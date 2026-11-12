@@ -91,6 +91,53 @@ fn beastmaster_ascension_collects_quest_counters_and_pumps_at_seven() {
 }
 
 #[test]
+fn beastmaster_ascension_triggers_once_for_each_attacker() {
+    use crate::support::{
+        game::clear_summoning_sickness,
+        inspect::counters_of,
+        play::{choose, pass_until, resolve_everything},
+    };
+    use managym::{
+        agent::action::{Action, ActionSpaceKind},
+        state::permanent::CounterKind,
+    };
+    let mut s = five_color_setup(&["Beastmaster Ascension", "Gray Ogre"]);
+    let ascension = s.force_permanent_on_battlefield(0, "Beastmaster Ascension");
+    let ogres = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    for ogre in ogres {
+        clear_summoning_sickness(&mut s, ogre);
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    s.declare_attack();
+    s.declare_attack();
+    let mut paid = 0;
+    for _ in 0..16 {
+        if s.action_space()
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::PayCost { .. }))
+        {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+            paid += 1;
+        } else if s.game().state.stack_objects.is_empty() && paid > 0 {
+            break;
+        } else if s.action_space().kind == ActionSpaceKind::OrderTriggers {
+            // Two attackers put two of its triggers on the stack at once.
+            s.step_action(0);
+        } else {
+            s.pass_priority();
+        }
+    }
+    resolve_everything(&mut s);
+    assert_eq!(paid, 2);
+    assert_eq!(counters_of(&s, ascension, CounterKind::Quest), 2);
+}
+
+#[test]
 fn valakut_deals_three_when_a_sixth_mountain_enters() {
     use crate::support::play::{choose, enter_and_settle};
     use managym::{

@@ -385,7 +385,12 @@ work is in the plan.
   serializer (a compatibility shim); input shapes are unchanged, w17 is the
   open world and the content digest already moves with every card. Frozen
   checkpoints and evidence keep their revisions.
-- Out of scope, possible follow-up: `DelayedEvent` (`YouCastSpell`,
-  `EndStep { your_turn }`, `Upkeep`), `Sacrificed { controller_only }`,
-  `YouPutCountersOnCreature` and `YourAttackingCreatureTriggers` still bake
-  the actor into names.
+- Out of scope, follow-up Task: `DelayedEvent` (`YouCastSpell`,
+  `EndStep { your_turn }`, `Upkeep`) is a second vocabulary for the same
+  events. Kept on purpose: `YouCastThis`, `SpellTargetsOnlyThis` and
+  `YourAttackingCreatureTriggers` (actor fixed by the rules or a
+  single-consumer meta-event). `Attacks`, `Sacrificed` and `PutsCounters` are
+  folded into event-over-actor form in this change.
+- Assumption (reversible): Beastmaster Ascension's subject is
+  `AnyYouControl(creature)` (printed "a creature you control"); a `This`
+  subject's `Attacks` uses `Per::Object`, which cannot differ from `Batch`.

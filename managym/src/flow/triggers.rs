@@ -16,8 +16,8 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, DelayedFrequency, Effect, EffectValue, KeywordAction, Per, TargetSpec,
-            TriggerCondition, TriggerSubject, TurnStep,
+            Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
+            TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::CardType,
         effect::{EffectDuration, Modification},
@@ -99,9 +99,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::EntersTheBattlefield { .. }
         | TriggerCondition::Dies { .. }
         | TriggerCondition::LeavesTheBattlefield { .. } => EventKinds::of(EventKind::CardMoved),
-        TriggerCondition::Attacks { .. }
-        | TriggerCondition::AttacksWithAnother
-        | TriggerCondition::AttacksAlone { .. } => EventKinds::of(EventKind::AttackersDeclared),
+        TriggerCondition::Attacks { .. } => EventKinds::of(EventKind::AttackersDeclared),
         TriggerCondition::Performs { any_of, .. } => {
             any_of.iter().fold(EventKinds::NONE, |kinds, action| {
                 kinds | EventKinds::of(keyword_action_event(*action))
@@ -120,7 +118,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
             EventKinds::of(EventKind::AbilityTriggered)
         }
         TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
-        TriggerCondition::YouPutCountersOnCreature { .. } | TriggerCondition::Chapter { .. } => {
+        TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
             EventKinds::of(EventKind::CountersPut)
         }
     }
@@ -1634,18 +1632,16 @@ impl Game {
                 event,
             ),
             (
-                TriggerCondition::Sacrificed {
-                    predicate,
-                    controller_only,
-                    another,
-                },
+                TriggerCondition::Sacrificed { subject },
                 GameEvent::PermanentSacrificed { card, controller },
-            ) => {
-                (!controller_only || *controller == source_controller)
-                    && !(*another && *card == source_card)
-                    && self.state.card_to_permanent[*card]
-                        .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
-            }
+            ) => self.subject_matches_moved_card(
+                subject,
+                source_card,
+                source_controller,
+                source_was_on_battlefield,
+                *card,
+                *controller,
+            ),
             (TriggerCondition::WhileSourceAttacking { condition }, _) => {
                 self.state.card_to_permanent[source_card]
                     .and_then(|id| self.state.permanents[id].as_ref())
@@ -1672,19 +1668,6 @@ impl Game {
                         let targets = self.state.stack_objects[index].targets();
                         !targets.is_empty() && targets.iter().all(|target| Some(*target) == this)
                     })
-            }
-            (
-                TriggerCondition::AttacksWithAnother,
-                GameEvent::AttackersDeclared { attackers, .. },
-            ) => {
-                attackers.len() >= 2
-                    && self
-                        .state
-                        .card_to_permanent
-                        .get(source_card.0)
-                        .copied()
-                        .flatten()
-                        .is_some_and(|permanent_id| attackers.contains(&permanent_id))
             }
             // Conditionally-granted abilities: the ability only exists (and
             // so only triggers) while the condition holds for its
@@ -1763,76 +1746,8 @@ impl Game {
                 *card,
                 *controller,
             ),
-            (
-                TriggerCondition::Attacks { subject },
-                GameEvent::AttackersDeclared { player, attackers },
-            ) => match subject {
-                TriggerSubject::This => self
-                    .state
-                    .card_to_permanent
-                    .get(source_card.0)
-                    .copied()
-                    .flatten()
-                    .is_some_and(|permanent_id| attackers.contains(&permanent_id)),
-                TriggerSubject::AnotherYouControl(predicate) => {
-                    *player == source_controller
-                        && attackers.iter().any(|attacker| {
-                            self.permanent_is_other(*attacker, source_card)
-                                && self.permanent_matches_predicate(*attacker, predicate)
-                        })
-                }
-                TriggerSubject::AnyYouControl(predicate) => {
-                    *player == source_controller
-                        && attackers
-                            .iter()
-                            .any(|attacker| self.permanent_matches_predicate(*attacker, predicate))
-                }
-                TriggerSubject::EnchantedCreature => attackers
-                    .iter()
-                    .any(|attacker| self.is_enchanted_by(*attacker, source_card)),
-                TriggerSubject::Another(predicate) => attackers.iter().any(|attacker| {
-                    self.permanent_is_other(*attacker, source_card)
-                        && self.permanent_matches_predicate(*attacker, predicate)
-                }),
-                TriggerSubject::Any(predicate) => attackers
-                    .iter()
-                    .any(|attacker| self.permanent_matches_predicate(*attacker, predicate)),
-            },
-            (
-                TriggerCondition::AttacksAlone { subject },
-                GameEvent::AttackersDeclared { player, attackers },
-            ) => {
-                let [attacker] = attackers.as_slice() else {
-                    return false;
-                };
-                match subject {
-                    TriggerSubject::This => self
-                        .state
-                        .card_to_permanent
-                        .get(source_card.0)
-                        .copied()
-                        .flatten()
-                        .is_some_and(|permanent_id| permanent_id == *attacker),
-                    TriggerSubject::AnotherYouControl(predicate) => {
-                        *player == source_controller
-                            && self.permanent_is_other(*attacker, source_card)
-                            && self.permanent_matches_predicate(*attacker, predicate)
-                    }
-                    TriggerSubject::AnyYouControl(predicate) => {
-                        *player == source_controller
-                            && self.permanent_matches_predicate(*attacker, predicate)
-                    }
-                    TriggerSubject::EnchantedCreature => {
-                        self.is_enchanted_by(*attacker, source_card)
-                    }
-                    TriggerSubject::Another(predicate) => {
-                        self.permanent_is_other(*attacker, source_card)
-                            && self.permanent_matches_predicate(*attacker, predicate)
-                    }
-                    TriggerSubject::Any(predicate) => {
-                        self.permanent_matches_predicate(*attacker, predicate)
-                    }
-                }
+            (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. }) => {
+                self.trigger_multiplicity(condition, source_card, source_controller, event) > 0
             }
             (
                 TriggerCondition::DealsCombatDamage { .. },
@@ -1900,7 +1815,7 @@ impl Game {
                     && chapter <= *total
             }
             (
-                TriggerCondition::YouPutCountersOnCreature { kind },
+                TriggerCondition::PutsCounters { who, kind, on },
                 GameEvent::CountersPut {
                     permanent,
                     kind: put,
@@ -1909,8 +1824,9 @@ impl Game {
                 },
             ) => {
                 put == kind
-                    && *by == source_controller
-                    && self.permanent_is_battlefield_creature(*permanent)
+                    && who.includes(source_controller, *by)
+                    && self.state.permanents[*permanent].is_some()
+                    && self.permanent_matches_predicate(*permanent, on)
             }
             (
                 TriggerCondition::Casts {
@@ -2022,6 +1938,38 @@ impl Game {
                     Per::Batch => usize::from(dealt > 0),
                 }
             }
+            (
+                TriggerCondition::Attacks {
+                    subject,
+                    per,
+                    attackers: size,
+                },
+                GameEvent::AttackersDeclared { attackers, .. },
+            ) => {
+                let size_holds = match size {
+                    AttackSize::Any => true,
+                    AttackSize::Alone => attackers.len() == 1,
+                    AttackSize::WithAnother => attackers.len() >= 2,
+                };
+                if !size_holds {
+                    return 0;
+                }
+                let attacked = attackers
+                    .iter()
+                    .filter(|attacker| {
+                        self.subject_matches_permanent(
+                            subject,
+                            source_card,
+                            source_controller,
+                            **attacker,
+                        )
+                    })
+                    .count();
+                match per {
+                    Per::Object => attacked,
+                    Per::Batch => usize::from(attacked > 0),
+                }
+            }
             _ => 1,
         }
     }
@@ -2116,12 +2064,6 @@ impl Game {
     fn is_enchanted_by(&self, permanent_id: PermanentId, aura: CardId) -> bool {
         self.state.card_to_permanent[aura].and_then(|aura| self.attached_permanent(aura))
             == Some(permanent_id)
-    }
-
-    fn permanent_is_other(&self, permanent_id: PermanentId, source_card: CardId) -> bool {
-        self.state.permanents[permanent_id]
-            .as_ref()
-            .is_some_and(|permanent| permanent.card != source_card)
     }
 }
 

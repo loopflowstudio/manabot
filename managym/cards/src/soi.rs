@@ -40,12 +40,10 @@ fn tireless_tracker() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate {
                         subtype: Some("Clue".into()),
                         ..Default::default()
-                    },
-                    controller_only: true,
-                    another: false,
+                    }),
                 },
                 effects: vec![Effect::put_counters(
                     ObjectSelector::This,

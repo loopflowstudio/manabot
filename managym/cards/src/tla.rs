@@ -3,7 +3,7 @@
 use managym_state::effect::{EffectDuration, Modification};
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
+        Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
         DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser, LinkedExile,
         LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
         TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
@@ -528,9 +528,7 @@ fn aang_swift_savior() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Reach, Keyword::Trample]),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::put_counters(
                     ObjectSelector::each_you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
@@ -993,9 +991,7 @@ fn appa_loyal_sky_bison() -> CardDefinition {
                 effects: vec![modes()],
             },
             Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 intervening_if: None,
                 effects: vec![modes()],
             },
@@ -1080,9 +1076,7 @@ fn avatar_aang() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
                     amount: EffectValue::Fixed(1),
@@ -1355,9 +1349,7 @@ fn azula_cunning_usurper() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
                     amount: EffectValue::Fixed(1),
@@ -1416,9 +1408,7 @@ fn azula_on_the_hunt() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
                     amount: EffectValue::Fixed(1),
@@ -1427,9 +1417,7 @@ fn azula_on_the_hunt() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![
                     Effect::LoseLife {
                         player: PlayerSelector::You,
@@ -1592,9 +1580,7 @@ fn beetle_headed_merchants() -> CardDefinition {
         power: Some(5),
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             intervening_if: None,
             effects: vec![
                 Effect::may_sacrifice(
@@ -1708,13 +1694,14 @@ fn bitter_work() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+            condition: TriggerCondition::attacks(
+                TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     min_power: Some(4),
                     ..Default::default()
                 }),
-            },
+                Per::Batch,
+            ),
             effects: vec![Effect::DrawCards {
                 count: EffectValue::Fixed(1),
             }],
@@ -1811,9 +1798,7 @@ fn boiling_rock_rioter() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::Fixed(1),
@@ -1822,9 +1807,7 @@ fn boiling_rock_rioter() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::CastExiledWithSource {
                     predicate: CardPredicate::subtype("Ally"),
                 }],
@@ -2192,9 +2175,7 @@ fn cat_owl() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Flying]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::untap(ObjectSelector::Target(
                 TargetSpec::Permanent {
                     predicate: CardPredicate {
@@ -2226,9 +2207,7 @@ fn combustion_man() -> CardDefinition {
         power: Some(4),
         toughness: Some(6),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             intervening_if: None,
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement::one(permanent()),
@@ -2397,9 +2376,7 @@ fn cruel_administrator() -> CardDefinition {
         }],
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::create_tokens("Soldier", 1)],
         }],
         text_box: text_box.into(),
@@ -2543,9 +2520,7 @@ fn dai_li_agents() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::DrainLife {
                     amount: EffectValue::CreaturesWithCounters,
                 }],
@@ -2779,8 +2754,10 @@ fn earth_kingdom_general() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
-                condition: TriggerCondition::YouPutCountersOnCreature {
+                condition: TriggerCondition::PutsCounters {
+                    who: Actor::You,
                     kind: CounterKind::PlusOnePlusOne,
+                    on: CardPredicate::creature(),
                 },
                 intervening_if: None,
                 effects: vec![Effect::MayOnceEachTurn {
@@ -3390,9 +3367,7 @@ fn fire_lord_azula() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
                     amount: EffectValue::Fixed(1),
@@ -3437,9 +3412,7 @@ fn fire_lord_zuko() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![
             Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 intervening_if: None,
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
@@ -3515,9 +3488,7 @@ fn fire_nation_cadets() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                condition: Box::new(TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                }),
+                condition: Box::new(TriggerCondition::attacks(TriggerSubject::This, Per::Object)),
             },
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RR"),
@@ -3685,9 +3656,10 @@ fn fire_navy_trebuchet() -> CardDefinition {
         toughness: Some(4),
         keywords: Keywords::of(&[Keyword::Defender, Keyword::Reach]),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
-            },
+            condition: TriggerCondition::attacks(
+                TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                Per::Batch,
+            ),
             intervening_if: None,
             effects: vec![
                 Effect::CreateToken {
@@ -3727,9 +3699,7 @@ fn fire_sages() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::Fixed(1),
@@ -3849,9 +3819,7 @@ fn firebending_student() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::SourcePower,
@@ -4648,9 +4616,7 @@ fn hei_bai_spirit_of_balance() -> CardDefinition {
                 effects: feed(),
             },
             Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 intervening_if: None,
                 effects: feed(),
             },
@@ -4981,9 +4947,7 @@ fn iroh_grand_lotus() -> CardDefinition {
         statics: vec![StaticAbility::GraveyardSpellsHaveFlashback],
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RR"),
                 amount: EffectValue::Fixed(1),
@@ -5153,9 +5117,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::Fixed(1),
@@ -6046,9 +6008,7 @@ fn master_piandao() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::FirstStrike]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::LookAndSelect {
                 to_battlefield: false,
                 random_order: true,
@@ -6502,9 +6462,10 @@ fn obsessive_pursuit() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
-                },
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                    Per::Batch,
+                ),
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement::one(attacking_creature()),
                     effects: vec![
@@ -6735,9 +6696,7 @@ fn ozai_the_phoenix_king() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Haste, Keyword::Trample]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RRRR"),
                 amount: EffectValue::Fixed(1),
@@ -6877,9 +6836,7 @@ fn pirate_peddlers() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::Sacrificed {
-                predicate: CardPredicate::default(),
-                controller_only: true,
-                another: true,
+                subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
             },
             effects: vec![Effect::put_counters(
                 ObjectSelector::This,
@@ -7133,9 +7090,7 @@ fn ran_and_shaw() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
                     amount: EffectValue::Fixed(1),
@@ -7249,9 +7204,7 @@ fn raven_eagle() -> CardDefinition {
                 effects: exile(),
             },
             Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 intervening_if: None,
                 effects: exile(),
             },
@@ -7445,9 +7398,7 @@ fn rough_rhino_cavalry() -> CardDefinition {
         toughness: Some(5),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RR"),
                 amount: EffectValue::Fixed(1),
@@ -7615,9 +7566,7 @@ fn sandbender_scavengers() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate::default(),
-                    controller_only: true,
-                    another: true,
+                    subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
                 },
                 intervening_if: None,
                 effects: vec![Effect::put_counters(
@@ -8004,7 +7953,11 @@ fn sokka_lateral_strategist() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Vigilance]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::AttacksWithAnother,
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::This,
+                per: Per::Object,
+                attackers: AttackSize::WithAnother,
+            },
             effects: vec![Effect::DrawCards {
                 count: EffectValue::Fixed(1),
             }],
@@ -8315,9 +8268,7 @@ fn suki_kyoshi_warrior() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::CreateToken {
                 token_name: "Ally".into(),
                 count: EffectValue::Fixed(1),
@@ -8377,9 +8328,7 @@ fn sun_warriors() -> CardDefinition {
         toughness: Some(5),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::BattlefieldMatching {
@@ -8447,11 +8396,13 @@ fn team_avatar() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::AttacksAlone {
+            condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
+                per: Per::Object,
+                attackers: AttackSize::Alone,
             },
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::Triggering,
@@ -8506,13 +8457,14 @@ fn teo_spirited_glider() -> CardDefinition {
         toughness: Some(4),
         keywords: Keywords::of(&[Keyword::Flying]),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+            condition: TriggerCondition::attacks(
+                TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     flying: true,
                     ..Default::default()
                 }),
-            },
+                Per::Batch,
+            ),
             intervening_if: None,
             effects: vec![
                 Effect::DrawCards {
@@ -8555,9 +8507,7 @@ fn the_boulder_ready_to_rumble() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::Earthbend {
                 count: EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
@@ -8633,13 +8583,14 @@ fn the_earth_king() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::AnyYouControl(CardPredicate {
                         card_type: Some(CardType::Creature),
                         min_power: Some(4),
                         ..Default::default()
                     }),
-                },
+                    Per::Batch,
+                ),
                 effects: vec![Effect::search_library(
                     CardPredicate::basic_land(),
                     EffectValue::AttackingMatching {
@@ -8906,9 +8857,7 @@ fn the_legend_of_roku() -> CardDefinition {
             toughness: Some(4),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RRRR"),
                     amount: EffectValue::Fixed(1),
@@ -9179,9 +9128,7 @@ fn the_rise_of_sozin() -> CardDefinition {
             abilities: vec![
                 Ability::Triggered {
                     intervening_if: None,
-                    condition: TriggerCondition::Attacks {
-                        subject: TriggerSubject::This,
-                    },
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                     effects: vec![Effect::AddMana {
                         mana: Mana::parse("RRR"),
                         amount: EffectValue::Fixed(1),
@@ -9400,9 +9347,7 @@ fn tolls_of_war() -> CardDefinition {
                     condition: Box::new(TriggerCondition::ActiveIf {
                         active_if: Condition::YourTurn,
                         condition: Box::new(TriggerCondition::Sacrificed {
-                            predicate: CardPredicate::default(),
-                            controller_only: true,
-                            another: false,
+                            subject: TriggerSubject::AnyYouControl(CardPredicate::default()),
                         }),
                     }),
                 },
@@ -9666,9 +9611,7 @@ fn tundra_tank() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("R"),
                     amount: EffectValue::Fixed(1),
@@ -9810,9 +9753,7 @@ fn ty_lee_artful_acrobat() -> CardDefinition {
                 )],
             },
             Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 intervening_if: None,
                 effects: vec![Effect::OptionalPayment {
                     cost: PaymentCost::Mana(ManaCost::parse("{1}")),
@@ -9907,9 +9848,7 @@ fn uncle_iroh() -> CardDefinition {
         })],
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::Fixed(1),
@@ -9969,12 +9908,10 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate {
                         subtype: Some("Food".into()),
                         ..Default::default()
-                    },
-                    controller_only: true,
-                    another: false,
+                    }),
                 },
                 effects: vec![Effect::Modal {
                     modes: vec![
@@ -10022,9 +9959,7 @@ fn vengeful_villagers() -> CardDefinition {
         power: Some(3),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             intervening_if: None,
             effects: vec![
                 Effect::tap(ObjectSelector::Target(TargetSpec::CreatureOpponentControls)),
@@ -10062,9 +9997,7 @@ fn vindictive_warden() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Menace]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::Fixed(1),
@@ -10180,9 +10113,7 @@ fn wandering_musicians() -> CardDefinition {
         toughness: Some(5),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
@@ -10694,9 +10625,7 @@ fn zhao_ruthless_admiral() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RR"),
                     amount: EffectValue::Fixed(1),
@@ -10706,9 +10635,7 @@ fn zhao_ruthless_admiral() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate::default(),
-                    controller_only: true,
-                    another: true,
+                    subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
                 },
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::each_you_control(CardPredicate::creature()),
@@ -10838,9 +10765,7 @@ fn zuko_exiled_prince() -> CardDefinition {
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RRR"),
                 amount: EffectValue::Fixed(1),

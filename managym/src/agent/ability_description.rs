@@ -4,7 +4,7 @@
 
 use crate::state::{
     ability::{
-        Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
+        Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
         DistinctSearchEnd, Effect, EffectValue, KeywordAction, LinkedChooser, LinkedExile,
         LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, TargetSpec,
         TriggerCondition, TriggerSubject, TurnStep,
@@ -59,20 +59,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
             condition_description(condition),
             condition_text(active_if)
         ),
-        TriggerCondition::Sacrificed {
-            predicate,
-            controller_only,
-            another,
-        } => format!(
-            "When {}{} {} sacrificed",
-            if *another { "another " } else { "" },
-            predicate_description(predicate, "permanent"),
-            if *controller_only {
-                "you control is"
-            } else {
-                "is"
-            }
-        ),
+        TriggerCondition::Sacrificed { subject } => {
+            format!("Whenever {} is sacrificed", subject_description(subject))
+        }
         TriggerCondition::YouCastThis => "When you cast this spell".into(),
         TriggerCondition::NoCounters { kind } => {
             format!("When this has no {} counters on it", counter_description(*kind))
@@ -81,25 +70,27 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "Whenever a player casts a {} that targets only this",
             predicate_description(predicate, "spell")
         ),
-        TriggerCondition::AttacksWithAnother => {
-            "When this and at least one other creature attack".into()
-        }
         TriggerCondition::EntersTheBattlefield { subject } => format!(
             "When {} enters the battlefield",
             subject_description(subject)
         ),
         TriggerCondition::Dies { subject } => format!("When {} dies", subject_description(subject)),
         TriggerCondition::Attacks {
-            subject: TriggerSubject::This,
-        } => "When this attacks".into(),
-        TriggerCondition::Attacks {
-            subject: TriggerSubject::EnchantedCreature,
-        } => "When enchanted creature attacks".into(),
-        TriggerCondition::Attacks { subject } => {
-            format!("When {} attack", one_or_more(subject, "permanents"))
-        }
-        TriggerCondition::AttacksAlone { subject } => {
-            format!("When {} attacks alone", subject_description(subject))
+            subject,
+            per,
+            attackers,
+        } => {
+            let attack = match per {
+                Per::Object => format!("{} attacks", subject_description(subject)),
+                Per::Batch => format!("{} attack", one_or_more(subject, "permanents")),
+            };
+            match attackers {
+                AttackSize::Any => format!("Whenever {attack}"),
+                AttackSize::Alone => format!("Whenever {attack} alone"),
+                AttackSize::WithAnother => {
+                    format!("Whenever {attack} with at least one other creature")
+                }
+            }
         }
         TriggerCondition::FromZone { zone, condition } => format!(
             "{} (from {})",
@@ -128,9 +119,11 @@ fn condition_description(condition: &TriggerCondition) -> String {
                 subject_description(subject)
             )
         }
-        TriggerCondition::YouPutCountersOnCreature { kind } => format!(
-            "When you put one or more {} counters on a creature",
-            counter_description(*kind)
+        TriggerCondition::PutsCounters { who, kind, on } => format!(
+            "Whenever {} one or more {} counters on a {}",
+            actor_does(*who, "put", "puts"),
+            counter_description(*kind),
+            predicate_description(on, "permanent")
         ),
         TriggerCondition::Casts {
             who,
@@ -1299,6 +1292,35 @@ mod tests {
                     per: Per::Object,
                 },
                 "Whenever a creature deals combat damage to you",
+            ),
+            (
+                TriggerCondition::attacks(
+                    TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                    Per::Batch,
+                ),
+                "Whenever one or more creature permanents you control attack",
+            ),
+            (
+                TriggerCondition::Attacks {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                    per: Per::Object,
+                    attackers: AttackSize::Alone,
+                },
+                "Whenever a creature you control attacks alone",
+            ),
+            (
+                TriggerCondition::Sacrificed {
+                    subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+                },
+                "Whenever another permanent you control is sacrificed",
+            ),
+            (
+                TriggerCondition::PutsCounters {
+                    who: Actor::Opponent,
+                    kind: CounterKind::PlusOnePlusOne,
+                    on: CardPredicate::creature(),
+                },
+                "Whenever an opponent puts one or more +1/+1 counters on a creature",
             ),
         ];
         for (condition, expected) in cases {

@@ -577,9 +577,7 @@ fn iroh_firebending_instructor() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::each(
                     Scope::Battlefield,

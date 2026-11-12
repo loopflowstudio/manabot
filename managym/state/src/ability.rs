@@ -42,14 +42,9 @@ impl Ability {
 pub enum TriggerCondition {
     /// The entering source must have been cast, rather than created or returned.
     WasCast { condition: Box<TriggerCondition> },
-    Sacrificed {
-        predicate: CardPredicate,
-        controller_only: bool,
-        /// "another permanent": the exact source object's own sacrifice
-        /// does not trigger it.
-        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
-        another: bool,
-    },
+    /// "Whenever [subject] is sacrificed" (CR 701.21): once per sacrificed
+    /// permanent, matched as it last existed on the battlefield.
+    Sacrificed { subject: TriggerSubject },
     /// Wrap the whole condition, including ActiveIf. The limit is recorded
     /// when the event fires, once per exact source incarnation and turn.
     OnceEachTurn { condition: Box<TriggerCondition> },
@@ -74,17 +69,17 @@ pub enum TriggerCondition {
     /// "When [subject] leaves the battlefield": to any other zone, looking
     /// back in time (CR 603.10a).
     LeavesTheBattlefield { subject: TriggerSubject },
-    /// "Whenever [subject] attacks." Fires after the declare-attackers
-    /// turn-based action (CR 508.1); a subject of `AnotherYouControl` /
-    /// `AnyYouControl` fires once per combat ("whenever one or more ...
-    /// attack"), not once per attacker.
-    Attacks { subject: TriggerSubject },
-    /// "Whenever [this] and at least one other creature attack": the source
-    /// is among two or more declared attackers.
-    AttacksWithAnother,
-    /// "Whenever [subject] attacks alone": exactly one creature was
-    /// declared as an attacker (CR 506.5). The attacker is the context.
-    AttacksAlone { subject: TriggerSubject },
+    /// "Whenever [subject] attacks" (CR 508.1, after the declare-attackers
+    /// turn-based action). `per` says whether it triggers once for each
+    /// matching attacker or once per combat ("whenever you attack", "one or
+    /// more ... attack"); `attackers` limits how many creatures were
+    /// declared in all ("attacks alone", "and at least one other creature
+    /// attack"). A lone matching attacker is the trigger's context.
+    Attacks {
+        subject: TriggerSubject,
+        per: Per,
+        attackers: AttackSize,
+    },
     /// The inner cast or entry trigger only for an object that came from
     /// `zone` ("whenever you cast a spell from exile", "whenever a permanent
     /// you control enters from exile").
@@ -108,10 +103,14 @@ pub enum TriggerCondition {
     /// on this Saga bring their number from below `chapter` to at least it.
     /// Abilities printed "I, II" are one ability per chapter.
     Chapter { chapter: u8 },
-    /// "Whenever you put one or more [kind] counters on a creature": once
-    /// per creature an instruction you control puts them on. The trigger's
-    /// X is how many were put ("that much").
-    YouPutCountersOnCreature { kind: CounterKind },
+    /// "Whenever [who] puts one or more [kind] counters on a [on]
+    /// permanent": once per permanent an instruction that player controls
+    /// puts them on. The trigger's X is how many were put ("that much").
+    PutsCounters {
+        who: Actor,
+        kind: CounterKind,
+        on: CardPredicate,
+    },
     /// "Whenever [who] casts a [predicate] spell" (CR 601.2i); with `nth`,
     /// only the spell that is the Nth its caster cast this turn ("whenever
     /// you cast your second spell each turn"). The caster is "that player".
@@ -288,6 +287,15 @@ impl TriggerCondition {
     pub fn beginning_of(step: TurnStep, whose: Actor) -> Self {
         TriggerCondition::BeginningOf { step, whose }
     }
+
+    /// "Whenever [subject] attacks", whatever else attacks with it.
+    pub fn attacks(subject: TriggerSubject, per: Per) -> Self {
+        TriggerCondition::Attacks {
+            subject,
+            per,
+            attackers: AttackSize::Any,
+        }
+    }
 }
 
 impl Condition {
@@ -412,6 +420,17 @@ impl KeywordAction {
 pub enum Per {
     Object,
     Batch,
+}
+
+/// How many creatures in all an `Attacks` trigger requires to have been
+/// declared as attackers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum AttackSize {
+    Any,
+    /// Exactly one (CR 506.5).
+    Alone,
+    /// Two or more, the subject among them.
+    WithAnother,
 }
 
 /// Which game objects an event-based trigger condition watches.

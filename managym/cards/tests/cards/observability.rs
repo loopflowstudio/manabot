@@ -59,7 +59,7 @@ use managym::{
     cards::tokens::{catalog_tokens, definition_tokens, name_value, TokenKind},
     state::{
         ability::{
-            Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
+            Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
             DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser,
             LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector,
             Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
@@ -1038,7 +1038,6 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YouCastThis => "TriggerCondition::YouCastThis",
         TriggerCondition::NoCounters { .. } => "TriggerCondition::NoCounters",
         TriggerCondition::SpellTargetsOnlyThis { .. } => "TriggerCondition::SpellTargetsOnlyThis",
-        TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
         TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
         TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
@@ -1046,12 +1045,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::BecomesTapped { .. } => "TriggerCondition::BecomesTapped",
         TriggerCondition::TappedForMana { .. } => "TriggerCondition::TappedForMana",
         TriggerCondition::BecomesTargeted { .. } => "TriggerCondition::BecomesTargeted",
-        TriggerCondition::YouPutCountersOnCreature { .. } => {
-            "TriggerCondition::YouPutCountersOnCreature"
-        }
+        TriggerCondition::PutsCounters { .. } => "TriggerCondition::PutsCounters",
         TriggerCondition::LeavesTheBattlefield { .. } => "TriggerCondition::LeavesTheBattlefield",
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
-        TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
         TriggerCondition::InGraveyard { .. } => "TriggerCondition::InGraveyard",
         TriggerCondition::YourAttackingCreatureTriggers => {
             "TriggerCondition::YourAttackingCreatureTriggers"
@@ -1098,21 +1094,21 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             per: Per::Batch,
         },
         TriggerCondition::Sacrificed {
-            predicate: CardPredicate::creature(),
-            controller_only: true,
-            another: true,
+            subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
         },
         TriggerCondition::OnceEachTurn {
             condition: enters(),
         },
         TriggerCondition::EntersTheBattlefield { subject: this() },
         TriggerCondition::Dies { subject: this() },
-        TriggerCondition::Attacks { subject: this() },
+        TriggerCondition::attacks(this(), Per::Object),
         TriggerCondition::BecomesTapped { subject: this() },
         TriggerCondition::TappedForMana { subject: this() },
         TriggerCondition::BecomesTargeted { subject: this() },
-        TriggerCondition::YouPutCountersOnCreature {
+        TriggerCondition::PutsCounters {
+            who: Actor::You,
             kind: CounterKind::PlusOnePlusOne,
+            on: CardPredicate::creature(),
         },
         TriggerCondition::LeavesTheBattlefield {
             subject: TriggerSubject::This,
@@ -1121,16 +1117,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             active_if: Condition::YourTurn,
             condition: enters(),
         },
-        TriggerCondition::AttacksAlone {
-            subject: TriggerSubject::AnyYouControl(CardPredicate {
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            }),
-        },
         TriggerCondition::SpellTargetsOnlyThis {
             predicate: CardPredicate::creature(),
         },
-        TriggerCondition::AttacksWithAnother,
         TriggerCondition::FromZone {
             zone: ZoneType::Exile,
             condition: enters(),
@@ -1895,6 +1884,14 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             per,
         });
         expected.push(format!("Per::{per:?}"));
+    }
+    for attackers in [AttackSize::Any, AttackSize::Alone, AttackSize::WithAnother] {
+        conditions.push(TriggerCondition::Attacks {
+            subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+            per: Per::Batch,
+            attackers,
+        });
+        expected.push(format!("AttackSize::{attackers:?}"));
     }
     let definition = CardDefinition {
         name: "Witness".into(),

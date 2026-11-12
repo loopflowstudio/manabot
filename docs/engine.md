@@ -553,10 +553,12 @@ fn lightning_bolt() -> CardDefinition {
   turn". The same applies to draws (`Draws { who, nth }`),
   steps (`BeginningOf { step, whose }`), keyword actions such as searching,
   scrying or bending (`Performs { who, any_of }`) and cards reaching a
-  graveyard (`PutIntoGraveyard { whose, predicate }`). Object events name a
-  `TriggerSubject` instead: `Dies`, `Attacks`, `DealsCombatDamage { subject,
-  to, per }`, where `per` says whether "one or more" creatures trigger once per
-  batch or once each. The ability description ("Whenever an opponent draws
+  graveyard (`PutIntoGraveyard { whose, predicate }`) or counters
+  (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
+  instead: `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
+  `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
+  more" creatures trigger once per batch or once each, and `attackers` says
+  whether the attack is alone or with at least one other creature. The ability description ("Whenever an opponent draws
   their second card each turn, ...") and the learning tokens come from one
   template per event, so a card that needs a new actor or count needs no new
   variant.

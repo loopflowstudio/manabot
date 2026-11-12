@@ -3,7 +3,7 @@
 //! keyed by name and carries the Scryfall id of its first token printing.
 use managym_state::{
     ability::{
-        Ability, Actor, Effect, EffectValue, ObjectSelector, TriggerCondition, TriggerSubject,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, Per, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes, Keyword,
@@ -145,9 +145,7 @@ fn dragon() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Flying]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("RRRR"),
                 amount: EffectValue::Fixed(1),
@@ -284,9 +282,7 @@ fn soldier() -> CardDefinition {
     CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::AddMana {
                 mana: Mana::parse("R"),
                 amount: EffectValue::Fixed(1),

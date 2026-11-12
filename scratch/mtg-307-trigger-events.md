@@ -25,12 +25,26 @@ Card code uses `TriggerCondition::casts(who, predicate)` and
 
 Tokens and digests move (decision in `scratch/questions.md`).
 
+Concept review (2026-11-12) folded the last actor/batch-named shapes in:
+`Attacks { subject, per, attackers: AttackSize::{Any, Alone, WithAnother} }`
+(multiplicity in `trigger_multiplicity`, like `DealsCombatDamage`; card code
+uses `TriggerCondition::attacks(subject, per)`), `Sacrificed { subject }`
+(matched by `subject_matches_moved_card`, like `Dies`) and
+`PutsCounters { who, kind, on }`. `Per::Batch` on Fire Navy Trebuchet, Teo,
+The Earth King, Bitter Work and Obsessive Pursuit; Beastmaster Ascension is
+`Per::Object` and now gets one trigger per attacker
+(`zen::beastmaster_ascension_triggers_once_for_each_attacker`).
+
+Kept on purpose (actor fixed by the rules, or single-consumer meta-event):
+`YouCastThis`, `SpellTargetsOnlyThis`, `YourAttackingCreatureTriggers`.
+Later Task: merge `DelayedEvent` into `TriggerCondition` over a captured
+subject.
+
 ## Checks
 
-- `cargo nextest run --workspace --profile ci` (debug, after compress): 1162/1163 pass;
-  `checked_semantic_conformance_evidence_reproduces` fails identically on the
-  base commit d95734088. All 14 regenerated traces equal base's except
-  `state_hash`/`content_digest`, so play is unchanged.
+- `cargo nextest run --workspace --profile ci` (debug): 1163/1164 pass;
+  `checked_semantic_conformance_evidence_reproduces` fails as on base
+  d95734088 (state_hash/content_digest only). Clippy: no findings in changed code.
 - `uv run --extra dev pytest tests/semantic -q`: 197 passed (rebuilt extension).
 
 ## Remaining

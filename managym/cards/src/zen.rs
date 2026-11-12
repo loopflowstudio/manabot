@@ -1,7 +1,7 @@
 //! Zendikar.
 use managym_state::{
     ability::{
-        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, Per,
         PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
@@ -61,9 +61,10 @@ fn beastmaster_ascension() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
-            },
+            condition: TriggerCondition::attacks(
+                TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                Per::Object,
+            ),
             effects: vec![Effect::OptionalPayment {
                 cost: PaymentCost::Mana(ManaCost::default()),
                 if_paid: vec![Effect::put_counters(
