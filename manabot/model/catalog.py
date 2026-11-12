@@ -27,7 +27,11 @@ from typing import Any, Literal
 import torch
 
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import (
+    ModelConfig,
+    ObservationConfig,
+    UnsupportedPolicyInput,
+)
 from manabot.model.world import WORLD, current_binding_form, expected_world
 import managym
 
@@ -162,6 +166,8 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
         )
         expected = expected_world(binding, ObservationSpace(observation))
         binding = current_binding_form(binding)
+    except UnsupportedPolicyInput as error:
+        return str(error)
     except BaseException as error:  # PyO3 panics on invalid native setups
         if isinstance(error, (KeyboardInterrupt, SystemExit, GeneratorExit)):
             raise

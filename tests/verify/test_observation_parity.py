@@ -14,14 +14,14 @@ from manabot.env.observation import (
     FACT_COPY,
     FACT_COPY_EXCEPTION,
     FACT_DURATION_INDEX,
-    FACT_EFFECT,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_OBJECT_INDEX,
     FACT_ORDER_INDEX,
     FACT_SOURCE_INDEX,
+    FACT_TRANSFORMS,
+    FACT_USED_ABILITY,
     FACT_VALID_INDEX,
-    FACT_VALUE_INDEX,
     PERMANENT_ATTACHED_INDEX,
     PERMANENT_DIM,
     PERMANENT_GRANTED_LAND_INDEX,
@@ -32,8 +32,8 @@ from manabot.env.observation import (
     ObservationConfig,
     ObservationEncoder,
 )
+from manabot.infra.config import UnsupportedPolicyInput
 from manabot.managym.enums import ActionEnum
-from manabot.verify.representation import source_effect_root
 from manabot.verify.text_observation import priority_root
 import managym
 
@@ -353,7 +353,7 @@ def _token_low(name: str) -> int:
     return managym.learning_token_value(name) & 0xFFFF
 
 
-# Policy input v5 encodes every Observation fact. These states reach its new
+# The policy input encodes every Observation fact. These states reach its
 # columns through real T3 games and through each observed field directly.
 _T3_DECK = {
     "Plains": 5,
@@ -373,10 +373,10 @@ _T3_DECK = {
 }
 
 
-def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
+def test_native_and_python_encoders_agree_on_t3_games() -> None:
     rng = np.random.default_rng(5)
     env = managym.Env(seed=5, skip_trivial=True)
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
+    encoder = ObservationEncoder(ObservationConfig())
     reached: set[str] = set()
     for _ in range(12):
         obs, _ = env.reset(
@@ -384,7 +384,7 @@ def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
         )
         for _ in range(400):
             expected = encoder.encode(obs)
-            actual = env.encode_observation(obs, 5)
+            actual = env.encode_observation(obs)
             for key, value in expected.items():
                 np.testing.assert_array_equal(actual[key], value, err_msg=key)
             permanents = np.concatenate(
@@ -396,7 +396,7 @@ def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
                     "stun",
                     facts[:, FACT_ID_INDEX + 1] == _token_low("CounterKind::stun"),
                 ),
-                ("effect", facts[:, FACT_KIND_INDEX] == FACT_EFFECT),
+                ("effect", actual["effects"][:, -1]),
                 ("attached", permanents[:, PERMANENT_ATTACHED_INDEX]),
                 ("granted land", permanents[:, PERMANENT_GRANTED_LAND_INDEX]),
                 ("stack X", actual["relations"][:, RELATION_X_INDEX]),
@@ -413,7 +413,7 @@ def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
             if obs.game_over or not obs.action_space.actions:
                 break
             obs, *_ = env.step(random_valid_action(obs, rng))
-    # Seeded play reaches every new column, so parity covers each of them.
+    # Seeded play reaches each of these columns, so parity covers them.
     assert reached == {
         "stun",
         "effect",
@@ -425,7 +425,7 @@ def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
     }
 
 
-def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
+def test_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     env = managym.Env(seed=11, skip_trivial=False)
     env.reset(make_player_configs())
     env.scenario_force_battlefield(0, "Mountain")
@@ -439,21 +439,13 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     mine.temp_subtypes = ["Island", "Construct", "Citizen"]
     mine.attacking, mine.blocking, mine.abilities_lost = True, theirs.id, True
     mine.used_abilities = [1, 5]
-    # Later than both permanents (ranks 1 and 2).
+    # Entry order ranks this permanent first.
     assert mine.timestamp is None and theirs.timestamp is None
-    base = max(mine.id, theirs.id)
     assert mine.id < theirs.id
-    pump = managym.ContinuousEffect()
-    pump.modification, pump.power, pump.toughness = "ModifyPt", 2, 0
-    pump.duration, pump.timestamp = "EndOfTurn", base + 1
-    grant = managym.ContinuousEffect()
-    grant.modification, grant.keywords = "AddKeywords", ["flying", "trample"]
-    # Together with the pump and copy exceptions, this covers all durations.
-    grant.duration, grant.timestamp = "WhileYouControlSource", base + 2
-    grant.source_registry_key = theirs.registry_key
-    mine.effects = [pump, grant]
-    # Copy exceptions share the modification vocabulary, but have their own
-    # fact kind and use the copied permanent's timestamp and definition join.
+    # Continuous-effect records travel as shared effects
+    # (test_shared_effect_transport.py). Copy exceptions share the modification
+    # vocabulary, but have their own fact kind and use the copied permanent's
+    # timestamp and definition join.
     copy = managym.CopyEffect()
     copy.name, copy.registry_key = "Forest", theirs.registry_key
     nonlegendary = managym.ContinuousEffect()
@@ -472,36 +464,31 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     agent.keeps_red_mana = agent.no_maximum_hand_size = True
     agent.extra_turns = 2
     agent.additional_combats = 1
-    kept = managym.ContinuousEffect()
-    kept.modification, kept.color = "KeepUnspentMana", "Red"
-    kept.duration, kept.timestamp = "EndOfTurn", base + 3
-    agent.effects = [kept]
     history = agent.turn_history
     history.attacked = history.land_entered = True
     history.permanents_sacrificed, history.cards_drawn = 3, 2
     agent.turn_history = history
     obs.agent = agent
 
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
+    encoder = ObservationEncoder(ObservationConfig())
     expected = encoder.encode(obs)
-    actual = env.encode_observation(obs, 5)
+    actual = env.encode_observation(obs)
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
     row = actual["agent_permanents"][0]
     own = 2 + 2 * encoder.cards_per_player
     host = own + encoder.perms_per_player
-    # Attacking (v4 column 27), then v5: exhausted, once each turn, granted
+    # Attacking (column 27), then exhausted, once each turn, granted
     # firebending, attachment join, granted land, blocking join, lost
     # abilities, timestamp rank, dealt damage this turn, validity.
     np.testing.assert_allclose(
         row[27:PERMANENT_DIM], [1, 0, 0, 0.4, host + 1, 1, host + 1, 1, 1, 1, 1]
     )
     # Fact rows, in order: counters, added subtypes, set name and creature
-    # type, used abilities, copy and its exceptions, then effect records
-    # (one row per keyword).
+    # type, used abilities, copy and its exceptions (one row per keyword).
     facts = actual["facts"]
     kinds = facts[facts[:, FACT_VALID_INDEX] == 1, FACT_KIND_INDEX].tolist()
-    assert kinds == [1, 1, 1, 2, 2, 2, 3, 4, 5, 5, 7, 8, 8, 8, 6, 6, 6, 6]
+    assert kinds == [1, 1, 1, 2, 2, 2, 3, 4, 5, 5, 7, 8, 8, 8]
     copies = facts[np.isin(facts[:, FACT_KIND_INDEX], [FACT_COPY, FACT_COPY_EXCEPTION])]
     np.testing.assert_array_equal(copies[:, FACT_OBJECT_INDEX], [own + 1] * 4)
     np.testing.assert_array_equal(
@@ -509,61 +496,27 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     )
     np.testing.assert_array_equal(copies[:, FACT_ORDER_INDEX], [1] * 4)
     np.testing.assert_array_equal(copies[:, FACT_DURATION_INDEX], [2] * 4)
-    effects = facts[facts[:, FACT_KIND_INDEX] == FACT_EFFECT]
-    # The agent's player row comes first; its record is the latest.
-    np.testing.assert_allclose(
-        effects[:, [FACT_OBJECT_INDEX, FACT_VALUE_INDEX, FACT_DURATION_INDEX]],
-        [[1, 0, 1], [own + 1, 0.2, 1], [own + 1, 0, 3], [own + 1, 0, 3]],
-    )
-    assert effects[:, FACT_ORDER_INDEX].tolist() == [5, 3, 4, 4]
-    assert effects[2, FACT_SOURCE_INDEX] == theirs.registry_key + 1
+    assert not actual["effects"].any()
     np.testing.assert_allclose(
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
         [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2, 0, 0, 0, 0, 2, 1],
     )
     assert actual["agent_cards"][0, CARD_DIM - 1] == 1
-    v4 = env.encode_observation(obs, 4)
-    assert v4["agent_permanents"].shape[-1] == 29
-    assert v4["agent_cards"].shape[-1] == 41
 
 
-@pytest.mark.parametrize(
-    ("version", "capacity"), [(5, 128), (6, 512), (6, 256), (6, 140)]
-)
-def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
-    version: int, capacity: int
-) -> None:
-    """Both contracts retain every timestamp and reject excess facts."""
+@pytest.mark.parametrize("capacity", [512, 256, 140])
+def test_fact_capacity_fills_exactly_and_rejects_overflow(capacity: int) -> None:
+    """A full fact block keeps every row; one more is an error, never a prefix."""
     env = managym.Env(seed=11, skip_trivial=False)
     env.reset(make_player_configs())
     env.scenario_force_battlefield(0, "Mountain")
-    env.scenario_force_battlefield(1, "Forest")
     obs = env.scenario_refresh()
-    mine, theirs = obs.agent_permanents[0], obs.opponent_permanents[0]
-    base = max(mine.id, theirs.id)
-    durations = ("EndOfTurn", "Indefinite", "WhileYouControlSource")
-    sources = (None, mine.registry_key, theirs.registry_key)
-    effects: list[managym.ContinuousEffect] = []
-    # Each record contributes two distinct keyword facts. Do not fold repeated
-    # removals into the effective keywords: their timestamps remain observable.
-    for index in range(capacity // 2 + 1):
-        effect = managym.ContinuousEffect()
-        effect.modification = "LoseKeywords"
-        effect.keywords = ["hexproof", "indestructible"]
-        effect.timestamp = base + index + 1
-        effect.duration = durations[index % len(durations)]
-        effect.source_registry_key = sources[index % len(sources)]
-        effects.append(effect)
-    mine.effects = effects[:-1]
+    mine = obs.agent_permanents[0]
+    # Controlled transport fixture: each used ability index is one fact row.
+    mine.used_abilities = list(range(capacity))
     obs.agent_permanents = [mine]
-    config = ObservationConfig.model_validate(
-        {
-            "policy_input_version": version,
-            "max_facts": capacity if version == 6 else None,
-        }
-    )
-    encoder = ObservationEncoder(config)
-    native = env.encode_observation(obs, version, config.max_facts)
+    encoder = ObservationEncoder(ObservationConfig(max_facts=capacity))
+    native = env.encode_observation(obs, capacity)
     reference = encoder.encode(obs)
     for key, value in reference.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
@@ -571,35 +524,27 @@ def test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow(
     assert facts.shape == (capacity, 12)
     assert len(np.unique(facts, axis=0)) == capacity
     assert facts[:, FACT_VALID_INDEX].tolist() == [1] * capacity
-    for index, effect in enumerate(effects[:-1]):
-        rows = facts[index * 2 : index * 2 + 2]
-        assert rows[:, FACT_ORDER_INDEX].tolist() == [index + 3] * 2
-        assert rows[:, FACT_DURATION_INDEX].tolist() == [index % 3 + 1] * 2
-        source = effect.source_registry_key
-        assert (
-            rows[:, FACT_SOURCE_INDEX].tolist()
-            == [0 if source is None else source + 1] * 2
-        )
+    assert facts[:, FACT_KIND_INDEX].tolist() == [FACT_USED_ABILITY] * capacity
 
     buffers = encoder.allocate()
     env.encode_observation_into(obs, buffers)
     for key, value in reference.items():
         np.testing.assert_array_equal(buffers[key], value, err_msg=key)
 
-    mine.effects = effects
+    mine.used_abilities = list(range(capacity + 1))
     obs.agent_permanents = [mine]
-    message = f"observation capacity exceeded: facts {capacity + 2} > {capacity}"
+    message = f"observation capacity exceeded: facts {capacity + 1} > {capacity}"
     with pytest.raises(ValueError, match=message):
         encoder.encode(obs)
     with pytest.raises(ValueError, match=message):
-        env.encode_observation(obs, version, config.max_facts)
+        env.encode_observation(obs, capacity)
     buffers = encoder.allocate()
     with pytest.raises(ValueError, match=message):
         env.encode_observation_into(obs, buffers)
 
 
 @pytest.mark.parametrize("frequency", [1, 2])
-def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -> None:
+def test_waiting_delayed_trigger_rows_agree(frequency: int) -> None:
     card = "Fatal Fissure" if frequency == 1 else "Ruinous Waterbending"
     env = priority_root((card,), ("Swamp",) * 7, opponent=("Gray Ogre",))
     obs = env.scenario_refresh()
@@ -627,33 +572,24 @@ def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4(frequency: int) -
         obs, *_ = env.step(ranked[0])
     else:
         raise AssertionError(f"{card} trigger is not waiting")
-    for version in (4, 5, 6, 7):
-        expected = ObservationEncoder(
-            ObservationConfig(policy_input_version=version)
-        ).encode(obs)
-        actual = env.encode_observation(obs, version)
-        for key, value in expected.items():
-            np.testing.assert_array_equal(actual[key], value, err_msg=key)
-        relations = actual["relations"]
-        waiting = relations[:, 3] == 10
-        if version == 4:
-            assert not waiting.any(), "a v5 fact"
-            continue
-        header = relations[waiting & (relations[:, 0] == 1)][0]
-        assert header[28] == (1 if frequency == 1 else 3)
-        assert header[RELATION_THIS_TURN_INDEX] == 1
-        lifetime = relations[waiting & (relations[:, 0] == 9)][0]
-        assert lifetime[28] == frequency
-        if frequency == 1:
-            watched = relations[waiting & (relations[:, 0] == 3)][0]
-            remembered = relations[waiting & (relations[:, 0] == 8)][0]
-            assert remembered[24] == watched[24] > 0
+    expected = ObservationEncoder(ObservationConfig()).encode(obs)
+    actual = env.encode_observation(obs)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    relations = actual["relations"]
+    waiting = relations[:, 3] == 10
+    header = relations[waiting & (relations[:, 0] == 1)][0]
+    assert header[28] == (1 if frequency == 1 else 3)
+    assert header[RELATION_THIS_TURN_INDEX] == 1
+    lifetime = relations[waiting & (relations[:, 0] == 9)][0]
+    assert lifetime[28] == frequency
+    if frequency == 1:
+        watched = relations[waiting & (relations[:, 0] == 3)][0]
+        remembered = relations[waiting & (relations[:, 0] == 8)][0]
+        assert remembered[24] == watched[24] > 0
 
 
-@pytest.mark.parametrize("version", [4, 5, 6, 7])
-def test_t6_transform_parity_and_schedule_relation_versions(
-    version: int,
-) -> None:
+def test_transform_parity_and_schedule_relations() -> None:
     env = priority_root((), ("Mountain", "Gray Ogre"))
     obs = env.scenario_refresh()
     mine = obs.agent_permanents[-1]
@@ -692,34 +628,29 @@ def test_t6_transform_parity_and_schedule_relation_versions(
         frame | {"kind": 12, "source": empty, "mode": 1, "attackers": "land creatures"},
     ]
     frames = managym.parse_continuation_frames_json(json.dumps(frames))
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
+    encoder = ObservationEncoder(ObservationConfig())
     expected = encoder.encode(obs)
-    actual = env.encode_observation(obs, version)
+    actual = env.encode_observation(obs)
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
     # Retained frames are read-only: the native environment remains the
     # execution authority, and offline relation encoding consumes the capture.
     relations = encoder._encode_relations(frames, obs.agent.player_index)
-    if version >= 5:
-        assert (relations[:, 0] == 7).any(), (
-            "inherited definition joins learning tokens"
-        )
-        frequency = relations[relations[:, 0] == 9]
-        assert len(frequency) == 1 and frequency[0, 28] == 2
-        assert (relations[:, 3] == 12).any(), "pending combat is visible"
-        assert (relations[:, RELATION_X_INDEX] == 6).any(), "paid X is retained"
-        for kind in (9,):
-            rows = actual["facts"][actual["facts"][:, FACT_KIND_INDEX] == kind]
-            assert len(rows) and (rows[:, FACT_OBJECT_INDEX] > 0).all()
-    else:
-        assert not (relations[:, 0] == 7).any()
-        assert not (relations[:, 3] >= 10).any(), "frozen v4 omits v5 scheduling"
+    assert (relations[:, 0] == 7).any(), "inherited definition joins learning tokens"
+    frequency = relations[relations[:, 0] == 9]
+    assert len(frequency) == 1 and frequency[0, 28] == 2
+    assert (relations[:, 3] == 12).any(), "pending combat is visible"
+    assert (relations[:, RELATION_X_INDEX] == 6).any(), "paid X is retained"
+    rows = actual["facts"][actual["facts"][:, FACT_KIND_INDEX] == FACT_TRANSFORMS]
+    assert len(rows) and (rows[:, FACT_OBJECT_INDEX] > 0).all()
 
 
-def test_saved_action_capacity_retains_its_historical_default() -> None:
-    assert ObservationConfig().max_actions >= managym.CARD_DEFINITION_COUNT
-    assert ObservationConfig.from_checkpoint({}).max_actions == 64
-    assert ObservationConfig.from_checkpoint({"max_actions": 128}).max_actions == 128
+def test_saved_action_capacity_is_retained_only_for_the_current_input() -> None:
+    saved = {"policy_input_version": 9, "max_actions": 128}
+    assert ObservationConfig.from_checkpoint(saved).max_actions == 128
+    # A configuration that names no input is the first one, never today's.
+    with pytest.raises(UnsupportedPolicyInput):
+        ObservationConfig.from_checkpoint({"max_actions": 128})
 
 
 def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> None:
@@ -760,24 +691,8 @@ def test_bumi_scheduled_combat_restriction_has_native_python_fact_parity() -> No
     )
 
 
-def test_v5_source_dependent_duration_matches_native_authority() -> None:
-    env = source_effect_root()
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
-    actor = env.current_agent_index()
-    assert actor is not None
-    for viewer in (actor, 1 - actor):
-        obs = env.observation_for_player(viewer)
-        native = env.encode_observation(obs, 5)
-        reference = encoder.encode(obs)
-        effects = native["facts"][native["facts"][:, FACT_KIND_INDEX] == FACT_EFFECT]
-        assert len(effects) == 1
-        assert effects[0, FACT_DURATION_INDEX] == 3
-        for key in native:
-            np.testing.assert_array_equal(native[key], reference[key], err_msg=key)
-
-
 @pytest.mark.parametrize("capacity", [128, 140, 256, 512])
-def test_v6_vector_buffers_derive_fact_capacity(capacity: int) -> None:
+def test_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     config = ObservationConfig(max_facts=capacity)
     encoder = ObservationEncoder(config)
     env = managym.VectorEnv(num_envs=1, seed=213, skip_trivial=True)

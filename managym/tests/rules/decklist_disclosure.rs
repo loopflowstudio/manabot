@@ -158,13 +158,6 @@ fn decklist_rows_encode_known_lists_and_zero_for_a_closed_opponent() {
             DecklistDisclosure::Closed => assert!(opponent.iter().all(|value| *value == 0.0)),
         }
     }
-    let legacy = ObservationEncoderConfig {
-        policy_input_version: 4,
-        ..config
-    };
-    let game = Game::new(configs(DecklistDisclosure::Open), 7, true);
-    let obs = Observation::for_player(&game, PlayerId(0));
-    assert!(encode(&obs, &legacy).unwrap().decklists.is_empty());
 }
 
 #[test]

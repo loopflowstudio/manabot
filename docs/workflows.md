@@ -6,7 +6,7 @@ Workflow installation grants no campaign, resource, spending or shipping authori
 
 | Responsibility | Owns | Default Graph | Completion evidence |
 | --- | --- | --- | --- |
-| Experiments | Scientific questions spanning model architecture, training regime and card pools; training and evaluation together | `experiment` | Frozen protocol, reconciled actual runs/failures/costs, analysis and supported conclusion |
+| Experiments | Scientific questions spanning model architecture, training regime and card pools; training and evaluation together | `experiment` | One report: each run's commit, run ID and cost, what it showed, and for a finding the verdict on its prediction |
 | Coverage | Faithful cards/mechanics, shared observations/actions/tokens and rules defects | `coverage` | Working behavior, reusable decomposition, measured optimization and integrated batch handoff |
 | Engine performance | Cross-cutting algorithms, allocation, caches, throughput and latency | `engine-performance` | Behavior-preserving gains on representative workloads with same-hardware comparison |
 | Infrastructure | Shared training/evaluation systems, artifacts, interfaces, CI, developer tools and reliability | builtin `code` | Working maintained systems and their relevant workflow checks |
@@ -44,31 +44,38 @@ create that Task, start its campaign or complete it on the card author's behalf.
 
 ## Experiments
 
-`experiment` has one lifecycle: design → design review → optional software →
-final freeze → execution review → bounded execution → analysis → evidence review.
-Architecture, regime and card-pool coverage are lenses used within its design and
-analysis, not three obligatory campaigns. Existing checkpoints can go directly
-to evaluation without placeholder training or a placeholder PR.
+`experiment` has four steps: design → run → report → review. Only the review is
+interactive, and it returns to the run for a specific missing portion of the
+same question.
 
-The optional `experiment-software` path composes builtin `pursue` and `deliver`,
-retains demo, and uses a narrow integration verification skill. Builtin `verify`
-can complete a Task; this variant verifies software without completing the parent
-experiment before its empirical obligations. The ready path is empty. Source and
-protocol freeze occur after software integration on either path.
+Most runs are **exploratory**: calibration, throughput, capacity, pilots and
+anything run to make later work possible. They need a module and a line saying
+what the run is for, and no prediction. A **finding** is a result that will be
+cited as a claim about a method or about playing strength. It opens its report
+with one paragraph, committed before any scored run: the question, a numeric
+prediction, the result that would refute it and a cost cap
+([experiments](experiments.md#how-a-claim-gets-made)).
 
-Execution review checks actual authorization and accepted settings, not just the
-existence of a budget. Missing authority stops headless execution without jobs,
-games, rental or spending. A retry reconciles existing jobs and artifacts first;
-it cannot silently duplicate a campaign. Evidence review returns to execution only
-for a correctable missing portion still covered by the same protocol and authority.
-Changed hypotheses/source/bounds require prospective redesign and review.
+Three rules replace protocol files:
 
-The first growing-pool instance uses [the MTG-245 protocol](../experiments/protocols/growing-pool-245-v1.md):
-A's reference league, authored functional decks, frozen tickets, stable anchors
-and explicit splits. Lists, shares and budgets remain proposals until accepted.
-Training exposure is separate from evaluation draws and committed action counts;
-the latter never substitute for training capture. Task 04 owns actual first-pilot
-execution/results and Task 08 Validation B on the expanded mechanism cohort.
+- The freeze is the commit and the Etude run ID.
+- A change that keeps the question (a capacity limit, a crash fix, a device, a
+  retry) is a dated line in the report. A change to a finding's question,
+  prediction or decision rule is a new dated prediction, and earlier runs
+  become exploratory.
+- Cost is the launcher's number for the run, recorded once.
+
+An experiment whose whole cost is at or under USD25 launches under the
+launcher's own cap (`--max-usd`). Above that, a person approves the amount
+before anything is rented. Software the experiment needs beyond its module is
+delivered as an ordinary PR from the same checkout before the run; the Task
+stays open until the review accepts the report. Existing checkpoints go straight
+to evaluation without placeholder training.
+
+An experiment is its Python module at a commit. It has no protocol document,
+serialized regime, digest check or test suite of its own; machinery a second
+experiment would reuse lives in `manabot/` or Etude and is tested once there.
+
 The [Standard milestone](../.lf/wave/coverage/research/standard-2026-11/milestone.md) keeps the deeper
 strength/generalization track separate, first after full FDN. Tiny runs may
 prove execution while leaving learning inconclusive.

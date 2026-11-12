@@ -102,77 +102,79 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
-    if config.policy_input_version >= 9 {
-        dict.set_item(
-            "name_candidates",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.name_candidates,
-                &[config.max_actions, config.name_dim()],
-            )?,
-        )?;
+    dict.set_item(
+        "name_candidates",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.name_candidates,
+            &[
+                config.max_actions,
+                crate::agent::observation_encoder::NAME_DIM,
+            ],
+        )?,
+    )?;
+    for (name, values, shape) in [
+        (
+            "effects",
+            &encoded.effects,
+            [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
+        ),
+        (
+            "effect_details",
+            &encoded.effect_details,
+            [shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
+        ),
+        (
+            "effect_members",
+            &encoded.effect_members,
+            [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
+        ),
+    ] {
+        dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
     }
-    if config.policy_input_version >= 7 {
-        for (name, values, shape) in [
-            (
-                "effects",
-                &encoded.effects,
-                [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
-            ),
-            (
-                "effect_details",
-                &encoded.effect_details,
-                [
-                    shared_effects::detail_rows(config.policy_input_version),
-                    shared_effects::DETAIL_DIM,
-                ],
-            ),
-            (
-                "effect_members",
-                &encoded.effect_members,
-                [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
-            ),
-        ] {
-            dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
-        }
-    }
-    if config.policy_input_version >= 5 {
-        dict.set_item(
-            "facts",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.facts,
-                &[
-                    config.fact_rows(),
-                    crate::agent::observation_encoder::FACT_DIM,
-                ],
-            )?,
-        )?;
-    }
-    if config.policy_input_version >= 2 {
-        dict.set_item(
-            "relations",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.relations,
-                &[
-                    crate::agent::continuation::RELATION_ROWS,
-                    config.relation_dim(),
-                ],
-            )?,
-        )?;
-    }
+    dict.set_item(
+        "facts",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.facts,
+            &[
+                config.max_facts,
+                crate::agent::observation_encoder::FACT_DIM,
+            ],
+        )?,
+    )?;
+    dict.set_item(
+        "relations",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.relations,
+            &[
+                crate::agent::continuation::RELATION_ROWS,
+                crate::agent::continuation::RELATION_DIM,
+            ],
+        )?,
+    )?;
 
     dict.set_item(
         "agent_player",
-        to_numpy_array_f32(py, &np, &encoded.agent_player, &[1, config.player_dim()])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.agent_player,
+            &[1, crate::agent::observation_encoder::PLAYER_DIM],
+        )?,
     )?;
     dict.set_item(
         "opponent_player",
-        to_numpy_array_f32(py, &np, &encoded.opponent_player, &[1, config.player_dim()])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.opponent_player,
+            &[1, crate::agent::observation_encoder::PLAYER_DIM],
+        )?,
     )?;
     dict.set_item(
         "agent_cards",
@@ -180,7 +182,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_cards,
-            &[config.max_cards_per_player, config.card_dim()],
+            &[
+                config.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -189,7 +194,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_cards,
-            &[config.max_cards_per_player, config.card_dim()],
+            &[
+                config.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -198,7 +206,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
+            &[
+                config.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -207,7 +218,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
+            &[
+                config.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -304,21 +318,19 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player, 2],
         )?,
     )?;
-    if config.policy_input_version >= 5 {
-        dict.set_item(
-            "decklists",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decklists,
-                &[
-                    2,
-                    config.max_cards_per_player,
-                    crate::agent::observation_encoder::DECKLIST_DIM,
-                ],
-            )?,
-        )?;
-    }
+    dict.set_item(
+        "decklists",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.decklists,
+            &[
+                2,
+                config.max_cards_per_player,
+                crate::agent::observation_encoder::DECKLIST_DIM,
+            ],
+        )?,
+    )?;
 
     Ok(dict)
 }
@@ -4227,30 +4239,21 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=6, max_facts=None))]
+    #[pyo3(signature = (obs, max_facts=None))]
     fn encode_observation(
         &self,
         py: Python<'_>,
         obs: PyObservation,
-        policy_input_version: u8,
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=9) {
-            return Err(PyValueError::new_err("unsupported policy input version"));
-        }
-        if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
+        if max_facts == Some(0) {
             return Err(PyValueError::new_err(
-                "max_facts requires v6 and a positive capacity",
+                "max_facts requires a positive capacity",
             ));
         }
         let config = ObservationEncoderConfig {
-            policy_input_version,
-            max_facts: max_facts.unwrap_or(if policy_input_version == 7 {
-                crate::agent::observation_encoder::V5_FACT_ROWS
-            } else {
-                ObservationEncoderConfig::default().max_facts
-            }),
+            max_facts: max_facts.unwrap_or(ObservationEncoderConfig::default().max_facts),
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
@@ -4600,18 +4603,6 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
         .collect())
 }
 
-#[cfg(feature = "python")]
-#[pyfunction]
-fn validate_policy_input(obs: &PyObservation, version: u8) -> PyResult<()> {
-    #[cfg(feature = "benchmark")]
-    let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
-    let observation = obs.clone().into();
-    #[cfg(feature = "benchmark")]
-    drop(conversion_timer);
-    crate::agent::observation_encoder::validate_policy_input(&observation, version)
-        .map_err(|error| PyValueError::new_err(error.to_string()))
-}
-
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
@@ -4671,7 +4662,6 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyContinuousEffect>()?;
     m.add_class::<PySharedEffect>()?;
-    m.add_function(wrap_pyfunction!(validate_policy_input, m)?)?;
     m.add_class::<crate::agent::shared_effects::EffectObject>()?;
     m.add_class::<crate::agent::shared_effects::EffectMembership>()?;
     m.add_class::<PyCopyEffect>()?;

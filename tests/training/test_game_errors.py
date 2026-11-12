@@ -179,7 +179,6 @@ def test_resource_limit_receipt_replays_its_retained_encoding_boundary(
         error="observation capacity exceeded: agent_permanents 41 > 40",
         frame_json=game.frame,
         observation=ObservationConfig(
-            policy_input_version=7,
             max_cards_per_player=128,
             max_permanents_per_player=40,
             max_actions=64,

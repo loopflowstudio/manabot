@@ -203,7 +203,6 @@ class Env:
     def encode_observation(
         self,
         obs: Observation,
-        policy_input_version: int = 6,
         max_facts: int | None = None,
     ) -> Dict[str, np.ndarray]: ...
     def encode_observation_into(
@@ -834,7 +833,6 @@ class ContinuationFrame:
     effect_execution_references: list[VisibleReference]
     effect_execution_description: str | None
     effect_execution_summary: list[str]
-    effect_execution_requires_v8: bool
     program: list[tuple[int, int]]
     program_description: str | None
     remembered: list[VisibleReference]
@@ -843,7 +841,6 @@ class ContinuationFrame:
     source_transforms: int
     kind: int
     decision: int
-    legacy_decision: int | None
     parent: int | None
     controller: int
     source: VisibleReference
@@ -882,7 +879,6 @@ class NameCandidate:
     def definition(self) -> int | None: ...
 
 def naming_catalog() -> list[NameCandidate]: ...
-def validate_policy_input(obs: Observation, version: int) -> None: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...

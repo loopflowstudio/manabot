@@ -127,7 +127,10 @@ def load_checkpoint(
     tuple[ActorCritic, ObservationSpace]
     | tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]
 ):
-    """Load saved configuration and validate world/schema; verify S3 bytes before loading."""
+    """Load saved configuration and validate world/schema; verify S3 bytes before loading.
+
+    Raises `UnsupportedPolicyInput` for a checkpoint of another policy input.
+    """
 
     if isinstance(path, StoredArtifact):
         path = str(materialize_artifact(path))
@@ -139,9 +142,7 @@ def load_checkpoint(
     )
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent_config = ModelConfig.from_checkpoint(
-        config["agent_hypers"], obs_space.encoder.config.policy_input_version
-    )
+    agent_config = ModelConfig.from_checkpoint(config["agent_hypers"])
     agent = ActorCritic(obs_space, agent_config)
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:

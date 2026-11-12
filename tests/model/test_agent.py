@@ -136,7 +136,14 @@ def test_gradient_flow(agent: ActorCritic, real_observation: Dict[str, torch.Ten
     loss = logits.mean() + value.mean()
     loss.backward()
 
+    # Program and shared-effect reducers keep absent (never zero) gradients
+    # until an observation carries a program or an effect record; an opening
+    # observation has neither.
+    unused = ("facts.program_", "shared_effects.")
     for name, param in agent.named_parameters():
+        if name.startswith(unused):
+            assert param.grad is None, f"Unexpected gradient for parameter {name}"
+            continue
         assert param.grad is not None, f"No gradient for parameter {name}"
         assert not torch.isnan(param.grad).any(), f"NaN gradient in parameter {name}"
         assert not torch.isinf(param.grad).any(), (

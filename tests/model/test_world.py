@@ -33,7 +33,7 @@ def checkpoint():
         "model_state_dict": agent.state_dict(),
         "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
-            "agent_hypers": agent.config.model_dump(),
+            "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(selected_match().to_rust(), space),

@@ -121,26 +121,17 @@ def _coverage(coverage: list[Step]) -> None:
 
 
 def _experiment(experiment: list[Step]) -> None:
-    router = _one(experiment, "experiment-route")
-    routes = {path.name: path.steps for path in router.paths}
-    assert set(routes) == {"software", "ready"} and not routes["ready"]
-    software = routes["software"]
-    _delivery(software, _one(software, "implement").key, "experiment-software-review")
-    assert not any(step.label == "verify" for step in _flatten(experiment))
-    for review, target in (
-        ("experiment-design-review", "experiment-design"),
-        ("experiment-execution-review", "experiment-freeze"),
-        ("experiment-evidence-review", "pool-validation"),
-    ):
-        step = _one(experiment, review)
-        assert step.interactive and step.returns_to == _one(experiment, target).key
-    assert (
-        router.key
-        < _one(experiment, "experiment-freeze").key
-        < _one(experiment, "experiment-execution-review").key
-        < _one(experiment, "pool-validation").key
-        < _one(experiment, "experiment-analysis").key
-    )
+    """Design, run, report, then one interactive review that returns to the run."""
+    steps = _flatten(experiment)
+    assert [step.label for step in steps] == [
+        "experiment-design",
+        "experiment-run",
+        "experiment-report",
+        "experiment-review",
+    ]
+    assert [step.label for step in steps if step.interactive] == ["experiment-review"]
+    review = _one(steps, "experiment-review")
+    assert review.returns_to == _one(steps, "experiment-run").key
 
 
 def main() -> None:
@@ -151,9 +142,7 @@ def main() -> None:
     performance = graphs["engine-performance"]
     _delivery(performance, performance[0].key)
     _experiment(graphs["experiment"])
-    print(
-        "Coverage loops, single delivery, optional software and experiment review boundaries: valid"
-    )
+    print("Coverage loops, single delivery and the experiment review boundary: valid")
 
 
 if __name__ == "__main__":

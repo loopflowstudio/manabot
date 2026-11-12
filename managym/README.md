@@ -58,14 +58,14 @@ Both players expose definition-only initial and remaining sideboard counts;
 only the owner gets copy candidates. Python observation JSON and validation
 use the native Rust implementations so new visibility fields cannot drift.
 
-Input v7 factors resolved `EffectRecords` through `agent/shared_effects.rs`
+The policy input factors resolved `EffectRecords` through `agent/shared_effects.rs`
 before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
 source incarnation, timestamps, fixed affected sets and duplicate edges survive.
 Public object IDs are joins; private card storage IDs do not enter this view.
 Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
-512 × 3 and 2048 × 2; every capacity fails explicitly. V1–v6 still use their
-frozen per-holder fact projection, while v7 local facts exclude active effects.
+4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
+active effects.
 Projection never mutates or semantically coalesces the engine’s records.
 
 Catalog naming uses `Decision::NameCard` over a shared immutable `NameVocabulary`.
@@ -76,9 +76,8 @@ records its digest. A decision holds a `NameScope`; a scope over
 contiguous groups, and choosing one only narrows the scope. Selecting a name
 constructs one `ExileNamed` effect, then enters the existing private search
 continuation. Public names and optional learning definition references are not
-in-game card objects or deck admission. Explicit policy input v9 carries name
-joins and group spans in `name_candidates[A,4]` at ordinary action capacity,
-beside v8's layer layout; v1–v8 layouts and fresh v6 defaults are frozen.
+in-game card objects or deck admission. The policy input carries name joins and
+group spans in `name_candidates[A,4]` at ordinary action capacity.
 See [policy inputs](../docs/observation-and-model.md#catalog-naming-input).
 
 Spell-level modes are announced before targets and payment. Independent target
@@ -110,10 +109,10 @@ ability is created. Its exact incarnations travel through placement, stack and
 suspended resolution; `ObjectSelector::Remembered` never follows a departed
 object into a new incarnation. Event context (such as the spell just cast) stays
 separate. End-step timing can wait for either player's step or the controller's,
-independently of what was captured. Viewer-safe v5/v6 relations and text expose
+independently of what was captured. Viewer-safe relations and text expose
 the remembered references, expiry and frequency. Relation row kind 9 carries
 frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
-Missing historical frequency is unknown. Widths and existing meanings stay fixed; earlier input versions retain their exclusions.
+Missing historical frequency is unknown.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
 not a set of revealed physical cards. Search forks by full clone: clone the
@@ -273,12 +272,12 @@ current-digest validation plus ordinary semantic execution. Portable capture JSO
 is evidence, not execution authority; clones need their own live capture.
 
 
-Fresh policy input v6 has configurable fact capacity (512 by default), with
-v5 frozen at 128 rows and identical column meanings. It keeps v4's trigger-placement action joins and retained
+The policy input has configurable fact capacity (512 by default). It keeps
+trigger-placement action joins and retained
 resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its
-layout, legacy checkpoint admission and measurement commands are documented in
+layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
@@ -316,14 +315,12 @@ changed and pending; a pending turn action cannot enter priority stabilization.
 Immediate fixture/arithmetic helpers require completion without a question and
 fail explicitly if used for a choice-bearing event. Sacrifice facts match their
 pre-move subjects after replacement choices and before any batch member leaves;
-trigger placement still waits for resolution. Explicit input v8 projects the
+trigger placement still waits for resolution. The policy input projects the
 retained program, results, completion and proposals through fact-kind 14 as bare
 name/value facts, with viewer-safe reference slots in relation kind 10; a frame
 that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
-(decision context and capture), never by a policy observation. Earlier inputs reject
-novel retained state before buffer writes; migrated searches retain their frozen
-obligation codes and implied completion events.
+(decision context and capture), never by a policy observation.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with

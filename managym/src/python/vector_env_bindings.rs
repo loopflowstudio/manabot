@@ -427,9 +427,8 @@ impl PyVectorEnv {
 
 /// Every configurable axis follows the supplied ObservationSpace on both paths.
 /// Companion shapes, dtypes and storage are checked before buffers are written.
-/// Relation width binds v1-v5 layouts. V6 retains v5 columns and reads its
-/// capacity from the fact axis. At 128 rows their encoding is identical; the
-/// Python configuration/checkpoint still owns the declared version identity.
+/// The buffer set must be policy input v9's: fixed relation, shared-effect and
+/// name-candidate widths, with fact capacity read from the fact axis.
 #[cfg(feature = "python")]
 pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
@@ -469,71 +468,55 @@ pub(super) fn input_buffer_config(
         policy_history,
         ..ObservationEncoderConfig::default()
     };
-    let naming = buffers.contains("name_candidates")?;
-    let mut shared_count = 0;
-    for name in ["effects", "effect_details", "effect_members"] {
-        shared_count += usize::from(buffers.contains(name)?);
+    // One layout: every v9 buffer is present at its fixed width.
+    let fixed = [
+        (
+            "relations",
+            Some(crate::agent::continuation::RELATION_ROWS),
+            crate::agent::continuation::RELATION_DIM,
+        ),
+        ("facts", None, crate::agent::observation_encoder::FACT_DIM),
+        (
+            "effects",
+            Some(crate::agent::shared_effects::EFFECT_ROWS),
+            crate::agent::shared_effects::EFFECT_DIM,
+        ),
+        (
+            "effect_details",
+            Some(crate::agent::shared_effects::DETAIL_ROWS),
+            crate::agent::shared_effects::DETAIL_DIM,
+        ),
+        (
+            "effect_members",
+            Some(crate::agent::shared_effects::MEMBER_ROWS),
+            crate::agent::shared_effects::MEMBER_DIM,
+        ),
+        (
+            "name_candidates",
+            Some(config.max_actions),
+            crate::agent::observation_encoder::NAME_DIM,
+        ),
+    ];
+    for (name, rows, width) in fixed {
+        if !buffers.contains(name)? {
+            return Err(PyValueError::new_err(format!(
+                "policy input v9 requires a {name} buffer"
+            )));
+        }
+        let [actual_rows, actual_width] = shape(name)?;
+        if actual_width != width || rows.is_some_and(|rows| rows != actual_rows) {
+            return Err(PyValueError::new_err(format!(
+                "policy input v9 requires {name} of shape [{}, {width}]",
+                rows.map_or("capacity".to_string(), |rows| rows.to_string())
+            )));
+        }
     }
-    if shared_count != 0 && shared_count != 3 {
+    if !buffers.contains("decklists")? {
         return Err(PyValueError::new_err(
-            "v7 requires all shared-effect buffers",
+            "policy input v9 requires a decklists buffer",
         ));
     }
-    if !buffers.contains("relations")? {
-        if shared_count != 0 || naming {
-            return Err(PyValueError::new_err("v7 requires relations"));
-        }
-        config.policy_input_version = 1;
-        return Ok(config);
-    }
-    config.policy_input_version = match shape("relations")?[1] {
-        crate::agent::continuation::LEGACY_RELATION_DIM => 3,
-        crate::agent::continuation::RELATION_DIM => 4,
-        crate::agent::continuation::RELATION_DIM_V5 => {
-            let [rows, width] = shape("facts")?;
-            if width != crate::agent::observation_encoder::FACT_DIM {
-                return Err(PyValueError::new_err("invalid fact buffer shape"));
-            }
-            config.max_facts = rows;
-            if shared_count == 3 {
-                let details = buffers
-                    .get_item("effect_details")?
-                    .expect("shared buffers present");
-                let detail_shape: Vec<usize> = details.getattr("shape")?.extract()?;
-                if detail_shape.get(detail_shape.len().saturating_sub(2))
-                    == Some(&crate::agent::shared_effects::V8_DETAIL_ROWS)
-                {
-                    8
-                } else {
-                    7
-                }
-            } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
-                5
-            } else {
-                6
-            }
-        }
-        _ => {
-            return Err(PyValueError::new_err(
-                "unsupported continuation relation width",
-            ))
-        }
-    };
-    if shared_count != 0 && config.policy_input_version < 7 {
-        return Err(PyValueError::new_err("v7 requires current relation width"));
-    }
-    if naming {
-        // Naming composes the v8 layer layout with name and group-span rows.
-        if config.policy_input_version != 8 {
-            return Err(PyValueError::new_err(
-                "v9 requires the v8 shared-effect layout",
-            ));
-        }
-        if shape("name_candidates")?[1] != crate::agent::observation_encoder::NAME_DIM_V9 {
-            return Err(PyValueError::new_err("invalid name candidate width"));
-        }
-        config.policy_input_version = 9;
-    }
+    config.max_facts = shape("facts")?[0];
     Ok(config)
 }
 
@@ -543,77 +526,56 @@ fn read_observation_buffers(
     n: usize,
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
-    let shared_buffer = |name: &str, rows: usize, width: usize| -> PyResult<Option<Py<PyAny>>> {
-        if c.policy_input_version < 7 {
-            return Ok(None);
-        }
+    let required = |name: &str, shape: &[usize]| -> PyResult<Option<Py<PyAny>>> {
         Ok(Some(
-            require_numpy_array(buffers, name, &[n, rows, width], "float32")?.unbind(),
+            require_numpy_array(buffers, name, shape, "float32")?.unbind(),
         ))
     };
     Ok(ObservationBuffers {
-        name_candidates: if c.policy_input_version >= 9 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "name_candidates",
-                    &[n, c.max_actions, c.name_dim()],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
-        relations: if c.policy_input_version >= 2 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "relations",
-                    &[
-                        n,
-                        crate::agent::continuation::RELATION_ROWS,
-                        c.relation_dim(),
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
-        effects: shared_buffer(
+        name_candidates: required(
+            "name_candidates",
+            &[
+                n,
+                c.max_actions,
+                crate::agent::observation_encoder::NAME_DIM,
+            ],
+        )?,
+        relations: required(
+            "relations",
+            &[
+                n,
+                crate::agent::continuation::RELATION_ROWS,
+                crate::agent::continuation::RELATION_DIM,
+            ],
+        )?,
+        effects: required(
             "effects",
-            crate::agent::shared_effects::EFFECT_ROWS,
-            crate::agent::shared_effects::EFFECT_DIM,
+            &[
+                n,
+                crate::agent::shared_effects::EFFECT_ROWS,
+                crate::agent::shared_effects::EFFECT_DIM,
+            ],
         )?,
-        effect_details: shared_buffer(
+        effect_details: required(
             "effect_details",
-            crate::agent::shared_effects::detail_rows(c.policy_input_version),
-            crate::agent::shared_effects::DETAIL_DIM,
+            &[
+                n,
+                crate::agent::shared_effects::DETAIL_ROWS,
+                crate::agent::shared_effects::DETAIL_DIM,
+            ],
         )?,
-        effect_members: shared_buffer(
+        effect_members: required(
             "effect_members",
-            crate::agent::shared_effects::MEMBER_ROWS,
-            crate::agent::shared_effects::MEMBER_DIM,
+            &[
+                n,
+                crate::agent::shared_effects::MEMBER_ROWS,
+                crate::agent::shared_effects::MEMBER_DIM,
+            ],
         )?,
-        facts: if c.policy_input_version >= 5 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "facts",
-                    &[
-                        n,
-                        c.fact_rows(),
-                        crate::agent::observation_encoder::FACT_DIM,
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
+        facts: required(
+            "facts",
+            &[n, c.max_facts, crate::agent::observation_encoder::FACT_DIM],
+        )?,
         known_hand: require_numpy_array(
             buffers,
             "known_hand",
@@ -621,24 +583,15 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
-        decklists: if c.policy_input_version >= 5 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "decklists",
-                    &[
-                        n,
-                        2,
-                        c.max_cards_per_player,
-                        crate::agent::observation_encoder::DECKLIST_DIM,
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
+        decklists: required(
+            "decklists",
+            &[
+                n,
+                2,
+                c.max_cards_per_player,
+                crate::agent::observation_encoder::DECKLIST_DIM,
+            ],
+        )?,
         semantic_cards: require_numpy_array(
             buffers,
             "semantic_cards",
@@ -649,42 +602,58 @@ fn read_observation_buffers(
         agent_player: require_numpy_array(
             buffers,
             "agent_player",
-            &[n, 1, c.player_dim()],
+            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
             "float32",
         )?
         .unbind(),
         opponent_player: require_numpy_array(
             buffers,
             "opponent_player",
-            &[n, 1, c.player_dim()],
+            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
             "float32",
         )?
         .unbind(),
         agent_cards: require_numpy_array(
             buffers,
             "agent_cards",
-            &[n, c.max_cards_per_player, c.card_dim()],
+            &[
+                n,
+                c.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
             "float32",
         )?
         .unbind(),
         opponent_cards: require_numpy_array(
             buffers,
             "opponent_cards",
-            &[n, c.max_cards_per_player, c.card_dim()],
+            &[
+                n,
+                c.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
             "float32",
         )?
         .unbind(),
         agent_permanents: require_numpy_array(
             buffers,
             "agent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
+            &[
+                n,
+                c.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
             buffers,
             "opponent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
+            &[
+                n,
+                c.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
             "float32",
         )?
         .unbind(),
@@ -1093,10 +1062,12 @@ impl SendObservationFieldSlices {
         let actions_len = config.actions_len();
         let action_focus_len = config.action_focus_len();
 
-        let agent_player_ptr = self.agent_player.row_ptr(env_index, config.player_dim())?;
+        let agent_player_ptr = self
+            .agent_player
+            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
         let opponent_player_ptr = self
             .opponent_player
-            .row_ptr(env_index, config.player_dim())?;
+            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
         let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
         let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
         let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
@@ -1209,11 +1180,17 @@ impl SendObservationFieldSlices {
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_player: unsafe {
-                slice::from_raw_parts_mut(agent_player_ptr, config.player_dim())
+                slice::from_raw_parts_mut(
+                    agent_player_ptr,
+                    crate::agent::observation_encoder::PLAYER_DIM,
+                )
             },
             // SAFETY: each call uses disjoint per-env rows.
             opponent_player: unsafe {
-                slice::from_raw_parts_mut(opponent_player_ptr, config.player_dim())
+                slice::from_raw_parts_mut(
+                    opponent_player_ptr,
+                    crate::agent::observation_encoder::PLAYER_DIM,
+                )
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },

@@ -265,7 +265,9 @@ def write_report(
             projection = llm_receipts[0].projection
             experiment["title"] = "Qwen reasoning vs MTG-183"
             experiment["question"] = "Where does evaluation time go?"
-            experiment["context"]["world"] = "Elemental v2 · retained native Command replay"
+            experiment["context"]["world"] = (
+                "Elemental v2 · retained native Command replay"
+            )
             experiment["context"]["device"] = "Qwen GPU · policy CPU, one thread"
             experiment["context"]["caveat"] = (
                 "Same-game time accounting; different models and hardware. "
