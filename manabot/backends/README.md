@@ -85,7 +85,10 @@ buffer, or conversion fails naming the key.
 
 Loading a container validates the same world binding as
 `manabot.model.checkpoint.load_checkpoint` and fails with the same errors; a
-refusal names the revision that wrote the original torch checkpoint. Backends
+refusal names the revision that wrote the original torch checkpoint. A file
+that is not a container (a `.pt`, or a conversion without the metadata) raises
+`NotAContainer`, saying to convert the `.pt`; `convert` refuses a `.safetensors`
+input. Backends
 cover what the w160l8 regime uses: a catalog world with catalog record ids,
 table attention, a masked-mean scalar critic and policy input v9. A checkpoint
 that enables anything else (belief inputs, policy history, the pooled token

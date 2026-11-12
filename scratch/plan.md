@@ -17,10 +17,14 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   the new paths; experiments keep theirs except `cuda_precision.py`
   (`training.precision` had no alias). `manabot/policy/{__init__,prepare,
   checkpoint,protocol}.py`, `tests/model/test_policy_container.py`,
-  `manabot/backends/__init__.py` and `policy/README.md` are MTG-321's
-  c42eee948 files verbatim (except one `buckets.py` bullet in the README), so
-  they merge cleanly. `backends/README.md` is MTG-321's plus a torch row and
-  section (add/add conflict expected when the second of #495/#this lands).
+  `manabot/backends/__init__.py` and `policy/README.md` are MTG-321's files
+  verbatim as of its 88c97936b (re-synced at realign; it had added
+  `NotAContainer`, made `METADATA_KEYS` private and folded `dimensions()` into
+  `PolicyCheckpoint`), except one `buckets.py` bullet in the README, so they
+  merge cleanly. Re-sync whenever #495 moves. `backends/README.md` is
+  MTG-321's plus a torch row and section, keeping "the device" in the
+  `arrays.py` row that MTG-321 dropped (add/add conflict expected when the
+  second of #495/#this lands).
   Boundary tests: policy imports no framework (static + subprocess),
   backends never import each other, `_TORCH_NOT_YET_MOVED` lists the 73
   modules outside the backend that import torch (both directions checked),
@@ -65,7 +69,9 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
    continuation, recent_events, token_stream, belief) onto prepared indices.
 2. `save_checkpoint` writing the container and `load_checkpoint` reading it:
    needs the container to carry every config and the `.pt` extras (belief
-   binding, `bc`), which `require_supported`/`METADATA_KEYS` do not yet.
+   binding, `bc`), which `require_supported`/`_METADATA_KEYS` do not yet;
+   `read_container` now raises `NotAContainer` for `.pt`, so `load_checkpoint`
+   must dispatch on format rather than try the container first.
    Docs (training-loop.md checkpoint example, manabot/README.md) already
    describe this and are ahead of the code.
 3. Torch `BACKEND` in `backends/torch/checkpoint.py` + registration in
@@ -76,4 +82,5 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 5. After #497 (MTG-319) merges to main: merge main in, move
    `manabot/model/live_tokens.py` into `manabot/backends/torch/` with
    ActorCritic, keep `Execution.live_tokens` where it is (steer cc1dfb64).
-6. Rebase/merge onto #474 when it moves; delete `scratch/` before landing.
+6. Rebase/merge onto #474 when it moves (unchanged at 05c1203e9 on
+   2026-11-12); delete `scratch/` before landing.

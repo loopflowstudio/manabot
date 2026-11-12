@@ -4,7 +4,7 @@ A container is one [safetensors](https://huggingface.co/docs/safetensors) file:
 float32 parameters under canonical, framework-neutral names, the integer
 lookup buffers under `buffer/<name>`, and string metadata holding the
 checkpoint's `hypers`, `world_binding`, `architecture` and `source` record as
-JSON (`METADATA_KEYS`) plus the PyTorch file it came from (`converted_from`).
+JSON (`_METADATA_KEYS`) plus the PyTorch file it came from (`converted_from`).
 `manabot.backends.convert` writes one from a PyTorch `.pt` checkpoint, which
 stays readable as before; `read_container` validates the same world
 binding as `manabot.model.checkpoint.load_checkpoint`, so a refusal names the
@@ -57,8 +57,13 @@ _ATTENTION_LEAVES = {
     ".mha.in_proj_bias": ".mha.qkv_bias",
 }
 # Checkpoint fields carried, JSON-encoded, in the container metadata.
-METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
+_METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
 _BUFFER = "buffer/"
+
+
+class NotAContainer(ValueError):
+    """The file is not a policy checkpoint container (for example a PyTorch
+    `.pt` file, or a conversion that predates the container metadata)."""
 
 
 class UnsupportedPolicy(ValueError):
@@ -114,7 +119,6 @@ class Dimensions:
     token_rows: int
     name_rows: int
     links: int
-    value: int = 1
 
 
 def layout(space: ObservationSpace) -> Layout:
@@ -128,29 +132,6 @@ def layout(space: ObservationSpace) -> Layout:
             c for c in range(encoder.permanent_dim) if c not in joins
         ),
         link_columns=PERMANENT_LINK_INDEXES,
-    )
-
-
-def dimensions(
-    model: ModelConfig, space: ObservationSpace, parameters: Mapping[str, np.ndarray]
-) -> Dimensions:
-    encoder = space.encoder
-    return Dimensions(
-        hidden=model.hidden_dim,
-        heads=model.num_attention_heads,
-        layers=model.attention_layers,
-        feedforward=model.attention_feedforward_dim
-        or model.num_attention_heads * model.hidden_dim,
-        player=encoder.player_dim,
-        card=encoder.card_dim,
-        permanent=len(layout(space).numeric_permanent_columns),
-        action=encoder.action_dim,
-        focus=encoder.max_focus_objects,
-        relation=encoder.relation_dim,
-        fact_kinds=FACT_KINDS,
-        token_rows=int(parameters["semantic_cards.token_embedding.weight"].shape[0]),
-        name_rows=int(parameters["name_candidates.embedding.weight"].shape[0]),
-        links=len(PERMANENT_LINK_INDEXES),
     )
 
 
@@ -196,7 +177,27 @@ class PolicyCheckpoint:
         return Tables.from_buffers(self.buffers, layout(self.space))
 
     def dimensions(self) -> Dimensions:
-        return dimensions(self.model, self.space, self.parameters)
+        encoder = self.space.encoder
+        model = self.model
+        return Dimensions(
+            hidden=model.hidden_dim,
+            heads=model.num_attention_heads,
+            layers=model.attention_layers,
+            feedforward=model.attention_feedforward_dim
+            or model.num_attention_heads * model.hidden_dim,
+            player=encoder.player_dim,
+            card=encoder.card_dim,
+            permanent=len(layout(self.space).numeric_permanent_columns),
+            action=encoder.action_dim,
+            focus=encoder.max_focus_objects,
+            relation=encoder.relation_dim,
+            fact_kinds=FACT_KINDS,
+            token_rows=int(
+                self.parameters["semantic_cards.token_embedding.weight"].shape[0]
+            ),
+            name_rows=int(self.parameters["name_candidates.embedding.weight"].shape[0]),
+            links=len(PERMANENT_LINK_INDEXES),
+        )
 
 
 def from_torch_state(
@@ -236,7 +237,7 @@ def checkpoint_metadata(
     record: Mapping[str, Any], converted_from: Path
 ) -> dict[str, str]:
     """Container metadata of a PyTorch checkpoint record (`torch.load` output)."""
-    metadata = {key: json.dumps(record.get(key), default=str) for key in METADATA_KEYS}
+    metadata = {key: json.dumps(record.get(key), default=str) for key in _METADATA_KEYS}
     metadata["converted_from"] = str(converted_from)
     return metadata
 
@@ -248,9 +249,24 @@ def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
 
 
 def read_container(path: str | Path) -> PolicyCheckpoint:
-    """Read a container, validating its world binding and supported features."""
-    arrays, metadata = read_safetensors(Path(path))
-    meta = {key: json.loads(metadata[key]) for key in METADATA_KEYS}
+    """Read a container, validating its world binding and supported features.
+
+    Raises `NotAContainer` for a file that is not safetensors or lacks the
+    container metadata; convert its PyTorch checkpoint again.
+    """
+    path = Path(path)
+    remedy = "convert the PyTorch .pt with `python -m manabot.backends.convert`"
+    try:
+        arrays, metadata = read_safetensors(path)
+    except (struct.error, ValueError, KeyError) as error:
+        raise NotAContainer(f"{path} is not a safetensors file; {remedy}") from error
+    missing = [key for key in _METADATA_KEYS if key not in metadata]
+    if missing:
+        raise NotAContainer(
+            f"{path} has no {', '.join(missing)} metadata, so it is not a policy "
+            f"checkpoint container; {remedy}"
+        )
+    meta = {key: json.loads(metadata[key]) for key in _METADATA_KEYS}
     hypers = meta["hypers"]
     space = ObservationSpace(
         ObservationConfig.from_checkpoint(hypers["observation_hypers"])
@@ -317,7 +333,7 @@ def read_safetensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]
     data = path.read_bytes()
     (length,) = struct.unpack("<Q", data[:8])
     header = json.loads(data[8 : 8 + length])
-    metadata = header.pop("__metadata__", {})
+    metadata = header.pop("__metadata__", None) or {}
     body = memoryview(data)[8 + length :]
     arrays = {}
     for name, entry in header.items():
