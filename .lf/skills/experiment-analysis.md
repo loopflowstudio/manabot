@@ -18,5 +18,15 @@ Analyze the experiment against its frozen schedule and criteria.
    support. Inconclusive is a valid scientific result. Explain negative findings,
    retained failures, cost and limits without changing the frozen decision rule.
 
+5. Write the report for a reader, as science rather than a process log. Open
+   with the questions and a plain answer to each: the effect in points with its
+   interval and what it means. Follow with one chart per question, labelled in
+   words ("Uniform hands, 16 shuffles"), not condition keys; add a small table
+   only where it says something the chart cannot. Put cost in plain units
+   (seconds per decision, games per hour) beside strength, then the limits in a
+   few sentences. Ledgers, admission checks, run state, hashes, receipts and
+   interruptions go in a collapsed appendix at the end; no timestamps or
+   execution status above it. Check the rendered page before publishing.
+
 Update the existing report, not a second summary store. Analysis authorizes no
 new execution or retrospective parameter changes.

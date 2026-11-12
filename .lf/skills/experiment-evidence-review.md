@@ -5,7 +5,10 @@ produces: accepted conclusion, bounded revision direction or missing judgment
 Review what the retained evidence establishes and whether the experiment outcome is delivered.
 
 Check every declared run and game, identities, failures/costs, paired analysis,
-training exposure and scientific limits. A setup, merged PR, complete schedule or
+training exposure and scientific limits. Read the rendered report from the top as
+its reader would: it must open with the questions and plain answers, one chart per
+question and cost in plain units, with provenance in a closing appendix. A report
+whose opening is counts, ledgers or execution status is not delivered. A setup, merged PR, complete schedule or
 tiny successful update does not by itself demonstrate learning. An inconclusive
 result may fulfill an honest protocol; missing required evidence is not acceptance.
 
