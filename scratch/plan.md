@@ -16,7 +16,12 @@ Etude Tasks filed (unstarted, unowned on 2026-11-12):
 - EXP-52 (eb0db3) Pool one comparison's games across execution setups.
 - EXP-53 (9f66c2) Curve scores each checkpoint against whichever earlier
   checkpoint of its line it met (the later-side-only self chart).
+- EXP-55 `etude report` reads retained evidence without `eval(state)`
+  re-deriving matchups that must agree with the current source digest
+  (`records.py` `assemble` → `tournament_conflict`).
 
+Docs pass 2: report command examples made true to what runs (same-revision
+report; finished pages from their revision or scoped prefixes), EXP-55 filed.
 Check: `pytest tests/training/test_report_helpers.py tests/eval/test_experiment_files.py` 8 passed (compress: dropped helper tag validation; Etude `Curve` already rejects empty matches).
 Demo: rebuilt the frontier page from its retained runs (result below).
 
@@ -49,8 +54,41 @@ Found while building:
 
 - Self chart later-side-only and setup pooling wait on EXP-53 / EXP-52;
   docs state today's behavior. Nothing else in the Task outcome is open.
-- Open, not this Task's outcome: a finished experiment's `report()` cannot be
-  run from a later revision when its `eval(state)` re-derives matchups from
-  the current source digest (`tla_frontier._source`, Etude
-  `records.py` `tournament_conflict`). Whether to fix that in manabot
-  experiment files or Etude is undecided; no Task filed.
+- Rebuilding a finished experiment's page from a later revision waits on
+  EXP-55. Docs (§ "Writing a report" and the command block at the top) now
+  give the same-revision command and say a finished page is rebuilt from its
+  revision or with scoped prefixes.
+
+## Concept review (2026-11-12, headless)
+
+The concepts hold: a report asks questions (earlier self, a fixed player,
+head-to-head, schedule), each a helper returning a plain Etude panel, and jobs
+get names a reader knows them by. No helper hides a choice the experiment
+should make. `against_earlier_self` and `against_fixed` are both thin over
+`Curve`, but they stay separate: once EXP-53 lands, the self question is the one
+that asks for the later side only.
+
+Biggest mismatch: what a reader does with the docs. `docs/experiments.md`
+§ "Writing a report" says `uv run etude report <experiment file> --source
+r2://manabot/jobs --serve` draws the frontier page. From this revision the
+frontier file is refused (`tournament_conflict`): `eval(state)` re-derives its
+matchups with today's `_source()` digest. The unscoped source scan also ran
+more than 15 min and used 3.9 GB. The demo only worked through a wrapper with no `eval` and
+scoped run prefixes.
+
+Next implement direction:
+1. Make the docs paragraph true: give the command for a report whose
+   evaluations come from the same revision, and say that a finished
+   experiment's page is rebuilt from the revision that ran it, or with scoped
+   prefixes, until reading held evidence stops re-deriving matchups. Leave the
+   rest of the section as it is.
+2. Reading retained evidence should not require `eval(state)` to agree with
+   the current source. Per "Etude is ours", that gap belongs in Etude (the
+   report path through `records.py` tournament check), not in a manabot
+   `_source` workaround or an edit to the frozen frontier file. Loop-or-next or
+   implement files it as an Etude Task beside EXP-52/EXP-53 (filed: EXP-55).
+
+Kept as is: `job_labels` names layers relative to the first job. That
+reproduces the requested "Small (width 64)" / "Large (width 160, 8 layers)",
+and its docstring says the order matters (scratch/questions.md keeps the
+alternative). No open product choice.

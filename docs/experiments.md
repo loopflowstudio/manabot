@@ -29,7 +29,7 @@ runs track under its stem:
 ```sh
 uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs     # play what is new
-uv run etude report experiments/ --source r2://manabot/jobs --serve       # every experiment
+uv run etude report experiments/elemental.py --source r2://manabot/jobs --serve  # draw what it played
 ```
 
 `runs()` names the training runs, `eval(state)` returns the matchups still
@@ -249,8 +249,13 @@ def report() -> Report:
     )
 ```
 
+For an experiment whose evaluations were played from the same revision,
 `uv run etude report <experiment file> --source r2://manabot/jobs --serve`
-draws it. Rebuilt over the frontier's retained evaluations, it shows four charts under Evals, each with one line for Small (width 64)
+draws it. A finished experiment's page is rebuilt from the revision that ran
+it, or from a file with its `report()` and no `eval` over its own run prefixes:
+`etude report` still calls `eval(state)`, and a matchup derived from today's
+source digest no longer agrees with the held runs (`tournament_conflict`).
+Rebuilt over the frontier's retained evaluations, it shows four charts under Evals, each with one line for Small (width 64)
 and one for Large (width 160, 8 layers), scored from 0 to 1 with 0.5 drawn as
 even. Hovering a point reads like `0.62 · 95% interval 0.53–0.72 · 64 games · 16 matches`.
 The learning schedule opens ML details.
