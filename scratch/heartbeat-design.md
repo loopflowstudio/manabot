@@ -90,7 +90,8 @@ The production cut matches the design: one trigger record (`who`, predicate,
 typed output), bonuses resolved off the stack after the output, the planner
 folding bonus combinations into the same output alternatives, the old tap-time
 bonus path deleted. Two gaps, both settled by the design and answer C, are the
-next implement direction. Neither changes the v9/v10 layout.
+next implement direction. Neither changes the v9/v10 layout. Both are
+built (see `mtg-297-heartbeat-of-spring.md`).
 
 1. **Trigger sources at production, not at tap.** `questions.md` took the
    simpler choice of selecting trigger sources when the source taps. Answer C

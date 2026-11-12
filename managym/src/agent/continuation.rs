@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
-        decision::{Decision, EffectFrame, ResolutionRef, SuspendedResolution},
+        decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
@@ -906,7 +906,25 @@ impl Game {
                     &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
                 );
             }
-            Decision::ManaChoice { choices, .. } => {
+            Decision::ManaChoice {
+                choices,
+                production,
+                ..
+            } => {
+                // The output choice names the mana ability's source; a
+                // triggered mana ability's type choice names that ability's
+                // source, with the permanent tapped for mana as context.
+                match production {
+                    ManaProduction::Output { source, .. } => {
+                        if let Some(source) = source {
+                            frame.source = self.visible_reference(*source, viewer);
+                        }
+                    }
+                    ManaProduction::Bonus { source, tapped, .. } => {
+                        frame.source = self.visible_reference(*source, viewer);
+                        frame.context = Some(self.visible_reference(*tapped, viewer));
+                    }
+                }
                 frame.mana_outputs = choices
                     .iter()
                     .enumerate()
@@ -1227,8 +1245,10 @@ mod tests {
         game.suspend_rule_decision(Decision::ManaChoice {
             player: actor,
             choices: vec![Mana::parse("U")],
-            produced: None,
-            bonuses: Vec::new(),
+            production: ManaProduction::Output {
+                source: None,
+                tapped: None,
+            },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 actor,
                 PaymentCost::Waterbend { generic: 2 },
@@ -1290,8 +1310,10 @@ mod tests {
             Decision::ManaChoice {
                 player,
                 choices: vec![],
-                produced: None,
-                bonuses: Vec::new(),
+                production: ManaProduction::Output {
+                    source: None,
+                    tapped: None,
+                },
                 resume: None,
             },
             Decision::ChooseObject {

@@ -1,11 +1,19 @@
 # MTG-297 questions
 
-- Trigger sources are read when the source is tapped for mana, not when the
-  output enters the pool. CR 106.12a triggers on the production; nothing in
-  current content changes the board between the tap and the production except
-  the source's own sacrifice, which the earlier read preserves as LKI. If a
-  mana-ability suffix ever removes or adds a triggered mana ability, move the
-  read to production with source LKI. (Simpler choice taken.)
 - A fixed (non-activated) mana source producing two types under Heartbeat
   would need a bonus type choice inside automatic payment; the planner leaves
   such a source out. No current fixed source produces two types.
+- The tapped permanent answers trigger predicates from the record taken when
+  it tapped (`TappedForMana`), checked against predicates of triggers on the
+  board then. A triggered mana ability that arrives between the tap and the
+  production with a predicate no earlier trigger had would not see the
+  tapped permanent. No current content can do that. (Simpler choice taken.)
+- The iteration direction named "the existing kind-14 frame `source`
+  reference (... ManaChoice arm)". Kind 14 is the delegated-decision frame;
+  the `ManaChoice` arm is the kind-6 obligation frame (decision code 3), so
+  the sources are projected there: output choice `source` = the mana
+  ability's source; bonus choice `source` = the trigger's source, `context` =
+  the tapped permanent.
+- Mana abilities do not support `ActivatedAbilityDefinition.sacrifice`
+  (sacrifice-another) costs, so the witness sacrifices Heartbeat through the
+  ability's non-mana instructions, which run before the output is produced.

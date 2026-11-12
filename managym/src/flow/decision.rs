@@ -381,6 +381,47 @@ pub enum ResolutionCastOffer {
     Cascade { card: CardId, exiled: Vec<CardId> },
 }
 
+/// What a `ManaChoice` adds mana for.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ManaProduction {
+    /// The mana ability's output, from `source` (absent for a choice with no
+    /// permanent source). `tapped` is present when the ability tapped
+    /// `source` for mana (CR 106.12); the triggered mana abilities that
+    /// triggers are read from the board when this output is produced
+    /// (CR 106.12a).
+    Output {
+        source: Option<ObjectRef>,
+        tapped: Option<TappedForMana>,
+    },
+    /// The type that `source`'s triggered mana ability adds after
+    /// `tapped`'s ability produced `produced`, chosen by the tapping player.
+    /// `pending` are the triggered mana abilities of the same production
+    /// still to resolve after this choice (CR 605.4a).
+    Bonus {
+        source: ObjectRef,
+        tapped: ObjectRef,
+        produced: crate::state::mana::Mana,
+        pending: Vec<PendingManaBonus>,
+    },
+}
+
+/// A permanent tapped for mana, as it was once tapped (CR 106.12): the
+/// triggered mana ability predicates on the board then that it matched. A
+/// permanent the same ability sacrifices answers those triggers from this
+/// record, its last known information.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct TappedForMana {
+    pub matched: Vec<CardPredicate>,
+}
+
+/// A triggered mana ability's output waiting to resolve after a production
+/// (CR 605.4a), with the permanent whose ability it is.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PendingManaBonus {
+    pub source: ObjectRef,
+    pub output: crate::state::card::TriggeredManaOutput,
+}
+
 /// A pending mid-resolution decision, including its own bookkeeping so a
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
@@ -444,18 +485,13 @@ pub enum Decision {
         tap_remaining: usize,
         resume: Option<Box<Decision>>,
     },
-    /// A mana production's output choice. With `produced` absent, the
-    /// choices are the mana ability's outputs; present, they are one
-    /// triggered mana ability's type choice after that production. `bonuses`
-    /// are the triggered mana abilities still to resolve after this choice
-    /// (CR 605.4a), captured when the source was tapped for mana.
+    /// A choice of mana to add during a mana production: the mana ability's
+    /// own output, or a triggered mana ability's type after it
+    /// (`production`).
     ManaChoice {
         player: PlayerId,
         choices: Vec<crate::state::mana::Mana>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        produced: Option<crate::state::mana::Mana>,
-        #[serde(skip_serializing_if = "Vec::is_empty")]
-        bonuses: Vec<crate::state::card::TriggeredManaOutput>,
+        production: ManaProduction,
         resume: Option<Box<Decision>>,
     },
     /// `player` chooses a permanent they control matching `predicate` for
@@ -1987,8 +2023,7 @@ impl Game {
                 Decision::ManaChoice {
                     player,
                     choices,
-                    produced,
-                    bonuses,
+                    production,
                     resume,
                 },
                 Action::ChooseMode { mode, .. },
@@ -1996,13 +2031,28 @@ impl Game {
                 let mana = choices[*mode].clone();
                 self.state.mana_pool_mut(*player).add(&mana);
                 let player = *player;
-                let produced = produced.take().unwrap_or(mana);
-                let resume = match self.resolve_mana_bonuses(
-                    player,
-                    &produced,
-                    std::mem::take(bonuses),
-                    resume.take(),
-                ) {
+                // The output is produced: its triggered mana abilities
+                // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
+                let bonuses = match production {
+                    ManaProduction::Output {
+                        source: Some(source),
+                        tapped: Some(tapped),
+                    } => Some((*source, mana, self.production_bonuses(player, tapped))),
+                    ManaProduction::Output { .. } => None,
+                    ManaProduction::Bonus {
+                        tapped,
+                        produced,
+                        pending,
+                        ..
+                    } => Some((*tapped, produced.clone(), std::mem::take(pending))),
+                };
+                let resume = match bonuses {
+                    None => Ok(resume.take()),
+                    Some((tapped, produced, bonuses)) => {
+                        self.resolve_mana_bonuses(player, tapped, &produced, bonuses, resume.take())
+                    }
+                };
+                let resume = match resume {
                     Ok(resume) => resume,
                     Err(choice) => {
                         suspended.decision = *choice;

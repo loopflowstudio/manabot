@@ -1833,7 +1833,9 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
 
 #[test]
 fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
-    use crate::flow::decision::{Decision, EffectFrame, PaymentProgress, SuspendedResolution};
+    use crate::flow::decision::{
+        Decision, EffectFrame, ManaProduction, PaymentProgress, SuspendedResolution,
+    };
     use crate::state::ability::PaymentCost;
     use crate::state::mana::{Mana, ManaCost};
 
@@ -1850,8 +1852,10 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
         decision: Decision::ManaChoice {
             player,
             choices: vec![Mana::parse("U"), Mana::parse("B")],
-            produced: None,
-            bonuses: Vec::new(),
+            production: ManaProduction::Output {
+                source: None,
+                tapped: None,
+            },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 player,
                 PaymentCost::Mana(ManaCost::parse("{1}")),

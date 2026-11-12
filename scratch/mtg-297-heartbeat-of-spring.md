@@ -26,22 +26,26 @@ stay undefined; their Scryfall ids are recorded below for the spending Task.
 - Tapping no longer fires bonuses (`flow/zones.rs::tap_permanent`). Deleted
   `tap_mana_bonus`, `tap_mana_bonus_from`, `tap_bonus_sources`,
   `fire_triggered_mana_abilities`.
-- `flow/mana.rs`: `mana_triggers` (both battlefields), `tap_bonuses` (read
-  before the tap and any sacrifice, so the source keeps its LKI),
-  `resolve_mana_bonuses` (after the output enters the pool; a choice among
-  several produced types suspends as a `ManaChoice` with `produced` and the
-  remaining `bonuses`). No mana produced, no trigger (CR 106.12a).
-- `Decision::ManaChoice` gains `produced` and `bonuses` (serde-skipped when
-  empty). The output choice carries the captured bonuses; Henge/Citadel
-  suffixes still run before the choice, so bonuses resolve after the whole
-  mana ability (CR 605.4a).
+- `flow/mana.rs`: `mana_triggers` (both battlefields, with each source).
+  Tapping records `TappedForMana` (the trigger predicates the tapped
+  permanent matched, its LKI if the ability sacrifices it); trigger sources
+  are read from the board when the output is produced
+  (`production_bonuses`, CR 106.12a), after sacrifice costs and suffixes.
+  `resolve_mana_bonuses` resolves them after the output enters the pool; a
+  choice among several produced types suspends as a `ManaChoice`.
+- `Decision::ManaChoice.production: ManaProduction`: `Output { source,
+  tapped }` for the ability's output, `Bonus { source, tapped, produced,
+  pending }` for a triggered mana ability's type, with `PendingManaBonus`
+  (output plus source `ObjectRef`). The kind-6 obligation frame projects the
+  source (`frame.source`) and, for a bonus, the tapped permanent
+  (`frame.context`); `decision_context.rs` gives the bonus its own
+  instruction. Henge/Citadel suffixes still run before the output choice.
 - Planner: activation outputs and fixed sources fold in every bonus
   combination (`production_alternatives`); `mana_choice_completes_payment`
   adds the pending bonuses as an Output obligation. A fixed source whose bonus
   would need a type choice is left out of automatic production; no current
   fixed source produces two types.
-- Decision B's `producer` field became `produced` (the mana the ability
-  made) plus `bonuses`; the bonus choice is offered as ordinary `ManaChoice`
+- Decision B's `producer` became `ManaProduction`; the bonus choice is offered as ordinary `ManaChoice`
   actions, so no new action block. `TriggeredManaOutput` variants and the
   tapping `Actor` are guarded into the learning tokens
   (`observability.rs::every_triggered_mana_output_and_actor_reaches_the_learning_tokens`).
@@ -66,6 +70,14 @@ stay undefined; their Scryfall ids are recorded below for the spending Task.
   Sorcery.
 
 ## Checks
+
+- Concept-review iteration: cards 694 passed (debug), incl. the new
+  sacrificed-Heartbeat and source-naming witnesses; rules_tests 169,
+  search_state_contract 6, content_pack 3, engine lib 197 passed; clippy
+  clean; rebuilt extension: Python observation/parity/continuation/text/
+  decision-surface 164 and Academy fixture tests 11 passed after
+  `scripts/refresh_academy_fixtures.py` (content digest moved with Heartbeat's
+  registration).
 
 - `cargo test --manifest-path managym/cards/Cargo.toml --test cards`: 691 passed;
   the added token guard passes (debug).

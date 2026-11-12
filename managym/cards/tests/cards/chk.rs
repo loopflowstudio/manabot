@@ -9,9 +9,10 @@ use managym::{
     agent::action::{Action, ActionSpaceKind},
     state::{
         ability::Effect,
-        card::ActivatedAbilityDefinition,
-        game_object::{PermanentId, PlayerId},
+        card::{ActivatedAbilityDefinition, CardType},
+        game_object::{CardId, PermanentId, PlayerId},
         mana::Mana,
+        predicate::CardPredicate,
         zone::ZoneType,
     },
 };
@@ -144,6 +145,75 @@ fn heartbeat_of_spring_triggers_for_a_land_sacrificed_in_its_mana_ability() {
     take_single_output(&mut s);
     assert!(s.game().state.permanents[lands[0]].is_none());
     assert_eq!(*pool(&s, 0), Mana::parse("GG"));
+}
+
+/// Triggered mana abilities are read from the board when the mana is
+/// produced (CR 106.12a), so a Heartbeat that the mana ability sacrifices
+/// before its output is produced adds nothing.
+#[test]
+fn heartbeat_of_spring_sacrificed_by_the_mana_ability_adds_nothing() {
+    let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    let heartbeat = s
+        .game()
+        .state
+        .permanents
+        .iter()
+        .flatten()
+        .find(|permanent| s.game().state.cards[permanent.card].name == "Heartbeat of Spring")
+        .map(|permanent| permanent.card)
+        .unwrap();
+    let card = card_of(&s, lands[0]);
+    let abilities = &mut s.game_mut().state.cards[card].activated_abilities;
+    abilities.push(ActivatedAbilityDefinition {
+        tap_source: true,
+        effects: vec![
+            Effect::add_mana(Mana::parse("G")),
+            Effect::sacrifice(CardPredicate {
+                card_type: Some(CardType::Enchantment),
+                ..Default::default()
+            }),
+        ],
+        ..Default::default()
+    });
+    let ability = abilities.len() - 1;
+    activate(&mut s, lands[0], ability);
+    choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
+    take_single_output(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(heartbeat),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(*pool(&s, 0), Mana::parse("G"));
+}
+
+/// The bonus type choice names the Heartbeat as its source and the tapped
+/// land as context, so it reads apart from the land's own output choice.
+#[test]
+fn heartbeat_of_spring_type_choice_names_its_source_and_the_tapped_land() {
+    let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
+    let ability = add_tap_ability(&mut s, lands[0], "WU", false);
+    activate(&mut s, lands[0], ability);
+    take_single_output(&mut s);
+    let heartbeat = s
+        .game()
+        .state
+        .permanents
+        .iter()
+        .flatten()
+        .find(|permanent| s.game().state.cards[permanent.card].name == "Heartbeat of Spring")
+        .map(|permanent| permanent.card)
+        .unwrap();
+    let definition = |card: CardId| Some(s.game().state.cards[card].definition_id.0);
+    let frames = s.game().continuation_frames(PlayerId(0));
+    let frame = frames
+        .iter()
+        .find(|frame| frame.kind == 6 && frame.decision == 3)
+        .expect("the type choice's obligation frame");
+    assert_eq!(frame.source.definition, definition(heartbeat));
+    let land = frame.context.as_ref().expect("the tapped land");
+    assert_eq!(land.definition, definition(card_of(&s, lands[0])));
+    let context = s.game().decision_context(PlayerId(0)).unwrap();
+    assert!(context.instruction.contains("triggered mana ability"));
 }
 
 /// Tapping a nonland for mana triggers nothing; Badgermole Cub's bonus stays
