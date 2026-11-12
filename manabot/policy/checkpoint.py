@@ -152,6 +152,21 @@ def canonical_name(torch_name: str) -> str:
     return torch_name
 
 
+def torch_name(canonical: str) -> str:
+    """The PyTorch name of one canonical parameter: `canonical_name`'s inverse."""
+    for prefix in GRUS:
+        if canonical.startswith(prefix + "."):
+            leaf = canonical[len(prefix) + 1 :]
+            for torch_leaf, canonical_leaf in _GRU_LEAVES.items():
+                if leaf == canonical_leaf:
+                    return f"{prefix}.{torch_leaf}"
+            raise KeyError(f"unmapped GRU tensor {canonical}")
+    for packed, renamed in _ATTENTION_LEAVES.items():
+        if canonical.endswith(renamed):
+            return canonical[: -len(renamed)] + packed
+    return canonical
+
+
 def canonical_parameters(
     torch_named: Mapping[str, np.ndarray],
 ) -> dict[str, np.ndarray]:

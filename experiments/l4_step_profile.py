@@ -584,7 +584,7 @@ def learn_once(
     from manabot.model.inference import transfer_admitted
     from manabot.policy.prepare import reference_distribution
     from manabot.training.regime import DampedPolicyLearning
-    from manabot.training.updates.learner import observation_tensors
+    from manabot.backends.torch.rollout import observation_tensors
 
     device = learner.device
     learning = DampedPolicyLearning.model_validate(payload["learning"])

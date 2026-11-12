@@ -9,6 +9,7 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch import rollout as learner_module
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -18,7 +19,6 @@ from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
-from manabot.training.updates import learner as learner_module
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from tests.training.test_recovery import recipe

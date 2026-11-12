@@ -2,7 +2,8 @@
 
 `Learner` bundles a trainable `ActorCritic` with its Adam optimizer, its
 forward precision and a profiler; the updates in `manabot.training.updates`
-step it. `gradient_step` runs backward, global-norm clipping and the
+step it through `Learner.loss` and `Learner.step`, the two calls every
+backend's learner has. `gradient_step` runs backward, global-norm clipping and the
 optimizer for any `nn.Module`, refusing to step on a loss or gradients it
 cannot trust (`NumericalError`, `manabot.backends.torch.rl`); an optional
 `StepRecorder` (the player's `OptimizerHealth` in
@@ -12,9 +13,11 @@ keeps the averaged model that evaluation and exports read. `forward_precision` a
 `no_grad` wraps work whose outputs are constants (targets, diagnostics).
 """
 
+from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING, Protocol
 
+import numpy as np
 import torch
 from torch import Tensor, nn
 
@@ -243,3 +246,49 @@ class Learner:
         """The rate every following optimizer step uses."""
         for group in self.optimizer.param_groups:
             group["lr"] = rate
+
+    def loss(self, objective: Callable[[], tuple[Tensor, ...]]) -> tuple[Tensor, ...]:
+        """Run `objective`, whose first result is the loss `step` or
+        `gradients` then differentiates; the rest are returned with it.
+
+        An update writes its minibatch loss as this closure over the policy
+        forward, because a functional framework differentiates a function
+        rather than a value; torch runs it once and keeps the graph.
+        """
+        return objective()
+
+    def step(
+        self,
+        loss: Tensor,
+        max_grad_norm: float,
+        *,
+        recorder: StepRecorder | None = None,
+    ) -> Tensor:
+        """`gradient_step` on this learner's policy and optimizer: the
+        pre-clip gradient norm."""
+        return gradient_step(
+            loss, self.agent, self.optimizer, max_grad_norm, recorder=recorder
+        )
+
+    def gradients(self, loss: Tensor) -> dict[str, np.ndarray]:
+        """Unclipped gradients of `loss` by parameter name, without stepping
+        (zero where none flowed)."""
+        self.optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        gradients = {
+            name: (
+                np.zeros(tuple(parameter.shape), np.float32)
+                if parameter.grad is None
+                else parameter.grad.cpu().numpy().copy()
+            )
+            for name, parameter in self.agent.named_parameters()
+        }
+        self.optimizer.zero_grad(set_to_none=True)
+        return gradients
+
+    def parameters(self) -> dict[str, np.ndarray]:
+        """A host copy of every parameter by name."""
+        return {
+            name: parameter.detach().cpu().numpy().copy()
+            for name, parameter in self.agent.named_parameters()
+        }

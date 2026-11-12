@@ -46,3 +46,20 @@
 - `live_token_count` stays on `PreparedObservation` (counted in
   `PolicyInference.prepare`) as #497 wrote it, while buckets moved to
   admission here; moving the count to admission is a possible follow-up.
+- `Learner.loss` then `Learner.step` (two calls) rather than one
+  `step(objective)`: keeps the profiler's "Forward and loss" section and the
+  objective check where they were. MLX's `loss` evaluates the gradients with
+  the forward and holds them for `step`. Reversible.
+- `OptimizerHealth`'s sampled gradient detail (critic readout norm, parameter
+  delta) reads torch modules and is absent on MLX; `health.py` still imports
+  torch. Follow-up, not built.
+- PPO runs on torch only (it steps through `gradient_step` and calls tensor
+  methods). The damped update is the one MLX runs. Follow-up if PPO is wanted
+  on MLX.
+- The torch backend keeps its own host recursions (GAE, selection) in
+  `rl.py` because that file imports nothing from manabot; `policy/returns.py`
+  is the NumPy twin, bit-identical. Folding torch's onto the NumPy ones is a
+  possible follow-up.
+- Steer 793944f0: main's `require_supported` reads `ModelConfig.token_stream`
+  after #498 removed it; #499 fixes it. This branch has neither yet; take
+  #499's two-line removal at the next main merge.

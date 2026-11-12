@@ -358,9 +358,14 @@ def _mlx_step(
     targets: Any,
     settings: StepSettings,
 ) -> tuple[float, float]:
+    import manabot.backends.mlx as backend
+    from manabot.backends.parity import minibatch_loss
     from manabot.policy.protocol import Settings
 
-    return learner.step(
+    loss = minibatch_loss(
+        backend,
+        policy,
+        learner,
         policy.prepare(obs),
         targets,
         Settings(
@@ -371,6 +376,9 @@ def _mlx_step(
             settings.max_grad_norm,
         ),
     )
+    learner.set_learning_rate(settings.learning_rate)
+    norm = learner.step(loss, settings.max_grad_norm)
+    return float(loss), float(norm)
 
 
 # -- bench ---------------------------------------------------------------------------
@@ -529,7 +537,7 @@ def _bench_learner(ledger: Path, capture_dir: Path, phase: str, width: int) -> N
     import mlx.core as mx
     import torch
 
-    from manabot.backends.mlx.learner import MLXLearner
+    from manabot.backends.mlx.learner import Learner as MLXLearner
 
     label = f"w{width}l8"
     count = 24 if phase == "learner" else 12
@@ -538,7 +546,7 @@ def _bench_learner(ledger: Path, capture_dir: Path, phase: str, width: int) -> N
     cpu = TorchLearner(agent, "cpu")
     other: Any
     if phase == "learner":
-        other = MLXLearner(policy)
+        other = MLXLearner(policy, minibatch_rows=1)
         arm = "mlx"
         mx.reset_peak_memory()
     else:
@@ -593,7 +601,7 @@ def _bench_widths(ledger: Path, capture_dir: Path, phase: str, width: int) -> No
     the first 24 captured minibatches; stops before a predicted overflow."""
     import mlx.core as mx
 
-    from manabot.backends.mlx.learner import MLXLearner
+    from manabot.backends.mlx.learner import Learner as MLXLearner
 
     obs, targets, settings = max(
         _minibatches(capture_dir, 24), key=lambda s: len(s[1].actions)
@@ -625,7 +633,7 @@ def _bench_widths(ledger: Path, capture_dir: Path, phase: str, width: int) -> No
                 )
                 break
         _, policy = _agents(capture_dir, candidate)
-        learner = MLXLearner(policy)
+        learner = MLXLearner(policy, minibatch_rows=1)
         mx.reset_peak_memory()
         tick = time.perf_counter()
         _mlx_step(learner, policy, obs, targets, settings)
@@ -656,7 +664,7 @@ def soak(out: Path, capture_dir: Path) -> None:
     import mlx.core as mx
     import torch
 
-    from manabot.backends.mlx.learner import MLXLearner
+    from manabot.backends.mlx.learner import Learner as MLXLearner
 
     out.mkdir(parents=True, exist_ok=True)
     ledger = out / "soak.jsonl"
@@ -698,7 +706,9 @@ def soak(out: Path, capture_dir: Path) -> None:
         else:
             inference.__exit__(None, None, None)
         learner: Any = (
-            MLXLearner(policy) if arm == "mlx" else TorchLearner(agent, "cpu")
+            MLXLearner(policy, minibatch_rows=1)
+            if arm == "mlx"
+            else TorchLearner(agent, "cpu")
         )
         learn_time = 0.0
         losses: list[float] = []

@@ -24,7 +24,6 @@ from manabot.training.updates.health import (
     failure_tensors,
     minibatch_tensors,
 )
-from manabot.training.updates.learner import AdmittedRollout
 from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
 
 if TYPE_CHECKING:
@@ -56,7 +55,7 @@ def update_iteration(
     track = learner.profiler.track
     with track("Batch transfer, targets and behavior checks"):
         batch.action_data.check(batch.actions, batch.logprobs)
-        admitted = AdmittedRollout(learner.agent, batch)
+        admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
         values = to_device(batch.values, dev)
         rewards = to_device(batch.rewards, dev)
         ends = to_device(batch.dones, dev)
@@ -134,17 +133,18 @@ def update_iteration(
         diagnostics["selected_action_types"] = np.bincount(
             chosen_types[retained], minlength=ACTION_TYPE_DIM
         ).tolist()
+        advantage_rows = backend.arrays.to_numpy(advantages)
         diagnostics["selection_groups"] = selection_diagnostics(
-            advantages.reshape_as(ends),
-            residuals.reshape_as(ends),
-            mask.reshape_as(ends),
-            ends,
-            to_device(types, dev),
+            advantage_rows.reshape(types.shape),
+            backend.arrays.to_numpy(residuals).reshape(types.shape),
+            actor_rows.reshape(types.shape),
+            batch.dones,
+            types,
         )
         health = batch_health(
             batch.action_data,
-            advantages,
-            mask,
+            advantage_rows,
+            actor_rows,
             actor_only=learning.filter_scope == "actor",
         )
         diagnostics["numerical"] = health
@@ -166,7 +166,7 @@ def update_iteration(
                 indices = to_device(rows_host, dev)
                 with track("Forward and loss"):
                     obs, rows = admitted.rows(rows_host, dev)
-                    valid = rl.legal_mask(obs["actions_valid"])
+                    valid = rl.legal_mask(admitted.legal(obs))
                     behavior_logs = to_device(rows.log_probabilities, dev)
                     reference = to_device(
                         reference_distribution(rows.observation, learning.reference),
@@ -206,8 +206,8 @@ def update_iteration(
 
                     def _failure() -> "dict[str, Tensor]":
                         return minibatch_tensors(
-                            logits=logits,
-                            value_logits=value,
+                            logits=rl.constant(logits),
+                            value_logits=rl.constant(value),
                             valid=valid,
                             actions=actions[indices],
                             behavior_logs=behavior_logs,
@@ -216,7 +216,7 @@ def update_iteration(
                             value_targets=returns[indices],
                             actor_selected=actor_mask,
                             indexes=indices,
-                            obs=obs,
+                            obs=admitted.evidence(obs),
                         )
 
                     with failure_tensors(_failure):

@@ -29,6 +29,7 @@ import mlx.nn as nn
 import numpy as np
 
 from manabot.backends.mlx.arrays import to_numpy
+from manabot.infra.config import ModelConfig
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import (
     Packed,
@@ -230,9 +231,12 @@ class _Static:
 
 
 class MLXActorCritic(nn.Module):
-    def __init__(self, dims: Dimensions, tables: Tables) -> None:
+    def __init__(self, dims: Dimensions, tables: Tables, config: ModelConfig) -> None:
         super().__init__()
         self.dims = dims
+        # The model configuration the weights were trained under, as the
+        # torch policy carries it; the updates read its `value_kind`.
+        self.config = config
         hidden = dims.hidden
         self.semantic_cards = SemanticCards(dims)
         self.player_embedding = Projection(dims.player, hidden)
@@ -314,6 +318,10 @@ class MLXActorCritic(nn.Module):
         logits, values = self(batch)
         mx.eval(logits, values)
         return to_numpy(logits), to_numpy(values)[:, 0]
+
+    def forward_distribution(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+        """The training forward the updates differentiate: `__call__`."""
+        return self(batch)
 
     def _public(self, programs: mx.array) -> mx.array:
         """`NameCandidateEncoder.public_definitions`: add names to their programs."""

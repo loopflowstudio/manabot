@@ -5,12 +5,13 @@ real inputs.
 
 `DIR` is a capture written by `experiments/mlx_pilot.py capture`: learner
 minibatches (`learner/NNN.npz` with `minibatches.json`) and collection calls
-(`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU,
-running the training code's own loss (`damped_policy_loss`, `selected_mean`).
+(`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU.
 Each backend whose framework is installed (`BACKENDS`) loads the same weights
 through the shared container's canonical names and is compared in its own
-parameter layout (`manabot.policy.protocol.Backend`). For each minibatch, at
-the checkpoint's weights:
+parameter layout (`manabot.policy.protocol.Backend`). Both sides run the one
+loss the damped update trains (`minibatch_objective`), each over its own
+backend's `rl` functions and learner (`minibatch_loss`). For each minibatch,
+at the checkpoint's weights:
 
 - forward logits on legal actions and values: max absolute difference <= 1e-4;
 - PPO loss: relative difference <= 0.1%;
@@ -38,13 +39,14 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+from types import ModuleType
 from typing import Any, cast
 
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.backends.torch.rl import damped_policy_loss, legal_mask, selected_mean
 from manabot.model.admission import admit_observation
 from manabot.policy.checkpoint import (
     UnsupportedPolicy,
@@ -59,6 +61,7 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
+from manabot.training.updates.damped_policy import minibatch_objective
 
 LOGIT_TOLERANCE = 1e-4
 LOSS_TOLERANCE = 1e-3
@@ -78,9 +81,56 @@ def installed_backends() -> list[str]:
     ]
 
 
+def backend_module(name: str) -> ModuleType:
+    """`manabot.backends.<name>`, the module an update takes as its backend."""
+    return importlib.import_module(f"manabot.backends.{name}")
+
+
 def backend(name: str) -> Backend:
-    module = importlib.import_module(f"manabot.backends.{name}.checkpoint")
-    return cast(Backend, module.BACKEND)
+    return cast(Backend, backend_module(name).checkpoint.BACKEND)
+
+
+def minibatch_loss(
+    module: ModuleType,
+    policy: BackendPolicy,
+    learner: BackendLearner,
+    batch: Prepared,
+    targets: Targets,
+    settings: Settings,
+) -> Any:
+    """The damped update's loss on one captured minibatch, as `module`'s
+    array, ready for `learner.step` or `learner.gradients`.
+
+    The same `minibatch_objective` the update trains, over the backend's own
+    `rl` functions, with the scalar critic every backend supports.
+    """
+    rl, to_device = module.rl, module.arrays.from_numpy
+    device = getattr(learner, "device", "cpu")
+    valid = rl.legal_mask(to_device(batch.legal, device))
+    constants = {
+        "actions": to_device(targets.actions.astype(np.int64), device),
+        "advantages": to_device(targets.advantages, device),
+        "value_targets": to_device(targets.value_targets, device),
+        "behavior_logs": to_device(targets.behavior_logs, device),
+        "reference": to_device(targets.reference, device),
+        "actor_mask": to_device(targets.actor_mask.astype(bool), device),
+    }
+
+    def objective() -> tuple[Any, ...]:
+        logits, values = policy.forward_distribution(batch)
+        return minibatch_objective(
+            rl,
+            logits,
+            values,
+            valid,
+            **constants,
+            categorical=False,
+            clip=settings.clip,
+            collection_kl=settings.collection_kl,
+            tau=settings.tau,
+        )
+
+    return learner.loss(objective)[0]
 
 
 @dataclass
@@ -170,20 +220,6 @@ def minibatches(
         yield obs, targets, settings, row
 
 
-def torch_gradients(agent: torch.nn.Module) -> dict[str, np.ndarray]:
-    """PyTorch gradients under canonical names (zero where none flowed)."""
-    return canonical_parameters(
-        {
-            name: (
-                np.zeros(tuple(parameter.shape), np.float32)
-                if parameter.grad is None
-                else parameter.grad.detach().numpy()
-            )
-            for name, parameter in agent.named_parameters()
-        }
-    )
-
-
 def _cosine(a: np.ndarray, b: np.ndarray, floor: float = 0.0) -> float | None:
     a, b = a.astype(np.float64).ravel(), b.astype(np.float64).ravel()
     na, nb = np.linalg.norm(a), np.linalg.norm(b)
@@ -215,50 +251,40 @@ def check(
     agent, space = load_checkpoint(str(checkpoint))
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
     weights = from_torch_state(agent.config, space.encoder.config, state)
+    module = backend_module(backend_name)
     port = backend(backend_name)
     policy, learner = port.load(weights)
+    # The reference: the same loss over the torch backend, on the loaded agent.
+    reference_policy = torch_backend.checkpoint.TorchPolicy(agent, weights)
+    reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
     report = Report()
-    agent.train()
     for index, (obs, targets, settings, meta) in enumerate(
         minibatches(capture, minibatch_count)
     ):
-        tensors = {k: torch.from_numpy(v) for k, v in obs.items()}
-        admitted = admit_observation(agent, tensors)
-        valid = legal_mask(admitted["actions_valid"])
-        agent.zero_grad(set_to_none=True)
-        logits, values = agent.forward_distribution(admitted)
-        reference = torch.from_numpy(targets.reference)
-        policy_loss = damped_policy_loss(
-            logits,
-            torch.from_numpy(targets.actions),
-            torch.from_numpy(targets.advantages),
-            torch.from_numpy(targets.behavior_logs),
-            reference,
-            valid,
-            clip=settings.clip,
-            collection_kl=settings.collection_kl,
-            tau=settings.tau,
+        reference_batch = reference_policy.prepare(obs)
+        valid = reference_batch.legal
+        with torch.no_grad():
+            logits, values = reference_policy.forward_distribution(reference_batch)
+        loss = minibatch_loss(
+            torch_backend,
+            reference_policy,
+            reference_learner,
+            reference_batch,
+            targets,
+            settings,
         )
-        policy_loss = selected_mean(policy_loss, torch.from_numpy(targets.actor_mask))
-        value_loss = (
-            (values.squeeze(-1) - torch.from_numpy(targets.value_targets))
-            .square()
-            .mean()
+        reference_loss = float(loss.detach())
+        expected = port.gradient_layout(
+            canonical_parameters(reference_learner.gradients(loss))
         )
-        loss = policy_loss + value_loss
-        loss.backward()
-        expected = port.gradient_layout(torch_gradients(agent))
 
         batch = policy.prepare(obs)
         port_logits, port_values = policy.evaluate(batch)
-        loss_value, grads = learner.gradients(batch, targets, settings)
-        absolute, relative = _legal_difference(
-            port_logits, logits.detach().numpy(), valid.numpy()
-        )
-        value_difference = float(
-            np.abs(port_values - values.detach().numpy().reshape(-1)).max()
-        )
-        reference_loss = float(loss.detach())
+        port_loss = minibatch_loss(module, policy, learner, batch, targets, settings)
+        loss_value = float(port_loss)
+        grads = learner.gradients(port_loss)
+        absolute, relative = _legal_difference(port_logits, logits.numpy(), valid)
+        value_difference = float(np.abs(port_values - values.numpy().reshape(-1)).max())
         loss_relative = abs(loss_value - reference_loss) / max(
             abs(reference_loss), 1e-12
         )
@@ -301,9 +327,29 @@ def check(
             report.gradient_min_cosine = cosines[worst]
             report.gradient_worst = worst
         if index == 0:
-            _compare_step(agent, port, learner, batch, targets, settings, zero, report)
+            reference_loss_again = minibatch_loss(
+                torch_backend,
+                reference_policy,
+                reference_learner,
+                reference_batch,
+                targets,
+                settings,
+            )
+            _compare_step(
+                reference_learner,
+                reference_loss_again,
+                port,
+                learner,
+                minibatch_loss(module, policy, learner, batch, targets, settings),
+                settings,
+                zero,
+                report,
+            )
             policy, learner = port.load(weights)
             agent.load_state_dict({k: torch.from_numpy(v) for k, v in state.items()})
+            reference_learner = torch_backend.learner.Learner(
+                agent, "cpu", minibatch_rows=1
+            )
         print(
             f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
@@ -315,11 +361,11 @@ def check(
 
 
 def _compare_step(
-    agent: torch.nn.Module,
+    reference: BackendLearner,
+    reference_loss: Any,
     port: Backend,
     learner: BackendLearner,
-    batch: Prepared,
-    targets: Targets,
+    loss: Any,
     settings: Settings,
     zero: set[str],
     report: Report,
@@ -329,19 +375,17 @@ def _compare_step(
     Tensors with structurally zero gradients (`zero`) are skipped: Adam's
     first step moves their rounding noise by +-lr in either direction.
     """
-    before = {k: v.detach().clone() for k, v in agent.named_parameters()}
-    optimizer = torch.optim.Adam(
-        agent.parameters(), lr=settings.learning_rate, eps=1e-5
-    )
-    torch.nn.utils.clip_grad_norm_(list(agent.parameters()), settings.max_grad_norm)
-    optimizer.step()
+    before = reference.parameters()
+    reference.set_learning_rate(settings.learning_rate)
+    reference.step(reference_loss, settings.max_grad_norm)
+    now = reference.parameters()
     initial = learner.parameters()
-    learner.step(batch, targets, settings)
+    learner.set_learning_rate(settings.learning_rate)
+    learner.step(loss, settings.max_grad_norm)
     after = learner.parameters()
-    now = {k: v.detach().numpy() for k, v in agent.named_parameters()}
     expected_after = port.parameter_layout(canonical_parameters(now))
     expected_delta = port.parameter_layout(
-        canonical_parameters({k: v - before[k].numpy() for k, v in now.items()})
+        canonical_parameters({k: v - before[k] for k, v in now.items()})
     )
     worst = 1.0
     largest = 0.0

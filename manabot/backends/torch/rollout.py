@@ -1,9 +1,9 @@
-"""Rollout admission for the updates.
+"""Rollout admission for the updates: a collected batch's observations as the
+torch policy reads them.
 
-AdmittedRollout admits a collected batch's observations once before its
-minibatches. The updates step a `Learner` (`manabot.backends.torch.learner`);
-execute_regime owns collection, clocks, tracking, exports and recovery. Native
-stream count sets the damped rule's minibatch width.
+`AdmittedRollout` admits a batch's observations once before its minibatches.
+The updates reach it as `backend.rollout.AdmittedRollout`; every backend has
+one with these methods over its own policy input.
 """
 
 import numpy as np
@@ -72,3 +72,11 @@ class AdmittedRollout:
         rows = self.batch.observations(indexes)
         admitted = bind_admitted(self.agent, observation_tensors(rows.observation))
         return transfer_admitted(admitted, device)[0], rows
+
+    def legal(self, obs: AdmittedObservation) -> torch.Tensor:
+        """The 0/1 legal-action input [B,A] of rows this rollout returned."""
+        return obs["actions_valid"]
+
+    def evidence(self, obs: AdmittedObservation) -> dict[str, torch.Tensor]:
+        """The arrays a rejected step retains for rows this rollout returned."""
+        return dict(obs)

@@ -21,6 +21,11 @@ def to_numpy(tensor: Tensor) -> np.ndarray:
     return tensor.detach().cpu().numpy()
 
 
+def float32(tensor: Tensor) -> Tensor:
+    """A forward output in float32, whatever precision the forward ran in."""
+    return tensor.float()
+
+
 def flat_numpy(named: Iterable[tuple[str, Tensor]]) -> dict[str, np.ndarray]:
     """Named parameters, buffers or gradients as host arrays under the same names."""
     return {name: to_numpy(value) for name, value in named}

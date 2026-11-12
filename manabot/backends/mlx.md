@@ -1,7 +1,8 @@
 # MLX backend (Apple Silicon pilot)
 
-`manabot.backends.mlx` runs a saved `ActorCritic` policy, and its PPO learner
-step, in [MLX](https://ml-explore.github.io/mlx/) on Apple Silicon. It loads
+`manabot.backends.mlx` runs a saved `ActorCritic` policy, and the damped
+update that trains it, in [MLX](https://ml-explore.github.io/mlx/) on Apple
+Silicon. It loads
 the shared checkpoint container ([backends](README.md#convert-a-pytorch-checkpoint))
 and must agree with PyTorch numerically before it is used for any timing
 ([parity check](README.md#parity-check)). Training, evaluation and the CLI
@@ -73,15 +74,36 @@ float64 (the GPU has none); the two differ only for |log ratio| > 88.
 
 Every canonical parameter maps to MLX arrays, or loading fails naming the key.
 
-## Learner step
+## Learner
 
-`manabot.backends.mlx.learner.MLXLearner` computes the same damped PPO loss as
-`manabot.backends.torch.rl.damped_policy_loss` over one minibatch (its terms are in
-`rl.py`), clips the global gradient norm and applies Adam with the learner's
-settings. It runs eagerly: packed GRU schedules and legal-action counts change
+The backend carries no loss of its own. `manabot.backends.mlx.rl` has the
+torch backend's functions over MLX arrays, and
+`manabot.backends.mlx.learner.Learner` differentiates whatever loss an update
+hands it, clips the global gradient norm and applies Adam (eps 1e-5, bias
+correction). The damped update runs on it unchanged:
+
+```python
+import manabot.backends.mlx as backend
+from manabot.recipes.builders import move_learning
+from manabot.training.updates.damped_policy import update_damped_iteration
+
+learner = backend.learner.Learner(policy, minibatch_rows=64)
+diagnostics = update_damped_iteration(
+    backend, learner, batch, move_learning(), iteration=1
+)
+```
+
+`batch` is a `RolloutBatch` as torch collection writes it. The same batch and
+weights give the same diagnostics as the torch backend within the parity
+bars. Returns and advantage selection run on the host in NumPy
+(`manabot.policy.returns`), the surrogate ratio is float32, and the sampled
+gradient detail of `OptimizerHealth` is absent
+([what differs](README.md#algorithms-are-written-once)).
+
+The step runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell
-is compiled. It exists to measure the step and does not write checkpoints;
-training continuity stays with the PyTorch learner.
+is compiled. The backend does not write checkpoints or collect; training
+continuity stays with the PyTorch learner.
 
 Results, machine and cost are in
 [the MLX pilot report](../../experiments/mlx_pilot.md).

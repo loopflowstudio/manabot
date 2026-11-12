@@ -128,8 +128,8 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
    by zip magic): needs the container to carry every config and the `.pt`
    extras (belief binding, `bc`), which `require_supported`/`_METADATA_KEYS`
    do not yet. Follows item 1.
-3. Register `"torch": "torch"` in `backends/parity.py` `BACKENDS` (today
-   `{"mlx": "mlx"}`) and run parity on a w160l8 capture. Unblocked.
+3. Done (f61ed7dcc): `BACKENDS = {"torch", "mlx"}`; torch passes its own
+   parity on the w160l8 capture (see "Pass of 21:00Z").
 4. Done (Etude 15d399dab9ae, see Checks). Re-run CPU and the L4 launch
    (`scratch/equivalence/mtg325_cuda_equivalence.py`, regenerate
    `base.patch`) after item 1 changes the forward.
@@ -196,11 +196,7 @@ backend first, client second). Next passes:
    `manabot.backends.torch`; `minimal.py` reads `rl.`/`learner.` from the
    torch backend; docs/training-loop.md and backends/README.md
    "Algorithms are written once" updated.
-8. Delete MLX's copied loss (`damped_loss`, `MLXLearner._loss` in
-   `manabot/backends/mlx/learner.py`) for the shared update; the mlx backend
-   is on this branch now. MLX is not installed on this laptop. Show agreement with the
-   MTG-321 parity capture on the rented M2 (`~/.manabot-mps-bench/access.md`,
-   ours until 23:39 UTC 2026-11-12; after that skip and say so).
+8. Done; see "Pass of 21:00Z".
 9. Done on CPU (pre-registered: byte-identical). `scratch/equivalence/updates.py`
    at e0ad728a0 (before) vs a522c22ba and the main merge 9a728aca2 (after),
    one thread, one collected batch (2 streams, 6 decisions, hidden 16): PPO
@@ -217,10 +213,7 @@ backend first, client second). Next passes:
    `TYPE_CHECKING` blocks and reuses `_FRAMEWORKS`. Boundaries, learning
    pieces, minimal loop, credit assignment: 66 passed; `updates.py` JSON
    still `cmp`-identical to after.json.
-10. Torch half done (`test_learning_pieces`, `test_minimal_loop` pass).
-    Remaining: one
-    parametrized test running the update on every installed backend on the
-    same captured batch within MTG-321 tolerances (skip absent backends).
+10. Done: `tests/training/test_update_backends.py`; see "Pass of 21:00Z".
 11. Done in a522c22ba: `docs/training-loop.md` shows the backend argument
     and the one-line swap; `backends/README.md` "Algorithms are written once".
 
@@ -244,3 +237,77 @@ assignment, precision, phase timing, admission, ataraxos gradients, MPS,
 two-seat, naming, recovery, active training): all pass except the 3
 `test_game_errors` `binding_mismatch` cases already failing on main (MTG-304
 plan).
+
+## Pass of 21:00Z 2026-11-12: items 3, 8, 10
+
+Built:
+- `learner.loss(objective)` / `learner.step(loss, max_grad_norm, recorder=)`
+  in both backends. The update writes its minibatch loss as a closure over
+  the forward (`minibatch_objective` in `training/updates/damped_policy.py`);
+  torch runs it once, MLX evaluates it with `nn.value_and_grad`. Torch's
+  `gradient_step(loss, ...)` is unchanged and `Learner.step` calls it.
+- `backend.rollout.AdmittedRollout` in both (`training/updates/learner.py`
+  moved to `backends/torch/rollout.py`; MLX's prepares rows), with `legal`
+  and `evidence`. Backend `__init__`s resolve their files as attributes on
+  first use.
+- `manabot/policy/returns.py`: NumPy `terminal_distances`, `reverse_waves`,
+  `transition_gae`, `quantile`, `selection_mask`. Against torch on 2,000
+  random [T,E] batches and 28,000 quantiles: bitwise identical
+  (`torch.quantile` takes a float64 rank from a float32 q and one fused
+  multiply-add from the nearer end; the NumPy form reproduces that).
+- `selection_diagnostics`, `value_scale`, `batch_health` are NumPy on host
+  rows (`selection.py` no longer imports torch). `OptimizerHealth(...,
+  backend=)` and `failure_tensors(..., refusal)` take the backend's check and
+  `NumericalError`.
+- MLX: `rl.py` has torch's functions (no categorical critic), `learner.py`
+  is `Learner` (`damped_loss`, `MLXLearner` deleted), `rollout.py`,
+  `arrays.from_numpy/float32`; `MLXActorCritic(dims, tables, config)` and
+  `forward_distribution`.
+- Protocol: `BackendLearner` is the learner (`loss`, `step`, `gradients`,
+  `parameters`, `set_learning_rate`); `BackendPolicy.forward_distribution`.
+  `parity.minibatch_loss` runs `minibatch_objective` through a backend, for
+  the torch reference and every backend. `TorchLearner` (protocol copy of the
+  loss) deleted; torch `BACKEND` parameters keep torch names (`torch_name`).
+- `experiments/mlx_pilot.py` calls `Learner` + `minibatch_loss`.
+- PPO update: helper signatures only; it still steps through
+  `backend.learner.gradient_step` and tensor methods (torch-only).
+
+Checks:
+- Torch update equivalence (`scratch/equivalence/updates.py` vs `after.json`):
+  parameters, target residual bytes, every PPO diagnostic and every damped
+  diagnostic identical except one float64 `value_scale` statistic per damped
+  configuration, 1 ulp (relative 1.4e-16 / 1.7e-16): NumPy's summation order
+  for the float64 std, not torch's.
+- MLX is installed in this worktree's venv now (`uv pip install mlx==0.32.4`,
+  the locked version).
+- Local (laptop, MLX 0.32.4): parity on 8 learner minibatches and 8
+  collection calls of the MTG-321 capture (copied to /tmp/mtg325capture):
+  pass for torch and mlx, before and after the MLX loss deletion (mlx: logits
+  7.7e-09, values 3.7e-07, min cosine 1.000000, one step 9.4e-05 / 0.944018).
+- Rented M2 (21:30Z, `~/mtg325/manabot` = this branch's files and this
+  checkout's cp313 extension, `~/mlx-pilot/venv`): `python -m
+  manabot.backends.parity ~/mlx-pilot/capture/initial.pt --capture
+  ~/mlx-pilot/capture`: pass (torch, mlx). mlx: forward logits 7.0e-09,
+  values 3.6e-07, collection logits 6.7e-09, values 3.6e-07, loss 0.0000%,
+  min cosine 0.999940 over 201 tensors, one step 9.4e-05 / 0.944017: the
+  figures MTG-321 recorded in `backends/README.md` (0.999940 over 201;
+  9.4e-05, 0.944017). torch against its own reference: logits 9.5e-09,
+  cosine 1.000000 over 169.
+- M2 pytest: update backends, mlx backend, boundaries, learning pieces,
+  minimal loop, torch protocol: 37 passed. (A first run failed 3 boundary
+  tests only because the copy lacked `academy/`; with it, all pass.)
+- Laptop pytest: learning pieces, minimal loop, numerical health, credit
+  assignment, phase timing, rl objectives, regimes, precision, mps training,
+  two-seat, packed rollouts, ataraxos gradients, naming, recovery, active
+  training, attack execution, ci selection, conditional search, admission:
+  277 passed, 1 failed (`test_conditional_search` frozen fixture:
+  `experiments/data/int-13-conditional-strategy-fixture-v1.json` is not in
+  this worktree; artifact-store data, unrelated). Then update backends,
+  boundaries, torch protocol, mlx backend, learning pieces, minimal loop,
+  numerical health, credit assignment, phase timing: 97 passed; experiment
+  files: 4 passed.
+- The M2 is no longer needed by this Task after this pass.
+
+Remaining after this pass: items 1, 2 and the item 4 rerun (ActorCritic over
+`Prepared`, container save, forward equivalence), then delete `scratch/`
+before landing.

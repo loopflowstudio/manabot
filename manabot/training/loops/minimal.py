@@ -11,7 +11,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.training.updates.learner import AdmittedRollout
+from manabot.backends.torch.rollout import AdmittedRollout
 
 
 def train(

@@ -56,9 +56,11 @@ diagnostics as a dictionary; EMA and checkpoints stay with the caller.
 
 Recipes and the executor pass `manabot.backends.torch`. Inside an update,
 array math goes only through `backend.rl`, `backend.learner` and
-`backend.arrays`; NumPy keeps the host-side bookkeeping (which rows train,
-minibatch indexes, action-type counts). Running the same update in another
-framework changes the import, and the learner comes from that backend. The
+`backend.arrays`, and observations come from `backend.rollout`; NumPy keeps
+the host-side bookkeeping and diagnostics (which rows train, minibatch
+indexes, action-type counts, selection groups). Running the same update in
+another framework changes the import, and the learner comes from that
+backend; the damped update runs on torch and on MLX. The
 contract a backend meets is in
 [framework backends](../manabot/backends/README.md#algorithms-are-written-once).
 
@@ -74,7 +76,7 @@ of rows and `A` for padded legal offers.
 | --- | --- |
 | `SeatRoutedCollector` (`manabot.training.rollout.collection`) | Owns native game streams. `collect(agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close()` stops the streams. |
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (an end belongs to that row), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping an unfinished tail, and `outcome_probabilities` `[T,E,3]` for a categorical critic. `observations(indexes)` materializes flat rows as an observation dict and the full behavior distribution. |
-| `AdmittedRollout(agent, batch)` (`manabot.training.updates.learner`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` and an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
+| `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` and an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
 
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
@@ -105,7 +107,7 @@ logits for `value_kind="categorical_wdl"`, `[B,1]` for scalar.
 Reduced precision is a context around the forward only:
 `with backend.learner.forward_precision(precision, device):` (or
 `learner.forward_precision()`) runs `bf16` autocast, and you cast the outputs
-with `.float()` before any loss.
+with `backend.arrays.float32` (`.float()`) before any loss.
 `bf16` and `tf32` are CUDA-only; losses and their float64 terms stay in full
 precision on every device.
 
@@ -116,9 +118,9 @@ None of these change the update; call them when you want the numbers.
 | Piece | Module | Records |
 | --- | --- | --- |
 | `batch_health(action_data, advantages, selected, *, actor_only)` | `manabot.training.updates.health` | A `NumericalHealth` record for the batch: legal-logit range, underflow, forced rows, zero advantages, rows each head trains on. Pass `batch.action_data`. |
-| `OptimizerHealth(health, iteration, profiler=None)` | `manabot.training.updates.health` | The player's step recorder. Pass as `backend.learner.gradient_step(..., recorder=observer)` to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
+| `OptimizerHealth(health, iteration, profiler=None, *, backend=...)` | `manabot.training.updates.health` | The player's step recorder. Pass as `learner.step(loss, max_grad_norm, recorder=observer)` (or to torch's `gradient_step`) to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
 | `clip_fraction(log_ratio, clip)` | `backend.rl` | The fraction of rows whose likelihood ratio left `1 ± clip`, the record's `clip_fraction`. |
-| `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). Every argument is `[T,E]`: `ends` is `batch.dones` and `action_types` is `batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)` (`manabot.env.observation`). |
+| `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). Every argument is `[T,E]` host rows (NumPy, or CPU tensors): `ends` is `batch.dones` and `action_types` is `batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)` (`manabot.env.observation`). |
 
 ## Standard methods, kept local
 
@@ -143,6 +145,7 @@ loss, so you choose the reduction, mask and weight.
 | `entropy(logs, valid)` | `manabot.backends.torch.rl` | Entropy over valid entries. |
 | `selection_mask(advantages, kind, fraction, minimum)`, `selected_mean(values, selected)` | `manabot.backends.torch.rl` | Keep a top count or inclusive quantile of advantage magnitude; average a per-row term over the mask (zero gradient when empty). |
 | `gradient_step(loss, model, optimizer, max_grad_norm, *, recorder=None)` | `manabot.backends.torch.learner` | Backward, `clip_grad_norm_`, step; returns the pre-clip norm. |
+| `Learner.loss(objective)`, `Learner.step(loss, max_grad_norm, *, recorder=None)` | `backend.learner` | The same step on a `Learner`'s policy and optimizer, in every backend: `objective` is a closure over the forward whose first result is the loss. |
 | `update_ema(averaged, model, rate)` | `manabot.backends.torch.learner` | Moves `averaged`'s parameters toward `model`'s by `1 - rate` and copies buffers. Start from `deepcopy(model)`. |
 
 `gradient_step` raises `NumericalError` (`manabot.backends.torch.rl`) instead of
@@ -180,8 +183,9 @@ your own to try it quickly. When it needs checkpoints, tracking and Etude
 launches, add a learning record for it in `manabot.training.regime` and an
 update in `manabot/training/updates/` beside the two above; our recipes then
 run it as they run those. Write that update as they are written: take the
-backend first and do array math only through `backend.rl`, `backend.learner`
-and `backend.arrays`, so it runs on every backend unchanged.
+backend first, do array math only through `backend.rl`, `backend.learner`
+and `backend.arrays`, and hand the minibatch loss to `learner.loss` as a
+closure, so it runs on every backend unchanged.
 
 ### A complete self-play loop
 
@@ -205,7 +209,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.training.updates.learner import AdmittedRollout
+from manabot.backends.torch.rollout import AdmittedRollout
 
 
 def train(

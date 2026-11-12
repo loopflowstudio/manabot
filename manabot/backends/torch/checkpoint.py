@@ -22,14 +22,8 @@ from etude.train.records import CheckpointRecord
 import numpy as np
 import torch
 
-from manabot.backends.torch.learner import gradient_step
+from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import (
-    damped_policy_loss,
-    legal_mask,
-    selected_mean,
-    squared_value_loss,
-)
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
     BeliefEncodingSchema,
@@ -54,11 +48,10 @@ from manabot.model.world import (
 from manabot.policy.checkpoint import (
     PolicyCheckpoint,
     canonical_name,
-    canonical_parameters,
     read_container,
+    torch_name,
 )
 from manabot.policy.prepare import Prepared, prepare
-from manabot.policy.protocol import Settings, Targets
 import managym
 
 
@@ -260,8 +253,8 @@ def save_checkpoint(
 # -- the NumPy backend protocol ------------------------------------------------------
 # Until `ActorCritic` reads `Prepared` indices itself, `prepare` builds the shared
 # `Prepared` and retains the admitted torch observation on it (`Retained`), which
-# `evaluate` and the learner run; parity against the retained-reference torch
-# path then exercises the harness with torch alone.
+# the forward runs; parity against the reference torch path then exercises the
+# harness with torch alone.
 
 
 @dataclass(frozen=True)
@@ -298,78 +291,18 @@ class TorchPolicy:
             logits, values = self.agent(_admitted(batch))
         return logits.numpy(), values.numpy()
 
+    def forward_distribution(
+        self, batch: Prepared
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """The training-mode forward, as the learner runs it."""
+        self.agent.train()
+        return self.agent.forward_distribution(_admitted(batch))
+
     def cache_programs(self) -> None:
         """The torch forward encodes its programs per call; nothing to cache."""
 
     def clear_cache(self) -> None:
         pass
-
-
-class TorchLearner:
-    """`BackendLearner`: the damped PPO loss with a clipped Adam step, as
-    `manabot.training.updates.damped_policy` computes it, over canonical names."""
-
-    def __init__(self, agent: ActorCritic) -> None:
-        self.agent = agent
-        self.optimizer = torch.optim.Adam(agent.parameters(), lr=0.0, eps=1e-5)
-
-    def _loss(
-        self, batch: Prepared, targets: Targets, settings: Settings
-    ) -> torch.Tensor:
-        obs = _admitted(batch)
-        self.agent.train()
-        logits, values = self.agent.forward_distribution(obs)
-        policy = damped_policy_loss(
-            logits,
-            torch.from_numpy(targets.actions),
-            torch.from_numpy(targets.advantages),
-            torch.from_numpy(targets.behavior_logs),
-            torch.from_numpy(targets.reference),
-            legal_mask(obs["actions_valid"]),
-            clip=settings.clip,
-            collection_kl=settings.collection_kl,
-            tau=settings.tau,
-        )
-        value = squared_value_loss(values, torch.from_numpy(targets.value_targets))
-        return (
-            selected_mean(policy, torch.from_numpy(targets.actor_mask)) + value.mean()
-        )
-
-    def gradients(
-        self, batch: Prepared, targets: Targets, settings: Settings
-    ) -> tuple[float, dict[str, np.ndarray]]:
-        self.agent.zero_grad(set_to_none=True)
-        loss = self._loss(batch, targets, settings)
-        loss.backward()
-        gradients = canonical_parameters(
-            {
-                name: (
-                    np.zeros(tuple(parameter.shape), np.float32)
-                    if parameter.grad is None
-                    else parameter.grad.numpy().copy()
-                )
-                for name, parameter in self.agent.named_parameters()
-            }
-        )
-        self.agent.zero_grad(set_to_none=True)
-        return float(loss.detach()), gradients
-
-    def step(
-        self, batch: Prepared, targets: Targets, settings: Settings
-    ) -> tuple[float, float]:
-        for group in self.optimizer.param_groups:
-            group["lr"] = settings.learning_rate
-        loss = self._loss(batch, targets, settings)
-        norm = gradient_step(loss, self.agent, self.optimizer, settings.max_grad_norm)
-        return float(loss.detach()), float(norm)
-
-    def parameters(self) -> dict[str, np.ndarray]:
-        return canonical_parameters(
-            {
-                name: parameter.detach().numpy().copy()
-                for name, parameter in self.agent.named_parameters()
-            }
-        )
 
 
 def _admitted(batch: Prepared) -> AdmittedObservation:
@@ -381,15 +314,17 @@ def _admitted(batch: Prepared) -> AdmittedObservation:
 class _Torch:
     name = "torch"
 
-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[TorchPolicy, TorchLearner]:
+    def load(self, checkpoint: PolicyCheckpoint) -> tuple[TorchPolicy, Learner]:
         agent = assemble(checkpoint)
-        return TorchPolicy(agent, checkpoint), TorchLearner(agent)
+        return TorchPolicy(agent, checkpoint), Learner(agent, "cpu", minibatch_rows=1)
 
     def parameter_layout(
         self, canonical: Mapping[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
-        """Torch tensors have the canonical names and shapes."""
-        return {name: np.asarray(value) for name, value in canonical.items()}
+        """Torch tensors have the canonical shapes under torch's own names."""
+        return {
+            torch_name(name): np.asarray(value) for name, value in canonical.items()
+        }
 
     gradient_layout = parameter_layout
 

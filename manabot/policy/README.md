@@ -18,9 +18,13 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
   axes to (`bucket_sizes`). Admission measures them on the host; each backend
   trims its own arrays.
+- `returns.py` holds the returns and advantage-selection recursions over host
+  NumPy rows (`transition_gae`, `selection_mask`, `quantile`,
+  `terminal_distances`), bit for bit what the torch backend computes. The
+  update diagnostics read them, and a backend with no better form wraps them.
 - `protocol.py` states what a backend provides (`BackendPolicy`,
-  `BackendLearner`, `Backend`) and the learner's per-minibatch inputs
-  (`Targets`, `Settings`). Values are `[B]`.
+  `BackendLearner`, `Backend`) and one captured minibatch's constants and
+  coefficients (`Targets`, `Settings`). Values are `[B]`.
 
 Backends live in [`manabot/backends/`](../backends/README.md). The PyTorch
 model in `manabot.model` reads `.pt` checkpoints directly and does not yet

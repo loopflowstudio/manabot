@@ -1,7 +1,8 @@
 """Censored rollout diagnostics of the player's advantage selection.
 
-The selection itself is generic (`manabot.backends.torch.rl`); these group it by the
-player's action types and terminal distances.
+The selection itself is the backend's (`backend.rl.selection_mask`); these
+group it by the player's action types and terminal distances, on the host in
+NumPy, so every backend reports them the same way.
 
 Distances count same-viewer transitions to a terminal observed in this batch.
 Unfinished tails are unknown, never labeled distant or terminal. Residuals are
@@ -10,16 +11,14 @@ lambda-target minus collection prediction, not independent ground-truth error.
 
 from typing import Literal, TypedDict
 
-import torch
-from torch import Tensor
+import numpy as np
+from numpy.typing import ArrayLike
 
-from manabot.backends.torch.rl import (
-    float64_operand,
-    magnitude_quantile,
-    terminal_distances,
-)
+from manabot.policy.returns import magnitude_quantile, quantile, terminal_distances
 from manabot.training.rollout.adaptive import AdaptiveDiagnostics
 from manabot.training.updates.health import NumericalHealth
+
+_QUARTILES = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 
 class SelectionGroup(TypedDict):
@@ -33,21 +32,25 @@ class SelectionGroup(TypedDict):
     retained_residual_abs_mean: float | None
 
 
-@torch.no_grad()
 def selection_diagnostics(
-    advantages: Tensor,
-    residuals: Tensor,
-    selected: Tensor,
-    ends: Tensor,
-    action_types: Tensor,
+    advantages: ArrayLike,
+    residuals: ArrayLike,
+    selected: ArrayLike,
+    ends: ArrayLike,
+    action_types: ArrayLike,
 ) -> list[SelectionGroup]:
     """Raw/retained signed quartiles and residual magnitudes per type/distance.
 
-    Fixed descriptive bins are not a scientific short/long horizon definition.
-    Cross-stratification permits comparisons within distance and action type;
-    selection-correlated residuals alone cannot establish critic error causality.
+    Every argument is [T,E] host rows. Fixed descriptive bins are not a
+    scientific short/long horizon definition. Cross-stratification permits
+    comparisons within distance and action type; selection-correlated
+    residuals alone cannot establish critic error causality.
     """
-    distances = terminal_distances(ends)
+    advantages = np.asarray(advantages, np.float32)
+    residuals = np.asarray(residuals, np.float32)
+    selected = np.asarray(selected, bool)
+    action_types = np.asarray(action_types)
+    distances = terminal_distances(np.asarray(ends, bool))
     result: list[SelectionGroup] = []
     bins = {
         "terminal": distances == 0,
@@ -55,8 +58,7 @@ def selection_diagnostics(
         "5+": distances >= 5,
         "censored": distances < 0,
     }
-    quantiles = advantages.new_tensor([0, 0.25, 0.5, 0.75, 1])
-    for kind in action_types.unique().tolist():
+    for kind in np.unique(action_types).tolist():
         for label, distance_mask in bins.items():
             mask = distance_mask & (action_types == kind)
             if not mask.any():
@@ -68,17 +70,17 @@ def selection_diagnostics(
                     terminal_distance=label,
                     rows=int(mask.sum()),
                     retained=int(retained.sum()),
-                    advantage_quantiles=torch.quantile(
-                        advantages[mask], quantiles
-                    ).tolist(),
+                    advantage_quantiles=[
+                        quantile(advantages[mask], q) for q in _QUARTILES
+                    ],
                     retained_advantage_quantiles=(
-                        torch.quantile(advantages[retained], quantiles).tolist()
+                        [quantile(advantages[retained], q) for q in _QUARTILES]
                         if retained.any()
                         else []
                     ),
-                    residual_abs_mean=float(residuals[mask].abs().mean()),
+                    residual_abs_mean=float(np.abs(residuals[mask]).mean()),
                     retained_residual_abs_mean=(
-                        float(residuals[retained].abs().mean())
+                        float(np.abs(residuals[retained]).mean())
                         if retained.any()
                         else None
                     ),
@@ -109,37 +111,37 @@ class ValueScale(TypedDict):
     floor_binds: bool | None
 
 
-@torch.no_grad()
 def value_scale(
-    predictions: Tensor,
-    targets: Tensor,
-    advantages: Tensor,
+    predictions: ArrayLike,
+    targets: ArrayLike,
+    advantages: ArrayLike,
     *,
     kind: Literal["top_count", "quantile"],
     quantile: float,
     minimum: float,
 ) -> ValueScale:
-    """Summarize critic/advantage scale; see ValueScale for target semantics."""
-    predictions = float64_operand(predictions).double()
-    targets = float64_operand(targets).double()
-    target_variance = float(targets.var(correction=0))
+    """Summarize critic/advantage scale in float64 over host rows; see
+    ValueScale for target semantics."""
+    predictions = np.asarray(predictions, np.float64)
+    targets = np.asarray(targets, np.float64)
+    target_variance = float(targets.var())
     threshold: float | None = None
     floor_binds: bool | None = None
     if kind == "quantile":
-        empirical = magnitude_quantile(advantages, quantile)
+        empirical = magnitude_quantile(np.asarray(advantages, np.float32), quantile)
         threshold = max(empirical, minimum)
         floor_binds = minimum > empirical
     return ValueScale(
         prediction_mean=float(predictions.mean()),
-        prediction_std=float(predictions.std(correction=0)),
+        prediction_std=float(predictions.std()),
         target_mean=float(targets.mean()),
         target_std=target_variance**0.5,
         explained_variance=(
-            1 - float((targets - predictions).var(correction=0)) / target_variance
+            1 - float((targets - predictions).var()) / target_variance
             if target_variance > 0
             else None
         ),
-        advantage_std=float(float64_operand(advantages).double().std(correction=0)),
+        advantage_std=float(np.asarray(advantages, np.float64).std()),
         selection_threshold=threshold,
         floor_binds=floor_binds,
     )

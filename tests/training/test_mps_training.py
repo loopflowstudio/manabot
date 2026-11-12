@@ -58,7 +58,7 @@ from manabot.training.regime import (
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates import damped_policy, ppo
-from manabot.training.updates.learner import AdmittedRollout
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym

@@ -28,7 +28,7 @@ from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
 from manabot.backends.mlx.arrays import to_mlx
-from manabot.backends.mlx.learner import MLXLearner
+from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -104,7 +104,9 @@ def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly."""
     parameters = mlx_parameters(checkpoint.parameters)
-    policy = MLXActorCritic(checkpoint.dimensions(), checkpoint.tables())
+    policy = MLXActorCritic(
+        checkpoint.dimensions(), checkpoint.tables(), checkpoint.model
+    )
     expected = dict(tree_flatten(policy.parameters()))
     unmapped = sorted(set(parameters) ^ set(expected))
     if unmapped:
@@ -140,9 +142,9 @@ class _MLX:
 
     name = "mlx"
 
-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, MLXLearner]:
+    def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
         policy = assemble(checkpoint)
-        return policy, MLXLearner(policy)
+        return policy, Learner(policy, minibatch_rows=1)
 
     def parameter_layout(
         self, canonical: Mapping[str, np.ndarray]

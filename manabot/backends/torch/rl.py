@@ -61,6 +61,11 @@ def float64_operand(tensor: Tensor) -> Tensor:
     return tensor.cpu() if tensor.device.type == "mps" else tensor
 
 
+def constant(tensor: Tensor) -> Tensor:
+    """The same values with no gradient path: targets, evidence, diagnostics."""
+    return tensor.detach()
+
+
 # -- Policy distribution -------------------------------------------------------
 # Masked categorical policies with retained log-space support.
 #
@@ -295,6 +300,11 @@ def standardized_advantages(advantages: Tensor, over: Tensor | None = None) -> T
 def expected_outcome(probabilities: Tensor) -> Tensor:
     """Expected signed outcome `[...]` of loss/draw/win mixtures `[...,3]`: P(win) - P(loss)."""
     return probabilities[..., 2] - probabilities[..., 0]
+
+
+def outcome_probabilities(value_logits: Tensor) -> Tensor:
+    """Loss/draw/win mixtures `[...,3]` of a categorical critic's logits."""
+    return value_logits.softmax(-1)
 
 
 @torch.no_grad()

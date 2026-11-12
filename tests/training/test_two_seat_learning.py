@@ -29,7 +29,7 @@ from manabot.training.regime import (
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import observation_tensors
+from manabot.backends.torch.rollout import observation_tensors
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates

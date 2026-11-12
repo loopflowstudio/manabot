@@ -3,13 +3,15 @@
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.parity import minibatch_loss
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.admission import admit_observation
-from manabot.policy.checkpoint import canonical_name, from_torch_state
+from manabot.policy.checkpoint import canonical_parameters, from_torch_state
 from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import Settings, Targets
 import managym
@@ -74,17 +76,20 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
     settings = Settings(
         learning_rate=1e-3, clip=0.2, collection_kl=0.1, tau=0.01, max_grad_norm=0.5
     )
-    loss, gradients = learner.gradients(batch, targets, settings)
-    names = {canonical_name(name) for name, _ in model.named_parameters()}
-    assert np.isfinite(loss)
+    loss = minibatch_loss(torch_backend, policy, learner, batch, targets, settings)
+    gradients = learner.gradients(loss)
+    names = {name for name, _ in model.named_parameters()}
+    assert np.isfinite(float(loss.detach()))
     assert gradients.keys() == names
-    assert BACKEND.gradient_layout(gradients).keys() == names
+    assert BACKEND.gradient_layout(canonical_parameters(gradients)).keys() == names
     assert any(np.abs(g).sum() > 0 for g in gradients.values())
 
     before = learner.parameters()
-    step_loss, norm = learner.step(batch, targets, settings)
+    learner.set_learning_rate(settings.learning_rate)
+    step_loss = minibatch_loss(torch_backend, policy, learner, batch, targets, settings)
+    norm = learner.step(step_loss, settings.max_grad_norm)
     after = learner.parameters()
-    assert step_loss == loss
-    assert norm > 0
+    assert float(step_loss.detach()) == float(loss.detach())
+    assert float(norm) > 0
     moved = [name for name in names if not np.array_equal(before[name], after[name])]
     assert moved

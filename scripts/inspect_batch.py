@@ -26,7 +26,7 @@ from manabot.recipes.baseline import baseline_test
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import _targets, update_damped_iteration
-from manabot.training.updates.learner import AdmittedRollout
+from manabot.backends.torch.rollout import AdmittedRollout
 
 STREAMS = 2
 

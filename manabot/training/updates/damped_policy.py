@@ -6,15 +6,20 @@ likelihoods and the magnet are constants. Only current policy/critic logits
 receive gradients. MTG uses same-viewer transitions and an action-type magnet;
 see docs/learning.md#fidelity-to-the-sources for the fidelity boundary and unresolved source details.
 
-The update is written once over a backend module (`manabot.backends.torch`):
-array math goes through `backend.rl`, `backend.learner` and `backend.arrays`,
-and row bookkeeping (which rows train, minibatch indexes) is NumPy.
-The objective itself is `backend.rl.damped_policy_loss`.
+The update is written once over a backend module (`manabot.backends.torch`,
+`manabot.backends.mlx`): array math goes through `backend.rl`,
+`backend.learner` and `backend.arrays`, observations are admitted by
+`backend.rollout`, and row bookkeeping and diagnostics (which rows train,
+minibatch indexes, selection groups, value scale) are NumPy. The minibatch
+loss is `minibatch_objective`, equation (6) in `backend.rl.damped_policy_loss`
+plus the critic's loss; the learner differentiates it as a closure over the
+policy forward (`Learner.loss`), which is how a functional framework takes a
+gradient.
 """
 
 from dataclasses import dataclass
 from types import ModuleType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -28,7 +33,6 @@ from manabot.training.updates.health import (
     failure_tensors,
     minibatch_tensors,
 )
-from manabot.training.updates.learner import AdmittedRollout
 from manabot.training.updates.selection import (
     UpdateDiagnostics,
     selection_diagnostics,
@@ -41,6 +45,7 @@ if TYPE_CHECKING:
 
     from manabot.backends.torch.learner import Learner
     from manabot.backends.torch.policy import ActorCritic
+    from manabot.backends.torch.rollout import AdmittedRollout
 
 
 @dataclass(frozen=True)
@@ -50,10 +55,60 @@ class DampedTargets:
     selected: "Tensor"
 
 
+def minibatch_objective(
+    rl: ModuleType,
+    logits: "Tensor",
+    value_logits: "Tensor",
+    valid: "Tensor",
+    *,
+    actions: "Tensor",
+    advantages: "Tensor",
+    value_targets: "Tensor",
+    behavior_logs: "Tensor",
+    reference: "Tensor",
+    actor_mask: "Tensor",
+    categorical: bool,
+    clip: float,
+    collection_kl: float,
+    tau: float,
+) -> "tuple[Tensor, Tensor, Tensor]":
+    """The damped rule's loss on one minibatch: (loss, policy loss, value loss).
+
+    `rl` is a backend's `rl` module and every array is that backend's:
+    float32 `logits` [B,A] and critic output ([B,1], or [B,3] outcome logits
+    when `categorical`) from the current forward, the legal mask [B,A], and
+    the constants `actions` [B], `advantages` [B], `value_targets` ([B] or
+    [B,3]), `behavior_logs` [B,A], `reference` probabilities [B,A] and the
+    actor-selected rows [B]. The policy term averages equation (6) over the
+    actor's rows; the critic term averages every row. Gradients reach only
+    `logits` and `value_logits`.
+    """
+    policy_loss = rl.selected_mean(
+        rl.damped_policy_loss(
+            logits,
+            actions,
+            advantages,
+            behavior_logs,
+            reference,
+            valid,
+            clip=clip,
+            collection_kl=collection_kl,
+            tau=tau,
+        ),
+        actor_mask,
+    )
+    if categorical:
+        value_loss = rl.categorical_value_loss(value_logits, value_targets).mean()
+    else:
+        # Representation ablation, not the paper's outcome objective.
+        value_loss = rl.squared_value_loss(value_logits, value_targets).mean()
+    return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
+
+
 def _targets(
     backend: ModuleType,
     learner: "Learner",
-    admitted: AdmittedRollout,
+    admitted: "AdmittedRollout",
     learning: DampedPolicyLearning,
     bootstrap_agent: "ActorCritic | None" = None,
 ) -> DampedTargets:
@@ -69,7 +124,7 @@ def _targets(
         with learner.forward_precision():
             policy = bootstrap_agent or learner.agent
             _, next_raw = policy.forward_distribution(next_obs)
-        next_raw = next_raw.float()
+        next_raw = backend.arrays.float32(next_raw)
         rl.require_finite("nonfinite_bootstrap", values=next_raw)
         if learner.agent.config.value_kind == "categorical_wdl":
             if batch.outcome_probabilities is None:
@@ -84,7 +139,7 @@ def _targets(
                     "saved value differs from collection outcome probabilities"
                 )
             probabilities = backend.arrays.from_numpy(outcomes, device)
-            bootstrap = next_raw.softmax(-1)
+            bootstrap = rl.outcome_probabilities(next_raw)
             value_targets = rl.categorical_lambda_returns(
                 probabilities, rewards, ends, bootstrap, learning.value_lambda
             )
@@ -130,18 +185,19 @@ def update_damped_iteration(
     checks, target and diagnostic floats, the objective and gradient checks).
     """
     rl, to_device = backend.rl, backend.arrays.from_numpy
+    to_host, float32 = backend.arrays.to_numpy, backend.arrays.float32
     device = learner.device
     categorical = learner.agent.config.value_kind == "categorical_wdl"
     track = learner.profiler.track
     with track("Batch transfer and behavior checks"):
         batch.action_data.check(batch.actions, batch.logprobs)
-        admitted = AdmittedRollout(learner.agent, batch)
+        admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
         actions = to_device(batch.actions, device)
     with track("Targets"):
         targets = _targets(backend, learner, admitted, learning, bootstrap_agent)
         advantage_abs_mean = float(targets.advantages.abs().mean())
     # Which rows the actor trains on, [T,E] on the host.
-    actor_rows = backend.arrays.to_numpy(targets.selected)
+    actor_rows = to_host(targets.selected)
     rate, tau = learning.rates(iteration)
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
@@ -162,37 +218,34 @@ def update_damped_iteration(
         ),
     }
     with track("Selection and health diagnostics"):
+        advantage_rows = to_host(targets.advantages)
         health = batch_health(
             batch.action_data,
-            targets.advantages,
-            targets.selected,
+            advantage_rows,
+            actor_rows,
             actor_only=learning.filter_scope == "actor",
         )
         diagnostics["numerical"] = health
-        observer = OptimizerHealth(health, iteration, learner.profiler)
+        observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
         expected_targets = (
-            rl.expected_outcome(targets.values)
-            if categorical
-            else targets.values
+            rl.expected_outcome(targets.values) if categorical else targets.values
         )
-        predictions = to_device(batch.values, device)
-        residuals = expected_targets - predictions
+        expected_rows = to_host(expected_targets)
+        # In the backend's arithmetic: these residuals are credit evidence.
+        residuals = to_host(expected_targets - to_device(batch.values, device))
         if batch.assignments is not None:
-            batch.target_residuals = backend.arrays.to_numpy(residuals)
-        chosen_types = to_device(
-            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM), device
-        )
+            batch.target_residuals = residuals
         diagnostics["selection_groups"] = selection_diagnostics(
-            targets.advantages,
+            advantage_rows,
             residuals,
-            targets.selected,
-            to_device(batch.dones, device),
-            chosen_types,
+            actor_rows,
+            batch.dones,
+            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
         )
         diagnostics["value_scale"] = value_scale(
-            predictions,
-            expected_targets,
-            targets.advantages,
+            batch.values,
+            expected_rows,
+            advantage_rows,
             kind=learning.filter_kind,
             quantile=learning.advantage_quantile,
             minimum=learning.min_advantage,
@@ -225,44 +278,48 @@ def update_damped_iteration(
                 rows_host = np.arange(start, start + len(window))[window]
                 indexes = to_device(rows_host, device)
                 obs, rows = admitted.rows(rows_host, device)
-                valid = rl.legal_mask(obs["actions_valid"])
+                valid = rl.legal_mask(admitted.legal(obs))
                 behavior_logs = to_device(rows.log_probabilities, device)
-                with learner.forward_precision():
-                    logits, value_logits = learner.agent.forward_distribution(obs)
-                logits, value_logits = logits.float(), value_logits.float()
                 reference = to_device(
                     reference_distribution(rows.observation, learning.reference),
                     device,
                 )
-                policy_loss = rl.damped_policy_loss(
-                    logits,
-                    actions[indexes],
-                    advantages[indexes],
-                    behavior_logs,
-                    reference,
-                    valid,
-                    clip=learning.clip,
-                    collection_kl=learning.collection_kl,
-                    tau=tau,
-                )
                 actor_selected = actor_rows[rows_host]
                 actor_mask = to_device(actor_selected, device)
-                policy_loss = rl.selected_mean(policy_loss, actor_mask)
-                if categorical:
-                    value_loss = rl.categorical_value_loss(
-                        value_logits, value_targets[indexes]
-                    ).mean()
-                else:
-                    # Representation ablation, not the paper's outcome objective.
-                    value_loss = rl.squared_value_loss(
-                        value_logits, value_targets[indexes]
-                    ).mean()
-                loss = policy_loss + rl.float64_operand(value_loss)
 
-                def _failure() -> "dict[str, Tensor]":
+                def _objective() -> "tuple[Tensor, ...]":
+                    with learner.forward_precision():
+                        logits, value_logits = learner.agent.forward_distribution(obs)
+                    logits, value_logits = float32(logits), float32(value_logits)
+                    return (
+                        *minibatch_objective(
+                            rl,
+                            logits,
+                            value_logits,
+                            valid,
+                            actions=actions[indexes],
+                            advantages=advantages[indexes],
+                            value_targets=value_targets[indexes],
+                            behavior_logs=behavior_logs,
+                            reference=reference,
+                            actor_mask=actor_mask,
+                            categorical=categorical,
+                            clip=learning.clip,
+                            collection_kl=learning.collection_kl,
+                            tau=tau,
+                        ),
+                        logits,
+                        value_logits,
+                    )
+
+                loss, policy_loss, value_loss, logits, value_logits = learner.loss(
+                    _objective
+                )
+
+                def _failure() -> dict[str, Any]:
                     return minibatch_tensors(
-                        logits=logits,
-                        value_logits=value_logits,
+                        logits=rl.constant(logits),
+                        value_logits=rl.constant(value_logits),
                         valid=valid,
                         actions=actions[indexes],
                         behavior_logs=behavior_logs,
@@ -271,19 +328,13 @@ def update_damped_iteration(
                         value_targets=value_targets[indexes],
                         actor_selected=actor_mask,
                         indexes=indexes,
-                        obs=obs,
+                        obs=admitted.evidence(obs),
                     )
 
-                with failure_tensors(_failure):
+                with failure_tensors(_failure, rl.NumericalError):
                     observer.check(loss)
-            with failure_tensors(_failure):
-                norm = backend.learner.gradient_step(
-                    loss,
-                    learner.agent,
-                    learner.optimizer,
-                    learning.max_grad_norm,
-                    recorder=observer,
-                )
+            with failure_tensors(_failure, rl.NumericalError):
+                norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
             with track("Minibatch diagnostics"):
                 diagnostics["optimizer_exposures"] += len(rows_host)
                 diagnostics["actor_exposures"] += int(actor_selected.sum())
@@ -304,9 +355,9 @@ def update_damped_iteration(
                         ratio_logs, learning.clip
                     )
                 diagnostics.update(
-                    loss=float(loss.detach()),
-                    value_loss=float(value_loss.detach()),
-                    policy_loss=float(policy_loss.detach()),
+                    loss=float(rl.constant(loss)),
+                    value_loss=float(rl.constant(value_loss)),
+                    policy_loss=float(rl.constant(policy_loss)),
                     gradient_norm=float(norm),
                 )
     return diagnostics

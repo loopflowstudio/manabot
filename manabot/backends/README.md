@@ -11,7 +11,7 @@ checked against.
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | policy and learner step, parity-checked; measurement only | [mlx.md](mlx.md) |
+| `mlx` | policy and the damped update, parity-checked; measurement only | [mlx.md](mlx.md) |
 
 ## Layout
 
@@ -21,11 +21,12 @@ files; a backend may add private modules that its `policy.py` uses (torch's
 
 | File | Holds |
 | --- | --- |
-| `__init__.py` | the import guard naming the optional extra; nothing else |
+| `__init__.py` | the import guard naming the optional extra, and the files below as attributes loaded on first use (`backend.rl`) |
 | `arrays.py` | conversion to and from NumPy, the float dtype, the device |
 | `policy.py` | the forward over a `Prepared` batch: logits and values |
 | `rl.py` | the policy terms, losses, returns and selection the updates call, over the framework's arrays |
-| `learner.py` | the optimizer, gradient step and precision |
+| `learner.py` | `Learner`: the optimizer, the differentiated loss, the guarded step and precision |
+| `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
 | `checkpoint.py` | the map from canonical names to the backend's layout, loading, and `BACKEND` |
 
 `BACKEND` in `checkpoint.py` implements `manabot.policy.protocol.Backend`, the
@@ -51,47 +52,93 @@ diagnostics = update_damped_iteration(
 )
 ```
 
+The damped update runs on torch and on MLX. The same batch and the same
+weights give the same diagnostics on both, within the
+[parity check](#parity-check)'s bars
+(`tests/training/test_update_backends.py` runs it on every installed
+backend):
+
+```python
+import manabot.backends.mlx as backend
+
+learner = backend.learner.Learner(policy, minibatch_rows=64)
+diagnostics = update_damped_iteration(
+    backend, learner, batch, move_learning(), iteration=1
+)
+```
+
 Inside an update, array math goes only through the backend's modules:
 
-- `backend.arrays`: moving host rows in and out (`from_numpy`, `to_numpy`).
+- `backend.arrays`: moving host rows in and out (`from_numpy`, `to_numpy`)
+  and `float32` for a forward output.
 - `backend.rl`: the policy terms (`legal_mask`, `policy_logs`,
   `action_logs`, `reference_logs`, `damped_policy_loss`), the losses
   (`clipped_surrogate`, `reverse_kl`, `squared_value_loss`,
   `categorical_value_loss`, `entropy`, `clip_fraction`), returns
-  (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`),
-  selection (`selected_rows`, `selection_mask`, `selected_mean`) and the
-  refusals (`require`, `require_finite`, `float64_operand`).
-- `backend.learner`: `gradient_step`, `update_ema`, the `forward_precision`
-  context and `no_grad` for constants; its `Learner` holds the policy and
-  optimizer and sets the learning rate (`set_learning_rate`).
+  (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`,
+  `outcome_probabilities`, `expected_outcome`), selection (`selected_rows`,
+  `selection_mask`, `selected_mean`), `constant` for a value with no gradient
+  path, and the refusals (`require`, `require_finite`, `float64_operand`,
+  `NumericalError`).
+- `backend.learner`: its `Learner` holds the policy and optimizer, sets the
+  learning rate (`set_learning_rate`), differentiates a loss (`loss`) and
+  steps (`step`); `forward_precision` is the context a forward runs in,
+  `no_grad` the one for constants and `check_objective` the loss's refusal.
+- `backend.rollout`: `AdmittedRollout(agent, batch)` returns a batch's rows as
+  the policy reads them (`rows`, `next_observation`), their legal mask
+  (`legal`) and the arrays a rejected step retains (`evidence`).
 
-NumPy keeps the host-side bookkeeping: admitted rollouts, which rows train,
-minibatch indexes, action-type counts and diagnostics. Policy logic that is
-pure NumPy or index logic, such as `reference_distribution`, lives once in
-`manabot.policy`. The update modules import no framework and no backend at
-runtime (`tests/test_package_boundaries.py` enforces it); the torch types
-they name are annotations only.
+An update writes its minibatch loss as a closure over the policy forward and
+hands it to the learner, because a functional framework differentiates a
+function, not a value:
+
+```python
+def objective():
+    logits, values = learner.agent.forward_distribution(obs)
+    return minibatch_objective(backend.rl, logits, values, valid, ...)
+
+loss, policy_loss, value_loss = learner.loss(objective)
+norm = learner.step(loss, max_grad_norm, recorder=observer)
+```
+
+Torch runs the closure once and keeps the graph for `step`; MLX evaluates it
+with its gradients (`mlx.nn.value_and_grad`), so the forward also runs once.
+
+NumPy keeps the host-side bookkeeping and everything computed once per batch
+on host rows: which rows train, minibatch indexes, action-type counts, batch
+health, `selection_diagnostics` and `value_scale`. Logic that is pure NumPy
+lives once in `manabot.policy`: `reference_distribution` (`prepare.py`) and
+the returns and selection recursions (`returns.py`), which match torch's bit
+for bit and which a backend without a better form wraps (MLX does). The
+update modules import no framework and no backend at runtime
+(`tests/test_package_boundaries.py` enforces it); the torch types they name
+are annotations only.
 
 A function has the same name, arguments, shapes and per-row results in every
 backend; the torch backend's signatures are the reference, and
 [training loops](../../docs/training-loop.md#standard-methods-kept-local)
-documents them. A backend never carries its own copy of an update's loss.
-Two gaps remain for a second backend. The updates call a few array methods
-directly (`.float()`, `.flatten()`, `.abs().mean()`, `.detach()`, and
-`.softmax()` on categorical bootstrap logits), and they admit rows, record
-optimizer health and summarize selection through torch-only modules
-(`AdmittedRollout`, `OptimizerHealth`, `selection_diagnostics`,
-`value_scale`). Running the shared update on another backend moves what that
-backend lacks into its modules.
+documents them. A backend never carries its own copy of an update's loss:
+`manabot.backends.parity` runs `minibatch_objective` through each backend's
+`rl` and `Learner`. What still differs between the two backends:
+
+- MLX has no float64 on the GPU, so its surrogate ratio and loss sum are
+  float32; torch's are float64.
+- MLX has no categorical critic functions; the backend refuses a categorical
+  checkpoint.
+- `OptimizerHealth` counts steps and rejections on every backend; its sampled
+  gradient and parameter detail reads torch modules and is absent on MLX.
+- The PPO update still steps through torch's `gradient_step` and calls tensor
+  methods; only the damped update runs on MLX.
 
 ## The torch backend
 
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic` |
-| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `require`, `require_finite`, `NumericalError` |
-| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
-| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `flat_numpy`, `device_of` |
+| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `NumericalError` |
+| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
+| `manabot.backends.torch.rollout` | `AdmittedRollout`, `observation_tensors` |
+| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `flat_numpy`, `device_of` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
 
 ```python
@@ -107,11 +154,13 @@ their first bytes; `save_checkpoint` writes `.pt` until the container carries
 every configuration the torch policy runs (belief inputs, history, FiLM and
 the rest refused below).
 
-`BACKEND` is torch's `manabot.policy.protocol.Backend`, NumPy in and out,
-beside the native torch API; its parameters and gradients keep canonical
-names. Until `ActorCritic` reads `Prepared` indices, its `prepare` builds the
-shared `Prepared` and keeps the admitted torch observation on it (`Retained`),
-so parity can run torch against its own torch reference.
+`BACKEND` is torch's `manabot.policy.protocol.Backend`, beside the native
+torch API: `load` returns a `TorchPolicy` and a `Learner`, whose parameters
+and gradients keep torch's names (`torch_name` in `manabot.policy.checkpoint`
+maps canonical names back). Until `ActorCritic` reads `Prepared` indices, its
+`prepare` builds the shared `Prepared` and keeps the admitted torch
+observation on it (`Retained`), so parity can run torch against its own torch
+reference.
 
 `rl.py`, `learner.py` and `arrays.py` import nothing else from manabot at
 runtime, so another role reuses them unchanged.
@@ -172,8 +221,9 @@ mlx    one step                                 params max |Δ| 9.4e-05, update 
 parity: pass (mlx)
 ```
 
-The check runs the PyTorch model in float32 on CPU as the reference, with the
-training code's own loss, and every installed backend on the same inputs: a
+The check runs the PyTorch model in float32 on CPU as the reference and every
+installed backend, torch included, on the same inputs, each side computing
+the damped update's `minibatch_objective` through its own backend: a
 capture directory written by `experiments/mlx_pilot.py capture` (real learner
 minibatches with their targets and settings, and real collection calls). Each
 backend loads the reference's weights through the canonical names and is
