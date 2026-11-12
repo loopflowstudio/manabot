@@ -283,7 +283,7 @@ written), under the USD 10 cap.
 | Job | Etude run | Source | Torch | Arms |
 |---|---|---|---|---|
 | option 3 | `d8ad784530d7` | `4a002968e` = main `92560a1e0` + module | 2.10.0+cu128 | baseline, option 3 |
-| bucketed | `1999b57daf19` | `e55157ac5` = MTG-302 branch `54cd65420` (newer main) + module | 2.15.0+cu132 | baseline (switch off), bucketed (`MANABOT_BUCKETED_SHAPES=1`) |
+| bucketed | `1999b57daf19` | `e55157ac5` (tag `mtg301-bucketed-run`) = MTG-302 branch `54cd65420` (newer main) + module | 2.15.0+cu132 | baseline (switch off), bucketed (`MANABOT_BUCKETED_SHAPES=1`) |
 
 Both jobs ran in sequence on one hand-held L4 window: machine
 `l4-etude-6fc061afd2e6`, RunPod pod `jvkaqth5y6wyt9`, 11:27–12:40 UTC on
