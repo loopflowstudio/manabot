@@ -43,7 +43,11 @@ def _manifest(*, reverse_ids: bool = False) -> dict:
         "schema_version": 1,
         "content_digest": pool["content_digest"],
         "definitions": [
-            {"card_def_id": card_def_id, "registry_name": row["registry_name"]}
+            {
+                "card_def_id": card_def_id,
+                "key": row["key"],
+                "registry_name": row["registry_name"],
+            }
             for card_def_id, row in zip(ids, rows, strict=True)
         ],
     }
@@ -176,6 +180,51 @@ def test_back_faces_are_characteristics_references() -> None:
     assert (
         padded["definition_token_kind"][front][position]
         == (TOKEN_KINDS["definition_ref"])
+    )
+
+
+def test_tokens_sharing_a_printed_name_bind_to_their_own_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A definition binds by its key, so two tokens may print one name."""
+    catalog = dict(managym.catalog_tokens())
+    ally = catalog["keys"].index("token.ally")
+    boulder = catalog["keys"].index("token.ballistic_boulder")
+    names = list(catalog["registry_names"])
+    names[boulder] = names[ally]
+    catalog["registry_names"] = names
+    monkeypatch.setattr(managym, "catalog_tokens", lambda: catalog)
+
+    manifest = _manifest()
+    ids = {row["key"]: row["card_def_id"] for row in manifest["definitions"]}
+    for row in manifest["definitions"]:
+        if row["key"] == "token.ballistic_boulder":
+            row["registry_name"] = names[ally]
+
+    pack = BoundSemanticPack.bind(manifest)
+    assert pack.definition_row(ids["token.ally"]) == ally
+    assert pack.definition_row(ids["token.ballistic_boulder"]) == boulder
+    assert pack.binding_hash == BoundSemanticPack.bind(_manifest()).binding_hash
+
+    # Without keys the shared name identifies neither row.
+    for row in manifest["definitions"]:
+        del row["key"]
+    with pytest.raises(ContentPackBindingError, match="names 2 catalog rows"):
+        BoundSemanticPack.bind(manifest)
+
+
+def test_a_manifest_without_keys_binds_by_name() -> None:
+    keyed = _manifest()
+    named = {
+        **keyed,
+        "definitions": [
+            {name: value for name, value in row.items() if name != "key"}
+            for row in keyed["definitions"]
+        ],
+    }
+    assert (
+        BoundSemanticPack.bind(named).definition_row_by_card_def_id
+        == BoundSemanticPack.bind(keyed).definition_row_by_card_def_id
     )
 
 
@@ -342,7 +391,7 @@ def test_unknown_schema_and_content_binding_fail_closed(tmp_path: Path) -> None:
         BoundSemanticPack.bind(missing)
 
     unknown = _manifest()
-    unknown["definitions"][0]["registry_name"] = "Not A Card"
+    unknown["definitions"][0]["key"] = "lea.not_a_card"
     with pytest.raises(ContentPackBindingError, match="does not bind"):
         BoundSemanticPack.bind(unknown)
 

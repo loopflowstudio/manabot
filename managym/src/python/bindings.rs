@@ -3619,6 +3619,7 @@ impl PyEnv {
         for entry in manifest.definitions {
             let definition = PyDict::new_bound(py);
             definition.set_item("card_def_id", entry.card_def_id.0)?;
+            definition.set_item("key", entry.key)?;
             definition.set_item("registry_name", entry.registry_name)?;
             definitions.append(definition)?;
         }
@@ -4433,7 +4434,15 @@ fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("content_digest", content.content_digest())?;
-    // Binding only: names join a manifest's CardDefIds to catalog rows.
+    // Binding only: a row's key, or its name when it has none, joins a
+    // manifest's CardDefIds to catalog rows.
+    out.set_item(
+        "keys",
+        content
+            .definitions()
+            .map(|definition| (!definition.key.is_empty()).then_some(definition.key))
+            .collect::<Vec<_>>(),
+    )?;
     out.set_item(
         "registry_names",
         content

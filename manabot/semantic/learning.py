@@ -403,7 +403,8 @@ class BoundSemanticPack:
 
         The catalog's content digest must equal the manifest's, so the tokens
         describe exactly the definitions the match runs. Manifest IDs join
-        catalog rows by registry name, so rows never depend on ID allocation.
+        catalog rows by definition identity (key, else printed name), so rows
+        never depend on ID allocation.
         """
         import managym  # Native only on this path; historical readers stay pure.
 
@@ -426,13 +427,27 @@ class BoundSemanticPack:
             raise ContentPackBindingError("learning catalog differs from the live pack")
         catalog = SemanticCatalog.from_native(raw)
 
-        row_by_name = {
-            _string(name, "catalog_tokens.registry_names[]"): row
-            for row, name in enumerate(
-                _sequence(raw.get("registry_names"), "catalog_tokens.registry_names")
+        # A definition is identified by its key, or by its printed name when
+        # it has none (a back face or rules fixture). Two tokens may print one
+        # name, and a token may print a card's, so names alone do not bind.
+        names = tuple(
+            _string(name, "catalog_tokens.registry_names[]")
+            for name in _sequence(
+                raw.get("registry_names"), "catalog_tokens.registry_names"
             )
-        }
+        )
+        keys = tuple(_sequence(raw.get("keys"), "catalog_tokens.keys"))
+        if len(keys) != len(names):
+            raise ContentPackBindingError("catalog keys and names differ in length")
+        row_by_key: dict[str, int] = {}
+        rows_by_name: dict[str, list[int]] = {}
+        for row, (key, name) in enumerate(zip(keys, names, strict=True)):
+            if key is not None:
+                row_by_key[_string(key, "catalog_tokens.keys[]")] = row
+            rows_by_name.setdefault(name, []).append(row)
+
         rows_by_id: dict[int, int] = {}
+        bound_rows: set[int] = set()
         for index, raw_definition in enumerate(
             _sequence(manifest.get("definitions"), "content_pack_manifest.definitions")
         ):
@@ -447,18 +462,36 @@ class BoundSemanticPack:
                 definition.get("registry_name"),
                 f"content_pack_manifest.definitions[{index}].registry_name",
             )
+            key = definition.get("key")
             if card_def_id in rows_by_id:
                 raise ContentPackBindingError(f"duplicate CardDefId {card_def_id}")
-            try:
-                row = row_by_name[registry_name]
-            except KeyError as error:
-                raise ContentPackBindingError(
-                    f"manifest definition {registry_name!r} does not bind"
-                ) from error
-            if row in rows_by_id.values():
-                raise ContentPackBindingError(
-                    f"duplicate ContentPack registry name {registry_name!r}"
+            if key is not None:
+                identity = _string(
+                    key, f"content_pack_manifest.definitions[{index}].key"
                 )
+                row = row_by_key.get(identity)
+            else:
+                # A keyless row names a keyless definition; a manifest written
+                # before keys names any definition whose name is unshared.
+                identity = registry_name
+                named = rows_by_name.get(registry_name, [])
+                keyless = [row for row in named if keys[row] is None]
+                candidates = keyless or named
+                if len(candidates) > 1:
+                    raise ContentPackBindingError(
+                        f"manifest definition {registry_name!r} names "
+                        f"{len(candidates)} catalog rows and has no key"
+                    )
+                row = candidates[0] if candidates else None
+            if row is None:
+                raise ContentPackBindingError(
+                    f"manifest definition {identity!r} does not bind"
+                )
+            if row in bound_rows:
+                raise ContentPackBindingError(
+                    f"duplicate ContentPack definition {identity!r}"
+                )
+            bound_rows.add(row)
             rows_by_id[card_def_id] = row
         if len(rows_by_id) != catalog.definitions:
             raise ContentPackBindingError("catalog definitions do not all bind")
@@ -484,7 +517,7 @@ class BoundSemanticPack:
             semantic_pack_hash=semantic_pack_hash,
             definition_row_by_card_def_id=rows_by_id,
             catalog=catalog,
-            registry_names=tuple(row_by_name),
+            registry_names=names,
         )
 
     @classmethod

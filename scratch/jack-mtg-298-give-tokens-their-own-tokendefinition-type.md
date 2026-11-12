@@ -88,4 +88,21 @@ definition by printed name, and it is the one that breaks the Task's outcome
 - Out of scope (own follow-up Task): renaming runtime `state::card::Card` and
   `CardDefId`;
   keying Academy curated token art by `token.*`.
-- Concept review 2 direction above is not implemented.
+- Concept review 2 change made: `BoundSemanticPack.bind` joins by key, else
+  name (`catalog_tokens()["keys"]`, manifest `key`, `bind_policy_catalog`). A
+  keyless manifest row binds the keyless row of its name, else the only row of
+  that name; a shared name without a key raises. Cards bind by key too (same
+  identity as the pool row), not only tokens.
+- Contrary to "nothing moves": the env manifest gained `key`, and retained
+  evidence embeds that manifest. Re-recorded (only `key` lines added; content
+  digest, binding_hash, state digests, tokens and observations unchanged):
+  `academy/fixtures/{learn,precision,precision-mana}-demo-w17.json`, the
+  authored-match receipt (SHA now `1b0568bd…`, pinned as `AUTHORITY_SHA256`;
+  `TERMINAL_STATE` unchanged) and both parity receipts. A checkpoint world
+  binding stores the manifest, so one written earlier on this branch differs.
+- Checks: debug `cargo test --lib -- content_pack agent::env cards::pool` 6
+  passed; pytest 47 passed (learning projection, current content, policy
+  catalog, projection env) and 107 passed (authority, both parities, learn,
+  decision surface, world, mirror admission, belief, temur, static tokens).
+  `ruff check` reports one import-order error in untouched
+  `manabot/semantic/text_observation.py`.

@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "0b10440af4f2856c6755fe5d55e8bba5c7eb7de942cb0c3634d9ed08ec2bdddd",
+    "authority_receipt_sha256": "1b0568bd3a20e32702877712d744eae189a13549009b92a11542c7246fc562d7",
     "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "0b10440af4f2856c6755fe5d55e8bba5c7eb7de942cb0c3634d9ed08ec2bdddd"
+          "sha256": "1b0568bd3a20e32702877712d744eae189a13549009b92a11542c7246fc562d7"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "3fc01aa8a7c58a0c290b6d46ac68e73828933abda2d5cbfbd54886282fc260fc"
+          "sha256": "ba8ad860714a4dbecf7932d7c99755c101ac37b853c18ccb3dce5837e02c9bc7"
         },
         {
           "path": "academy/server.py",
@@ -73,7 +73,7 @@
         },
         {
           "path": "managym/__init__.pyi",
-          "sha256": "8503805dd82d2e67eb190f4762b4e26a7db520e13597c2f7bd21f69a9040dfb1"
+          "sha256": "93976e5c734f5f6b99204b4f2129af5762c3d02a0ecc389bda6cfabca59d7ffd"
         },
         {
           "path": "managym/decision.py",
@@ -101,7 +101,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "f8fdc5c6a7ca6034957ce82926ca54f7bf3790145a508e101edd4830ade13af2"
+          "sha256": "e3743dcf3e4a64adeca488a9fc5630df030e39dc04a43c2ecf251ee097908ac0"
         },
         {
           "path": "managym/cards/tests/cards/stx.rs",
@@ -128,7 +128,7 @@
           "sha256": "fe7203833b223d1efa2024782cb8ff2a666e981f12c402b9e54a1acfea49db9a"
         }
       ],
-      "sha256": "57430bf745fd4e9647d72dd3fbbac3c6234cd93819fa054f95f0fcee1bef9f79"
+      "sha256": "5552d76b7d1baefa08361aeb716bdae9156a818c0ab79fb01f91f365425876c1"
     },
     "seed": 0,
     "semantic_decision_version": 8
