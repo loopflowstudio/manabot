@@ -8,7 +8,9 @@ import numpy as np
 from typing_extensions import deprecated
 
 class ObservationValueLayout(TypedDict):
-    kind: Literal["id", "reference", "category", "flag", "count", "number", "rank", "tagged"]
+    kind: Literal[
+        "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
+    ]
     encoding: str
     range: str
 

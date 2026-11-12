@@ -361,7 +361,7 @@ fn merchant_repeats_with_four_foods_and_preserves_exact_tap_commands() {
         can_cast(&s, prism),
         "the payment needs two uses of the same Merchant"
     );
-    for (activation, pair) in foods.chunks_exact(2).enumerate() {
+    for (activation, pair) in foods.as_chunks::<2>().0.iter().enumerate() {
         assert!(can_activate(&s, source));
         activate(&mut s, source, 0);
         assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
@@ -414,7 +414,7 @@ fn merchant_cannot_reuse_the_food_reserved_for_its_own_activation() {
     let payer_card = card_of(&s, payer);
     assert!(can_activate(&s, payer));
     activate(&mut s, payer, 0);
-    for pair in foods[1..].chunks_exact(2) {
+    for pair in foods[1..].as_chunks::<2>().0 {
         activate(&mut s, source, 0);
         for food in pair {
             assert!(!offered_cards(&s).contains(&payer_card));

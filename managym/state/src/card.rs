@@ -284,7 +284,7 @@ pub enum PowerCda {
     CreaturesYouControl,
     /// "This creature's power is equal to the number of [predicate] cards
     /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
-    GraveyardMatching(CardPredicate),
+    GraveyardMatching(Box<CardPredicate>),
 }
 
 /// Which battlefield permanents a static P/T buff applies to.

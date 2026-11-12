@@ -79,7 +79,6 @@ impl Game {
             .into_iter()
             .flat_map(|player| self.iter_battlefield_permanents(player));
         self.layer_views(permanents)
-            .into_iter()
             .map(|(_, view)| {
                 view.static_abilities
                     .iter()

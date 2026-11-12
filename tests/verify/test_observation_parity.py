@@ -35,7 +35,6 @@ from manabot.env.observation import (
 from manabot.infra.config import UnsupportedPolicyInput
 from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision, submit_response
-from manabot.verify.representation import source_effect_root
 from manabot.verify.text_observation import priority_root
 import managym
 
