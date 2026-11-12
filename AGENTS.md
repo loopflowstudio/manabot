@@ -465,7 +465,10 @@ A `TriggerCondition` is "whenever X does Y": an event over its actor, never an
 `BeginningOf { step, whose }`, `Performs { who, any_of }` for keyword actions
 (search, scry, surveil, the four bends) and `PutIntoGraveyard { whose,
 predicate }`, `PutsCounters { who, kind, on }`. An object actor is a
-`TriggerSubject`, as in `Dies { subject }`, `Sacrificed { subject }`,
+`TriggerSubject` (`This`, `EnchantedCreature`, or `Matching { controlled_by,
+predicate, another }`, whose controller is the same `Actor`; card code uses
+`you_control`, `another_you_control`, `any`, `another`), as in
+`Dies { subject }`, `Sacrificed { subject }`,
 `Attacks { subject, per, attackers }` ("alone" and "with at least one other"
 are `AttackSize`) and `DealsCombatDamage { subject, to, per }`. Counts,
 predicates, recipients and once-per-object versus once-per-batch ("one or

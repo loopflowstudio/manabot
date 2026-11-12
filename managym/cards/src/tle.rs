@@ -79,7 +79,7 @@ fn the_cabbage_merchant() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::DealsCombatDamage {
-                    subject: TriggerSubject::Any(CardPredicate::creature()),
+                    subject: TriggerSubject::any(CardPredicate::creature()),
                     to: Actor::You,
                     per: Per::Object,
                 },

@@ -555,7 +555,9 @@ fn lightning_bolt() -> CardDefinition {
   scrying or bending (`Performs { who, any_of }`) and cards reaching a
   graveyard (`PutIntoGraveyard { whose, predicate }`) or counters
   (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
-  instead: `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
+  instead, whose controller is the same kind of `Actor` ("a creature an
+  opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
+  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
   `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
   more" creatures trigger once per batch or once each, and `attackers` says
   whether the attack is alone or with at least one other creature. The ability description ("Whenever an opponent draws

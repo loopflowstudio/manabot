@@ -37,7 +37,7 @@ fn lotus_cobra() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                subject: TriggerSubject::you_control(CardPredicate {
                     card_type: Some(CardType::Land),
                     ..Default::default()
                 }),
@@ -62,7 +62,7 @@ fn beastmaster_ascension() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::attacks(
-                TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                TriggerSubject::you_control(CardPredicate::creature()),
                 Per::Object,
             ),
             effects: vec![Effect::OptionalPayment {
@@ -157,7 +157,7 @@ fn valakut_the_molten_pinnacle() -> CardDefinition {
                 predicate: CardPredicate::subtype("Mountain"),
             }),
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate::subtype("Mountain")),
+                subject: TriggerSubject::another_you_control(CardPredicate::subtype("Mountain")),
             },
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement::one(TargetSpec::AnyTarget),

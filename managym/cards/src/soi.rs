@@ -30,7 +30,7 @@ fn tireless_tracker() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Land),
                         ..Default::default()
                     }),
@@ -40,7 +40,7 @@ fn tireless_tracker() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         subtype: Some("Clue".into()),
                         ..Default::default()
                     }),

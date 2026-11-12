@@ -139,7 +139,7 @@ fn the_great_henge() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                subject: TriggerSubject::you_control(CardPredicate {
                     token: Some(false),
                     ..creature()
                 }),

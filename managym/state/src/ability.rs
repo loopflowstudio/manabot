@@ -438,16 +438,54 @@ pub enum AttackSize {
 pub enum TriggerSubject {
     /// The permanent this ability is on.
     This,
-    /// "another [predicate] you control"
-    AnotherYouControl(CardPredicate),
-    /// "this or another [predicate] you control"
-    AnyYouControl(CardPredicate),
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
-    /// "another [predicate]", whoever controls it.
-    Another(CardPredicate),
+    /// "a/another [predicate] [controlled_by controls]": an object whose
+    /// controller is `controlled_by`, relative to the ability's controller.
+    /// `another` excludes the source itself (CR 109.4).
+    Matching {
+        controlled_by: Actor,
+        predicate: CardPredicate,
+        another: bool,
+    },
+}
+
+impl TriggerSubject {
+    /// "a [predicate] you control", this included.
+    pub fn you_control(predicate: CardPredicate) -> Self {
+        Self::Matching {
+            controlled_by: Actor::You,
+            predicate,
+            another: false,
+        }
+    }
+
+    /// "another [predicate] you control".
+    pub fn another_you_control(predicate: CardPredicate) -> Self {
+        Self::Matching {
+            controlled_by: Actor::You,
+            predicate,
+            another: true,
+        }
+    }
+
     /// "a [predicate]", whoever controls it, this included.
-    Any(CardPredicate),
+    pub fn any(predicate: CardPredicate) -> Self {
+        Self::Matching {
+            controlled_by: Actor::AnyPlayer,
+            predicate,
+            another: false,
+        }
+    }
+
+    /// "another [predicate]", whoever controls it.
+    pub fn another(predicate: CardPredicate) -> Self {
+        Self::Matching {
+            controlled_by: Actor::AnyPlayer,
+            predicate,
+            another: true,
+        }
+    }
 }
 
 /// The players an effect affects, relative to its controller.

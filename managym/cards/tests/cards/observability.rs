@@ -1089,12 +1089,12 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             predicate: CardPredicate::default(),
         },
         TriggerCondition::DealsCombatDamage {
-            subject: TriggerSubject::Any(CardPredicate::creature()),
+            subject: TriggerSubject::any(CardPredicate::creature()),
             to: Actor::You,
             per: Per::Batch,
         },
         TriggerCondition::Sacrificed {
-            subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+            subject: TriggerSubject::another_you_control(CardPredicate::creature()),
         },
         TriggerCondition::OnceEachTurn {
             condition: enters(),
@@ -1887,7 +1887,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
     }
     for attackers in [AttackSize::Any, AttackSize::Alone, AttackSize::WithAnother] {
         conditions.push(TriggerCondition::Attacks {
-            subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+            subject: TriggerSubject::you_control(CardPredicate::creature()),
             per: Per::Batch,
             attackers,
         });
@@ -1913,6 +1913,40 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             tokens.contains(&(TokenKind::Variant, name_value(&name))),
             "{name}"
         );
+    }
+
+    // An object actor's controller and "another" are parameters of one
+    // subject: each combination is its own token stream.
+    let mut subjects: Vec<Vec<(TokenKind, i32)>> = Vec::new();
+    for controlled_by in [Actor::You, Actor::Opponent, Actor::AnyPlayer] {
+        for another in [false, true] {
+            let tokens = tokens_of(&CardDefinition {
+                name: "Witness".into(),
+                abilities: vec![Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::Matching {
+                            controlled_by,
+                            predicate: CardPredicate::creature(),
+                            another,
+                        },
+                    },
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                }],
+                ..Default::default()
+            });
+            assert!(
+                tokens.contains(&(
+                    TokenKind::Variant,
+                    name_value(&format!("Actor::{controlled_by:?}"))
+                )),
+                "{controlled_by:?}"
+            );
+            assert!(!subjects.contains(&tokens), "{controlled_by:?} {another}");
+            subjects.push(tokens);
+        }
     }
 }
 

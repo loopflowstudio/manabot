@@ -162,7 +162,7 @@ fn one_or_more_attack_trigger_fires_once() {
         Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::attacks(
-                TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                TriggerSubject::you_control(CardPredicate::creature()),
                 Per::Batch,
             ),
             effects: vec![Effect::gain_life(1)],

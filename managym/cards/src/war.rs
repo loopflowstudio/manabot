@@ -26,7 +26,7 @@ fn mayhem_devil() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::Sacrificed {
-                subject: TriggerSubject::Any(CardPredicate::default()),
+                subject: TriggerSubject::any(CardPredicate::default()),
             },
             effects: vec![Effect::deal_damage(
                 1,

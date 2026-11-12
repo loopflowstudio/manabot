@@ -1981,21 +1981,16 @@ impl Game {
         };
         match subject {
             TriggerSubject::This => moved_card == source_card,
-            TriggerSubject::AnotherYouControl(predicate) => {
-                moved_card != source_card
-                    && moved_controller == source_controller
-                    && source_was_on_battlefield
+            TriggerSubject::Matching {
+                controlled_by,
+                predicate,
+                another,
+            } => {
+                source_was_on_battlefield
+                    && controlled_by.includes(source_controller, moved_controller)
+                    && !(*another && moved_card == source_card)
                     && matches(predicate)
             }
-            TriggerSubject::AnyYouControl(predicate) => {
-                moved_controller == source_controller
-                    && source_was_on_battlefield
-                    && matches(predicate)
-            }
-            TriggerSubject::Another(predicate) => {
-                moved_card != source_card && source_was_on_battlefield && matches(predicate)
-            }
-            TriggerSubject::Any(predicate) => source_was_on_battlefield && matches(predicate),
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
             TriggerSubject::EnchantedCreature => self.state.card_to_permanent[source_card]
@@ -2019,22 +2014,15 @@ impl Game {
         };
         match subject {
             TriggerSubject::This => permanent.card == source_card,
-            TriggerSubject::AnotherYouControl(predicate) => {
-                permanent.card != source_card
-                    && permanent.controller == source_controller
-                    && self.permanent_matches_predicate(permanent_id, predicate)
-            }
-            TriggerSubject::AnyYouControl(predicate) => {
-                permanent.controller == source_controller
-                    && self.permanent_matches_predicate(permanent_id, predicate)
-            }
             TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_card),
-            TriggerSubject::Another(predicate) => {
-                permanent.card != source_card
+            TriggerSubject::Matching {
+                controlled_by,
+                predicate,
+                another,
+            } => {
+                controlled_by.includes(source_controller, permanent.controller)
+                    && !(*another && permanent.card == source_card)
                     && self.permanent_matches_predicate(permanent_id, predicate)
-            }
-            TriggerSubject::Any(predicate) => {
-                self.permanent_matches_predicate(permanent_id, predicate)
             }
         }
     }

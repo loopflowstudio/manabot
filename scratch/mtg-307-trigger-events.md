@@ -42,11 +42,24 @@ Kept on purpose (actor fixed by the rules, or single-consumer meta-event):
 Later Task: merge `DelayedEvent` into `TriggerCondition` over a captured
 subject.
 
+## Object actor controller (concept review 2, 2026-11-12)
+
+The `Any`/`Another` × `YouControl`/whoever grid is now one
+`TriggerSubject::Matching { controlled_by: Actor, predicate, another }`
+beside `This` and `EnchantedCreature`; card code uses `you_control`,
+`another_you_control`, `any`, `another`. Each matcher in `flow/triggers.rs`
+is one test through `Actor::includes` (moved-card path keeps the
+`source_was_on_battlefield` gate); `subject_description`/`one_or_more` share
+`matching_description` ("a creature an opponent controls" covered in
+`trigger_descriptions_fill_one_template_per_event`). The learning-token test
+now asserts all six `controlled_by` × `another` subjects tokenize distinctly.
+
 ## Checks
 
 - `cargo nextest run --workspace --profile ci` (debug): 1163/1164 pass;
   `checked_semantic_conformance_evidence_reproduces` fails as on base
   d95734088 (state_hash/content_digest only). Clippy: no findings in changed code.
+- Subject fold: debug nextest filter `trigger|attack|combat_damage|dies|sacrific|observability|description|token` 249/249; extension rebuilt, imports.
 - Compress pass: trigger-filtered debug nextest (`attack|combat_damage|trigger|…`)
   139/139.
 - `uv run --extra dev pytest tests/semantic -q`: 197 passed (rebuilt extension).

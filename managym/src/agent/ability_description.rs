@@ -214,16 +214,16 @@ fn condition_description(condition: &TriggerCondition) -> String {
 fn subject_description(subject: &TriggerSubject) -> String {
     match subject {
         TriggerSubject::This => "this".into(),
-        TriggerSubject::AnotherYouControl(p) => format!(
-            "another {} you control",
-            predicate_description(p, "permanent")
-        ),
         TriggerSubject::EnchantedCreature => "enchanted creature".into(),
-        TriggerSubject::Another(p) => format!("another {}", predicate_description(p, "permanent")),
-        TriggerSubject::AnyYouControl(p) => {
-            format!("a {} you control", predicate_description(p, "permanent"))
-        }
-        TriggerSubject::Any(p) => format!("a {}", predicate_description(p, "permanent")),
+        TriggerSubject::Matching {
+            controlled_by,
+            predicate,
+            another,
+        } => matching_description(
+            if *another { "another" } else { "a" },
+            predicate_description(predicate, "permanent"),
+            *controlled_by,
+        ),
     }
 }
 
@@ -232,20 +232,31 @@ fn subject_description(subject: &TriggerSubject) -> String {
 fn one_or_more(subject: &TriggerSubject, plural: &str) -> String {
     match subject {
         TriggerSubject::This | TriggerSubject::EnchantedCreature => subject_description(subject),
-        TriggerSubject::AnotherYouControl(p) => format!(
-            "one or more other {} you control",
-            predicate_description(p, plural)
+        TriggerSubject::Matching {
+            controlled_by,
+            predicate,
+            another,
+        } => matching_description(
+            if *another {
+                "one or more other"
+            } else {
+                "one or more"
+            },
+            predicate_description(predicate, plural),
+            *controlled_by,
         ),
-        TriggerSubject::AnyYouControl(p) => {
-            format!(
-                "one or more {} you control",
-                predicate_description(p, plural)
-            )
-        }
-        TriggerSubject::Another(p) => {
-            format!("one or more other {}", predicate_description(p, plural))
-        }
-        TriggerSubject::Any(p) => format!("one or more {}", predicate_description(p, plural)),
+    }
+}
+
+/// "[quantity] [objects] [controller controls]"; any player's objects name
+/// no controller.
+fn matching_description(quantity: &str, objects: String, controlled_by: Actor) -> String {
+    match controlled_by {
+        Actor::AnyPlayer => format!("{quantity} {objects}"),
+        _ => format!(
+            "{quantity} {objects} {}",
+            actor_does(controlled_by, "control", "controls")
+        ),
     }
 }
 
@@ -1279,7 +1290,7 @@ mod tests {
             ),
             (
                 TriggerCondition::DealsCombatDamage {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate::subtype("Ally")),
+                    subject: TriggerSubject::you_control(CardPredicate::subtype("Ally")),
                     to: Actor::AnyPlayer,
                     per: Per::Batch,
                 },
@@ -1287,7 +1298,7 @@ mod tests {
             ),
             (
                 TriggerCondition::DealsCombatDamage {
-                    subject: TriggerSubject::Any(CardPredicate::creature()),
+                    subject: TriggerSubject::any(CardPredicate::creature()),
                     to: Actor::You,
                     per: Per::Object,
                 },
@@ -1295,14 +1306,14 @@ mod tests {
             ),
             (
                 TriggerCondition::attacks(
-                    TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                    TriggerSubject::you_control(CardPredicate::creature()),
                     Per::Batch,
                 ),
                 "Whenever one or more creature permanents you control attack",
             ),
             (
                 TriggerCondition::Attacks {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
                     per: Per::Object,
                     attackers: AttackSize::Alone,
                 },
@@ -1310,9 +1321,19 @@ mod tests {
             ),
             (
                 TriggerCondition::Sacrificed {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+                    subject: TriggerSubject::another_you_control(CardPredicate::default()),
                 },
                 "Whenever another permanent you control is sacrificed",
+            ),
+            (
+                TriggerCondition::Dies {
+                    subject: TriggerSubject::Matching {
+                        controlled_by: Actor::Opponent,
+                        predicate: CardPredicate::creature(),
+                        another: false,
+                    },
+                },
+                "When a creature an opponent controls dies",
             ),
             (
                 TriggerCondition::PutsCounters {

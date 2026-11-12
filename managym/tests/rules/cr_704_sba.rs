@@ -246,7 +246,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
     let ability = Ability::Triggered {
         intervening_if: None,
         condition: TriggerCondition::Dies {
-            subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+            subject: TriggerSubject::another_you_control(CardPredicate::creature()),
         },
         effects: vec![Effect::gain_life(1)],
     };

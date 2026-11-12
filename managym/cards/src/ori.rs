@@ -39,7 +39,7 @@ fn elemental_bond() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                subject: TriggerSubject::another_you_control(CardPredicate {
                     min_power: Some(3),
                     ..CardPredicate::creature()
                 }),

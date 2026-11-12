@@ -343,7 +343,7 @@ fn aang_at_the_crossroads() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::LeavesTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+                    subject: TriggerSubject::another_you_control(CardPredicate::creature()),
                 },
                 effects: vec![Effect::CreateDelayedTrigger {
                     remember: None,
@@ -785,7 +785,7 @@ fn airbender_ascension() -> CardDefinition {
             },
             Ability::Triggered {
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
                 },
                 intervening_if: None,
                 effects: vec![Effect::put_counters(
@@ -1227,7 +1227,7 @@ fn avatar_enthusiasts() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                subject: TriggerSubject::another_you_control(CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
                 }),
@@ -1617,7 +1617,7 @@ fn beifong_s_bounty_hunters() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::Dies {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                subject: TriggerSubject::you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     not_card_types: vec![CardType::Land],
                     ..Default::default()
@@ -1695,7 +1695,7 @@ fn bitter_work() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::attacks(
-                TriggerSubject::AnyYouControl(CardPredicate {
+                TriggerSubject::you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     min_power: Some(4),
                     ..Default::default()
@@ -2043,7 +2043,7 @@ fn buzzard_wasp_colony() -> CardDefinition {
             },
             Ability::Triggered {
                 condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+                    subject: TriggerSubject::another_you_control(CardPredicate::creature()),
                 },
                 intervening_if: Some(Condition::TriggeringHadCounters),
                 effects: vec![Effect::PutCountersFrom {
@@ -2345,7 +2345,7 @@ fn crescent_island_temple() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
                         subtype: Some("Shrine".into()),
                         ..Default::default()
                     }),
@@ -2895,7 +2895,7 @@ fn earth_kings_lieutenant() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
                         subtype: Some("Ally".into()),
                         ..Default::default()
                     }),
@@ -3065,7 +3065,7 @@ fn earthbender_ascension() -> CardDefinition {
             },
             Ability::Triggered {
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Land),
                         ..Default::default()
                     }),
@@ -3438,7 +3438,7 @@ fn fire_lord_zuko() -> CardDefinition {
                 condition: TriggerCondition::FromZone {
                     zone: ZoneType::Exile,
                     condition: Box::new(TriggerCondition::EntersTheBattlefield {
-                        subject: TriggerSubject::AnyYouControl(CardPredicate::default()),
+                        subject: TriggerSubject::you_control(CardPredicate::default()),
                     }),
                 },
                 intervening_if: None,
@@ -3657,7 +3657,7 @@ fn fire_navy_trebuchet() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Defender, Keyword::Reach]),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::attacks(
-                TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                TriggerSubject::you_control(CardPredicate::creature()),
                 Per::Batch,
             ),
             intervening_if: None,
@@ -4519,7 +4519,7 @@ fn haru_hidden_talent() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                subject: TriggerSubject::another_you_control(CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
                 }),
@@ -4913,7 +4913,7 @@ fn invasion_tactics() -> CardDefinition {
             },
             Ability::Triggered {
                 condition: TriggerCondition::DealsCombatDamage {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         subtype: Some("Ally".into()),
                         ..Default::default()
                     }),
@@ -5509,7 +5509,7 @@ fn koh_the_face_stealer() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::Another(CardPredicate {
+                    subject: TriggerSubject::another(CardPredicate {
                         card_type: Some(CardType::Creature),
                         token: Some(false),
                         ..Default::default()
@@ -5615,7 +5615,7 @@ fn kyoshi_island_plaza() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
                         subtype: Some("Shrine".into()),
                         ..Default::default()
                     }),
@@ -5818,7 +5818,7 @@ fn long_feng_grand_secretariat() -> CardDefinition {
             // Long Feng is no land, so "another" only ever excludes it as a
             // creature; a land creature matches once.
             condition: TriggerCondition::Dies {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                subject: TriggerSubject::another_you_control(CardPredicate {
                     card_types_any: vec![CardType::Creature, CardType::Land],
                     ..Default::default()
                 }),
@@ -6215,7 +6215,7 @@ fn momo_friendly_flier() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                subject: TriggerSubject::another_you_control(CardPredicate {
                     flying: true,
                     card_type: Some(CardType::Creature),
                     ..Default::default()
@@ -6407,7 +6407,7 @@ fn northern_air_temple() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
                         subtype: Some("Shrine".into()),
                         ..Default::default()
                     }),
@@ -6463,7 +6463,7 @@ fn obsessive_pursuit() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::attacks(
-                    TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                    TriggerSubject::you_control(CardPredicate::creature()),
                     Per::Batch,
                 ),
                 effects: vec![Effect::TargetClause {
@@ -6836,7 +6836,7 @@ fn pirate_peddlers() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::Sacrificed {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+                subject: TriggerSubject::another_you_control(CardPredicate::default()),
             },
             effects: vec![Effect::put_counters(
                 ObjectSelector::This,
@@ -7041,7 +7041,7 @@ fn rabaroo_troop() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                subject: TriggerSubject::you_control(CardPredicate {
                     card_type: Some(CardType::Land),
                     ..Default::default()
                 }),
@@ -7566,7 +7566,7 @@ fn sandbender_scavengers() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 condition: TriggerCondition::Sacrificed {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+                    subject: TriggerSubject::another_you_control(CardPredicate::default()),
                 },
                 intervening_if: None,
                 effects: vec![Effect::put_counters(
@@ -8053,7 +8053,7 @@ fn south_pole_voyager() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                subject: TriggerSubject::you_control(CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
                 }),
@@ -8104,7 +8104,7 @@ fn southern_air_temple() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
                         subtype: Some("Shrine".into()),
                         ..Default::default()
                     }),
@@ -8242,7 +8242,7 @@ fn suki_courageous_rescuer() -> CardDefinition {
                 condition: Box::new(TriggerCondition::ActiveIf {
                     active_if: Condition::YourTurn,
                     condition: Box::new(TriggerCondition::LeavesTheBattlefield {
-                        subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+                        subject: TriggerSubject::another_you_control(CardPredicate::default()),
                     }),
                 }),
             },
@@ -8397,7 +8397,7 @@ fn team_avatar() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                subject: TriggerSubject::you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
@@ -8458,7 +8458,7 @@ fn teo_spirited_glider() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Flying]),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::attacks(
-                TriggerSubject::AnyYouControl(CardPredicate {
+                TriggerSubject::you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
                     flying: true,
                     ..Default::default()
@@ -8584,7 +8584,7 @@ fn the_earth_king() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::attacks(
-                    TriggerSubject::AnyYouControl(CardPredicate {
+                    TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
                         min_power: Some(4),
                         ..Default::default()
@@ -9198,7 +9198,7 @@ fn the_spirit_oasis() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
                         subtype: Some("Shrine".into()),
                         ..Default::default()
                     }),
@@ -9347,7 +9347,7 @@ fn tolls_of_war() -> CardDefinition {
                     condition: Box::new(TriggerCondition::ActiveIf {
                         active_if: Condition::YourTurn,
                         condition: Box::new(TriggerCondition::Sacrificed {
-                            subject: TriggerSubject::AnyYouControl(CardPredicate::default()),
+                            subject: TriggerSubject::you_control(CardPredicate::default()),
                         }),
                     }),
                 },
@@ -9908,7 +9908,7 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         subtype: Some("Food".into()),
                         ..Default::default()
                     }),
@@ -10189,7 +10189,7 @@ fn wartime_protestors() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                subject: TriggerSubject::another_you_control(CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
                 }),
@@ -10281,7 +10281,7 @@ fn waterbender_ascension() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::DealsCombatDamage {
-                subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                subject: TriggerSubject::you_control(CardPredicate::creature()),
                 to: Actor::AnyPlayer,
                 per: Per::Object,
             },
@@ -10635,7 +10635,7 @@ fn zhao_ruthless_admiral() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+                    subject: TriggerSubject::another_you_control(CardPredicate::default()),
                 },
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::each_you_control(CardPredicate::creature()),
