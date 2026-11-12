@@ -18,7 +18,7 @@ from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import WORLD, checkpoint_world
 from manabot.training.execution import execute_regime
-from manabot.training.learning.references import reference_distribution
+from manabot.training.updates.references import reference_distribution
 from manabot.verify.action_cases import (
     DecisionCase,
     decision_case,

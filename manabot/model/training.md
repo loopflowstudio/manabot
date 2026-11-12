@@ -2,7 +2,8 @@
 
 RL entry points resolve a `TrainingRegime` and call
 `manabot.training.execution.execute_regime`. Bounded diagnostics may use the
-same `SeatRoutedCollector` and `update_iteration` primitives directly. A new
+same `SeatRoutedCollector` and update rules (`update_damped_iteration`,
+`update_iteration`) directly. A new
 loop or optimizer implementation needs a concrete unsupported behavior and a
 current consumer; an old import or test is not a reason to retain one.
 

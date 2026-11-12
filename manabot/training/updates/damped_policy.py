@@ -1,4 +1,4 @@
-"""Damped policy updates with scalar or categorical lambda-return targets.
+"""The damped policy rule: what recipes select, with scalar or categorical targets.
 
 The damped update is a clipped likelihood-ratio surrogate with two reverse
 KL penalties, not a novel replacement for that surrogate. Targets, behavior
@@ -11,34 +11,47 @@ from dataclasses import dataclass
 
 import torch
 from torch import Tensor
-from torch.nn import functional as F
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
-from manabot.model.numerics import float64_operand
 from manabot.model.policy_distribution import (
-    NumericalError,
     check_logs,
     check_probabilities,
-    clipped_surrogate,
     legal_mask,
     policy_logs,
-    require,
+)
+from manabot.rl.losses import (
+    categorical_value_loss,
+    clip_fraction,
+    clipped_surrogate,
+    entropy,
     reverse_kl,
+    squared_value_loss,
+    support_logs,
 )
-from manabot.training.learning.health import OptimizerHealth, batch_health
-from manabot.training.learning.learner import AdmittedRollout, Learner
-from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.returns import reverse_waves, transition_gae
-from manabot.training.learning.selection import (
-    UpdateDiagnostics,
-    selected_mean,
-    selection_diagnostics,
-    selection_mask,
-    value_scale,
+from manabot.rl.numerics import float64_operand, require
+from manabot.rl.returns import (
+    categorical_lambda_returns,
+    expected_outcome,
+    transition_gae,
 )
+from manabot.rl.selection import selected_mean, selection_mask
+from manabot.rl.step import gradient_step
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.health import (
+    OptimizerHealth,
+    batch_health,
+    failure_tensors,
+    minibatch_tensors,
+)
+from manabot.training.updates.learner import AdmittedRollout, Learner
+from manabot.training.updates.references import reference_distribution
+from manabot.training.updates.selection import (
+    UpdateDiagnostics,
+    selection_diagnostics,
+    value_scale,
+)
 
 
 def damped_policy_loss(
@@ -53,7 +66,9 @@ def damped_policy_loss(
     collection_kl: float,
     tau: float,
 ) -> Tensor:
-    """Equation (6), per row [B], over padded categorical offers [B,A].
+    """The damped policy objective, equation (6), per row [B] over offers [B,A].
+
+    Sources and departures: docs/learning.md#fidelity-to-the-sources.
 
     Ratios use the actual action likelihood at collection, even after earlier
     minibatches change the learner. The reverse KLs sum all legal actions.
@@ -80,7 +95,7 @@ def damped_policy_loss(
     if not valid.gather(-1, actions[:, None]).all():
         raise ValueError("sampled action is not legal")
     logs = policy_logs(logits, valid)
-    reference_logs = reference.detach().masked_fill(~valid, 1).log()
+    reference_logs = support_logs(reference.detach(), valid)
     ratio_logs = (
         (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
     )
@@ -90,70 +105,6 @@ def damped_policy_loss(
         + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
         + tau * float64_operand(reverse_kl(logs, reference_logs, valid))
     )
-
-
-@torch.no_grad()
-def categorical_lambda_returns(
-    probabilities: Tensor,
-    rewards: Tensor,
-    ends: Tensor,
-    bootstrap: Tensor,
-    trace_lambda: float,
-) -> Tensor:
-    """Undiscounted outcome mixtures [T,E,3], ordered loss/draw/win.
-
-    Each row ends at the next decision of the SAME player or at terminal.
-    Terminal targets are one-hot signed outcomes. A nonterminal tail uses the
-    exact paused next observation; reset observations never cross end markers.
-    For earlier rows mix (1-lambda)*next_prediction + lambda*next_return.
-    No policy receives true hidden-state input from these outcome labels.
-    """
-    if probabilities.ndim != 3 or probabilities.shape[-1] != 3:
-        raise ValueError("outcome probabilities require [T,E,3]")
-    if (
-        rewards.shape != probabilities.shape[:2]
-        or ends.shape != rewards.shape
-        or bootstrap.shape != probabilities.shape[1:]
-        or not len(rewards)
-        or not 0 <= trace_lambda <= 1
-    ):
-        raise ValueError("invalid outcome target shapes or lambda")
-    for distribution in (probabilities, bootstrap):
-        if (
-            not torch.isfinite(distribution).all()
-            or (distribution < 0).any()
-            or not torch.allclose(
-                distribution.sum(-1),
-                torch.ones_like(distribution.sum(-1)),
-                atol=1e-5,
-                rtol=1e-5,
-            )
-        ):
-            raise ValueError("outcome probabilities must normalize")
-    if (
-        not torch.isfinite(rewards).all()
-        or not ((rewards == -1) | (rewards == 0) | (rewards == 1)).all()
-    ):
-        raise ValueError("outcome rewards must be signed win/loss/draw")
-    ends = ends.bool()
-    if (rewards[~ends] != 0).any():
-        raise ValueError("nonterminal outcome reward must be zero")
-    # Trajectories run in parallel on the host (`reverse_waves`), row order intact.
-    host_probabilities = probabilities.cpu()
-    host_ends = ends.cpu()
-    last_row = bootstrap.cpu()[None]
-    following = torch.cat([host_probabilities[1:], last_row])
-    terminal = F.one_hot((rewards.cpu() + 1).long(), 3).to(host_probabilities.dtype)
-    # The extra row is the trace past each column's last row.
-    targets = torch.cat([torch.empty_like(host_probabilities), last_row])
-    for steps, columns in reverse_waves(host_ends):
-        continuation = (1 - trace_lambda) * following[
-            steps, columns
-        ] + trace_lambda * targets[steps + 1, columns]
-        targets[steps, columns] = torch.where(
-            host_ends[steps, columns, None], terminal[steps, columns], continuation
-        )
-    return targets[:-1].to(probabilities.device)
 
 
 @dataclass(frozen=True)
@@ -188,9 +139,7 @@ def _targets(
                 "categorical update requires collection outcome probabilities"
             )
         probabilities = torch.as_tensor(batch.outcome_probabilities, device=device)
-        if not torch.allclose(
-            values, probabilities[..., 2] - probabilities[..., 0], atol=1e-5
-        ):
+        if not torch.allclose(values, expected_outcome(probabilities), atol=1e-5):
             raise ValueError(
                 "saved value differs from collection outcome probabilities"
             )
@@ -198,7 +147,7 @@ def _targets(
         value_targets = categorical_lambda_returns(
             probabilities, rewards, ends, bootstrap, learning.value_lambda
         )
-        next_value = bootstrap[:, 2] - bootstrap[:, 0]
+        next_value = expected_outcome(bootstrap)
     else:
         next_value = next_raw.squeeze(-1)
         _, value_targets = transition_gae(
@@ -231,7 +180,7 @@ def update_damped_iteration(
 ) -> UpdateDiagnostics:
     """One fresh epoch grouped by native stream count, with frozen targets.
 
-    EMA remains owned by execute_regime and advances once even on an empty
+    EMA belongs to the calling stage and advances once even on an empty
     filter. No batch shuffling, advantage normalization, replay or hidden truth.
     Scalar value is an explicit MSE ablation; categorical uses equation (5).
 
@@ -254,6 +203,8 @@ def update_damped_iteration(
         "rows": actions.numel(),
         "retained": int(targets.selected.sum()),
         "optimizer_exposures": 0,
+        "actor_exposures": 0,
+        "critic_exposures": 0,
         "iteration": iteration,
         "learning_rate": rate,
         "tau": tau,
@@ -272,26 +223,21 @@ def update_damped_iteration(
             actor_only=learning.filter_scope == "actor",
         )
         diagnostics["numerical"] = health
-        observer = OptimizerHealth(
-            learner.agent, learner.optimizer, health, iteration, learner.profiler
-        )
+        observer = OptimizerHealth(health, iteration, learner.profiler)
         expected_targets = (
-            targets.values[..., 2] - targets.values[..., 0]
+            expected_outcome(targets.values)
             if learner.agent.config.value_kind == "categorical_wdl"
             else targets.values
         )
+        predictions = torch.as_tensor(batch.values, device=device)
         if batch.assignments is not None:
             batch.target_residuals = (
-                (expected_targets - torch.as_tensor(batch.values, device=device))
-                .detach()
-                .cpu()
-                .numpy()
+                (expected_targets - predictions).detach().cpu().numpy()
             )
         chosen_types = torch.as_tensor(
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
             device=device,
         )
-        predictions = torch.as_tensor(batch.values, device=device)
         diagnostics["selection_groups"] = selection_diagnostics(
             targets.advantages,
             expected_targets - predictions,
@@ -307,8 +253,6 @@ def update_damped_iteration(
             quantile=learning.advantage_quantile,
             minimum=learning.min_advantage,
         )
-    diagnostics["actor_exposures"] = 0
-    diagnostics["critic_exposures"] = 0
     for group in learner.optimizer.param_groups:
         group["lr"] = rate
     # Compute credit on the original seat trajectories before regrouping rows.
@@ -368,65 +312,55 @@ def update_damped_iteration(
                 actor_mask = actor_selected[selected]
                 policy_loss = selected_mean(policy_loss, actor_mask)
                 if learner.agent.config.value_kind == "categorical_wdl":
-                    value_loss = (
-                        -(targets.values[indexes] * value_logits.log_softmax(-1))
-                        .sum(-1)
-                        .mean()
-                    )
+                    value_loss = categorical_value_loss(
+                        value_logits, targets.values[indexes]
+                    ).mean()
                 else:
                     # Representation ablation, not the paper's outcome objective.
-                    value_loss = (
-                        (value_logits.squeeze(-1) - targets.values[indexes])
-                        .square()
-                        .mean()
-                    )
+                    value_loss = squared_value_loss(
+                        value_logits, targets.values[indexes]
+                    ).mean()
                 loss = policy_loss + float64_operand(value_loss)
 
-                def _failure_tensors() -> dict[str, torch.Tensor]:
-                    return {
-                        "logits": logits.detach(),
-                        "value_logits": value_logits.detach(),
-                        "valid": valid,
-                        "actions": actions[indexes],
-                        "behavior_logs": behavior_logs,
-                        "reference": reference,
-                        "advantages": targets.advantages[indexes],
-                        "value_targets": targets.values[indexes],
-                        "actor_selected": actor_mask,
-                        "minibatch_indexes": indexes,
-                        **{
-                            f"minibatch_observation/{key}": value
-                            for key, value in obs.items()
-                        },
-                    }
+                def _failure() -> dict[str, Tensor]:
+                    return minibatch_tensors(
+                        logits=logits,
+                        value_logits=value_logits,
+                        valid=valid,
+                        actions=actions[indexes],
+                        behavior_logs=behavior_logs,
+                        reference=reference,
+                        advantages=targets.advantages[indexes],
+                        value_targets=targets.values[indexes],
+                        actor_selected=actor_mask,
+                        indexes=indexes,
+                        obs=obs,
+                    )
 
-                try:
+                with failure_tensors(_failure):
                     observer.check(loss)
-                except NumericalError as error:
-                    error.tensors.update(_failure_tensors())
-                    raise
-            try:
-                norm = observer.step(loss, learning.max_grad_norm, checked=True)
-            except NumericalError as error:
-                error.tensors.update(_failure_tensors())
-                raise
+            with failure_tensors(_failure):
+                norm = gradient_step(
+                    loss,
+                    learner.agent,
+                    learner.optimizer,
+                    learning.max_grad_norm,
+                    recorder=observer,
+                )
             with track("Minibatch diagnostics"):
                 diagnostics["optimizer_exposures"] += int(selected.sum())
                 diagnostics["actor_exposures"] += int(actor_mask.sum())
                 diagnostics["critic_exposures"] += int(selected.sum())
                 with torch.no_grad():
                     logs = policy_logs(logits, valid)
-                    probabilities = logs.exp()
-                    diagnostics["entropy"] = float(
-                        -(probabilities * logs.masked_fill(~valid, 0)).sum(-1).mean()
-                    )
+                    diagnostics["entropy"] = float(entropy(logs, valid).mean())
                     diagnostics["collection_kl"] = float(
                         reverse_kl(logs, behavior_logs, valid).mean()
                     )
                     diagnostics["reference_kl"] = float(
                         reverse_kl(
                             logs,
-                            reference.masked_fill(~valid, 1).log(),
+                            support_logs(reference, valid),
                             valid,
                         ).mean()
                     )
@@ -435,14 +369,7 @@ def update_damped_iteration(
                         .gather(-1, actions[indexes, None])
                         .squeeze(-1)
                     )
-                    health["clip_fraction"] = float(
-                        (
-                            (float64_operand(ratio_logs).double().exp() - 1).abs()
-                            > learning.clip
-                        )
-                        .float()
-                        .mean()
-                    )
+                    health["clip_fraction"] = clip_fraction(ratio_logs, learning.clip)
                 diagnostics.update(
                     loss=float(loss.detach()),
                     value_loss=float(value_loss.detach()),
