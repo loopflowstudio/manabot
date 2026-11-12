@@ -776,19 +776,17 @@ def test_expired_allocation_starts_no_games_and_search_stays_unbound(
     assert search == contract.anchors[2]
 
 
-def test_forward_layout_resolves_from_the_device_outside_identity() -> None:
+def test_forward_layout_is_opt_in_and_outside_identity() -> None:
     deadline = time.time() + 30
-    cpu = EvalExecution(deadline_unix=deadline)
     cuda = EvalExecution(device="cuda", deadline_unix=deadline)
-    assert (cpu.bucketed_shapes, cpu.live_tokens) == (False, False)
-    assert (cuda.bucketed_shapes, cuda.live_tokens) == (True, True)
-    padded = EvalExecution(
-        device="cuda", deadline_unix=deadline, bucketed_shapes=False, live_tokens=False
+    assert (cuda.bucketed_shapes, cuda.live_tokens) == (False, False)
+    layout = EvalExecution(
+        device="cuda", deadline_unix=deadline, bucketed_shapes=True, live_tokens=True
     )
-    assert padded.identity == cuda.identity
-    receipt = cuda.model_dump()
+    assert layout.identity == cuda.identity
+    receipt = layout.model_dump()
     assert (receipt["bucketed_shapes"], receipt["live_tokens"]) == (True, True)
-    assert EvalExecution.model_validate(receipt) == cuda
+    assert EvalExecution.model_validate(receipt) == layout
     with pytest.raises(ValueError, match="live tokens require CUDA"):
         EvalExecution(deadline_unix=deadline, live_tokens=True)
 

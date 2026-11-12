@@ -1,8 +1,9 @@
 """MTG-328: what the forward layout costs on CPU and saves in CUDA evaluation.
 
-Two exploratory measurements behind the `auto` forward-layout defaults
-(`Execution` and `EvalAllocation`: bucketed padding and live-token attention on
-for CUDA, off elsewhere, `live_tokens=True` refused off CUDA).
+Two exploratory measurements behind the forward-layout defaults: bucketed
+padding and live-token attention are on for CUDA training (`Execution`), opt-in
+for served evaluation (`EvalAllocation`), and `live_tokens=True` is refused off
+CUDA.
 
 `cpu` times the live-token fallback off CUDA. It replays MTG-319's retained
 w160l8 inputs (`experiments/data/live_token_attention/inputs`: collection
@@ -15,10 +16,10 @@ live tokens over buckets on the local CPU with a fixed thread count:
 
 `job` runs on one rented L4. It saves a seeded random w384l8 policy and plays the
 same served evaluation pass (the policy against itself, same deals) through
-`manabot.eval.evaluation.evaluate` with the padded layout and with the layout a
-CUDA allocation resolves to, interleaved, in separate processes:
+`manabot.eval.evaluation.evaluate` with the padded layout and with both
+switches on, interleaved, in separate processes:
 
-    uv run etude launch experiments/eval_forward_layout.py --rent l4-etude \\
+    uv run etude launch experiments/eval_forward_layout.py --rent ONDEMAND \\
         --revision COMMIT
 
 Report: experiments/eval_forward_layout.md. Its figures come from the evidence:
@@ -172,8 +173,8 @@ def evaluation_pass(
 ) -> dict[str, Any]:
     """Play one pass of the policy against itself and write `receipt.json`.
 
-    `padded` writes both layout switches off; `layout` leaves them to the
-    allocation, which is what an ordinary evaluation does. The wall time covers
+    `padded` serves with both layout switches off, `layout` with both on. The
+    wall time covers
     `evaluate`: admission, the serving child's cold load, every game and replay.
     """
     from manabot.eval.evaluation import evaluate
@@ -183,16 +184,15 @@ def evaluation_pass(
     request = checkpoint_request(
         policy, opponent=policy, deal_seeds=DEALS[:deals], game_seconds=600
     )
-    layout: dict[str, bool] = (
-        {"bucketed_shapes": False, "live_tokens": False} if arm == "padded" else {}
-    )
+    on = arm == "layout"
     execution = EvalExecution(
         device=device,
         max_active_games=ACTIVE_GAMES,
         max_batch_rows=ACTIVE_GAMES,
         resident_model_bytes=2**31,
         deadline_unix=time.time() + 1500,
-        **layout,
+        bucketed_shapes=on,
+        live_tokens=on,
     )
     started = time.perf_counter()
     result = evaluate(request, out_dir=out / "evaluation", execution=execution)
@@ -378,7 +378,7 @@ _PADDED, _LAYOUT = "#898781", "#eb6834"
 
 
 def charts(folder: Path) -> None:
-    """Write `evaluation_pass.svg` and `cpu_cost.svg` into `folder` (needs matplotlib)."""
+    """Write `served_forward.svg` and `cpu_cost.svg` into `folder` (needs matplotlib)."""
     import matplotlib
 
     matplotlib.use("Agg")
@@ -438,13 +438,13 @@ def charts(folder: Path) -> None:
                 + f", pass {n[-1]}"
                 for n in names
             ],
-            [passes[n]["seconds"] for n in names],
+            [passes[n]["forward_ms"] for n in names],
             [_PADDED if passes[n]["arm"] == "padded" else _LAYOUT for n in names],
-            "s",
+            "ms",
         )
-        axis.set_xlabel(f"wall time of one evaluation pass, {SIZE} on an L4 (s)")
+        axis.set_xlabel(f"mean served forward, {SIZE} on an L4 (ms)")
         figure.tight_layout()
-        figure.savefig(folder / "evaluation_pass.svg", metadata={"Date": None})
+        figure.savefig(folder / "served_forward.svg", metadata={"Date": None})
         plt.close(figure)
 
     cpu_path = folder / "cpu.json"

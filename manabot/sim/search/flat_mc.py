@@ -273,18 +273,13 @@ def make_player(
     if kind == "policy_search":
         from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
 
-        device = str(spec.get("device", "cpu"))
-        # A CUDA policy runs the forward layout CUDA training and serving use.
-        cuda = device == "cuda"
-        agent, obs_space = load_checkpoint(
-            spec["checkpoint"], bucketed_shapes=cuda, live_tokens=cuda
-        )
+        agent, obs_space = load_checkpoint(spec["checkpoint"])
         sampler = BatchedSampler(
             agent,
             epsilon=float(spec.get("epsilon", 0.1)),
             temperature=float(spec.get("temperature", 1.0)),
             seed=seed,
-            device=device,
+            device=str(spec.get("device", "cpu")),
         )
         policy_plies = spec.get("policy_plies")
         return (

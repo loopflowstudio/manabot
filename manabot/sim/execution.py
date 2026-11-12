@@ -15,8 +15,8 @@ settings too; its frozen records stay readable through `EvalComputeV1`.
 
 The forward layout (`bucketed_shapes`, `live_tokens`) is an allocation setting
 for the same reason: like batch composition, it changes only the order of
-floating-point sums. Both resolve `auto` from the device when an allocation is
-validated (on for CUDA, off for CPU), so receipts retain the resolved values.
+floating-point sums. Both are off unless written: at served batch sizes the
+padded forward was the faster one (experiments/eval_forward_layout.md).
 """
 
 from __future__ import annotations
@@ -52,25 +52,9 @@ class EvalAllocation(EvalCompute):
     cache_catalog: bool = True
     resident: bool = True
     # Bucketed padding and live-token attention for served policies
-    # (`manabot.model.buckets`, `manabot.model.live_tokens`). Written `auto` or
-    # omitted, each resolves to whether the device is CUDA.
+    # (`manabot.model.buckets`, `manabot.model.live_tokens`); opt-in.
     bucketed_shapes: bool = False
     live_tokens: bool = False
-
-    @model_validator(mode="before")
-    @classmethod
-    def resolve_forward_layout(cls, value: object) -> object:
-        if not isinstance(value, dict):
-            return value
-        cuda = value.get("device") == "cuda"
-        return {
-            **value,
-            **{
-                name: cuda
-                for name in ("bucketed_shapes", "live_tokens")
-                if value.get(name, "auto") == "auto"
-            },
-        }
 
     @model_validator(mode="after")
     def live_tokens_on_cuda(self) -> "EvalAllocation":

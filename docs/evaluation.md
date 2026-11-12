@@ -210,19 +210,19 @@ authority across serving changes. `shared-eval-v1` (through PR #389) also
 hashed allocation settings; its records stay readable as `EvalComputeV1` /
 `EvalExecutionV1` but are not reused or continued under v2.
 
-**Forward layout.** A CUDA allocation serves policies with
+**Forward layout.** An allocation can serve policies with
 [bucketed padding](observation-and-model.md#bucketed-padding) and
-[live-token attention](observation-and-model.md#live-token-attention), as CUDA
-training does, so a checkpoint is evaluated at the speed it trained at.
-`EvalAllocation.bucketed_shapes` and `live_tokens` default to `auto`: on for
-`device="cuda"`, off for `device="cpu"`. Writing `False` serves the padded
-path, which is how a before/after comparison is run; `live_tokens=True` on CPU
-fails validation (`live tokens require CUDA`). The layout changes only the
-order of floating-point sums, as batch composition already does, so it is an
-allocation setting: the resolved values are retained in the attempt receipt
-and leave `EvalCompute`, player, benchmark and match identities unchanged.
-Search players that run a policy on CUDA (`"device": "cuda"` in their spec)
-use the same layout; on CPU they keep the padded path.
+[live-token attention](observation-and-model.md#live-token-attention):
+`EvalAllocation.bucketed_shapes` and `live_tokens`, both off by default.
+`live_tokens=True` requires `device="cuda"` (`live tokens require CUDA`). They
+are off because served batches are small: in one w384l8 pass on an L4, at about
+nine rows per forward, the padded forward took 23.7 ms against 27.3 ms with
+both on, and the pass took 118 s either way
+([measurement](../experiments/eval_forward_layout.md)). The layout changes only
+the order of floating-point sums, as batch composition already does, so it is
+an allocation setting: the values are retained in the attempt receipt and
+leave `EvalCompute`, player, benchmark and match identities unchanged. Search
+players and range likelihoods load their policies padded.
 
 With an execution, flat stateless checkpoints are served; without one,
 `play_cell`, `evaluate` and the monitor play them scalar in the game child

@@ -192,8 +192,9 @@ The stage's collection and learner policies, including a frozen opponent,
 use the resolved layout. Code that builds a policy outside a regime chooses it
 itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
 off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
-[Evaluation and search](evaluation.md#shared-inference) choose it from their
-own device in the same way.
+[Served evaluation](evaluation.md#shared-inference) accepts both switches and
+leaves them off: its batches are small, and the padded forward was the faster
+one there. Search players load their policies padded.
 
 Bucketed shapes are 2.4× faster per learner step than padding to capacity at
 w160l8 and 2.6× at w384l8 on an L4. Collection over full tables was faster at
@@ -237,7 +238,9 @@ are still trimmed to buckets.
 Attention within each observation uses `scaled_dot_product_attention` on
 jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
 CPU it falls back to one attention call per observation, which is correct but
-slow. A stage therefore uses live tokens only on CUDA: `auto` resolves off
+slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
+padded on a laptop CPU
+([measurement](../experiments/eval_forward_layout.md)). A stage therefore uses live tokens only on CUDA: `auto` resolves off
 elsewhere, and an explicit `live_tokens=True` on CPU or MPS fails validation
 (`live tokens require CUDA`), as a reduced precision does.
 
