@@ -19,15 +19,15 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.rl.selection import selected_rows
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.references import reference_distribution
-from manabot.training.loops.damped_policy import update_damped_iteration
-from manabot.training.loops.ppo import update_iteration
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.update_metrics import read_updates, stage_rows
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
+from manabot.training.updates.references import reference_distribution
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
 from tests.training.test_monitoring import _recipe

@@ -21,10 +21,10 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline_test
-from manabot.training.learning.learner import AdmittedRollout, Learner
-from manabot.training.loops.damped_policy import _targets, update_damped_iteration
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates.damped_policy import _targets, update_damped_iteration
+from manabot.training.updates.learner import AdmittedRollout, Learner
 
 STREAMS = 2
 

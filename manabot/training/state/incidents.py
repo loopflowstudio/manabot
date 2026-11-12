@@ -16,7 +16,7 @@ import torch
 from torch import Tensor
 
 from manabot.rl.numerics import NumericalError
-from manabot.training.learning.learner import Learner
+from manabot.training.updates.learner import Learner
 
 if TYPE_CHECKING:
     from manabot.training.records import TrainingRun

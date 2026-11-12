@@ -1,53 +1,44 @@
 # Training loops
 
-manabot trains agents to play Magic: The Gathering. What it brings is the part
-specific to Magic, and the few loops we maintain on top of it:
+An update learns from one collected batch, a loop keeps playing and updating
+until it is done, and a recipe is our loops with our settings. Write your own
+recipe or use one of ours, and use Etude to launch, track and evaluate it
+([remote training](training.md#remote-training)), or bring your own.
 
-- **The engine and its observations.** Every decision comes from the managym
-  rules engine; the policy reads it as objects, facts and effects, with each
-  card's rules read through its card tokens
-  ([engine](engine.md#observations), [what the policy sees](observation-and-model.md)).
-- **A policy over a variable set of legal actions.** One head scores every
-  kind of decision; `legal_mask` and `policy_logs`
-  (`manabot.model.policy_distribution`) normalize it over exactly the actions
-  the engine offers, and every policy term sums over those only.
-- **Credit for two-seat, hidden-information, complete-game self-play.** The
-  collector routes each seat's decisions, read from that seat's own view,
-  into its own trajectory, so returns follow one player through a whole game
-  ([assign credit](learning.md#2-assign-credit)).
-- **A win/draw/loss value head and the damped policy rule**, after Ataraxos
-  ([the loss](learning.md#4-update), [fidelity](learning.md#fidelity-to-the-sources)).
-- **The collector**, `SeatRoutedCollector`, which plays native game streams
-  and returns typed rollout batches.
-- **The loops we maintain**, written from these pieces, which our own runs
-  use.
+This guide covers the updates we maintain, the pieces they are made of, and a
+complete loop to copy. [How a manabot learns](learning.md) explains the
+method; [training](training.md) explains running a recipe.
 
-To try a different learner, take the pieces you need and put them in your own
-outer loop, or run it through a regime and Etude as we do.
-[How a manabot learns](learning.md) explains what each step means.
+- Train a manabot: the damped policy update, which every current recipe uses
+  ([the updates we maintain](#the-updates-we-maintain)).
+- Compare a new method: PPO is the control
+  ([the updates we maintain](#the-updates-we-maintain)).
+- Change one step: [the player's pieces](#the-players-pieces) and
+  [standard methods](#standard-methods-kept-local).
+- Write your own loop: [a complete self-play loop](#a-complete-self-play-loop).
 
-## The loops we maintain
+## The updates we maintain
 
-A regime ([training](training.md#regimes-and-stages)) runs one update rule
+A recipe's loop ([training](training.md#regimes-and-stages)) runs one update
 each iteration and adds checkpoints, tracking, recovery and evaluation around
-it. The learning record selects the rule; both live in
-`manabot/training/loops/`:
+it. Its learning record selects the update; both live in
+`manabot/training/updates/`:
 
 - **Damped policy** (`DampedPolicyLearning`, `update_damped_iteration` in
-  `manabot.training.loops.damped_policy`): the rule every current recipe
-  selects. A clipped surrogate with reverse KL penalties toward the behavior
-  policy and a reference magnet, over native-stream-wide minibatches in batch
-  order, with scalar or categorical value targets and no advantage
+  `manabot.training.updates.damped_policy`): the update every current
+  recipe selects. A clipped surrogate with reverse KL penalties toward the
+  behavior policy and a reference magnet, over native-stream-wide minibatches
+  in batch order, with scalar or categorical value targets and no advantage
   normalization ([the loss](learning.md#4-update)). Use it to train a manabot.
 - **PPO self-play** (`Learning`, `update_iteration` in
-  `manabot.training.loops.ppo`): the control. Shuffled minibatches, advantage
+  `manabot.training.updates.ppo`): the control. Shuffled minibatches, advantage
   normalization and filtering, scalar value targets and optional reference
   and collection KL penalties. Use it as the baseline a new method must beat.
 
-Both take a `Learner` (`manabot.training.learning.learner`), which holds the
+Both take a `Learner` (`manabot.training.updates.learner`), which holds the
 model, its Adam optimizer, the precision and a profiler, and a learning
-record from a regime (`manabot.training.regime`). Call them directly to
-reproduce a regime's update exactly:
+record (`manabot.training.regime`). Call them directly to reproduce a
+recipe's update exactly:
 
 ```python
 learner = Learner(agent, "cpu", minibatch_rows=64)
@@ -71,7 +62,7 @@ of rows and `A` for padded legal offers.
 | --- | --- |
 | `SeatRoutedCollector` (`manabot.training.rollout.collection`) | Owns native game streams. `collect(agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close()` stops the streams. |
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (an end belongs to that row), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping an unfinished tail, and `outcome_probabilities` `[T,E,3]` for a categorical critic. `observations(indexes)` materializes flat rows as an observation dict and the full behavior distribution. |
-| `AdmittedRollout(agent, batch)` (`manabot.training.learning.learner`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` and an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
+| `AdmittedRollout(agent, batch)` (`manabot.training.updates.learner`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` and an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
 
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
@@ -94,8 +85,8 @@ logits for `value_kind="categorical_wdl"`, `[B,1]` for scalar.
 | --- | --- | --- |
 | `legal_mask(obs["actions_valid"])` | `manabot.model.policy_distribution` | The legal offers `[B,A]`, refusing a corrupt mask. |
 | `policy_logs(logits, valid)` | `manabot.model.policy_distribution` | Log likelihoods `[B,A]`, `-inf` off the legal mask; every policy term reads these. |
-| `reference_distribution(obs, kind)` | `manabot.training.learning.references` | The magnet a reverse KL pulls toward: `"uniform"` over legal offers or `"action_type_uniform"`. |
-| `damped_policy_loss(logits, actions, advantages, behavior_logs, reference, valid, *, clip, collection_kl, tau)` | `manabot.training.loops.damped_policy` | The damped policy objective per row: the clipped surrogate plus both reverse KL penalties. |
+| `reference_distribution(obs, kind)` | `manabot.training.updates.references` | The magnet a reverse KL pulls toward: `"uniform"` over legal offers or `"action_type_uniform"`. |
+| `damped_policy_loss(logits, actions, advantages, behavior_logs, reference, valid, *, clip, collection_kl, tau)` | `manabot.training.updates.damped_policy` | The damped policy objective per row: the clipped surrogate plus both reverse KL penalties. |
 
 Reduced precision is a context around the forward only:
 `with forward_precision(precision, device):` (`manabot.training.precision`)
@@ -109,9 +100,9 @@ None of these change the update; call them when you want the numbers.
 
 | Piece | Module | Records |
 | --- | --- | --- |
-| `batch_health(action_data, advantages, selected, *, actor_only)` | `manabot.training.learning.health` | A `NumericalHealth` record for the batch: legal-logit range, underflow, forced rows, zero advantages, rows each head trains on. Pass `batch.action_data`. |
-| `OptimizerHealth(health, iteration, profiler=None)` | `manabot.training.learning.health` | The player's step recorder. Pass as `gradient_step(..., recorder=observer)` to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
-| `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.learning.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). |
+| `batch_health(action_data, advantages, selected, *, actor_only)` | `manabot.training.updates.health` | A `NumericalHealth` record for the batch: legal-logit range, underflow, forced rows, zero advantages, rows each head trains on. Pass `batch.action_data`. |
+| `OptimizerHealth(health, iteration, profiler=None)` | `manabot.training.updates.health` | The player's step recorder. Pass as `gradient_step(..., recorder=observer)` to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
+| `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). |
 
 ## Standard methods, kept local
 
@@ -124,8 +115,8 @@ loss, so you choose the reduction, mask and weight.
 
 | Piece | Module | What it is |
 | --- | --- | --- |
-| `transition_gae(rewards, values, ends, next_value, gamma, lam)` | `manabot.rl.returns` | GAE (Schulman et al. 2016): advantages and lambda returns `[T,E]`. Each column is one agent's trajectory; an end cuts bootstrap and trace. `next_value` `[E]` is read only where a column's last row is not an end. Our rules call it once per lambda (policy and value). |
-| `standardized_advantages(advantages, over=None)` | `manabot.rl.returns` | Every row shifted and scaled by the mean and population std of the rows `over` selects (all rows when omitted); the std is clamped at 1e-8. Our PPO rule takes the statistics over the rows it trains on. |
+| `transition_gae(rewards, values, ends, next_value, gamma, lam)` | `manabot.rl.returns` | GAE (Schulman et al. 2016): advantages and lambda returns `[T,E]`. Each column is one agent's trajectory; an end cuts bootstrap and trace. `next_value` `[E]` is read only where a column's last row is not an end. Our updates call it once per lambda (policy and value). |
+| `standardized_advantages(advantages, over=None)` | `manabot.rl.returns` | Every row shifted and scaled by the mean and population std of the rows `over` selects (all rows when omitted); the std is clamped at 1e-8. Our PPO update takes the statistics over the rows it trains on. |
 | `categorical_lambda_returns(probabilities, rewards, ends, bootstrap, trace_lambda)` | `manabot.rl.returns` | Undiscounted loss/draw/win lambda-return targets `[T,E,3]`; a terminal row is the one-hot outcome (`rewards` -1, 0 or 1, nonzero only at an end). `bootstrap` `[E,3]` is the outcome distribution past each column's last row (read only where it is not an end). |
 | `clipped_surrogate(log_ratio, advantages, clip)` | `manabot.rl.losses` | Negative PPO clipped surrogate (Schulman et al. 2017), with float64 ratios. |
 | `reverse_kl(logs, target_logs, valid)` | `manabot.rl.losses` | KL(current ‖ frozen target) over valid entries. |
@@ -163,21 +154,22 @@ plus reverse KL to the generating policy. Against that design:
   its collection (building decks and playing the games that score them) and
   its loop.
 
-## Write your own learner
+## Write your own loop
 
-A new learner is the pieces in a different arrangement. Write it as a loop of
+A new method is the pieces in a different arrangement. Write it as a loop of
 your own to try it quickly. When it needs checkpoints, tracking and Etude
 launches, add a learning record for it in `manabot.training.regime` and an
-update rule in `manabot/training/loops/` beside the two above, which is how
-our runs use them.
+update in `manabot/training/updates/` beside the two above; our recipes then
+run it as they run those.
 
 ### A complete self-play loop
 
 `manabot/training/loops/minimal.py` trains one model against itself with PPO
-on complete games, on CPU:
+on complete games, on CPU. It writes its update inline, inside the loop, so
+the whole method reads on one page:
 
 ```python
-"""Self-play PPO from the learning pieces alone: no regime, run or executor."""
+"""A self-play PPO loop written from the pieces alone, with no recipe or executor."""
 
 from copy import deepcopy
 
@@ -192,8 +184,8 @@ from manabot.model.policy_distribution import legal_mask, policy_logs
 from manabot.rl.losses import clipped_surrogate, entropy, squared_value_loss
 from manabot.rl.returns import standardized_advantages, transition_gae
 from manabot.rl.step import gradient_step, update_ema
-from manabot.training.learning.learner import AdmittedRollout
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.updates.learner import AdmittedRollout
 
 
 def train(
@@ -269,11 +261,11 @@ Three iterations take a few seconds on a laptop CPU and return a policy;
 they teach it almost nothing. Keep a run with `save_checkpoint(policy,
 policy.observation_space, "policy.pt", player_configs=Match().to_rust())` from
 `manabot.model.checkpoint`, which binds it to the decks it played, as a
-regime's checkpoint is bound to its setups; `load_checkpoint("policy.pt")`
+recipe's checkpoints are bound to their setups; `load_checkpoint("policy.pt")`
 returns the policy and its observation space. `tests/training/test_minimal_loop.py`
 runs the loop on two streams and a tiny model through the `model` argument,
 then saves and reloads its checkpoint.
 
 The entropy bonus is there to show that a term is one line. manabot's own
-update rules use none; they regularize with KL penalties instead
+updates use none; they regularize with KL penalties instead
 ([the loss](learning.md#4-update)).

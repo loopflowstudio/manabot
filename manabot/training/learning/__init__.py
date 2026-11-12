@@ -1,6 +1,5 @@
-"""The player's learning pieces: learner state, references, health and diagnostics.
+"""Deprecated: the player's learning pieces moved to `manabot.training.updates`.
 
-These read the player's observations, legal actions and `ActorCritic` heads.
-Model-agnostic pieces live in `manabot.rl`; the maintained update rules in
-`manabot.training.loops`.
+Each module here resolves its published names from their new modules with a
+warning and is removed in 0.3.0.
 """

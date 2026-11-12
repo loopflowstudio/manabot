@@ -17,9 +17,6 @@ import torch
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
-from manabot.training.learning.learner import Learner
-from manabot.training.loops.damped_policy import update_damped_iteration
-from manabot.training.loops.ppo import update_iteration
 from manabot.training.panels import PERF
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -29,6 +26,9 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates

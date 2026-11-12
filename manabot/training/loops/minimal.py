@@ -1,4 +1,4 @@
-"""Self-play PPO from the learning pieces alone: no regime, run or executor."""
+"""A self-play PPO loop written from the pieces alone, with no recipe or executor."""
 
 from copy import deepcopy
 
@@ -13,8 +13,8 @@ from manabot.model.policy_distribution import legal_mask, policy_logs
 from manabot.rl.losses import clipped_surrogate, entropy, squared_value_loss
 from manabot.rl.returns import standardized_advantages, transition_gae
 from manabot.rl.step import gradient_step, update_ema
-from manabot.training.learning.learner import AdmittedRollout
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.updates.learner import AdmittedRollout
 
 
 def train(

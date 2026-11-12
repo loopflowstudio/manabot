@@ -32,16 +32,16 @@ from manabot.rl.numerics import NumericalError
 from manabot.rl.selection import selected_moves
 from manabot.rl.step import gradient_step
 from manabot.training import execution
-from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.selection import value_scale
-from manabot.training.loops.damped_policy import (
-    damped_policy_loss,
-    update_damped_iteration,
-)
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.updates.damped_policy import (
+    damped_policy_loss,
+    update_damped_iteration,
+)
+from manabot.training.updates.health import NumericalHealth, OptimizerHealth
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.selection import value_scale
 from manabot.verify.store import VerifyStore
 import managym
 

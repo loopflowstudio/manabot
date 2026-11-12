@@ -16,10 +16,10 @@ from manabot.rl.numerics import NumericalError
 from manabot.rl.returns import standardized_advantages
 from manabot.rl.step import StepRecorder, gradient_step, update_ema
 from manabot.training.learning import objectives
-from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-from manabot.training.learning.learner import Learner
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.health import NumericalHealth, OptimizerHealth
+from manabot.training.updates.learner import Learner
 
 
 def test_squared_value_loss_accepts_column_predictions() -> None:
@@ -166,18 +166,18 @@ def test_update_ema_moves_parameters_by_one_minus_rate() -> None:
         update_ema(averaged, model, rate=1.0)
 
 
-# Names published before the generic/player split, and where they live now.
+# Names published in 0.2, and where they live now.
 _MOVED = [
     ("manabot.training.learning.objectives", "update_ema", "manabot.rl.step"),
     (
         "manabot.training.learning.damped_policy",
         "update_damped_iteration",
-        "manabot.training.loops.damped_policy",
+        "manabot.training.updates.damped_policy",
     ),
     (
         "manabot.training.learning.damped_policy",
         "damped_policy_loss",
-        "manabot.training.loops.damped_policy",
+        "manabot.training.updates.damped_policy",
     ),
     (
         "manabot.training.learning.damped_policy",
@@ -187,6 +187,31 @@ _MOVED = [
     ("manabot.training.learning.returns", "transition_gae", "manabot.rl.returns"),
     ("manabot.training.learning.selection", "selection_mask", "manabot.rl.selection"),
     ("manabot.training.learning.selection", "selected_mean", "manabot.rl.selection"),
+    (
+        "manabot.training.learning.selection",
+        "selection_diagnostics",
+        "manabot.training.updates.selection",
+    ),
+    (
+        "manabot.training.learning.learner",
+        "Learner",
+        "manabot.training.updates.learner",
+    ),
+    (
+        "manabot.training.learning.learner",
+        "AdmittedRollout",
+        "manabot.training.updates.learner",
+    ),
+    (
+        "manabot.training.learning.health",
+        "OptimizerHealth",
+        "manabot.training.updates.health",
+    ),
+    (
+        "manabot.training.learning.references",
+        "reference_distribution",
+        "manabot.training.updates.references",
+    ),
     ("manabot.model.policy_distribution", "NumericalError", "manabot.rl.numerics"),
     ("manabot.model.policy_distribution", "require", "manabot.rl.numerics"),
     ("manabot.model.policy_distribution", "clipped_surrogate", "manabot.rl.losses"),
@@ -217,7 +242,7 @@ def test_deprecated_update_iteration_dispatches_on_the_learning_record(
     rng = np.random.default_rng(0)
     learner, batch = cast(Learner, None), cast(RolloutBatch, None)
     damped = DampedPolicyLearning(gradient="damped_policy")
-    with pytest.warns(DeprecationWarning, match=r"loops\.ppo.*0\.3\.0"):
+    with pytest.warns(DeprecationWarning, match=r"updates\.ppo.*0\.3\.0"):
         assert objectives.update_iteration(learner, batch, Learning(), 0, rng) == {
             "rows": 1
         }

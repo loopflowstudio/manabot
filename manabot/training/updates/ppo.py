@@ -23,17 +23,17 @@ from manabot.rl.numerics import float64_operand, require
 from manabot.rl.returns import standardized_advantages, transition_gae
 from manabot.rl.selection import selected_mean, selected_rows
 from manabot.rl.step import gradient_step
-from manabot.training.learning.health import (
+from manabot.training.regime import Learning
+from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
     failure_tensors,
     minibatch_tensors,
 )
-from manabot.training.learning.learner import AdmittedRollout, Learner
-from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.selection import UpdateDiagnostics, selection_diagnostics
-from manabot.training.regime import Learning
-from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.learner import AdmittedRollout, Learner
+from manabot.training.updates.references import reference_distribution
+from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
 
 
 def update_iteration(

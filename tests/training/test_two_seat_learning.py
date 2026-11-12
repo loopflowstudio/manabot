@@ -19,8 +19,6 @@ from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
 from manabot.rl.returns import transition_gae
 from manabot.training.execution import execute_regime
-from manabot.training.learning.learner import Learner, observation_tensors
-from manabot.training.loops.damped_policy import update_damped_iteration
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
@@ -28,6 +26,8 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner, observation_tensors
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates

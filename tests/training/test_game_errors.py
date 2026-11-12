@@ -26,8 +26,6 @@ from manabot.rl.returns import transition_gae
 from manabot.sim import match as simulation
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
-from manabot.training.learning.learner import Learner
-from manabot.training.loops.ppo import update_iteration
 from manabot.training.regime import BatchClosure, Learning
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.state.game_errors import (
@@ -38,6 +36,8 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     replay_attempt,
 )
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
 import managym
 from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (

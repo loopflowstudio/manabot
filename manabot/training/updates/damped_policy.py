@@ -31,21 +31,21 @@ from manabot.rl.numerics import float64_operand, require
 from manabot.rl.returns import categorical_lambda_returns, transition_gae
 from manabot.rl.selection import selected_mean, selection_mask
 from manabot.rl.step import gradient_step
-from manabot.training.learning.health import (
+from manabot.training.regime import DampedPolicyLearning
+from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
     failure_tensors,
     minibatch_tensors,
 )
-from manabot.training.learning.learner import AdmittedRollout, Learner
-from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.selection import (
+from manabot.training.updates.learner import AdmittedRollout, Learner
+from manabot.training.updates.references import reference_distribution
+from manabot.training.updates.selection import (
     UpdateDiagnostics,
     selection_diagnostics,
     value_scale,
 )
-from manabot.training.regime import DampedPolicyLearning
-from manabot.training.rollout.collection import RolloutBatch
 
 
 def damped_policy_loss(

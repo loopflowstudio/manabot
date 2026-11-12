@@ -8,14 +8,14 @@
   - `losses.py`: `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`.
   - `selection.py`: `selected_rows`, `magnitude_quantile` (was `_magnitude_quantile`), `selected_moves`, `selection_mask`, `selected_mean`.
   - `step.py`: `StepRecorder` Protocol (`track`, `rejecting`, `sampling`, `before_clip`, `record_gradients(model, norm_before)`, `record_step`), `check_objective`, `gradient_step(..., recorder=None)` (a `None` recorder becomes the no-op `_Unrecorded`), `update_ema`.
-- `manabot/training/learning/` — the player package: `learner`, `references`, `health` (`OptimizerHealth` implements `StepRecorder`; `before_clip` stores `critic_gradient_norms`), `selection` (`selection_diagnostics`, `value_scale`, `UpdateDiagnostics`).
-- `manabot/training/loops/` — `damped_policy.py` (`damped_policy_loss`, `DampedTargets`, `_targets`, `update_damped_iteration`), `ppo.py` (`update_iteration`), `minimal.py` (example).
-- Deprecated aliases, via `manabot/infra/deprecation.py::moved` (lazy module `__getattr__`, warns with the new path and removal in 0.3.0): `learning.objectives` (`update_iteration`, `update_ema`), `learning.damped_policy` (rule, loss, `DampedTargets`, `categorical_lambda_returns`), `learning.returns`, `learning.selection` (the four selection functions), `model.policy_distribution` (`NumericalError`, `require`, `clipped_surrogate`, `reverse_kl`), `model.numerics` (`float64_operand`). `test_learning_pieces.py::test_moved_names_resolve_through_deprecated_aliases` covers each. Unreleased names (`step.py`, `losses.py`, `check_objective`, `critic_gradient_norms`) moved without aliases.
+- `manabot/training/updates/` (was `learning/`): an update learns from one batch. `damped_policy.py` (`damped_policy_loss`, `DampedTargets`, `_targets`, `update_damped_iteration`), `ppo.py` (`update_iteration`), and their pieces `learner`, `references`, `health` (`OptimizerHealth` implements `StepRecorder`), `selection` (`selection_diagnostics`, `value_scale`, `UpdateDiagnostics`).
+- `manabot/training/loops/`: loops only; `minimal.py` is the example loop (its update written inline on purpose).
+- Deprecated aliases (`manabot/infra/deprecation.py::moved`, removal 0.3.0): every 0.2 `learning.*` module stays as an alias module (`learner`, `references`, `health`, `selection`, `damped_policy`, `returns`, `objectives` with its warning dispatcher) pointing at `training.updates.*` or `manabot.rl.*`; `model.policy_distribution`, `model.numerics`. Covered by `test_learning_pieces.py::test_moved_names_resolve_through_deprecated_aliases`. Unreleased names (`loops.ppo`, `loops.damped_policy`, `rl.step`, `rl.losses`, `failure_tensors`, `minibatch_tensors`) moved without aliases.
 - All call sites in manabot/, scripts/, tests/ import the new paths. `experiments/protocols/*.json` keep their old paths (frozen evidence). `paper/` paths updated.
 
 ## Docs
 
-`docs/training-loop.md` follows the three steers: what is specific to Magic first (engine/observations/card tokens, legal-action policy, two-seat complete-game credit, WDL head and damped rule, collector, our loops), then the maintained loops, the player's pieces, one short "Standard methods, kept local" section on `manabot.rl` with "What a deck builder reuses", then "Write your own learner" with `minimal.py` verbatim. learning.md code table, README docs table, manabot/README (intro + package layout) updated.
+Naming steer cfe305b0 (final): update, loop and recipe are the only nouns; the guide opens with that sentence, then "write your own recipe or use one of ours, and use Etude to launch, track and evaluate it, or bring your own", then where to start; docs/training.md carries the same sentence. TrainingRegime and regime keys are not renamed here (MTG-303). The "what is specific to Magic" list is gone (steer 0f7227c7: "more of a guide than a sales pitch"); sections: the updates we maintain, the player's pieces, standard methods kept local (with what a deck builder reuses), write your own loop with `minimal.py` verbatim.
 
 Deck builder: no design doc in this checkout; the steer text ("free-order picks until stop, a win/loss/draw outcome head at every prefix, entropy-to-go, PPO clip 0.2 plus reverse KL to the generating policy") is the source. Lacks: an entropy-to-go piece, its own masked pool+stop distribution, collection, loop.
 
@@ -34,6 +34,8 @@ Parity script (outside the repo, `/tmp/mtg304parity/parity.py`): on one collecte
 Second compress (rebuilt branch): `gradient_step` takes a no-op `_Unrecorded` recorder when none is passed, removing its `None` branches. Parity JSON byte-identical to `main_e5897.json`; pieces/minimal/health/boundaries 68 passed.
 
 ## Remaining
+
+- Naming pass (2026-11-12): learning/ -> updates/, PPO and damped out of loops/, guide opening rewritten. Pieces/minimal/boundaries/objectives/credit 79 passed; admission/learner/health/mps/precision/ci-selection 124 passed; test_regimes 18 passed; test_game_errors 3 failed (the `binding_mismatch` failures already on main); all 19 touched test files collect. PR #474 needs republishing with this diff.
 
 - Done: PR #474 targets `main` at 9ae190e51 (main 13e5642ad merged), titled and described for this Task alone. CI was pending at the last check.
 - Collection is the existing `SeatRoutedCollector` → `RolloutBatch`, documented as a piece in `docs/training-loop.md`; no new collection API.

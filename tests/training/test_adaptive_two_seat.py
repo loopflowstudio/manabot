@@ -16,9 +16,6 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.learning.learner import Learner
-from manabot.training.loops.damped_policy import update_damped_iteration
-from manabot.training.loops.ppo import update_iteration
 from manabot.training.regime import DampedPolicyLearning, Learning, TrainSelfPlay
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
@@ -27,6 +24,9 @@ from manabot.training.rollout.adaptive import (
     GameResult,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
 import managym
 
 

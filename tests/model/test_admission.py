@@ -14,12 +14,12 @@ from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
-from manabot.training.learning import learner as learner_module
-from manabot.training.learning.learner import Learner
-from manabot.training.loops.damped_policy import update_damped_iteration
-from manabot.training.loops.ppo import update_iteration
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates import learner as learner_module
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
 from tests.training.test_recovery import recipe
 
 

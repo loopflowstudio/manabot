@@ -257,7 +257,7 @@ prints this view in a few seconds:
 | 0 | .003 | −1.003 | Yes |
 
 From `selected_moves` in
-[`manabot/training/learning/selection.py`](../manabot/training/learning/selection.py):
+[`manabot/training/updates/selection.py`](../manabot/training/updates/selection.py):
 
 ```python
 magnitude = advantages.detach().abs()
@@ -296,7 +296,7 @@ has a separate job:
 The **behavior policy** is the frozen weights that played the batch, and the
 ratio measures how far the learner has moved from them. From
 `damped_policy_loss` in
-[`manabot/training/loops/damped_policy.py`](../manabot/training/loops/damped_policy.py):
+[`manabot/training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py):
 
 ```python
 ratio_logs = (
@@ -311,7 +311,7 @@ per-action correction; there is no trajectory-level importance weighting.
 
 The **magnet** is a fixed reference policy built for each row from its legal
 actions. From `reference_distribution` in
-[`manabot/training/learning/references.py`](../manabot/training/learning/references.py):
+[`manabot/training/updates/references.py`](../manabot/training/updates/references.py):
 
 ```python
 counts.scatter_add_(-1, types, valid.to(counts.dtype))
@@ -460,7 +460,7 @@ objects, and paired evaluation were built for this project. The PPO-style
 
 ## Fidelity to the sources
 
-`damped_policy_loss` in `manabot/training/loops/damped_policy.py` owns the
+`damped_policy_loss` in `manabot/training/updates/damped_policy.py` owns the
 objective and `update_damped_iteration` beside it applies it; recipes select
 `DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
 regimes are rejected and need their pinned source; frozen evidence keeps the
@@ -523,18 +523,18 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 
 ## Where the code lives
 
-[Training loops](training-loop.md) names the maintained update rules and
-lists each piece they are made of as a public function.
+[Training loops](training-loop.md) names the maintained updates and lists
+each piece they are made of as a public function.
 
 | Step | Code |
 | --- | --- |
-| Iteration loop, checkpoints; which update rule a stage calls | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
+| Iteration loop, checkpoints; which update a stage calls | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
 | Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`rl/returns.py`](../manabot/rl/returns.py) |
-| Loss terms | `damped_policy_loss` in [`training/loops/damped_policy.py`](../manabot/training/loops/damped_policy.py); `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`rl/losses.py`](../manabot/rl/losses.py) |
+| Loss terms | `damped_policy_loss` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`rl/losses.py`](../manabot/rl/losses.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`rl/step.py`](../manabot/rl/step.py) |
-| Update rule | `_targets`, `update_damped_iteration` in [`training/loops/damped_policy.py`](../manabot/training/loops/damped_policy.py); the PPO control `update_iteration` in [`training/loops/ppo.py`](../manabot/training/loops/ppo.py) |
-| Filter | `selection_mask` in [`rl/selection.py`](../manabot/rl/selection.py); its diagnostics in [`training/learning/selection.py`](../manabot/training/learning/selection.py) |
-| Magnet | [`training/learning/references.py`](../manabot/training/learning/references.py) |
+| Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
+| Filter | `selection_mask` in [`rl/selection.py`](../manabot/rl/selection.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
+| Magnet | [`training/updates/references.py`](../manabot/training/updates/references.py) |
 | Defaults | `DampedPolicyLearning`, `TrainSelfPlay` in [`training/regime.py`](../manabot/training/regime.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

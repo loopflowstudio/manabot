@@ -46,9 +46,6 @@ from manabot.recipes.local import local_smoke
 from manabot.rl.losses import clipped_surrogate
 from manabot.rl.numerics import float64_operand
 from manabot.training import execution
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.selection import UpdateDiagnostics
-from manabot.training.loops import damped_policy, ppo
 from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -59,6 +56,9 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates import damped_policy, ppo
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym
 

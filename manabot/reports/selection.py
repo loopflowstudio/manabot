@@ -17,9 +17,9 @@ import torch
 from manabot.infra.identity import canonical_sha256
 from manabot.rl.returns import transition_gae
 from manabot.rl.selection import selection_mask
-from manabot.training.learning.selection import SelectionGroup, selection_diagnostics
 from manabot.training.regime import CollectSelection, DampedPolicyLearning, Strict
 from manabot.training.rollout.selection_data import FrozenRecord, SelectionDataset
+from manabot.training.updates.selection import SelectionGroup, selection_diagnostics
 
 
 class AnalyzedDecision(FrozenRecord):

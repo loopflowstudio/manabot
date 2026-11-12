@@ -5,7 +5,7 @@
 raises `NumericalError` (`manabot.rl.numerics`) instead. An optional
 `StepRecorder` observes what it did: timing, rejections and sampled gradient
 detail; the player's `OptimizerHealth`
-(`manabot.training.learning.health`) is one. `update_ema` keeps the averaged
+(`manabot.training.updates.health`) is one. `update_ema` keeps the averaged
 model that evaluation and exports read.
 """
 

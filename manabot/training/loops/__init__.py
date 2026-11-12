@@ -1,1 +1,1 @@
-"""The training loops we maintain, and a one-page example, written from the pieces."""
+"""Loops: each keeps playing and updating until it is done. `minimal.py` is the example."""

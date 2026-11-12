@@ -43,9 +43,6 @@ from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.rl.numerics import NumericalError
 from manabot.rl.step import update_ema
-from manabot.training.learning.learner import Learner
-from manabot.training.loops.damped_policy import update_damped_iteration
-from manabot.training.loops.ppo import update_iteration
 from manabot.training.mps import mps_torch_error
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
@@ -98,6 +95,9 @@ from manabot.training.update_metrics import (
     phase_seconds,
     time_since,
 )
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
 import managym
 
 from .clock import boot_identity, watchdog_seconds
