@@ -390,8 +390,10 @@ def _train_self_play(
             "run_id": run.id,
             "identities": run.record.identities,
         }
-        if run.record.regime_call is not None:
-            resolved["regime_call"] = run.record.regime_call.model_dump(mode="json")
+        if run.record.regime_function is not None:
+            resolved["regime_function"] = run.record.regime_function.model_dump(
+                mode="json"
+            )
         experiment = RunContext(
             RuntimeConfig(
                 seed=seeds["initialization"] if imported is not None else run.seed,
@@ -1042,8 +1044,9 @@ def _stage_regime(
     return validate_regime(regime)
 
 
-def _rehearsed(run: Run, execution: Execution) -> Execution:
-    return execution if run.rehearsal is None else run.rehearsal
+def _smoked(run: Run, execution: Execution) -> Execution:
+    """A smoke run's stages all run under its one small execution."""
+    return execution if run.smoke_execution is None else run.smoke_execution
 
 
 def self_play(
@@ -1078,15 +1081,15 @@ def self_play(
     recorded = run.completed(name)
     if recorded is not None:
         _restore_model(model, recorded)
-        model.session = None
         return SelfPlayResult.of(recorded)
     if opponent is model:
         raise ValueError("a model cannot be its own frozen opponent")
     frozen = None
     if opponent is not None:
-        reference = run.export(opponent)
+        reference = run.export(opponent, decks=decks)
         frozen = FrozenOpponent(path=reference["path"], sha256=reference["sha256"])
-    if run.rehearsal is not None:
+    if run.smoke_execution is not None:
+        # One update of one transition per stream: every path runs, cheaply.
         updates, transitions, streams = 1, 1, 2
         games_per_stream = None
     # Omitted seats and closure take TrainSelfPlay's defaults for the behavior.
@@ -1112,7 +1115,7 @@ def self_play(
         matchup_curriculum=matchup_curriculum,
         adaptive=adaptive,
         trainable=trainable,
-        execution=_rehearsed(run, execution),
+        execution=_smoked(run, execution),
     )
     regime = _stage_regime(
         run, name, decks, model.agent, model.observation, declaration
@@ -1132,6 +1135,12 @@ def self_play(
         self_play=True,
         keep_restored=True,
         operation="train_self_play",
+        arguments={
+            "model": model.name,
+            "opponent": opponent.name if opponent is not None else None,
+            "decks": decks,
+            "settings": declaration,
+        },
     )
     assert scope is not None
     live = _train_self_play(
@@ -1147,18 +1156,31 @@ def self_play(
     model.session = live
     model.network = live.learner.agent
     model.ema = live.ema
-    model.changed()
+    _published(model, scope.record)
     return SelfPlayResult.of(scope.record)
 
 
+def _published(model: Model, record: StageRecord) -> None:
+    """The stage's raw/EMA exports are checkpoints of the model's weights."""
+    model.exports = {
+        weights: record.artifacts[weights]  # type: ignore[misc]
+        for weights in ("raw", "ema")
+        if weights in record.artifacts
+    }
+
+
 def _restore_model(model: Model, record: StageRecord) -> None:
-    """Load a completed stage's exported weights into `model` on resume."""
+    """Load a completed stage's exported weights into `model` on resume.
+
+    The live learner is not restored, so the model's next self-play stage
+    starts a fresh learner from these weights.
+    """
     with torch.random.fork_rng(devices=[]):
-        raw, _ = load_checkpoint(record.artifacts["raw"]["path"])
-        model.network = raw
+        model.network, _ = load_checkpoint(record.artifacts["raw"]["path"])
         if "ema" in record.artifacts:
             model.ema, _ = load_checkpoint(record.artifacts["ema"]["path"])
-    model.changed()
+    model.session = None
+    _published(model, record)
 
 
 def import_policy(
@@ -1200,7 +1222,10 @@ def import_policy(
             declaration,
         )
         scope = run.begin_stage(
-            stage_id, declaration.execution, operation="import_policy"
+            stage_id,
+            declaration.execution,
+            operation="import_policy",
+            arguments={"model": name, "decks": decks, "settings": declaration},
         )
         assert scope is not None
         _import_policy(run, scope, regime, declaration)
@@ -1225,7 +1250,7 @@ def collect_belief(
     recorded = run.completed(name)
     if recorded is not None:
         return read_dataset(Path(recorded.artifacts["dataset"]["path"]))
-    if run.rehearsal is not None:
+    if run.smoke_execution is not None:
         games = 3
     declaration = CollectBelief(
         id=name,
@@ -1235,8 +1260,13 @@ def collect_belief(
         games=games,
         max_steps=max_steps,
     )
-    policy = run.export(model, weights)
-    scope = run.begin_stage(name, declaration.execution, operation="collect_belief")
+    policy = run.export(model, weights, decks=decks)
+    scope = run.begin_stage(
+        name,
+        declaration.execution,
+        operation="collect_belief",
+        arguments={"model": model.name, "decks": decks, "settings": declaration},
+    )
     assert scope is not None
     scope.record.inputs["policy"] = dict(policy)
     run.persist()
@@ -1260,7 +1290,7 @@ def train_belief(
     recorded = run.completed(name)
     if recorded is not None:
         return recorded.artifacts["sampler"]  # type: ignore[return-value]
-    if run.rehearsal is not None:
+    if run.smoke_execution is not None:
         steps = 1
     declaration = TrainBelief(
         id=name,
@@ -1273,7 +1303,12 @@ def train_belief(
         history_dropout=history_dropout,
         evaluation_samples=evaluation_samples,
     )
-    scope = run.begin_stage(name, declaration.execution, operation="train_belief")
+    scope = run.begin_stage(
+        name,
+        declaration.execution,
+        operation="train_belief",
+        arguments={"corpus": corpus.identity, "settings": declaration},
+    )
     assert scope is not None
     scope.record.inputs["dataset"] = {"identity": corpus.identity}
     return _train_belief(run, scope, declaration, corpus)

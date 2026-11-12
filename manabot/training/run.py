@@ -25,11 +25,12 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, field
-import hashlib
+import functools
 import importlib
 import inspect
 import os
 from pathlib import Path
+import platform
 import socket
 import subprocess
 import tempfile
@@ -39,29 +40,32 @@ import uuid
 import zlib
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, create_model
 import psutil
+from pydantic import TypeAdapter
+from pydantic_core import PydanticSerializationError, to_jsonable_python
 import torch
 
 from manabot.env.failures import CaptureScope, capture_scope
+from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.host import host_facts
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.infra.provenance import source_bundle_sha256
+from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.infra.runtime import RunContext
-from manabot.infra.source import source_commit
+from manabot.infra.source import source_commit, source_uncommitted_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
 from manabot.training.learning.learner import Learner
 from manabot.training.mps import mps_torch_error
+from manabot.training.decks import UniformDecks
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
-    RegimeCallRecord,
+    RegimeFunctionRecord,
     SourceRevision,
     StageRecord,
     TrainingRun,
@@ -77,20 +81,19 @@ from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.state.game_errors import GameErrorLedger, GameErrorPolicy
 from manabot.training.state.incidents import save_incident
 from manabot.training.state.recovery import (
-    TrainingPaused,
     UpdateSnapshot,
     admit_recovery_identities,
     attempt_lock,
     load_update,
     settle_orphan,
 )
+from manabot.verify.store import VerifyStore
 import managym
 
 from .clock import boot_identity, watchdog_seconds
 
 if TYPE_CHECKING:
-    from manabot.training.rollout.collection import Batch
-    from manabot.verify.store import VerifyStore
+    from manabot.training.rollout.collection import RolloutBatch
 
 
 # Longest a run.json export may lag the store while a stage is making progress.
@@ -171,7 +174,7 @@ class StageScope:
     last_memory_sample: float = float("-inf")
     learner: Learner | None = None
     collector: SeatRoutedCollector | None = None
-    batch: "Batch | None" = None
+    batch: "RolloutBatch | None" = None
     ema: ActorCritic | None = None
     rng: np.random.Generator | None = None
     iteration: int = 0
@@ -235,8 +238,9 @@ class Model:
 
     Stage functions read and change a model in place; it is never copied
     implicitly. `session` is the live learner state self-play continues when
-    the same model trains again; `exports` caches checkpoints of the current
-    weights by kind, so an unchanged model is published once.
+    the same model trains again; `exports` holds published checkpoints of the
+    current weights by kind (a stage that changes the weights replaces it),
+    so an unchanged model is published once.
     """
 
     name: str
@@ -246,10 +250,6 @@ class Model:
     ema: ActorCritic | None = None
     session: Any = None
     exports: dict[str, ArtifactReference] = field(default_factory=dict)
-
-    def changed(self) -> None:
-        """Forget exports of earlier weights."""
-        self.exports.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +287,7 @@ class Run:
         experiment: str | None,
         training_exposure: bool,
         game_ledger: GameErrorLedger | None,
-        rehearsal: Execution | None = None,
+        smoke_execution: Execution | None = None,
     ) -> None:
         self.record = record
         self.store = store
@@ -315,7 +315,7 @@ class Run:
         self.training_exposure = training_exposure
         self.game_ledger = game_ledger
         # Set when rehearsing: the execution every stage runs under.
-        self.rehearsal = rehearsal
+        self.smoke_execution = smoke_execution
         self.resources = ExitStack()
         self.resources.callback(apply_matmul_precision, "float32")
         # The live collector; a new collector closes the previous one.
@@ -408,18 +408,33 @@ class Run:
         return model
 
     def export(
-        self, model: Model, weights: Literal["raw", "ema"] = "raw"
+        self,
+        model: Model,
+        weights: Literal["raw", "ema"] = "raw",
+        *,
+        decks: MatchConfig | UniformDecks | None = None,
     ) -> ArtifactReference:
         """Publish `model`'s current weights through ordinary admission.
 
-        The checkpoint binds the world, so any deck the world admits may use
-        it. An export is a stage of its own (`export-<model>`).
+        The checkpoint binds the world when `decks` is omitted or a deck
+        source (which needs a model reading the complete world input), and
+        otherwise the setups of `decks`. An export is a stage of its own
+        (`export-<model>`); weights already published are returned as they
+        are.
         """
         if weights in model.exports:
             return model.exports[weights]
         network = model.network if weights == "raw" else model.ema
         if network is None:
             raise ValueError(f"model {model.name!r} has no {weights} weights")
+        setups = (
+            Match(decks).to_rust() if isinstance(decks, MatchConfig) else None
+        )
+        if setups is None and model.agent.world != managym.WORLD_SETUP:
+            raise ValueError(
+                f"model {model.name!r} does not read the complete world input; "
+                "export it for the decks it plays"
+            )
         name = self.stage_name(f"export-{model.name}")
         recorded = self.completed(name)
         if recorded is not None:
@@ -434,7 +449,7 @@ class Run:
             network,
             ObservationSpace(model.observation),
             target.with_suffix(".tmp"),
-            player_configs=None,
+            player_configs=setups,
             extra={
                 "run_id": self.id,
                 "stage_id": name,
@@ -670,6 +685,7 @@ class Run:
         self_play: bool = False,
         keep_restored: bool = False,
         operation: str | None = None,
+        arguments: Mapping[str, object] | None = None,
     ) -> StageScope | None:
         """Open the stage's record and supervision; `None` if it needs no work.
 
@@ -697,8 +713,10 @@ class Run:
                 self.record.stages.append(record)
                 self.snapshot = None
                 return None
-        if operation is not None and self.record.regime_call is not None:
+        if operation is not None and self.record.regime_function is not None:
             record.operation = operation
+            if arguments is not None:
+                record.arguments = to_jsonable_python(dict(arguments))
         if self_play:
             if snapshot is None:
                 record.optimizer_updates = 0
@@ -951,7 +969,7 @@ def open_run(
     *,
     seed: int,
     regime: TrainingRegime | None,
-    regime_call: RegimeCallRecord | None,
+    regime_function: RegimeFunctionRecord | None,
     regime_digest: str,
     wall_seconds: float,
     recovery: RecoveryPolicy | None,
@@ -969,7 +987,7 @@ def open_run(
     initial_admission: Path | None = None,
     experiment: str | None = None,
     training_exposure: bool = False,
-    rehearsal: Execution | None = None,
+    smoke_execution: Execution | None = None,
 ) -> Run:
     """Create and commit the attempt's record; the caller holds the leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -992,7 +1010,7 @@ def open_run(
     record = TrainingRun(
         id=uuid.uuid4().hex,
         regime=regime,
-        regime_call=regime_call,
+        regime_function=regime_function,
         regime_digest=regime_digest,
         seed=seed,
         seed_streams=seeds,
@@ -1071,7 +1089,7 @@ def open_run(
         experiment=experiment,
         training_exposure=training_exposure,
         game_ledger=game_ledger,
-        rehearsal=rehearsal,
+        smoke_execution=smoke_execution,
     )
 
 
@@ -1153,3 +1171,258 @@ def attempt(
                 # existing admission forward after checking the current runtime.
                 source_repair_reason = parent.source_repair_reason
         yield Attempt(destination, parent, snapshot, source_repair_reason)
+
+
+# ---------------------------------------------------------------------------
+# Regime functions
+
+# A regime: any callable taking the run, usually a function or a
+# `functools.partial` binding its keyword arguments.
+Regime = Callable[[Run], None]
+
+
+def _signature(regime: Regime) -> tuple[Callable[..., None], dict[str, object]]:
+    """The function a regime calls and every keyword argument it receives."""
+    if isinstance(regime, functools.partial):
+        if regime.args:
+            raise TypeError("bind regime arguments by name")
+        function, bound = regime.func, dict(regime.keywords)
+    else:
+        function, bound = regime, {}
+    if not inspect.isfunction(function) or "<locals>" in function.__qualname__:
+        raise TypeError("a regime is a module-level function, or a partial of one")
+    signature = inspect.signature(function)
+    parameters = list(signature.parameters.values())
+    if not parameters or parameters[0].kind not in (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    ):
+        raise TypeError("a regime function takes the run as its first argument")
+    hints = get_type_hints(function)
+    arguments: dict[str, object] = {}
+    for parameter in parameters[1:]:
+        if parameter.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            raise TypeError("regime function arguments are named")
+        if parameter.name in bound:
+            value = bound.pop(parameter.name)
+        elif parameter.default is not inspect.Parameter.empty:
+            value = parameter.default
+        else:
+            raise TypeError(f"regime argument {parameter.name!r} is not bound")
+        if parameter.name not in hints:
+            raise TypeError(f"annotate regime argument {parameter.name!r}")
+        # Validation returns typed instances unchanged; it rejects a wrong
+        # type here, before a run opens.
+        arguments[parameter.name] = TypeAdapter(hints[parameter.name]).validate_python(
+            value
+        )
+    if bound:
+        raise TypeError(f"unknown regime arguments: {', '.join(sorted(bound))}")
+    return function, arguments
+
+
+def regime_record(
+    regime: Regime, *, wall_seconds: float, recovery: RecoveryPolicy | None
+) -> RegimeFunctionRecord:
+    """What a run of `regime` records as its identity.
+
+    Arguments must serialize to JSON (numbers, strings, the typed records and
+    collections of them); a lambda or an open file is rejected.
+    """
+    function, arguments = _signature(regime)
+    try:
+        encoded = to_jsonable_python(arguments)
+    except PydanticSerializationError as error:
+        raise TypeError(f"regime arguments must serialize to JSON: {error}") from error
+    return RegimeFunctionRecord(
+        function=f"{function.__module__}:{function.__qualname__}",
+        arguments=encoded,
+        arguments_sha256=canonical_sha256(encoded),
+        revision=source_revision(),
+        wall_seconds=wall_seconds,
+        recovery=recovery,
+    )
+
+
+def load_regime(path: str, arguments: Mapping[str, object]) -> Regime:
+    """The function at `module:qualname` bound to JSON `arguments`.
+
+    Each argument is validated against the function's annotation, so a
+    recorded or remote regime rebinds to the same typed values.
+    """
+    module, _, name = path.partition(":")
+    if not module or not name:
+        raise ValueError("a regime function path is module:function")
+    target: Any = importlib.import_module(module)
+    for part in name.split("."):
+        target = getattr(target, part)
+    if not inspect.isfunction(target):
+        raise TypeError(f"{path} is not a function")
+    hints = get_type_hints(target)
+    unknown = set(arguments) - set(inspect.signature(target).parameters)
+    if unknown:
+        raise TypeError(f"unknown regime arguments: {', '.join(sorted(unknown))}")
+    return functools.partial(
+        target,
+        **{
+            key: TypeAdapter(hints[key]).validate_python(value)
+            if key in hints
+            else value
+            for key, value in arguments.items()
+        },
+    )
+
+
+def source_revision() -> SourceRevision:
+    """The commit and uncommitted tracked changes this process runs from."""
+    try:
+        commit: str | None = source_commit()
+    except (OSError, subprocess.CalledProcessError):
+        commit = None
+    return SourceRevision(commit=commit, uncommitted_sha256=source_uncommitted_sha256())
+
+
+def host_identities() -> dict[str, object]:
+    """Machine, Torch and training-source identities every attempt records."""
+    return {
+        "hardware": {
+            "platform": platform.platform(),
+            "processor": platform.processor(),
+            "cpu_count": os.cpu_count(),
+            "memory_bytes": psutil.virtual_memory().total,
+        },
+        "training_source_sha256": source_bundle_sha256(
+            sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
+        ),
+        "torch": torch.__version__,
+        "policy_numerics": "masked-log-softmax-v1",
+        "source_commit": source_commit(),
+    }
+
+
+def _function_identities(seed: int) -> dict[str, object]:
+    # Opening the world fixes content and input identities. A function run's
+    # setups are its stages' arguments, never a representative pair.
+    identities = runtime_fingerprints(seed)
+    del identities["matchup"], identities["matchup_sha256"]
+    return identities | host_identities()
+
+
+@dataclass(frozen=True)
+class ModelCheckpoints:
+    """A model's latest published checkpoints of its final weights."""
+
+    raw: ArtifactReference | None
+    ema: ArtifactReference | None
+
+
+@dataclass(frozen=True)
+class RunResult:
+    """A finished regime-function run: its record and each model's checkpoints."""
+
+    record: TrainingRun
+    checkpoints: dict[str, ModelCheckpoints]
+
+    @property
+    def status(self) -> str:
+        return self.record.status
+
+
+def execute(
+    regime: Regime,
+    *,
+    out: str | Path,
+    seed: int,
+    store: "VerifyStore | None" = None,
+    resume_from: str | None = None,
+    wall_seconds: float = 900.0,
+    recovery: RecoveryPolicy | None = None,
+    checkpoint_updates: int | None = None,
+    pause_path: Path | None = None,
+    stop_path: Path | None = None,
+    experiment: str | None = None,
+    smoke_execution: Execution | None = None,
+) -> RunResult:
+    """Run `regime(run)` as one attempt, or resume a stopped one.
+
+    Without `store` the run opens `training.sqlite` beside `out`. Resuming
+    requires the same function, arguments, revision, supervision and seed;
+    the function re-enters from the top, completed stages return their
+    recorded results, and the interrupted stage continues from its last
+    recovery snapshot at an update boundary.
+    """
+    if pause_path is not None and recovery is None:
+        raise ValueError("safe pause requires complete-state recovery")
+    record = regime_record(regime, wall_seconds=wall_seconds, recovery=recovery)
+    digest = canonical_sha256(record.model_dump(mode="json"))
+    with ExitStack() as stack:
+        if store is None:
+            store = stack.enter_context(
+                VerifyStore(Path(out).resolve().parent / "training.sqlite")
+            )
+        with attempt(
+            store,
+            out,
+            seed=seed,
+            regime_digest=digest,
+            identities=lambda: _function_identities(seed),
+            resume_from=resume_from,
+            source_repair_reason=None,
+            cadence=(checkpoint_updates, None, ()),
+            game_error_recovery=False,
+        ) as admitted:
+            run = open_run(
+                store,
+                admitted.out,
+                seed=seed,
+                regime=None,
+                regime_function=record,
+                regime_digest=digest,
+                wall_seconds=wall_seconds,
+                recovery=recovery,
+                recoverable=recovery is not None,
+                game_errors=None,
+                parent=admitted.parent,
+                snapshot=admitted.snapshot,
+                checkpoint_updates=checkpoint_updates,
+                pause_path=pause_path,
+                stop_path=stop_path,
+                experiment=experiment or record.function.partition(":")[2],
+                smoke_execution=smoke_execution,
+            )
+            result = run.execute(
+                lambda: _function_identities(seed), lambda: regime(run)
+            )
+            return RunResult(
+                result,
+                {
+                    name: ModelCheckpoints(
+                        raw=model.exports.get("raw"), ema=model.exports.get("ema")
+                    )
+                    for name, model in run.models.items()
+                },
+            )
+
+
+def smoke(
+    regime: Regime, *, device: Literal["cpu", "mps", "cuda"] = "cpu"
+) -> TrainingRun:
+    """Run `regime` once for real, tiny, in a temporary store deleted after.
+
+    Every stage does one update of one transition per stream on `device`
+    and exports and reloads its checkpoints through admission, so a bad deck,
+    capacity, world mismatch or error in the function fails here in seconds.
+    A smoke run says nothing about speed or learning.
+    """
+    with tempfile.TemporaryDirectory(prefix="manabot-smoke-") as root:
+        with VerifyStore(Path(root) / "training.sqlite") as store:
+            return execute(
+                regime,
+                out=Path(root) / "run",
+                seed=0,
+                store=store,
+                smoke_execution=Execution(device=device),
+            ).record

@@ -250,7 +250,7 @@ def execute_regime(
             admitted.out,
             seed=seed,
             regime=regime,
-            regime_call=None,
+            regime_function=None,
             regime_digest=digest,
             wall_seconds=regime.wall_seconds,
             recovery=regime.recovery,

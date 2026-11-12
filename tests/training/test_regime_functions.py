@@ -1,5 +1,6 @@
 """Regime functions run over the same Run and stage bodies as saved regimes."""
 
+from functools import partial
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 import manabot.training.run as run_handle
-from manabot.training.run import RegimeCall, Run, execute, rehearse
+from manabot.training.run import Run, execute, load_regime, regime_record, smoke
 from manabot.training.stages import self_play
 from manabot.verify.store import VerifyStore
 import managym
@@ -77,7 +78,7 @@ def test_function_self_play_matches_the_saved_stage(tmp_path: Path) -> None:
     with VerifyStore(tmp_path / "training.sqlite") as store:
         saved = execute_regime(regime, 41, tmp_path / "saved", store)
         function = execute(
-            RegimeCall.of(one_learner, updates=2),
+            partial(one_learner, updates=2),
             out=tmp_path / "function",
             seed=41,
             store=store,
@@ -99,7 +100,7 @@ def test_function_self_play_matches_the_saved_stage(tmp_path: Path) -> None:
 
 def test_two_models_train_one_against_the_other_frozen(tmp_path: Path) -> None:
     torch.set_num_threads(1)
-    call = RegimeCall.of(
+    regime = partial(
         two_models,
         decks=MatchConfig(),
         updates=1,
@@ -109,20 +110,28 @@ def test_two_models_train_one_against_the_other_frozen(tmp_path: Path) -> None:
         streams=2,
         transitions=16,
     )
-    result = execute(call, out=tmp_path / "run", seed=7)
+    result = execute(regime, out=tmp_path / "run", seed=7)
     assert result.status == "completed"
     record = result.record
     assert [stage.id for stage in record.stages] == ["export-reference", "self-play"]
-    assert record.regime is None and record.regime_call is not None
-    assert record.regime_call.function == "experiments.two_models:two_models"
-    assert record.regime_call.arguments == call.arguments
-    assert record.regime_call.arguments_sha256 == canonical_sha256(call.arguments)
-    assert record.regime_call.arguments["execution"]["device"] == "cpu"
+    identity = record.regime_function
+    assert record.regime is None and identity is not None
+    assert identity.function == "experiments.two_models:two_models"
+    assert identity.arguments_sha256 == canonical_sha256(identity.arguments)
+    # Defaults are recorded with the bound arguments.
+    assert identity.arguments["execution"]["device"] == "cpu"
+    assert identity.arguments["updates"] == 1
     reference, learner = result.checkpoints["reference"], result.checkpoints["learner"]
     assert reference.raw is not None and learner.raw is not None
     trained = record.stages[1]
     assert trained.inputs["frozen_opponent"]["sha256"] == reference.raw["sha256"]
     assert learner.raw == trained.artifacts["raw"]
+    assert trained.arguments is not None
+    assert (trained.arguments["model"], trained.arguments["opponent"]) == (
+        "learner",
+        "reference",
+    )
+    assert trained.arguments["settings"]["behavior"] == "frozen"
     frozen, _ = load_checkpoint(reference.raw["path"])
     student, _ = load_checkpoint(learner.raw["path"])
     assert frozen.config == AGENT
@@ -130,35 +139,44 @@ def test_two_models_train_one_against_the_other_frozen(tmp_path: Path) -> None:
     # The reference is never trained: its export is its initialization.
     assert record.stages[0].artifacts["raw"] == reference.raw
     exported = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_text())
-    assert exported.regime_call == record.regime_call
+    assert exported.regime_function == identity
 
 
-def test_arguments_are_validated_before_a_run_opens() -> None:
-    with pytest.raises(ValueError, match="updates"):
-        RegimeCall.of(one_learner, updates="many")
-    with pytest.raises(ValueError, match="extra"):
-        RegimeCall.of(one_learner, updates=1, unknown=2)
-    call = RegimeCall.of(two_models, decks=MatchConfig(), updates=3)
-    # Defaults are resolved into the record, not only the arguments written.
-    assert call.arguments["learning"]["gradient"] == "damped_policy"
-    assert RegimeCall.load(call.path, call.arguments).arguments == call.arguments
+def test_arguments_are_checked_before_a_run_opens() -> None:
+    def record(regime: object) -> object:
+        return regime_record(regime, wall_seconds=60, recovery=None)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="int"):
+        record(partial(one_learner, updates="many"))
+    with pytest.raises(TypeError, match="unknown"):
+        record(partial(one_learner, updates=1, unknown=2))
+    with pytest.raises(TypeError, match="not bound"):
+        record(one_learner)
+    with pytest.raises(TypeError, match="module-level"):
+        record(lambda run: None)
+    identity = record(partial(two_models, decks=MatchConfig(), updates=3))
+    assert identity.arguments["learning"]["gradient"] == "damped_policy"
+    rebound = load_regime(identity.function, identity.arguments)
+    assert record(rebound).arguments == identity.arguments
 
 
-def test_rehearsal_runs_one_tiny_update_and_rejects_bad_code(tmp_path: Path) -> None:
+def test_smoke_runs_one_tiny_update_and_rejects_bad_code() -> None:
     torch.set_num_threads(1)
-    record = rehearse(RegimeCall.of(one_learner, updates=500))
+    record = smoke(partial(one_learner, updates=500))
     assert record.status == "completed"
     assert [stage.updates for stage in record.stages] == [1]
     assert not Path(record.stages[0].artifacts["raw"]["path"]).exists()
     with pytest.raises(RuntimeError, match="regime code failed"):
-        rehearse(RegimeCall.of(failing, updates=500))
+        smoke(partial(failing, updates=500))
 
 
 def test_function_regime_resumes_at_an_update_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     torch.set_num_threads(1)
-    call = RegimeCall.of(one_learner, updates=3)
+    monkeypatch.setattr(run_handle, "PROGRESS_EXPORT_SECONDS", 0.0)
+    monkeypatch.setattr(run_handle, "PROGRESS_EXPORT_SHARE", float("inf"))
+    regime = partial(one_learner, updates=3)
     recovery = RecoveryPolicy(checkpoint_updates=1)
     export = run_handle.export_training_run
 
@@ -172,13 +190,17 @@ def test_function_regime_resumes_at_an_update_boundary(
 
     with VerifyStore(tmp_path / "training.sqlite") as store:
         whole = execute(
-            call, out=tmp_path / "whole", seed=5, store=store, recovery=recovery
+            regime, out=tmp_path / "whole", seed=5, store=store, recovery=recovery
         )
         with monkeypatch.context() as patch:
             patch.setattr(run_handle, "export_training_run", fail_after_second_update)
             with pytest.raises(KeyboardInterrupt):
                 execute(
-                    call, out=tmp_path / "failed", seed=5, store=store, recovery=recovery
+                    regime,
+                    out=tmp_path / "failed",
+                    seed=5,
+                    store=store,
+                    recovery=recovery,
                 )
         failed_id = store.con.execute(
             "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
@@ -188,7 +210,7 @@ def test_function_regime_resumes_at_an_update_boundary(
         assert failed.stages[0].updates == 2
         with pytest.raises(ValueError, match="recipe or seed"):
             execute(
-                RegimeCall.of(one_learner, updates=4),
+                partial(one_learner, updates=4),
                 out=tmp_path / "other",
                 seed=5,
                 store=store,
@@ -196,7 +218,7 @@ def test_function_regime_resumes_at_an_update_boundary(
                 resume_from=failed.id,
             )
         resumed = execute(
-            call,
+            regime,
             out=tmp_path / "resumed",
             seed=5,
             store=store,

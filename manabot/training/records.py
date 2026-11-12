@@ -2,7 +2,7 @@
 
 RunRecord shares retained measurements across execution and report readers.
 TrainingRun binds those measurements to its recipe: a currently admitted
-TrainingRegime, or the RegimeCallRecord of a regime function.
+TrainingRegime, or the RegimeFunctionRecord of a regime function.
 """
 
 from typing import Any, Literal
@@ -52,12 +52,13 @@ class SourceRevision(Strict):
     uncommitted_sha256: str | None = None
 
 
-class RegimeCallRecord(Strict):
-    """A regime function's identity: what ran, with which resolved arguments.
+class RegimeFunctionRecord(Strict):
+    """A regime function's identity: what ran, with which arguments.
 
-    `arguments` holds every keyword argument after validation against the
-    function's annotations, defaults included, as JSON. Two runs with equal
-    `function`, `arguments_sha256` and `revision` ran the same recipe.
+    `function` is the callable's `module:qualname`. `arguments` holds every
+    keyword argument after the run (bound by a `functools.partial`, or a
+    default) as JSON. Two runs with equal `function`, `arguments_sha256` and
+    `revision` ran the same recipe.
     """
 
     function: str = Field(pattern=r"^[\w.]+:[\w.]+$")
@@ -80,8 +81,12 @@ StageOperation = Literal[
 
 
 class StageRecord(Strict):
-    # What a regime function's stage did; a saved regime's stages declare it.
+    # What a regime function's stage did and the arguments it resolved; a
+    # saved regime's stages declare both in the regime.
     operation: StageOperation | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    arguments: dict[str, Any] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     learning_state_origin: LearningStateOrigin | None = Field(
@@ -188,7 +193,7 @@ class RunRecord[RegimeT](Strict):
     regime_digest: str
     # Exactly one recipe: a saved regime, or the call of a regime function.
     regime: RegimeT | None = Field(default=None, exclude_if=lambda v: v is None)
-    regime_call: RegimeCallRecord | None = Field(
+    regime_function: RegimeFunctionRecord | None = Field(
         default=None, exclude_if=lambda v: v is None
     )
     seed: int
@@ -273,15 +278,15 @@ class RunRecord[RegimeT](Strict):
 
     @model_validator(mode="after")
     def _one_recipe(self) -> "RunRecord[RegimeT]":
-        if (self.regime is None) == (self.regime_call is None):
+        if (self.regime is None) == (self.regime_function is None):
             raise ValueError("a run records exactly one regime or regime call")
         return self
 
     @property
     def recovery_policy(self) -> RecoveryPolicy | None:
         """The run's active recovery policy, whichever recipe declared it."""
-        if self.regime_call is not None:
-            return self.regime_call.recovery
+        if self.regime_function is not None:
+            return self.regime_function.recovery
         return getattr(self.regime, "recovery", None)
 
     def stage_operations(self) -> dict[str, str]:

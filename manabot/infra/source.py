@@ -84,6 +84,18 @@ def source_commit() -> str:
     return bundle.commit
 
 
+def source_uncommitted_sha256() -> str | None:
+    """SHA-256 of tracked changes against `source_commit`; None when clean.
+
+    A verified bundle, or an install outside a git checkout, has none.
+    """
+    root = Path(__file__).resolve().parents[2]
+    if (root / ".manabot-source.json").exists() or not (root / ".git").exists():
+        return None
+    diff = subprocess.check_output(["git", "-C", str(root), "diff", "--binary", "HEAD"])
+    return hashlib.sha256(diff).hexdigest() if diff else None
+
+
 @cache
 def source_dirty() -> bool:
     """Whether tracked files differ from `source_commit`; a verified bundle never does."""
