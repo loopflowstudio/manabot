@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTG-287 · Paired package concept review</title>
+<style>
+:root{color-scheme:light dark;--ink:#252a30;--paper:#faf9f6;--muted:#58616b;--line:#c7cbd0;--accent:#805317}
+@media(prefers-color-scheme:dark){:root{--ink:#e5e8ec;--paper:#171b20;--muted:#aeb8c3;--line:#48515b;--accent:#e9bd79}}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,sans-serif}main{max-width:850px;padding:28px 24px 36px;margin:auto}header{font-size:12px;color:var(--muted)}h1{font-size:28px;line-height:1.15;margin:18px 0 12px}h2{font-size:18px;margin:24px 0 8px}p{margin:9px 0}code{font:0.9em ui-monospace,monospace;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:9px 8px}th{color:var(--muted)}blockquote{margin:14px 0;padding:4px 16px;border-left:3px solid var(--accent)}ol{padding-left:24px}li{margin:8px 0}.source{overflow-wrap:anywhere}strong{font-weight:650}@media(max-width:560px){main{padding:20px 16px}h1{font-size:24px}table,tbody,tr,td,th{display:block}thead{display:none}tr{border-bottom:1px solid var(--line);padding:7px 0}td{border:0;padding:3px 0}td:before{content:attr(data-label) ' ';font-weight:650}}
+</style>
+<main>
+<header>MTG-287 · concept-review · 2026-11-11<br>
+<span class="source">Sources: scratch/packaging.md; scratch/questions.md; docs/engine-python.md; docs/development.md; both pyproject.toml files; scripts/release/{prepare,check,validate,complete}.py; .github/workflows/release.yml.</span></header>
+<h1>Two install choices, one paired release.</h1>
+<p><strong>Implemented:</strong> both install entry points qualify the PyPI commands and link to the existing candidate-wheel instructions before the first command. No tag or upload.</p>
+<p><strong>Review finding:</strong> the engine guide previously opened with an index install, while the Task delivers an unpublished pair. The clarification directs candidates to local wheels before troubleshooting platform support.</p>
+<table>
+<thead><tr><th>Action</th><th>Concept: before → implemented branch</th><th>API or state transition</th></tr></thead>
+<tbody>
+<tr><td data-label="Action:">Use the rules engine</td><td data-label="Concept:">Bundled training dependency → standalone engine</td><td data-label="API:"><code>uv pip install … managym</code><br><code>import managym; Env.reset(); Env.step()</code></td></tr>
+<tr><td data-label="Action:">Add training</td><td data-label="Concept:">One distribution → two packages, exact shared version</td><td data-label="API:"><code>uv pip install … manabot</code><br>Resolver aligns the engine; old imports alias the same classes.</td></tr>
+<tr><td data-label="Action:">Release and recover</td><td data-label="Concept:">One package inventory → one release with two inventories</td><td data-label="API:"><code>prepare → check/validate → complete</code><br>Workflow uploads engine, then training; completion verifies both and the GitHub entry.</td></tr>
+</tbody></table>
+<h2>Install-guide opening</h2>
+<blockquote>For an unpublished candidate, install the local wheels using Build and verify. The PyPI commands below apply after the paired release is published.</blockquote>
+<p>The candidate path installs the engine wheel alone, then both local wheel paths for training. The existing commands and Python/platform requirements remain.</p>
+<h2>One normal path, two recovery boundaries</h2>
+<p><strong>Consumer:</strong> install engine → play → add training. A conflicting pin requires matching versions. Preserve world identity, configuration, seeds and source receipts; matching package versions do not make old checkpoints compatible.</p>
+<p><strong>Publisher:</strong> validate all seven files → upload engine → upload training → complete GitHub entry. If training has no files, resume with the retained artifacts after matching engine digests. Partial files or different bytes stop for inspection. A GitHub-only failure retries completion.</p>
+<p><strong>Counterexample retained:</strong> sequential upload can leave the engine visible alone. Existing instructions correctly describe a coordinated release, not atomic visibility. Do not rebuild published bytes or call that state complete.</p>
+<h2>Remaining work</h2>
+<p>Debug Rust, Clippy, CPU training and the complete consumer matrix remain gate/CI obligations. The first shared version, both trusted publishers and publication authorization belong to the later release. The install clarification is implemented; this review adds no build or runtime results.</p>
+</main>
+</html>

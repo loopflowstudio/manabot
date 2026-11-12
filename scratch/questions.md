@@ -7,7 +7,7 @@ Licence, hidden labels, schema/defaults, capacity and card text moved to MTG-288
 through MTG-292 and are outside this change.
 
 Reversible choices: use the proposed uv workspace, canonical `managym` import,
-pure-Python `manabot` and exact matching engine dependency. Retain the requested
+pure-Python `manabot` and exact matching engine dependency. Retain the proposed
 `manabot.managym` alias, including submodule and stub identity. Keep the current
 0.2.1 metadata while developing; this does not select the first paired release.
 
@@ -32,3 +32,10 @@ still lists only 0.2.0"; "What remains for this Task is the separate `managym`
 distribution and publishing both packages together at one version, built on
 that release tooling." The implementation retains the existing release tools
 and extends their inventories; it does not redo hand snapshots or publish.
+
+Concept review assumption, 2026-11-11: the reversible documentation choice is
+to label index commands as post-publication usage and link to the existing local
+wheel instructions for candidates. No new installer is needed. The unresolved
+first shared version is a later publication prerequisite, not a reason to block
+review or validation of this packaging-only Task. No publication was checked or
+attempted during the review.

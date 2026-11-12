@@ -431,6 +431,10 @@ certification of playing strength or rules coverage.
 
 ### Install
 
+For an unpublished candidate, install the local wheels using
+[Build and verify](#build-and-verify). The PyPI commands below apply after the
+paired release is published.
+
 For the rules engine alone, follow [installing managym](engine-python.md).
 For training, install `manabot` in a fresh directory outside this checkout:
 
@@ -450,9 +454,7 @@ distributions to the same published version in reproducible projects. See the
 [0.2.1 release notes](../release/v0.2.1/NOTES.md) for that version's API migration
 guidance.
 The historical 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
-environment when reproducing that release. To verify an unpublished build,
-install both local wheel paths together; see
-[Build and verify](#build-and-verify).
+environment when reproducing that release.
 
 For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
 explicitly. CI validates CPU, not GPU, execution.

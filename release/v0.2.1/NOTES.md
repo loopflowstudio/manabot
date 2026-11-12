@@ -1,6 +1,6 @@
 # v0.2.1
 
-Install the library and bundled rules engine in a fresh directory:
+Install the training library and its matching rules engine in a fresh directory:
 
 ```bash
 uv venv --python 3.13
@@ -11,7 +11,11 @@ uv run --no-project --python .venv/bin/python manabot --help
 The last command lists the CLI commands without starting training. Wheels target
 ordinary CPython 3.12 and 3.13 on Linux x86-64 (glibc 2.28+) and Apple Silicon
 (macOS 14+). Use `--python 3.12` to select the other supported interpreter.
-The distribution includes `manabot.managym`; `import managym` remains an alias.
+`manabot` is a pure-Python distribution requiring `managym==0.2.1`. The
+separate `managym` distribution owns the compiled engine and `import managym`;
+`manabot.managym` remains a compatibility alias to the same classes and submodules.
+Engine-only consumers can install `'managym==0.2.1'` without Torch, Gymnasium
+or Etude. See the [engine installation guide](https://github.com/loopflowstudio/manabot/blob/v0.2.1/docs/engine-python.md).
 See the [installation guide](https://github.com/loopflowstudio/manabot/blob/v0.2.1/docs/development.md#install)
 for extras, backend selection and dependency troubleshooting.
 
@@ -110,10 +114,14 @@ CPU execution, not accelerator performance.
   Etude artifacts. Engine view caching, batched local-update rollouts and
   self-play metric indexing reduce repeated work; the linked guides and
   experiment reports retain the scope of each measurement.
-- **Release workflow:** after PyPI publication, the workflow creates a GitHub
-  Release from these notes and adds the version's PyPI link. Re-running completion
-  checks the retained five-file inventory and hashes; conflicting or partial
-  publication stops for inspection rather than overwriting files.
+- **Release workflow:** one tag builds both packages at the same version:
+  four engine wheels, one pure-Python training wheel and two source archives.
+  Both inventories are validated before publishing the engine, then training.
+  After both PyPI uploads, the workflow creates a GitHub Release from these
+  notes and adds both PyPI links. Uploads are not atomic across projects;
+  completion checks the retained seven-file inventory and hashes. A complete
+  engine upload with matching hashes can resume a missing training upload;
+  partial files within either package or conflicting bytes stop for inspection.
 
 The current world is open **w17**, versus w11 in 0.2.0. Package version numbers
 do not override world, content or checkpoint bindings. Use an older run's

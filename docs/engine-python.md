@@ -1,5 +1,9 @@
 # Install the rules engine
 
+For an unpublished candidate, install the local wheels using
+[Build and verify](development.md#build-and-verify). The PyPI commands below
+apply after the paired release is published.
+
 Install `managym` in a fresh directory outside the repository:
 
 ```bash
