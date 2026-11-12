@@ -1,74 +1,58 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>MTG-298 QA: TokenDefinition split</title>
-<style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;padding:0 1em}pre{background:#f4f4f4;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:1.6em}</style>
-<h1>MTG-298 QA: tokens as TokenDefinition</h1>
-<p>2026-11-12. The people this change serves: card authors writing tokens in Rust, Python consumers of the
-<code>managym</code> wheel, and Academy players who see tokens on the table.</p>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-298 QA: TokenDefinition split</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2rem auto;padding:0 1rem;color:#2b2620}
+h2{margin-top:2rem;border-bottom:1px solid #ddd}pre{background:#f6f2ea;padding:.6rem;overflow:auto;font-size:13px}
+img{max-width:100%;border:1px solid #ccc}.ok{color:#2a6b2a}.note{color:#8a5a00}</style></head><body>
+<h1>MTG-298 QA: tokens as their own TokenDefinition</h1>
+<p>PR #476 at <code>e4187e607</code>. The extension was rebuilt from this head (release, cp313) before testing, because the
+installed <code>.so</code> predated the main merge. No code changes came out of QA.</p>
 
-<h2>1. Gameplay unchanged: fresh wheel installs, base vs branch</h2>
-<p>I built wheels from the base commit <code>d2cde1117</code> and from the branch, then installed each in a fresh
-<code>/tmp</code> venv. In each venv I played 30 random-policy games with 2-colour decks of every eligible single-colour
-token maker (seeds 0–29).</p>
-<pre>games 30 … all terminated (14–45 turns)
-token objects seen: Ally, Clue, Food, Soldier, Monk, Bear, Ballistic Boulder, Human Soldier, Treasure,
-  plus token copies of cards (Phoenix Fleet Airship, Joo Dee, …)
-diff out-base.txt out-new.txt  →  IDENTICAL</pre>
-<p>The public surface compared the same way:</p>
+<h2>1. Library consumer: definitions and token references</h2>
+<p>Called <code>managym.card_definitions_json()</code>, <code>unsupported_cards</code>, <code>catalog_tokens</code> and <code>world_identity</code>.</p>
+<pre>defs: 460 rows, 16 tokens (is_token: true), row JSON keeps the old shape (name, no key)
+token_name refs in effects: token.ally, token.ballistic_boulder, ..., token.spirit, token.treasure  (all 16 are keys)
+unsupported(["Spirit","Ally","Clue","Lightning Bolt","token.spirit"]) -> ['Ally','Clue','Spirit','token.spirit']</pre>
+<p class="ok">Effects name tokens by key; tokens are refused for deck entry by printed name and by key.</p>
+
+<h2>2. Games that create tokens (Python Env, random play)</h2>
 <ul>
-<li><code>content_pool("world")</code> rows hash the same on both. The 11 token rows carry their
-<code>token.*</code> key and Scryfall id, and are "unsupported: A token, created by its card".</li>
-<li><code>learning_catalog()</code>: every array is identical except <code>content_digest</code>.</li>
-<li><code>world_identity().card_digest</code> moves from <code>0798b2c7…</code> to <code>aa606cea…</code>, as already reported.</li>
-<li><code>card_definitions_json()</code> now shows <code>"CreateToken": {"token_name": "token.clue"}</code> where it
-showed <code>"Clue"</code>. The field name was kept so the learning-token field hash stays the same; see questions.md.</li>
-<li>Deck admission (<code>check_decks</code>, <code>admit_decklists</code>, <code>Env.reset</code>) gives the same answers on
-both. "Spirit" and "Treasure" are rejected as tokens; "token.spirit" is rejected as unknown.</li>
+<li><code>tla-baseline-v1</code>, 20 games: all finished; Ally tokens observed throughout.</li>
+<li>Custom world decks (Deadly Dispute, Dockside Extortionist, Callous Inspector, Azula, Tireless Provisioner, Kyoshi Warriors vs
+Foggy Swamp Spirit Keeper, Canyon Crawler, Iroh, Air Nomad Legacy, Leaves from the Vine, Realm of Koh), 40 games:
+all finished. Tokens appeared: Treasure 97, Spirit 145, Clue 144, Food 75, Ally 9. Treasure, Clue and Food left the
+battlefield (sacrificed) about as often as they appeared.</li>
 </ul>
 
-<h2>2. Author adds a second "Spirit" token with no printing</h2>
-<p>In a throwaway worktree I added <code>token.spirit_flying</code>: a white 1/1 flying "Spirit" with
-<code>scryfall_id: None</code>. I listed it in <code>tokens()</code> and pointed Realm of Koh at it. Foggy Swamp Spirit
-Keeper still makes <code>token.spirit</code>.</p>
-<ul>
-<li>The cards crate in debug (<code>cargo nextest --profile ci</code>): 579/579 pass.</li>
-<li>I played 40 random games with Koh, Foggy Keeper and Ancestral Recall. Both Spirits exist side by side with distinct
-registry rows: <code>token.spirit</code> 1/1 with no keywords and <code>token.spirit_flying</code> 1/1 with flying.</li>
-<li>The online <code>check_scryfall.py</code> checked 351 definitions and skipped the unprinted token. It reported
-8 problems, all double-faced-card names (for example "Avatar Aang // …"). The base revision reports the same 8.</li>
-<li>A typo in the key (<code>"token.spirit_flyng"</code>) fails three debug tests with a clear error:
-<code>ContentError("\"token.spirit_flyng\" is not in the pack")</code>.</li>
-</ul>
-<p><b>Found and fixed:</b> with two tokens sharing a printed name, a deck listing "Spirit" was rejected as
-<code>ambiguous: card name identifies multiple definitions</code> instead of with the token reason. Both resolvers
-(<code>deck_admission::admit_in_world</code> and <code>decklist::admit_with_world</code>) now share
-<code>named_definition</code>. Rows that share a name and are all unsupported for one reason resolve to that reason.
-Names that match more than one eligible definition stay ambiguous. New test:
-<code>tokens_sharing_a_printed_name_are_unsupported_not_ambiguous</code>. After the fix the author build reports
-<code>Spirit: A token, created by its card; not a deck entry</code>.</p>
+<h2>3. Academy table in a browser</h2>
+<p><code>./scripts/play --port 18731 --frontend-port 18732</code>; READY reported native cp313 from this checkout. Headless Chromium
+(Playwright from <code>academy/ui</code>): chose GW Allies vs UR Lessons, New Game, then played (preferring land, then cast, then
+attack, then pass) until the game ended.</p>
+<p class="ok">Two Ally tokens reached the battlefield at step 10, labelled "Ally", 1/1, pack treatment
+(<code>data-asset-source="pack"</code>). The game ran to "Game Over" with no console errors. A second game also created Ally tokens and finished.</p>
+<img src="qa/03-ally-tokens.png" alt="Battlefield with two 1/1 Ally tokens beside Invasion Reinforcements and Kyoshi Warriors">
+<img src="qa/04-final.png" alt="Game Over dialog">
 
-<h2>3. Academy table</h2>
-<p>I ran <code>./scripts/play --demo precision --port 8731 --frontend-port 5931</code> and pressed New Game. The checked
-prefix replays against the re-recorded fixture digests without divergence. Sacrificing Callous Inspector leaves a
-Clue, and a Treasure comes from Deadly Dispute. Both appear under "Artifact tokens · 2". Inspecting the Clue shows
-"{2}, Sacrifice this token: Draw a card." No console errors. I stopped the server with SIGINT.</p>
-<img src="qa-clue.png" width="860" alt="Academy battlefield with Clue and Treasure tokens, Clue inspected">
-
-<h2>Checks after the fix</h2>
+<h2>4. Card author: adding tokens and cards</h2>
 <ul>
-<li><code>cargo fmt --check</code> and <code>cargo clippy --workspace --all-targets</code>: clean.</li>
-<li><code>cargo nextest run --workspace --profile ci</code> (debug): 1057 passed.</li>
-<li>Rebuilt the extension. Admission-related pytest (training decks, academy decklist setup, player control,
-decklist disclosure, text observation, decklist import): 95 passed.</li>
+<li>Temporarily added <code>token.plain_spirit</code>, a 1/1 Spirit with <code>scryfall_id: None</code> that shares a printed name with
+<code>token.spirit</code>, then ran the cards crate's scryfall/token/observability tests in debug. Scryfall checks passed. The one
+failure was <code>token.plain_spirit: 0 creating references</code>, the observability guard asking for a card that creates it.
+That is the intended guidance. Reverted.</li>
+<li>Temporarily blanked <code>lea.ancestral_recall</code>'s Scryfall id: <code>lea.ancestral_recall: malformed Scryfall id ""</code>. Reverted.</li>
+<li class="note">Small ergonomic note, unchanged: the <code>token()</code> helper in <code>tokens.rs</code> takes a required id, so an unprinted
+token (Lita's Zeppelin in MTG-286) is written as a <code>TokenDefinition</code> literal with <code>scryfall_id: None</code>, as in
+<code>content_pack_tests.rs</code>. That is fine for one token.</li>
 </ul>
 
-<h2>What works, what I couldn't reach, what's still wrong</h2>
-<ul>
-<li>Works: authoring, offline and online Scryfall checks, playing games, the Python wheel surface, deck admission
-and the Academy table.</li>
-<li>Not run: Engine Budget, which needs CI. The random games match base exactly, so no gameplay change is expected.</li>
-<li>Still wrong (known, out of scope): Academy curated-pack token art keys by printed name, so two tokens sharing a name
-would share art identity there. No such pair exists yet.</li>
-<li>Minor: <code>card_definitions_json</code> uses the field name <code>token_name</code> but now holds a key. This is kept on
-purpose to preserve learning tokens.</li>
-</ul>
+<h2>5. Deck builder: a decklist naming a token</h2>
+<pre>admit_decklists([("mine", Decklist("20 Forest\n16 Plains\n4 Clue\n"))])
+DeckImportError: mine mine.txt:3: Clue: A token, created by its card; not a deck entry</pre>
+
+<h2>Result</h2>
+<p><b>Works:</b> token creation, use and sacrifice in real games; Academy rendering of tokens; deck rejection by name and key;
+the Scryfall checks (required for cards, optional for tokens); key-based token identity for shared printed names.</p>
+<p><b>Not reached:</b> PyPI/clean-machine install (no packaging change in this PR; CI <code>package</code> and Clean-machine Play passed).
+Engine Budget and three Integration jobs were still pending when this was written; 18 checks had passed.</p>
+<p><b>Still wrong:</b> nothing found. The known follow-up stands: Academy curated-pack art keys tokens by printed name, so two tokens
+sharing a name would share art. No such pair exists yet.</p>
+</body></html>
