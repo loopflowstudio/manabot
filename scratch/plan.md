@@ -56,12 +56,13 @@ Remaining:
   will touch where `bucketed_shapes`/`live_tokens` enter the forward; keep one
   path (constraint: "switches reach the backend forward through one path").
 
-Implement pass 4 (2026-11-12): nothing new to build. origin/main is two
-commits ahead (e38518093 mana restrictions, #499); `git merge-tree` merges it
-cleanly and it shares no file with this branch. It is not merged here because
-the engine change needs an extension rebuild. Main still has no
-`precision="auto"` and no `manabot/backends/torch`. MTG-325 is draft PR #501
-(conflicting with main); MTG-324 has no PR open.
+Upstream (realign 2026-11-12): origin/main (through e38518093, mana
+restrictions) is merged at 5ff530928; the engine change needed an extension
+rebuild, after which the checks below pass. Main now has
+`manabot/backends/mlx` and `manabot/policy/prepare.py` (1b2a8cf8f) but still
+no `manabot/backends/torch` and no `precision="auto"`; neither touches
+`bucketed_shapes`/`live_tokens`. MTG-325 is draft PR #501 (conflicting with
+main); MTG-324 has no PR.
 
 ## Delete — do not maintain
 
@@ -72,7 +73,7 @@ Folded `_read_saved_layout` and `_read_saved_self_play` into `_read_saved_stage`
 one reader preserves saved layout, seat and closure defaults. No pending cuts.
 
 Check: `uv run --extra dev --extra artifacts pytest tests/training/test_bucketed_execution.py tests/training/test_builders.py -q` — 23 passed.
-Check: `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/training/test_regimes.py -q` — 18 passed; focused Ruff lint/format and `git diff --check` pass.
+Check: `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/training/test_regimes.py tests/eval/test_batched_eval.py -q` — 40 passed, 1 skipped (after the merge); focused Ruff lint/format and `git diff --check` pass.
 
 Compress pass (2026-11-12): no cuts left. `experiment/config.py` `Baseline.capture`
 keeps `model_dump` on purpose (a snapshot freezes resolved values). Shortened the
