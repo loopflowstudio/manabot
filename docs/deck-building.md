@@ -203,27 +203,22 @@ draws from the training pools. To evaluate a builder, play its deck against
 the human build of the **same held-out pool**, using a fixed reference pilot.
 Evaluate pilot changes separately on fixed trophy lists.
 
-To use pools in self-play, give each deck its pool and build:
+To play human builds in self-play, name each deck by its pool:
 
 ```python
 from manabot.training.decks import UniformDecks
 
 population = UniformDecks(
     decks=tuple(managym.Deck(p.human_build) for p in training),
-    pools=tuple(p.id for p in training),
-    builds=(None,) * len(training),  # None: the human build.
+    entry_ids=tuple(p.id for p in training),
 )
 ```
-
-`pools` and `builds` align with `decks`; each (pool, build) pair is unique.
-`UniformDecks.entry_ids` keeps its existing meaning in saved regimes.
 
 TLA Limited games outgrow the default observation capacities; a run on
 these decks stops with a typed capacity error within its first few dozen
 games. Copy the `observation` block and the `game_errors` policy (with
 `recover_capacity: true`) of
-`experiments/regimes/tla-frontier-c5fba4-w64.json`. Recovered games are
-`resource_limit` attempts in the private ledger and produce no result row.
+`experiments/regimes/tla-frontier-c5fba4-w64.json`.
 
 ### Deriving and publishing
 
@@ -255,51 +250,3 @@ existing local cache. If a local file differs, preserve it separately and
 restore the frozen file; do not edit the manifest to bless different bytes.
 `PoolCorpus.read` checks that every pool has a valid split matching the hash
 ranking and that its human build uses only its pool's cards plus basics.
-
-## Join games back to builds
-
-Self-play retains one public result row per completed native game, including
-runs that do not configure game-error recovery. Each row names both seats'
-pool and build, and the winning seat or a draw:
-
-```json
-{"schema_version": 1, "stream": 0, "game": 41,
- "seats": [{"pool": "bc6d…", "build": null},
-           {"pool": "bc6d…", "build": "ep-17"}],
- "winner": 1}
-```
-
-Here a builder's deck from pool `bc6d…` beat that pool's human build. Seats
-use native ordering, so seat 0 was on the play. `build: null` is the human
-build; `pool: null` is a deck with no pool, such as a constructed list.
-`winner: null` is a completed draw. Both seats belong to the same row, even
-when both contribute learning samples. Joining on pools recovers which cards
-each deck was built from; joining on deck names alone loses that distinction.
-
-Read a completed or failed stage's results with `manabot.game_results`, which
-imports nothing from training:
-
-```python
-from pathlib import Path
-
-from manabot.game_results import read_game_results
-
-rows = read_game_results(Path(stage_record.artifacts["game_results"]["path"]))
-```
-
-The stage record scopes the `stream`/`game` ordinals. Resume attempts keep
-their own records; do not concatenate attempts as independent games. A failed
-or interrupted stage can retain more rows than its `games` counter, which
-counts games in completed updates.
-
-Failed, interrupted and unfinished games do not become draws or losses in
-this result view. Their diagnostics belong in the existing
-[game-failure records](training.md#game-failures), which may contain private
-replay inputs; result rows do not. Aggregate deck counters are useful
-summaries but cannot recover pool or build joins. Missing results in an older
-run cannot be reconstructed from those aggregates.
-
-While a stage runs, it fsyncs each completed result to a `.partial` journal.
-Completion or failure seals the rows under the metric run's
-`artifacts/game-results/<sha256>.jsonl`. Completed games survive a later
-optimizer failure.

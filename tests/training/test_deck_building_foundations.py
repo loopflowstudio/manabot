@@ -1,4 +1,4 @@
-"""Small end-to-end contracts for pools, Limited builds and public game results."""
+"""Small end-to-end contracts for the pool corpus and Limited builds."""
 
 import json
 from pathlib import Path
@@ -11,15 +11,8 @@ import pytest
 from experiments.tla_corpus import Corpus, GameEvidence, Source, Trophy
 from experiments.tla_pools import derive_pools, main as pools_main
 from manabot import managym
-from manabot.game_results import GameSeat, read_game_results
-from manabot.infra.config import ModelConfig
-from manabot.infra.identity import file_sha256
 from manabot.managym.format import LimitedBuild
 from manabot.pools import PoolCorpus
-from manabot.training.decks import UniformDecks
-from manabot.training.execution import execute_regime
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.verify.store import VerifyStore
 from managym.format import Limited
 
 
@@ -233,9 +226,9 @@ def test_unknown_cards_stay_in_their_pools_without_moving_the_split(
     assert playable == ["b", "d"]
 
 
-def test_pool_and_result_types_import_no_engine_or_training() -> None:
+def test_pool_types_import_no_engine_or_training() -> None:
     probe = (
-        "import sys; import manabot.pools, manabot.game_results; "
+        "import sys; import manabot.pools; "
         "loaded = [m for m in sys.modules if m.startswith(('manabot.managym', "
         "'manabot.training', 'manabot.model', 'torch'))]; assert not loaded, loaded"
     )
@@ -259,96 +252,3 @@ def test_pool_derivation_does_not_exclude_malformed_lists(
         pools_main()
     assert str(cli.value) == f"No corpus written: {rejected.value}"
     assert not output.exists()
-
-
-def _tiny_regime() -> TrainingRegime:
-    return TrainingRegime(
-        id="foundation-proof",
-        world=managym.WORLD_VERSION,
-        agent=ModelConfig(
-            hidden_dim=8, num_attention_heads=2, world=managym.WORLD_SETUP
-        ),
-        deck_source=UniformDecks(
-            decks=(managym.Deck({"Forest": 10}), managym.Deck({"Forest": 10})),
-            pools=("pool-a", "pool-a"),
-            builds=(None, "build-a-1"),
-            sampling="uniform-independent-v1",
-        ),
-        schedule_clock="iteration_fraction",
-        stages=[
-            TrainSelfPlay(
-                id="play",
-                operation="train_self_play",
-                trainable="none",
-                streams=2,
-                transitions=1,
-                updates=1,
-                games_per_stream=1,
-            )
-        ],
-    )
-
-
-def test_self_play_without_recovery_emits_public_game_rows(tmp_path: Path) -> None:
-    regime = _tiny_regime()
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 17402, tmp_path / "run", store)
-    assert run.status == "completed"
-    assert run.game_error_ledgers == []
-    artifact = run.stages[0].artifacts["game_results"]
-    path = Path(artifact["path"])
-    assert path.name == f"{file_sha256(path)}.jsonl"
-    assert "/artifacts/game-results/" in str(path)
-    results = read_game_results(path)
-    assert len(results) == run.stages[0].games == 2
-    assert {(row.stream, row.game) for row in results} == {(0, 1), (1, 1)}
-    for row in results:
-        assert row.winner in (0, 1, None)
-        for seat in row.seats:
-            assert seat.pool == "pool-a" and seat.build in (None, "build-a-1")
-    assert not any(key in path.read_text() for key in ("actions", "seed", "matchup"))
-
-
-def test_completed_rows_survive_optimizer_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def fail(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("controlled optimizer failure")
-
-    regime = _tiny_regime()
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.trainable = "policy_value"
-    monkeypatch.setattr("manabot.training.execution.update_iteration", fail)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(RuntimeError, match="controlled optimizer failure"):
-            execute_regime(regime, 17402, tmp_path / "run", store)
-        saved = json.loads((tmp_path / "run/run.json").read_text())
-        run = store.training_run(saved["id"])
-    assert run.status == "failed"
-    results = read_game_results(Path(run.stages[0].artifacts["game_results"]["path"]))
-    assert len(results) == 2
-
-
-def test_pooled_deck_sources_require_unique_aligned_builds() -> None:
-    decks = (managym.Deck({"Forest": 40}), managym.Deck({"Forest": 40}))
-    source = UniformDecks(
-        decks=decks,
-        pools=("p", None),
-        builds=(None, None),
-        sampling="uniform-independent-v1",
-    )
-    assert source.seats_by_player() == {"p": GameSeat(pool="p", build=None)}
-    for pools, builds in (
-        (("p", "p"), (None, None)),
-        ((None, None), ("b", None)),
-        (("p",), (None,)),
-        (("p", "q"), None),
-    ):
-        with pytest.raises(ValueError):
-            UniformDecks(
-                decks=decks,
-                pools=pools,
-                builds=builds,
-                sampling="uniform-independent-v1",
-            )

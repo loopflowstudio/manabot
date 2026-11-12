@@ -28,7 +28,6 @@ from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.game_results import CompletedGame
 from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.host import host_facts
@@ -65,7 +64,6 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.result_journal import GameResultWriter
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.selection_data import (
@@ -546,7 +544,6 @@ def _execute_regime(
     else:
         store.claim_training_recovery(parent.id, run)
     self_play_session = None
-    result_writer: GameResultWriter | None = None
     resources = ExitStack()
     resources.callback(apply_matmul_precision, "float32")
     producers = resources.enter_context(ExitStack())
@@ -593,16 +590,6 @@ def _execute_regime(
             "sha256": file_sha256(path),
             "bytes": path.stat().st_size,
         }
-
-    def record_game_result(result: CompletedGame) -> None:
-        assert result_writer is not None
-        result_writer.record(result)
-
-    def seal_game_results() -> None:
-        nonlocal result_writer
-        if result_writer is not None:
-            run.stages[-1].artifacts["game_results"] = artifact(result_writer.seal())
-            result_writer = None
 
     def coordinates() -> dict[str, int | float]:
         origins = [
@@ -1279,7 +1266,6 @@ def _execute_regime(
                         record_attempt=record_game_attempt
                         if stage.game_errors
                         else None,
-                        record_result=record_game_result,
                         recovery_max_game_microsteps=regime.recovery.max_game_microsteps
                         if regime.recovery
                         else None,
@@ -1361,10 +1347,6 @@ def _execute_regime(
                         imported = None
                 if not restoring_completed:
                     record.actual_device = str(next(learner.agent.parameters()).device)
-                result_writer = GameResultWriter(
-                    experiment.run.files.root / "artifacts" / "game-results",
-                    f"{run.id}-{stage.id}",
-                )
                 # Phase timers are always on: each ends at an existing device
                 # wait, so they add no synchronization (~1 µs per phase).
                 collector.profiler = Profiler()
@@ -1659,7 +1641,6 @@ def _execute_regime(
                 os.replace(optimizer_path.with_suffix(".tmp"), optimizer_path)
                 record.artifacts["optimizer"] = artifact(optimizer_path)
                 record.export_seconds += time.perf_counter() - tick
-            seal_game_results()
             check()
             record.seconds = time.perf_counter() - stage_start
             record.cpu_seconds = time.process_time() - cpu_start
@@ -1783,12 +1764,7 @@ def _execute_regime(
                 pass
         raise
     finally:
-        try:
-            if result_writer is not None:
-                seal_game_results()
-                persist()
-        finally:
-            resources.close()
+        resources.close()
         if training_exposure and run.stages:
             for path in sorted((out / "exposure").glob("*.jsonl")):
                 run.stages[-1].artifacts[f"exposure/{path.name}"] = artifact(path)

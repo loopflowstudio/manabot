@@ -10,7 +10,6 @@ in [experiments.md](experiments.md); metric definitions live in
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)
-- [Deck-building pools and game results](deck-building.md)
 - [Experiments](#experiments)
 - [Remote training](#remote-training)
 - [Monitoring](#monitoring)
@@ -80,9 +79,6 @@ the legacy `--checkpoint-seconds` ([monitoring](#monitoring)) apply only to
 regime runs.
 
 ## Regimes and stages
-
-For Limited pools and their human builds and public per-game results, see
-[deck building](deck-building.md).
 
 A `TrainingRegime` (`manabot.training.regime`) is an ordered recipe; a
 `TrainingRun` (`manabot.training.records`) is one bounded execution with

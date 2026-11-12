@@ -35,7 +35,6 @@ import torch
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
-from manabot.game_results import CompletedGame, GameSeat
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
@@ -83,8 +82,6 @@ from manabot.training.state.game_errors import (
 from managym import WORLD_SETUP, Deck
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
-# The result seat of a deck with no pool.
-_NO_POOL = GameSeat(pool=None, build=None)
 
 # -----------------------------------------------------------------------------
 # Seat-routed rollout collection
@@ -373,7 +370,6 @@ class SeatRoutedCollector:
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
-        record_result: Callable[[CompletedGame], None] | None = None,
         precision: Precision = "float32",
         adaptive: AdaptiveConfig | None = None,
     ) -> None:
@@ -388,10 +384,6 @@ class SeatRoutedCollector:
             raise ValueError(
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
-        self._record_result = record_result
-        self._result_seats = (
-            deck_source.seats_by_player() if deck_source is not None else {}
-        )
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
             [self._sampler.draw() for _ in range(num_envs)] if self._sampler else []
@@ -1278,19 +1270,6 @@ class SeatRoutedCollector:
                 )
             if self.opponent_mode in ("self", "learning"):
                 self.stats.self_play.record(self._self_play_decks[int(row)], winner)
-            if self._record_result is not None:
-                match = self.stream_matches[int(row)]
-                self._record_result(
-                    CompletedGame(
-                        stream=int(row),
-                        game=self.stats.games_by_stream[int(row)],
-                        seats=(
-                            self._result_seats.get(match.hero, _NO_POOL),
-                            self._result_seats.get(match.villain, _NO_POOL),
-                        ),
-                        winner=winner,
-                    )
-                )
             if winner is None:
                 reward = 0.0
             elif winner == int(self.learner_seat[row]):
