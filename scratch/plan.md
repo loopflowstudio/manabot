@@ -58,6 +58,19 @@ learning forward. "What a default for larger models would take" and "What MTG-30
 pooled stream becomes" (strip, in its own Task) are recommendations only; neither is
 built here. The count is `live_token_count` (field and method, no alias).
 
+## Concept review (second pass, after charts and compress)
+
+Nothing to change in this Task. The switch, its validation, the report's three
+outcomes and the figures match the design. Two things belong to the build-out
+Task the report recommends, not here:
+- `manabot train` has `--bucketed-shapes` but no `--live-tokens` (QA's top rough
+  edge); add it with the build-out, not in the pilot.
+- `bucketed_shapes` and `live_tokens` travel as two parallel kwargs through
+  `ActorCritic`, `load_checkpoint`, `PolicyInference` and `Execution`. If the
+  build-out adds evaluation/search adoption, one forward-layout value for the
+  in-process APIs would keep "execution choice, never checkpoint state" in one
+  place; serialized `Execution` keys keep their spelling.
+
 ## Remaining
 
 - Publishing and CI belong to the caller.
