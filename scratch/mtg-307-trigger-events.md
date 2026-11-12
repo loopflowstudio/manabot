@@ -110,6 +110,8 @@ Re-checked at d002b743b against `ability.rs` (variants, constructors, links): no
 `TriggerSubject::matching(controlled_by, predicate, another)` owns the box;
 the four named constructors and both tests call it. Debug nextest
 `trigger|description|observability|token` 149/149.
+Re-checked at 17768efe2: only that fold and a docs reflow touched code or
+docs since; nothing further to reduce, scratch under budget.
 
 ## Status (realign, 2026-11-12, head f9b297fc8)
 
