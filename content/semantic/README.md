@@ -73,10 +73,7 @@ raw["keys"][row]            # "token.spirit", "tla.aang_s_iceberg", or None
 raw["registry_names"][row]  # "Spirit": the printed name, possibly shared
 ```
 
-A manifest saved without keys still binds while each of its names has one
-catalog row. When a name has several, binding raises
-`ContentPackBindingError` naming it; write the manifest again from the
-installed engine. The `semantic_only` mode masks opaque `CardDefId` inputs;
+The `semantic_only` mode masks opaque `CardDefId` inputs;
 `identity` exposes them for controlled ablations. The projection reads only
 viewer-safe `managym.Observation`; mutable counters, damage, control and other
 match facts remain in observation tensors.

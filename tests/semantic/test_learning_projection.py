@@ -206,27 +206,6 @@ def test_tokens_sharing_a_printed_name_bind_to_their_own_rows(
     assert pack.definition_row(ids["token.ballistic_boulder"]) == boulder
     assert pack.binding_hash == BoundSemanticPack.bind(_manifest()).binding_hash
 
-    # Without keys the shared name identifies neither row.
-    for row in manifest["definitions"]:
-        del row["key"]
-    with pytest.raises(ContentPackBindingError, match="names 2 catalog rows"):
-        BoundSemanticPack.bind(manifest)
-
-
-def test_a_manifest_without_keys_binds_by_name() -> None:
-    keyed = _manifest()
-    named = {
-        **keyed,
-        "definitions": [
-            {name: value for name, value in row.items() if name != "key"}
-            for row in keyed["definitions"]
-        ],
-    }
-    assert (
-        BoundSemanticPack.bind(named).definition_row_by_card_def_id
-        == BoundSemanticPack.bind(keyed).definition_row_by_card_def_id
-    )
-
 
 def test_semantic_only_ablation_is_independent_of_card_def_id_allocation():
     regular = BoundSemanticPack.bind(_manifest())

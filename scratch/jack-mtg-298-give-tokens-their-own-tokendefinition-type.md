@@ -89,10 +89,13 @@ definition by printed name, and it is the one that breaks the Task's outcome
   `CardDefId`;
   keying Academy curated token art by `token.*`.
 - Concept review 2 change made: `BoundSemanticPack.bind` joins by key, else
-  name (`catalog_tokens()["keys"]`, manifest `key`, `bind_policy_catalog`). A
-  keyless manifest row binds the keyless row of its name, else the only row of
-  that name; a shared name without a key raises. Cards bind by key too (same
-  identity as the pool row), not only tokens.
+  name (`catalog_tokens()["keys"]`, manifest `key`, `bind_policy_catalog`). Each
+  side's identity is its key, or its name when it has none (back faces,
+  fixtures); cards bind by key too. Compressed 2026-11-12: dropped the
+  fallback for manifests saved without keys. It was unreachable, because every
+  `bind` caller passes a live manifest (which carries `key`), and a manifest
+  from before this branch fails the content-digest check first. Checks:
+  pytest `tests/semantic` + learn setup + policy catalog, 233 passed.
 - Contrary to "nothing moves": the env manifest gained `key`, and retained
   evidence embeds that manifest. Re-recorded (only `key` lines added; content
   digest, binding_hash, state digests, tokens and observations unchanged):
@@ -109,7 +112,7 @@ definition by printed name, and it is the one that breaks the Task's outcome
 
 ## Docs for the key binding (2026-11-12)
 Changed: `content/semantic/README.md` (Learning projection: join by key,
-`catalog_tokens()["keys"]`, keyless-manifest failure), `docs/engine.md` (Card
+`catalog_tokens()["keys"]`), `docs/engine.md` (Card
 definition IDs: join on `key`), `WORLDS.md` (MTG-298 paragraph under w17),
 `AGENTS.md` (identity is the key, in the token paragraph). The
 `catalog_tokens()` example was read from the installed engine. No open product

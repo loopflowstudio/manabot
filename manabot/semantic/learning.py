@@ -436,62 +436,44 @@ class BoundSemanticPack:
                 raw.get("registry_names"), "catalog_tokens.registry_names"
             )
         )
-        keys = tuple(_sequence(raw.get("keys"), "catalog_tokens.keys"))
+        keys = _sequence(raw.get("keys"), "catalog_tokens.keys")
         if len(keys) != len(names):
             raise ContentPackBindingError("catalog keys and names differ in length")
-        row_by_key: dict[str, int] = {}
-        rows_by_name: dict[str, list[int]] = {}
+        row_by_identity: dict[str, int] = {}
         for row, (key, name) in enumerate(zip(keys, names, strict=True)):
-            if key is not None:
-                row_by_key[_string(key, "catalog_tokens.keys[]")] = row
-            rows_by_name.setdefault(name, []).append(row)
+            identity = name if key is None else _string(key, "catalog_tokens.keys[]")
+            if identity in row_by_identity:
+                raise ContentPackBindingError(
+                    f"duplicate catalog definition {identity!r}"
+                )
+            row_by_identity[identity] = row
 
         rows_by_id: dict[int, int] = {}
-        bound_rows: set[int] = set()
         for index, raw_definition in enumerate(
             _sequence(manifest.get("definitions"), "content_pack_manifest.definitions")
         ):
-            definition = _mapping(
-                raw_definition, f"content_pack_manifest.definitions[{index}]"
-            )
+            field = f"content_pack_manifest.definitions[{index}]"
+            definition = _mapping(raw_definition, field)
             card_def_id = _integer(
-                definition.get("card_def_id"),
-                f"content_pack_manifest.definitions[{index}].card_def_id",
-            )
-            registry_name = _string(
-                definition.get("registry_name"),
-                f"content_pack_manifest.definitions[{index}].registry_name",
+                definition.get("card_def_id"), f"{field}.card_def_id"
             )
             key = definition.get("key")
+            identity = (
+                _string(definition.get("registry_name"), f"{field}.registry_name")
+                if key is None
+                else _string(key, f"{field}.key")
+            )
             if card_def_id in rows_by_id:
                 raise ContentPackBindingError(f"duplicate CardDefId {card_def_id}")
-            if key is not None:
-                identity = _string(
-                    key, f"content_pack_manifest.definitions[{index}].key"
-                )
-                row = row_by_key.get(identity)
-            else:
-                # A keyless row names a keyless definition; a manifest written
-                # before keys names any definition whose name is unshared.
-                identity = registry_name
-                named = rows_by_name.get(registry_name, [])
-                keyless = [row for row in named if keys[row] is None]
-                candidates = keyless or named
-                if len(candidates) > 1:
-                    raise ContentPackBindingError(
-                        f"manifest definition {registry_name!r} names "
-                        f"{len(candidates)} catalog rows and has no key"
-                    )
-                row = candidates[0] if candidates else None
+            row = row_by_identity.get(identity)
             if row is None:
                 raise ContentPackBindingError(
                     f"manifest definition {identity!r} does not bind"
                 )
-            if row in bound_rows:
+            if row in rows_by_id.values():
                 raise ContentPackBindingError(
                     f"duplicate ContentPack definition {identity!r}"
                 )
-            bound_rows.add(row)
             rows_by_id[card_def_id] = row
         if len(rows_by_id) != catalog.definitions:
             raise ContentPackBindingError("catalog definitions do not all bind")
