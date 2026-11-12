@@ -12,6 +12,12 @@
   traces against a base-revision build.
 - Checks: `cargo nextest run --workspace --profile ci` 1166 passed, 4 timed out at load ~250-380;
   those 4 pass alone without the limit (conformance 508 s, base revision 345 s at the same load).
+- clippy `--workspace --all-targets -D warnings` clean. Rebuilt cp313 extension; pytest env, belief,
+  semantic, verify, academy + world-change list: 907 passed, 1 failed
+  (`tests/verify/test_input_v10.py::test_v10_vector_buffers_reach_the_model`: "policy forward
+  requires an observation from admit_observation"; no Python differs from main on this branch, so
+  inherited), 1 deselected (`test_real_population_learning_is_held_out_and_beats_p0` hit the 5-min
+  per-test limit at load ~260; trains a model, touches nothing renamed).
 - Left for the PR body as remaining: Card/CardId store split, new object per zone change, CR 400.7
   carry-over record, bench numbers (Engine Budget in CI).
 
