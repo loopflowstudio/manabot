@@ -549,7 +549,8 @@ with those packages blocked.
   search and batched games.
 - `training/`: regime execution, seat-routed collection, learning rules,
   numerical health and optimizer/collector recovery.
-  `run.py` owns the `Run` handle, `RegimeCall`, `execute` and `rehearse`;
+  `run.py` owns the `Run` handle and runs regime functions (`execute`,
+  `smoke`);
   `stages.py` holds the stage functions and `run_saved_regime`.
   `regime.py` declares saved recipes; `records.py` holds measured run records.
 - `training/rollout/`: on-policy collection, stream producers, matchups and

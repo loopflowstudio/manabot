@@ -104,18 +104,19 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 ## Declaring a comparison
 
-A comparison of [regime functions](training.md#regime-functions) is a list of
-calls: each arm is the same function with different arguments, and each call's
-recorded arguments are what the report compares.
+A comparison of [regime functions](training.md#regime-functions) is a dict of
+partials: each arm is the same function with different arguments, and each
+run's recorded arguments are what the report compares.
 
 ```python
+from functools import partial
+
 from experiments.two_models import two_models
 from manabot.recipes.builders import move_learning
 from manabot.training.regime import IterationSchedule
-from manabot.training.run import RegimeCall
 
 arms = {
-    f"horizon-{steps}": RegimeCall.of(
+    f"horizon-{steps}": partial(
         two_models, decks=DECKS, updates=400,
         learning=move_learning(IterationSchedule(steps=steps)),
     )
@@ -123,8 +124,9 @@ arms = {
 }
 ```
 
-Launch them as [Etude jobs](training.md#remote-training); there is nothing to
-resolve, because the arguments are the declaration.
+There is nothing to resolve: the arguments are the declaration, and each run
+records them (`regime_function` in `run.json`). Run an arm with
+`manabot.training.run.execute`; Etude jobs still launch saved regimes.
 
 `manabot.experiment.config.Experiment` declares a typed comparison of saved
 regimes. `resolve()`

@@ -179,14 +179,15 @@ and materialization; `manabot.belief` owns probability over that domain. A
 query never reveals whether the actual hidden hand satisfies it, and empty
 support is an explicit result.
 
-**Training is code over a run.** A regime is a Python function (one module per
-experiment under `experiments/`) that takes a `Run`, creates models and calls
-stage functions such as `self_play` in order. The run writes world-bound raw
-and EMA checkpoints, records every stage and its resolved arguments in
-`VerifyStore`, and ships metrics through Etude; saved `TrainingRegime` recipes
-run through the same stage functions. Regimes refuse
-belief inputs; the trained model sees the current observation only
-([training](docs/training.md)).
+**Training is code over a run.** Our maintained training loops are regime
+functions (one module per experiment under `experiments/`): Python that takes
+a `Run`, creates models and calls composable stage functions such as
+`self_play` in order. The run writes world-bound raw and EMA checkpoints,
+records the function, its arguments and every stage in `VerifyStore`, and
+ships metrics through Etude; saved `TrainingRegime` recipes run through the
+same stage functions. Your own loop can reuse those pieces the same way.
+Regimes refuse belief inputs; the trained model sees the current observation
+only ([training](docs/training.md)).
 
 **Evaluation never promotes.** A player is an immutable `PlayerRegistration`;
 a rating belongs to one `EvaluationKey` (world, content suite, viewer
