@@ -101,13 +101,15 @@ Shipping docs: `docs/engine.md` (card definitions: prowess example, event list)
 and the trigger rule in `AGENTS.md`/`CLAUDE.md`. No stale variant names remain
 in docs. This pass only reworded the event list in `docs/engine.md`.
 
-## Implement re-entry (2026-11-12, head e5bfb15ed)
-
-No new Task comments, steers or PR reviews; nothing remains to build. PR #484
-CI was pending at this pass.
-
 ## Compress (2026-11-12, head 079a8de32)
 
 `TriggerSubject::matching(controlled_by, predicate, another)` owns the box;
 the four named constructors and both tests call it. Debug nextest
 `trigger|description|observability|token` 149/149.
+
+## Status (realign, 2026-11-12, head f9b297fc8)
+
+Nothing remains to build. The latest base merge (7ef6ce588) only adds TLE
+spells to `tests/sim/test_heuristic.py`; no trigger code moved. Remaining:
+parent PR #469 lands first (open, blocked), then PR #484 CI (preflight pending
+at this pass) and the Engine Budget digest adoption noted under Gate.
