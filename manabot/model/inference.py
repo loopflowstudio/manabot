@@ -14,7 +14,9 @@ instead of one per key.
 
 With bucketed shapes, preparation measures each batch's buckets on the host
 before transfer; the forward trims the device tensors to them without a device
-read. The prepared dictionary itself keeps full-capacity tensors.
+read. The prepared dictionary itself keeps full-capacity tensors. With live
+tokens, preparation likewise counts the batch's live attention tokens, so the
+forward packs them without reading the count back.
 """
 
 from collections.abc import Mapping
@@ -105,7 +107,8 @@ class PreparedObservation(AdmittedObservation):
     """Device tensors and CPU-admitted joins, valid only in their owning scope.
 
     `transfers` counts the host-to-device copies that produced them; `buckets`
-    holds host-measured bucket sizes when the policy uses bucketed shapes.
+    holds host-measured bucket sizes when the policy uses bucketed shapes;
+    `live_objects` the host-measured live-token count when it uses live tokens.
     """
 
     def __init__(
@@ -114,6 +117,7 @@ class PreparedObservation(AdmittedObservation):
         scope: "PolicyInference",
         transfers: int,
         buckets: BucketSizes | None = None,
+        live_objects: int | None = None,
     ) -> None:
         super().__init__(
             admitted, admitted.binding, admitted.references, admitted.legal
@@ -121,6 +125,7 @@ class PreparedObservation(AdmittedObservation):
         self.scope = scope
         self.transfers = transfers
         self.buckets = buckets
+        self.live_objects = live_objects
 
 
 def trim_admitted(
@@ -154,7 +159,10 @@ def trim_prepared(obs: PreparedObservation) -> PreparedObservation:
     if obs.buckets is None:
         return obs
     return PreparedObservation(
-        trim_admitted(obs, obs.buckets), obs.scope, obs.transfers
+        trim_admitted(obs, obs.buckets),
+        obs.scope,
+        obs.transfers,
+        live_objects=obs.live_objects,
     )
 
 
@@ -229,5 +237,6 @@ class PolicyInference:
             if self.agent.bucketed_shapes
             else None
         )
+        live = self.agent.live_object_count(admitted)
         moved, transfers = transfer_admitted(admitted, self.device)
-        return PreparedObservation(moved, self, transfers, buckets)
+        return PreparedObservation(moved, self, transfers, buckets, live)

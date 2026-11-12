@@ -193,6 +193,63 @@ receives exactly zero gradients instead of none. Capacity overflow and
 malformed inputs are rejected with the same error and message as on the
 default path.
 
+### Live-token attention (profiling)
+
+Bucketed padding still attends over every slot in a bucket, and most of those
+slots are empty: a batch whose largest board holds 9 permanents pads every
+observation to 16 permanent slots, including those with two. Live-token
+attention is an opt-in layout that computes object attention and the
+per-object layers only for valid objects, so cost follows what the board holds
+rather than what the bucket allows.
+
+```python
+from manabot.training.regime import Execution
+
+execution = Execution(device="cuda", bucketed_shapes=True, live_tokens=True)
+```
+
+The forward packs the valid objects of every observation in the batch into one
+sequence and records where each observation's objects begin. Attention is
+restricted to objects of the same observation, so each object attends over
+exactly the objects it attended over before, and nothing else. A value token
+is one more packed token per observation. Every attention layer (projections,
+attention, normalization and feedforward) runs on the packed sequence, which
+is then scattered back to the object table with zero padding, as the padded
+layers leave it. Permanent links, shared-effect membership and local facts join
+the table before packing; action focus slots and the critic read it after, so
+an action still scores against the post-attention embeddings of the objects it
+names. The catalog encoder, shared-effect routing, fact programs and the action
+head run as they do without the setting; with `bucketed_shapes=True` their axes
+are still trimmed to buckets.
+
+Attention within each observation uses `scaled_dot_product_attention` on
+jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
+CPU it falls back to one attention call per observation, which is correct but
+slow, so the setting is meant for CUDA.
+
+Packing needs one host read per forward, the batch's total number of valid
+objects, to size the packed sequence. Collection measures it on the host while
+preparing a batch, as it does for buckets, so the device forward reads nothing
+back; learning reads it once per forward. The layout adds no other
+data-dependent reads.
+
+The stage's collection and learner policies, including a frozen opponent
+(`load_checkpoint(..., live_tokens=True)`), use the layout; evaluation and
+search do not. Code that builds a policy directly passes
+`ActorCritic(..., live_tokens=True)`. Like `bucketed_shapes`, the field is
+omitted from the serialized regime when unset, so existing regime hashes are
+unchanged, and a stage that sets it records `"live_tokens": true` in the regime
+in `run.json`.
+
+The setting changes how a forward is computed, not the model: no `ModelConfig`
+field, checkpoint, world binding or policy input changes, and a checkpoint
+trained with it loads and runs without it. Action probabilities, values,
+losses and gradients agree with the padded path to within 1e-5. It is rejected
+with `token_stream="pooled"`, which already packs its own sequence, at regime
+validation and when constructing the policy. The measured cost against the
+default path and bucketed padding is in
+[live-token attention](../experiments/live_token_attention.md).
+
 ## Policy inputs
 
 Main carries policy input v9, the fresh default, and explicit input v10
