@@ -166,3 +166,6 @@ page errors) with Tiger-Seal's upkeep trigger on the stack. No fixes.
 Gate (head 9479b26a5): since aaa6dd564 only scratch changed and main has not
 moved past 59cf727bc; no suite inputs moved, no reruns. PR #484 CI pending
 (re-run on the latest push).
+Implement pass (head 5565d8086): nothing to build. Main's c32b321b0 and
+f4c948f4a touch no `managym/` and only `docs/observation-and-model.md`
+(no trigger text); `git merge-tree` clean. Base merge left to realign.
