@@ -1,46 +1,35 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MTG-303 concept review</title>
+<title>MTG-303 concept review 4</title>
 <style>
-:root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--line:#ddd;--new:#2a6;--old:#a52}
-@media (prefers-color-scheme:dark){:root{--fg:#e8e6e1;--bg:#1b1a18;--mute:#9a968e;--line:#3a3833}}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 Georgia,serif}
-main{max-width:46rem;margin:0 auto;padding:2rem 1.2rem}
-header p{color:var(--mute);font-size:.9rem;margin:.2rem 0}
-pre{overflow-x:auto;border-left:3px solid var(--line);padding:.6rem .9rem;font:13px/1.45 ui-monospace,Menlo,monospace}
-.old{border-color:var(--old)}.new{border-color:var(--new)}
-.tag{font:12px ui-monospace,monospace;color:var(--mute)}
-table{border-collapse:collapse;font-size:.9rem}td,th{border-bottom:1px solid var(--line);padding:.3rem .6rem;text-align:left}
-h2{font-size:1.15rem;margin-top:2rem}
-</style></head><body><main>
-<header>
-<h1>Regime functions: a model's weights come from the model</h1>
-<p>Task MTG-303 · concept-review step (third pass) · 2026-11-12, against 7fcacc3e5</p>
-<p>Built from manabot/training/stages.py (self_play, _train_self_play, _open_stage, run_saved_regime), manabot/training/run.py (Model), manabot/training/regime.py and scratch/plan.md</p>
-</header>
-
-<p><strong>Decision needed:</strong> none for the next round. The design settles it: a stage records what it read, and a model holds the weights a stage trains. The Etude budget question below stays open.</p>
-
-<h2>Actions → concepts → APIs</h2>
-<p>Actions: write a regime function, bind arguments with <code>partial</code>, smoke it, execute or resume it. Concepts: <code>Run</code>, <code>Model</code> (weights, <code>trained_by</code>, <code>source</code>), stage functions, stage records. APIs: <code>execute</code>, <code>smoke</code>, <code>run.model</code>, <code>run.export</code>, <code>self_play</code>, <code>import_policy</code>, <code>collect_selection</code>, <code>collect_belief</code>, <code>train_belief</code>. One caller per stage body and resume-stable lineage both hold since the second pass.</p>
-
-<h2>Biggest mismatch: two places say where the weights start</h2>
-<p class="tag">existing</p>
-<pre class="old">m = import_policy(run, "m", source_run=…, checkpoint=A, decks=d)
-self_play(run, m, decks=d, pretrained=PretrainedPolicy(checkpoint=B, …))
-    # body: load m.network (A), then load B over it
-    # record.inputs: "import-m/raw" = A      ← trained B, recorded A</pre>
-<p><code>initial_weights</code> and <code>learning_state</code> overwrite the model the same way. Saved regimes never reach this: each fresh stage gets a new <code>run.model</code>, and <code>TrainingRegime</code> already refuses <code>initial</code> with another starting state.</p>
-<p class="tag">proposed</p>
-<pre class="new">self_play(run, m, pretrained=…)       # also initial_weights=, learning_state=
-    if m.source is not None or m.trained_by is not None:
-        ValueError: "model 'm' already holds weights from stage 'import-m';
-                     pretrained= starts a fresh model only"
-    # checked before the stage opens, so smoke rejects it</pre>
-<p>Function regimes start from a published policy with <code>import_policy</code>; the three arguments stay for fresh models, which is how saved stages use them. No saved record, digest or stage id changes.</p>
-
-<h2>Open questions</h2>
+:root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--rule:#ddd;--prop:#2a6}
+@media(prefers-color-scheme:dark){:root{--fg:#e8e6e1;--bg:#1b1a18;--mute:#aaa;--rule:#444;--prop:#6c9}}
+body{font:16px/1.5 Georgia,serif;color:var(--fg);background:var(--bg);max-width:42rem;margin:2rem auto;padding:0 1rem}
+code,pre{font:14px/1.4 ui-monospace,Menlo,monospace}pre{overflow-x:auto;border-left:3px solid var(--rule);padding-left:.8rem}
+header{color:var(--mute);font-size:14px}.proposed{border-left:3px solid var(--prop);padding-left:.8rem}
+</style></head><body>
+<header>MTG-303 · concept-review (headless) · 2026-11-12 · built from scratch/plan.md, manabot/training/run.py, manabot/training/stages.py, experiments/two_models.py at 40d0e373a</header>
+<h1>Regime functions: the design holds; land this slice</h1>
+<p><strong>Decision needed:</strong> none for this slice. One choice stays open for follow-up work: how a function job tells Etude its budget.</p>
+<h2>Actions → concepts → APIs (built)</h2>
+<pre>write a regime     def r(run: Run, **arguments) -&gt; None
+make models        run.model(name, agent, observation)   → Model
+train              self_play(run, model, decks=…, updates=…, opponent=…)
+other stages       import_policy · collect_selection · collect_belief · train_belief
+publish            run.export(model, weights, decks=…)
+check first        smoke(regime) · manabot train --smoke · TrainingJob.smoke()
+run / resume       execute(regime, out=, seed=, resume_from=)
+saved regimes      run_saved_regime(run, regime)  (calls the same stage functions)</pre>
+<h2>What this review checked</h2>
+<ul>
+<li>Resuming two_models: the opponent export skipped by a replayed stage gets the same <code>export-reference</code> name later, so stage numbering still lines up.</li>
+<li>An imported model going into self-play starts a fresh learner and records the import as its input.</li>
+<li>Calling <code>run.export</code> without decks after a stage returns that stage's checkpoint, as the docstring says.</li>
+</ul>
+<p>None of these broke the design.</p>
+<h2>Still open (follow-up, not this slice)</h2>
+<div class="proposed"><p>Remote jobs rely on one saved self-play stage with <code>until=updates=N</code>. A function regime has no single update count, so <code>TrainingJob(regime=callable)</code> and Outcome 6 wait on the Etude contract.</p></div>
 <ol>
-<li>How should a function job declare its Etude budget? (a) the job passes an <code>updates</code> argument the function must accept; (b) Etude stops function jobs on wall/USD only, and they resume at update boundaries; (c) a smoke run reports the planned updates. This decides <code>TrainingJob(regime=callable)</code> and Outcome 6; it does not block the change above.</li>
+<li>How does a function job declare its budget? (a) the job passes an <code>updates</code> argument the function must accept; (b) Etude stops function jobs on wall time or USD only, and they resume at update boundaries; (c) a smoke run reports the planned updates.</li>
 </ol>
-</main></body></html>
+</body></html>

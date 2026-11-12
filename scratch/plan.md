@@ -114,7 +114,16 @@ Last check (after 3): regime_functions, regimes, policy_import,
 learning_state, recovery, package_boundaries: 87 passed. Broader module list
 passed after 1, except the known test_game_errors `binding_mismatch` (3).
 
-## Open product choice (does not block 1-5)
+4. Fourth review (against `40d0e373a`): no new mismatch. Checked
+   two_models on resume (the skipped opponent export takes the same
+   `export-reference` name later, so numbering holds), an imported model
+   entering self-play (fresh learner, producer recorded) and a stage export
+   returned for a later `run.export` without decks (documented: published
+   weights are returned as they are). This slice is Outcomes 1-5 and 7;
+   the brief allows it: "Land in reviewable slices if the whole does not
+   fit". Next is the gate, not more design.
+
+## Open product choice (follow-up; does not block this slice)
 
 - **How a function job declares its Etude budget.** Remote jobs are built on
   one saved self-play stage with `until=updates=N`, continuations and a stop
