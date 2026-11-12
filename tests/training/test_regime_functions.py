@@ -1,5 +1,6 @@
 """Regime functions run over the same Run and stage bodies as saved regimes."""
 
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
@@ -307,11 +308,19 @@ def orphaned_continuation(run: Run) -> None:
     self_play(run, model, decks=MatchConfig(), **_settings(1))  # type: ignore[arg-type]
 
 
+def interleaved_continuation(run: Run) -> None:
+    first = run.model("first", AGENT, ObservationConfig())
+    second = run.model("second", AGENT, ObservationConfig())
+    for model in (first, second, first):
+        self_play(run, model, decks=MatchConfig(), **_settings(1))  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("regime", [orphaned_continuation, interleaved_continuation])
 def test_a_continuation_without_learner_or_snapshot_is_refused(
-    tmp_path: Path,
+    tmp_path: Path, regime: Callable[[Run], None]
 ) -> None:
     with pytest.raises(ValueError, match="neither its live learner"):
-        execute(orphaned_continuation, out=tmp_path / "run", seed=5)
+        execute(regime, out=tmp_path / "run", seed=5)
 
 
 def test_a_saved_regime_smokes_through_the_same_stages(tmp_path: Path) -> None:

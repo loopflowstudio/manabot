@@ -239,9 +239,9 @@ class Model:
 
     Stage functions read and change a model in place; it is never copied
     implicitly. `trained_by` is the last self-play stage that trained the
-    model, which its next self-play stage continues (its `initial`);
-    `session` is that stage's live learner state while this attempt holds
-    it, and a resumed attempt continues from the recovery snapshot instead.
+    model, which its next self-play stage continues (its `initial`): live
+    while that stage's learner is the run's latest (`Run.live_session`),
+    else from this stage's recovery snapshot.
     `exports` holds published checkpoints of the
     current weights by kind (a stage that changes the weights replaces it),
     so an unchanged model is published once. `source` is the stage that
@@ -254,7 +254,6 @@ class Model:
     network: ActorCritic
     ema: ActorCritic | None = None
     trained_by: str | None = None
-    session: "SelfPlaySession | None" = None
     exports: dict[str, ArtifactReference] = field(default_factory=dict)
     source: str | None = None
 

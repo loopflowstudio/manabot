@@ -979,7 +979,14 @@ def self_play(
     if isinstance(opponent, Model):
         reference = run.export(opponent, decks=decks)
         frozen = FrozenOpponent(path=reference["path"], sha256=reference["sha256"])
-    session = model.session
+    # The run's latest learner continues only the model it last trained; a
+    # resumed attempt holds no live learner for the stages it replayed.
+    latest = run.live_session
+    session = (
+        latest
+        if latest is not None and latest.declaration.id == model.trained_by
+        else None
+    )
     implied = {
         key: value
         for key, value in (
@@ -1013,23 +1020,18 @@ def self_play(
     )
     declaration = smoke_stage(declaration, run.smoke_execution)
     if session is not None:
-        if run.live_session is not session:
-            raise ValueError(
-                f"model {model.name!r} can continue only while its collector is "
-                "the run's latest; train it in consecutive self-play stages"
-            )
         check_continuation(session.declaration, declaration)
     elif model.trained_by is not None and (
         run.snapshot is None or run.snapshot.record.id != name
     ):
-        # A resumed attempt holds no live learner for stages it replayed; the
-        # parent attempt checked this continuation and its snapshot carries
-        # the learner, Adam state and EMA. Without it, refuse rather than
-        # start a fresh learner from the weights.
+        # The parent attempt checked this continuation, and its snapshot
+        # carries the learner, Adam state and EMA. Without either, refuse
+        # rather than start a fresh learner from the weights.
         raise ValueError(
             f"stage {name!r} continues model {model.name!r} from stage "
             f"{model.trained_by!r}, but this attempt holds neither its live "
-            "learner nor a recovery snapshot of this stage"
+            "learner nor a recovery snapshot of this stage; train a model in "
+            "consecutive self-play stages"
         )
     check_self_play(
         declaration,
@@ -1068,7 +1070,6 @@ def self_play(
         initial=model.network if session is None else None,
     )
     run.live_session = live
-    model.session = live
     model.trained_by = name
     model.network = live.learner.agent
     model.ema = live.ema
@@ -1096,7 +1097,6 @@ def _restore_model(model: Model, record: StageRecord) -> None:
         model.network, _ = load_checkpoint(record.artifacts["raw"]["path"])
         if "ema" in record.artifacts:
             model.ema, _ = load_checkpoint(record.artifacts["ema"]["path"])
-    model.session = None
     model.trained_by = record.id
     _published(model, record)
 

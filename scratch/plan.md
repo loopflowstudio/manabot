@@ -155,15 +155,15 @@ resumed. That breaks Outcome 7's comparable resolved arguments.
 
 Done since: `Model.trained_by` holds the last self-play stage that trained
 the model; `self_play` and `_restore_model` set it and `initial` reads it.
-A model that has `trained_by` but no live session continues from this
-stage's recovery snapshot, or is refused by name. Continuation was already
-checked by the parent attempt at the same revision, so the snapshot path
+`Model.session` is gone: a stage continues live when `Run.live_session` is
+the stage named by `trained_by`, else from this stage's recovery snapshot,
+else it is refused by name (also covers a model trained in non-consecutive
+stages). The parent attempt checked the continuation, so the snapshot path
 does not check it again. Tests:
 `test_a_resumed_continuation_records_and_trains_as_uninterrupted` (the
-probe: equal stage arguments, bit-equal raw weights; fails with the old
-derivation) and `test_a_continuation_without_learner_or_snapshot_is_refused`.
-Check: test_regime_functions (8), test_regimes (18), test_recovery (15),
-test_active_recovery (4), test_belief_stages (7), test_package_boundaries (9)
-all pass.
+probe: equal stage arguments, bit-equal raw weights) and
+`test_a_continuation_without_learner_or_snapshot_is_refused` (orphaned and
+interleaved). Check: test_regime_functions, test_regimes, test_recovery,
+test_active_recovery, test_belief_stages, test_package_boundaries: 61 passed.
 
 Unchanged: the open Etude budget choice and the `run.stage` resume limit.
