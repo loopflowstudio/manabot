@@ -368,8 +368,9 @@ inspecting what a bot does, not a way to play Magic.
 
 For use in another project, see [installation and dependency choices](docs/development.md#install).
 The release guide also covers supported platforms and CPU/CUDA selection.
-The historical [0.2.0 release](https://pypi.org/project/manabot/0.2.0/) requires
-CPython 3.12; its metadata does not describe this checkout's compatibility.
+The [0.2.1 release notes](release/v0.2.1/NOTES.md) cover CPython 3.12/3.13
+support and collector API migrations. The historical
+[0.2.0 release](https://pypi.org/project/manabot/0.2.0/) requires CPython 3.12.
 
 ## Experiment data
 
