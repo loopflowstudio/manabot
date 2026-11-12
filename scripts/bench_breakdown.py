@@ -21,6 +21,7 @@ from manabot.infra.config import (
 )
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 
 
 def build_env(num_envs: int, seed: int) -> VectorEnv:
@@ -61,7 +62,9 @@ def run_breakdown(
                 if agent is not None:
                     with profiler.track("inference"):
                         with torch.no_grad():
-                            action, _, _, _ = agent.get_action_and_value(obs)
+                            action, _, _, _ = agent.get_action_and_value(
+                                admit_observation(agent, obs)
+                            )
                         actions = action
 
                 with profiler.track("step_into_buffers"):

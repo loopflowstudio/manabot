@@ -30,6 +30,7 @@ from manabot.eval.execution import bind_execution
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
+from manabot.model.inference import admit_on_device
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
@@ -202,7 +203,7 @@ def _numerical_worker(
                         prepared = (
                             resident.scope.prepare(chunk)
                             if execution.cache_catalog
-                            else {k: v.to(execution.device) for k, v in chunk.items()}
+                            else admit_on_device(resident.agent, chunk)
                         )
                         output.append(resident.agent(prepared)[0].cpu())
                 logits = torch.cat(output)

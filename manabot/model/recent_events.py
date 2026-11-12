@@ -7,9 +7,49 @@ public definition, historical zone and owner. The native ledger owns visibility,
 incarnation boundaries, the chronological suffix and reset.
 """
 
+from collections.abc import Mapping
+
 import torch
 from torch import nn
 import torch.nn.functional as F
+
+# Each event carries two references: definition, owner, zone, focus, status.
+_REFERENCE_STARTS = (2, 7)
+
+
+def admit_recent_events(
+    obs: Mapping[str, torch.Tensor], object_count: int, definition_rows: torch.Tensor
+) -> None:
+    """Reject malformed public history v1 before any forward; padding is ignored."""
+    if "events" not in obs or "events_valid" not in obs:
+        raise ValueError("recent-event ActorCritic requires events and events_valid")
+    events, valid = obs["events"], obs["events_valid"]
+    if events.ndim != 3 or events.shape[-1] != 12 or valid.shape != events.shape[:2]:
+        raise ValueError("public history v1 requires [batch, events, 12]")
+    if not ((valid == 0) | (valid == 1)).all():
+        raise ValueError("event validity must be binary")
+    rows = torch.where(valid.bool().unsqueeze(-1), events, 0)
+    if not torch.isfinite(rows).all():
+        raise ValueError("public history must be finite")
+
+    def categorical(values: torch.Tensor, size: int) -> None:
+        if not ((values == values.floor()) & (values >= 0) & (values < size)).all():
+            raise ValueError("invalid public history categorical field")
+
+    categorical(rows[..., 0], 6)
+    for start in _REFERENCE_STARTS:
+        ids, owner, zone, focus, status = rows[..., start : start + 5].unbind(-1)
+        if not ((ids == ids.floor()) & (ids >= 0) & (ids < len(definition_rows))).all():
+            raise ValueError("unadmitted historical definition")
+        if (definition_rows[ids.long()] < 0).any():
+            raise ValueError("unadmitted historical definition")
+        if not (
+            (focus == focus.floor()) & (focus >= -1) & (focus < object_count)
+        ).all():
+            raise ValueError("invalid historical context reference")
+        categorical(owner, 3)
+        categorical(zone, 8)
+        categorical(status, 3)
 
 
 class RecentEventEncoder(nn.Module):
@@ -33,30 +73,15 @@ class RecentEventEncoder(nn.Module):
         definition_rows: torch.Tensor,
     ) -> torch.Tensor:
         """Return [B,D], exactly zero for empty history; gradients reach both
-        the event projection and shared semantic/object encoders. Padding is
-        sanitized before any lookup, including nonfinite padded payloads.
+        the event projection and shared semantic/object encoders. History must
+        be admitted (`admit_recent_events`); padding is zeroed before any
+        lookup, including nonfinite padded payloads.
         """
-        if "events" not in obs or "events_valid" not in obs:
-            raise ValueError(
-                "recent-event ActorCritic requires events and events_valid"
-            )
         events, valid = obs["events"], obs["events_valid"]
-        if (
-            events.ndim != 3
-            or events.shape[-1] != 12
-            or valid.shape != events.shape[:2]
-        ):
-            raise ValueError("public history v1 requires [batch, events, 12]")
-        if not ((valid == 0) | (valid == 1)).all():
-            raise ValueError("event validity must be binary")
         admitted = valid.bool()
         rows = torch.where(admitted.unsqueeze(-1), events, 0)
-        if not torch.isfinite(rows).all():
-            raise ValueError("public history must be finite")
 
         def categorical(values: torch.Tensor, size: int) -> torch.Tensor:
-            if not ((values == values.floor()) & (values >= 0) & (values < size)).all():
-                raise ValueError("invalid public history categorical field")
             return F.one_hot(values.long(), size).to(events.dtype)
 
         counts = valid.sum(1, keepdim=True)
@@ -66,19 +91,9 @@ class RecentEventEncoder(nn.Module):
             rows[..., 1:2] / 20,
             age.log1p().unsqueeze(-1),
         ]
-        for start in (2, 7):
+        for start in _REFERENCE_STARTS:
             ids, owner, zone, focus, status = rows[..., start : start + 5].unbind(-1)
-            if not (
-                (ids == ids.floor()) & (ids >= 0) & (ids < len(definition_rows))
-            ).all():
-                raise ValueError("unadmitted historical definition")
             catalog_rows = definition_rows[ids.long()]
-            if (catalog_rows < 0).any():
-                raise ValueError("unadmitted historical definition")
-            if not (
-                (focus == focus.floor()) & (focus >= -1) & (focus < objects.shape[1])
-            ).all():
-                raise ValueError("invalid historical context reference")
             context = objects.gather(
                 1,
                 focus.clamp_min(0)
