@@ -129,6 +129,9 @@ Direct `SeatRoutedCollector` users must call `close()`.
 `execution.bucketed_shapes` (default `False`, serialized only when `True`)
 selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
 for the stage's collection and learner policies.
+`execution.live_tokens` (default `False`, serialized only when `True`) selects
+[live-token attention](observation-and-model.md#live-token-attention-profiling)
+for the same policies.
 
 Self-play `initial` continues the live collector, learner and optimizer of an
 earlier stage in the same execution. External checkpoints never act as
