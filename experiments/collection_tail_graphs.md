@@ -141,11 +141,11 @@ listed below with what removing it would take:
 Whole-forward capture fails at the first of these (`buckets.py:307`, a
 CPU→CUDA copy during capture).
 
-Under compilation, one pass over the 24 inputs also broke the graph at:
+Under compilation, one pass over the 20 inputs also broke the graph at:
 - `nonzero` (29);
 - the program GRUs, which Dynamo does not trace (16);
 - `sort` with SymInt keys (30);
-- the per-call admission binding (`model_dump_json` and `named_modules`, 23);
+- the per-call admission binding (`model_dump_json` and `named_modules`, 24);
 - two scalar reads.
 
 The admission binding is pure Python per call. The GRUs need either
@@ -199,11 +199,11 @@ Etude run `1a2e6cb86345`: about $0.27 (launcher), under the USD 5 cap.
 - **One host and one GPU type.** This L4 pod had a 128-CPU AMD EPYC 7542 host;
   MTG-301's had 48 CPUs, so host-bound absolute times differ. Every ratio here
   is within this job.
-- **24 retained inputs.** They are spread over row bands from update 1 and
-  weighted to the tail; band medians rest on 1–5 inputs each.
+- **20 retained inputs.** They are spread over row bands from update 1 and
+  weighted to the tail; band medians rest on 1–4 inputs each.
 - **The rule-4 projection undercounts compilation.** It multiplies band
   medians by update 1's call mix and spreads the replay's first-call cost
-  (385 s for 24 inputs) over 100 updates. In situ there were 367–396 distinct
+  (385 s for 20 inputs) over 100 updates. In situ there were 367–396 distinct
   bucket signatures per update, each a new CUDA graph recording under
   `reduce-overhead`.
 - **w384l8 is a random initialization;** w160l8 uses the in-situ initial
@@ -264,7 +264,7 @@ in `experiments/data.manifest.json`):
 - `probe/receipt.json`;
 - `replay/<arm>-<size>/`: receipt, outputs and gzipped trace;
 - `logs/`: compile logs carry `TORCH_LOGS=perf_hints,recompiles,graph_breaks`;
-- `inputs/`: initial weights, regime and the 24 inputs;
+- `inputs/`: initial weights, regime and the 20 inputs;
 - `gpu-samples.csv`.
 
 Reproduce with
