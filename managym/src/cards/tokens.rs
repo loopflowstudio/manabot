@@ -18,7 +18,7 @@
 //! `"amount"`, a subtype such as `"Ally"`); integers and booleans carry their
 //! value. Rows are the pack's [`CardDefId`]s.
 //!
-//! Entry point: [`learning_catalog`].
+//! Entry point: [`catalog_tokens`].
 
 use serde::ser::{self, Serialize};
 
@@ -81,7 +81,7 @@ pub enum ProgramKind {
 /// `definition_program_rows[definition_program_offsets[row]..]` lists its
 /// program spans in `program_offsets`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct LearningCatalog {
+pub struct CatalogTokens {
     pub token_kind: Vec<u16>,
     pub token_value: Vec<i32>,
     pub definition_offsets: Vec<i32>,
@@ -139,8 +139,8 @@ pub fn rules_tokens<T: Serialize>(
 }
 
 /// The token catalog of every definition in `pack`, rows in `CardDefId` order.
-pub fn learning_catalog(pack: &ContentPack) -> Result<LearningCatalog, ContentError> {
-    let mut out = LearningCatalog::default();
+pub fn catalog_tokens(pack: &ContentPack) -> Result<CatalogTokens, ContentError> {
+    let mut out = CatalogTokens::default();
     let mut programs: Vec<Span> = Vec::new();
     let mut definition_programs: Vec<Vec<i32>> = Vec::new();
 
@@ -184,7 +184,7 @@ struct Span {
     references: Vec<(usize, i32)>,
 }
 
-fn append(out: &mut LearningCatalog, span: Span) {
+fn append(out: &mut CatalogTokens, span: Span) {
     let offset = out.token_kind.len();
     for (index, row) in span.references {
         out.definition_ref_source_tokens
@@ -721,7 +721,7 @@ mod tests {
     #[test]
     fn default_catalog_spans_every_definition_and_resolves_token_references() {
         let pack = default_content_pack();
-        let catalog = learning_catalog(pack).unwrap();
+        let catalog = catalog_tokens(pack).unwrap();
         assert_eq!(catalog.definition_offsets.len(), pack.len() + 1);
         assert_eq!(
             catalog.definition_ref_source_tokens.len(),
