@@ -17,10 +17,12 @@
 ## MTG-320
 - Emblem: room only. No `ObjectKind::Emblem` or command-zone admission until a card creates one
   (nothing would use it). Docs say "none yet".
-- Kept the runtime record named `Card` and the table `GameState::cards`; the kind distinguishes objects
-  (the target's `Card.is_token` field merged into `kind`).
-  A rename (e.g. to an object record) would touch ~500 sites; Jack Heart: "im not sure the
-  Card->GameObject rename is totally clean". Left for review; docs list it as a departure.
+- The record rename is no longer deferred: steers of 2026-11-12 asked for it in this PR (see below).
 - Predicate `token` filters now match `ObjectKind::Token` only; spell copies used to match (they were
   tokens). No defined card filters spells by token status, so no behavior moves.
 - Spell copies stop being tokens internally (CR 704.5e); observation `is_token` stays true for them.
+- Rename targets (steers 2026-11-12): `Card` -> `GameObject` (module `state::game_object` already holds
+  the ids), `CardId` -> `ObjectId`, `CardVec` -> `ObjectVec`, `GameState::cards` -> `objects`,
+  `card_to_permanent` -> `object_to_permanent`; locals `card` -> `object`. Chosen because `Object*`
+  names (ObjectKind, ObjectRef, ObjectDefinition) already exist and none collide. Observation
+  `CardData` and Python/PyO3 names stay.

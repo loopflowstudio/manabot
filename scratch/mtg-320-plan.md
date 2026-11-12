@@ -1,6 +1,6 @@
 # MTG-320: runtime object kinds by zone
 
-Docs: `docs/engine.md#objects-and-zones`, `managym/README.md` Architecture pointer (match the build).
+Docs: `docs/engine.md#objects-and-zones` (rename written 2026-11-12: `GameObject`/`ObjectId`/`GameState::objects`, card-only naming rule, departure "record named Card" dropped), `managym/README.md` (Architecture pointer; policy-input paragraph says `ObjectId`). Build must match these names.
 
 Built:
 - `state::card::ObjectKind { Card, Token, SpellCopy }`, private `kind` on the runtime object record

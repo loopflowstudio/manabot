@@ -587,9 +587,22 @@ Magic card (CR 108.2); engine code asks `is_card()`.
 ### Objects
 
 CR 109.1 lists every kind of object. Cards, tokens and copies of spells are
-all held in `GameState::cards` as `state::card::Card` values, the engine's
-object record, and `Card::kind()` returns which of them each one is
-(`ObjectKind`). An object keeps its kind for its whole life; a zone change
+all `GameObject` values (`state::game_object`) held in `GameState::objects`
+and named by `ObjectId`; `GameObject::kind()` returns which of them each one
+is (`ObjectKind`). Every zone list holds `ObjectId`s:
+
+```rust
+let object = &game.state.objects[object_id];
+if object.is_card() {
+    // "return target creature card": cards only, never a token or copy
+}
+```
+
+Engine names follow the same rule: `object`, `objects` and `ObjectId` for
+anything that may be a token or copy (the battlefield, the stack, targets,
+events, last known information); `card` and `cards` only where the rules mean
+a card (a library, a hand, a decklist, a `CardDefinition`, or an effect whose
+text says "card"). An object keeps its kind for its whole life; a zone change
 makes a new object of the same kind (CR 400.7). The one change of kind is a
 copy of a permanent spell, which becomes a token as it resolves (CR 111.12,
 608.3f).
@@ -650,10 +663,6 @@ zone.
 
 ### Where the engine departs from the rules
 
-- **One object table.** Cards, tokens and copies of spells share
-  `GameState::cards`, indexed by `CardId`, and the record type is named
-  `Card`; zone lists hold `CardId`s of any kind. `Card::kind()` carries the
-  distinction the rules draw.
 - **Shared zones are stored per player.** Battlefield, stack, exile and command
   are shared zones (CR 400.1); the engine keeps one list per player for each.
   Stack order is `GameState::stack_objects`.

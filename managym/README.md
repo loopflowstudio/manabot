@@ -72,7 +72,7 @@ The policy input factors resolved `EffectRecords` through `agent/shared_effects.
 before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
 source incarnation, timestamps, fixed affected sets and duplicate edges survive.
-Public object IDs are joins; private card storage IDs do not enter this view.
+Public object IDs are joins; private object storage IDs (`ObjectId`) do not enter this view.
 Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
 active effects.
