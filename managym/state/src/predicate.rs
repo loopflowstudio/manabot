@@ -2,7 +2,7 @@
 // Reusable structural predicates over cards, shared by trigger subjects,
 // blocking restrictions, and zone counting (no scattered string compares).
 
-use super::card::{Card, CardType, Keyword};
+use super::card::{Card, CardType, Keyword, ObjectKind};
 
 /// A structural predicate over cards. Every populated field must match.
 /// Deserialization reads a definition's serialized predicate back, so
@@ -130,7 +130,7 @@ impl CardPredicate {
         }
         if self
             .token
-            .is_some_and(|token| token != (card.kind() == crate::card::ObjectKind::Token))
+            .is_some_and(|token| token != (card.kind() == ObjectKind::Token))
         {
             return false;
         }

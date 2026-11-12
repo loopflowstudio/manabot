@@ -19,3 +19,8 @@ Built:
 Checks: `cargo nextest run --workspace --profile ci` 1058 passed; rebuilt cp313 extension; pytest
 belief/verify/semantic/search-command-evidence/academy authored+parity+study 444 passed.
 Remaining for gate: clippy; CLAUDE.md world-change pytest list; Engine Budget in CI (digest should not move).
+
+Compress: only import tidying (`ObjectKind` in retarget.rs, predicate.rs). Kept `kind() == ObjectKind::Token`
+over a `Card::is_token()` method: it would share a name with the deref'd row flag `CardDefinition.is_token`.
+No runtime `Card` reads that flag any more (grep: remaining reads are rows or observation `CardData`).
+`cargo build --tests` ok.

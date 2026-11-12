@@ -11,6 +11,7 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
+        card::ObjectKind,
         game_object::{CardId, PlayerId, Target},
         stack_object::StackObject,
     },
@@ -171,7 +172,7 @@ impl Game {
                 let mut card = self.state.cards[spell.card].clone();
                 card.id = id;
                 card.owner = controller;
-                let card = card.with_kind(crate::state::card::ObjectKind::SpellCopy);
+                let card = card.with_kind(ObjectKind::SpellCopy);
                 let copied = CardId(self.state.cards.len());
                 self.state.cards.push(card);
                 self.state.card_to_permanent.push(None);
