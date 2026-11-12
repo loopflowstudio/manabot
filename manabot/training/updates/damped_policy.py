@@ -277,6 +277,7 @@ def update_damped_iteration(
             with track("Forward and loss"):
                 rows_host = np.arange(start, start + len(window))[window]
                 indexes = to_device(rows_host, device)
+                minibatch_actions = actions[indexes]
                 obs, rows = admitted.rows(rows_host, device)
                 valid = rl.legal_mask(admitted.legal(obs))
                 behavior_logs = to_device(rows.log_probabilities, device)
@@ -297,7 +298,7 @@ def update_damped_iteration(
                             logits,
                             value_logits,
                             valid,
-                            actions=actions[indexes],
+                            actions=minibatch_actions,
                             advantages=advantages[indexes],
                             value_targets=value_targets[indexes],
                             behavior_logs=behavior_logs,
@@ -321,7 +322,7 @@ def update_damped_iteration(
                         logits=rl.constant(logits),
                         value_logits=rl.constant(value_logits),
                         valid=valid,
-                        actions=actions[indexes],
+                        actions=minibatch_actions,
                         behavior_logs=behavior_logs,
                         reference=reference,
                         advantages=advantages[indexes],
@@ -350,7 +351,7 @@ def update_damped_iteration(
                             logs, rl.reference_logs(reference, valid), valid
                         ).mean()
                     )
-                    ratio_logs = rl.action_logs(logs - behavior_logs, actions[indexes])
+                    ratio_logs = rl.action_logs(logs - behavior_logs, minibatch_actions)
                     health["clip_fraction"] = rl.clip_fraction(
                         ratio_logs, learning.clip
                     )

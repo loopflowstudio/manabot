@@ -261,8 +261,13 @@ Built:
   the torch reference and every backend. `TorchLearner` (protocol copy of the
   loss) deleted; torch `BACKEND` parameters keep torch names (`torch_name`).
 - `experiments/mlx_pilot.py` calls `Learner` + `minibatch_loss`.
-- PPO update: helper signatures only; it still steps through
-  `backend.learner.gradient_step` and tensor methods (torch-only).
+- PPO update: helper signatures only; it calls tensor methods and
+  `get_value` (torch-only). Third compress: it steps through `learner.step`,
+  passes `backend=` to `OptimizerHealth` and `rl.NumericalError` to
+  `failure_tensors` (now required) like the damped update. Check: update
+  backends, learning pieces, numerical health, objectives, minimal loop,
+  boundaries 85 passed; `updates.py` vs `after.json` differs only in the
+  known 1-ulp `value_scale` std.
 
 Checks:
 - Torch update equivalence (`scratch/equivalence/updates.py` vs `after.json`):

@@ -130,8 +130,8 @@ documents them. A backend never carries its own copy of an update's loss:
   `selected_rows`, which only PPO calls.
 - `OptimizerHealth` counts steps and rejections on every backend; its sampled
   gradient and parameter detail reads torch modules and is absent on MLX.
-- The PPO update still steps through torch's `gradient_step` and calls tensor
-  methods; only the damped update runs on MLX.
+- The PPO update calls torch tensor methods (`.float()`, `.flatten()`,
+  `.detach()`) and torch's `get_value`; only the damped update runs on MLX.
 
 ## The torch backend
 

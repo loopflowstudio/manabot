@@ -18,7 +18,7 @@ import torch
 from torch import Tensor, nn
 
 import manabot.backends.torch as torch_backend
-from manabot.backends.torch.rl import NumericalError, float64_operand
+from manabot.backends.torch.rl import float64_operand
 from manabot.infra.profiler import Profiler
 from manabot.training.rollout.actions import PackedActions
 
@@ -234,7 +234,7 @@ def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
 @contextmanager
 def failure_tensors(
     tensors: Callable[[], Mapping[str, Any]],
-    refusal: type[Exception] = NumericalError,
+    refusal: type[Exception],
 ) -> Iterator[None]:
     """Attach `tensors()` to a `refusal` (the backend's `rl.NumericalError`)
     raised inside, then re-raise it.

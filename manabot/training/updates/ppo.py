@@ -148,7 +148,7 @@ def update_iteration(
             actor_only=learning.filter_scope == "actor",
         )
         diagnostics["numerical"] = health
-    observer = OptimizerHealth(health, iteration, learner.profiler)
+    observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
     if not len(training_rows):
         diagnostics["skipped"] = "empty advantage filter"
         health["skipped_steps"] = learning.epochs * learning.minibatches
@@ -219,16 +219,10 @@ def update_iteration(
                             obs=admitted.evidence(obs),
                         )
 
-                    with failure_tensors(_failure):
+                    with failure_tensors(_failure, rl.NumericalError):
                         observer.check(loss)
-                with failure_tensors(_failure):
-                    norm = backend.learner.gradient_step(
-                        loss,
-                        learner.agent,
-                        learner.optimizer,
-                        learning.max_grad_norm,
-                        recorder=observer,
-                    )
+                with failure_tensors(_failure, rl.NumericalError):
+                    norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
                 with track("Minibatch diagnostics"):
                     health["clip_fraction"] = rl.clip_fraction(log_ratio, learning.clip)
                     diagnostics["optimizer_exposures"] += len(rows_host)

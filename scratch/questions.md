@@ -53,8 +53,8 @@
 - `OptimizerHealth`'s sampled gradient detail (critic readout norm, parameter
   delta) reads torch modules and is absent on MLX; `health.py` still imports
   torch. Follow-up, not built.
-- PPO runs on torch only (it steps through `gradient_step` and calls tensor
-  methods). The damped update is the one MLX runs. Follow-up if PPO is wanted
+- PPO runs on torch only (it steps through `learner.step` but calls tensor
+  methods and `get_value`). The damped update is the one MLX runs. Follow-up if PPO is wanted
   on MLX.
 - The torch backend keeps its own host recursions (GAE, selection) in
   `rl.py` because that file imports nothing from manabot; `policy/returns.py`
