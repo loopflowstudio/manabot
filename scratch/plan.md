@@ -52,3 +52,14 @@ appendix). Report-only edits, no new numbers:
    agreement sentence beside the arms table, where it qualifies the comparison.
 3. Leave `experiments/l4_step_profile.py` and the option-3 patch unchanged (they are what ran).
 No open product choice. Publish still needs the `mtg301-bucketed-run` ref pushed (questions.md).
+
+## Performance review (2026-11-12)
+Checked against `summary.json`/`job.json`/in-situ traces of both jobs:
+- Replay pass totals, learner medians, sync counts (118/208; bucketed 117/192), baseline repeats
+  (≤2.1% learner, ≤3.6% inference), parameters/weights digests per arm, the $0.30 and $1.40 per-100-update
+  arithmetic, and the "≈18 s" small-call tail (in-situ, recording subtracted per row) all reproduce.
+- Added to the report: bucketed job's profiled in-situ calls 122–137 had 45–1,330 ms of host time
+  outside any torch op (option-3 job 17–22 ms); window table uses the option-3 job; replays unaffected.
+- Unproved, already stated as such: no CUDA baseline-vs-baseline numerics floor; no decision digest or
+  matched-trace game evidence for bucketed; whole-update savings are projections; no learning evidence.
+  Default adoption stays a person's decision at demo; MTG-312 (typed Execution field) carries the switch.

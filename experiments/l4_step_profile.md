@@ -108,6 +108,12 @@ calibration read 194.5 s/update; its later updates read 86 s of collection with
 *Rollout recording* took 76–172 s. That is a host-side CPU phase larger than any
 GPU phase here, and it varied 2.3× between two runs on one machine. It is not
 explained by this profile. Whether it recurs past update 1 is unmeasured.
+In the slower bucketed job, the 16 profiled inference calls (122–137) also
+carried 45–1,330 ms of host time that no recorded torch op covers. The same
+calls in the option-3 job carried 17–22 ms (`insitu/collection-trace.json.gz`,
+inside `mtg301/sample_learning_rows`). So that job's host was slowed
+outside the GPU in both collection phases. The window table below uses the
+option-3 job, and replays ran on retained inputs, which this does not affect.
 
 Inference calls by rows, in situ (seconds include preparation and recording):
 
