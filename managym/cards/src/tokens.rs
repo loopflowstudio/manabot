@@ -22,7 +22,6 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         ballistic_boulder(),
         bear(),
         clue(),
-        colorless_spirit(),
         dragon(),
         elf_warrior(),
         food(),
@@ -31,6 +30,7 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         komas_coil(),
         marit_lage(),
         monk(),
+        plain_spirit(),
         powerstone(),
         soldier(),
         spirit(),
@@ -358,16 +358,12 @@ fn treasure() -> TokenDefinition {
 }
 
 /// Plain colorless Spirit, first printed in the 2004 player rewards tokens.
-fn colorless_spirit() -> TokenDefinition {
+fn plain_spirit() -> TokenDefinition {
+    let base = face("Spirit", [CardType::Creature], &["Spirit"], "");
     token(
-        "token.colorless_spirit",
+        "token.plain_spirit",
         "46b60d95-b9bc-40f8-b986-bfa8e3eb74f3",
-        creature(
-            face("Spirit", [CardType::Creature], &["Spirit"], ""),
-            1,
-            1,
-            [],
-        ),
+        creature(base, 1, 1, []),
     )
 }
 

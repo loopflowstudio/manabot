@@ -633,7 +633,7 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::CreatedThisWay => "that token".into(),
         ObjectSelector::Remembered => "the remembered objects".into(),
         ObjectSelector::Grantor => "the permanent granting this ability".into(),
-        ObjectSelector::Moved => "it".into(),
+        ObjectSelector::Moved => "objects moved this way".into(),
         ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
         ObjectSelector::Selected => "the selected cards".into(),
         ObjectSelector::Zone(zone) => format!("your {}", format!("{zone:?}").to_lowercase()),
@@ -751,10 +751,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
         EffectValue::Objects { of, predicate } => {
-            let objects = match of.as_ref() {
-                ObjectSelector::Moved => "objects moved this way".into(),
-                other => selector_description(other),
-            };
+            let objects = selector_description(of);
             match predicate {
                 None => format!("the number of {objects}"),
                 Some(predicate) => format!(

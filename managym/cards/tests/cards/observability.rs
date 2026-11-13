@@ -4764,7 +4764,7 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
 fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
     let pack = default_content_pack();
     let plain = pack
-        .definition(pack.token_id("token.colorless_spirit").unwrap())
+        .definition(pack.token_id("token.plain_spirit").unwrap())
         .unwrap();
     let tla = pack
         .definition(pack.token_id("token.spirit").unwrap())

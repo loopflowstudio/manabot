@@ -1,7 +1,8 @@
 # Assumptions and source facts
 
-2026-11-12: Use `token.colorless_spirit` for Release to Memory's unrestricted
-Spirit, keeping TLA's `token.spirit` unchanged. Use `token.zeppelin` for Lita's
+2026-11-12: Use `token.plain_spirit` for Release to Memory's unrestricted
+Spirit (concept review replaced `token.colorless_spirit`: TLA's Spirit is
+colorless too), keeping TLA's `token.spirit` unchanged. Use `token.zeppelin` for Lita's
 unprinted Vehicle. Both are reversible internal naming choices.
 
 Scryfall API verified the first-printing card ids from the pinned inventory:

@@ -74,7 +74,7 @@ fn release_to_memory_spirits_block_and_are_blocked_by_nonspirits() {
         let spirit = s
             .game_mut()
             .create_token(
-                "token.colorless_spirit",
+                "token.plain_spirit",
                 PlayerId(usize::from(!spirit_attacking)),
                 false,
             )

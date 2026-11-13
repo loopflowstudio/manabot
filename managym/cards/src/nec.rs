@@ -26,7 +26,7 @@ fn release_to_memory() -> CardDefinition {
                     zone: ZoneType::Graveyard,
                 }),
                 Effect::create_tokens(
-                    "token.colorless_spirit",
+                    "token.plain_spirit",
                     EffectValue::Objects {
                         of: Box::new(ObjectSelector::Moved),
                         predicate: Some(CardPredicate::creature()),
