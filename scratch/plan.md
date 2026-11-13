@@ -268,3 +268,48 @@ eight modules and `git diff --check` passed; an AST comparison against HEAD
 found only module docstrings differ. No test or parity rerun for prose-only
 edits. Open choices (questions.md: CLI recipe-config fields, local follower)
 and the delivery obligations above are unchanged.
+
+## Concept review 8: next implement direction — 2026-11-13
+
+Proposals drawn from the design, not statements anyone made. Reading the
+guide's code as a person writing their own recipe or experiment would copy it
+(`docs/training.md`), against the code and Etude `105abdd`. Recipes, loop, CLI
+and `experiments/elemental.py` agree with each other; four excerpts lag them.
+Docs only; no code, test or parity change follows.
+
+1. **Two clocks declared, one logged.** Every recipe declares `updates` and
+   `training_seconds` (review 4) and the loop passes `**clocks(state)`. The
+   guide's loop template still writes `run.log(row, updates=state.update)`,
+   and its pieces table says `record_checkpoint` calls
+   `run.checkpoint(path, updates=)`. Etude requires every declared clock; a
+   checkpoint missing one warns and is not recorded. Show `**clocks(state)` in
+   the template and the table, and name `clocks(state)` among the pieces.
+2. **Belief excerpt.** The guide ends with
+   `run.checkpoint(sampler, tags=("belief",), updates=updates)`; the recipe
+   reads `policy_record = run.latest_checkpoint()` and records the sampler at
+   `**policy_record.at`. Copy the code, say in a sentence that a later step's
+   output is recorded at the coordinate of the policy it was made from, and
+   add `run.latest_checkpoint()` to the "From Etude" table.
+3. **Remote training example does not launch.** Its `runs()` takes no
+   parameters and returns a list of `Job`s. `read_job_file` accepts a Job, a
+   Run or a nonempty list of Runs, and binds launch flags to `runs()`
+   parameters, so the list is refused and `--revision COMMIT` in the command
+   below it has nothing to bind to. It also omits `setup`, though the next
+   paragraph describes the Rust/uv setup. Write it in the shape of
+   `experiments.elemental.runs`: `runs(revision: str) -> list[Run]` returning
+   `training(train, config=..., smoke=..., revision=revision,
+   setup=machine_setup(...), max_hours=, max_usd=).runs(197, 198)`. The
+   single-Job excerpt in `manabot/README.md` is valid and stays.
+4. Check the corrected example with `read_job_file` on a scratch copy under
+   the SDK override; do not add a test for a guide excerpt.
+
+Checked and left alone: the Elemental recipe excerpt (abridged as it says),
+the `local_launch` excerpt, the untracked `self_play` call, README and
+experiments guide commands, `etude continue --run --until` and `--cohort`
+(real flags). `run.latest_checkpoint()` depends on the loop's last tracker
+call being the returned policy; the belief test asserts the recording, so the
+loop's return type stays a path.
+
+Open choices are unchanged and still do not stop the Graph (questions.md: CLI
+recipe-config fields, local follower). Delivery obligations above are
+unchanged.
