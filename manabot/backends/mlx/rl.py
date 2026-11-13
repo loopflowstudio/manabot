@@ -74,7 +74,12 @@ def legal_mask(mask: mx.array) -> mx.array:
 
 
 def policy_logs(logits: mx.array, valid: mx.array) -> mx.array:
-    """Normalize [*,A] logits; padding is -inf and legal logs must be finite."""
+    """Normalize in float32 for both behavior and learning, including half forwards.
+
+    Padding is -inf and legal logs must be finite. Promote before normalization,
+    so recorded behavior logs do not retain half-rounded log-softmax values.
+    """
+    logits = logits.astype(mx.float32)
     if logits.shape != valid.shape or logits.ndim < 2:
         raise NumericalError("policy_shape", {"logits": logits, "valid": valid})
     require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
@@ -98,8 +103,8 @@ def policy_logs(logits: mx.array, valid: mx.array) -> mx.array:
 
 
 def action_logs(logs: mx.array, actions: mx.array) -> mx.array:
-    """The entry of each row of `logs` [B,A] at its sampled action [B]: [B]."""
-    return mx.take_along_axis(logs, actions[:, None], axis=-1)[:, 0]
+    """Float32 log probability of each sampled action [B]."""
+    return mx.take_along_axis(logs.astype(mx.float32), actions[:, None], axis=-1)[:, 0]
 
 
 def reference_logs(reference: mx.array, valid: mx.array) -> mx.array:

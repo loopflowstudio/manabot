@@ -23,7 +23,7 @@ import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
-from manabot.backends.mlx.arrays import to_mlx
+from manabot.backends.mlx.arrays import precision_dtype, to_mlx
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.env.observation import ObservationSpace
@@ -34,6 +34,7 @@ from manabot.policy.checkpoint import (
     from_torch_state,
     read_container,
 )
+from manabot.policy.protocol import Precision
 
 _SEQUENTIAL = re.compile(r"(^|\.)(projection|policy_head|value_head|mlp)\.(\d+)\.")
 _GRU = {
@@ -81,12 +82,18 @@ def mlx_gradients(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
     return mlx_parameters(canonical)
 
 
-def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
+def assemble(
+    checkpoint: PolicyCheckpoint, *, precision: Precision = "float32"
+) -> MLXActorCritic:
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly."""
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
-        checkpoint.dimensions(), checkpoint.tables(), checkpoint.model, checkpoint.space
+        checkpoint.dimensions(),
+        checkpoint.tables(),
+        checkpoint.model,
+        checkpoint.space,
+        precision=precision,
     )
     expected = dict(tree_flatten(policy.parameters()))
     unmapped = sorted(set(parameters) ^ set(expected))
@@ -106,25 +113,33 @@ def build(
     model: ModelConfig,
     observation: ObservationConfig,
     state: Mapping[str, np.ndarray],
+    *,
+    precision: Precision = "float32",
 ) -> tuple[MLXActorCritic, ObservationSpace]:
     """An MLX policy holding `state` (a PyTorch state dict as NumPy arrays)."""
     checkpoint = from_torch_state(model, observation, state)
-    return assemble(checkpoint), checkpoint.space
+    return assemble(checkpoint, precision=precision), checkpoint.space
 
 
-def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]:
+def load_mlx_policy(
+    path: str | Path, *, precision: Precision = "float32"
+) -> tuple[MLXActorCritic, ObservationSpace]:
     """Load a checkpoint container, validating its world binding."""
     checkpoint = read_container(path)
-    return assemble(checkpoint), checkpoint.space
+    return assemble(checkpoint, precision=precision), checkpoint.space
 
 
-class _MLX:
+class MLXBackend:
     """`manabot.policy.protocol.Backend` for MLX."""
 
     name = "mlx"
 
+    def __init__(self, precision: Precision = "float32") -> None:
+        precision_dtype(precision)
+        self.precision = precision
+
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
-        policy = assemble(checkpoint)
+        policy = assemble(checkpoint, precision=self.precision)
         return policy, Learner(policy, minibatch_rows=1)
 
     def parameter_layout(
@@ -138,4 +153,4 @@ class _MLX:
         return mlx_gradients(canonical)
 
 
-BACKEND = _MLX()
+BACKEND = MLXBackend()
