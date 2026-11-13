@@ -32,9 +32,17 @@ class NativeContractEngine:
         self.revision = 17
         self.viewer_hash = "runtime-viewer-17"
         definitions = [
-            {"card_def_id": 0, "registry_name": "Counterspell"},
-            {"card_def_id": 1, "registry_name": "Lightning Bolt"},
-            {"card_def_id": 2, "registry_name": "Mountain"},
+            {
+                "card_def_id": 0,
+                "registry_name": "Counterspell",
+                "key": "lea.counterspell",
+            },
+            {
+                "card_def_id": 1,
+                "registry_name": "Lightning Bolt",
+                "key": "lea.lightning_bolt",
+            },
+            {"card_def_id": 2, "registry_name": "Mountain", "key": "lea.mountain"},
         ]
         if remap_card_ids:
             definitions[0]["registry_name"], definitions[1]["registry_name"] = (
@@ -228,3 +236,19 @@ def test_checkpoint_loader_rejects_removed_agent_fields(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="max_conditions"):
         load_checkpoint(str(checkpoint_path))
+
+
+def test_hidden_card_schema_excludes_tokens_with_shared_printed_names() -> None:
+    engine = NativeContractEngine()
+    engine.definitions.extend(
+        [
+            {"card_def_id": 3, "registry_name": "Lightning Bolt", "key": "token.bolt"},
+            {"card_def_id": 4, "registry_name": "Spirit", "key": "token.spirit"},
+            {"card_def_id": 5, "registry_name": "Spirit", "key": "token.plain_spirit"},
+        ]
+    )
+    schema = belief_schema_from_engine(
+        engine, PossibleWorldSpace.from_engine(engine, 0), count_buckets=3
+    )
+    assert {row.card_def_id for row in schema.rows} == {0, 1, 2}
+    assert len(schema.rows) == 6
