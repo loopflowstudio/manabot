@@ -74,21 +74,6 @@ impl Game {
     /// Publish a newly computed external decision and invalidate commands
     /// decoded from every previously published structured offer set.
     pub(crate) fn publish_action_space(&mut self, mut action_space: ActionSpace) {
-        if self.mana_payment_stats.active_over_tapped
-            && self
-                .state
-                .suspended_decision
-                .as_ref()
-                .is_some_and(|suspended| {
-                    matches!(
-                        suspended.decision,
-                        crate::flow::decision::Decision::ManaSpend { .. }
-                    )
-                })
-            && action_space.actions.len() > 1
-        {
-            self.mana_payment_stats.spend_decisions_over_tapped += 1;
-        }
         self.decision_epoch = self
             .decision_epoch
             .checked_add(1)

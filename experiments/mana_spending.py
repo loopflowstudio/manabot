@@ -81,16 +81,14 @@ def decks() -> list[Deck]:
     source = UniformDecks.model_validate(json.loads(TLA.read_text())["deck_source"])
     if source.entry_ids is None:
         raise ValueError("TLA population is missing source event IDs")
-    selected = 0
-    for name, deck in zip(source.entry_ids, source.decks, strict=True):
-        if sum(deck.main.values()) != 40:
-            continue
-        result.append(Deck("tla", name, deck.main, deck.sideboard))
-        selected += 1
-        if selected == 10:
-            break
-    if selected != 10:
+    tla = [
+        Deck("tla", name, deck.main, deck.sideboard)
+        for name, deck in zip(source.entry_ids, source.decks, strict=True)
+        if sum(deck.main.values()) == 40
+    ][:10]
+    if len(tla) != 10:
         raise ValueError("TLA population has fewer than ten 40-card builds")
+    result += tla
     result.append(
         Deck(
             "heartbeat",
@@ -183,6 +181,10 @@ def play(deck: Deck, policy: Policy, seed: int) -> GameCounts:
     return row
 
 
+def _ratio(numerator: int, denominator: int) -> float:
+    return numerator / denominator if denominator else 0.0
+
+
 def summarize(rows: list[GameCounts]) -> None:
     groups: dict[tuple[str, Policy], list[GameCounts]] = defaultdict(list)
     for row in rows:
@@ -195,14 +197,13 @@ def summarize(rows: list[GameCounts]) -> None:
         decisions = sum(sum(game.stages.values()) for game in valid)
         spending = sum(game.stages.get("mana_spend", 0) for game in valid)
         over = sum(game.mana_spend_decisions_over_tapped for game in valid)
+        no_spend = sum("mana_spend" not in game.stages for game in valid)
         n = len(valid)
         print(
             f"{deck_set} {policy} {n} {len(games) - n} "
-            f"{decisions / n if n else 0:.2f} {spending / n if n else 0:.2f} "
-            f"{spending / decisions if decisions else 0:.2%} "
-            f"{over / spending if spending else 0:.2%} "
-            f"{(spending - over) / decisions if decisions else 0:.2%} "
-            f"{sum(g.stages.get('mana_spend', 0) == 0 for g in valid) / n if n else 0:.2%}"
+            f"{_ratio(decisions, n):.2f} {_ratio(spending, n):.2f} "
+            f"{_ratio(spending, decisions):.2%} {_ratio(over, spending):.2%} "
+            f"{_ratio(spending - over, decisions):.2%} {_ratio(no_spend, n):.2%}"
         )
 
 

@@ -36,14 +36,15 @@ use crate::{
 };
 
 /// Per-game diagnostics, outside rules state, hashes and policy observations.
-/// A spend cannot start a nested payment, so attribution lives until that
-/// spend completes; upfront activation fees get their own attribution.
+/// Every spend directly follows its own recorded payment and cannot start a
+/// nested one, so each offered spend decision belongs to the latest payment;
+/// upfront activation fees are payments of their own.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ManaPaymentStats {
     pub payments: usize,
     pub over_tapped: usize,
     pub spend_decisions_over_tapped: usize,
-    pub active_over_tapped: bool,
+    latest_over_tapped: bool,
 }
 
 /// One finite resource transition model. A source is reserved before its
@@ -2261,19 +2262,13 @@ impl Game {
                         return false;
                     }
                     let mut obligations = self.payment_obligations(player);
-                    if !obligations.is_empty() {
-                        obligations.remove(0);
-                    }
-                    if obligations.is_empty() {
+                    if obligations.len() <= 1 {
                         return true;
                     }
-                    obligations.insert(
-                        0,
-                        Obligation::Pay {
-                            cost: cost.clone(),
-                            waterbend: false,
-                        },
-                    );
+                    obligations[0] = Obligation::Pay {
+                        cost: cost.clone(),
+                        waterbend: false,
+                    };
                     self.payment_model(player, None).payable(
                         remaining,
                         obligations,
@@ -2282,7 +2277,7 @@ impl Game {
                 });
         self.mana_payment_stats.payments += 1;
         self.mana_payment_stats.over_tapped += usize::from(over_tapped);
-        self.mana_payment_stats.active_over_tapped = over_tapped;
+        self.mana_payment_stats.latest_over_tapped = over_tapped;
     }
 
     /// Commit precisely the selected unit, retaining its expiry identity.
@@ -2384,7 +2379,12 @@ impl Game {
                 let index = match selected.take() {
                     Some(index) => index,
                     None if choices.len() == 1 => 0,
-                    None if !choices.is_empty() => return Ok(()),
+                    None if !choices.is_empty() => {
+                        // The player is offered this pip's units.
+                        self.mana_payment_stats.spend_decisions_over_tapped +=
+                            usize::from(self.mana_payment_stats.latest_over_tapped);
+                        return Ok(());
+                    }
                     None => return Err(AgentError("no feasible mana spending choice".into())),
                 };
                 let choice = choices
@@ -2403,7 +2403,6 @@ impl Game {
                 continue;
             }
             let suspended = self.state.suspended_decision_mut().take().unwrap();
-            self.mana_payment_stats.active_over_tapped = false;
             let Decision::ManaSpend {
                 spent, completion, ..
             } = suspended.decision
@@ -2662,22 +2661,14 @@ mod tests {
             ));
             game.begin_mana_spend(player, cost, completion, EffectFrame::new(player, vec![]))
                 .unwrap();
-            if let Some(space) = game.suspended_decision_action_space() {
-                assert_eq!(expected_choices, 1);
-                game.publish_action_space(space);
-                assert_eq!(
-                    game.mana_payment_stats.spend_decisions_over_tapped,
-                    expected_over
-                );
+            let offered = game.state.suspended_decision.is_some();
+            assert_eq!(usize::from(offered), expected_choices);
+            if offered {
                 let mut fork = game.clone();
                 fork.advance_mana_spend(Some(0)).unwrap();
-                assert!(!fork.mana_payment_stats.active_over_tapped);
                 assert!(game.state.suspended_decision.is_some());
                 game.advance_mana_spend(Some(0)).unwrap();
-            } else {
-                assert_eq!(expected_choices, 0);
             }
-            assert!(!game.mana_payment_stats.active_over_tapped);
             assert_eq!(
                 game.mana_payment_stats.spend_decisions_over_tapped,
                 expected_over * expected_choices
