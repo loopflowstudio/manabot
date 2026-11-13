@@ -143,6 +143,9 @@ struct PaymentSearch {
     visited: std::collections::HashSet<PaymentSearchState>,
     #[cfg(test)]
     max_states: Option<usize>,
+    /// Reference search for tests: skip the color-set bound.
+    #[cfg(test)]
+    total_bound_only: bool,
 }
 
 impl PaymentSearch {
@@ -395,7 +398,7 @@ impl PaymentModel {
             })
             .sum::<u64>();
         // Only states that need exploration need an owned visited key.
-        if total < owed || !visited.insert(&state) {
+        if total < owed || !self.colors_coverable(&state, visited) || !visited.insert(&state) {
             return None;
         }
         #[cfg(feature = "benchmark")]
@@ -586,6 +589,146 @@ impl PaymentModel {
             }
         }
         None
+    }
+
+    /// Hall's condition over the colors owed: for every set S of the mana
+    /// kinds named by pending `Pay` pips (W/U/B/R/G and {C}), the pips payable
+    /// only from S need that many units of mana in S. A pip is confined to S
+    /// when it is a colored or {C} pip of S or a hybrid pip with both halves
+    /// in S; generic pips and waterbend taps are left to the total bound.
+    ///
+    /// Supply is optimistic in the same way as the total bound: restricted
+    /// mana counts when any pending cost may spend it, one tap yields the best
+    /// of the fixed output and the tapping abilities, and non-tapping
+    /// abilities and pending outputs add their best choice. Unlike the
+    /// per-cost check, each use contributes one output choice, not the union
+    /// of its modes, so one "U or R" source cannot cover {U}{R}. Mana is never
+    /// spent as another color during payment (`Mana::payment_remainders`), so
+    /// a failed set has no witness and pruning it keeps the first witness.
+    fn colors_coverable(&self, state: &PaymentSearchState, search: &PaymentSearch) -> bool {
+        #[cfg(test)]
+        if search.total_bound_only {
+            return true;
+        }
+        #[cfg(not(test))]
+        let _ = search;
+        const KINDS: usize = 6;
+        let mut pips = [0_u64; KINDS];
+        let mut hybrid: Vec<u8> = Vec::new();
+        let mut owed_kinds = 0_u8;
+        let mut pays = 0;
+        for obligation in &state.obligations {
+            let Obligation::Pay { cost, .. } = obligation else {
+                continue;
+            };
+            pays += 1;
+            for (kind, owed) in pips.iter_mut().enumerate() {
+                *owed += u64::from(cost.cost[kind]);
+                if cost.cost[kind] > 0 {
+                    owed_kinds |= 1 << kind;
+                }
+            }
+            for [left, right] in &cost.hybrid {
+                let pip = 1 << (*left as usize) | 1 << (*right as usize);
+                owed_kinds |= pip;
+                hybrid.push(pip);
+            }
+        }
+        // One color owed by one cost is already bounded by its own check.
+        if owed_kinds == 0 || (owed_kinds.count_ones() < 2 && pays < 2) {
+            return true;
+        }
+        let amounts = |mana: &Mana| -> [u64; KINDS] {
+            let mut amounts = mana.mana.map(u64::from);
+            for (restriction, restricted) in mana.restricted() {
+                if state.obligations.iter().any(|obligation| {
+                    matches!(obligation, Obligation::Pay { cost, .. }
+                        if restriction.allows(&cost.purpose))
+                }) {
+                    for (amount, more) in amounts.iter_mut().zip(restricted) {
+                        *amount += u64::from(*more);
+                    }
+                }
+            }
+            amounts
+        };
+        // Each group is one exclusive choice: the supply of S is the pool
+        // plus, per group, its best member counted inside S.
+        let mut choices: Vec<[u64; KINDS]> = Vec::new();
+        let mut groups: Vec<usize> = Vec::new();
+        for (index, source) in self.sources.iter().enumerate() {
+            if !state.resources.present[index] {
+                continue;
+            }
+            // Fixed mana and tapping abilities compete for the same tap.
+            let tap_group = choices.len();
+            if state.resources.untapped[index] {
+                if let Some(output) = &source.fixed {
+                    choices.push(amounts(output));
+                }
+            }
+            let mut separate: Vec<(u64, &[Mana])> = Vec::new();
+            for (ability_index, ability) in source.abilities.iter().enumerate() {
+                let uses = self.uses(&state.resources, index, ability_index) as u64;
+                if uses == 0 {
+                    continue;
+                }
+                if ability.tap_source {
+                    choices.extend(ability.outputs.iter().map(&amounts));
+                } else {
+                    separate.push((uses, &ability.outputs));
+                }
+            }
+            if choices.len() > tap_group {
+                groups.push(choices.len());
+            }
+            for (uses, outputs) in separate {
+                choices.extend(
+                    outputs
+                        .iter()
+                        .map(|output| amounts(output).map(|amount| amount.saturating_mul(uses))),
+                );
+                groups.push(choices.len());
+            }
+        }
+        for obligation in &state.obligations {
+            if let Obligation::Output { choices: modes, .. } = obligation {
+                choices.extend(modes.iter().map(&amounts));
+                groups.push(choices.len());
+            }
+        }
+        let pool = amounts(&state.pool);
+        let within = |amounts: &[u64; KINDS], set: u8| -> u64 {
+            (0..KINDS)
+                .filter(|kind| set & (1 << kind) != 0)
+                .fold(0_u64, |sum, kind| sum.saturating_add(amounts[kind]))
+        };
+        // Every non-empty subset of the owed kinds, largest first.
+        let mut set = owed_kinds;
+        while set != 0 {
+            let owed =
+                within(&pips, set) + hybrid.iter().filter(|pip| **pip & !set == 0).count() as u64;
+            let mut supply = within(&pool, set);
+            let mut start = 0;
+            for &end in &groups {
+                if supply >= owed {
+                    break;
+                }
+                supply = supply.saturating_add(
+                    choices[start..end]
+                        .iter()
+                        .map(|choice| within(choice, set))
+                        .max()
+                        .unwrap_or(0),
+                );
+                start = end;
+            }
+            if supply < owed {
+                return false;
+            }
+            set = (set - 1) & owed_kinds;
+        }
+        true
     }
 
     fn activation_obligations(ability: &ManaActivation) -> Vec<Obligation> {
@@ -2100,6 +2243,252 @@ mod tests {
         assert!(matches!(path[0], PaymentStep::Activate(PermanentId(0), 0)));
         assert!(matches!(path[1], PaymentStep::Spend(_)));
         assert!(matches!(path[2], PaymentStep::Output(0)));
+    }
+
+    fn modal_source(index: usize, outputs: &[&str], cost: &str) -> ManaSource {
+        let mut ability = tapping_ability(outputs.iter().map(|text| Mana::parse(text)).collect());
+        ability.cost = ManaCost::parse(cost);
+        ManaSource {
+            permanent: PermanentId(index),
+            card: CardId(index),
+            untapped: true,
+            fixed: None,
+            abilities: vec![ability],
+            waterbend: false,
+        }
+    }
+
+    /// The same search without the color-set bound, as a reference.
+    fn total_bound_search(
+        model: &PaymentModel,
+        pool: &Mana,
+        obligations: &[Obligation],
+    ) -> Option<Vec<PaymentStep>> {
+        let mut reference = PaymentSearch::new(model, obligations);
+        reference.total_bound_only = true;
+        let mut state = search_state(model, obligations.to_vec());
+        state.pool = pool.clone();
+        model.witness(state, SourcePolicy::All, &mut reference)
+    }
+
+    /// One source that makes U or R cannot pay {U}{R}, however many Forests
+    /// stand beside it: the root is rejected without expanding a state.
+    #[test]
+    fn payment_color_bound_rejects_unpayable_colors_without_searching() {
+        const ANY: [&str; 5] = ["W", "U", "B", "R", "G"];
+        for count in [8, 24] {
+            let mut dual = forests(count);
+            dual.sources.push(modal_source(count, &["U", "R"], ""));
+            let mut filter = forests(count);
+            filter.sources.push(modal_source(count, &ANY, "1"));
+            let mut any = forests(count);
+            any.sources.push(modal_source(count, &ANY, ""));
+            for (model, obligations) in [
+                (&dual, vec![pay("UR")]),
+                (&dual, vec![pay("{U/R}R")]),
+                (&filter, vec![pay("UR")]),
+                (&any, vec![pay("U"), pay("U")]),
+                (&any, vec![pay("1U"), pay("R")]),
+                (&any, vec![pay("CU")]),
+            ] {
+                let state = search_state(model, obligations.clone());
+                assert!(
+                    bounded_search(model, state, SourcePolicy::All, 0, false).is_none(),
+                    "{obligations:?}"
+                );
+                if count == 8 {
+                    assert!(total_bound_search(model, &Mana::default(), &obligations).is_none());
+                }
+            }
+        }
+    }
+
+    /// Payable costs that meet the bound with nothing to spare keep their
+    /// first witness: hybrid pips, restricted mana for its purpose, a modal
+    /// two-mana output and a paid filter.
+    #[test]
+    fn payment_color_bound_keeps_payable_costs_at_the_bound() {
+        let lesson = |text: &str| Obligation::Pay {
+            cost: ManaCost {
+                purpose: SpendingContext::cast(["Lesson"], []),
+                ..ManaCost::parse(text)
+            },
+            waterbend: false,
+        };
+        let mut herbalist = modal_source(9, &["U", "R"], "");
+        herbalist.abilities[0].outputs.push(Mana::restricted_to(
+            ManaRestriction::spell(["Lesson"]),
+            [0, 2, 0, 0, 0, 0],
+        ));
+        let cases: Vec<(Vec<ManaSource>, Mana, Vec<Obligation>)> = vec![
+            // Two U/R sources and a Forest pay two hybrid pips and green.
+            (
+                vec![
+                    modal_source(8, &["U", "R"], ""),
+                    modal_source(9, &["U", "R"], ""),
+                ],
+                Mana::default(),
+                vec![pay("{U/R}{U/R}G")],
+            ),
+            // The hybrid pip takes the color the colored pip leaves.
+            (
+                vec![modal_source(9, &["U", "R"], "")],
+                Mana::parse("R"),
+                vec![pay("{U/R}R")],
+            ),
+            // Lesson-only mana in the pool pays a Lesson's blue pip.
+            (
+                vec![modal_source(9, &["U", "R"], "")],
+                Mana::restricted_to(ManaRestriction::spell(["Lesson"]), [0, 1, 0, 0, 0, 0]),
+                vec![lesson("UR")],
+            ),
+            // One tap for two Lesson mana pays both blue pips of a Lesson.
+            (
+                vec![herbalist.clone()],
+                Mana::default(),
+                vec![lesson("UUG")],
+            ),
+            // A filter paid by one Forest makes the only blue mana.
+            (
+                vec![modal_source(9, &["W", "U", "B", "R", "G"], "1")],
+                Mana::default(),
+                vec![pay("UG")],
+            ),
+            // A nested filter cost and its parent share the supply.
+            (
+                vec![modal_source(9, &["W", "U", "B", "R", "G"], "G")],
+                Mana::default(),
+                vec![pay("G"), pay("U")],
+            ),
+        ];
+        for (extra, pool, obligations) in cases {
+            let mut model = forests(2);
+            model.sources.extend(extra);
+            let reference = total_bound_search(&model, &pool, &obligations);
+            assert!(reference.is_some(), "{obligations:?}");
+            let mut state = search_state(&model, obligations.clone());
+            state.pool = pool;
+            assert_eq!(
+                bounded_search(&model, state, SourcePolicy::All, 200, false),
+                reference,
+                "{obligations:?}"
+            );
+        }
+        // The same two Lesson mana cannot pay a spell that is not a Lesson.
+        let mut model = forests(8);
+        model.sources.push(herbalist);
+        let state = search_state(&model, vec![pay("UUG")]);
+        assert!(bounded_search(&model, state, SourcePolicy::All, 0, true).is_none());
+    }
+
+    /// On every small board of a varied palette, the bound returns exactly
+    /// the reference search's first witness: it rejects nothing payable.
+    #[test]
+    fn payment_color_bound_matches_the_search_without_it() {
+        let lesson_two =
+            Mana::restricted_to(ManaRestriction::spell(["Lesson"]), [0, 2, 0, 0, 0, 0]);
+        let palette = |kind: usize, index: usize| -> ManaSource {
+            let mut source = modal_source(index, &[], "");
+            match kind {
+                0 => source.abilities.clear(),
+                1 => source.abilities[0].outputs = vec![Mana::parse("U"), Mana::parse("R")],
+                2 => {
+                    source.abilities[0].outputs =
+                        ["W", "U", "B", "R", "G"].map(Mana::parse).to_vec();
+                    source.abilities[0].cost = ManaCost::parse("1");
+                }
+                3 => {
+                    source.abilities[0].outputs =
+                        vec![Mana::parse("U"), Mana::parse("G"), lesson_two.clone()];
+                    source.waterbend = true;
+                }
+                4 => {
+                    // A repeatable-per-turn ability that does not tap.
+                    source.abilities[0].tap_source = false;
+                    source.abilities[0].limited = true;
+                    source.abilities[0].outputs = vec![Mana::parse("R"), Mana::parse("C")];
+                }
+                _ => source.abilities[0].outputs = vec![Mana::parse("UR")],
+            }
+            source.fixed = match kind {
+                0 => Some(Mana::parse("G")),
+                4 => Some(Mana::parse("U")),
+                _ => None,
+            };
+            source
+        };
+        let purposes = [
+            SpendingContext::default(),
+            SpendingContext::cast(["Lesson"], []),
+        ];
+        let costs = [
+            vec!["UR"],
+            vec!["UG"],
+            vec!["{U/R}R"],
+            vec!["{U/R}{U/G}"],
+            vec!["UU1"],
+            vec!["CU"],
+            vec!["{U/R}{U/R}G"],
+            vec!["2UR"],
+            vec!["U", "U"],
+            vec!["1", "UR"],
+            vec!["G", "{U/R}"],
+        ];
+        let pools = [Mana::default(), Mana::parse("R"), lesson_two.clone()];
+        let (mut payable, mut rejected) = (0, 0);
+        // Every multiset of up to four sources from the six kinds.
+        for code in 0..7_usize.pow(4) {
+            let kinds = (0..4)
+                .map(|slot| code / 7_usize.pow(slot) % 7)
+                .collect::<Vec<_>>();
+            if kinds.windows(2).any(|pair| pair[0] > pair[1]) {
+                continue;
+            }
+            let model = PaymentModel {
+                sources: kinds
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, kind)| **kind < 6)
+                    .map(|(index, kind)| palette(*kind, index))
+                    .collect(),
+                life: 20,
+            };
+            for cost in &costs {
+                for purpose in &purposes {
+                    for pool in &pools {
+                        let mut obligations = cost
+                            .iter()
+                            .map(|text| Obligation::Pay {
+                                cost: ManaCost {
+                                    purpose: purpose.clone(),
+                                    ..ManaCost::parse(text)
+                                },
+                                waterbend: cost.len() == 1,
+                            })
+                            .collect::<Vec<_>>();
+                        if cost.len() == 2 {
+                            // A started activation: its cost, its output, the parent.
+                            obligations.insert(
+                                1,
+                                Obligation::Output {
+                                    choices: vec![Mana::parse("U"), Mana::parse("R")],
+                                    life_cost: 0,
+                                },
+                            );
+                        }
+                        let reference = total_bound_search(&model, pool, &obligations);
+                        let mut state = search_state(&model, obligations.clone());
+                        state.pool = pool.clone();
+                        let mut search = PaymentSearch::new(&model, &obligations);
+                        let path = model.witness(state, SourcePolicy::All, &mut search);
+                        assert_eq!(path, reference, "{kinds:?} {cost:?} {pool:?}");
+                        payable += usize::from(path.is_some());
+                        rejected += usize::from(path.is_none() && search.visited.is_empty());
+                    }
+                }
+            }
+        }
+        assert!(payable > 1_000 && rejected > 1_000, "{payable} {rejected}");
     }
 
     #[test]

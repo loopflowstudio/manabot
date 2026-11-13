@@ -59,18 +59,34 @@ colour during payment (`Mana::usable_total` / `can_pay`), that `cost[6]` is
 generic and index 5 colourless (treat {C} as a kind like a colour), and that
 waterbend taps pay generic only, so they stay out of coloured supply.
 
-## What this does not fix
+## Result (2026-11-12, after merging the canonical memo 5e8eebbd3)
 
-- Infeasible payments that pass Hall still search exponentially in this
-  checkout: a multi-mana modal output (Herbalist's two Lesson mana when the
-  spell is a Lesson and the pips need UUR), and a filter whose cost consumes
-  the unit the bound also counts (Prism + one Forest owing {U}{G}).
-- Feasible payments whose first DFS branches fail late.
-- Both need the canonical memo over interchangeable sources. That is being
-  written in `/Users/jack/src/manabot.ryan-bug` (uncommitted `PaymentSearch`,
-  same file, touches `witness`'s `visited` parameter and `search`). Do not
-  duplicate it. This change touches only the bound block before
-  `visited.insert`, so the two merge with one conflict line at most.
+Implemented as `PaymentModel::colors_coverable`. Receipts: `scratch/payment-after/`.
+
+| Workload | Baseline states | After |
+| --- | --- | --- |
+| herbalist-unpayable-14 | 409,604 | 4 (same at N = 6..14) |
+| dual-unpayable-14 | 81,927 | 7 (same at N = 6..14) |
+| filter-unpayable-14 / -12 | 131,069 / 32,765 | 3 (same at N = 6..14) |
+| replay | 7,243 states, max 449 calls/plan | 7,161 states, max 169; digest unchanged |
+| bench_steps | 793,333 states | 791,410; digest 15843333459759757527 |
+
+Check: 135 debug mana/waterbend/payment tests, workspace clippy, fmt, reporter
+replay SHA cb3af276..., bench_steps and three bench_search digests all pass.
+Local wall time was not comparable (load average over 300); CI's Engine Budget
+decides speed.
+
+## What still searches exponentially
+
+- An unpayable cost that passes every colour set, over sources that are
+  pairwise not interchangeable: N lands each making differently restricted
+  green, an Island and a {U}-cost any-colour filter, owing {U}{R}, expand
+  2^(N+1) states (128 / 8,192 / 524,288 at N = 6 / 12 / 18). The memo only
+  merges identical sources; the bound counts the Island's U once for the
+  filter's cost and once for the pip.
+- The same shape over identical Forests is linear (14 / 26 / 38 / 50 states).
+- Feasible payments whose first DFS branches fail late, and overlapping
+  counted-tap sets, are unmeasured here.
 
 ## Ruled out for today
 
