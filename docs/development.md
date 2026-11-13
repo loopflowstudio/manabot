@@ -542,7 +542,11 @@ is one state, size, decision checkpoint and layer. Read down a layer's rows:
 work that grows much faster than size is a cell to investigate. Without a name
 the harness runs every state. Defaults are 4, 8 and 16 copies; `restricted-filter`
 uses 2, 3 and 4 because its nested-filter search already grows sharply there.
-`recorded` has one size. `--sizes 8,16` overrides constructed-state sizes
+`distinct-restrictions` uses 2, 3 and 4 different restrictions beside a paid
+Prism filter: the catalog has only Tea Shop, Hideout, Herbalist and Powerstone
+restrictions. It accepts sizes 2–4 and cannot model arbitrary N distinct
+restrictions or establish a theoretical exponential growth rate.
+`recorded` has one size. `--sizes 8,16` overrides other constructed-state sizes
 (1–64), `--layers actions,step` selects layers, and `--list` names the cards and
 known expensive shapes. Do not increase a known expensive cell just to make it
 run longer.
@@ -551,20 +555,24 @@ run longer.
 `--list` names every state with its cards and known growth; the list lives in
 the harness, not here. They come in three families: many copies of one thing
 (`duplicate-lands`, `duplicate-creatures`, `duplicate-tokens`), many different
-things (`diverse-mana`, `restricted-filter`, `diverse-statics`, `attachments`,
-`mixed`) and one mechanic at size (`herbalist`, `paid-filter`, `counted-tap`,
-`waterbend-x`, `triggers`, `zones`, `choices`, `names`). Combat states put
+things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
+`diverse-statics`, `attachments`, `mixed`) and one mechanic at size (`herbalist`,
+`paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
+`names`). Combat states put
 creatures on both sides and measure the pass that resolves damage; payment
-states isolate one player. `recorded` is the checkpoint after the 426 reported
-actions of `managym/tests/fixtures/payment_search/manabot_slow_step.py`, kept
-byte for byte: a board that real play reached.
+states isolate one player. `recorded` replays the 426 reported actions of
+`managym/tests/fixtures/payment_search/manabot_slow_step.py`, kept byte for
+byte, to reach a board from real play. This requires the recording's action
+ordering: an incompatible engine fails with the step and action index rather
+than rewriting the recording or substituting a different board.
 
 **Layers.** Every checkpoint runs through the same list. Action steps with no
 applicable action and characteristics reads without permanents print no row.
 Preparation reaches combat, cast choices, trigger ordering, a deep stack and
-naming through rules actions; it is outside the measured region. The recorded
-closed-decklist checkpoint reports search as unavailable: determinization
-requires open decklists, and the harness preserves the recording's disclosure.
+naming through rules actions; it is outside the measured region. When replay
+completes, the recorded closed-decklist checkpoint reports search as unavailable:
+determinization requires open decklists, and the harness preserves the recording's
+disclosure.
 
 | Layer | Measures | Work reported |
 |---|---|---|

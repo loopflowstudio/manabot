@@ -27,7 +27,7 @@ restores it.
 
 ## Implemented
 
-- `bench_states` has 17 catalog-backed recipes and 13 layers. Default sizes
+- `bench_states` has 18 catalog-backed recipes and 13 layers. Default sizes
   are 4/8/16, restricted-filter 2/3/4, recorded 13. Ordinary rules actions
   prepare combat declarations and damage, modal/target choices, chosen-object
   sacrifice, trigger ordering, a deep stack and Saga naming. Every checkpoint
@@ -53,125 +53,144 @@ The reporter fixture remains byte-identical (SHA-256
 `42c6bec5f6a94fbb189ef40a92c7f197489e75756d3e813eaff063bd996596fa`),
 with its Ruff exclusion and detailed `bench_payment replay` reader retained.
 
-## Audit (2026-11-13, release, one machine)
+## Current constructed-state audit (2026-11-13, release, one machine)
 
-Complete native table: `.runs/mtg337/states.jsonl`; exact exports:
-`.runs/mtg337/recipes.jsonl`; Python table: `.runs/mtg337/python.jsonl`.
-These are local review artifacts, not new experiment evidence or a committed
-report. Put the table/findings in the PR body at delivery.
-
-1,377 native rows, 180 checkpoints, 360 Python rows. Native digest:
-`3f139b957ea5c988535f6ed377adcc69cebb86032ceb7bc2d6b62183c65ce5fd`.
-All 1,185 cells from the earlier audit retain identical work after adding
-combat-damage checkpoints. No runtime algorithm changed.
+Final table: `.runs/mtg337/constructed-final.jsonl`: 1,425 rows, 186 checkpoints,
+17 constructed states, digest
+`f0539bcff108e87cef7ea5bc8654078a118616ed3f13858a624d9543ef57fe5d`.
+The final executable preserves all 320 comparison work rows below. The new
+family's exact exports are `distinct-recipes.jsonl` and Python results are
+`distinct-python.jsonl` beside it: 14 rows over 7 checkpoints; both consumers
+complete, maximum 1.182 ms. The `recorded` failure is below, not in this digest.
+These are local review artifacts, not committed experiment evidence. Put the
+table and findings in the eventual PR body. The earlier executable's audit,
+replay and Python findings remain in `7e450d47f:scratch/payment-search.md`;
+do not present their numbers as a source-built audit of the merged HEAD.
 
 | State | Sizes | Priority payment calls | Largest row (checkpoint/layer, size) | Median ms |
 |---|---|---|---|---:|
-| duplicate-lands | 4/8/16 | 10/10/10 | priority/search, 16 | 0.976 |
-| herbalist | 4/8/16 | 19/23/31 | priority/search, 16 | 4.324 |
-| paid-filter | 4/8/16 | 5/5/5 | priority/search, 16 | 0.648 |
-| counted-tap | 4/8/16 | 41/44/76 | cast-choice/search, 16 | 1341.922 |
-| waterbend-x | 4/8/16 | 53/41/41 | priority/search, 16 | 33.736 |
-| duplicate-creatures | 4/8/16 | 3/3/3 | cast-choice/search, 16 | 3.419 |
-| duplicate-tokens | 4/8/16 | 3/3/3 | cast-choice/search, 16 | 3.373 |
-| diverse-mana | 4/8/16 | 144/106/181 | cast-choice/search, 16 | 533.195 |
-| restricted-filter | 2/3/4 | 100/99/99 | priority/search, 4 | 322.237 |
-| diverse-statics | 4/8/16 | 3/3/3 | cast-choice/search, 16 | 24.930 |
-| attachments | 4/8/16 | 19/35/67 | cast-choice/search, 16 | 96.848 |
-| triggers | 4/8/16 | 3/3/3 | damage/search, 16 | 1.773 |
-| zones | 4/8/16 | 15/27/51 | cast-choice/search, 16 | 30.250 |
-| mixed | 4/8/16 | 20/43/86 | cast-choice/search, 16 | 352.012 |
-| choices | 4/8/16 | 7/7/7 | object/search, 16 | 3.883 |
-| names | 4/8/16 | — | name/search, 16 | 0.614 |
-| recorded | 13 | — | priority/vector, 13 | 0.914 |
+| duplicate-lands | 4/8/16 | 4/4/4 | priority/search, 16 | 0.964 |
+| herbalist | 4/8/16 | 18/22/30 | priority/search, 16 | 3.517 |
+| paid-filter | 4/8/16 | 6/6/6 | priority/search, 16 | 0.856 |
+| counted-tap | 4/8/16 | 40/43/75 | cast-choice/search, 16 | 1030.870 |
+| waterbend-x | 4/8/16 | 51/39/39 | priority/search, 16 | 25.343 |
+| duplicate-creatures | 4/8/16 | 0/0/0 | cast-choice/search, 16 | 3.431 |
+| duplicate-tokens | 4/8/16 | 0/0/0 | cast-choice/search, 16 | 3.272 |
+| diverse-mana | 4/8/16 | 136/110/188 | cast-choice/search, 16 | 359.905 |
+| restricted-filter | 2/3/4 | 103/106/106 | priority/search, 4 | 103.932 |
+| distinct-restrictions | 2/3/4 | 48/204/112 | priority/search, 4 | 76.359 |
+| diverse-statics | 4/8/16 | 0/0/0 | cast-choice/search, 16 | 23.317 |
+| attachments | 4/8/16 | 0/0/0 | cast-choice/search, 16 | 88.249 |
+| triggers | 4/8/16 | 0/0/0 | damage/search, 16 | 1.876 |
+| zones | 4/8/16 | 0/0/0 | cast-choice/search, 16 | 15.361 |
+| mixed | 4/8/16 | 18/42/85 | cast-choice/search, 16 | 269.628 |
+| choices | 4/8/16 | 0/0/0 | object/search, 16 | 3.666 |
+| names | 4/8/16 | — | name/search, 16 | 0.709 |
 
-Per-path conclusions:
+- Payment and rollout work has two shapes. Counted-tap's slowest row makes
+  8,296 plans / 515,556 calls, at most 67 calls per plan; mixed makes 10,213
+  plans / 51,479 calls, at most 13 per plan. Restricted-filter's slowest row
+  makes 1,966 plans / 51,897 calls with up to 2,375 in one plan. The finite
+  distinct family reaches 1,893 calls in one plan at size 4.
+- The earlier size-8 restricted-filter search stopped producing rows and was
+  interrupted without a completed count. Do not raise its defaults to retry it.
+- Combat declarations/damage, targets/modes, chosen sacrifices, naming groups,
+  trigger ordering and zones remain measured at real decision boundaries.
+  No strategic action is truncated. A whole combat or ordering round still
+  requires multiple choices; the harness does not materialize all sequences.
+- Static diversity saturates at four cards; mana diversity saturates at seven.
+  Cold characteristics costs at these sizes do not warrant a separate layer
+  optimization. Clone/observation work grows with objects and capacities.
+- Academy frames need a live session; the optional frame measurement is
+  omitted. The earlier Python audit found a text announcement-stage gap;
+  fixing renderer coverage remains outside this Task.
 
-- **Payment:** interchangeable Forests and Prism remain constant-work at these
-  sizes. Diverse/restricted producers are not generally cheap: restricted-filter
-  search spends 3,705/68,191/88,826 calls at 2/3/4 sources. An initial size-8
-  search stopped producing rows and was interrupted, with no completed count.
-  This recipe repeats three card-source restrictions; Powerstone tokens have
-  another. Arbitrary pairwise-distinct restrictions are not reproduced. Exact nested-filter pruning remains a
-  larger rules-search change and is named in `--list` rather than hidden.
-- **Action enumeration:** zones priority uses 15/27/51 calls at 4/8/16, with
-  complete choices retained; below 0.2 ms here. No actionable isolated blowup.
-- **Attackers/blockers and damage:** individual declarations remain small;
-  first-block timings grow roughly with board size. A whole combat still has
-  per-creature decisions and repeated scans. The damage checkpoint measures
-  the final pass through real damage/SBA processing, verified by departures
-  or game over. No choice truncation is proposed.
-- **Targets and modes:** Pillar Launch targets and Azula modes are reached
-  through casting; target sets grow with objects, mode count stays fixed.
-  **Chosen objects and names:** Joo Dee exposes a real sacrifice choice over
-  the board; Sozin exposes catalog-wide bounded naming groups. Their individual
-  steps stay below 0.1 ms at tested sizes; no combinatorial choice materialization
-  was found at these boundaries.
-- **Layers:** the four-card static mix and attached Aura/equipment board keep
-  one cold board rebuild per row. The small tested costs do not justify a new
-  layer optimization; finite catalog diversity is explicitly named.
-- **Trigger ordering:** entry matching examines 8/16/32 sources and finds
-  4/8/16 triggers. One ordering choice is about 0.015/0.022/0.040 ms. A whole
-  ordering round still makes N choices; the harness exposes one boundary at a
-  time, not a factorial set of orderings.
-- **Search:** the slow search rows have two shapes (from `states.jsonl`
-  `plans`/`max_plan_calls`):
-  - *One large plan:* diverse-mana spends 13,553 calls in one plan at size 8
-    (721 at 16, so not monotonic in N); restricted-filter 3,559/5,092 per plan
-    at 3/4 sources. This is payment-search pruning in `flow/mana.rs`.
-  - *Many small plans:* counted-tap cast-choice search makes 860/2,412/8,364
-    plans at 4/8/16 with at most 137 calls each (533,168 calls, about 1.3 s
-    at 16); mixed makes 10,571 plans of at most 13 calls (352 ms). Per-plan
-    bounds would not help; the cost is replanning across playout steps and
-    the per-call cost of counted tap costs.
-- **Observation/clone/Python:** work grows with objects/records and allocated
-  capacity. The Python encoder and text renderer complete all supported
-  checkpoints; the recorded announcement is the single text coverage gap.
-  Largest encode-py: 1.104 ms (attachments, cast-choice, size 16).
-  Largest text: 10.957 ms (attachments, cast-choice, size 16).
+## Optimization pass (2026-11-13)
 
-## Validation and next step
+`PaymentModel::uses` no longer scans every source when an activation has no
+counted tap cost. Single-use counted costs stop after finding enough candidates
+for one activation; repeatable costs still count every available candidate.
+The transition order, resource model, bounds and memo are unchanged. There is
+no new runtime cache or schema. Delete target: the unconditional candidate scan
+inside `uses`; retain finite-resource checks and exact counted-tap bounds.
 
-- Debug example construction/combat check: 1 passed in 3.29 s.
-- Focused exported-continuation policy-parity/rejection test: 1 passed in 0.64 s.
-- Complete release native audit and Python audit completed, with explicit
-  unavailable rows above. The previous repeated native audit had identical
-  deterministic work and digest; added damage cells intentionally change the
-  final corpus digest.
-- Release replay: 426 steps; digest `16547847303527648701` unchanged;
-  2,100 plans / 9,382 calls / 7,167 states, maximum 180 calls per plan.
-  Earlier debug work was 2,234/10,379/8,030: debug invariant probes do extra
-  work, so compare the same features/build profile.
-- CPython 3.13 release wheel built; extension replaced atomically. Ruff,
-  Rust formatting and diff whitespace pass; Loopflow graphs/skills validate.
+Controlled release comparison: `.runs/mtg337/optimization-before.jsonl` and
+`optimization-after.jsonl`, rebuilt from HEAD and the optimized source with
+identical features. All 320 rows have identical deterministic work, legal
+surfaces, step results, ordered first witnesses and corpus digest
+`dcd55c3f472dc6563cfa53b7e088fe50587addd26fcae62833b0d12de6b646df`.
+`compare_optimization.py` beside those artifacts checks every non-time field.
+The initial comparison used a stale executable and is discarded; rebuilding the
+unchanged source resolved its different digest. Do not reuse the stale timing
+comparison as evidence for this optimization.
 
-- Compress (2026-11-13): one reporter-script reader,
-  `benchmark_payments::reporter_game`, serves `bench_payment replay` and the
-  `recorded` state; `scripts/bench_states.py` passes `--sizes` only when given,
-  so its export uses each state's defaults (it had forced 4,8,16 onto
-  restricted-filter); the docs' states table gave way to `--list`. Release
-  `bench_states`: 1,377 rows, digest `3f139b95…` unchanged; replay counts and
-  the herbalist/recorded recipe export byte-identical.
+| State / checkpoint / size | Before ms | After ms |
+|---|---:|---:|
+| diverse-mana / cast-choice / 16 | 417.088 | 354.221 |
+| mixed / cast-choice / 16 | 290.851 | 260.467 |
+| counted-tap / cast-choice / 16 | 1057.352 | 1022.781 |
+| restricted-filter / priority / 4 | 106.482 | 103.133 |
+
+These are one-machine medians of three, not timing assertions or broad speed
+claims. Search-call counts are unchanged: the improvement removes work inside
+a call. Counted-tap and restricted-filter have only small timing differences.
+Residual work is explicitly named in `--list` for each slow state:
+
+- Diverse-mana and restricted-filter need a stronger exact nested-payment
+  bound. Subtracting activation fees from output is unsafe: restricted pool
+  mana may pay a filter while being unusable for its parent (the existing
+  `payment_bound_allows_restricted_mana_to_fund_a_filter` test covers this).
+  A tighter bound must account for spending-purpose conversions and saved
+  outputs, beyond this local cost reduction; no partial pruning is added.
+- Counted-tap and mixed repeatedly plan over different tapped sets, pools,
+  life and saved obligations during rollouts. Reusing only the root cost or
+  source identity would give stale answers. Cross-step reuse needs a separate
+  ownership/key/invalidation design; a per-plan limit would not help.
+
+Catalog audit: `ManaRestriction::` appears at Tea Shop (Ally spells/abilities),
+Hideout (Lesson/Shrine spells), Herbalist (Lesson spells), and Powerstone
+(except nonartifact spells). Added `distinct-restrictions` with 2/3/4 distinct
+restrictions and a paid Prism. Token recipes now name their catalog keys rather
+than assuming Ally. No catalog state can realize arbitrary N distinct
+restrictions, and this bounded family does not establish 2^(N+1) growth.
+`--list` and developer docs state the limit; sizes outside 2..4 are rejected.
+
+Validation: debug `cargo test --lib flow::mana::tests -- --test-threads 2`
+passes all 21 tests, including counted taps, limited uses, saved callers,
+restricted filter funding and full first-witness comparisons.
+
+Source-built Engine Budget comparison: 102,209 steps / digest
+`17459788495858550277` unchanged; all three search seed digests unchanged
+(`16220228006789220642`, `5713229298486337703`, `18315821755026080079`).
+
+Counterexample after rebuilding (do not hide): the existing debug example
+construction test fails on the final `recorded` recipe. The source-built
+**unchanged baseline** also fails `bench_states recorded --layers actions`
+with `Action index 2 out of bounds: 2`. With the improved diagnostic the
+optimized debug build identifies zero-based step 145, action 2. This is
+pre-existing relative to the scan reduction, consistent with the stale
+executable found above; the earlier 426-step success cannot describe HEAD.
+The full construction test is left failing, the fixture remains byte-identical,
+and no index is remapped or historical world rebound. Default all-state audits
+therefore fail as well. A current-world replay needs semantic decision mapping
+or an explicitly chosen compatible historical runtime; neither can be inferred
+from the index-only recording. Stop dependent recorded-corpus claims and leave
+this design/compatibility decision to review.
+
+CPython 3.13 release wheel rebuilt and matching extension atomically installed.
+Rust format and diff whitespace checks pass.
+
+Focused new-state debug check: `cargo run --features benchmark --example
+bench_states --manifest-path managym/Cargo.toml -- distinct-restrictions
+--layers actions` succeeds at all 2/3/4 sizes with debug invariants enabled.
 
 ## Remaining
 
-The harness, audit, list and skill edits exist; the optimisation deliverable
-does not. Comment `b0a6f0a4` step 3: "Optimise the ones that blow up ...
-Where one is too large for this Task, leave it benchmarked and named rather
-than half-fixed", delivering "the optimisations made, with before/after
-numbers". No runtime algorithm has changed, so:
-
-1. For each slow cell above (diverse-mana and restricted-filter single plans;
-   counted-tap and mixed plan counts), either optimise it with before/after
-   `bench_states` work and time, keeping legal actions, first witnesses and
-   the `bench_steps`/`bench_search` digests unchanged and validating in debug,
-   or record in `--list` and the PR body why it is too large for this Task.
-   Calling them all deferred without that reason does not meet the steer.
-2. The steer names "pairwise-different restricted sources plus a paid filter,
-   2^(N+1) states" as a benchmark. restricted-filter repeats three card-source
-   restrictions; whether the catalog can build N pairwise-distinct ones is
-   unchecked. Build it if real cards allow, otherwise say so in `--list`.
-3. Gate, review, PR body with the state x layer table. Shipping stays held
-   (comment `d55bd16b`); the text `announcement` gap is outside this Task.
+1. Resolve recorded replay compatibility before claiming complete corpus
+   validation or a passing gate. Do not repair it by changing the frozen script,
+   skipping its test or remapping action indices without semantic evidence.
+2. Gate, review, PR body with the state x layer table and the optimization,
+   residual reasons and replay failure above. Shipping stays held (comment
+   `d55bd16b`); the text `announcement` gap is outside this Task.
 
 Earlier replay CI implementation history is retained at `6691ed956:scratch/payment-search.md`.

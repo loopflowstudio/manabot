@@ -430,16 +430,28 @@ impl PaymentModel {
         {
             return 0;
         }
-        // No counted tap cost leaves this bound open (usize::MAX) for the
-        // finite-resource limits below.
-        let mut uses = self
-            .tap_candidates(resources, &ability.tap_candidates)
-            .count()
-            .checked_div(ability.tap_count)
-            .unwrap_or(usize::MAX);
-        if ability.tap_source || ability.sacrifice_source || ability.limited {
-            uses = uses.min(1);
-        }
+        let single_use = ability.tap_source || ability.sacrifice_source || ability.limited;
+        // Ordinary activations have no counted taps: do not scan the board
+        // just to divide by zero. For a single-use ability, finding enough
+        // candidates for one activation is sufficient. Repeatable counted
+        // costs still need the full count for an optimistic production bound.
+        let uses = if ability.tap_count == 0 {
+            if single_use {
+                1
+            } else {
+                usize::MAX
+            }
+        } else {
+            let limit = if single_use {
+                ability.tap_count
+            } else {
+                usize::MAX
+            };
+            self.tap_candidates(resources, &ability.tap_candidates)
+                .take(limit)
+                .count()
+                / ability.tap_count
+        };
         assert_ne!(
             uses,
             usize::MAX,

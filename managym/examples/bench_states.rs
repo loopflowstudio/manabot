@@ -24,17 +24,18 @@ const STATES: &[(&str, &str)] = &[
     ("duplicate-lands", "Forest + Airship Engine Room; interchangeable sources, unpayable Sokka"),
     ("herbalist", "Forest + Hermitic Herbalist; modal and Lesson-only output"),
     ("paid-filter", "Forest + Prophetic Prism; nested unpayable payment"),
-    ("counted-tap", "Forest, Supportive Parents, Compassionate Healer; counted tap choices; rollout work grows superlinearly"),
+    ("counted-tap", "Forest, Supportive Parents, Compassionate Healer; counted tap scans stop once a single use is funded. Residual rollout replanning spans changing tapped resources and saved callers; sharing answers across steps needs a separate cache/invalidation design"),
     ("waterbend-x", "Forest, Katara, Bender's Waterskin, Herbalist; one payment per X"),
     ("duplicate-creatures", "Gray Ogre on both sides; attack, block and damage checkpoints"),
     ("duplicate-tokens", "Ally tokens on both sides; observation and combat rows"),
-    ("diverse-mana", "cycle of seven modal/fixed/filter/restricted sources; diversity saturates at seven; nested-filter rollout spikes"),
-    ("restricted-filter", "Tea Shop, Hideout, Herbalist + Prism; expensive nested filters (search grows sharply); defaults 2,3,4. Three card-source restrictions; not arbitrary pairwise-distinct sources"),
+    ("diverse-mana", "cycle of seven modal/fixed/filter/restricted sources; diversity saturates at seven. Avoids counted-tap scans on ordinary activations; residual nested-filter branches need an exact bound accounting for upfront spending purposes and saved outputs"),
+    ("restricted-filter", "Tea Shop, Hideout, Herbalist + Prism; expensive nested filters; defaults 2,3,4. Repeats three restrictions. Residual branch pruning must keep restricted mana that can fund a filter but not the parent; subtracting fees from gross output is not a safe bound"),
+    ("distinct-restrictions", "2/3/4 pairwise-distinct restrictions + paid Prism: Powerstone, Tea Shop, Hideout, Herbalist. Catalog maximum four; cannot construct arbitrary N or claim 2^(N+1) growth. Nested filters retain the same pruning limitation as restricted-filter"),
     ("diverse-statics", "White Lotus Reinforcements, Earth King's Lieutenant, Kyoshi Warriors, Badgermole Cub; diversity saturates at four"),
     ("attachments", "Gray Ogre + Kyoshi Battle Fan + Avatar Destiny, attached, with counters"),
     ("triggers", "many Airbender Ascensions; Ally enters, ordering checkpoint"),
     ("zones", "large hands/graveyards and a stack of Pillar Launch spells; target choices"),
-    ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides"),
+    ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
     ("names", "The Rise of Sozin chapter II; catalog-wide bounded naming groups beside a large graveyard"),
     ("recorded", "unchanged 426-action reporter game; one size (13 mana sources at reported step)"),
@@ -75,7 +76,7 @@ struct Seat {
     battlefield: Vec<String>,
     hand: Vec<String>,
     graveyard: Vec<String>,
-    tokens: usize,
+    tokens: Vec<String>,
 }
 impl Seat {
     fn add(&mut self, name: &str, count: usize) {
@@ -122,7 +123,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 }
             }
         }
-        "diverse-mana" | "restricted-filter" => {
+        "diverse-mana" | "restricted-filter" | "distinct-restrictions" => {
             let names = if name == "diverse-mana" {
                 MANA
             } else {
@@ -132,7 +133,17 @@ fn recipe(name: &str, size: usize) -> Recipe {
                     "Hermitic Herbalist",
                 ]
             };
-            for i in 0..size {
+            let count = if name == "distinct-restrictions" {
+                assert!(
+                    (2..=4).contains(&size),
+                    "distinct-restrictions supports sizes 2..4: the catalog has four restrictions"
+                );
+                seats[0].tokens.push("token.powerstone".into());
+                size - 1
+            } else {
+                size
+            };
+            for i in 0..count {
                 seats[0].add(names[i % names.len()], 1);
             }
             seats[0].add("Prophetic Prism", 1);
@@ -151,7 +162,7 @@ fn recipe(name: &str, size: usize) -> Recipe {
         | "mixed" => {
             for seat in &mut seats {
                 match name {
-                    "duplicate-tokens" => seat.tokens = size,
+                    "duplicate-tokens" => seat.tokens = vec!["token.ally".into(); size],
                     "diverse-statics" => {
                         for i in 0..size {
                             seat.add(STATICS[i % STATICS.len()], 1);
@@ -218,8 +229,10 @@ fn recipe(name: &str, size: usize) -> Recipe {
 fn build(recipe: &Recipe) -> Env {
     if recipe.state == "recorded" {
         let (mut env, actions) = benchmark_payments::reporter_game(RECORDING);
-        for action in actions {
-            env.step(action).unwrap();
+        for (step, action) in actions.into_iter().enumerate() {
+            env.step(action).unwrap_or_else(|error| {
+                panic!("recorded replay failed at step {step} (action {action}): {error}")
+            });
         }
         return env;
     }
@@ -263,9 +276,9 @@ fn build(recipe: &Recipe) -> Env {
                 .zones
                 .move_card(card, PlayerId(i), ZoneType::Graveyard);
         }
-        for _ in 0..seat.tokens {
+        for token in &seat.tokens {
             let game = env.benchmark_game_mut();
-            let id = game.create_token("token.ally", PlayerId(i), false).unwrap();
+            let id = game.create_token(token, PlayerId(i), false).unwrap();
             game.state.permanents[id].as_mut().unwrap().summoning_sick = false;
         }
     }
@@ -814,7 +827,7 @@ fn main() {
         let sizes = match (name, &sizes) {
             ("recorded", _) => vec![13],
             (_, Some(given)) => given.clone(),
-            ("restricted-filter", None) => vec![2, 3, 4],
+            ("restricted-filter" | "distinct-restrictions", None) => vec![2, 3, 4],
             (_, None) => vec![4, 8, 16],
         };
         for size in sizes {

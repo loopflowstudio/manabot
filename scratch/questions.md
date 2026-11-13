@@ -18,7 +18,8 @@ docs, all reversible:
 - The audit table goes in the PR body, not a committed report; the docs keep
   only how to produce it.
 
-Open product question: none. Shipping remains on hold from comment `d55bd16b`.
+Shipping remains on hold from comment `d55bd16b`. The fresh-build replay
+compatibility issue below needs resolution before complete validation.
 
 Implementation findings (2026-11-13):
 - The restricted-filter recipe uses three card-source spending restrictions
@@ -31,7 +32,7 @@ Implementation findings (2026-11-13):
   The optional frame row is omitted; text rendering is reachable directly.
 - The initial audit stalled at restricted-filter size 8 search and was stopped
   with SIGINT. Its defaults now stop at 2,3,4, and `--list` names this growth.
-  Exact mixed-restriction/filter pruning is larger than this harness change.
+  Exact mixed-restriction/filter pruning needs spending-purpose conversions and saved-output accounting; see the optimization pass in the plan.
 - Frozen viewer JSON omits continuation. Exact Python policy input therefore
   requires an explicit `continuation_json` argument on the existing reader,
   using the existing canonical frame parser. This is a read-only join, not a
@@ -40,3 +41,21 @@ Implementation findings (2026-11-13):
   the existing text renderer rejects that stage. The Python audit reports the
   unavailable row, and still fails on malformed captures or other renderer
   errors. Fixing LLM announcement coverage is outside the performance harness.
+
+Optimization pass choices (2026-11-13):
+- Keep the safe local scan reduction, leaving exact nested-filter pruning and
+  cross-step payment caching outside this Task for the reasons in `--list`.
+- The catalog supports four distinct restrictions, so add a bounded 2/3/4
+  family with Powerstone instead of inventing more restrictions or cards.
+- Rebuild benchmark binaries before comparing: an existing executable had a
+  different witness digest from HEAD; the source-built baseline and optimized
+  build agree on every non-time field. Earlier audit values remain historical.
+
+Open design issue from the fresh source build:
+- The unchanged baseline cannot replay the reporter's index-only recording
+  (`Action index 2 out of bounds: 2`); optimized debug diagnostics locate step
+  145. Earlier passing replay/audit notes used a stale executable. Keep the
+  bytes and failure intact; recorded-corpus completion needs a compatible
+  historical runtime or independently evidenced semantic mapping, not guessed
+  index edits. This blocks complete validation, not the independent scan
+  reduction or constructed-state measurements.
