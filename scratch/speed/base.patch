@@ -1722,7 +1722,7 @@ index 69c1419887..0000000000
 -        )
 -        return objects + delta.reshape_as(objects)
 diff --git a/manabot/backends/torch/arrays.py b/manabot/backends/torch/arrays.py
-index 05416e46ca..a304dba1a0 100644
+index d87a8ac8ad..a304dba1a0 100644
 --- a/manabot/backends/torch/arrays.py
 +++ b/manabot/backends/torch/arrays.py
 @@ -6,28 +6,10 @@ Neither changes a dtype, so a float64 operand stays float64 and an integer
@@ -1754,18 +1754,22 @@ index 05416e46ca..a304dba1a0 100644
  
  def from_numpy(array: np.ndarray, device: torch.device | str = "cpu") -> Tensor:
      return torch.as_tensor(array, device=device)
-@@ -45,92 +27,3 @@ def float32(tensor: Tensor) -> Tensor:
+@@ -45,97 +27,3 @@ def float32(tensor: Tensor) -> Tensor:
  def device_of(module: nn.Module) -> torch.device:
      """Where a module computes: the device of its first parameter."""
      return next(module.parameters()).device
 -
 -
 -def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str, A]:
--    """Flatten the dataclass tree; tuples preserve their field coordinates."""
+-    """Flatten array fields, skipping host-only metadata; tuples keep coordinates."""
 -    if isinstance(value, leaf):
 -        return {prefix: value}
 -    if is_dataclass(value) and not isinstance(value, type):
--        children = ((f.name, getattr(value, f.name)) for f in fields(value))
+-        children = (
+-            (f.name, getattr(value, f.name))
+-            for f in fields(value)
+-            if not f.metadata.get("host_only", False)
+-        )
 -    elif isinstance(value, tuple):
 -        if _host_scalars(value):
 -            return {}
@@ -1790,6 +1794,7 @@ index 05416e46ca..a304dba1a0 100644
 -                    getattr(value, f.name), moved, f"{prefix}/{f.name}"
 -                )
 -                for f in fields(value)
+-                if not f.metadata.get("host_only", False)
 -            },
 -        )
 -    if isinstance(value, tuple):
@@ -7164,7 +7169,7 @@ index 69f06b5807..f1cfa00cb8 100644
          if code is None:
              raise TypeError(f"{name}: dtype {array.dtype} has no safetensors code")
 diff --git a/manabot/policy/prepare.py b/manabot/policy/prepare.py
-index b5e7ed9e64..c9d4def5e7 100644
+index 9941e0a47e..c9d4def5e7 100644
 --- a/manabot/policy/prepare.py
 +++ b/manabot/policy/prepare.py
 @@ -1,26 +1,23 @@
@@ -7196,10 +7201,11 @@ index b5e7ed9e64..c9d4def5e7 100644
  """
  
 -from collections.abc import Callable, Mapping, Sequence
-+from collections.abc import Mapping, Sequence
- from dataclasses import dataclass
+-from dataclasses import dataclass, field
 -from enum import IntEnum
 -from functools import cached_property
++from collections.abc import Mapping, Sequence
++from dataclasses import dataclass
  
  import numpy as np
  
@@ -7411,11 +7417,12 @@ index b5e7ed9e64..c9d4def5e7 100644
      """
  
 -    gather: A
-+    gather: Array
-     sizes: tuple[int, ...]
+-    sizes: tuple[int, ...] = field(metadata={"host_only": True})
 -    unpack: A
 -    restore: A
--    lengths: tuple[int, ...]
+-    lengths: tuple[int, ...] = field(metadata={"host_only": True})
++    gather: Array
++    sizes: tuple[int, ...]
 +    unpack: Array
 +    restore: Array
  
@@ -7438,7 +7445,7 @@ index b5e7ed9e64..c9d4def5e7 100644
      ordered = lengths[order]
      sizes: list[int] = []
      gather: list[Array] = []
-@@ -291,217 +214,153 @@ def pack(
+@@ -291,219 +214,153 @@ def pack(
      unpack[flat] = np.arange(len(flat))
      restore = np.empty(len(order), dtype=np.int64)
      restore[order] = np.arange(len(order))
@@ -7499,6 +7506,22 @@ index b5e7ed9e64..c9d4def5e7 100644
 -    positions: A  # [B*F] token position of each fact row
 -    mask: A  # [B*F] bool
 -    schedule: Packed[A]
+-
+-
+-@dataclass(frozen=True)
+-class FactRoutes[A]:
+-    kinds: A  # [B,F]
+-    columns: A  # [B,F,6] numeric columns
+-    id_rows: A  # [B,F] token rows of named ids
+-    id_mask: A  # [B,F]
+-    detail_rows: A
+-    detail_mask: A
+-    token_rows: A  # program token rows
+-    token_mask: A
+-    source_rows: A  # [B,F] catalog row + 1
+-    targets: A  # [B*F] flat object index
+-    linked: A  # [B,F] float
+-    programs: FactPrograms[A] | None
 +class FactRoutes:
 +    kinds: Array  # [B,F]
 +    columns: Array  # [B,F,6] numeric columns
@@ -7517,38 +7540,6 @@ index b5e7ed9e64..c9d4def5e7 100644
 +    program_positions: Array | None  # [B*F] token position of each fact row
 +    program_mask: Array | None  # [B*F] bool
 +    program_schedule: Packed | None
- 
- 
- @dataclass(frozen=True)
--class FactRoutes[A]:
--    kinds: A  # [B,F]
--    columns: A  # [B,F,6] numeric columns
--    id_rows: A  # [B,F] token rows of named ids
--    id_mask: A  # [B,F]
--    detail_rows: A
--    detail_mask: A
--    token_rows: A  # program token rows
--    token_mask: A
--    source_rows: A  # [B,F] catalog row + 1
--    targets: A  # [B*F] flat object index
--    linked: A  # [B,F] float
--    programs: FactPrograms[A] | None
-+class EffectRoutes:
-+    numeric: Array  # [L,8]
-+    controller: Array  # [L] flat object index
-+    controller_mask: Array
-+    source_object: Array
-+    source_object_mask: Array
-+    modification_rows: Array  # [L]
-+    source_rows: Array  # [L] catalog row + 1
-+    detail_rows: Array  # [Dt]
-+    detail_kinds: Array  # [Dt]
-+    detail_numbers: Array  # [Dt]
-+    detail_is_number: Array  # [Dt] float
-+    token_indexes: Array  # [sum lengths] rows of the header+detail token table
-+    schedule: Packed
-+    routes: Array  # [M] flat object index
-+    member_records: Array  # [M]
  
  
  @dataclass(frozen=True)
@@ -7580,9 +7571,25 @@ index b5e7ed9e64..c9d4def5e7 100644
 -    probabilities: A
 -    validity: A
 -    globals: A
--
--
--@dataclass(frozen=True)
++class EffectRoutes:
++    numeric: Array  # [L,8]
++    controller: Array  # [L] flat object index
++    controller_mask: Array
++    source_object: Array
++    source_object_mask: Array
++    modification_rows: Array  # [L]
++    source_rows: Array  # [L] catalog row + 1
++    detail_rows: Array  # [Dt]
++    detail_kinds: Array  # [Dt]
++    detail_numbers: Array  # [Dt]
++    detail_is_number: Array  # [Dt] float
++    token_indexes: Array  # [sum lengths] rows of the header+detail token table
++    schedule: Packed
++    routes: Array  # [M] flat object index
++    member_records: Array  # [M]
+ 
+ 
+ @dataclass(frozen=True)
 -class EventRows[A]:
 -    """Public history joins and integer ages; log1p stays in the backend."""
 -
@@ -7695,7 +7702,9 @@ index b5e7ed9e64..c9d4def5e7 100644
 -    legal_support: bool = True  # every observation has a legal action
 -    # A serving scope may bound this batch's lifetime without changing its rows.
 -    guard: Callable[[object], None] | None = None
--    bucket_needs: tuple[tuple[int, ...], ...] | None = None
+-    bucket_needs: tuple[tuple[int, ...], ...] | None = field(
+-        default=None, metadata={"host_only": True}
+-    )
 +    attention_columns: Array | None = None
  
  
@@ -7768,7 +7777,7 @@ index b5e7ed9e64..c9d4def5e7 100644
      f32 = np.float32
      permanents = np.stack([obs[key] for key in _PERMANENT_KEYS], axis=1)
      numeric = permanents[..., list(layout.numeric_permanent_columns)].astype(f32)
-@@ -544,8 +403,6 @@ def prepare(
+@@ -546,8 +403,6 @@ def prepare(
      frame_indexes = (frame_base + (frame_ids - 1).clip(min=0)).reshape(-1)
  
      legal = obs["actions_valid"] > 0
@@ -7777,7 +7786,7 @@ index b5e7ed9e64..c9d4def5e7 100644
      legal_batches, legal_slots = np.nonzero(legal)
      positions = np.zeros(legal.shape, dtype=np.int64)
      positions[legal_batches, legal_slots] = np.arange(len(legal_batches))
-@@ -558,44 +415,18 @@ def prepare(
+@@ -560,44 +415,18 @@ def prepare(
      else:
          first = last = np.zeros(len(candidates), np.int64)
  
@@ -7828,7 +7837,7 @@ index b5e7ed9e64..c9d4def5e7 100644
          deck_rows=tables.rows(decklists[..., 0]),
          deck_counts=(decklists[..., 1:] / f32(60)).astype(f32),
          permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
-@@ -611,7 +442,6 @@ def prepare(
+@@ -613,7 +442,6 @@ def prepare(
          frame_indexes=frame_indexes,
          legal=legal,
          legal_batches=legal_batches.astype(np.int64),
@@ -7836,7 +7845,7 @@ index b5e7ed9e64..c9d4def5e7 100644
          logit_positions=positions,
          action_features=action_rows[:, :-2].astype(f32),
          action_frames=legal_batches * relation_count + (frames - 1).clip(min=0),
-@@ -626,74 +456,17 @@ def prepare(
+@@ -628,74 +456,17 @@ def prepare(
          focus=legal_batches[:, None] * objects + focus.clip(min=0),
          focus_mask=(focus != -1).astype(f32),
          attention_columns=columns,
@@ -7916,7 +7925,7 @@ index b5e7ed9e64..c9d4def5e7 100644
      scale = np.float32(FACT_TIMESTAMP_SCALE)
      columns = np.stack(
          [
-@@ -707,94 +480,99 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
+@@ -709,94 +480,99 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
          -1,
      ).astype(np.float32)
      named = (kinds > 0) & ~ordinal
@@ -8079,7 +8088,7 @@ index b5e7ed9e64..c9d4def5e7 100644
      halves, source, links = live[:, :2], live[:, 11], live[:, [10, 12]]
      detail_indexes: list[int] = []
      member_indexes: list[int] = []
-@@ -816,16 +594,16 @@ def _effects(
+@@ -818,16 +594,16 @@ def _effects(
      kinds, ids = detail_host[:, 0], detail_host[:, 1:]
      targets = members.reshape(-1, MEMBER_DIM)[member_indexes][:, 0].astype(np.int64)
      records = np.asarray(member_records, dtype=np.int64)
@@ -8100,7 +8109,7 @@ index b5e7ed9e64..c9d4def5e7 100644
      if program.any():
          detail_embedding_rows[program] = tables.tokens(
              kinds[program] - 10, unsigned[program]
-@@ -837,15 +615,11 @@ def _effects(
+@@ -839,15 +615,11 @@ def _effects(
          controller_mask=(links[:, 0] > 0).astype(np.float32),
          source_object=base + (links[:, 1] - 1).clip(min=0),
          source_object_mask=(links[:, 1] > 0).astype(np.float32),
@@ -8119,7 +8128,7 @@ index b5e7ed9e64..c9d4def5e7 100644
          detail_is_number=((kinds == 14) | (kinds == 15)).astype(np.float32),
          token_indexes=np.asarray(token_indexes, dtype=np.int64),
          schedule=pack(lengths),
-@@ -854,44 +628,7 @@ def _effects(
+@@ -856,44 +628,7 @@ def _effects(
      )
  
  
