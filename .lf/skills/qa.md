@@ -130,6 +130,15 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Engine cost on large boards (`docs/development.md#stress-states`): build
+  once with `cargo build --release --features benchmark --example bench_states
+  --manifest-path managym/Cargo.toml`, then call
+  `managym/target/release/examples/bench_states` directly (all 17 states ran
+  in about 11 s on an M-series laptop). Compare two commits by building the
+  other one in a `/private/tmp` worktree with its own `CARGO_TARGET_DIR` and
+  diffing each row's `work` field; the closing digest also moves whenever
+  cards are added, so it is not a behavior check across a merge from main.
+  `scripts/bench_states.py` uses the installed extension.
 - Local-update search changes: `uv run --extra dev python
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
   seconds that receipts still equal main's, field for field; the

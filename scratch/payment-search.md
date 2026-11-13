@@ -94,8 +94,10 @@ three, not assertions.
   plans / 515,556 calls (at most 67 per plan); mixed 10,213 / 51,479 (at most
   13). Few large plans: restricted-filter 1,966 / 51,897 with up to 2,375 in
   one plan; distinct-restrictions reaches 1,893 in one plan at size 4.
-- A restricted-filter search at size 8 stopped producing rows and was
-  interrupted without a count. Do not raise its defaults to retry it.
+- An earlier restricted-filter search at size 8 stopped producing rows and
+  was interrupted. QA (2026-11-13, after the scan reduction and main merge):
+  `--sizes 8 restricted-filter` completes in about 1 s, priority/search 570 ms,
+  220,417 calls. Defaults stay 2/3/4.
 - Static diversity saturates at four cards, mana diversity at seven. Cold
   characteristics cost at these sizes warrants no separate optimization.
 - Python consumers: every constructed checkpoint completed in the earlier
@@ -175,6 +177,13 @@ and a `flow/resolution.rs` change (no new `ManaRestriction`, no `flow/mana.rs`
 change). The recipes name their cards, but whether the digest folds catalog
 ids is unchecked: gate reruns the debug example test and the release default
 run, and the PR body cites the digest from that run.
+
+QA (2026-11-13) reran after the merge: 1,425 rows, closing digest
+`9d110ad53de4758bf15706218ae5a104305ca716dd357a9be1ec185b9c7a1a24`. Every
+row's `work` equals the pre-merge run except `choices` clone bytes (+8). All
+17 per-state digests also move on the pre-merge parent versus the merged
+build: `state_digest` hashes the serialized game, card definition ids
+included. Cite the new digest; the docs now say so.
 
 1. Gate, PR body with the state x layer table, the optimization, the two
    residual costs and the replay finding, then land. The text renderer's

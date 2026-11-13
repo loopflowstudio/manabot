@@ -775,14 +775,15 @@ fn main() {
                         layers
                             .iter()
                             .all(|s| s == "step" || LAYERS.contains(&s.as_str())),
-                        "unknown layer"
+                        "unknown layer in {value}; layers are step, {}",
+                        LAYERS.join(", ")
                     );
                 }
             }
             name => {
                 assert!(
                     STATES.iter().any(|(n, _)| *n == name),
-                    "unknown state {name}"
+                    "unknown state {name}; --list names the states"
                 );
                 names.push(args[i].clone());
             }

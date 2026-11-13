@@ -544,8 +544,8 @@ the harness runs every state. Defaults are 4, 8 and 16 copies. `restricted-filte
 and `distinct-restrictions` default to 2, 3 and 4: nested-filter search already
 grows sharply there, and the catalog has only four spending restrictions, so
 `distinct-restrictions` accepts no other size and cannot establish a growth
-rate in the number of restrictions. `--sizes 8,16` overrides the other states'
-sizes (1–64), `--layers actions,step` selects
+rate in the number of restrictions. `--sizes 8,16` overrides the sizes of
+every named state (1–64), `--layers actions,step` selects
 layers, and `--list` names the cards and known expensive shapes. Do not
 increase a known expensive cell just to make it run longer.
 
@@ -586,7 +586,11 @@ and `benchmark_payments.rs`. They exist only in `benchmark` builds, never in
 wheels. *ms* is the median of repeated runs and is comparable only between two
 builds on one machine. The closing digest folds every state's legal actions and
 first payment witnesses, so an optimization that changes behavior shows as a
-changed digest beside its faster numbers.
+changed digest beside its faster numbers. It also folds engine state digests,
+which hash the serialized game, card definition ids included, so adding cards or
+changing a rules type moves every state's digest without changing behavior;
+across such a change, compare the rows' `work` (witness digests included)
+instead.
 
 The Python-side layers read the same states (the Rust harness prints their
 recipes with `--recipes`) and report time only:

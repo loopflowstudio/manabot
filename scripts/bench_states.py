@@ -59,7 +59,7 @@ def main() -> None:
     if args.recipes_file:
         corpus = args.recipes_file.read_text()
     else:
-        corpus = subprocess.run(
+        harness = subprocess.run(
             [
                 "cargo",
                 "run",
@@ -75,11 +75,14 @@ def main() -> None:
                 *(["--sizes", args.sizes] if args.sizes else []),
                 *args.states,
             ],
-            check=True,
             text=True,
             stdout=subprocess.PIPE,
             timeout=180,
-        ).stdout
+        )
+        # The harness prints its own error (unknown state, bad size) to stderr.
+        if harness.returncode:
+            raise SystemExit(harness.returncode)
+        corpus = harness.stdout
     for line in corpus.splitlines():
         point = Checkpoint.model_validate_json(line)
         if args.states and point.recipe.state not in args.states:

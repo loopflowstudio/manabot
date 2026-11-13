@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-337 QA: stress states</title>
+<style>body{font:15px/1.5 system-ui;max-width:860px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.6em;overflow:auto;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:.2em .6em;text-align:left}</style></head>
+<body>
+<h1>MTG-337 QA: stress states</h1>
+<p>Audience: a contributor changing payment, enumeration or layers who follows
+<code>docs/development.md#stress-states</code>. Release build, one laptop, 2026-11-13.</p>
+
+<h2>Scenarios</h2>
+<table>
+<tr><th>Scenario</th><th>What I did</th><th>What I saw</th></tr>
+<tr><td>First run, docs verbatim</td><td><code>cargo run --release --features benchmark --example bench_states … -- --list</code>, then <code>-- diverse-mana</code></td><td>Cold build in 45 s. <code>--list</code> names 17 states with cards and residual costs. diverse-mana prints 69 rows plus a digest in 2.9 s, in the documented row shape.</td></tr>
+<tr><td>Whole audit</td><td>Ran the binary with no arguments</td><td>1,425 rows in 11 s (docs: "about a minute"). Digest <code>9d110ad5…</code> is identical on a second run.</td></tr>
+<tr><td>Compared with the pre-merge commit</td><td>Built parent <code>52327cdd98</code> in a temporary worktree and diffed every row's <code>work</code></td><td>All 1,425 rows have the same work and witness digests, except <code>choices</code> clone bytes (+8). <b>All 17 per-state digests changed</b>: <code>state_digest</code> hashes the serialized game, card definition ids included, so main's new J22/NEC cards move every digest. The docs claimed a changed digest means changed behavior. <b>Fixed</b>: the docs now say to compare <code>work</code> across a catalog or rules-type change.</td></tr>
+<tr><td>Documented flags</td><td><code>--sizes 8,16 --layers actions,step</code>, <code>--recipes</code></td><td>Work as described. <code>--sizes</code> also applies to <code>restricted-filter</code>, though the docs said "the other states'". <b>Fixed</b> the wording. <code>--sizes 8 restricted-filter</code> now finishes in about 1 s (search 570 ms, 220k calls). The scratch note saying it stalled was stale and is corrected.</td></tr>
+<tr><td>Wrong input</td><td>Unknown state, sizes 0/65/abc, <code>--sizes 8 distinct-restrictions</code>, unknown layer, <code>--help</code></td><td>All exit 101 with a panic message. The unknown-state and unknown-layer messages gave no next step. <b>Fixed</b>: <code>unknown state nope; --list names the states</code>, and the layer error now lists the valid layers. Size errors were already clear.</td></tr>
+<tr><td>Python consumers</td><td><code>uv run --extra play python scripts/bench_states.py diverse-mana</code>, <code>--recipes-file</code>, <code>--layers encode-py</code>, unknown state, bad layer</td><td>18 rows (encode-py and text) in 0.6 s, and the exported-file path works. A bad layer gives a clean argparse error. An unknown state printed the harness's message followed by a Python <code>CalledProcessError</code> traceback. <b>Fixed</b>: the script now exits with the harness's status and no traceback.</td></tr>
+<tr><td>Reported game (docs recipe)</td><td>Worktree at <code>v0.2.3</code>, <code>bench_payment replay</code> on the fixture</td><td>Built and replayed in 53 s, with output identical to the docs: 426 steps, 2,100 plans, 9,382 calls, 7,167 states, max 180, digest 16547847303527648701.</td></tr>
+<tr><td>Local checks</td><td>Debug <code>cargo test --features benchmark --example bench_states --example bench_payment</code>; <code>pytest tests/verify/test_continuation_input.py</code>; loopflow workflow check; ruff and cargo fmt</td><td>1 passed; 11 passed; valid; clean.</td></tr>
+</table>
+
+<h2>What works now</h2>
+<p>Every documented command runs as written from a fresh terminal, and the reported-game recipe reproduces the documented numbers.
+Wrong input now names the valid choice.</p>
+
+<h2>Not reached</h2>
+<ul><li>Academy frames: they need a live session, and the docs already state that they are not measured.</li>
+<li>The installed extension (08:57) predates commit <code>0de5b61</code>'s <code>flow/mana.rs</code> edit. The Python rows time only encoding and rendering, so I did not rebuild; gate should rebuild before any release check.</li></ul>
+
+<h2>Still wrong, worst first</h2>
+<ol><li>The closing digest is not comparable across a merge that adds cards. This is documented now, not changed: excluding definition ids from the fold would be a harness design change.</li>
+<li>CI never compiles <code>bench_states</code> (already recorded in the plan and questions), so a card change can break a recipe without anyone noticing.</li>
+<li>Arguments are handled with panics (exit 101 and a "thread main panicked" line), and <code>--help</code> reads as an unknown state. This is acceptable for a benchmark example.</li></ol>
+</body></html>
