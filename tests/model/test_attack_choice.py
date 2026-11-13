@@ -2,9 +2,12 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
@@ -13,12 +16,10 @@ from manabot.env.observation import (
 )
 from manabot.experiment.config import Experiment
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import WORLD, checkpoint_world
+from manabot.policy.prepare import reference_distribution
 from manabot.training.execution import execute_regime
-from manabot.training.updates.references import reference_distribution
 from manabot.verify.action_cases import (
     DecisionCase,
     decision_case,
@@ -79,8 +80,10 @@ def test_native_attack_choice_can_learn_either_preference(
             )
             torch.testing.assert_close(swapped[:, :2], logits[:, [1, 0]])
         for kind in ("uniform", "action_type_uniform"):
-            prior = reference_distribution(attack_observation, kind)
-            torch.testing.assert_close(prior[0, :2], torch.tensor([0.5, 0.5]))
+            prior = reference_distribution(
+                {k: v.numpy() for k, v in attack_observation.items()}, kind
+            )
+            np.testing.assert_allclose(prior[0, :2], [0.5, 0.5])
             assert not prior[0, 2:].any()
     finally:
         torch.set_num_threads(previous_threads)

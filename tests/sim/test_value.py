@@ -5,12 +5,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.rollout import _allocate_buffers
 from manabot.sim.search.flat_mc import make_player, spec_name
 from manabot.sim.search.value import (

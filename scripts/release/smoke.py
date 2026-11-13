@@ -9,7 +9,7 @@ import torch
 
 import manabot
 from manabot import managym as compatibility
-from manabot.model.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import torch
 
-from manabot.model.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.policy.checkpoint import (
     UnsupportedPolicy,
     checkpoint_metadata,

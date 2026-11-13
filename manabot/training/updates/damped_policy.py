@@ -5,48 +5,43 @@ KL penalties, not a novel replacement for that surrogate. Targets, behavior
 likelihoods and the magnet are constants. Only current policy/critic logits
 receive gradients. MTG uses same-viewer transitions and an action-type magnet;
 see docs/learning.md#fidelity-to-the-sources for the fidelity boundary and unresolved source details.
+
+The update is written once over a backend module (`manabot.backends.torch`,
+`manabot.backends.mlx`; the surface it calls is
+`manabot.training.updates.backend.Backend`): array math goes through
+`backend.rl`, `backend.learner` and `backend.arrays`, observations are
+admitted by `backend.rollout`, and row bookkeeping and diagnostics (which rows train,
+minibatch indexes, selection groups, value scale) are NumPy. The minibatch
+loss is `minibatch_objective`, equation (6) in `backend.rl.damped_policy_loss`
+plus the critic's loss; the learner differentiates it as a closure over the
+policy forward (`Learner.loss`), which is how a functional framework takes a
+gradient.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
-import torch
-from torch import Tensor
+import numpy as np
 
 from manabot.env.observation import ACTION_TYPE_DIM
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.policy_distribution import (
-    check_logs,
-    check_probabilities,
-    legal_mask,
-    policy_logs,
-)
-from manabot.rl.losses import (
-    categorical_value_loss,
-    clip_fraction,
-    clipped_surrogate,
-    entropy,
-    reverse_kl,
-    squared_value_loss,
-    support_logs,
-)
-from manabot.rl.numerics import float64_operand, require
-from manabot.rl.returns import (
-    categorical_lambda_returns,
-    expected_outcome,
-    transition_gae,
-)
-from manabot.rl.selection import selected_mean, selection_mask
-from manabot.rl.step import gradient_step
+from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.backend import (
+    RL,
+    AdmittedRollout,
+    Array,
+    Backend,
+    Learner,
+    Policy,
+    categorical_rl,
+)
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
     failure_tensors,
     minibatch_tensors,
 )
-from manabot.training.updates.learner import AdmittedRollout, Learner
-from manabot.training.updates.references import reference_distribution
 from manabot.training.updates.selection import (
     UpdateDiagnostics,
     selection_diagnostics,
@@ -54,154 +49,164 @@ from manabot.training.updates.selection import (
 )
 
 
-def damped_policy_loss(
-    logits: Tensor,
-    actions: Tensor,
-    advantages: Tensor,
-    behavior_logs: Tensor,
-    reference: Tensor,
-    valid: Tensor,
+@dataclass(frozen=True)
+class DampedTargets:
+    advantages: Array
+    values: Array
+    selected: Array
+
+
+def minibatch_objective(
+    rl: RL,
+    logits: Array,
+    value_logits: Array,
+    valid: Array,
     *,
+    actions: Array,
+    advantages: Array,
+    value_targets: Array,
+    behavior_logs: Array,
+    reference: Array,
+    actor_mask: Array,
+    categorical: bool,
     clip: float,
     collection_kl: float,
     tau: float,
-) -> Tensor:
-    """The damped policy objective, equation (6), per row [B] over offers [B,A].
+) -> tuple[Array, Array, Array]:
+    """The damped rule's loss on one minibatch: (loss, policy loss, value loss).
 
-    Sources and departures: docs/learning.md#fidelity-to-the-sources.
-
-    Ratios use the actual action likelihood at collection, even after earlier
-    minibatches change the learner. The reverse KLs sum all legal actions.
-    This is per-action reuse correction, not trajectory importance weighting.
-    MPS combines these terms on the host to retain float64 surrogate range.
+    `rl` is a backend's `rl` module and every array is that backend's:
+    float32 `logits` [B,A] and critic output ([B,1], or [B,3] outcome logits
+    when `categorical`) from the current forward, the legal mask [B,A], and
+    the constants `actions` [B], `advantages` [B], `value_targets` ([B] or
+    [B,3]), `behavior_logs` [B,A], `reference` probabilities [B,A] and the
+    actor-selected rows [B]. The policy term averages equation (6) over the
+    actor's rows; the critic term averages every row. Gradients reach only
+    `logits` and `value_logits`.
     """
-    valid = valid.bool()
-    if logits.ndim != 2 or logits.shape != valid.shape:
-        raise ValueError("policy logits require [B,A] legal support")
-    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
-        raise ValueError("actions and advantages require [B]")
-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
-        raise ValueError("invalid damping coefficients")
-    check_logs(behavior_logs, valid)
-    check_probabilities(reference, valid, positive=True)
-    require(
-        torch.isfinite(advantages),
-        "nonfinite_advantages",
-        advantages=advantages,
-        valid=valid,
+    policy_loss = rl.selected_mean(
+        rl.damped_policy_loss(
+            logits,
+            actions,
+            advantages,
+            behavior_logs,
+            reference,
+            valid,
+            clip=clip,
+            collection_kl=collection_kl,
+            tau=tau,
+        ),
+        actor_mask,
     )
-    if ((actions < 0) | (actions >= logits.shape[-1])).any():
-        raise ValueError("action index outside legal support")
-    if not valid.gather(-1, actions[:, None]).all():
-        raise ValueError("sampled action is not legal")
-    logs = policy_logs(logits, valid)
-    reference_logs = support_logs(reference.detach(), valid)
-    ratio_logs = (
-        (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
-    )
-    surrogate = clipped_surrogate(ratio_logs, advantages, clip)
-    return (
-        surrogate
-        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
-        + tau * float64_operand(reverse_kl(logs, reference_logs, valid))
-    )
+    if categorical:
+        value_loss = (
+            categorical_rl(rl).categorical_value_loss(value_logits, value_targets)
+        ).mean()
+    else:
+        # Representation ablation, not the paper's outcome objective.
+        value_loss = rl.squared_value_loss(value_logits, value_targets).mean()
+    return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
 
 
-@dataclass(frozen=True)
-class DampedTargets:
-    advantages: Tensor
-    values: Tensor
-    selected: Tensor
-
-
-@torch.no_grad()
 def _targets(
+    backend: Backend,
     learner: Learner,
     admitted: AdmittedRollout,
     learning: DampedPolicyLearning,
-    bootstrap_agent: ActorCritic | None = None,
+    bootstrap_agent: Policy | None = None,
 ) -> DampedTargets:
-    device = learner.device
+    rl, device = backend.rl, learner.device
     batch = admitted.batch
-    rewards = torch.as_tensor(batch.rewards, device=device)
-    ends = torch.as_tensor(batch.dones, device=device)
-    values = torch.as_tensor(batch.values, device=device)
-    require(torch.isfinite(values), "nonfinite_collection_values", values=values)
-    require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
-    next_obs = admitted.next_observation(device)
-    with learner.forward_precision():
-        _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
-    next_raw = next_raw.float()
-    require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
-    if learner.agent.config.value_kind == "categorical_wdl":
-        if batch.outcome_probabilities is None:
-            raise ValueError(
-                "categorical update requires collection outcome probabilities"
+    with backend.learner.no_grad():
+        rewards = backend.arrays.from_numpy(batch.rewards, device)
+        ends = backend.arrays.from_numpy(batch.dones, device)
+        values = backend.arrays.from_numpy(batch.values, device)
+        rl.require_finite("nonfinite_collection_values", values=values)
+        rl.require_finite("nonfinite_rewards", rewards=rewards)
+        next_obs = admitted.next_observation(device)
+        with learner.forward_precision():
+            policy = bootstrap_agent or learner.agent
+            _, next_raw = policy.forward_distribution(next_obs)
+        next_raw = backend.arrays.float32(next_raw)
+        rl.require_finite("nonfinite_bootstrap", values=next_raw)
+        if learner.agent.config.value_kind == "categorical_wdl":
+            if batch.outcome_probabilities is None:
+                raise ValueError(
+                    "categorical update requires collection outcome probabilities"
+                )
+            outcomes = batch.outcome_probabilities
+            if not np.allclose(
+                batch.values, outcomes[..., 2] - outcomes[..., 0], atol=1e-5
+            ):
+                raise ValueError(
+                    "saved value differs from collection outcome probabilities"
+                )
+            probabilities = backend.arrays.from_numpy(outcomes, device)
+            wdl = categorical_rl(rl)
+            bootstrap = wdl.outcome_probabilities(next_raw)
+            value_targets = wdl.categorical_lambda_returns(
+                probabilities, rewards, ends, bootstrap, learning.value_lambda
             )
-        probabilities = torch.as_tensor(batch.outcome_probabilities, device=device)
-        if not torch.allclose(values, expected_outcome(probabilities), atol=1e-5):
-            raise ValueError(
-                "saved value differs from collection outcome probabilities"
+            next_value = wdl.expected_outcome(bootstrap)
+        else:
+            next_value = next_raw.squeeze(-1)
+            _, value_targets = rl.transition_gae(
+                rewards, values, ends, next_value, 1.0, learning.value_lambda
             )
-        bootstrap = next_raw.softmax(-1)
-        value_targets = categorical_lambda_returns(
-            probabilities, rewards, ends, bootstrap, learning.value_lambda
+        advantages, _ = rl.transition_gae(
+            rewards, values, ends, next_value, 1.0, learning.policy_lambda
         )
-        next_value = expected_outcome(bootstrap)
-    else:
-        next_value = next_raw.squeeze(-1)
-        _, value_targets = transition_gae(
-            rewards, values, ends, next_value, 1.0, learning.value_lambda
+        rl.require_finite("nonfinite_advantages", advantages=advantages)
+        rl.require_finite("nonfinite_value_targets", targets=value_targets)
+        # Inclusive quantile keeps all ties, unlike a top-k filter with fixed count.
+        selected = rl.selection_mask(
+            advantages,
+            learning.filter_kind,
+            1 - learning.advantage_quantile,
+            learning.min_advantage,
         )
-    advantages, _ = transition_gae(
-        rewards, values, ends, next_value, 1.0, learning.policy_lambda
-    )
-    require(torch.isfinite(advantages), "nonfinite_advantages", advantages=advantages)
-    require(
-        torch.isfinite(value_targets), "nonfinite_value_targets", targets=value_targets
-    )
-    # Inclusive quantile keeps all ties, unlike a top-k filter with fixed count.
-    selected = selection_mask(
-        advantages,
-        learning.filter_kind,
-        1 - learning.advantage_quantile,
-        learning.min_advantage,
-    )
     return DampedTargets(advantages, value_targets, selected)
 
 
 def update_damped_iteration(
+    backend: Backend,
     learner: Learner,
     batch: RolloutBatch,
     learning: DampedPolicyLearning,
     iteration: int,
     *,
-    bootstrap_agent: ActorCritic | None = None,
+    bootstrap_agent: Policy | None = None,
 ) -> UpdateDiagnostics:
     """One fresh epoch grouped by native stream count, with frozen targets.
 
-    EMA belongs to the calling stage and advances once even on an empty
-    filter. No batch shuffling, advantage normalization, replay or hidden truth.
-    Scalar value is an explicit MSE ablation; categorical uses equation (5).
+    `backend` is the module whose arrays `learner` holds. EMA belongs to the calling stage and advances
+    once even on an empty filter. No batch shuffling, advantage normalization,
+    replay or hidden truth. Scalar value is an explicit MSE ablation;
+    categorical uses equation (5).
 
     Timed phases end where the code already reads device values (the behavior
     checks, target and diagnostic floats, the objective and gradient checks).
     """
+    rl, to_device = backend.rl, backend.arrays.from_numpy
+    to_host, float32 = backend.arrays.to_numpy, backend.arrays.float32
     device = learner.device
+    categorical = learner.agent.config.value_kind == "categorical_wdl"
     track = learner.profiler.track
     with track("Batch transfer and behavior checks"):
         batch.action_data.check(batch.actions, batch.logprobs)
-        admitted = AdmittedRollout(learner.agent, batch)
-        actions = torch.as_tensor(batch.actions, device=device)
+        admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
+        actions = to_device(batch.actions, device)
     with track("Targets"):
-        targets = _targets(learner, admitted, learning, bootstrap_agent)
+        targets = _targets(backend, learner, admitted, learning, bootstrap_agent)
         advantage_abs_mean = float(targets.advantages.abs().mean())
+    # Which rows the actor trains on, [T,E] on the host.
+    actor_rows = to_host(targets.selected)
     rate, tau = learning.rates(iteration)
     diagnostics: UpdateDiagnostics = {
         "gradient": learning.gradient,
         "value_kind": learner.agent.config.value_kind,
-        "rows": actions.numel(),
-        "retained": int(targets.selected.sum()),
+        "rows": batch.actions.size,
+        "retained": int(actor_rows.sum()),
         "optimizer_exposures": 0,
         "actor_exposures": 0,
         "critic_exposures": 0,
@@ -212,168 +217,153 @@ def update_damped_iteration(
         "reference": learning.reference,
         "advantage_abs_mean": advantage_abs_mean,
         "bootstrapped_tail_fraction": float(
-            (~torch.as_tensor(batch.dones[-1])).float().mean()
+            np.mean(~batch.dones[-1], dtype=np.float32)
         ),
     }
     with track("Selection and health diagnostics"):
+        advantage_rows = to_host(targets.advantages)
         health = batch_health(
             batch.action_data,
-            targets.advantages,
-            targets.selected,
+            advantage_rows,
+            actor_rows,
             actor_only=learning.filter_scope == "actor",
         )
         diagnostics["numerical"] = health
-        observer = OptimizerHealth(health, iteration, learner.profiler)
+        observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
         expected_targets = (
-            expected_outcome(targets.values)
-            if learner.agent.config.value_kind == "categorical_wdl"
+            categorical_rl(rl).expected_outcome(targets.values)
+            if categorical
             else targets.values
         )
-        predictions = torch.as_tensor(batch.values, device=device)
+        expected_rows = to_host(expected_targets)
+        # In the backend's arithmetic: these residuals are credit evidence.
+        residuals = to_host(expected_targets - to_device(batch.values, device))
         if batch.assignments is not None:
-            batch.target_residuals = (
-                (expected_targets - predictions).detach().cpu().numpy()
-            )
-        chosen_types = torch.as_tensor(
-            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
-            device=device,
-        )
+            batch.target_residuals = residuals
         diagnostics["selection_groups"] = selection_diagnostics(
-            targets.advantages,
-            expected_targets - predictions,
-            targets.selected,
-            torch.as_tensor(batch.dones, device=device),
-            chosen_types,
+            advantage_rows,
+            residuals,
+            actor_rows,
+            batch.dones,
+            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
         )
         diagnostics["value_scale"] = value_scale(
-            predictions,
-            expected_targets,
-            targets.advantages,
+            batch.values,
+            expected_rows,
+            advantage_rows,
             kind=learning.filter_kind,
             quantile=learning.advantage_quantile,
             minimum=learning.min_advantage,
         )
-    for group in learner.optimizer.param_groups:
-        group["lr"] = rate
+    learner.set_learning_rate(rate)
     # Compute credit on the original seat trajectories before regrouping rows.
     # Rectangular rollouts retain one timestep per minibatch. Complete-game
     # rollouts are packed into one column; use the same native stream count
     # rather than accidentally taking one optimizer step per recorded decision.
     width = learner.minibatch_rows
     actions = actions.flatten(0, 1)
-    targets = DampedTargets(
-        targets.advantages.flatten(0, 1),
-        targets.values.flatten(0, 1),
-        targets.selected.flatten(0, 1),
-    )
-    if not targets.selected.any() and learning.filter_scope == "actor_critic":
+    advantages = targets.advantages.flatten(0, 1)
+    value_targets = targets.values.flatten(0, 1)
+    actor_rows = actor_rows.reshape(-1)
+    actor_critic = learning.filter_scope == "actor_critic"
+    if not actor_rows.any() and actor_critic:
         diagnostics["skipped"] = "empty advantage filter"
-        health["skipped_steps"] = (actions.numel() + width - 1) // width
+        health["skipped_steps"] = (len(actor_rows) + width - 1) // width
         return diagnostics
+    # Rows each minibatch trains: the actor's under actor_critic scope, else all.
+    trained = actor_rows if actor_critic else np.ones_like(actor_rows)
     with track("Minibatches"):
-        trained = (
-            targets.selected
-            if learning.filter_scope == "actor_critic"
-            else torch.ones_like(targets.selected)
-        )
-        admitted.admit_rows(trained.nonzero().flatten().cpu().numpy(), width)
-        for start in range(0, actions.numel(), width):
-            actor_selected = targets.selected[start : start + width]
-            selected = (
-                actor_selected
-                if learning.filter_scope == "actor_critic"
-                else torch.ones_like(actor_selected)
-            )
-            if not selected.any():
+        admitted.admit_rows(np.flatnonzero(trained), width)
+        for start in range(0, len(actor_rows), width):
+            window = trained[start : start + width]
+            if not window.any():
                 health["skipped_steps"] += 1
                 continue
             with track("Forward and loss"):
-                indexes = torch.arange(start, start + len(selected), device=device)[
-                    selected
-                ]
-                obs, rows = admitted.rows(indexes.cpu().numpy(), device)
-                valid = legal_mask(obs["actions_valid"])
-                behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
-                with learner.forward_precision():
-                    logits, value_logits = learner.agent.forward_distribution(obs)
-                logits, value_logits = logits.float(), value_logits.float()
-                reference = reference_distribution(obs, learning.reference)
-                policy_loss = damped_policy_loss(
-                    logits,
-                    actions[indexes],
-                    targets.advantages[indexes],
-                    behavior_logs,
-                    reference,
-                    valid,
-                    clip=learning.clip,
-                    collection_kl=learning.collection_kl,
-                    tau=tau,
+                rows_host = np.arange(start, start + len(window))[window]
+                indexes = to_device(rows_host, device)
+                minibatch_actions = actions[indexes]
+                obs, rows = admitted.rows(rows_host, device)
+                valid = rl.legal_mask(admitted.legal(obs))
+                behavior_logs = to_device(rows.log_probabilities, device)
+                reference = to_device(
+                    reference_distribution(rows.observation, learning.reference),
+                    device,
                 )
-                actor_mask = actor_selected[selected]
-                policy_loss = selected_mean(policy_loss, actor_mask)
-                if learner.agent.config.value_kind == "categorical_wdl":
-                    value_loss = categorical_value_loss(
-                        value_logits, targets.values[indexes]
-                    ).mean()
-                else:
-                    # Representation ablation, not the paper's outcome objective.
-                    value_loss = squared_value_loss(
-                        value_logits, targets.values[indexes]
-                    ).mean()
-                loss = policy_loss + float64_operand(value_loss)
+                actor_selected = actor_rows[rows_host]
+                actor_mask = to_device(actor_selected, device)
 
-                def _failure() -> dict[str, Tensor]:
+                def _objective() -> tuple[Array, ...]:
+                    with learner.forward_precision():
+                        logits, value_logits = learner.agent.forward_distribution(obs)
+                    logits, value_logits = float32(logits), float32(value_logits)
+                    return (
+                        *minibatch_objective(
+                            rl,
+                            logits,
+                            value_logits,
+                            valid,
+                            actions=minibatch_actions,
+                            advantages=advantages[indexes],
+                            value_targets=value_targets[indexes],
+                            behavior_logs=behavior_logs,
+                            reference=reference,
+                            actor_mask=actor_mask,
+                            categorical=categorical,
+                            clip=learning.clip,
+                            collection_kl=learning.collection_kl,
+                            tau=tau,
+                        ),
+                        logits,
+                        value_logits,
+                    )
+
+                loss, policy_loss, value_loss, logits, value_logits = learner.loss(
+                    _objective
+                )
+
+                def _failure() -> dict[str, Any]:
                     return minibatch_tensors(
-                        logits=logits,
-                        value_logits=value_logits,
+                        logits=rl.constant(logits),
+                        value_logits=rl.constant(value_logits),
                         valid=valid,
-                        actions=actions[indexes],
+                        actions=minibatch_actions,
                         behavior_logs=behavior_logs,
                         reference=reference,
-                        advantages=targets.advantages[indexes],
-                        value_targets=targets.values[indexes],
+                        advantages=advantages[indexes],
+                        value_targets=value_targets[indexes],
                         actor_selected=actor_mask,
                         indexes=indexes,
-                        obs=obs,
+                        obs=admitted.evidence(obs),
                     )
 
-                with failure_tensors(_failure):
+                with failure_tensors(_failure, rl.NumericalError):
                     observer.check(loss)
-            with failure_tensors(_failure):
-                norm = gradient_step(
-                    loss,
-                    learner.agent,
-                    learner.optimizer,
-                    learning.max_grad_norm,
-                    recorder=observer,
-                )
+            with failure_tensors(_failure, rl.NumericalError):
+                norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
             with track("Minibatch diagnostics"):
-                diagnostics["optimizer_exposures"] += int(selected.sum())
-                diagnostics["actor_exposures"] += int(actor_mask.sum())
-                diagnostics["critic_exposures"] += int(selected.sum())
-                with torch.no_grad():
-                    logs = policy_logs(logits, valid)
-                    diagnostics["entropy"] = float(entropy(logs, valid).mean())
+                diagnostics["optimizer_exposures"] += len(rows_host)
+                diagnostics["actor_exposures"] += int(actor_selected.sum())
+                diagnostics["critic_exposures"] += len(rows_host)
+                with backend.learner.no_grad():
+                    logs = rl.policy_logs(logits, valid)
+                    diagnostics["entropy"] = float(rl.entropy(logs, valid).mean())
                     diagnostics["collection_kl"] = float(
-                        reverse_kl(logs, behavior_logs, valid).mean()
+                        rl.reverse_kl(logs, behavior_logs, valid).mean()
                     )
                     diagnostics["reference_kl"] = float(
-                        reverse_kl(
-                            logs,
-                            support_logs(reference, valid),
-                            valid,
+                        rl.reverse_kl(
+                            logs, rl.reference_logs(reference, valid), valid
                         ).mean()
                     )
-                    ratio_logs = (
-                        (logs - behavior_logs)
-                        .gather(-1, actions[indexes, None])
-                        .squeeze(-1)
+                    ratio_logs = rl.action_logs(logs - behavior_logs, minibatch_actions)
+                    health["clip_fraction"] = rl.clip_fraction(
+                        ratio_logs, learning.clip
                     )
-                    health["clip_fraction"] = clip_fraction(ratio_logs, learning.clip)
                 diagnostics.update(
-                    loss=float(loss.detach()),
-                    value_loss=float(value_loss.detach()),
-                    policy_loss=float(policy_loss.detach()),
+                    loss=float(rl.constant(loss)),
+                    value_loss=float(rl.constant(value_loss)),
+                    policy_loss=float(rl.constant(policy_loss)),
                     gradient_norm=float(norm),
                 )
     return diagnostics
