@@ -40,18 +40,19 @@ def demo_declaration() -> Experiment:
     base = wdl_baseline().regime()
     base.world = managym.WORLD_VERSION
     base.id = f"fixture-{base.world}"
-    base.stages = base.stages[:1]
+    stage = base.stages[0]
+    base.stages = [stage]
     # Resource allowances are hang guards, including interpreter startup and
     # parallel CI scheduling; the work is one small update per attempt.
     base.wall_seconds = 120
-    for stage in base.stages:
-        stage.execution.wall_seconds = 120
-        stage.streams = 2
-        stage.transitions = 8
-        # Exercise experiment orchestration without waiting for full games.
-        # Live monitoring still plays and replays its complete game cohorts.
-        stage.learning_seats = "one"
-        stage.batch_closure = "exact-quota"
+    stage.execution.wall_seconds = base.wall_seconds
+    stage.updates = 1
+    stage.streams = 2
+    stage.transitions = 8
+    # Exercise experiment orchestration without waiting for full games.
+    # Live monitoring still plays and replays its complete game cohorts.
+    stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     base.agent.hidden_dim = 8
     base.agent.num_attention_heads = 2
     # Four real monitoring cohorts include process startup and exact replay.

@@ -5,10 +5,11 @@ table{border-collapse:collapse}td,th{padding:.2rem .7rem;border-bottom:1px solid
 td.n{text-align:right;font-variant-numeric:tabular-nums}pre{background:#f5f3ee;padding:.7rem;overflow:auto}</style></head>
 <body>
 <h1>QA: CI under 8 minutes</h1>
-<p>Revision <code>f90ae2893</code> (branch head, pushed). Users of this change are contributors whose PRs wait on
+<p>Historical QA at revision <code>f90ae2893</code>. Users of this change are contributors whose PRs wait on
 CI, and the people who read job times and the parallel-worker contract.</p>
 
-<h2>1. Full CI on the current revision</h2>
+<p>Later PR validation at <code>1fc4e1b24</code> passed in <a href="https://github.com/loopflowstudio/manabot/actions/runs/43337105047">run 43337105047</a>: every ordinary job finished within 349 s. See the gate section of <code>ci-under-8-minutes.md</code> for current results.</p>
+<h2>1. Full CI on the QA revision</h2>
 <p>Dispatched <code>gh workflow run ci.yml --ref jack-heart/38ef25-get-ci-under</code> → run
 <a href="https://github.com/loopflowstudio/manabot/actions/runs/43332039325">43332039325</a>. It finished green.
 Times run from job start to job end:</p>
@@ -60,7 +61,7 @@ plus one optional 30 s test. I removed both afterwards; <code>git status</code> 
 <h2>Outcome</h2>
 <ul>
 <li>Works: every ordinary Ubuntu job on <code>f90ae2893</code> passed in 416 s or less, the watchdog works per worker, and the documented command works.</li>
-<li>Not reached: a PR-triggered run. No PR exists yet, so this was a dispatch, which selects everything, like a full PR run.</li>
+<li>At this QA step, no PR existed and this was a dispatch. The later PR run linked above closes that evidence gap.</li>
 <li>Still a concern, though not broken: the 64 s margin. Download speed alone moved one job by about 110 s, and test time for unchanged groups has varied by up to 100 s between runs. A slow runner could push a job past 480 s with no code change.</li>
 <li>Unchanged from main: a new test file outside a selected directory runs in no Integration group.</li>
 </ul>
