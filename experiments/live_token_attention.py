@@ -1,5 +1,9 @@
 """MTG-319: live-token attention against bucketed shapes on one rented L4.
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 Exploratory pilot of `ActorCritic(..., live_tokens=True)` (`manabot.backends.torch.live_tokens`).
 It reuses MTG-301's profile (`experiments/l4_step_profile.py`): one in-situ w160l8
 update keeps collection observations and learner minibatches, and those inputs replay

@@ -1,4 +1,8 @@
-"""Shared launch and scoring for the batch-closure and lambda studies (Tasks fc6ffb, 07c490).
+"""Historical launch declarations and shared scoring for the batch-closure and lambda studies (Tasks fc6ffb, 07c490).
+
+`training_runs` refuses execution at this revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`),
+while scoring and report functions remain.
 
 `experiments/batch_closure.py` and `experiments/lambda_sweep.py` (Allies/Lessons) and
 `experiments/elemental_closure.py` and `experiments/elemental_lambda.py` (the ten-deck

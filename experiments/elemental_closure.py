@@ -1,5 +1,9 @@
 """One-seat exact quota versus one-seat complete games on the ten-deck Elemental recipe (Task 07c490).
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 MTG-251 asked this on Allies/Lessons (`experiments/batch_closure.py`). Jack Heart
 placed the current recipe at the ten-deck Elemental setup, so this repeats it there,
 with the model scored on random deck pairs against the heuristic. Protocol:

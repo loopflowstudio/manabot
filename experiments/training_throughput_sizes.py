@@ -1,5 +1,9 @@
 """Step 3 of the training-throughput experiment: model size, GPU and precision (Task b015d5).
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 Protocol: experiments/protocols/training-throughput-b015d5-v1.md, "Step 3". Every
 cell is the control recipe at another network size or precision, 256 streams, both
 seats, one producer, CUDA. A leg is one cell, `<gpu>-<size>-k<K>-<precision>`, and

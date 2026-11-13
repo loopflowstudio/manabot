@@ -240,36 +240,30 @@ CLI recipe-config fields, local follower).
 Validation: `git diff --check` and Ruff on the touched modules passed; launch
 arguments checked against `experiments.elemental.runs`.
 
-## Concept review 7: next implement direction — 2026-11-13
+## Concept review 7: implemented — 2026-11-13
 
-Proposals drawn from the design, not statements anyone made. The loop, the four
-recipes, the CLI, the Saved regimes section and the README agree with each
-other; a search of code and guides finds no reference to a deleted module or
-flag outside refusals and frozen evidence. One rule from review 6 is applied
-unevenly: a frozen module whose header shows a launch command says the command
-records how it ran and refuses here. Review 6 covered modules that call
-`refuse_frozen_execution` themselves; these refuse through
-`learning_signal.training_runs`, `l4_step_profile.runs` or a retired CLI flag
-and still read as runnable:
+Review 6's rule (a frozen module whose header shows a launch command says the
+command records how it ran and refuses here) had covered only modules calling
+`refuse_frozen_execution` themselves. These refuse through
+`learning_signal.training_runs`, `l4_step_profile.runs` or a retired CLI flag,
+and their headers now say so, naming
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`):
+`experiments/direct_self_play.py`, `elemental_closure.py`,
+`elemental_closure_calibration.py`, `elemental_lambda.py`,
+`training_throughput_packing.py`, `training_throughput_sizes.py`,
+`live_token_attention.py`, and `learning_signal.py` (`training_runs` refuses;
+scoring and reports remain).
 
-- `experiments/direct_self_play.py` (`manabot train --regime-name ...`)
-- `experiments/elemental_closure.py`, `elemental_closure_calibration.py`,
-  `elemental_lambda.py` (`etude launch`)
-- `experiments/training_throughput_packing.py` (`etude launch`),
-  `training_throughput_sizes.py` (`etude queue`)
-- `experiments/live_token_attention.py` (`etude launch`)
-- `experiments/learning_signal.py`: header calls itself "shared launch and
-  scoring"; `training_runs` refuses, scoring and reports remain.
-
-Direction: add the same one-sentence note to those headers, naming
-`FROZEN_EXECUTION_REVISION` as the other headers do. Docstrings only: commands,
-reports, protocols, data and behavior stay. `etude eval` / `etude report` lines
-in the same headers were not exercised here; do not claim they run or refuse
-without checking. `batch_closure.py` and `lambda_sweep.py` show only eval/report
-commands, `tla_frontier_vocabulary.py` already says "launched", and
-`collection_tail_graphs.py` shows no command: leave them. This list came from
+Only opening docstrings changed. The `etude eval` / `etude report` lines in
+those headers were not exercised; nothing claims they run or refuse.
+`batch_closure.py` and `lambda_sweep.py` show only eval/report commands,
+`tla_frontier_vocabulary.py` already says "launched" and
+`collection_tail_graphs.py` shows no command: left alone. The list came from
 checking every `experiments/*.py` that reaches a refusal against launch
 commands in its first 50 lines, so it closes the header pass.
 
-No test or parity rerun follows. Open choices are unchanged (questions.md: CLI
-recipe-config fields, local follower); delivery obligations above remain.
+Validation: `uv run --no-sync ruff check` and `ruff format --check` on the
+eight modules and `git diff --check` passed; an AST comparison against HEAD
+found only module docstrings differ. No test or parity rerun for prose-only
+edits. Open choices (questions.md: CLI recipe-config fields, local follower)
+and the delivery obligations above are unchanged.

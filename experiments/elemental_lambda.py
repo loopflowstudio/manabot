@@ -1,5 +1,9 @@
 """Does more direct game-result credit help the ten-deck Elemental recipe? (Task 07c490)
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 The two-seat complete-game Elemental recipe, lambda alone varying above its .5/.8. At
 twenty decisions from the end those traces give the result weight about 1e-6 and
 .012. MTG-251 asked this on Allies/Lessons (`experiments/lambda_sweep.py`). Protocol:
