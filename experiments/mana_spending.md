@@ -367,7 +367,8 @@ code, default training behavior or production deployment is changed here.
 - Mirror games under scripted or early policies show how often the decision
   arises, not how much a strong player gains from it.
 - The shape comparison counts offers. It does not measure play or learning
-  under a shape that is not implemented.
+  under a shape that is not implemented. Manual tapping at every priority
+  window is a qualitative alternative, without a measured offer count here.
 - Ten TLA builds in retained file order are a bounded convenience sample, not
   a representative sample of the entire Limited corpus. The eight Heartbeat
   games per policy are a constructed upper-end example, not a metagame rate.

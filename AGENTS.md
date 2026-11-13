@@ -533,6 +533,11 @@ the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
 
+Programmatic Etude readers take a `Storage` or a local path. Parse remote URIs
+with `etude.run.storage.storage_from_uri` before passing them to `observe` or
+`read_all`; a bare string is treated as a local path and can produce an empty
+listing for a bucket URI.
+
 Training row tables belong under the metric run's `artifacts/`, named by their
 content digest, with `.partial` staging before atomic rename. Etude's tracker
 and launcher courier carry these immutable author artifacts before metric

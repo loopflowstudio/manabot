@@ -148,8 +148,8 @@ exceed the 64 policy slots anywhere, D needs grouping or fails.
   it goes.
 - Manual tapping as priority actions (Arena/Forge override): adds a mana
   action for every untapped source at every priority; the largest action-space
-  cost of any shape, and pooled mana empties between steps. Counted in part 3
-  as an upper bound only.
+  cost of any shape, and pooled mana empties between steps. It remains a
+  qualitative alternative; the bounded A–E slice does not count priority taps.
 - A full learning study of the shapes here: belongs to MTG-265.
 
 ## What the frequency run showed (2026-11-13, `58e5923c53`)
