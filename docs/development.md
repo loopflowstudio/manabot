@@ -606,7 +606,7 @@ In a checkout, use `uv sync --locked --extra notebook`. If a command reports
 a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
 
-Experiment recipes (`--recipe <experiment>`), experiment drivers and data-ledger tools need a
+Experiment recipes (`etude run experiments/<experiment>.py`), experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
 

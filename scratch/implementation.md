@@ -44,3 +44,11 @@ Validation:
 
 Remaining real training/consumer checks are blocked on EXP-56, not reported
 as passing. No server, watcher, provider job or child agent was started.
+
+## Compress — 2026-11-13
+
+Removed the release smoke's `train --help` call, inlined the local recipe's
+update default, corrected the development guide's `--recipe` mention, restored
+the dated `experiments/baseline-nightly.md` to main, and merged six historical
+scratch pointers into plan.md.
+`uv run --no-sync --with pytest --with typer pytest tests/training/test_train_command.py tests/infra/test_release.py -q`: 42 passed (1.96s); ruff clean on both changed Python files.

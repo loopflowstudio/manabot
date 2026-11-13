@@ -9,11 +9,9 @@ from pydantic import Field
 from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.training.loops.self_play import self_play
 
-LOCAL_STEPS = 2
-
 
 class LocalConfig(BaselineConfig):
-    updates: int = Field(default=LOCAL_STEPS, ge=1)
+    updates: int = Field(default=2, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
 
 

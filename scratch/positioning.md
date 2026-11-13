@@ -1,8 +1,7 @@
-# Historical positioning
-
-Complete source, including exact remarks and contrary findings:
-`bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/positioning.md`.
-The current rebuild design is `scratch/design-train-api.md`; remaining work
-and API dependencies are in plan.md and questions.md. This historical material
-does not select more work. Etude's README/ontology proposals belong to EXP-56;
-no Etude files are edited from this checkout.
+Correcting my reading: "I'm thinking the other way around. I'm thinking that
+in the future Cloud will have names for experiments and it will supply the
+experiment name to the A2 SDK launcher" ("A2" read as Etude). Design: the
+launcher is the authority for a run's experiment name; a name given at launch
+wins over the file stem. Seen at `105abdd`: `Job.experiment` exists and
+`track` refuses a name that differs from the launch's; `etude launch` has no
+experiment option in the signature I read.

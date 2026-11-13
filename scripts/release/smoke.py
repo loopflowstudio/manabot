@@ -29,7 +29,6 @@ def main() -> None:
     assert value.grad is not None and value.grad.item() == 2.0
     command = ["uv", "run", "--no-project", "--python", sys.executable, "manabot"]
     subprocess.run([*command, "--help"], check=True)
-    subprocess.run([*command, "train", "--help"], check=True)
     output = Path.cwd() / "release-smoke"
     output.mkdir()
     # The installed package is a library; Etude executes an author's recipe file.

@@ -13,8 +13,10 @@ Jack Heart, 2026-11-13: "you can run both. i dont care that manabot cant be test
 The implementation boundary is: build independent changes, then stop at the
 missing EXP-56 calls; no local stub and no delivery. EXP-56 owns the SDK and
 its naming migration. The full design conversation and earlier review history
-are preserved at `bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/positioning.md` and
-`bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/plan.md`. No Wave is selected.
+are preserved at `bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/` (plan, positioning,
+cutover, ontology, etude-api, functional-audit, etude-readme-draft, with exact
+remarks and contrary findings). That history selects no work; Etude's
+README/ontology proposals belong to EXP-56. No Wave is selected.
 
 ## Independent CLI cut — 2026-11-13
 

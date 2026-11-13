@@ -1,6 +1,6 @@
 # The Etude train API and Manabot's loops: design for EXP-56 and MTG-329
 
-2026-11-13. Written from the day's exploration (`scratch/positioning.md` holds
+2026-11-13. Written from the day's exploration (`bd14801a72:scratch/positioning.md` holds
 every quoted remark in full; `scratch/explore.html` and `scratch/sketch.html`
 are the pages). Jack Heart asked for it: "Be ambitious. Help us land in the
 new world where we're set up for the most success in terms of adoption by Jace
@@ -70,7 +70,7 @@ Each is something Jack Heart said on 2026-11-13; the design is held to them.
 
 ## Names
 
-From the ontology review (`scratch/ontology.md`). Jack Heart, 2026-11-13,
+From the ontology review (`bd14801a72:scratch/ontology.md`). Jack Heart, 2026-11-13,
 answering its questions: "1a -- i think RunAttempt is probably better than
 Attempt though", "2a", "3a", "4a, or alternatively use cohort instead of
 experiment as a more general word", "5a", "6b". All of the renaming is in
@@ -319,6 +319,13 @@ between runs (`continue`, `start=`); checkpoints with clocks; evaluations.
 The SDK adds no experiment record: an experiment stays the label those files
 share.
 
+The experiment's name comes from outside the training code. Jack Heart,
+2026-11-13: "in the future Cloud will have names for experiments and it will
+supply the experiment name to the [Etude] SDK launcher". So the launcher is
+the authority for a run's experiment: a name given at launch wins, the file's
+stem is only the default when none is given, and training code never needs to
+name its experiment. Launch commands take the name as an argument.
+
 ## Manabot (MTG-329)
 
 Rebuilt against the API above. Frozen evidence, experiment IDs and receipts
@@ -400,7 +407,7 @@ without reading Manabot.
 2. **MTG-329**: rebuild on an isolated override of the unreleased SDK, then
    pin the release.
 3. **EXP-12** (launcher database migration) starts as soon as EXP-56 is done.
-4. After: README led by the league (`scratch/etude-readme-draft.md`), EXP-60.
+4. After: README led by the league (`bd14801a72:scratch/etude-readme-draft.md`), EXP-60.
 
 ## Acceptance for EXP-56
 
