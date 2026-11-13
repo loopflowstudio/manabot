@@ -55,8 +55,7 @@ fn describe() -> ContentPool {
             PoolDefinition {
                 card_def_id,
                 key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
-                scryfall_id: (!definition.scryfall_id.is_empty())
-                    .then(|| definition.scryfall_id.to_owned()),
+                scryfall_id: definition.scryfall_id.map(str::to_owned),
                 registry_name: definition.name.clone(),
                 eligibility: if reason.is_none() {
                     Eligibility::Eligible

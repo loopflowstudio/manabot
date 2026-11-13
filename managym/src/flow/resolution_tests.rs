@@ -3640,7 +3640,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
         TargetIteration,
     };
     use crate::flow::proposed_event::{
-        CounterProvenance, EventBinding, EventCause, ProposedEvent, TokenDefinition, ZoneEntry,
+        CounterProvenance, EventBinding, EventCause, ProposedEvent, TokenSource, ZoneEntry,
     };
     let player = PlayerId(0);
     let (base, first, second) = fixture(player);
@@ -3708,7 +3708,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 }
                 "token_count" => {
                     let mut batch = game.event_batch(vec![ProposedEvent::CreateTokens {
-                        definition: Box::new(TokenDefinition::Registered("Food".into())),
+                        definition: Box::new(TokenSource::Registered("token.food".into())),
                         controller: player,
                         count: choice + 1,
                         entry: ZoneEntry::default(),

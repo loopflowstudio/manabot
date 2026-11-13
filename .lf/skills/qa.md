@@ -134,6 +134,17 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Python-only library changes (no engine change): `uv build --wheel --package
+  manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
+  venv with `uv pip install <wheel> --index-url https://pypi.org/simple
+  --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
+  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
+  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
+  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+- Training guide (`docs/training-loop.md`): run its example command verbatim
+  (about 20 s on CPU), save and reload the policy as it says, call both
+  maintained rules directly on a collected batch, and compare the tables'
+  signatures with `inspect.signature`.
 - Training recipes: write a regime JSON from Python
   (`TrainingRegime(...).model_dump_json()`) and run
   `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
@@ -148,7 +159,13 @@ publish, land or choose the next Graph step from here.
   the same `--seed`. Equal layouts then give `run.json` files that differ only in
   `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
   `bucketed_shapes` makes learning about 7× slower than padded, so time
-  bucketed arms against a bucketed control.
+  bucketed arms against a bucketed control. Rebuild a regime for another
+  device from `authored_dump()`, not `model_dump()`, so `auto` fields resolve
+  again. To resume, the regime needs `recovery` (e.g.
+  `{"checkpoint_updates": 2}`); without it `--resume-from` passes the digest
+  check, then fails with "no committed recovery boundary". Resume with the same
+  regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
+  time. macOS has no `timeout`; use the tool's own timeout.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of

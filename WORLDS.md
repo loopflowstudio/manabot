@@ -368,6 +368,18 @@ integrated from published T6 `7c790f78e`. Mutable w17 receipts are rebound to
 the combined content/hash identity; their 135-Command authored tape and 66
 public commitments remain unchanged. CI and review acceptance remain separate.
 
+Task MTG-298 (same open world) separates tokens from cards. A token is a
+`TokenDefinition` in its own catalog under a `token.*` key, with a Scryfall id
+unless it was never printed; a `CardDefinition` always has one. Effects create
+tokens by key, and deck entry and the learning catalog identify a definition by
+key rather than printed name, so two tokens may share a name. `CardDefId`s,
+learning tokens, the record vocabulary, pool rows and observation widths are
+unchanged. The definition encoding moved the content digest, and environment
+manifests add each definition's `key`, so the semantic-kernel evidence, the
+authored-match receipt, both parity receipts and the Academy fixtures were
+re-recorded with their Commands, state digests and outcomes unchanged. A
+checkpoint keeps the manifest of the revision that wrote it.
+
 ## w16: one card authority (superseded by w17)
 
 Cards are typed Rust functions in the file of the set that first printed them

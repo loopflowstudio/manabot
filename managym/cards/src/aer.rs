@@ -2,7 +2,7 @@
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, ObjectSelector},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -16,14 +16,20 @@ fn heroic_intervention() -> CardDefinition {
     CardDefinition {
         key: "aer.heroic_intervention",
         scryfall_id: "8f5a620c-fde7-4b72-bf8a-efc4f14560c5",
-        name: "Heroic Intervention".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::until_end_of_turn(
-            ObjectSelector::each_you_control(CardPredicate::default()),
-            Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof, Keyword::Indestructible])),
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Heroic Intervention".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::each_you_control(CardPredicate::default()),
+                Modification::AddKeywords(Keywords::of(&[
+                    Keyword::Hexproof,
+                    Keyword::Indestructible,
+                ])),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

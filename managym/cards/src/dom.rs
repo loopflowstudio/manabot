@@ -2,7 +2,7 @@
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -22,21 +22,24 @@ fn run_amok() -> CardDefinition {
     CardDefinition {
         key: "dom.run_amok",
         scryfall_id: "d3f2aa2c-deec-4927-a2d6-f5dce5967e26",
-        name: "Run Amok".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(attacking()),
-                Modification::pump(3, 3),
-            ),
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(attacking()),
-                Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
-            ),
-        ],
-        targeting: vec![TargetRequirement::one(attacking())],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Run Amok".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(attacking()),
+                    Modification::pump(3, 3),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(attacking()),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                ),
+            ],
+            targeting: vec![TargetRequirement::one(attacking())],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

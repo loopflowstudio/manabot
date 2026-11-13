@@ -1,7 +1,10 @@
 //! Champions of Kamigawa.
 use managym_state::{
     ability::Actor,
-    card::{CardDefinition, CardType, CardTypes, TriggeredManaAbility, TriggeredManaOutput},
+    card::{
+        CardDefinition, CardType, CardTypes, PrintedCharacteristics, TriggeredManaAbility,
+        TriggeredManaOutput,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -15,18 +18,21 @@ fn heartbeat_of_spring() -> CardDefinition {
     CardDefinition {
         key: "chk.heartbeat_of_spring",
         scryfall_id: "6be3ba05-dce0-463b-bfe6-d51df63cc1a8",
-        name: "Heartbeat of Spring".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        triggered_mana_abilities: vec![TriggeredManaAbility {
-            who: Actor::AnyPlayer,
-            predicate: CardPredicate {
-                card_type: Some(CardType::Land),
-                ..Default::default()
-            },
-            output: TriggeredManaOutput::OneProducedType,
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Heartbeat of Spring".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            triggered_mana_abilities: vec![TriggeredManaAbility {
+                who: Actor::AnyPlayer,
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                },
+                output: TriggeredManaOutput::OneProducedType,
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

@@ -4,14 +4,11 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.model.policy_distribution import (
-    NumericalError,
-    clipped_surrogate,
-    policy_logs,
-    reverse_kl,
-)
-from manabot.training.learning.damped_policy import damped_policy_loss
+from manabot.model.policy_distribution import policy_logs
+from manabot.rl.losses import clipped_surrogate, reverse_kl
+from manabot.rl.numerics import NumericalError
 from manabot.training.rollout.actions import PackedActions
+from manabot.training.updates.damped_policy import damped_policy_loss
 
 
 def evidence() -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray, np.ndarray]:

@@ -234,10 +234,10 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     # the schema also binds the open w17 content digest, so these receipts move
     # whenever w17 content does.
     current_v3_receipts = (
-        "b02d5d4b29c3c9bd0f31ae5a161104aadc06c20917af0d352c5194f0f51901a9",
-        "c40861660837becbfe65d2436efb81d6aa4e0ae1f16de5f9044fbbc5bb4ffaba",
-        "6b13344b7ee90fcb4cfd378fc193d1959aae4ede43843d223706f4ce5fd837fd",
-        "6cf3c2ccbeff667896fd7da9aad094b72fa0ee846ce6345ab347f065855671af",
+        "3b01f5d4b6c93509267135c018bfc66d6bbebde144d44c810606562ec7048534",
+        "c6b07a6972039c39faebb2f0b8660edda2faf1267bab4b2608b28b0bd17d4c87",
+        "2f2d0ef1ebc494b942f9869313ca71cea5b4a6050c182eedfebe02beda61c692",
+        "0ec13d19b2380aca016dafc7324bc00592ad065e355d0d6afa695d1396ee3eef",
     )
     for (
         (belief, prior_catalog_receipt, historical_receipt),

@@ -3,7 +3,7 @@ use managym_state::{
     ability::{
         Ability, Effect, EffectValue, ObjectSelector, Scope, TriggerCondition, TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -21,26 +21,29 @@ fn dockside_extortionist() -> CardDefinition {
     CardDefinition {
         key: "c19.dockside_extortionist",
         scryfall_id: "571bc9eb-8d13-4008-86b5-2e348a326d58",
-        name: "Dockside Extortionist".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Goblin".into(), "Pirate".into()],
-        power: Some(1),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens(
-                "Treasure",
-                EffectValue::Objects(Box::new(ObjectSelector::each(
-                    Scope::OpponentsControl,
-                    artifacts_and_enchantments,
-                ))),
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Dockside Extortionist".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Pirate".into()],
+            power: Some(1),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens(
+                    "token.treasure",
+                    EffectValue::Objects(Box::new(ObjectSelector::each(
+                        Scope::OpponentsControl,
+                        artifacts_and_enchantments,
+                    ))),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

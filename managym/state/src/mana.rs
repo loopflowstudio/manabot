@@ -4,7 +4,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
-    card::{CardDefinition, CardType},
+    card::{CardType, PrintedCharacteristics},
     zone::ZoneType,
 };
 
@@ -356,7 +356,7 @@ impl SpendingObject {
 /// distinct snapshots of equal characteristics are different purposes, never
 /// a different restriction outcome.
 #[derive(Clone, Debug)]
-pub struct SpellSnapshot(pub Arc<CardDefinition>);
+pub struct SpellSnapshot(pub Arc<PrintedCharacteristics>);
 
 impl PartialEq for SpellSnapshot {
     fn eq(&self, other: &Self) -> bool {
@@ -402,7 +402,7 @@ impl SpendingContext {
         subtypes: impl IntoIterator<Item = &'a str>,
         types: impl IntoIterator<Item = CardType>,
     ) -> Self {
-        Self::Cast(SpellSnapshot(Arc::new(CardDefinition {
+        Self::Cast(SpellSnapshot(Arc::new(PrintedCharacteristics {
             subtypes: subtypes.into_iter().map(String::from).collect(),
             types: crate::card::CardTypes::new(types),
             ..Default::default()

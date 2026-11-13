@@ -27,3 +27,9 @@
 - Automatic spending order for mana with a spend effect: before ordinary
   mana when the effect applies to the spell being cast, after it otherwise.
   This stands in for the design's spending choice until that is built.
+
+- Sync onto `285cd49ce` (2026-11-12): retain main's unrelated w17 fixtures,
+  parity hashes and belief receipts as directed by sync-conflicts. Neither
+  parent's hashes describe the combined catalog; gate must refresh current-world
+  evidence after rebuilding. Keep mana behavior in main's new printed/card/token
+  structure, including the four new definitions and Badgermole production.

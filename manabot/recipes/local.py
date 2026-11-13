@@ -21,7 +21,7 @@ def local_smoke(
     seconds: float = LOCAL_SECONDS,
     learning_seats: Literal["one", "both"] = "both",
     device: Literal["cpu", "mps", "cuda"] | None = None,
-    bucketed_shapes: bool = False,
+    padded_shapes: bool = False,
 ) -> TrainingRegime:
     """Terminal-outcome self-play with complete-game batch closure.
 
@@ -35,7 +35,7 @@ def local_smoke(
             steps,
             seconds=seconds,
             learning_seats=learning_seats,
-            bucketed_shapes=bucketed_shapes,
+            padded_shapes=padded_shapes,
         )
         if selected == "cpu"
         else baseline(
@@ -43,7 +43,7 @@ def local_smoke(
             seconds=seconds,
             learning_seats=learning_seats,
             device=selected,
-            bucketed_shapes=bucketed_shapes,
+            padded_shapes=padded_shapes,
         )
     )
     regime = recipe.regime
@@ -65,14 +65,14 @@ def run_local(
     seconds: float = LOCAL_SECONDS,
     learning_seats: Literal["one", "both"] = "both",
     device: Literal["cpu", "mps", "cuda"] | None = None,
-    bucketed_shapes: bool = False,
+    padded_shapes: bool = False,
 ) -> TrainingRun:
     plan = local_smoke(
         steps=steps,
         seconds=seconds,
         learning_seats=learning_seats,
         device=device,
-        bucketed_shapes=bucketed_shapes,
+        padded_shapes=padded_shapes,
     )
     destination = out or Path(".runs") / (
         "local-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")

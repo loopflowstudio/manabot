@@ -76,7 +76,7 @@ Every canonical parameter maps to MLX arrays, or loading fails naming the key.
 ## Learner step
 
 `manabot.backends.mlx.learner.MLXLearner` computes the same damped PPO loss as
-`manabot.training.learning.damped_policy` over one minibatch (its terms are in
+`manabot.training.updates.damped_policy` over one minibatch (its terms are in
 `rl.py`), clips the global gradient norm and applies Adam with the learner's
 settings. It runs eagerly: packed GRU schedules and legal-action counts change
 with every batch, so a compiled graph would retrace per call; only the GRU cell

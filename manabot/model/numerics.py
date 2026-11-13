@@ -16,17 +16,6 @@ def embedding_rows(embedding: nn.Embedding, rows: Tensor) -> Tensor:
     return embedding(rows)
 
 
-def float64_operand(tensor: Tensor) -> Tensor:
-    """Move MPS operands to the host, where float64 is supported.
-
-    MPS has no float64 tensors. The CPU transfer preserves autograd; callers
-    retain their explicit double casts and keep companion operands together.
-    Elsewhere this is a no-op relabel: the identical tensor, dtype and device
-    are returned, with no transfer or additional tensor operation.
-    """
-    return tensor.cpu() if tensor.device.type == "mps" else tensor
-
-
 def buffer_on(module: nn.Module, name: str, device: torch.device) -> Tensor:
     """An immutable lookup buffer of `module` on `device`, for admission checks.
 
