@@ -19,9 +19,10 @@ METRICS = [
 ]
 
 folder = Path(sys.argv[1])
+names = sorted({p.stem.rsplit("-", 1)[0] for p in folder.glob("*-*.json")})
 arms = {
     arm: [json.loads(p.read_text()) for p in sorted(folder.glob(f"{arm}-*.json"))]
-    for arm in ("base", "head")
+    for arm in ["base"] + [n for n in names if n != "base"]
 }
 for arm, results in arms.items():
     rows = {r["learner_rows"] for r in results}
@@ -32,15 +33,29 @@ for label, read, larger in METRICS:
     values = {arm: [read(r) for r in results] for arm, results in arms.items()}
     median = {arm: statistics.median(v) for arm, v in values.items()}
     spread = max(max(v) - min(v) for v in values.values())
-    gap = median["head"] - median["base"]
-    slower = -gap if larger else gap
-    verdict = "REGRESSION" if slower > spread else "within spread"
-    line = (
-        f"{label:18s} base {median['base']:.4g} [{min(values['base']):.4g}, "
-        f"{max(values['base']):.4g}]  head {median['head']:.4g} "
-        f"[{min(values['head']):.4g}, {max(values['head']):.4g}]  "
-        f"head/base {median['head'] / median['base']:.3f}  {verdict}"
-    )
-    lines.append(line)
-    print(line)
+    for arm in arms:
+        if arm == "base":
+            continue
+        gap = median[arm] - median["base"]
+        slower = -gap if larger else gap
+        verdict = "REGRESSION" if slower > spread else "within spread"
+        line = (
+            f"{label:18s} base {median['base']:.4g} [{min(values['base']):.4g}, "
+            f"{max(values['base']):.4g}]  {arm} {median[arm]:.4g} "
+            f"[{min(values[arm]):.4g}, {max(values[arm]):.4g}]  "
+            f"{arm}/base {median[arm] / median['base']:.3f}  {verdict}"
+        )
+        lines.append(line)
+        print(line)
+# Learner sections (seconds per update, medians over processes).
+for kind in ("damped", "ppo"):
+    labels = sorted({k for rs in arms.values() for r in rs for k in r[kind].get("sections", {})})
+    for label in labels:
+        cells = []
+        for arm, results in arms.items():
+            totals = [r[kind]["sections"][label]["total_time"] for r in results if label in r[kind].get("sections", {})]
+            cells.append(f"{arm} {statistics.median(totals):.3f}" if totals else f"{arm} -")
+        line = f"{kind} {label:55s} " + "  ".join(cells)
+        lines.append(line)
+        print(line)
 (folder / "summary.txt").write_text("\n".join(lines) + "\n")

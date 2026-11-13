@@ -15,6 +15,9 @@ legal logs, sampling, host read), and `--checkpoints` save/load round trips.
 """
 
 import argparse
+import importlib
+import importlib.util
+import inspect
 import cProfile
 from copy import deepcopy
 import json
@@ -37,46 +40,64 @@ from manabot.training.rollout.collection import SeatRoutedCollector
 import managym
 import manabot
 
-try:
-    from manabot.backends.torch import rl as _rl
-    from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
-    from manabot.backends.torch.learner import (
-        Learner,
-        apply_matmul_precision,
-        forward_precision,
-    )
-    from manabot.backends.torch.policy import ActorCritic
-    import manabot.backends.torch as _backend
-    from manabot.training.updates.damped_policy import update_damped_iteration
-    from manabot.training.updates.ppo import update_iteration
 
+def _first(*homes: str) -> object:
+    """The first importable `module:name` of `homes` (the arms move names)."""
+    for home in homes:
+        module, name = home.split(":")
+        try:
+            return getattr(importlib.import_module(module), name)
+        except (ImportError, AttributeError):
+            continue
+    raise ImportError(f"none of {homes}")
+
+
+ActorCritic = _first(
+    "manabot.backends.torch.policy:ActorCritic",
+    "manabot.model.actor_critic:ActorCritic",
+)
+load_checkpoint = _first(
+    "manabot.backends.torch.checkpoint:load_checkpoint",
+    "manabot.model.checkpoint:load_checkpoint",
+)
+save_checkpoint = _first(
+    "manabot.backends.torch.checkpoint:save_checkpoint",
+    "manabot.model.checkpoint:save_checkpoint",
+)
+legal_mask = _first(
+    "manabot.backends.torch.rl:legal_mask",
+    "manabot.model.policy_distribution:legal_mask",
+)
+policy_logs = _first(
+    "manabot.backends.torch.rl:policy_logs",
+    "manabot.model.policy_distribution:policy_logs",
+)
+Learner = _first(
+    "manabot.backends.torch.learner:Learner", "manabot.training.updates.learner:Learner"
+)
+apply_matmul_precision = _first(
+    "manabot.backends.torch.learner:apply_matmul_precision",
+    "manabot.training.precision:apply_matmul_precision",
+)
+forward_precision = _first(
+    "manabot.backends.torch.learner:forward_precision",
+    "manabot.training.precision:forward_precision",
+)
+update_damped_iteration = _first(
+    "manabot.training.updates.damped_policy:update_damped_iteration"
+)
+update_iteration = _first("manabot.training.updates.ppo:update_iteration")
+# The updates take the backend module first on this branch (#501) only.
+TAKES_BACKEND = "backend" in inspect.signature(update_iteration).parameters
+LEAD: tuple[object, ...] = (
+    (importlib.import_module("manabot.backends.torch"),) if TAKES_BACKEND else ()
+)
+if TAKES_BACKEND:
     ARM = "head"
-    LEAD: tuple[object, ...] = (_backend,)
-    legal_mask, policy_logs = _rl.legal_mask, _rl.policy_logs
-except ImportError:  # main before this change (a343904ee)
-    from manabot.model.actor_critic import ActorCritic  # type: ignore[no-redef]
-    from manabot.model.checkpoint import (  # type: ignore[no-redef]
-        load_checkpoint,
-        save_checkpoint,
-    )
-    from manabot.model.policy_distribution import (  # type: ignore[no-redef]
-        legal_mask,
-        policy_logs,
-    )
-    from manabot.training.precision import (  # type: ignore[no-redef]
-        apply_matmul_precision,
-        forward_precision,
-    )
-    from manabot.training.updates.damped_policy import (  # type: ignore[no-redef]
-        update_damped_iteration,
-    )
-    from manabot.training.updates.learner import Learner  # type: ignore[no-redef]
-    from manabot.training.updates.ppo import (  # type: ignore[no-redef]
-        update_iteration,
-    )
-
+elif ActorCritic.__module__ == "manabot.backends.torch.policy":
+    ARM = "backend"
+else:
     ARM = "base"
-    LEAD = ()
 
 RECIPE = Path(__file__).parents[2] / "experiments/regimes/elemental-long-183-v1.json"
 _steps = 0
@@ -180,10 +201,12 @@ def main() -> None:
             _sync(device)
             elapsed = time.perf_counter() - tick
             if repeat:
+                sections = learner.profiler.get_stats()
                 rates.append(_steps / elapsed)
                 seconds.append(elapsed)
                 steps.append(_steps)
         result[name] = {
+            "sections": sections,
             "steps_per_second": _summary(rates),
             "seconds": _summary(seconds),
             "steps": steps,
