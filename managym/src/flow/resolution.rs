@@ -12,7 +12,7 @@ use crate::{
         event::GameEvent,
         game::Game,
         proposed_event::{
-            EventBinding, ProposedDamageTarget, ProposedEvent, TokenDefinition, ZoneEntry,
+            EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
         trigger::{DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
@@ -23,7 +23,7 @@ use crate::{
             LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
             TargetRequirement, TargetSpec,
         },
-        card::{CardDefId, CardDefinition, Keyword, StaticAbility},
+        card::{CardDefId, Keyword, PrintedCharacteristics, StaticAbility},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         mana::ManaCost,
@@ -249,12 +249,18 @@ impl Game {
     /// The face an ability on the stack came from: the card as it stands
     /// while that face is up, else that face's row (the card has turned over
     /// or left since; the ability exists independently, CR 113.7a).
-    pub(crate) fn source_face(&self, card: CardId, face: CardDefId) -> Option<&CardDefinition> {
+    pub(crate) fn source_face(
+        &self,
+        card: CardId,
+        face: CardDefId,
+    ) -> Option<&PrintedCharacteristics> {
         let current = self.state.cards.get(card.0)?;
         if current.definition_id == face {
             Some(current)
         } else {
-            default_content_pack().definition(face)
+            default_content_pack()
+                .definition(face)
+                .map(|row| &*row.printed)
         }
     }
 
@@ -1493,9 +1499,10 @@ impl Game {
                 let events = copied
                     .into_iter()
                     .map(|copied| ProposedEvent::CreateTokens {
-                        definition: Box::new(TokenDefinition::Copy {
+                        definition: Box::new(TokenSource::Copy {
                             definition_id: self.state.cards[copied].definition_id,
-                            definition: self.state.cards[copied].copiable_definition(),
+                            definition: default_content_pack()
+                                .object_row(&self.state.cards[copied]),
                             front: self.state.cards[copied].front_face().cloned(),
                             copy: self.state.cards[copied].copy.clone(),
                             exceptions: exceptions.clone(),
@@ -1579,14 +1586,14 @@ impl Game {
                 None
             }
             Effect::CreateToken {
-                token_name,
+                token,
                 count,
                 tapped_and_attacking,
                 tapped,
             } => {
                 let count = self.effect_value(count, frame).max(0);
                 let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
-                    definition: Box::new(TokenDefinition::Registered(token_name.clone())),
+                    definition: Box::new(TokenSource::Registered(token.clone())),
                     controller: frame.controller,
                     count,
                     entry: ZoneEntry {

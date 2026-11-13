@@ -2,6 +2,7 @@
 //! Offers, public stack inspection and text capture share this projection. It never
 //! evaluates hidden state or predicts an outcome; quantities remain symbolic.
 
+use crate::cards::content_pack::default_content_pack;
 use crate::state::{
     ability::{
         Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
@@ -989,8 +990,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CounterAbility { what } => format!("Counter {}",selector_description(what)),
         DrawCards { count } => format!("Draw {} cards", value_description(count)),
         LoseLife { player, amount } => format!("{} loses {} life",player_description(player),value_description(amount)),
-        CreateToken { token_name, count: EffectValue::Fixed(count), tapped_and_attacking, tapped } => format!("Create {count} {}{token_name} token{}{}",if *tapped { "tapped " } else { "" },if *count == 1 { "" } else { "s" },if *tapped_and_attacking { " tapped and attacking" } else { "" }),
-        CreateToken { token_name, count, tapped_and_attacking, .. } => format!("Create X {token_name} tokens, where X is {}{}",value_description(count),if *tapped_and_attacking { ". They enter tapped and attacking" } else { "" }),
+        CreateToken { token, count: EffectValue::Fixed(count), tapped_and_attacking, tapped } => format!("Create {count} {}{} token{}{}",if *tapped { "tapped " } else { "" },default_content_pack().token_name(token),if *count == 1 { "" } else { "s" },if *tapped_and_attacking { " tapped and attacking" } else { "" }),
+        CreateToken { token, count, tapped_and_attacking, .. } => format!("Create X {} tokens, where X is {}{}",default_content_pack().token_name(token),value_description(count),if *tapped_and_attacking { ". They enter tapped and attacking" } else { "" }),
         GainLife { amount: EffectValue::Fixed(amount) } => format!("You gain {amount} life"),
         GainLife { amount } => format!("You gain life equal to {}", value_description(amount)),
         FightLastTarget => "The first target fights the last target".into(),

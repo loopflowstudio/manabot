@@ -1,7 +1,7 @@
 //! Salvat 2005.
 use managym_state::{
     ability::{DistinctSearchEnd, Effect},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -15,15 +15,18 @@ fn three_dreams() -> CardDefinition {
     CardDefinition {
         key: "psal.three_dreams",
         scryfall_id: "ddd4bbfb-80c9-4bdd-86c6-96fba00d3d12",
-        name: "Three Dreams".into(),
-        mana_cost: Some(ManaCost::parse("{4}{W}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::SearchDistinctNames {
-            predicate: CardPredicate::subtype("Aura"),
-            count: 3,
-            end: DistinctSearchEnd::Hand,
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Three Dreams".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::SearchDistinctNames {
+                predicate: CardPredicate::subtype("Aura"),
+                count: 3,
+                end: DistinctSearchEnd::Hand,
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

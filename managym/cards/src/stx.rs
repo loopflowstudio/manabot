@@ -5,7 +5,10 @@ use managym_state::{
         Ability, Effect, EffectValue, ObjectSelector, PaymentCost, TargetRequirement, TargetSpec,
         TriggerCondition, TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, StaticAbility},
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -30,19 +33,22 @@ fn divide_by_zero() -> CardDefinition {
     CardDefinition {
         key: "stx.divide_by_zero",
         scryfall_id: "1958d96e-ec44-48ab-80b1-5b01a24ac7b8",
-        name: "Divide by Zero".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::return_to_hand(ObjectSelector::Target(TargetSpec::SpellOrPermanent {
+        printed: PrintedCharacteristics {
+            name: "Divide by Zero".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::return_to_hand(ObjectSelector::Target(TargetSpec::SpellOrPermanent {
+                    min_mana_value: 1,
+                })),
+                Effect::Learn,
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::SpellOrPermanent {
                 min_mana_value: 1,
-            })),
-            Effect::Learn,
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::SpellOrPermanent {
-            min_mana_value: 1,
-        })],
-        text_box: text_box.into(),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -53,21 +59,24 @@ fn enthusiastic_study() -> CardDefinition {
     CardDefinition {
         key: "stx.enthusiastic_study",
         scryfall_id: "543c64ff-2c51-4a63-a940-dc8645717c85",
-        name: "Enthusiastic Study".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::pump(3, 1),
-            ),
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
-            ),
-            Effect::Learn,
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Enthusiastic Study".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(3, 1),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                ),
+                Effect::Learn,
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -78,21 +87,24 @@ fn eyetwitch() -> CardDefinition {
     CardDefinition {
         key: "stx.eyetwitch",
         scryfall_id: "1f4d1bb6-cb8f-4d01-9879-0b3a0585cbf4",
-        name: "Eyetwitch".into(),
-        mana_cost: Some(ManaCost::parse("{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Eye".into(), "Bat".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Learn],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Eyetwitch".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Eye".into(), "Bat".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Learn],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -103,24 +115,27 @@ fn field_trip() -> CardDefinition {
     CardDefinition {
         key: "stx.field_trip",
         scryfall_id: "f235060a-eb49-4a73-bb5f-01228c3c4070",
-        name: "Field Trip".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::search_library(
-                CardPredicate {
-                    subtype: Some("Forest".into()),
-                    ..CardPredicate::basic_land()
-                },
-                EffectValue::Fixed(1),
-                vec![Effect::return_to_battlefield(
-                    ObjectSelector::Selected,
-                    true,
-                )],
-            ),
-            Effect::Learn,
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Field Trip".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::search_library(
+                    CardPredicate {
+                        subtype: Some("Forest".into()),
+                        ..CardPredicate::basic_land()
+                    },
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Selected,
+                        true,
+                    )],
+                ),
+                Effect::Learn,
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -131,21 +146,24 @@ fn gnarled_professor() -> CardDefinition {
     CardDefinition {
         key: "stx.gnarled_professor",
         scryfall_id: "a32338e8-1f6a-49b9-bd93-26578adab6b3",
-        name: "Gnarled Professor".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Treefolk".into(), "Druid".into()],
-        power: Some(5),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Trample]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Learn],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Gnarled Professor".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Treefolk".into(), "Druid".into()],
+            power: Some(5),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Learn],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -156,15 +174,18 @@ fn igneous_inspiration() -> CardDefinition {
     CardDefinition {
         key: "stx.igneous_inspiration",
         scryfall_id: "5781ad7b-dc1b-4cc1-9e72-6e714b9ba1de",
-        name: "Igneous Inspiration".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::deal_damage(3, ObjectSelector::Target(TargetSpec::AnyTarget)),
-            Effect::Learn,
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Igneous Inspiration".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::deal_damage(3, ObjectSelector::Target(TargetSpec::AnyTarget)),
+                Effect::Learn,
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -175,16 +196,19 @@ fn pop_quiz() -> CardDefinition {
     CardDefinition {
         key: "stx.pop_quiz",
         scryfall_id: "d16892d8-9d10-45de-ab79-0e645c4b5588",
-        name: "Pop Quiz".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::DrawCards {
-                count: EffectValue::Fixed(1),
-            },
-            Effect::Learn,
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Pop Quiz".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+                Effect::Learn,
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -195,20 +219,23 @@ fn professor_of_symbology() -> CardDefinition {
     CardDefinition {
         key: "stx.professor_of_symbology",
         scryfall_id: "f427cf73-9f5e-4ef5-bc4f-29ffbfda9d57",
-        name: "Professor of Symbology".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Kor".into(), "Cleric".into()],
-        power: Some(2),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Learn],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Professor of Symbology".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Kor".into(), "Cleric".into()],
+            power: Some(2),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Learn],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -219,17 +246,20 @@ fn waterfall_aerialist() -> CardDefinition {
     CardDefinition {
         key: "stx.waterfall_aerialist",
         scryfall_id: "7bc6966c-18d9-4675-9594-6f0b2d11c405",
-        name: "Waterfall Aerialist".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Djinn".into(), "Wizard".into()],
-        power: Some(3),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
-            "{2}",
-        )))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Waterfall Aerialist".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Djinn".into(), "Wizard".into()],
+            power: Some(3),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
+                "{2}",
+            )))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

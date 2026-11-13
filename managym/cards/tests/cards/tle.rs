@@ -342,7 +342,7 @@ fn create_foods(s: &mut Scenario, count: usize) -> Vec<PermanentId> {
     (0..count)
         .map(|_| {
             s.game_mut()
-                .create_token("Food", PlayerId(0), false)
+                .create_token("token.food", PlayerId(0), false)
                 .unwrap()
         })
         .collect()

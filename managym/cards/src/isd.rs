@@ -1,7 +1,10 @@
 //! Innistrad.
 use managym_state::{
     ability::{Effect, ObjectSelector, Scope},
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, StaticAbility},
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -17,14 +20,17 @@ fn typhoid_rats() -> CardDefinition {
     CardDefinition {
         key: "isd.typhoid_rats",
         scryfall_id: "4490ce65-c73a-4809-abd1-ccc3175bd2a4",
-        name: "Typhoid Rats".into(),
-        mana_cost: Some(ManaCost::parse("{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Rat".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Deathtouch]),
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Typhoid Rats".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rat".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -34,17 +40,20 @@ fn blasphemous_act() -> CardDefinition {
     CardDefinition {
         key: "isd.blasphemous_act",
         scryfall_id: "509ce648-fb76-486d-8b39-183e368b7cb7",
-        name: "Blasphemous Act".into(),
-        mana_cost: Some(ManaCost::parse("{8}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        statics: vec![StaticAbility::CostsLessPerPermanentOnBattlefield(
-            CardPredicate::creature(),
-        )],
-        spell_effects: vec![Effect::deal_damage(
-            13,
-            ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Blasphemous Act".into(),
+            mana_cost: Some(ManaCost::parse("{8}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            statics: vec![StaticAbility::CostsLessPerPermanentOnBattlefield(
+                CardPredicate::creature(),
+            )],
+            spell_effects: vec![Effect::deal_damage(
+                13,
+                ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

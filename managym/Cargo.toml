@@ -6,7 +6,7 @@ license = "MIT"
 
 # The engine, with the rules types it is written in (`state/`) and the card
 # sets it runs (`cards/`) as sibling crates. The engine reaches the sets only
-# through `managym_cards::catalog()`, so `cargo check -p managym-cards` checks
+# through `managym_cards::catalog()` and `token_catalog()`, so `cargo check -p managym-cards` checks
 # a card edit against the rules types alone. `cargo test` here covers all three.
 [workspace]
 members = ["state", "cards"]

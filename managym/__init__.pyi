@@ -71,6 +71,7 @@ def unsupported_cards(names: list[str]) -> list[str]:
 
 class CatalogTokens(TypedDict):
     content_digest: str
+    keys: list[str | None]
     registry_names: list[str]
     token_kind: list[int]
     token_value: list[int]
