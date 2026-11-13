@@ -29,19 +29,20 @@ def test_card_class_alias_warns_on_each_access() -> None:
 @pytest.mark.parametrize("seat", ["agent", "opponent"])
 def test_object_list_alias_reads_and_writes_same_rows(seat: str) -> None:
     env = managym.Env(seed=42)
-    obs, _ = env.reset(Match().to_rust())
+    env.reset(Match().to_rust())
+    env.scenario_force_battlefield(1, "Mountain", ready=True)
+    env.scenario_refresh()
+    obs = env.observation_for_player(0)
     old, new = f"{seat}_cards", f"{seat}_objects"
-    rows = obs.agent_objects
+    message = rf"Observation\.{old}.*0\.3\.0.*Observation\.{new}"
+    rows = getattr(obs, new)
     assert isinstance(rows[0], managym.Object)
-    with pytest.warns(
-        DeprecationWarning, match=rf"Observation\.{old}.*0\.3\.0.*Observation\.{new}"
-    ) as caught:
+    setattr(obs, new, [])
+    with pytest.warns(DeprecationWarning, match=message) as caught:
         setattr(obs, old, rows)
     assert len(caught) == 1
     assert [row.id for row in getattr(obs, new)] == [row.id for row in rows]
-    with pytest.warns(
-        DeprecationWarning, match=rf"Observation\.{old}.*0\.3\.0.*Observation\.{new}"
-    ) as caught:
+    with pytest.warns(DeprecationWarning, match=message) as caught:
         legacy = getattr(obs, old)
     assert len(caught) == 1
     assert [row.id for row in legacy] == [row.id for row in rows]

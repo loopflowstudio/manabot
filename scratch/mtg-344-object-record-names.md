@@ -402,3 +402,41 @@ bindings filter to hand or battlefield zones.
 Recheck: `uv run --no-sync python -W error::DeprecationWarning scripts/bench_states.py`
 on its smallest state selection (see its `--help`), the alias test under
 `-W error::DeprecationWarning`, and the digest script.
+
+### Concept review 3 implementation
+
+Moved the benchmark script to the current observation attributes and renamed the
+reviewed native object-row bindings. The public-entry closure uses `entry` to
+avoid shadowing its enclosing `object`. The seat-parametrized alias test now
+selects `getattr(obs, new)`, places a visible opponent permanent, and clears the
+current list before writing it through the deprecated setter; both seats exercise
+a nonempty write. No persistence or tensor names change.
+
+Search of `scripts/` and `experiments/` found no remaining deprecated consumers
+in Python files. Other matches are frozen protocol JSON and historical Markdown.
+Ruff check/format on the two changed Python files and `git diff --check` pass;
+workspace Rust formatting is applied. Frozen fixture/vocabulary diff against
+`e363e4058e` remains empty.
+
+Focused validation:
+
+- `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --lib fixed_player_observation_does_not_follow_the_acting_seat -- --test-threads 2` -> 1 passed in debug (0.06s test time).
+- Root maturin release build -> pass; matching cp313 extension installed atomically.
+- `uv run --no-sync pytest tests/env/test_object_record_aliases.py -q -W error::DeprecationWarning` -> 5 passed (22.89s), including both nonempty seat lists.
+- `uv run --no-sync python scratch/observation_digest.py` -> 3,512 decisions, SHA-256 `14c102e45341799283111bb57adec4b2df92b1742170b866a9f2334c0295100a`, identical to baseline.
+- `CARGO_BUILD_JOBS=2 cargo build --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml` -> pass.
+- `uv run --no-sync python -W error::DeprecationWarning scripts/bench_states.py duplicate-tokens --sizes 1` -> pass: encoder and text consumers at all five checkpoints, with no deprecation warnings.
+
+Concept review 3 follow-up is complete.
+
+Compress after concept review 3: the list-alias test states its warning pattern
+once (`message`); the same hand-leak closure over `opponent_objects` in
+`managym/src/flow/decision.rs` (test
+`learn_reveal_is_ordered_public_definition_and_known_hand_is_not_a_hand_leak`)
+binds `object`, matching `agent/env.rs`. Test-only Rust, no extension rebuild.
+`uv run --no-sync pytest tests/env/test_object_record_aliases.py -q -W error::DeprecationWarning`
+-> 5 passed (8.65s); `CARGO_BUILD_JOBS=2 cargo check --manifest-path managym/Cargo.toml --lib --tests`
+-> pass in debug; `cargo fmt --all --check` -> pass. `scripts/` and
+`experiments/` Python files hold no deprecated observation attribute.
+
+Remaining gate suites and the alias-removal Task remain later delivery steps.

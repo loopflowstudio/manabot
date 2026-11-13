@@ -125,7 +125,7 @@ impl Game {
                                 .agent_objects
                                 .iter()
                                 .chain(observation.opponent_objects.iter())
-                                .find(|card| card.id == id.0 as i32)
+                                .find(|object| object.id == id.0 as i32)
                                 .and_then(|_| {
                                     self.state
                                         .objects

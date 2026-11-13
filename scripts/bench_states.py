@@ -94,7 +94,7 @@ def main() -> None:
             ObservationConfig(
                 policy_input_version=10,
                 max_cards_per_player=max(
-                    60, len(obs.agent_cards), len(obs.opponent_cards)
+                    60, len(obs.agent_objects), len(obs.opponent_objects)
                 ),
                 max_permanents_per_player=max(
                     40, len(obs.agent_permanents), len(obs.opponent_permanents)

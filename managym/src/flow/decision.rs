@@ -3715,7 +3715,7 @@ mod learn_tests {
         assert!(!other
             .opponent_objects
             .iter()
-            .any(|card| card.zone == ZoneType::Hand));
+            .any(|object| object.zone == ZoneType::Hand));
         assert_ne!(
             before.identity.viewer_state_hash,
             game.semantic_observation(PlayerId(1))

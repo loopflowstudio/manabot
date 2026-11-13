@@ -368,12 +368,12 @@ impl Game {
         }
         let agent_obs = AgentObservation::for_player(self, viewer);
         let public_entries = self.pending_public_entries();
-        if !agent_obs.opponent_objects.iter().all(|card| {
-            card.zone != ZoneType::Hand
+        if !agent_obs.opponent_objects.iter().all(|object| {
+            object.zone != ZoneType::Hand
                 || self.shares_information(viewer, PlayerId(1 - viewer.0))
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
-                || public_entries.iter().any(|object| {
-                    self.state.objects[ObjectId::from(object.entity)].id.0 as i32 == card.id
+                || public_entries.iter().any(|entry| {
+                    self.state.objects[ObjectId::from(entry.entity)].id.0 as i32 == object.id
                 })
         }) {
             return Err(SemanticError::ViewerSafetyViolation);

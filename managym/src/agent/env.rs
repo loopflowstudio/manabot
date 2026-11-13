@@ -1743,11 +1743,11 @@ mod content_pack_contract_tests {
         assert!(player_zero
             .opponent_objects
             .iter()
-            .all(|card| card.zone != crate::state::zone::ZoneType::Hand));
+            .all(|object| object.zone != crate::state::zone::ZoneType::Hand));
         assert!(player_one
             .opponent_objects
             .iter()
-            .all(|card| card.zone != crate::state::zone::ZoneType::Hand));
+            .all(|object| object.zone != crate::state::zone::ZoneType::Hand));
         assert_eq!(
             env.observation_for_player(2)
                 .expect_err("only two seats exist")
