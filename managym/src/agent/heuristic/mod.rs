@@ -1,7 +1,56 @@
 //! Deterministic, viewer-safe rule-of-thumb opponent shared by scalar and batch
 //! play. Heuristic owns only decision history; Board borrows an Observation,
-//! never a Game. Knowledge is compiled from public card definitions. Mana and
-//! combat are estimates, intentionally preserving the Python anchor's rules.
+//! never a Game. Knowledge is compiled from public card definitions.
+//!
+//! Selection rules:
+//! - Mana: play a land, activate fetch lands, then cast the highest-mana-value
+//!   spell with a worthwhile use. Let our spell resolve before casting another;
+//!   legal offers determine affordability. Pay kicker when untapped lands cover
+//!   spell plus kicker.
+//! - Instant timing: delay instants in our upkeep and draw step. Untargeted
+//!   instants (draw, selection) and draw/life abilities wait for the opponent's
+//!   end step, leaving mana for permanents first. Fetch abilities are considered
+//!   before spell timing.
+//! - Targets: derive polarity from card definitions, with damage, destroy,
+//!   bounce, counter and exile harmful; pumps, untaps and keyword grants
+//!   beneficial. Aim harmful effects at the opponent's side and beneficial ones
+//!   at ours. Hold damage removal until it kills a creature or the opponent,
+//!   accounting for estimated kicker mana and graveyard Lessons; hold counters
+//!   for an opposing spell on the stack.
+//! - Card choices: Learn takes a Lesson, preferring removal while opposing
+//!   creatures remain. Discard spare lands once five are in play, otherwise the
+//!   costliest card; decline optional discards without a spare land. A
+//!   look-and-select favors a land while hand and battlefield together have
+//!   fewer than four.
+//! - Combat: hold back the toughest attackers while the estimated swing back
+//!   is lethal. Avoid an attack if an untapped blocker can kill the attacker
+//!   and survive; attack with everything when unblockable damage is lethal.
+//!   Plan blocks once per combat, one blocker per attacker: prefer kills that
+//!   survive, trades up and free absorption, then chump the largest remaining
+//!   attackers while incoming damage is lethal.
+//! - Own tricks: an affordable pump in hand can rescue one dominated attacker.
+//!   After blocks, cast pumps when they improve a one-on-one fight or make
+//!   unblocked damage lethal; activate self-pumps on unblocked attackers.
+//!   Hypothetical opposing combat tricks are ignored.
+//! - Optional costs: pay offered ward and "unless pays" costs.
+//! - Fallback for unhandled prompts: at priority prefer land, spell, then pass;
+//!   attack or block when offered; otherwise take the first non-decline offer,
+//!   or the last offer when all decline.
+//!
+//! Ties are deterministic for the same visible state and decision history.
+//! Equal-value casts, equal-ranked targets and Lessons use the first legal
+//! offer; equal-ranked discard and look-and-select choices use the last.
+//! Block pairs rank by outcome, attacker power, lower blocker mana value, then
+//! descending blocker and attacker IDs. Pump targets rank by fight improvement,
+//! power, then descending ID. Other equal combat rankings keep observation order.
+//!
+//! These are estimates, not exact combat search. Mana counts untapped lands,
+//! ignoring colors and other sources. Creature identity uses visible card
+//! definitions (or an animated permanent); without a definition, positive
+//! toughness counts as a creature. Modal bodies are opaque to spell ratings.
+//! Combat assignments use the observation's attacker/blocker events and current
+//! permanent IDs, remembered for the turn. No hidden hand or library order is
+//! consulted.
 mod knowledge;
 use crate::agent::{
     action::{ActionSpaceKind as Space, ActionType as Action, AgentError},
@@ -172,8 +221,9 @@ fn can_block(b: &PermanentData, a: &PermanentData) -> bool {
         && (!a.keywords.flying || b.keywords.flying || b.keywords.reach)
 }
 
-/// One player's memory. Reset explicitly between games in a batch; scalar
-/// callers can reset on lifecycle boundaries, with turn rollback as a backstop.
+/// One player's memory. Env clears it on batch reset; scalar games construct
+/// fresh players. Direct callers reset between games, with turn rollback as a
+/// backstop.
 #[derive(Clone, Debug, Default)]
 pub struct Heuristic {
     turn: Option<u32>,

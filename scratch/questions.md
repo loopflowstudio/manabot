@@ -213,3 +213,46 @@ stay above) and the unexecutable pre-sync parity fixture; the integrated
 comparison now owns the one fixture path. Test imports moved to the top. No
 Rust or runtime change, so no rebuild.
 `uv run --no-sync pytest tests/sim/test_heuristic.py -q` — 15 passed.
+
+## Second sync (2026-11-13)
+
+Branch merged main `d1554835be` (MTG-337, `de39d601fb`: large-board benchmarks,
+fewer mana-payment scans with unchanged search order, `Observation.from_json`
+optional `continuation_json`). It touched no heuristic, opponent or vector-env
+file. The installed extension predated the merge, so realign rebuilt it
+(release, atomic cp313 replacement) and reran
+`uv run --no-sync pytest tests/sim/test_heuristic.py tests/env/test_captured_vector_bookkeeping.py tests/semantic/test_player_control.py tests/env/test_opponents.py tests/training/test_action_cutoff.py::test_heuristic_scores_only_retained_legal_offers -q`
+— 50 passed; the retained parity fixture still replays. Gate's remaining checks
+above are unchanged, and Engine Budget now compares against main's reference
+`d53220d36`.
+
+## Concept review after integration (2026-11-13)
+
+No open product choice. Actions, runners, memory lifecycle (Env reset clears,
+fork copies, `build_code_player` builds a fresh scalar player per game) and
+registration identity hold after both syncs; no code-behavior change wanted.
+
+Direction taken — one owner for the rule description. The adapter docstring
+stated the rules where they no longer run, the native header defined itself by
+the deleted Python implementation, and the copies had already drifted once
+(realign's instant-timing correction). The `//!` header of
+`managym/src/agent/heuristic/mod.rs` now states the rule groups, fallback,
+tie-breaks and approximations as its own; `manabot/sim/heuristic.py` documents
+only the adapter, why it sits outside frozen `anchors.py`, the identity files
+and a pointer to the header and docs/engine.md; `Heuristic`'s doc comment says
+Env clears batch memory on reset and scalar games construct fresh players.
+Parity with Python source `757bb6257` is evidence (the fixture), not the
+definition. Comments only: no behavior, API or fixture change. The source
+digest moves (no registration exists under it yet). Assumption: the Task's
+"keep the documented rules in the module header" means the module that owns
+the rules.
+
+`CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
+— passed; cp313 extension replaced atomically. Compress rechecked: all 96
+packaged Rust sources and the installed extension equal wheel/checkout bytes,
+and the header's tie-break and fallback claims match `best_card`, `priority`,
+`learn`, `target`, `plan_blocks` and `fallback`; no further cut found.
+`uv run --no-sync pytest tests/sim/test_heuristic.py -q` — 15 passed.
+Workspace Rust formatting, adapter Ruff lint/format and `git diff --check`
+passed. Full suites, release smoke and Engine Budget remain for gate; no
+background work remains.

@@ -1,79 +1,70 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MTG-277 · Heuristic concept review</title>
 <style>
-:root { color-scheme: light dark; --paper: #faf8f3; --ink: #252b29; --muted: #58635c; --line: #b8c4b9; --accent: #315d48; }
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 system-ui, sans-serif; }
-main { max-width: 850px; padding: 32px 24px 48px; margin: auto; }
-header { color: var(--muted); font-size: 13px; }
-h1 { font: 600 clamp(27px, 5vw, 36px)/1.15 system-ui, sans-serif; margin: 20px 0 12px; }
-h2 { font-size: 19px; margin: 26px 0 8px; }
-p { margin: 10px 0; }
-code { font: .86em ui-monospace, monospace; overflow-wrap: anywhere; }
-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 15px; }
-th, td { text-align: left; vertical-align: top; padding: 10px 8px; border-bottom: 1px solid var(--line); }
-th { color: var(--accent); }
-aside { border-left: 3px solid var(--accent); padding-left: 16px; }
-ol { padding-left: 24px; }
-li { margin: 8px 0; }
-.sources { overflow-wrap: anywhere; }
-@media (prefers-color-scheme: dark) { :root { --paper: #1a211d; --ink: #ebece4; --muted: #b2c0b6; --line: #53685a; --accent: #add2ba; } }
-@media (max-width: 540px) { main { padding: 22px 16px; } th, td { padding: 8px 4px; font-size: 13px; } }
-</style>
-</head>
-<body><main>
-<header>
-MTG-277 · concept-review · 2026-11-11
-<div class="sources">Built from <code>scratch/questions.md</code>, <code>docs/engine.md</code>,
-<code>docs/evaluation.md</code>, <code>managym/src/agent/{heuristic,env.rs,opponent.rs,vector_env.rs}</code>,
-<code>managym/src/python/heuristic_bindings.rs</code>, <code>manabot/sim/{heuristic,players,native_game}.py</code>,
-<code>manabot/eval/admission.py</code>, <code>tests/sim/test_heuristic.py</code> and
-<code>tests/semantic/test_player_control.py</code>.</div>
-</header>
-<h1>Advance without redesign.</h1>
-<p>No open product choice. One heuristic strategy serves scalar evaluation and native batch collection.
-<strong>Proposed new behavior: none.</strong> Integration and validation remain outstanding.</p>
-<aside><strong>Biggest mismatch, addressed in this checkout:</strong> “heuristic” previously meant a Python
-scalar player without a native batch counterpart. It now names one strategy; callers choose the runner.</aside>
+:root{color-scheme:light dark;--paper:#faf8f3;--ink:#252b29;--muted:#58635c;--line:#b8c4b9;--accent:#315d48}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.5 system-ui,sans-serif}
+main{max-width:850px;padding:32px 24px 48px;margin:auto}
+header{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+h1{font:600 clamp(26px,5vw,34px)/1.15 system-ui,sans-serif;margin:20px 0 12px}
+h2{font-size:19px;margin:26px 0 8px}
+code{font:.86em ui-monospace,monospace;overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15px}
+th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--accent)}
+aside{border-left:3px solid var(--accent);padding-left:16px}
+.proposed{border-left:3px dashed var(--accent);padding-left:16px}
+li{margin:8px 0}
+@media (prefers-color-scheme:dark){:root{--paper:#1a211d;--ink:#ebece4;--muted:#b2c0b6;--line:#53685a;--accent:#add2ba}}
+@media (max-width:540px){main{padding:22px 16px}th,td{padding:8px 4px;font-size:13px}}
+</style></head><body><main>
+<header>MTG-277 · concept-review · 2026-11-13 (after both syncs with main) · built from
+scratch/questions.md, docs/engine.md, docs/evaluation.md, manabot/README.md,
+manabot/sim/{heuristic,players}.py, manabot/eval/admission.py,
+managym/src/agent/{heuristic/mod.rs,env.rs,opponent.rs,vector_env.rs},
+managym/src/python/heuristic_bindings.rs, managym/__init__.pyi</header>
+<h1>One change before gate: describe the rules where they run</h1>
+<p>No product choice is open. Actions, concepts and APIs below are built and unchanged by this review.
+The one mismatch is in documentation ownership, and it is proposed, not built.</p>
+
 <table>
-<thead><tr><th scope="col">Action</th><th scope="col">Before → built here</th><th scope="col">State-changing API</th></tr></thead>
-<tbody>
-<tr><td>Train against heuristic</td><td>Unavailable natively → opponent advances inside each game</td><td><code>VectorEnv(opponent_policy="heuristic")</code><br><code>reset_all(players)</code> → <code>step(actions)</code></td></tr>
-<tr><td>Evaluate against heuristic</td><td>Python rules → adapter to the same native strategy</td><td><code>HeuristicPlayer.act</code> → <code>Heuristic.select_action</code> → game step</td></tr>
-<tr><td>Start another game / fork</td><td>Scalar player memory → same lifecycle in both runners</td><td>Reset clears batch memory; fork copies it. Scalar games build fresh players.</td></tr>
-<tr><td>Register an anchor</td><td>Python source identity → <code>native-v2</code> plus shipped source bytes</td><td><code>register_anchor</code>; validate before execution. Historical results retain their identity.</td></tr>
-</tbody></table>
-<h2>One interaction, including recovery</h2>
-<p>Create two heuristic-opponent slots, reset their decks, then submit one learner action per slot.
-Native play answers the opponent's decisions until the learner chooses again. If the opponent wins,
-the returned terminal reward is the learner's loss; the returned observation belongs to the replacement game.
-That new game starts with clean strategy memory.</p>
-<p>An old extension rejecting <code>"heuristic"</code> requires the matching install or rebuild.
-Capacity errors remain errors. A registration whose source bytes changed requires the matching artifact
-or a new truthful registration; old results are never reassigned. No silent random fallback.</p>
-<h2>Three concepts worth keeping</h2>
-<p><strong>Strategy:</strong> native rules plus per-player decision history.
-<strong>Runner:</strong> owns stepping, rewards, resets and fork lifecycle.
-<strong>Registration:</strong> records exactly which implementation produced evidence.
-Public definition ratings are derived once; they do not need a second authored card model.</p>
-<h2>Counterexamples that constrain simplification</h2>
-<p>A JSON snapshot cannot replace live observations: it omits target/cost focus, and strategy also depends
-on prior decisions. Turn rollback cannot replace explicit reset: another game can start at the same turn.
-The active player cannot replace the published chooser under control effects. Closed decklists cannot
-be recovered from privileged hand snapshots. Optional legal-prefix selection must preserve original offer indices.</p>
-<p><strong>Still pending:</strong> integrate MTG-272 after landing, preserving these boundaries and its reset
-contracts. Passive remains in this checkout until that integration. Full required suites and same-runner
-Engine Budget remain gates. The retained 862-decision parity proof and bounded collection samples establish
-neither strength nor sustained training speed. This review reran no runtime checks.</p>
-<h2>Review questions — resolved from the working design</h2>
+<tr><th>Action</th><th>Concept</th><th>State-changing API (built)</th></tr>
+<tr><td>Train against heuristic</td><td>Runner advances the opponent inside each game</td><td><code>VectorEnv(opponent_policy="heuristic")</code>, <code>reset_all</code>, <code>step</code></td></tr>
+<tr><td>Evaluate against heuristic</td><td>Scalar adapter to the same strategy</td><td><code>HeuristicPlayer.act</code> → <code>managym.Heuristic.select_action</code></td></tr>
+<tr><td>New game / fork</td><td>Game-scoped strategy memory</td><td>Env reset clears, fork copies; <code>build_code_player</code> builds a fresh scalar player per game</td></tr>
+<tr><td>Register an anchor</td><td>Identity of the implementation that produced evidence</td><td><code>register_anchor</code> → <code>native-v2</code>, adapter + three Rust files; drift rejected</td></tr>
+</table>
+
+<h2>Biggest mismatch</h2>
+<aside>
+<p><strong>Existing.</strong> The rules are described in the file that no longer runs them. The adapter
+<code>manabot/sim/heuristic.py</code> (about 30 lines of code) carries a 45-line docstring: “<code>HeuristicPlayer</code>
+keeps v1 … and adds”, “the player remembers them for the turn”. The owner,
+<code>managym/src/agent/heuristic/mod.rs</code>, has a four-line header that defines itself as
+“preserving the Python anchor's rules”, an implementation this change deletes. The two descriptions
+already drifted once (instant timing, corrected in realign).</p>
+</aside>
+<div class="proposed">
+<p><strong>Proposed.</strong> The <code>//!</code> header of <code>mod.rs</code> states the rule groups, fallback, tie-breaks and
+approximations as its own. The adapter docstring says what the file is: a scalar adapter, why it sits
+outside frozen <code>anchors.py</code>, which files form the identity, and where the rules are. The
+<code>Heuristic</code> doc comment says Env clears batch memory on reset. Parity with Python source
+<code>757bb6257</code> stays evidence in the fixture, never the definition.</p>
+<p>Comments and docstrings only. The source digest moves; no registration exists under it yet.</p>
+</div>
+
+<h2>Checked and kept</h2>
+<ul>
+<li>Normal path: two slots, learner acts, the opponent's decisions resolve natively, terminal reward is the learner's.</li>
+<li>Failure: old extension rejects <code>"heuristic"</code>; capacity overflow stays an error; source drift rejects a registration. No random fallback.</li>
+<li>Recovery: matching install or rebuild; a new truthful registration. Old results keep their identity.</li>
+<li>Counterexamples still binding: viewer JSON omits <code>action_space.focus</code>; turn rollback cannot stand in for reset; the chooser is not the active player under control effects.</li>
+</ul>
+
+<h2>Questions</h2>
 <ol>
-<li>Separate scalar and batch strategies? <strong>No:</strong> the Task requires one native owner.</li>
-<li>Persist a new heuristic lifecycle record? <strong>No:</strong> game-scoped memory and existing evidence identities suffice.</li>
-<li>Any new product choice to return as Blocked? <strong>None.</strong> Advance to the remaining integration and acceptance work.</li>
+<li>The Task says “keep the documented rules in the module header”. This review reads that as the module that owns the rules.
+(a) native header owns them, adapter points there — assumed; (b) keep the full list in the Python adapter as well.</li>
 </ol>
-</main></body>
-</html>
+</main></body></html>
