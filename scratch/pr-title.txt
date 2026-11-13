@@ -1,0 +1,1 @@
+Keep tokens and spell copies out of card-only operations
