@@ -581,7 +581,9 @@ def prepare(
     present = validity != 0
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
-    referenced = _referenced_definitions(obs, tables, candidates)
+    referenced = (
+        _referenced_definitions(obs, tables, candidates) if select_programs else None
+    )
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
