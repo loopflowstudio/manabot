@@ -87,6 +87,8 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
+Fourth recheck (after review 3 implementation): PR #103 unchanged, open at
+`105abdd`; main has not moved past `105e7e2aa`; nothing new to merge.
 Third realign recheck: Etude PR #103 is still OPEN at
 `105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (`mergedAt: null`); `pyproject.toml`
 still requires 0.2.16. Main advanced to `105e7e2aa` (player-chosen mana
@@ -97,173 +99,43 @@ dependency file. The parity proof compared against main `6ce618b8a`, before
 that observation change; it is not rerun here. Gate's focused checks cover the
 merged observation code. No tests were rerun for realign.
 
-## Concept review follow-through — 2026-11-13
+## Concept reviews 1–3: implemented — 2026-11-13
 
-Implemented the four independent items: retained experiment records moved to
-experiment/records.py; live learning types moved to training/learning.py;
-state.pt includes learner settings and refusal names differing fields with
-saved/requested values; CLI exposes --updates with a hidden warning --steps
-alias (removal 0.3.0). Recipe config discovery requires seed/device, which the
-CLI actually passes. Serialized learning fields are unchanged; imports use the
-new defining modules without compatibility aliases.
+The review items were proposals drawn from the design, not statements anyone
+made. All are implemented; details and run lines are in git history
+(`488d6194f:scratch/plan.md`) and implementation.md.
 
-Deletion inventory addition: experiment/execution.py and the six live learning
-definitions in regime.py were replaced by those modules. Retained stage/regime
-records still use the learning types; offline records and schemas survive.
+- Retained experiment records live in `experiment/records.py`; live learning
+  types in `training/learning.py`. Serialized learning fields are unchanged;
+  imports use defining modules without compatibility aliases.
+- `state.pt` holds learner settings (`self_play.learner_settings` owns the
+  machine-field exclusion); resume refuses a changed setting, naming saved and
+  requested values.
+- PPO has a fixed horizon: optional `Learning.horizon` (omitted when unset, so
+  retained regime bytes hold); live `SelfPlay` requires an explicit learning
+  record and refuses PPO without a horizon; `step`/`learn` take no target.
+  Rates read `update / horizon`, clamped, so a run extended past its horizon
+  trains on at the final rates. Gray Ogre and belief pass their own update
+  count.
+- The loop adds no `final` tag; Etude's `TrainingRun.final` (last checkpoint
+  of a finished run) owns the endpoint. The already-finished early return
+  still calls `record_checkpoint`, covering a crash between `save_state` and
+  the record. `test_recipe_etude.py` checks the derived endpoint advances from
+  update 1 to 2 and no checkpoint carries `final`.
+- CLI `--updates` sets only the stop target; hidden `--steps` alias warns
+  (removal 0.3.0) that, unlike on main, it leaves the local/baseline recipe's
+  rates and checkpoint grid unchanged. docs/training.md says the same and its
+  recipe/loop excerpts match the code. Whether the CLI should set any recipe
+  config field stays open in questions.md; nothing was built for it.
 
-Still tied to SDK release: local_launch currently owns neither target nor
-deadline arguments, so the CLI retains its environment save/restore. Seek
-local_launch(out=, experiment=, until=, deadline=) in EXP-56; if unavailable,
-keep the current code. Remove the PR #103 notice only when the real pin lands.
-The repeated track/run.until opening and experiment runs/eval/report names stay.
+Left alone on purpose: `training/state/` keeps its name; the repeated
+`track`/`run.until` opening; `baseline.evaluate` refusing a run that ended
+anywhere but `config.updates`. `local_launch` owns neither target nor deadline
+in EXP-56 `105abdd`, so the CLI keeps its environment save/restore; adopt
+`local_launch(..., until=, deadline=)` only if the released SDK provides it,
+and remove the PR #103 notice only when the real pin lands.
 
-Focused validation: 139 checks passed across resume/CLI, retained regime and
-experiment records, package boundaries, CI selection and release checks; one
-stale boundary expectation was corrected and its failed check rerun successfully.
-Full gate and installed-consumer checks remain in Remaining work above.
-
-## Compress follow-through after concept implementation — 2026-11-13
-
-`self_play.learner_settings` now owns the machine-field exclusion for state
-serialization, digests and refusal diagnostics, so those views cannot drift.
-Loop helpers have descriptive function names without private prefixes, matching
-the recorded naming direction. Recipe clock labels say collection/update
-iterations; optimizer-step counts remain separate metrics. No serialized keys,
-learner calculations or frozen evidence changed.
-
-## Concept review 2 — 2026-11-13: next implement direction
-
-Reviewed recipes, loop, CLI and docs/training.md at `7bbeb4b8c`. The model
-holds. One interaction breaks its own promise; the rest is doc drift. These
-are proposals drawn from the design, not statements anyone made.
-
-1. Extending a PPO run changes what it already learned from. `learn` gives
-   PPO `state.update / updates`, where `updates` is the launch target. Run
-   the belief recipe to 64 and then `--updates 128`: the first leg decays its
-   rates over 64, the second restarts at half progress, so the result is
-   neither a 64- nor a 128-update run, and nothing refuses (the target is not
-   in `state.pt`). docs/training.md uses exactly this recipe to show
-   extension. Damped policy already has the right contract
-   (`IterationSchedule`: "continuation must retain the original horizon").
-   Give PPO the same: an optional `Learning.horizon` (omitted from
-   serialization when unset, as `iteration_schedule` is, so retained regime
-   records keep their bytes); `SelfPlay` refuses PPO without it; progress is
-   `state.update / horizon`; `step` and `learn` lose `updates=`. The horizon
-   then sits in the resume identity. `gray_ogre_self_play` and belief set it
-   from the recipe's own update count. With horizon equal to the target the
-   fresh-run parity fixture is unchanged; rerun `scratch/parity.py` for PPO.
-   Drop the "for PPO the target matters" sentences from the loop docstring,
-   training.md and questions.md.
-2. docs/training.md shows recipes that differ from the code: the clock label
-   is "optimizer updates" (code: "collection/update iterations", and the
-   README explains they are not optimizer calls); the Elemental excerpt omits
-   `device`/`streams`; the belief excerpt shows seed 421, 64 updates, 256
-   games and `sampler_config()` (code: 197, 1, 3, `config.sampler`). Make
-   the excerpts match the files, or say they are abridged where they are.
-
-Left alone on purpose: `training/state/` (game errors and incidents) keeps
-its name; the CLI's local/baseline-only flags wait on the open question in
-questions.md (should the CLI set any field of a recipe's config).
-
-## Docs for concept review 2 — 2026-11-13
-
-Changed doc paths: `docs/training.md` (Elemental and belief excerpts match the
-recipe files; loop excerpt and piece table drop `updates=` from `step`/`learn`;
-"Schedules and clocks" states the fixed PPO horizon; belief extension example
-uses the real defaults, `--updates 2`) and `docs/learning.md` (PPO paragraph).
-These describe the implemented behavior (see follow-through below). The docs fix
-three details the plan left to implement: the builder call is
-`gray_ogre_self_play(horizon=config.updates)`; a run extended past its horizon
-trains on at the final rates (what `Schedule.at` and `IterationSchedule.at`
-already do by clamping) rather than refusing; a changed horizon is refused on
-resume as a learner setting. `SelfPlay.learning` defaults to `Learning()`, so
-"refuses PPO without a horizon" makes that default unusable: implement must
-either drop the default or accept that a bare `SelfPlay(...)` refuses. The implementation
-below drops the default.
-Second docs pass (same day): reread both files against the recipe code; the
-only edit is one sentence in `docs/training.md` saying the belief example's
-second update lies past its one-update horizon and uses the final rates. The
-changed doc paths are still `docs/training.md` and `docs/learning.md`.
-The loop docstring and questions.md now state the fixed-horizon contract.
-
-## Concept review 2 implementation — 2026-11-13
-
-Implemented `Learning.horizon` as an optional positive strict integer omitted
-when unset, preserving retained regime bytes. Live `SelfPlay` requires an
-explicit learning record and refuses PPO without its horizon. The Gray Ogre
-builder requires a horizon; belief supplies `config.updates`. `learn` and
-`step` no longer take a target. PPO progress reads the saved learning horizon,
-so target extension does not revise prior rates; schedules clamp at final
-rates past the horizon. Changed horizons refuse with saved/requested values.
-The existing docs excerpts now match implementation.
-
-Deletion addition: the target argument on `step`/`learn` and the implicit
-`SelfPlay.learning` default are removed; there is no second scheduling path.
-Focused validation and parity results are recorded in implementation.md.
-Release/pin, installed consumers, gate, recovery review and launcher/service
-proof remain as listed above. Stop at demo before shipping.
-
-## Compress after concept review 2 — 2026-11-13
-
-The horizon change was already minimal; no deletion target remains. Reworded
-the `Learning` and baseline `settings` docstrings, which said a target
-"extends that horizon", to state the contract: rates read `update / horizon`,
-clamped, so a later target runs past it at the final rates.
-`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_self_play_loop.py tests/training/test_pretrained.py -q`: 7 passed (6.34s).
-
-## Concept review 3 — 2026-11-13: next implement direction
-
-Reviewed loop, recipes, CLI, docs/training.md and Etude `105abdd` at
-`2c88aeb3c`. Target, horizon and resume identity now agree. Two leftovers,
-both proposals drawn from the design, not statements anyone made.
-
-1. A run can hold two "final" checkpoints. The loop tags the checkpoint at
-   its target `final`; extend the run and the old one keeps the tag
-   (`test_recipe_etude.py` asserts updates 1 and 2 both carry it). Nothing
-   reads the tag: Etude already derives the fact (`TrainingRun.final`, the
-   last checkpoint of a finished run; `experiments/elemental.py` uses it).
-   Remove the tag and `record_checkpoint`'s `final=` argument; tags stay for
-   what a recipe names itself (`belief`). Keep recording the checkpoint on
-   the already-finished early return: it covers a crash between the last
-   `save_state` and the record. Test instead that an extended run's
-   `final` is its last checkpoint; drop "tagged `final`" from
-   docs/training.md "Checkpoint cadence".
-2. `--steps` is announced as a rename of `--updates`, but for local and
-   baseline it changed meaning. On main `--steps N` set the recipe length,
-   so rates and the checkpoint grid fitted N. Now N is only the stop target:
-   `train --updates 10` (local) runs a 2-update schedule and eight updates
-   at the final rates; `--recipe baseline --updates 32` runs the first
-   quarter of the 128 schedule with checkpoints at 0 and 32 only. Say so in
-   the alias warning and in docs/training.md "Run training" (one sentence:
-   the recipe's own update count, which fixes local/baseline rates and
-   checkpoint grid, is not changed by the flag). Whether the CLI should set
-   that count is the open question in questions.md; do not build it here.
-
-Left alone: the repeated `track`/`run.until` opening; `baseline.evaluate`
-refusing a run that ended anywhere but `config.updates` (the nightly sets
-the config, never the flag).
-
-## Concept review 3 implementation — 2026-11-13
-
-Removed the loop's `final` tag and `record_checkpoint(final=)` argument;
-Etude's `TrainingRun.final` owns endpoint selection. Early-return recording
-remains so reruns can publish a checkpoint missed after saving state.
-The extension proof checks the derived endpoint advances from update 1 to 2
-while retaining the earlier immutable checkpoint. The alias warning and
-training guide explain that the stop target leaves local/baseline recipe
-rates and checkpoint grids unchanged. No CLI config overrides were added.
-
-`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_local_cli_stop_resume_and_target_only_continuation tests/training/test_self_play_loop.py::test_a_rerun_resumes_and_a_finished_loop_returns_at_once -q`: 2 passed (12.99s).
-Changed Python files pass Ruff; applied its one formatting correction and
-`git diff --check` passes. Scratch remains within both context limits.
-Release/pin, installed consumers, gate, recovery review and launcher/service
-proof remain delivery obligations above.
-
-## Compress after concept review 3 — 2026-11-13
-
-No deletion target remains. docs/training.md's loop excerpt still showed the
-removed `final` tag and an unrecorded early return; it now calls
-`record_checkpoint` as the code does, and the piece table lists it. The
-early return carries a comment on why it records again. The guide's `--updates`
-paragraph gives the baseline example; the CLI test checks the warning once.
-`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_local_cli_stop_resume_and_target_only_continuation tests/training/test_self_play_loop.py::test_a_rerun_resumes_and_a_finished_loop_returns_at_once -q`: 2 passed (8.98s); Ruff clean.
+Last focused check (after review 3):
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_local_cli_stop_resume_and_target_only_continuation tests/training/test_self_play_loop.py::test_a_rerun_resumes_and_a_finished_loop_returns_at_once -q`: 2 passed; Ruff clean.
+PPO fresh-run parity with horizon equal to the target is recorded in
+implementation.md.
