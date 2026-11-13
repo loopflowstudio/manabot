@@ -291,3 +291,9 @@ Baseline revision: strict replay of 58e5923c53's original digest fails after the
 main merge. Current capture on/off agrees. Recount the same exact decks/deals
 on the current engine, preserve original evidence, then run shapes against that
 new baseline. No learning launch until the shape results are recorded.
+
+Shape run complete: 336 verified replays; 14,775 payments, 9,089 cast payments;
+420 cast cap hits. Flat D has up to 712 completely enumerated capability
+outcomes; 422 casts certify >64. Conditional ordinary p95 49–59, Heartbeat
+105–132. E reaches 1,552 full priority offers on its completely measured subset.
+Report tables are generated from `current/shapes/summary.json`.

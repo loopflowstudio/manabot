@@ -77,8 +77,8 @@ excluded from the summary and make the command exit nonzero; none is replaced.
 Replay the retained deals with the bounded native diagnostic:
 
 ```sh
-uv run python -m experiments.mana_spending shapes --source experiments/data/mana_spending --out experiments/data/mana_spending/shapes --cap 16384
-uv run python -m experiments.mana_spending summary --source experiments/data/mana_spending/shapes
+uv run python -m experiments.mana_spending shapes --source experiments/data/mana_spending/current --out experiments/data/mana_spending/current/shapes --cap 16384
+uv run python -m experiments.mana_spending summary --source experiments/data/mana_spending/current/shapes
 ```
 
 This enumerates fixed-source subsets at every actual payment, then native unit
@@ -192,6 +192,100 @@ Evidence is published under `experiments/data/mana_spending/` in the
 ```sh
 uv run --extra artifacts python -m manabot.data fetch experiments/data/mana_spending
 ```
+
+## Matched payment-shape results
+
+2026-11-13, source `0d2233a567`, rebuilt native SHA256
+`acd7fbfa00c522afda010a3cec5e533a668173874aee2f95416defa2ad6b81dc`.
+The engine/card merge after the original frequency run changes final state
+digests. A fresh `count --games 8 --seed 0` under this build completed and
+replay-verified all 336 games. All 21 deck lists, every selected action index,
+stage count, spend offer and payment counter match the original evidence;
+only final digests differ. Original evidence remains unchanged. `shapes` then
+replayed this fresh baseline: **336 verified games, 14,775 payments and 9,089
+cast payments**, with no digest, payment-count or spend-offer disagreement.
+All exact actual payments had at least one enumerated outcome. Local CPU, no rental.
+
+“Real” below means distinct formal outcomes, including surplus production; it
+does not assert that every outcome is strategically useful. Source and receipt
+percentages use only completely enumerated cast payments. Cap hits keep certified
+lower bounds and are included in the adjacent total denominator.
+
+| decks | policy | cast payments | capped | ≥2 joint outcomes, certified | ≥2 untapped-source outcomes, exact | ≥2 receipt variants, exact | identity collapse loses distinctions, exact |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 2062 | 99 | 1527/2062 (74.1%) | 1425/1963 (72.6%) | 874/1963 (44.5%) | 1380/1963 (70.3%) |
+| elemental | random | 2589 | 120 | 1932/2589 (74.6%) | 1805/2469 (73.1%) | 1132/2469 (45.8%) | 1708/2469 (69.2%) |
+| tla | heuristic | 2027 | 111 | 1326/2027 (65.4%) | 1215/1916 (63.4%) | 846/1916 (44.2%) | 1172/1916 (61.2%) |
+| tla | random | 2113 | 38 | 1346/2113 (63.7%) | 1305/2075 (62.9%) | 884/2075 (42.6%) | 1236/2075 (59.6%) |
+| heartbeat | heuristic | 134 | 16 | 107/134 (79.9%) | 91/118 (77.1%) | 67/118 (56.8%) | 82/118 (69.5%) |
+| heartbeat | random | 164 | 36 | 143/164 (87.2%) | 107/128 (83.6%) | 73/128 (57.0%) | 93/128 (72.7%) |
+
+The hidden source choice is common: 63–73% of completely enumerated ordinary
+casts leave different fixed-source capabilities available. This contrasts with
+0.11–0.60% of all decisions being today’s pool prompts. Equal-output producers
+also conceal different exact objects in 60–70% of exact ordinary casts; output
+capability alone is not an approved equivalence rule. Activated sources were
+present at 212/18 Elemental and 492/53 TLA cast payments (heuristic/random);
+their activation strategies are outside these fixed-source counts. None of the
+observed cast payments retained a saved caller obligation.
+
+Counterfactual **all decisions per game** on these A trajectories: B removes
+all spend prompts; C–E replace only cast-payment prompts. C’s range spans
+always taking automatic payment to always taking a nontrivial override. All
+capped cast rows already certify ≥2 outcomes, so D’s decision count is known
+even though some offer counts are incomplete. Grouping D would add decisions
+beyond this flat, one-decision estimate.
+
+| decks | policy | A per unit | B automatic | C automatic / override | D flat outcome | E folded |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 306.18 | 305.56 | 324.69–341.57 | 324.69 | 305.60 |
+| elemental | random | 211.36 | 210.82 | 235.06–256.07 | 235.06 | 210.91 |
+| tla | heuristic | 437.75 | 437.25 | 453.84–468.94 | 453.84 | 437.26 |
+| tla | random | 217.50 | 216.20 | 233.05–247.65 | 233.05 | 216.22 |
+| heartbeat | heuristic | 87.62 | 75.50 | 88.88–101.25 | 88.88 | 75.50 |
+| heartbeat | random | 146.25 | 132.00 | 149.88–166.38 | 149.88 | 132.00 |
+
+Payment **offers median / p95 / maximum**, conditional on complete enumeration
+and at least two outcomes. A uses actual prompts. C is the always-override path
+(entry offers plus its nontrivial outcome offers). B has no payment offers.
+
+| decks | policy | A | C | D | D casts certified above 64 |
+| --- | --- | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 2 / 2 / 3 | 2 / 39 / 203 | 10 / 49 / 204 | 82 |
+| elemental | random | 2 / 3 / 5 | 2 / 42 / 192 | 10 / 52 / 193 | 79 |
+| tla | heuristic | 2 / 4 / 4 | 2 / 45 / 711 | 10 / 59 / 712 | 91 |
+| tla | random | 3 / 4 / 4 | 2 / 42 / 631 | 7 / 58 / 632 | 84 |
+| heartbeat | heuristic | 2 / 2 / 2 | 2 / 92 / 167 | 19 / 132 / 168 | 37 |
+| heartbeat | random | 2 / 2 / 2 | 2 / 77 / 158 | 19 / 105 / 159 | 49 |
+
+Flat D has completely enumerated casts with **712** capability outcomes.
+Heartbeat’s conditional p95 is 105–132; ordinary-deck conditional p95 is
+49–59. Because 420/9,089 cast enumerations hit the cap, these conditional
+quantiles are not a bound on the full population. There are 422 cast payments
+already certified above 64 outcomes, including capped rows. A 64-slot policy
+cannot use flat D everywhere, even with the optimistic capability collapse.
+
+E **full priority offers median / p95 / maximum**, only where every cast at
+that priority window reached an immediate, completely enumerated payment:
+
+| decks | policy | complete / observed windows | original offers | E offers | unresolved cast offers | capped cast offers |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 4575/13509 | 3 / 6 / 10 | 11 / 66 / 408 | 12731 | 227 |
+| elemental | random | 3343/5385 | 3 / 6 / 10 | 11 / 66 / 545 | 2180 | 228 |
+| tla | heuristic | 1514/9413 | 3 / 7 / 13 | 6 / 55 / 459 | 10346 | 127 |
+| tla | random | 2626/4068 | 4 / 8 / 13 | 8 / 112 / 1552 | 1670 | 159 |
+| heartbeat | heuristic | 183/199 | 3 / 7 / 9 | 20 / 99 / 169 | 0 | 16 |
+| heartbeat | random | 262/356 | 3 / 7 / 8 | 32 / 136 / 242 | 0 | 112 |
+
+E reaches 1,552 offers even on the fully measured subset. Many ordinary-deck
+casts require targets or other announcements before their cost is payable;
+flattening those into priority would require another announcement design.
+The unresolved counts are an explicit measurement limit, not zero outcomes.
+E’s offer quantiles do not describe all priority windows.
+
+Evidence: `current/decks.json`, `current/games.jsonl`, and
+`current/shapes/{metadata.json,shapes.jsonl,summary.json}` under the experiment’s
+artifact directory. The earlier empty failed shape attempt remains local only.
 
 ## Recommended design
 
