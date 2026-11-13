@@ -40850,6 +40850,138 @@
    "sha256": "5fd1af3f1c6897e87fd1014b30f79102b4fee4102a43a9f40773954c13a4219d",
    "bytes": 403261
   },
+  "experiments/data/ppo_cuda/baseline/baseline.json": {
+   "sha256": "07cf5a5c88c6fd1a5d900b586f9d0cb297e449e275f940f98cc3a5db332ca31d",
+   "bytes": 182772
+  },
+  "experiments/data/ppo_cuda/baseline/easier.json": {
+   "sha256": "590d8ba438948ee52b199d55da8cb50e08acc0ee0a035c25459fa72c7f3a5c45",
+   "bytes": 30334
+  },
+  "experiments/data/ppo_cuda/paired-all/baseline-0.pt": {
+   "sha256": "ba52eb1b06e34ea53c5bd557168b2ec63bda0d226a691c96a53c44cd1132a959",
+   "bytes": 11790609
+  },
+  "experiments/data/ppo_cuda/paired-all/baseline-1.pt": {
+   "sha256": "92394bbab61deebd89494acec93ef36550e5e4fb07ac9e3d8d9537747d26c3cd",
+   "bytes": 11790609
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-0.pt": {
+   "sha256": "045d788d757431ecbb2594048fc13a8b7121cc3ca3b77189c60f6671ba2fbf90",
+   "bytes": 11790935
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-1.pt": {
+   "sha256": "e819117b644b2aa3e1c7e83f93690dcb34ae988d8177840b831b40e0b22d5e64",
+   "bytes": 11790935
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-profile.json": {
+   "sha256": "4567b19a347f26240743a18676b88ccfdf815dc61e6077930319101f4d9aeac5",
+   "bytes": 39597
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-profile.ppo.txt": {
+   "sha256": "eff11c2b376aa8ade8bf910cc6ef713c4956566c06ea33b5c163fd2cb7d99a92",
+   "bytes": 9226
+  },
+  "experiments/data/ppo_cuda/paired-all/cpu-comparison.txt": {
+   "sha256": "8bee60ebc154d004ce76da54593d9854c58e8551a1fa2eb78424310666b67ffa",
+   "bytes": 147
+  },
+  "experiments/data/ppo_cuda/paired-all/differences.json": {
+   "sha256": "82089d0832cb27768650e6b0815b0283c9ff40dd68c837202cf0daa82b944a42",
+   "bytes": 294913
+  },
+  "experiments/data/ppo_cuda/paired-all/paired.json": {
+   "sha256": "97a4ea2e2d30f4376083c71d947958ce313e3187fbac56f6a5c72fd36e96498c",
+   "bytes": 487283
+  },
+  "experiments/data/ppo_cuda/paired-all/tests.txt": {
+   "sha256": "0e15d1ed55ea67fab7405767363bd65f478c9da2e6d82163910a973af7be146b",
+   "bytes": 949
+  },
+  "experiments/data/ppo_cuda/paired-all/updates-baseline.json": {
+   "sha256": "cb46f7033aced778bd38d4e7fccc2637a0ebe6fc2b6d2c940681f6689e9071c0",
+   "bytes": 42828
+  },
+  "experiments/data/ppo_cuda/paired-all/updates-candidate.json": {
+   "sha256": "cb46f7033aced778bd38d4e7fccc2637a0ebe6fc2b6d2c940681f6689e9071c0",
+   "bytes": 42828
+  },
+  "experiments/data/ppo_cuda/paired/baseline-0.pt": {
+   "sha256": "76bca20c44cfb17e88ddec0291b73c082f93dc978777ad1ed86c401f51901bf7",
+   "bytes": 11321489
+  },
+  "experiments/data/ppo_cuda/paired/baseline-1.pt": {
+   "sha256": "227123089fc14f7a3fcffee15c309f711ba0fcf3effe11a2c17b42ace9f09c92",
+   "bytes": 11321489
+  },
+  "experiments/data/ppo_cuda/paired/candidate-0.pt": {
+   "sha256": "4cfe8366909b024fea99ee765238f33ad4322b7b08d455e67f55db5aa97ee0b2",
+   "bytes": 11321815
+  },
+  "experiments/data/ppo_cuda/paired/candidate-1.pt": {
+   "sha256": "91ef012650ae923d5e35a834d7f74b20b1f13df0f513010d9eefb83bfef58465",
+   "bytes": 11321815
+  },
+  "experiments/data/ppo_cuda/paired/candidate-profile.json": {
+   "sha256": "6c284646a7c1362b0bae86233a03e8d2156bb23c674b4b7ad1a471146068215a",
+   "bytes": 39454
+  },
+  "experiments/data/ppo_cuda/paired/candidate-profile.ppo.txt": {
+   "sha256": "df82d8894003eecfdf81ef0e21ce77fef972f1b3c831109e7f1e55f33cdfa545",
+   "bytes": 9331
+  },
+  "experiments/data/ppo_cuda/paired/cpu-comparison.txt": {
+   "sha256": "8bee60ebc154d004ce76da54593d9854c58e8551a1fa2eb78424310666b67ffa",
+   "bytes": 147
+  },
+  "experiments/data/ppo_cuda/paired/differences.json": {
+   "sha256": "3dc6323ba3c6c513008fd48eac241fc9b7a54bc5257ee0730283b55ea251fc00",
+   "bytes": 294182
+  },
+  "experiments/data/ppo_cuda/paired/paired.json": {
+   "sha256": "90f1ba388355cce12edb624788b2920fb37b91d0a39c5ff0535451a6d396d7e3",
+   "bytes": 485445
+  },
+  "experiments/data/ppo_cuda/paired/tests.txt": {
+   "sha256": "c885f82223394f2eaf7fa7a8f2e0926aef3d3174219e38536974dc9830c69dfc",
+   "bytes": 938
+  },
+  "experiments/data/ppo_cuda/paired/updates-baseline.json": {
+   "sha256": "5f332735383f02d69a1aa12181105a15f064e14e673687742065715cb1163ae5",
+   "bytes": 43444
+  },
+  "experiments/data/ppo_cuda/paired/updates-candidate.json": {
+   "sha256": "5f332735383f02d69a1aa12181105a15f064e14e673687742065715cb1163ae5",
+   "bytes": 43444
+  },
+  "experiments/data/ppo_cuda/profile/diagnostic.json": {
+   "sha256": "63619f249b488777d4f6c288c4901f93402d0011769d4207b68090854894f7af",
+   "bytes": 39463
+  },
+  "experiments/data/ppo_cuda/profile/profile.ppo": {
+   "sha256": "4a40bf1be16da16e81c4a94da2655147aba22604a8cdc7ad3a712426ae8f26ad",
+   "bytes": 143003
+  },
+  "experiments/data/ppo_cuda/profile/profile.ppo.trace.json.gz": {
+   "sha256": "0cda86668da7eef613fa8d5b49ba16307e1574d9e55d612ac55d127786bced84",
+   "bytes": 28555106
+  },
+  "experiments/data/ppo_cuda/profile/profile.ppo.txt": {
+   "sha256": "c6cb714f10c8db927e61a7bd3caa70bfa3e6074b902ef9ca8c2ba39fa6afda4b",
+   "bytes": 9304
+  },
+  "experiments/data/ppo_cuda/profile/source-mapping.json": {
+   "sha256": "84584f51882bdb9e9e5743feb843148efb7da33079f77ed0b718424d8fef067f",
+   "bytes": 11643
+  },
+  "experiments/data/ppo_cuda/profile/trace-summary.json": {
+   "sha256": "76c52558b8078df48a2c7dfd85d94cf6ecf12761263f7b3b224248244933ca69",
+   "bytes": 165848
+  },
+  "experiments/data/ppo_cuda/profile/untuned-0fd992b8d6c3.log": {
+   "sha256": "06ae6606ed376a681a955a9d25e901b20b2de139edd49966e9d7cca0071e70e4",
+   "bytes": 7175
+  },
   "experiments/data/precision_ladder/07f84834e617/run.json": {
    "sha256": "2e249face778508c83499e46763a562c43d92ca9f067e4286c07183698278fe2",
    "bytes": 53802
