@@ -85,3 +85,19 @@ past its `Learning.horizon` trains on at the final rates (the clamp both
 schedules already have); it is not refused. Implemented choice: `SelfPlay.learning` is required, avoiding an unusable
 implicit PPO default. `gray_ogre_self_play` requires an explicit horizon,
 provided by the belief recipe's own update count.
+
+## Concept review 3 — 2026-11-13
+
+Open, for demo; reversible and additive, so it does not stop the Graph (the
+simpler option, no new flags, stays): should `manabot train` set fields of a
+recipe's Pydantic config, at least its update count? Why it matters, beyond
+Elemental's 256 CPU streams: `runs()` on the Etude path sets
+`ElementalConfig.updates`, while the CLI can only set the stop target, so the
+same word means the recipe length under `etude launch --updates` and only
+where to stop under `manabot train --updates`. For local and baseline that
+changed what `--steps N` did on main (plan.md, concept review 3, item 2).
+Also still open for demo, nothing built: a local checkpoint follower.
+
+Reversible, proposed without asking: drop the loop's `final` checkpoint tag
+in favor of Etude's `TrainingRun.final`. The alternative, untagging the old
+checkpoint on extension, keeps a second owner of one fact.

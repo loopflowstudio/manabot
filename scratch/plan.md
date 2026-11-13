@@ -210,3 +210,35 @@ the `Learning` and baseline `settings` docstrings, which said a target
 "extends that horizon", to state the contract: rates read `update / horizon`,
 clamped, so a later target runs past it at the final rates.
 `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_self_play_loop.py tests/training/test_pretrained.py -q`: 7 passed (6.34s).
+
+## Concept review 3 — 2026-11-13: next implement direction
+
+Reviewed loop, recipes, CLI, docs/training.md and Etude `105abdd` at
+`2c88aeb3c`. Target, horizon and resume identity now agree. Two leftovers,
+both proposals drawn from the design, not statements anyone made.
+
+1. A run can hold two "final" checkpoints. The loop tags the checkpoint at
+   its target `final`; extend the run and the old one keeps the tag
+   (`test_recipe_etude.py` asserts updates 1 and 2 both carry it). Nothing
+   reads the tag: Etude already derives the fact (`TrainingRun.final`, the
+   last checkpoint of a finished run; `experiments/elemental.py` uses it).
+   Remove the tag and `record_checkpoint`'s `final=` argument; tags stay for
+   what a recipe names itself (`belief`). Keep recording the checkpoint on
+   the already-finished early return: it covers a crash between the last
+   `save_state` and the record. Test instead that an extended run's
+   `final` is its last checkpoint; drop "tagged `final`" from
+   docs/training.md "Checkpoint cadence".
+2. `--steps` is announced as a rename of `--updates`, but for local and
+   baseline it changed meaning. On main `--steps N` set the recipe length,
+   so rates and the checkpoint grid fitted N. Now N is only the stop target:
+   `train --updates 10` (local) runs a 2-update schedule and eight updates
+   at the final rates; `--recipe baseline --updates 32` runs the first
+   quarter of the 128 schedule with checkpoints at 0 and 32 only. Say so in
+   the alias warning and in docs/training.md "Run training" (one sentence:
+   the recipe's own update count, which fixes local/baseline rates and
+   checkpoint grid, is not changed by the flag). Whether the CLI should set
+   that count is the open question in questions.md; do not build it here.
+
+Left alone: the repeated `track`/`run.until` opening; `baseline.evaluate`
+refusing a run that ended anywhere but `config.updates` (the nightly sets
+the config, never the flag).
