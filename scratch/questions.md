@@ -61,3 +61,10 @@ targets. Original uncommitted notes were copied to
   quote under its $0.60 ceiling. Use a Task-specific one-machine template at
   $0.75/hour, preserving the $3 equivalence/$10 speed cohort caps and $25 total.
   Leave the shared rental configuration unchanged.
+
+- **Card when L4 is out of stock (kickoff, 2026-11-13 12:20 UTC).** The brief
+  names L4; RunPod and Vast had none and RunPod's list omitted it. If L4 is
+  not rentable at launch, equivalence, speed and optimize run on one RunPod
+  A40 (`mtg333-a40`, $0.59/hour quoted, same ceiling and cohort caps). Base
+  and head run on the same machine, so the comparison holds; MTG-325's L4
+  figures become a reference. Rerunning on L4 later is one capped launch.
