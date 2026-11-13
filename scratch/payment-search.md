@@ -181,5 +181,33 @@ run, and the PR body cites the digest from that run.
    `announcement` stage gap (seen only on the recorded checkpoint) is outside
    this Task.
 
+## Concept review (2026-11-13, headless)
+
+Walked the three uses against the code and docs: a contributor changing
+payment or enumeration (runs named states before/after, reads work down a
+layer, puts both tables in the PR), a card batch adding a mechanic (names the
+expensive board shape, adds a recipe), and recovery when the recorded game
+fails to replay (the doc says why and points at the `v0.2.3` tag). Each is one
+command and one doc section; no change to the implementation follows.
+
+- One concept, two words: docs, CLI and row JSON say *state*; the harness
+  builds a state at a size from a `Recipe`, and `--recipes` exports each
+  checkpoint led by its recipe. The split is internal and consistent; left.
+- "Stress states" sits beside the no-induced-load rule; TESTING, the docs and
+  engine-measure each say a constructed board run once is a workload. Left.
+- `bench_payment boards` repeats three of the payment boards. It predates this
+  Task and stays as the single-layer attribution tool the docs name.
+- Publishing: the Task title ("Fail CI when ...") describes the withdrawn
+  design. The PR title and body name what ships: a measurement harness, an
+  audit, one scan reduction and skill guidance; nothing fails CI.
+- Consequence to state in the PR body: no CI job compiles `bench_states`
+  (CI runs `cargo nextest run --profile ci` without `benchmark`; Engine Budget
+  builds only `bench_search` and `bench_steps`), so its one example test runs
+  only locally and a card change can break a recipe unnoticed until the next
+  run, where it fails loudly. Assumption recorded in `scratch/questions.md`.
+
+No open product choice: the recorded-state decision and shipping approval are
+quoted above.
+
 Earlier narrative (stale-executable discovery, replay CI design):
 `e8eb0ab296:scratch/payment-search.md`, `6691ed956:scratch/payment-search.md`.

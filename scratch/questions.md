@@ -24,5 +24,9 @@ Active plan: `scratch/payment-search.md`. Reversible assumptions taken headless:
   fix the renderer.
 - The recorded-state choice is settled as (b) by comment `9f42783b` (quoted in
   the plan), which also approved shipping.
+- Concept review (2026-11-13): CI does not build or run `bench_states`, so its
+  recipes are kept working by whoever runs it next, not by CI. Taken as
+  following from "no work contract" and the dropped CI test; a build-only CI
+  step for the example is a cheap later addition if recipes rot.
 - Sync onto main (2026-11-13): retain this Task's assumptions despite main's
   deletion of the shared scratch path; these notes belong to the active branch.
