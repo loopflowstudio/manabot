@@ -250,7 +250,6 @@ class RolloutBatch:
                 key: value.reshape(*trajectory_shape, *value.shape[1:])
                 for key, value in rows.observation.items()
             }
-            rows.probabilities = rows.probabilities.reshape(*trajectory_shape, -1)
             rows.log_probabilities = rows.log_probabilities.reshape(
                 *trajectory_shape, -1
             )
@@ -1458,7 +1457,6 @@ class SeatRoutedCollector:
                     weights, 1, generator=self._self_rng
                 ).squeeze(-1)
                 logprob_t = logs.gather(-1, action_t[:, None]).squeeze(-1)
-                probabilities = weights.cpu().numpy()
                 log_probabilities = logs.cpu().numpy()
             acts = action_t.cpu().numpy().astype(np.int64)
             logprobs = logprob_t.cpu().numpy()
@@ -1472,7 +1470,6 @@ class SeatRoutedCollector:
                     for key in ACTION_FIELDS
                     if key in self._buffers
                 },
-                probabilities,
                 log_probabilities,
             )
             for j, row in enumerate(rows):
