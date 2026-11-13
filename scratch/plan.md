@@ -87,8 +87,9 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
-Seventh recheck (after review 6, `43ba82024`): PR #103 still open at
-`105abdd`; origin/main has nothing new; the guide commands match
+Eighth recheck (after review 7, `11ba67310`): PR #103 open at `105abdd`;
+origin/main has nothing new; all eight review-7 headers name the revision.
+Seventh recheck (after review 6, `43ba82024`): the guide commands match
 `experiments.elemental.runs(revision, updates, hours, usd_per_run)`.
 
 Sixth recheck (after review 5 and the #510 sync): PR #103 still open at
