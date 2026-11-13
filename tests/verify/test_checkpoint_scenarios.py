@@ -8,12 +8,12 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.replay import replay_games
 from manabot.sim.search.flat_mc import make_player
 from manabot.verify.checkpoint_scenarios import main, score_checkpoint

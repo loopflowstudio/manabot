@@ -38,10 +38,9 @@ from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import MonitorResult
 from manabot.eval.results import EvaluationRow
-from manabot.infra.artifacts import verify_file
+from manabot.infra.artifacts import local_checkpoint_file, verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import AuthoredMatchup, selected_decks
 from manabot.sim.registration import PlayerRegistration

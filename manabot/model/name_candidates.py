@@ -18,8 +18,9 @@ from collections.abc import Sequence
 import torch
 from torch import nn
 
+from manabot.backends.torch.arrays import to_numpy
 from manabot.model.numerics import buffer_on
-from manabot.model.semantic_cards import admit_definition_ids
+from manabot.policy import admission
 import managym
 
 
@@ -61,15 +62,10 @@ class NameCandidateEncoder(nn.Module):
     def admit(self, candidates: torch.Tensor) -> None:
         """Reject candidate rows whose names, definitions or spans disagree
         with the vocabulary (observation admission)."""
-        definitions = buffer_on(self, "definitions", candidates.device)
-        rows = admit_definition_ids(candidates[..., 0], len(definitions))
-        if not torch.equal(candidates[..., 1], definitions[rows].to(candidates.dtype)):
-            raise ValueError("name candidate definition disagrees with vocabulary")
-        if candidates.shape[-1] == 4:
-            first = admit_definition_ids(candidates[..., 2], len(definitions))
-            last = admit_definition_ids(candidates[..., 3], len(definitions))
-            if not torch.equal(first > 0, last > 0) or bool((first > last).any()):
-                raise ValueError("invalid naming group span")
+        admission.names(
+            to_numpy(candidates),
+            to_numpy(buffer_on(self, "definitions", torch.device("cpu"))),
+        )
 
     def forward(self, candidates: torch.Tensor) -> torch.Tensor:
         """Embed admitted one-based `[..., 4]` candidate rows; a `[..., 2]`

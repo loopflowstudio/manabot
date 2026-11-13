@@ -53,7 +53,7 @@ def selected(
         ("academy/ui/src/lib/components/Card.svelte", {"frontend"}),
         ("academy/ui/src/lib/components/a card.svelte", {"frontend"}),
         ("academy/ui/package-lock.json", {"frontend", "clean_machine_play"}),
-        ("manabot/training/updates/learner.py", {"integration"}),
+        ("manabot/training/updates/ppo.py", {"integration"}),
         ("manabot/experiment/job.py", {"integration"}),
         ("experiments/protocols/recipe.md", {"integration"}),
         ("docs/experiment-metrics.md", {"integration"}),

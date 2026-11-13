@@ -7,9 +7,9 @@ Both read only observations admitted by `manabot.model.admission`, which owns
 every input check; the forward does no validation host reads.
 
 Object attention runs over the fixed object tables. With `bucketed_shapes=True`
-(`manabot.model.buckets`), each forward trims its variable axes to power-of-two
+(`manabot.policy.buckets`), each forward trims its variable axes to power-of-two
 buckets and returns logits at full capacity.
-With `live_tokens=True` (`manabot.model.live_tokens`), table attention runs
+With `live_tokens=True` (`manabot.backends.torch.live_tokens`), table attention runs
 over the batch's valid objects packed into one sequence; either setting
 composes with the other and neither changes the model.
 """
@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 
 # Local imports
+from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.env.observation import (
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
@@ -32,16 +33,15 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
-from manabot.model.admission import AdmittedObservation, admission_binding
-from manabot.model.buckets import (
-    BucketSizes,
-    bucket_sizes,
-    object_columns,
+from manabot.model.admission import (
+    AdmittedObservation,
+    admission_binding,
+    measure_buckets,
 )
+from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder, RecordVocabulary
-from manabot.model.inference import PreparedObservation, trim_admitted, trim_prepared
-from manabot.model.live_tokens import LiveTokens
+from manabot.model.inference import PreparedObservation, trim_admitted
 from manabot.model.name_candidates import NameCandidateEncoder
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import (
@@ -50,6 +50,7 @@ from manabot.model.semantic_cards import (
     definition_rows,
 )
 from manabot.model.shared_effects import SharedEffectEncoder
+from manabot.policy.buckets import BucketSizes, object_columns
 import managym
 
 # Validity of the visible object table, in its concatenation order.
@@ -394,6 +395,17 @@ class ActorCritic(nn.Module):
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
 
+    def architecture_receipt(self) -> ArchitectureReceipt:
+        """This model's receipt; `named_parameters` yields each shared parameter once."""
+        return architecture_receipt(
+            self.config,
+            self.observation_space,
+            {
+                name: (parameter.numel(), parameter.requires_grad)
+                for name, parameter in self.named_parameters()
+            },
+        )
+
     def live_token_count(self, obs: Dict[str, torch.Tensor]) -> int | None:
         """Host count of the tokens live-token attention packs for CPU `obs`.
 
@@ -421,17 +433,17 @@ class ActorCritic(nn.Module):
     def _bucketed(
         self, obs: AdmittedObservation
     ) -> tuple[AdmittedObservation, BucketSizes | None]:
-        """Trim `obs` to its buckets; prepared inputs were measured on the host.
+        """Trim `obs` to the buckets admission measured on the host.
 
         Without buckets (a layout admission did not judge), `obs` is returned
-        unchanged.
+        unchanged. Input admitted by a policy without bucketed shapes is
+        measured here, from a host copy.
         """
         self._require_admitted(obs)
-        if isinstance(obs, PreparedObservation):
-            return trim_prepared(obs), obs.buckets
-        buckets = bucket_sizes(
-            obs, self.observation_space.encoder, objects=self.object_trimming()
-        )
+        assert isinstance(obs, AdmittedObservation)
+        buckets = obs.buckets
+        if buckets is None:
+            buckets = measure_buckets(self, obs)
         if buckets is None:
             return obs, None
         return trim_admitted(obs, buckets), buckets

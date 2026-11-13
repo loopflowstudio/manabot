@@ -6,13 +6,18 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
+from manabot.infra.identity import canonical_sha256
 from manabot.model.admission import admit_observation
-from manabot.model.architecture import architecture_identity, architecture_receipt
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.architecture import (
+    architecture_identity,
+    architecture_receipt,
+    validate_architecture_receipt,
+)
 from manabot.model.facts import FactEncoder, admit_facts
 from manabot.training.rollout.collection import SeatRoutedCollector
 
@@ -35,7 +40,7 @@ def test_capacity_export_and_real_legal_policy(
         ),
     )
     before = torch.get_rng_state().clone()
-    receipt = architecture_receipt(agent)
+    receipt = agent.architecture_receipt()
     assert torch.equal(before, torch.get_rng_state())
     assert receipt.parameters.total == sum(p.numel() for p in agent.parameters())
     assert receipt.parameters.trainable == receipt.parameters.total
@@ -69,7 +74,7 @@ def test_capacity_export_and_real_legal_policy(
         agent, agent.observation_space, path, player_configs=Match().to_rust()
     )
     loaded, _ = load_checkpoint(str(path))
-    assert architecture_receipt(loaded) == receipt
+    assert loaded.architecture_receipt() == receipt
     actual = loaded(obs)
     for expected, observed in zip((policy, value), actual, strict=True):
         torch.testing.assert_close(expected, observed, rtol=0, atol=0)
@@ -100,14 +105,51 @@ def test_resolved_identity_and_accounting_follow_meaning() -> None:
     masked = ModelConfig(value_aggregation="masked_mean")
     agent = ActorCritic(space, implicit)
     other = ActorCritic(space, masked)
-    baseline = architecture_receipt(agent)
-    assert baseline.parameters == architecture_receipt(other).parameters
-    assert baseline.identity != architecture_receipt(other).identity
+    baseline = agent.architecture_receipt()
+    assert baseline.parameters == other.architecture_receipt().parameters
+    assert baseline.identity != other.architecture_receipt().identity
     agent.requires_grad_(False)
-    frozen = architecture_receipt(agent)
+    frozen = agent.architecture_receipt()
     assert frozen.parameters.trainable == 0
     assert frozen.parameters.total == baseline.parameters.total
     assert frozen.identity == baseline.identity
+
+
+def test_receipt_counts_named_sizes_by_owner() -> None:
+    space = ObservationSpace()
+    spec = ModelConfig(hidden_dim=8)
+    receipt = architecture_receipt(
+        spec,
+        space,
+        {
+            "heads.policy.weight": (6, True),
+            "heads.value": (2, False),
+            "embed": (4, True),
+        },
+    )
+    assert receipt.identity == architecture_identity(spec, space)
+    assert receipt.parameters.model_dump() == {"total": 12, "trainable": 10}
+    assert {k: v.model_dump() for k, v in receipt.components.items()} == {
+        "embed": {"total": 4, "trainable": 4},
+        "heads": {"total": 8, "trainable": 6},
+    }
+
+
+def test_receipt_saved_in_a_checkpoint_verifies_byte_for_byte(tmp_path: Path) -> None:
+    agent = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16))
+    agent.policy_head.requires_grad_(False)
+    path = tmp_path / "policy.pt"
+    save_checkpoint(
+        agent, agent.observation_space, path, player_configs=Match().to_rust()
+    )
+    saved = torch.load(path, weights_only=False)["architecture"]
+    loaded, _ = load_checkpoint(str(path))
+    loaded.policy_head.requires_grad_(False)
+    recomputed = loaded.architecture_receipt()
+    assert canonical_sha256(saved) == canonical_sha256(
+        recomputed.model_dump(mode="json")
+    )
+    validate_architecture_receipt(recomputed, saved)
 
 
 def test_deep_feedforward_identity_and_weights() -> None:
@@ -171,16 +213,17 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
     save_checkpoint(agent, space, path, player_configs=Match().to_rust())
     loaded, loaded_space = load_checkpoint(str(path))
     assert loaded_space.encoder.config.model_dump(mode="json") == serialized
-    assert architecture_receipt(loaded) == architecture_receipt(agent)
+    assert loaded.architecture_receipt() == agent.architecture_receipt()
     different = ActorCritic(
         ObservationSpace(ObservationConfig(max_facts=256)), agent.config
     )
     assert (
-        architecture_receipt(different).identity != architecture_receipt(agent).identity
+        different.architecture_receipt().identity
+        != agent.architecture_receipt().identity
     )
     assert (
-        architecture_receipt(different).parameters
-        == architecture_receipt(agent).parameters
+        different.architecture_receipt().parameters
+        == agent.architecture_receipt().parameters
     )
 
 

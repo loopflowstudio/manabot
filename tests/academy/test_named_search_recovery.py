@@ -10,18 +10,18 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi.testclient import TestClient
-from managym.experience import ExperienceFrame, InteractionOffer
-from managym.experience_projection import decision_surface_view
 import numpy as np
 import pytest
 import torch
 
 from academy import server, trace as trace_store
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 import managym
+from managym.experience import ExperienceFrame, InteractionOffer
+from managym.experience_projection import decision_surface_view
 
 
 def _command(

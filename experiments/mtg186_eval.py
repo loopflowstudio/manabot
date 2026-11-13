@@ -263,8 +263,8 @@ def arena(
     a: Player, b: Player, matchup: AuthoredMatchup, arena_version: str
 ) -> tuple[EvaluationKey, PlayerRegistration, PlayerRegistration]:
     """The arena key and byte-checked registrations: MTG-186 is A, MTG-181 is B."""
+    from manabot.backends.torch.checkpoint import load_checkpoint
     from manabot.infra.provenance import runtime_fingerprints
-    from manabot.model.checkpoint import load_checkpoint
 
     common = dict(
         world=managym.WORLD_VERSION,
