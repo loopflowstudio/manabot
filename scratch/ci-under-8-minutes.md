@@ -61,7 +61,7 @@ time; report before/after from CI runs. Do not drop or weaken tests."
 | 43322780291 (5 groups, `-n auto` = 2 workers) | training failed | evaluation 665, training 650, model 473, recovery 302, experiment 271 | Rust Tests 298 |
 | 43324957183 (6 groups, `-n logical` = 4) | training failed | recovery 437, experiment 342, model 305, training 294, evaluation-long 262, evaluation 247 | Rust Tests 406 |
 | 43327574361 (before compression) | green | experiment 404, training 379, evaluation 378, evaluation-long 365, model 316, recovery 311 | Rust Tests 397 |
-| 43332039325 at `f90ae2893` (current) | green | recovery 416, evaluation 411, experiment 394, training 359, evaluation-long 309, model 268 | Rust Tests 255 |
+| 43332039325 at `f90ae2893` | green | recovery 416, evaluation 411, experiment 394, training 359, evaluation-long 309, model 268 | Rust Tests 255 |
 
 Engine Budget (exempt) was 720-919 s throughout. Academy Integration went
 221 -> 165 s with the single build.
@@ -140,6 +140,25 @@ stacks, and the run exited 1. The same tests without `-n` gave the same outcomes
 - If the PR revision differs from `f90ae2893`, run full Ubuntu CI on it again.
 - Retain the before/after results and MTG-263 scope in the PR. One historical
   green run provides limited evidence about timing variation; preserve the
-  observed 76-second margin rather than treating 480 s as typical performance.
+  observed 64-second margin rather than treating 480 s as typical performance.
 - No product decision or substantial implementation change is identified.
   Publishing, PR validation and Task completion remain outstanding.
+
+## Publication validation (2026-11-12)
+
+`lf sync` merged main through `285cd49ce` cleanly, producing `30cfcb2e6`.
+That merge includes the token-definition changes from main, so the prior
+green run cannot establish this revision's timing. Full dispatch
+43334548912 ran on `30cfcb2e6` before publication. Every ordinary Ubuntu job
+passed under 480 s: evaluation 448, Rust 411, evaluation-long 378,
+experiment 368, model 321, training 305, protocol 264, recovery 231,
+Academy UI 210, Academy Integration 174, clean-machine play 146,
+Python unit tests 145, semantic conformance 122. Engine Budget passed in
+896 s, and the complete run is green. The observed minimum timing margin
+is now 32 s; this is one run,
+not a guarantee against runner and download variability.
+
+On the synced checkout, `uv lock --check`, Ruff check/format for the three
+changed Python files, and `git diff --check` passed. The focused selection
+check (`uv run --no-sync pytest tests/infra/test_ci_selection.py -n 2 -q`)
+passed all 53 tests in 3.88 s.
