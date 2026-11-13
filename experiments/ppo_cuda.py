@@ -44,7 +44,7 @@ tar -czf "$out/measurement.tar.gz" -C "$out" baseline.json easier.json{evidence}
 set -eu
 out="$ETUDE_OUTPUT_DIR"
 export MANABOT_REQUIRE_CUDA=1
-uv run --locked --extra dev --extra artifacts --extra notebook --extra reports pytest tests/model/test_semantic_cards.py tests/model/test_semantic_card_precision.py tests/model/test_bucketed_shapes.py tests/model/test_live_tokens.py -q > "$out/tests.txt" 2>&1
+uv run --locked --extra dev --extra artifacts --extra notebook --extra reports pytest tests/model/test_semantic_cards.py tests/model/test_semantic_card_precision.py tests/model/test_bucketed_shapes.py tests/model/test_live_tokens.py tests/model/test_recent_events.py -q > "$out/tests.txt" 2>&1
 for arm in baseline candidate; do
   LOOKUP_ARM=$arm uv run --locked python scratch/equivalence/run.py "$out/cpu-$arm.pt" > "$out/cpu-$arm.log" 2>&1
   LOOKUP_ARM=$arm uv run --locked python scratch/equivalence/updates.py "$out/updates-$arm.json" > "$out/updates-$arm.log" 2>&1

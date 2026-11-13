@@ -663,7 +663,9 @@ class ActorCritic(nn.Module):
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
-            permanent_definitions = definitions[references.permanents]
+            permanent_definitions = self.semantic_cards.lookup(
+                definitions, references.permanents
+            )
         else:
             assert self.card_definitions is not None
             cards = self.card_definitions(references.cards)
