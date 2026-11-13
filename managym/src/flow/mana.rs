@@ -140,9 +140,20 @@ enum SourcePolicy {
 
 /// Memoize feasibility modulo interchangeable resources, but never rewrite the
 /// live state or a returned witness. The first concrete DFS path still wins.
+///
+/// Ordinary plans expand a handful of states, so a search starts with exact
+/// identity keys and only the root's color-set check. Once it has expanded
+/// `GROWTH` states it classifies the interchangeable sources once, re-keys
+/// what it visited and from then on canonicalizes every key and applies the
+/// color-set bound to every state. Both protections only reject states with
+/// no witness, so when they start does not change the path returned.
 #[derive(Default)]
 struct PaymentSearch {
-    groups: Vec<Vec<usize>>,
+    /// Counted-tap sets of the root obligations; with the abilities' own sets
+    /// they decide which sources are interchangeable.
+    root_taps: Vec<Vec<PermanentId>>,
+    /// Classes of interchangeable sources, built when the search grows.
+    groups: Option<Vec<Vec<usize>>>,
     visited: std::collections::HashSet<PaymentSearchState>,
     #[cfg(test)]
     max_states: Option<usize>,
@@ -152,7 +163,30 @@ struct PaymentSearch {
 }
 
 impl PaymentSearch {
-    fn new(model: &PaymentModel, obligations: &[Obligation]) -> Self {
+    /// Visited states after which a search pays for source classes and the
+    /// per-state color-set bound.
+    const GROWTH: usize = 16;
+
+    fn new(obligations: &[Obligation]) -> Self {
+        Self {
+            root_taps: obligations
+                .iter()
+                .filter_map(|obligation| match obligation {
+                    Obligation::Tap { candidates, .. } => Some(candidates.clone()),
+                    _ => None,
+                })
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    /// Whether the color-set bound applies to the state about to be checked:
+    /// at the root, and everywhere once the search has grown.
+    fn bounds_colors(&self) -> bool {
+        self.visited.is_empty() || self.groups.is_some()
+    }
+
+    fn groups(&self, model: &PaymentModel) -> Vec<Vec<usize>> {
         // Membership in every possible counted-tap set is part of identity:
         // equal mana producers need not be equal candidates for a saved cost.
         let candidates = model
@@ -160,17 +194,10 @@ impl PaymentSearch {
             .iter()
             .flat_map(|source| &source.abilities)
             .map(|ability| &ability.tap_candidates)
-            .chain(
-                obligations
-                    .iter()
-                    .filter_map(|obligation| match obligation {
-                        Obligation::Tap { candidates, .. } => Some(candidates),
-                        _ => None,
-                    }),
-            )
+            .chain(&self.root_taps)
             .collect::<Vec<_>>();
-        // Most small boards have few duplicates. Do not allocate a member
-        // vector for every singleton just to discard it after classification.
+        // Most boards have few duplicates. Do not allocate a member vector
+        // for every singleton just to discard it after classification.
         let mut representatives: Vec<(usize, Option<usize>)> = Vec::new();
         let mut groups: Vec<Vec<usize>> = Vec::new();
         for (index, source) in model.sources.iter().enumerate() {
@@ -193,13 +220,11 @@ impl PaymentSearch {
                 representatives.push((index, None));
             }
         }
-        Self {
-            groups,
-            ..Default::default()
-        }
+        groups
     }
 
-    fn insert(&mut self, state: &PaymentSearchState) -> bool {
+    /// The state with each class's resources in sorted order.
+    fn canonical(groups: &[Vec<usize>], state: &PaymentSearchState) -> PaymentSearchState {
         let mut key = state.clone();
         let resources = &state.resources;
         let resource_key = |index: usize| {
@@ -209,7 +234,7 @@ impl PaymentSearch {
                 &resources.used[index],
             )
         };
-        for group in &self.groups {
+        for group in groups {
             // Source-order success usually consumes an already sorted prefix.
             // Allocate a permutation only for branches that need one.
             if group
@@ -226,6 +251,25 @@ impl PaymentSearch {
                 key.resources.used[to].clone_from(&resources.used[from]);
             }
         }
+        key
+    }
+
+    fn insert(&mut self, model: &PaymentModel, state: &PaymentSearchState) -> bool {
+        if self.groups.is_none() && self.visited.len() >= Self::GROWTH {
+            // A visited identity state failed or is being expanded, and so is
+            // every state interchangeable with it: its canonical key is one
+            // the grouped search would hold too.
+            let groups = self.groups(model);
+            self.visited = std::mem::take(&mut self.visited)
+                .iter()
+                .map(|key| Self::canonical(&groups, key))
+                .collect();
+            self.groups = Some(groups);
+        }
+        let key = match &self.groups {
+            Some(groups) => Self::canonical(groups, state),
+            None => state.clone(),
+        };
         let inserted = self.visited.insert(key);
         #[cfg(test)]
         if let Some(limit) = self.max_states {
@@ -406,7 +450,10 @@ impl PaymentModel {
             })
             .sum::<u64>();
         // Only states that need exploration need an owned visited key.
-        if total < owed || !self.colors_coverable(&state, visited) || !visited.insert(&state) {
+        if total < owed
+            || (visited.bounds_colors() && !self.colors_coverable(&state, visited))
+            || !visited.insert(self, &state)
+        {
             return None;
         }
         #[cfg(feature = "benchmark")]
@@ -782,7 +829,7 @@ impl PaymentModel {
             .find(|index| self.sources[*index].permanent == permanent)?;
         *remaining = remaining.checked_sub(1)?;
         resources.untapped[index] = false;
-        let mut search = PaymentSearch::new(self, &obligations);
+        let mut search = PaymentSearch::new(&obligations);
         self.witness(
             PaymentSearchState {
                 resources,
@@ -816,7 +863,7 @@ impl PaymentModel {
         obligations: Vec<Obligation>,
         policy: SourcePolicy,
     ) -> Option<Vec<PaymentStep>> {
-        let mut search = PaymentSearch::new(self, &obligations);
+        let mut search = PaymentSearch::new(&obligations);
         // Offers need one executable witness, not a proof of the fewest taps.
         // Only a nested automatic prefix minimizes early commitments.
         if policy != SourcePolicy::AutomaticPrefix {
@@ -1834,6 +1881,9 @@ mod tests {
 
     /// Compare full concrete witnesses with the identity-keyed DFS on small
     /// boards; on large boards fail during exploration, before a stall can grow.
+    /// A search holds up to `GROWTH` identity states before it classifies its
+    /// sources, so a smaller limit binds from there; zero still asserts that
+    /// the root is rejected.
     fn bounded_search(
         model: &PaymentModel,
         state: PaymentSearchState,
@@ -1841,11 +1891,17 @@ mod tests {
         limit: usize,
         compare: bool,
     ) -> Option<Vec<PaymentStep>> {
-        let mut search = PaymentSearch::new(model, &state.obligations);
-        search.max_states = Some(limit);
+        let mut search = PaymentSearch::new(&state.obligations);
+        search.max_states = Some(if limit == 0 {
+            0
+        } else {
+            limit.max(PaymentSearch::GROWTH)
+        });
         let path = model.witness(state.clone(), policy, &mut search);
         if compare {
+            // No classes: identity keys throughout.
             let mut identities = PaymentSearch {
+                groups: Some(Vec::new()),
                 max_states: Some(20_000),
                 ..Default::default()
             };
@@ -2232,7 +2288,7 @@ mod tests {
         pool: &Mana,
         obligations: &[Obligation],
     ) -> Option<Vec<PaymentStep>> {
-        let mut reference = PaymentSearch::new(model, obligations);
+        let mut reference = PaymentSearch::new(obligations);
         reference.total_bound_only = true;
         let mut state = search_state(model, obligations.to_vec());
         state.pool = pool.clone();
@@ -2447,7 +2503,7 @@ mod tests {
                         let reference = total_bound_search(&model, pool, &obligations);
                         let mut state = search_state(&model, obligations.clone());
                         state.pool = pool.clone();
-                        let mut search = PaymentSearch::new(&model, &obligations);
+                        let mut search = PaymentSearch::new(&obligations);
                         let path = model.witness(state, SourcePolicy::All, &mut search);
                         assert_eq!(path, reference, "{kinds:?} {cost:?} {pool:?}");
                         payable += usize::from(path.is_some());

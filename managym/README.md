@@ -286,7 +286,10 @@ set of owed colors, so one "U or R" source cannot cover `{U}{R}`. Search
 memoization shares feasibility across interchangeable sources (including
 membership in every counted-tap set), while retaining source order and exact
 identities in the first witness. Repeated lands therefore contribute resource
-counts instead of all identity subsets. Distinct
+counts instead of all identity subsets. A search checks the color-set bound at
+its root and keeps identity keys until it has expanded 16 states; only then
+does it classify the sources and apply both to every state, so ordinary small
+payments pay nothing for them. Distinct
 source behaviors, overlapping tap sets, nested obligations and concrete pool
 remainders can still make exact search combinatorial; there is no general
 large-board work limit or truncation of legal payments.
