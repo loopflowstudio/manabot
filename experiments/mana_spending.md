@@ -285,37 +285,40 @@ uv run python -m experiments.mana_spending shapes --source .runs/mana-spending-c
 uv run python -m experiments.mana_spending summary --source .runs/mana-spending-shapes
 ```
 
-This enumerates fixed-source subsets at every actual payment, then native unit spending
-to completion. Each final remainder must preserve saved payment obligations under
-`PaymentModel`. It includes deliberately producing surplus mana. The paired capture also
-counts capability and exact-identity outcomes only for non-redundant source sets:
-removing any selected source's whole output must make the current cost unpayable from
-the pool or saved callers infeasible on the post-tap board. This is the over-tap
-counter's criterion, not a ban on all floating mana. Indivisible surplus (Heartbeat) and
-pre-existing pool choices remain. All four counts share the same traversal and cap;
-capped counts are lower bounds, including a zero non-redundant count. Activated
-abilities remain explicit native decisions outside this automatic boundary; their
-presence is recorded, and these are not counts of every possible mana-ability strategy.
+At every actual payment this enumerates fixed-source subsets, then native unit
+spending to completion; each final remainder must preserve saved payment
+obligations under `PaymentModel`. Zero-mana payments keep the existing pool
+and add no fixed sources. Activated abilities remain explicit native decisions
+outside this automatic boundary: their presence is recorded, their strategies
+are not enumerated.
+
+Each payment is counted four ways on one traversal:
+
+- **Redundant taps included or not.** The inclusive count allows deliberately
+  producing surplus mana. The non-redundant count keeps only source sets where
+  removing any selected source's whole output leaves the cost unpayable from
+  the pool or a saved caller infeasible on the post-tap board. This is the
+  over-tap counter's criterion, not a ban on floating mana: indivisible surplus
+  (Heartbeat) and pre-existing pool choices remain.
+- **Capability or identity.** Capability treats sources with equal output as
+  one choice; identity keeps exact objects. The collapse is a measurement
+  definition, not permission to hide object choices.
 
 Separate columns count untapped-source capabilities, floating pools, native
-receipts and their joint outcomes. Receipts retain all six spent amounts and
-entry counters; this conservatively distinguishes more than a particular spell
-may read. Distinct remainders are retained regardless of receipt relevance. Exact source identity counts expose the
-additional distinctions lost by grouping producers with equal output. Such a
-grouping is a measurement definition, not permission to hide object choices.
-Zero-mana payments retain the existing pool without adding fixed sources.
-The per-payment cap counts source-subset and receipt traversal visits. A cap hit
-retains lower bounds; incomplete rows never enter exact offer quantiles.
+receipts and their joint outcomes. Receipts keep all six spent amounts and
+entry counters, which distinguishes more than a particular spell may read.
+
+The per-payment cap counts source-subset and receipt traversal visits. A capped
+payment keeps lower bounds for every count, including a zero non-redundant
+count, and never enters exact offer quantiles.
 
 For folded offers, every legal cast at an observed priority window is tried on
-an exact clone. Casts that reach one payment immediately supply their outcome
-count; casts that first require other announcements (targets, modes or costs)
-are marked unresolved. Any probe that does not reach exactly one immediate
-cast payment is unresolved, including payment bypasses or multiple payment
-steps. Windows with an unresolved or capped cast are excluded
-from exact folded-offer quantiles. Their lower-bound counts remain in evidence.
-Neither enumeration changes the retained trajectory; every final digest must
-match the frequency run.
+an exact clone. A probe that reaches exactly one immediate cast payment
+supplies its outcome count; any other (targets, modes or costs announced
+first, a payment bypass, several payment steps) is unresolved. Windows with an
+unresolved or capped cast are excluded from exact folded-offer quantiles;
+their lower-bound counts remain in evidence. Neither enumeration changes the
+retained trajectory; every final digest must match the frequency run.
 
 | shape | what the player decides |
 | --- | --- |
@@ -328,13 +331,10 @@ match the frequency run.
 The comparison reports decisions per game, offers per decision (median, 95th
 percentile, maximum), real choices and cap hits. A and B count all spending
 prompts; C–E replace cast-payment prompts and retain noncast payment behavior.
-D offers one joint outcome decision when outcomes differ. C puts an
-automatic-or-override step in front of it, with the outcome decision only if
-the override has multiple alternatives; its decision cost depends on how often
-the player overrides, so it is reported as a range whose lower end equals D. E
-folds those cast outcomes into priority offers; its decision count assumes the
-other announcement steps stay as they are. These are counterfactual counts on
-A's trajectories, not games under C–E.
+C's decision cost depends on how often the player overrides, so it is a range
+from always accepting the plan (equal to D) to always overriding. E's decision
+count assumes the other announcement steps stay as they are. These are
+counterfactual counts on A's trajectories, not games under C–E.
 
 ## Matched payment-shape results
 
@@ -375,12 +375,10 @@ capability alone is not an approved equivalence rule. Activated sources were pre
 strategies are outside these fixed-source counts. None of the observed cast payments
 retained a saved caller obligation.
 
-Counterfactual **all decisions per game** on these A trajectories: B removes
-all spend prompts; C–E replace only cast-payment prompts. C’s range spans
-always taking automatic payment to always taking a nontrivial override. All
-capped cast rows already certify ≥2 outcomes, so D’s decision count is known
-even though some offer counts are incomplete. Grouping D would add decisions
-beyond this flat, one-decision estimate.
+Counterfactual **all decisions per game** on these A trajectories. All capped
+cast rows already certify ≥2 outcomes, so D’s decision count is known even
+though some offer counts are incomplete. Grouping D would add decisions beyond
+this flat, one-decision estimate.
 
 | decks | policy | A per unit | B automatic | C automatic / override | D flat outcome | E folded |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -405,14 +403,14 @@ A uses actual prompts. C is the always-override path
 | heartbeat | heuristic | 2 / 2 / 2 | 2 / 92 / 167 | 19 / 132 / 168 | 37 |
 | heartbeat | random | 2 / 2 / 2 | 2 / 77 / 158 | 19 / 105 / 159 | 49 |
 
-Flat D has completely enumerated casts with **712** capability outcomes. Heartbeat’s
-conditional p95 is 105–132; ordinary-deck conditional p95 is 49–59. Because 420/9,089
-cast enumerations hit the cap, these conditional quantiles are not a bound on the full
-population. There are 422 cast payments already certified above 64 outcomes, including
-capped rows. With deliberate redundant tapping included, a 64-slot policy cannot use
-flat D everywhere, even with the optimistic capability collapse. This conclusion does
-not establish the capacity needed when redundant tapping is excluded; the paired
-measurement below addresses that question.
+Flat D reaches **712** capability outcomes on a completely enumerated cast.
+Heartbeat’s conditional p95 is 105–132; ordinary-deck conditional p95 is 49–59.
+Because 420/9,089 cast enumerations hit the cap, these conditional quantiles do
+not bound the full population. 422 cast payments are certified above 64
+outcomes, including capped rows: with deliberate redundant tapping included, a
+64-slot policy cannot use flat D everywhere, even under the optimistic
+capability collapse. The [paired measurement](#paired-counts-without-redundant-taps)
+gives the capacity needed without redundant tapping.
 
 E **full priority offers median / p95 / maximum**, only where every cast at
 that priority window reached an immediate, completely enumerated payment:
@@ -435,7 +433,7 @@ least one cast offer; other priority windows retain their baseline offers.
 
 Evidence: `current/decks.json`, `current/games.jsonl`, and
 `current/shapes/{metadata.json,shapes.jsonl,summary.json}` under the experiment’s
-artifact directory. The earlier empty failed shape attempt remains local only.
+artifact directory.
 
 ### Paired counts without redundant taps
 
@@ -448,12 +446,10 @@ comparison of all 336 rows also found **every original payment and folded-offer 
 unchanged**, including surplus-inclusive counts, work and cap hits. All fully enumerated
 payments have at least one non-redundant outcome.
 
-“Non-redundant” excludes removable whole-source outputs using the over-tap criterion
-above. It retains unavoidable surplus and existing pooled mana. None of the sampled cast
-payments has saved obligations; the saved-caller criterion is covered by a directed
-native fixture. Capability is the optimistic equal-output collapse; identity retains
-exact objects, including otherwise identical basics. Neither measures an approved
-definition/state equivalence.
+Non-redundant, capability and identity are defined under
+[Decision shapes](#decision-shapes). None of the sampled cast payments has
+saved obligations; the saved-caller criterion is covered by a directed native
+fixture. Neither source key measures an approved definition/state equivalence.
 
 D offers below are median / p95 / maximum on fully enumerated casts with at least two
 outcomes **under the column's own definition**; the conditional samples therefore
@@ -544,15 +540,13 @@ heuristic panel: 200 replay-checked games per final checkpoint, with native
 seats and decks swapped across four legs per pair.
 
 The pilot asks only whether removing pool-spending decisions visibly changes
-early scores or decisions per game on this recipe. Updates are matched;
-completed games and learner transitions need not be. The training decision/game
-ratio divides all recorded environment decisions by completed games, including
-decisions from unfinished or failed episodes; it is not mean completed-game length.
-Trajectories differ once the policies differ, so their decision ratios cannot isolate saved prompts.
-Two training seeds and a recipe with roughly 0.2% pool prompts do not establish
-an improvement, equivalence or a compound-decision learning result. This pilot
-does not expose fixed-source choice or implement C–E. MTG-265 owns the planned
-learning-effect study.
+early scores or decisions per game on this recipe. It does not expose
+fixed-source choice or implement C–E. Updates are matched; completed games and
+learner transitions need not be. The training decision/game ratio divides all
+recorded environment decisions by completed games, including decisions from
+unfinished or failed episodes; it is not mean completed-game length, and
+trajectories differ once the policies differ, so the ratios cannot isolate
+saved prompts.
 
 | arm | seed | training run | updates | completed games | environment decisions | learner transitions | decisions/completed game |
 | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
@@ -580,11 +574,11 @@ there were no draws.
 | 34701 | 52 / 200 | 26.0% | 54 / 200 | 27.0% | +1.0 pp |
 | 34702 | 57 / 200 | 28.5% | 65 / 200 | 32.5% | +4.0 pp |
 
-B scored higher on these two early checkpoints. Two training seeds do not
-resolve a learning effect, especially on a recipe where pool prompts are rare;
-this does not establish that automatic spending improves learning. It supplies
-no comparison of the recommended payment decision. Retain A's defaults for now
-and take the source-control design to review.
+B scored higher on these two early checkpoints. Two training seeds on a recipe
+with roughly 0.2% pool prompts establish neither an improvement nor
+equivalence, and say nothing about compound decisions or the recommended
+payment decision; MTG-265 owns the learning-effect study. Retain A's defaults
+for now and take the source-control design to review.
 
 Rental cost about USD1.4 by the launcher's numbers, under the USD25
 authorization. Launch history, cost receipts and warning-log notes are in the
@@ -655,13 +649,19 @@ difference is report/scratch text only. Both include the diagnostic constructor
 cleanup after training; it changes neither the frozen training input layout nor
 payment behavior. Model rows join through Etude's participant seat, rather than
 treating the native game seat as player identity. The published summary retains
-the SQL, query plan and timing: the offline aggregation's `EXPLAIN` uses scans
-and hash joins over only this fixed 800-game panel (1,600 participant rows),
-taking 0.0029 seconds; it is not a growing application query.
+the aggregation's SQL, query plan and timing.
 
-**Launch history.** An initial parallel launch (`518a4948ea80`) failed admission when a second L4 was unavailable; none of its four job commands started. The acquired machine was deleted before the serial retry. The source and question stayed fixed. Final run receipts, scores and launcher costs are recorded below.
+**Launch history.** An initial parallel launch (`518a4948ea80`) failed
+admission when a second L4 was unavailable; none of its four job commands
+started. The acquired machine was deleted before the serial retry. The source
+and question stayed fixed.
 
-**Warning logs.** Both evaluation logs include `Invalid focus object ID 81 for action 12` (ChooseMode), among similar warnings. The existing Python encoder emits this when a focus object has no observation join and encodes -1. The cause was not diagnosed in this experiment. Valid replay-checked games do not establish that every action feature was informative: the pilot measures the existing representation and procedure together. Keep that limitation separate from game failures; changing the encoder mid-pilot would change its question.
+**Warning logs.** Both evaluation logs include `Invalid focus object ID 81 for
+action 12` (ChooseMode), among similar warnings. The existing Python encoder
+emits this when a focus object has no observation join and encodes -1. The
+cause was not diagnosed here; the pilot measures the existing representation
+and procedure together, and changing the encoder mid-pilot would have changed
+its question. These warnings are not game failures.
 
 **Launcher cost** observations after all acquired rentals ended (2026-11-13):
 

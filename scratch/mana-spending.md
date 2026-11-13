@@ -8,11 +8,13 @@ another Task. Keep defaults, policy input, Academy behavior, native payment
 execution and the frozen A/B pilot unchanged. No Wave is selected.
 
 All measurement is complete and published: frequencies, the A/B pilot, and the
-paired shape counts with and without redundant taps. The report-text slice
-below is complete: the recommendation and its questions now describe the
-single decision from the second concept review. Earlier implementation history
-and launch notes are in git `ce074e9d37` and the experiment report; do not rerun
-the pilot or rewrite its evidence.
+paired shape counts with and without redundant taps. The report recommends one
+native payment-outcome decision with the automatic plan first and asks three
+review questions. Do not rerun the pilot or rewrite its evidence. Earlier plan
+text, launch notes and per-slice checks are in git `78397f2042` and before
+(`ce074e9d37` for the first concept review).
+
+Remaining: gate/review and the caller's delivery steps. No PR created here.
 
 ## Demo and done when
 
@@ -20,13 +22,12 @@ A reviewer opens `experiments/mana_spending.md` and, before any table, reads:
 the recommended design (one native payment-outcome decision, automatic plan
 first), then three numbered questions, each with its options and the measured
 price of each. Evidence and limits follow; run logistics sit in a collapsed
-appendix. Headless: `sed -n 1,60p experiments/mana_spending.md` shows the
-summary, the recommendation and the start of the questions.
+appendix. Headless: `sed -n 1,60p experiments/mana_spending.md`.
 
-Done when the report recommends that single decision with D's costs, no longer
-names an entry step as part of the design, asks the three questions in the form
-below, and every number it quotes is one already in its tables. Nothing outside
-the report and `scratch/` changes.
+Done when the report recommends that single decision with D's costs, names no
+entry step as part of the design, and every number it quotes is one already in
+its tables. The report-text slice (base `caa15caca4`) changes nothing outside
+the report and `scratch/`.
 
 ## What people said
 
@@ -50,165 +51,85 @@ the report and `scratch/` changes.
   Implementing the design is a separate Task. USD25 launcher cap; more needs
   approval.
 
-## Evidence already complete
+## Evidence (all published; bytes must survive unchanged)
 
-- Original frequency source `58e5923c53`: 336 games on 21 exact deck lists,
-  eight deals per deck/policy. Heuristic and random mirrors; MTG-183's input-v1
+- Frequency, source `58e5923c53`: 336 games on 21 exact deck lists, eight
+  deals per deck/policy, heuristic and random mirrors; MTG-183's input-v1
   checkpoint was refused rather than rebound. Ordinary pool prompts are
   0.11–0.60% of decisions; Heartbeat is 9.7–13.8%.
-- Current baseline from rebuilt `0d2233a567`: same actions, counts and offers;
-  main's engine/card merge changed digests. All 336 games replay verified.
-  `current/shapes/` holds 14,775 payment rows, 9,089 casts, 420 capped casts;
-  422 casts already certify more than 64 surplus-inclusive capability outcomes.
-  Those bytes and the original baseline must survive unchanged.
-- Pilot source `00ee188998cb`: two seeds per arm, 32 updates each, A per-unit
+- Current baseline, rebuilt `0d2233a567`: same actions, counts and offers;
+  main's engine/card merge changed digests. `current/shapes/`: 14,775 payment
+  rows, 9,089 casts, 420 capped; 422 casts certified above 64
+  surplus-inclusive capability outcomes.
+- Paired counts, `d18004357a`, `current/non-redundant-shapes/`: same games in
+  421.48 s; every original field unchanged. Non-redundant capability D: exact
+  max 22, capped lower bounds reach 30, none certified above 64. Exact
+  identity: 493 non-redundant casts above 64 (291 exact, 202 capped), exact
+  max 252. Non-redundant capability E reaches 75 on one complete window.
+  Published `metadata.json` hashes name the `d18004357a` build; the compress
+  at `1530995a9e` reproduced `shapes.jsonl` and `summary.json` byte-identically.
+- Pilot, source `00ee188998cb`: two seeds per arm, 32 updates, A per-unit
   versus B automatic pooled-unit spending. Evaluations
   `mana-spending-A-303f5f0a6a59` / `mana-spending-B-fe362b5c294d`: 800 valid
-  replay-checked games. Scores A/B 26/27% and 28.5/32.5%. No improvement or
+  replay-checked games; scores A/B 26/27% and 28.5/32.5%. No improvement or
   equivalence established; no source-choice design tested. Missing-focus
   warnings and three recovered resource-limit failures (915 discarded samples)
-  remain explicit in the report. All 24 pilot artifacts are published.
+  are explicit in the report. All 24 pilot artifacts are published.
 
 ## Delete — do not maintain
 
-Remove the report's unconditional flat-D capacity conclusion, misleading
-“grouped D” label and recommendation of a separate automatic/override entry.
-Replace with the paired measurements and one payment-outcome decision with
-the automatic plan first; keep C's measured entry costs as comparison evidence.
-Do not preserve a second enumeration/payment path. Keep all existing evidence,
-PaymentModel authority, source/action behavior, frozen pilot revision and switch.
+Nothing remains to delete. The report no longer carries the unconditional
+flat-D capacity conclusion, the "grouped D" label or a separate
+automatic/override entry in the design; C's measured columns stay as
+comparison evidence. Do not add a second enumeration/payment path. Keep
+`PaymentModel` authority (`PaymentModel::is_surplus` in
+`managym/src/flow/mana.rs` owns the over-tap criterion), the frozen pilot
+revision and `MANAGYM_EXPERIMENT_AUTOSPEND` with its README note; the report
+says the follow-up replaces the switch. The flat summary keys and the unused
+`pool_outcomes`/`source_outcomes` row fields stay because published rows carry
+them.
 
-## Review direction and product choices
+## Design reasoning behind the report (concept review `1530995a9e`, page `scratch/concept-review.html`)
 
-Concept review at `9dbe3f78df` found redundant taps counted as choices in part 3
-but attributed as defects in part 2; that iteration added both counting rules
-(text in git `ce074e9d37`).
+1. **One payment decision, no separate entry.** C is entry + outcome choice;
+   its always-automatic bound equals D (Elemental heuristic 317.39 both) and
+   every override costs one more decision (up to 321.69). Overflow uses native
+   balanced groups where only an outcome commits, after `Decision::NameCard` /
+   `NAME_BRANCHING`. `NameScope` (`managym/src/cards/names.rs`) partitions a
+   sorted vocabulary by contiguous span; payment outcomes have no such public
+   order, so ordering outcomes into groups is left to the implementing Task.
+2. **Question 3's cast-selection option is arithmetic, not a measured shape:**
+   decisions/game between E (305.60 / 210.91 / 437.26 / 216.22, never
+   override) and D; at most one more offer per cast offer (13 on fully
+   measured windows). Its price: the automatic path commits before modes,
+   targets, X and cost are known.
+3. **Question 1 asks where surplus lives.** The non-redundant menu is the set
+   of minimal payments MTG-342's tapper picks from; deliberate floating is
+   tapping for mana with priority (CR 605.3a). Activated mana abilities
+   (`mana_choices()` is some) are already `Action::ActivateAbility` offers at
+   priority (`managym/src/flow/action.rs`, `can_activate_mana_ability`) and
+   during payment (`mana_ability_actions`); a land's fixed output is tapped
+   only by the automatic payer (`PaymentStep::Fixed`, `flow/mana.rs`). The
+   priority option's offer cost is unmeasured.
+4. The over-tap figure is 6–15% of ordinary payments (400/2717, 538/4430,
+   213/2588, 288/4742); earlier text said 8–15%.
 
-Concept review at `1530995a9e` (2026-11-13), page `scratch/concept-review.html`.
-Report text only: no code, run, artifact or evidence change.
+## Open product choices (nobody has answered; they do not block this Task)
 
-### This slice: report text (kickoff 2026-11-13 kept this direction)
-
-Kickoff re-derived the quoted numbers from the report's own tables and read the
-engine precedents; findings are inline as *Checked*.
-
-1. **One payment decision, automatic plan first; no separate entry.** The report
-   defines C as entry + outcome choice, so "C followed by D" names C twice. Its own
-   paired table shows the entry buys nothing where the menu fits: C's
-   always-automatic bound equals D (Elemental heuristic 317.39 both) and every
-   override costs one more decision (C up to 321.69), while non-redundant
-   capability D is 2 / 4-7 / exact max 22 offers. Recommend one native
-   payment-outcome decision whose first offer is the bound automatic plan,
-   identified as automation. Where permitted outcomes exceed the action capacity,
-   the remaining offers are native balanced groups and only an outcome commits
-   (the `Decision::NameCard` / `NAME_BRANCHING` precedent). The entry step is that
-   grouping's degenerate case, not a concept of its own. Keep the measured C
-   columns as evidence; rewrite the recommendation, its quoted costs (D's, with
-   C's as the price of an entry) and question 3 to match.
-   *Checked:* D capability lower bounds over A are +3.7% / +7.0% (Elemental
-   heuristic / random) and +2.5% / +4.5% (TLA), so "2.5-7.0%" holds; ordinary
-   p95 is 4-7. The precedent is real and reusable in shape: `NameScope`
-   (`managym/src/cards/names.rs`) publishes a balanced, complete partition
-   where only a leaf commits. It partitions a sorted vocabulary by contiguous
-   span; payment outcomes have no such public order, so the report may cite the
-   precedent but must leave "how outcomes are ordered into groups" to the
-   implementing Task, not present it as solved. The summary bullets, the shape
-   table's C row and "Decision shapes" prose also say "C followed by D" in
-   effect; change wording there, never the measured columns.
-2. **Give question 3 both sides in numbers.** Override intent at cast selection
-   ("cast X" / "cast X, choosing payment") is bounded by published columns
-   without a run: decisions/game lie between E (never override) and D (always);
-   a priority window gains at most one offer per cast offer (measured maximum 13
-   offers per window). State its price beside it: the automatic path commits
-   before modes, targets, X, the cost and therefore the plan are known, so the
-   plan is not inspectable when chosen. Label these as arithmetic bounds, not a
-   measured shape.
-3. **Question 1 asks where surplus lives, not only whether.** The non-redundant
-   menu is the set of minimal payments, the same set MTG-342's fixed tapper picks
-   from. Deliberate floating is a different act (tapping for mana with priority,
-   CR 605.3a), and putting it in the payment menu is what produces the 422 casts
-   above 64. Present the options as: not offered; a tap-for-mana action at
-   priority (uncounted here); or in the payment chooser (measured, needs groups).
-   This is a proposal inside the question, not an answer.
-   *Checked:* the report's "The engine has no explicit action for it today" is
-   true only of fixed sources. Activated mana abilities (`mana_choices()` is
-   some) are already `Action::ActivateAbility` offers at priority
-   (`managym/src/flow/action.rs`, the `can_activate_mana_ability` branch) and
-   during payment (`mana_ability_actions`); a land's fixed output is tapped only
-   by the automatic payer (`PaymentStep::Fixed`, `flow/mana.rs`). So the
-   priority option extends an existing action to fixed sources; say so, and
-   scope that sentence. Its offer cost is still unmeasured.
-4. **Lead with the decision.** Order: summary, recommended design, the three
-   numbered questions, then evidence, limits. Move commands' output details,
-   launch history, cost receipts and warning-log notes to a collapsed appendix.
-   Retitle for the design question (file name unchanged).
-
-Docs written (2026-11-13): `experiments/mana_spending.md` is the only changed
-doc and now has this slice's shape: summary, recommended design, three
-questions with option/price tables, evidence, limits, collapsed appendix.
-Evidence tables are byte-for-byte the earlier ones, reordered (frequency
-results before decision shapes). One figure corrected against the frequency
-table: the payer over-taps in 6-15% of ordinary payments (400/2717, 538/4430,
-213/2588, 288/4742), where the old text said 8-15%. Question 3's cast-selection
-bound quotes the surplus-inclusive E column (305.60 / 210.91 / 437.26 / 216.22);
-the 13-offer window maximum is from fully measured windows only, and says so.
-
-Unchanged on purpose: `MANAGYM_EXPERIMENT_AUTOSPEND` and its README note stay as
-written; the report already says the follow-up replaces the switch.
-
-Open product choices, for the report's review (nobody has answered them; they do
-not block this Task, whose outcome is the report that asks them):
-
-1. Deliberate surplus tapping: not offered, a priority action, or in the chooser?
-   Decides whether the flat menu suffices (exact max 22) or groups are required.
+1. Deliberate surplus tapping: not offered, a priority action, or in the
+   chooser? Decides whether the flat menu suffices (exact max 22) or groups are
+   required.
 2. Which sources are the same choice: exact identity (493 non-redundant casts
    above 64, mostly identical basics) or equal definition and state (needs a
    rules argument; capability alone merges a land with a mana creature)?
 3. Where the player opts out of automation: a decision at each payment whose
-   outcomes differ (+2.5-7.0% decisions/game non-redundant capability, plan
+   outcomes differ (+2.5–7.0% decisions/game non-redundant capability, plan
    visible) or intent at cast selection (no added decisions unless used, plan
    not visible). Learning effects stay with MTG-265.
 
-## Final implementation and results
-
-- Existing PaymentModel capture now records non-redundant capability and exact
-  identity outcomes on the same traversal/cap. Saved obligations use the actual
-  post-tap board, matching over-tap attribution. No runtime default or shared
-  policy/Academy behavior changed.
-- `d18004357a` replayed all 336 current-baseline games, 14,775 payments and 9,089
-  cast payments, in 421.48 s. Every original payment/folded field matches the
-  earlier capture; all final digests, spend offers and counters agree.
-- Non-redundant capability D: exact maximum 22, capped lower bounds reach 30,
-  zero casts certified above 64; 420 capped casts remain unknown. Grouping is
-  not implied on the exact capability subset. Exact identity still certifies
-  493 non-redundant casts above 64 (291 exact, 202 capped), exact max 252.
-  Non-redundant capability E reaches 75 on one complete window.
-- All three artifacts under `current/non-redundant-shapes/` are published.
-  Original/current shape evidence and frozen pilot bytes remain unchanged.
-- Report recommends one payment-outcome decision, compares C's entry costs,
-  makes grouping conditional on reviewed surplus/equivalence choices, states
-  MTG-342's dependency and leads with all three open review questions. Its
-  small-menu costs explicitly use equal-output collapse, not the recommended
-  exact-identity default; conditional quantiles do not bound capped casts.
-- Remaining: gate/review and the caller's delivery steps. No PR created here.
-
 ## Checks
 
-Report-text implementation (2026-11-13): `uv run --no-sync python` static
-comparison preserved all 13 numerical evidence tables from HEAD verbatim and
-verified section order, three numbered questions, the collapsed appendix and
-report/scratch-only scope. `git diff --check` passed; `lf context` is within
-both scratch limits. No build or experiment rerun for this prose-only slice;
-the gate commands below remain for the caller's gate step.
-
-- `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana::outcomes::tests -- --test-threads 2`: 5 passed in debug (0.05 s).
-- Release wheel rebuilt for CPython 3.13 and extension replaced atomically.
-- `uv run --no-sync ruff check experiments/mana_spending.py`: passed.
-- Paired `shapes` / `summary`: 336 verified games; all original row projections
-  unchanged and new count subset bounds hold.
-- `uv run --no-sync --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`: 1 passed (0.56 s).
-
-Gate, for the report-text slice (base `caa15caca4`):
+Gate, for the report-text slice:
 
 - `git diff --stat caa15caca4 -- . ':!experiments/mana_spending.md' ':!scratch'`:
   empty (no code, manifest or evidence change).
@@ -217,20 +138,20 @@ Gate, for the report-text slice (base `caa15caca4`):
 - Each figure quoted in the recommendation and questions appears in a table of
   the same report (317.39, 321.69, 22, 493, 422, 420, 75, 13).
 
-At kickoff the checkout had no `.venv`; `uv run --no-sync` then creates an empty
-one and imports fail. Sync from the lock (`uv run --extra dev`) and keep the
-existing `managym/_managym.cpython-313-darwin.so`.
+If code changes again: debug `flow::mana` tests
+(`CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana -- --test-threads 2`,
+27 passed at `1530995a9e`), rebuild the release extension, and `cmp` a fresh
+`shapes`/`summary` against `current/non-redundant-shapes/`.
 
-## Compress (2026-11-13)
+A checkout with no `.venv` makes `uv run --no-sync` create an empty one and
+imports fail. Sync from the lock (`uv run --extra dev`) and keep the existing
+`managym/_managym.cpython-313-darwin.so`.
 
-- One owner for the over-tap criterion: `PaymentModel::is_surplus`
-  (`managym/src/flow/mana.rs`), read by `record_mana_payment` and the
-  non-redundant classification in `flow/mana/outcomes.rs`. The script folds its
-  four parallel expansion counters into one list and derives the summary's flat
-  C/D keys from the `capability` rule.
-- Kept: the flat summary keys and the unused `pool_outcomes`/`source_outcomes`
-  row fields, because published rows and summaries carry them.
-- Check: rebuilt release extension, replayed all 336 games; `shapes.jsonl` and
-  `summary.json` are byte-identical (`cmp`) to
-  `current/non-redundant-shapes/`. Debug `flow::mana` tests: 27 passed.
-  Published `metadata.json` hashes name the `d18004357a` build, not this one.
+## Compress (2026-11-13, report text)
+
+Prose only, on top of `78397f2042`: the four counting definitions
+(redundant/non-redundant, capability/identity) are stated once under "Decision
+shapes" and referenced from the paired section; repeated shape restatements,
+duplicate pilot caveats and appendix query-plan detail are cut.
+Check: all 140 table rows and every heading are identical to `78397f2042`,
+all in-page anchors resolve, `git diff --check` clean.
