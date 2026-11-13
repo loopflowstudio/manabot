@@ -1,5 +1,34 @@
 # Infrastructure Wave memory
 
+## CI job budgets (38ef25, reconciled 2026-11-12)
+
+Measure job start to job end on the target runner, including installation and
+build. `docs/development.md` owns the ordinary Ubuntu PR budget of eight
+minutes; Engine Budget retains its same-runner reference comparison and is
+exempt. The macOS nightly has no such budget. In Task 38ef25, main's slowest
+Integration job was 1443 s; branch dispatch 43327574361 at `45fe9f866` passed
+with every non-exempt job at or below 404 s. That run predates the admission
+fixture simplification and later main merge; it does not certify their timing.
+
+- Inspect setup before adding shards: `uv sync` built the engine in release,
+  then `maturin develop` built it again in dev. Syncing all needed extras with
+  `--no-install-package managym`, building once and retaining `UV_NO_SYNC=1`
+  removed the duplicate while keeping native debug assertions. Cache paths
+  must follow the action's actual directory; `~/.cache/uv` never hit here.
+- Bound complete-game smoke work by streams/games, not just the transition
+  floor. Two streams retained the real-worker one-update size check.
+- Parallel tests need isolated files/ports and injected time at scheduling
+  boundaries. A 30-second future wait failed beside other workers; the final
+  admission fixture releases the gate in its injected sleep instead. The
+  five-minute test watchdog belongs in each xdist worker, not its controller.
+- Keep timing margin: unchanged evaluation-long tests varied from 153 to
+  249 s across two CI runs. The successful six-group layout used four logical
+  workers; earlier two-worker groups remained over budget.
+
+Coverage: read Infrastructure's complete objective and memory and listed its
+directory on 2026-11-12; there were no immediate child directories or child
+memories. No other Wave memory was read in this reconciliation.
+
 ## Training throughput and experiment delivery (b015d5, reconciled 2026-11-11)
 
 Jack Heart said "keep going" after "I recommend repairing BF16, lengthening the
