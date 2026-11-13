@@ -3,7 +3,7 @@
 use crate::support::{
     game::{five_color_setup, five_color_unfunded_setup, plant_in_graveyard, Scenario},
     inspect::{can_cast, find_owned_card, offered_targets, permanent, permanent_named},
-    play::{activate_card, attack_with, cast, pass_until},
+    play::{activate_card, attack_with, cast, pass_until, spend_colorless},
 };
 use managym::{
     agent::action::ActionSpaceKind,
@@ -48,6 +48,7 @@ fn cityscape_leveler_cast_trigger_destroys_and_pays_the_controller_a_tapped_powe
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.game_mut().scenario_refresh_priority().unwrap();
     cast(&mut s, "Cityscape Leveler");
+    spend_colorless(&mut s);
     settle_targeting(&mut s, Target::Permanent(ogre));
     assert!(s.game().state.permanents[ogre].is_none());
     assert_eq!(powerstones(&s, 1), vec![true]);
@@ -87,6 +88,7 @@ fn unearthed_cityscape_leveler_has_haste_and_is_exiled_instead_of_destroyed() {
     let mut s = five_color_setup(&["Cityscape Leveler"]);
     let object = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
     activate_card(&mut s, object, 0);
+    spend_colorless(&mut s);
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
     let leveler = permanent_named(&s, "Cityscape Leveler");
     assert!(s
@@ -108,6 +110,7 @@ fn unearthed_cityscape_leveler_is_exiled_at_the_next_end_step() {
     let mut s = five_color_setup(&["Cityscape Leveler"]);
     let object = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
     activate_card(&mut s, object, 0);
+    spend_colorless(&mut s);
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
     assert_eq!(
         s.game().state.zones.zone_of(object),

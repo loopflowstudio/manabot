@@ -4,7 +4,8 @@ use crate::support::{
     game::{five_color_setup, until_end_of_turn},
     inspect::permanent_named,
     play::{
-        activate_first, play_and_settle, select_card, settle_targeting_opponent, target_opponent,
+        activate_first, play_and_settle, select_card, settle_targeting_opponent, spend_colorless,
+        target_opponent,
     },
 };
 use managym::state::{
@@ -28,6 +29,7 @@ fn mayhem_keeps_granted_lifelink_after_it_is_sacrificed() {
     activate_first(&mut s, weapon);
     target_opponent(&mut s);
     select_card(&mut s, object);
+    spend_colorless(&mut s);
     settle_targeting_opponent(&mut s);
     assert_eq!(s.game().state.players[0].life, 21);
     assert_eq!(s.game().state.players[1].life, 17);

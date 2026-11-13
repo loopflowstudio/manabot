@@ -3,7 +3,7 @@
 use crate::support::{
     game::{clear_hand, deck, five_color_setup, force_lands, Scenario},
     inspect::{hand, library, library_card, permanent, stack_spell_card},
-    play::{cast, cast_and_resolve, cast_only, pass_until, settle},
+    play::{cast, cast_and_resolve, cast_only, pass_until, settle, spend_colorless},
 };
 use managym::{
     agent::{
@@ -130,6 +130,7 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
     for (name, forest) in [("Field Trip", true), ("Shared Roots", false)] {
         let mut s = five_color_setup(&[name]);
         cast(&mut s, name);
+        spend_colorless(&mut s);
         s.pass_priority();
         s.pass_priority();
         assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
@@ -184,6 +185,7 @@ fn search_selection_or_decline_and_shuffle_restore_exactly_from_fork() {
     use managym::search_state::witness;
     let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
+    spend_colorless(&mut s);
     s.pass_priority();
     s.pass_priority();
     for select in [false, true] {
@@ -215,6 +217,7 @@ fn search_selection_or_decline_and_shuffle_restore_exactly_from_fork() {
 fn resampled_private_search_choices_still_name_library_cards() {
     let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
+    spend_colorless(&mut s);
     s.pass_priority();
     s.pass_priority();
     for viewer in [PlayerId(0), PlayerId(1)] {
@@ -270,6 +273,7 @@ fn library_search_semantic_command_replays_and_rejects_reuse_without_mutation() 
     use managym::search_state::witness;
     let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
+    spend_colorless(&mut s);
     s.pass_priority();
     s.pass_priority();
     let mut replay = s.game().clone();
@@ -296,6 +300,7 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
     let hand = library_card(&s, 0, "Forest");
     s.game_mut().move_object(hand, ZoneType::Hand);
     cast(&mut s, "Field Trip");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let space = PossibleWorldSpace::for_viewer(s.game(), PlayerId(1));
     for index in 0..space.worlds().len() {
@@ -592,6 +597,7 @@ fn professors_enter_and_offer_learn_before_priority_returns() {
     for name in ["Professor of Symbology", "Gnarled Professor"] {
         let mut s = five_color_setup(&[name]);
         cast(&mut s, name);
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::Learn);
         assert_eq!(s.battlefield_permanents_named(0, name).len(), 1);
         settle(&mut s);

@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
-        decision::{Decision, EffectFrame, ResolutionRef, SuspendedResolution},
+        decision::{Decision, EffectFrame, ManaProduction, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
         ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
         game_object::{ObjectId, ObjectRef, PlayerId, Target},
-        mana::ManaCost,
+        mana::{ManaCost, ManaSpent},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -196,6 +196,18 @@ impl ContinuationFrame {
             .collect();
         self.lesson = !cost.purpose.is_resolving();
     }
+}
+
+/// The cast receipt a stack object carries when a rule still reads it
+/// (`effect_execution::receipt_matters`).
+fn stack_receipt(object: &StackObject) -> Option<ManaSpent> {
+    let spent = match object {
+        StackObject::Spell(spell) => spell.spent,
+        StackObject::TriggeredAbility(ability) => ability.spent,
+        StackObject::ActivatedAbility(_) => return None,
+    };
+    super::effect_execution::receipt_matters(&spent, Some(object.source_definition_id()))
+        .then_some(spent)
 }
 
 impl Game {
@@ -650,6 +662,9 @@ impl Game {
         // Stack definitions remain public after the original source departs.
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
+        if let Some(spent) = stack_receipt(object) {
+            super::effect_execution::project_receipt(self, &spent, viewer, &mut frame, false);
+        }
         frame
     }
 
@@ -850,6 +865,13 @@ impl Game {
         viewer: PlayerId,
         frames: &mut [ContinuationFrame],
     ) {
+        // Stack frames lead, top to bottom; their receipts are public.
+        for (frame, object) in frames.iter_mut().zip(self.state.stack_objects.iter().rev()) {
+            debug_assert!(matches!(frame.kind, 1..=3));
+            if let Some(spent) = stack_receipt(object) {
+                super::effect_execution::project_receipt(self, &spent, viewer, frame, true);
+            }
+        }
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
             || self.is_game_over()
         {
@@ -917,13 +939,32 @@ impl Game {
                     &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
                 );
             }
-            Decision::ManaChoice { choices, .. } => {
+            Decision::ManaSpend { cost, .. } => frame.cost(cost),
+            Decision::ManaChoice {
+                choices,
+                production,
+                ..
+            } => {
+                // The output choice names the mana ability's source; a
+                // triggered mana ability's type choice names that ability's
+                // source, with the permanent tapped for mana as context.
+                match production {
+                    ManaProduction::Output { source, .. } => {
+                        if let Some(source) = source {
+                            frame.source = self.visible_reference(*source, viewer);
+                        }
+                    }
+                    ManaProduction::Bonus { source, tapped, .. } => {
+                        frame.source = self.visible_reference(*source, viewer);
+                        frame.context = Some(self.visible_reference(*tapped, viewer));
+                    }
+                }
                 frame.mana_outputs = choices
                     .iter()
                     .enumerate()
                     .map(|(mode, output)| ManaOutput {
                         mode,
-                        mana: output.mana,
+                        mana: output.unrestricted_colors(),
                         lesson: output.restricted_colors(),
                     })
                     .collect();
@@ -985,7 +1026,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 30;
+pub const MAX_DECISION_CODE: u8 = 31;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -999,6 +1040,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::Payment(_) => 1,
         Decision::ManaUpfront { .. } => 2,
         Decision::ManaChoice { .. } => 3,
+        Decision::ManaSpend { .. } => 31,
         Decision::ChooseObject { .. } => 4,
         Decision::SelectCards { .. } => 28,
         Decision::Scry { .. } => 8,
@@ -1184,6 +1226,7 @@ pub fn encode_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::flow::decision::SpendCompletion;
     use crate::state::ability::DistinctSearchEnd;
     use std::collections::HashMap;
 
@@ -1241,6 +1284,10 @@ mod tests {
         game.suspend_rule_decision(Decision::ManaChoice {
             player: actor,
             choices: vec![Mana::parse("U")],
+            production: ManaProduction::Output {
+                source: None,
+                tapped: None,
+            },
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 actor,
                 PaymentCost::Waterbend { generic: 2 },
@@ -1272,6 +1319,14 @@ mod tests {
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
         let decisions = [
+            Decision::ManaSpend {
+                player,
+                cost: ManaCost::default(),
+                spent: crate::state::mana::ManaSpent::default(),
+                completion: Box::new(SpendCompletion::Foretell(
+                    game.state.card_id(ObjectId(0)).unwrap(),
+                )),
+            },
             Decision::OrderReplacement {
                 player: PlayerId(0),
                 candidates: Vec::new(),
@@ -1302,6 +1357,10 @@ mod tests {
             Decision::ManaChoice {
                 player,
                 choices: vec![],
+                production: ManaProduction::Output {
+                    source: None,
+                    tapped: None,
+                },
                 resume: None,
             },
             Decision::ChooseObject {

@@ -15,7 +15,11 @@
 
 use crate::{
     agent::action::AgentError,
-    flow::{game::Game, proposed_event::ZoneEntry},
+    flow::{
+        decision::{EffectFrame, SpendCompletion},
+        game::Game,
+        proposed_event::ZoneEntry,
+    },
     state::{
         ability::{LinkedGrant, PlayWindow},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId},
@@ -175,7 +179,15 @@ impl Game {
         }
         let cost = ManaCost::parse(FORETELL_ACTION_COST);
         self.produce_mana(player, &cost)?;
-        self.spend_mana(player, &cost)?;
+        self.begin_mana_spend(
+            player,
+            cost,
+            SpendCompletion::Foretell(card),
+            EffectFrame::new(player, Vec::new()),
+        )
+    }
+
+    pub(crate) fn complete_foretell(&mut self, player: PlayerId, card: CardId) {
         let turn = self.state.turn.turn_number;
         self.move_object_with_entry(
             card,
@@ -191,7 +203,6 @@ impl Game {
             ..ExileCastGrant::new(object, player)
         });
         self.restart_priority_round();
-        Ok(())
     }
 
     /// Whether `card` is a foretold card lying face down in exile, hidden

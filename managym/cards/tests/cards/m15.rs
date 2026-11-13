@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::five_color_setup,
-    play::{activate, cast_owned, choose_mode, pass_until, settle},
+    play::{activate, cast_owned, choose_mode, pass_until, settle, spend_colorless},
 };
 use managym::{
     agent::action::ActionSpaceKind,
@@ -13,6 +13,7 @@ use managym::{
 fn meteorite_deals_two_on_entry_and_taps_for_any_color() {
     let mut s = five_color_setup(&["Meteorite"]);
     let object = cast_owned(&mut s, "Meteorite");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     settle(&mut s);

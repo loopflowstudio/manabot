@@ -15,7 +15,7 @@ use crate::{
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{ObjectId, PlayerId, PublicId, Target},
-        mana::{ManaCost, ManaRestriction, SpendPredicate},
+        mana::{Mana, ManaCost, ManaRestriction, SpendPredicate},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -57,6 +57,11 @@ pub struct PlayerData {
     /// Restricted mana by restriction class, in class order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<RestrictedManaData>,
+    /// Pooled mana with a spend effect or combat expiry, by class and expiry.
+    /// Its amounts are also counted in `mana` when
+    /// unrestricted and in `restricted_mana` when restricted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pooled_mana_classes: Vec<PooledManaClassData>,
     /// While set, this player can cast spells only from their hand until the
     /// named player's next turn begins (Avatar's Wrath). It overrides every
     /// card's `cast_permission`.
@@ -121,6 +126,23 @@ pub struct RestrictedManaData {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub except_nonartifact_spells: bool,
     pub mana: [i32; 6],
+}
+
+/// Pooled mana of one class with a spend effect or combat expiry. `program` is the
+/// class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary, the
+/// same serialization the producing card's definition uses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PooledManaClassData {
+    #[serde(default)]
+    pub combat: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restriction: Option<String>,
+    /// "a +1/+1 counter on a non-Human creature spell it casts".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
+    pub mana: [i32; 6],
+    pub program: Vec<(u16, i32)>,
 }
 
 impl RestrictedManaData {
@@ -1155,7 +1177,21 @@ impl Observation {
 
         // Regular and combat mana together, as the player may spend it.
         let mut pool = p.mana_pool.clone();
-        pool.add(&p.combat_mana_pool);
+        pool.add_combat(&p.combat_mana_pool);
+        // Individual class counts are u8; public totals may exceed one class's
+        // capacity when regular and combat mana have the same color.
+        let mut mana = pool.mana.map(i32::from);
+        let mut lesson_mana = [0_i32; 6];
+        for (class, amounts) in pool.classes() {
+            let total = if class.restriction.is_some() {
+                &mut lesson_mana
+            } else {
+                &mut mana
+            };
+            for (sum, amount) in total.iter_mut().zip(amounts) {
+                *sum += i32::from(*amount);
+            }
+        }
         PlayerData {
             main_counts,
             unseen_counts,
@@ -1172,12 +1208,35 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
-            mana: pool.mana.map(i32::from),
-            lesson_mana: pool.restricted_colors().map(i32::from),
+            mana,
+            lesson_mana,
             restricted_mana: pool
-                .restricted()
+                .classes()
                 .iter()
-                .map(|(restriction, amounts)| RestrictedManaData::new(restriction, *amounts))
+                .filter_map(|(class, amounts)| {
+                    let restriction = class.restriction.as_ref()?;
+                    Some(RestrictedManaData::new(restriction, *amounts))
+                })
+                .collect(),
+            pooled_mana_classes: pool
+                .classes()
+                .iter()
+                .filter_map(|(class, amounts)| {
+                    if class.effect.is_none() && !class.combat {
+                        return None;
+                    }
+                    Some(PooledManaClassData {
+                        combat: class.combat,
+                        restriction: class.restriction.as_ref().map(|r| r.describe()),
+                        effect: class.effect.as_ref().map(|e| e.describe()),
+                        mana: amounts.map(i32::from),
+                        program: crate::cards::tokens::rules_tokens(
+                            &Mana::of_class(class.clone(), *amounts),
+                            default_content_pack(),
+                        )
+                        .expect("registered rules payload"),
+                    })
+                })
                 .collect(),
             hand_only_until: game
                 .hand_only_until(player)

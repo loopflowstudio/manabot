@@ -136,6 +136,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             attacker: None,
             inline_effects: None,
             x: 0,
+            spent: Default::default(),
         },
         PendingTrigger {
             program: false,
@@ -156,6 +157,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             attacker: None,
             inline_effects: None,
             x: 0,
+            spent: Default::default(),
         },
     ];
 
@@ -280,6 +282,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         attacker: None,
         inline_effects: None,
         x: 0,
+        spent: Default::default(),
     });
 
     s.pass_priority();

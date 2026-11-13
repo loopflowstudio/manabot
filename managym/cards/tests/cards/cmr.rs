@@ -3,7 +3,7 @@
 use crate::support::{
     game::{five_color_setup, move_to_hand, pin_top, Scenario},
     inspect::{assert_choice_contract, zone_of},
-    play::{cast_card, choose, settle},
+    play::{cast_card, choose, settle, spend_colorless},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
@@ -28,6 +28,7 @@ fn cascade_over(s: &mut Scenario, top: &[&str]) -> Vec<ObjectId> {
     let torrent = move_to_hand(s, "Volcanic Torrent");
     let pinned = pin_top(s, top);
     cast_card(s, torrent);
+    spend_colorless(s);
     while s.action_space().kind == ActionSpaceKind::Priority
         && !s.game().state.stack_objects.is_empty()
         && s.game().state.stack_objects.len() > 1
@@ -121,6 +122,7 @@ fn volcanic_torrent_cascade_without_a_castable_hit_bottoms_everything() {
         s.game_mut().state.zones.remove_object(object);
     }
     cast_card(&mut s, torrent);
+    spend_colorless(&mut s);
     s.pass_priority();
     s.pass_priority();
     assert_eq!(bottom(&s, 2), sorted(kept));
@@ -151,6 +153,7 @@ fn sakashima_copies_a_legend_you_control_and_both_stay() {
     s.force_permanent_on_battlefield(1, "Gray Ogre");
     let sakashima = move_to_hand(&mut s, "Sakashima of a Thousand Faces");
     cast_card(&mut s, sakashima);
+    spend_colorless(&mut s);
     s.pass_priority();
     s.pass_priority();
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);

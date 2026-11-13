@@ -3,7 +3,7 @@
 use crate::support::{
     game::five_color_setup,
     inspect::{offered_cards, zone_of},
-    play::{cast, choose, pass_until, settle},
+    play::{cast, choose, pass_until, settle, spend_colorless},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
@@ -19,6 +19,7 @@ fn three_dreams_finds_up_to_three_differently_named_auras() {
     names.extend(auras);
     let mut s = five_color_setup(&names);
     cast(&mut s, "Three Dreams");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let mut chosen = Vec::new();
     for name in auras {

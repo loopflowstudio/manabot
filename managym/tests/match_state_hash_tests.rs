@@ -236,6 +236,7 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
         target_req_indices: Vec::new(),
         kicked: false,
         x: 0,
+        spent: Default::default(),
         mode: None,
     };
     let stack_object = StackObject::Spell(spell.clone());

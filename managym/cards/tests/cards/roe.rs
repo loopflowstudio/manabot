@@ -3,7 +3,7 @@
 use crate::support::{
     game::{five_color_setup, Scenario},
     inspect::{can_cast, library_card, permanent_named},
-    play::{activate_named, cast, choose, enter_and_settle, settle},
+    play::{activate_named, cast, choose, enter_and_settle, settle, spend_named},
 };
 use managym::{
     agent::action::Action,
@@ -66,6 +66,7 @@ fn prism_payment_preserves_required_blue_already_in_the_pool() {
     let mut s = five_color_setup(&["Prophetic Prism", "Gnarled Professor", "Counterspell"]);
     enter_and_settle(&mut s, "Forest");
     enter_and_settle(&mut s, "Prophetic Prism");
+    s.set_player_mana_pool(0, "2GG");
     let professor = cast(&mut s, "Gnarled Professor");
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     s.set_player_mana_pool(0, "U");
@@ -448,6 +449,8 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
                 |a| matches!(a, Action::CastSpell { object, .. } if *object == angel),
             );
             activate_named(&mut s, "Prophetic Prism", 0);
+            crate::support::inspect::assert_choice_contract(&s);
+            spend_named(&mut s, |label| label.contains("end of combat"));
             assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
@@ -475,14 +478,14 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
             activate_named(&mut s, "Prophetic Prism", 0);
             assert_eq!(s.game().state.players[0].mana_pool.mana[1], 0);
             assert_eq!(
-                s.game().state.players[0].mana_pool.restricted(),
-                restricted.restricted()
+                s.game().state.players[0].mana_pool.classes(),
+                restricted.classes()
             );
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
             assert_eq!(s.game().state.players[0].mana_pool.mana[4], 1);
             assert_eq!(
-                s.game().state.players[0].mana_pool.restricted(),
-                restricted.restricted()
+                s.game().state.players[0].mana_pool.classes(),
+                restricted.classes()
             );
         }
     }
@@ -547,4 +550,24 @@ fn training_grounds_reduces_creature_activations_to_no_less_than_one_mana() {
     assert_eq!(cost(&s, june).mana_value, 1);
     assert_eq!(cost(&s, prism), before[2]);
     assert_eq!(cost(&s, rival), before[3]);
+}
+
+#[test]
+fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
+    let mut s = five_color_setup(&["Prophetic Prism"]);
+    enter_and_settle(&mut s, "Prophetic Prism");
+    enter_and_settle(&mut s, "Forest");
+    let prism = permanent_named(&s, "Prophetic Prism");
+    let card = s.game().state.permanents[prism].as_ref().unwrap().card;
+    // A two-mana filter fee distinguishes full-cost production from a
+    // witness that spends one pooled unit before producing the rest.
+    s.game_mut().state.cards[card].activated_abilities[0].mana_cost =
+        managym::state::mana::ManaCost::parse("2");
+    s.set_player_mana_pool(0, "U");
+    activate_named(&mut s, "Prophetic Prism", 0);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    choose(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 4, .. })
+    });
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
 }

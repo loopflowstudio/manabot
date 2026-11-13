@@ -81,6 +81,10 @@ pub struct PendingTrigger {
     /// the spell that became it (CR 107.3m); otherwise 0.
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
+    /// For an entering permanent's own trigger, the mana spent to cast the
+    /// spell that became it; otherwise empty.
+    #[serde(skip_serializing_if = "crate::state::mana::ManaSpent::is_empty")]
+    pub spent: crate::state::mana::ManaSpent,
     /// The attacking creature whose attack triggered its own ability.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attacker: Option<crate::state::game_object::PermanentId>,

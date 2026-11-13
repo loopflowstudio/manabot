@@ -161,7 +161,7 @@ fn tokens_sharing_a_printed_name_stay_distinct_by_key() {
     let mut pack = ContentPack::default();
     let printed = pack.token_id("token.spirit").unwrap();
     pack.register_token(&TokenDefinition {
-        key: "token.plain_spirit",
+        key: "token.fixture_spirit",
         scryfall_id: None,
         printed: PrintedCharacteristics {
             name: "Spirit".into(),
@@ -170,10 +170,10 @@ fn tokens_sharing_a_printed_name_stay_distinct_by_key() {
             ..Default::default()
         },
     });
-    let plain = pack.token_id("token.plain_spirit").unwrap();
+    let plain = pack.token_id("token.fixture_spirit").unwrap();
     assert_ne!(plain, printed);
     assert_eq!(pack.definition_id("Spirit"), None);
-    for (key, row) in [("token.spirit", printed), ("token.plain_spirit", plain)] {
+    for (key, row) in [("token.spirit", printed), ("token.fixture_spirit", plain)] {
         let token = pack
             .instantiate_token(key, PlayerId(0), PublicId(1))
             .unwrap();

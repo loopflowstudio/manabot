@@ -5,7 +5,7 @@ use crate::support::{
     inspect::permanent_named,
     play::{
         activate_first, cast, choose, pass_until, play_and_settle, select_card, settle,
-        target_opponent,
+        spend_colorless, target_opponent,
     },
 };
 use managym::{
@@ -39,6 +39,7 @@ fn death_rewards_and_selected_activation_costs() {
         Some(ZoneType::Battlefield)
     );
     select_card(&mut s, fodder);
+    spend_colorless(&mut s);
     assert_eq!(
         s.game().state.zones.zone_of(fodder),
         Some(ZoneType::Graveyard)
@@ -59,6 +60,7 @@ fn bastion_uses_a_sacrificed_lands_last_known_creature_type() {
     source.change_counters(CounterKind::PlusOnePlusOne, 1);
     let object = source.object;
     cast(&mut s, "Cycle of Renewal");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, object);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
@@ -81,6 +83,7 @@ fn weaponize_keeps_its_exact_damage_source_after_removal() {
     activate_first(&mut s, source);
     target_opponent(&mut s);
     select_card(&mut s, fodder);
+    spend_colorless(&mut s);
     // Model a completed removal response before the activated ability resolves.
     s.game_mut().move_object(weapon, ZoneType::Graveyard);
     settle(&mut s);
