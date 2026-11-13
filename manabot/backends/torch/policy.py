@@ -379,11 +379,7 @@ class ActorCritic(nn.Module):
         self._cache_versions: tuple[tuple[int, int], ...] = ()
 
     def _binding(self) -> str:
-        return (
-            self.config.model_dump_json()
-            + "\n"
-            + self.observation_space.encoder.config.model_dump_json()
-        )
+        return admission.binding(self.config, self.observation_space)
 
     def _admission_spec(self) -> admission.Spec:
         key = (
@@ -602,7 +598,6 @@ class ActorCritic(nn.Module):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
-        programs = None
         if not isinstance(obs, Prepared) or not isinstance(obs.legal, torch.Tensor):
             raise TypeError(
                 "policy forward requires device Prepared rows from prepare/on_device"
@@ -613,11 +608,8 @@ class ActorCritic(nn.Module):
             raise ValueError(
                 "observation was admitted for a different policy configuration"
             )
-        if (
-            programs is None
-            and not torch.is_grad_enabled()
-            and self._program_cache is not None
-        ):
+        programs = None
+        if not torch.is_grad_enabled() and self._program_cache is not None:
             if self._cache_versions != self._parameter_versions():
                 raise RuntimeError(
                     "cached inference policy changed; clear_cache before reuse"
@@ -1036,20 +1028,13 @@ class PolicyInference:
         batch = self.agent.prepare(obs, inference=True)
         if self.cache_catalog:
             batch = replace(batch, programs=None)
-        self.transfer_bytes = (
-            0
+        arrays = (
+            []
             if self.device.type == "cpu"
-            else sum(
-                array.nbytes for array in _array_fields(batch, np.ndarray).values()
-            )
+            else _array_fields(batch, np.ndarray).values()
         )
-        self.transfers = (
-            0
-            if self.device.type == "cpu"
-            else len(
-                {array.dtype for array in _array_fields(batch, np.ndarray).values()}
-            )
-        )
+        self.transfer_bytes = sum(array.nbytes for array in arrays)
+        self.transfers = len({array.dtype for array in arrays})
         return replace(on_device(batch, self.device), guard=self._forward_check)
 
 

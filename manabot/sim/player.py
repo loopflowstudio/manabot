@@ -7,9 +7,6 @@ import numpy as np
 from manabot.env.observation import ObservationBuffers
 from manabot.policy.protocol import BackendPolicy
 
-# Local imports
-
-
 # -----------------------------------------------------------------------------
 # Player Classes
 # -----------------------------------------------------------------------------

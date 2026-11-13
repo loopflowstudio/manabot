@@ -274,7 +274,6 @@ def save_checkpoint(
         ),
         "source": checkpoint_source(),
         "architecture": agent.architecture_receipt().model_dump(mode="json"),
-        "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
             "agent_hypers": agent.config.checkpoint_payload(),
@@ -291,6 +290,7 @@ def save_checkpoint(
             card_vocab_size=agent.config.belief_card_vocab_size,
         )
     )
+    # Check before NumPy conversion, which refuses some floating types outright.
     for name, parameter in agent.named_parameters():
         if parameter.dtype != torch.float32:
             raise TypeError(

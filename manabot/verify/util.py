@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import numpy as np
 from pydantic import Field
 import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.config.load import deep_merge
 from manabot.env.env import Env
 from manabot.env.observation import ActionEnum, ObservationBuffers
@@ -52,13 +53,8 @@ def _tensor_observation(
     return on_device(
         agent.prepare(
             {
-                key: to_numpy(value)
-                for key, value in (
-                    {
-                        key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-                        for key, value in obs.items()
-                    }
-                ).items()
+                key: np.asarray(value, dtype=np.float32)[None]
+                for key, value in obs.items()
             },
             inference=not torch.is_grad_enabled(),
         ),

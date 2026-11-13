@@ -49,6 +49,11 @@ from manabot.infra.config import ModelConfig
 from manabot.policy.prepare import Tables
 
 
+def binding(model: ModelConfig, space: ObservationSpace) -> str:
+    """The configuration a prepared batch belongs to, independent of weights."""
+    return model.model_dump_json() + "\n" + space.encoder.config.model_dump_json()
+
+
 @dataclass(frozen=True)
 class Spec:
     """Configuration and immutable vocabularies shared by admission and preparation."""
@@ -60,11 +65,7 @@ class Spec:
 
     @property
     def binding(self) -> str:
-        return (
-            self.model.model_dump_json()
-            + "\n"
-            + self.space.encoder.config.model_dump_json()
-        )
+        return binding(self.model, self.space)
 
 
 def legal_mask(mask: np.ndarray) -> np.ndarray:

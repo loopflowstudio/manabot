@@ -433,9 +433,7 @@ class MLXActorCritic(nn.Module):
             obs,
             self._static.tables,
             inference=inference,
-            binding=admission.Spec(
-                self.config, self._static.space, self._static.tables, 0
-            ).binding,
+            binding=admission.binding(self.config, self._static.space),
         )
 
     def check_observation(self, obs: ObservationBuffers) -> None:
@@ -502,8 +500,7 @@ class MLXActorCritic(nn.Module):
         if not isinstance(batch, Prepared):
             raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
-        expected = admission.Spec(self.config, static.space, static.tables, 0).binding
-        if batch.binding != expected:
+        if batch.binding != admission.binding(self.config, static.space):
             raise ValueError("prepared batch belongs to another policy configuration")
         dims = self.dims
         hidden = dims.hidden
