@@ -50,7 +50,7 @@ struct ManaSource {
     waterbend: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct ManaActivation {
     tap_source: bool,
     tap_count: usize,
@@ -72,7 +72,7 @@ struct SourceReservation {
     sacrifice: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum PaymentStep {
     Fixed(PermanentId),
     Activate(PermanentId, usize),
@@ -133,6 +133,103 @@ enum SourcePolicy {
     All,
     FixedOnly,
     AutomaticPrefix,
+}
+
+/// Memoize feasibility modulo interchangeable resources, but never rewrite the
+/// live state or a returned witness. The first concrete DFS path still wins.
+#[derive(Default)]
+struct PaymentSearch {
+    groups: Vec<Vec<usize>>,
+    visited: std::collections::HashSet<PaymentSearchState>,
+    #[cfg(test)]
+    max_states: Option<usize>,
+}
+
+impl PaymentSearch {
+    fn new(model: &PaymentModel, obligations: &[Obligation]) -> Self {
+        // Membership in every possible counted-tap set is part of identity:
+        // equal mana producers need not be equal candidates for a saved cost.
+        let candidates = model
+            .sources
+            .iter()
+            .flat_map(|source| &source.abilities)
+            .map(|ability| &ability.tap_candidates)
+            .chain(
+                obligations
+                    .iter()
+                    .filter_map(|obligation| match obligation {
+                        Obligation::Tap { candidates, .. } => Some(candidates),
+                        _ => None,
+                    }),
+            )
+            .collect::<Vec<_>>();
+        // Most small boards have few duplicates. Do not allocate a member
+        // vector for every singleton just to discard it after classification.
+        let mut representatives: Vec<(usize, Option<usize>)> = Vec::new();
+        let mut groups: Vec<Vec<usize>> = Vec::new();
+        for (index, source) in model.sources.iter().enumerate() {
+            let equivalent = representatives.iter_mut().find(|(representative, _)| {
+                let other = &model.sources[*representative];
+                source.fixed == other.fixed
+                    && source.abilities == other.abilities
+                    && source.waterbend == other.waterbend
+                    && candidates.iter().all(|set| {
+                        set.contains(&source.permanent) == set.contains(&other.permanent)
+                    })
+            });
+            if let Some((representative, group)) = equivalent {
+                let group = group.get_or_insert_with(|| {
+                    groups.push(vec![*representative]);
+                    groups.len() - 1
+                });
+                groups[*group].push(index);
+            } else {
+                representatives.push((index, None));
+            }
+        }
+        Self {
+            groups,
+            ..Default::default()
+        }
+    }
+
+    fn insert(&mut self, state: &PaymentSearchState) -> bool {
+        let mut key = state.clone();
+        let resources = &state.resources;
+        let resource_key = |index: usize| {
+            (
+                resources.present[index],
+                resources.untapped[index],
+                &resources.used[index],
+            )
+        };
+        for group in &self.groups {
+            // Source-order success usually consumes an already sorted prefix.
+            // Allocate a permutation only for branches that need one.
+            if group
+                .windows(2)
+                .all(|pair| resource_key(pair[0]) <= resource_key(pair[1]))
+            {
+                continue;
+            }
+            let mut order = group.clone();
+            order.sort_unstable_by_key(|&index| resource_key(index));
+            for (&to, from) in group.iter().zip(order) {
+                key.resources.present[to] = resources.present[from];
+                key.resources.untapped[to] = resources.untapped[from];
+                key.resources.used[to].clone_from(&resources.used[from]);
+            }
+        }
+        let inserted = self.visited.insert(key);
+        #[cfg(test)]
+        if let Some(limit) = self.max_states {
+            assert!(
+                self.visited.len() <= limit,
+                "payment exceeded {limit} states"
+            );
+        }
+        inserted
+    }
 }
 
 struct PaymentModel {
@@ -223,7 +320,7 @@ impl PaymentModel {
         &self,
         state: PaymentSearchState,
         policy: SourcePolicy,
-        visited: &mut std::collections::HashSet<PaymentSearchState>,
+        visited: &mut PaymentSearch,
     ) -> Option<Vec<PaymentStep>> {
         if state.obligations.is_empty() {
             return Some(Vec::new());
@@ -296,7 +393,7 @@ impl PaymentModel {
             })
             .sum::<u64>();
         // Only states that need exploration need an owned visited key.
-        if total < owed || !visited.insert(state.clone()) {
+        if total < owed || !visited.insert(&state) {
             return None;
         }
         let first = state.obligations[0].clone();
@@ -529,6 +626,7 @@ impl PaymentModel {
             .find(|index| self.sources[*index].permanent == permanent)?;
         *remaining = remaining.checked_sub(1)?;
         resources.untapped[index] = false;
+        let mut search = PaymentSearch::new(self, &obligations);
         self.witness(
             PaymentSearchState {
                 resources,
@@ -538,7 +636,7 @@ impl PaymentModel {
                 prefix: None,
             },
             SourcePolicy::All,
-            &mut Default::default(),
+            &mut search,
         )
     }
 
@@ -548,6 +646,7 @@ impl PaymentModel {
         obligations: Vec<Obligation>,
         policy: SourcePolicy,
     ) -> Option<Vec<PaymentStep>> {
+        let mut search = PaymentSearch::new(self, &obligations);
         // Offers need one executable witness, not a proof of the fewest taps.
         // Only a nested automatic prefix minimizes early commitments.
         if policy != SourcePolicy::AutomaticPrefix {
@@ -560,11 +659,12 @@ impl PaymentModel {
                     prefix: None,
                 },
                 policy,
-                &mut Default::default(),
+                &mut search,
             );
         }
         // Minimize taps before the first Spend without starving a saved caller.
         for budget in 0..=self.sources.len() {
+            search.visited.clear();
             if let Some(path) = self.witness(
                 PaymentSearchState {
                     resources: self.resources(),
@@ -574,7 +674,7 @@ impl PaymentModel {
                     prefix: Some(budget),
                 },
                 policy,
-                &mut Default::default(),
+                &mut search,
             ) {
                 return Some(path);
             }
@@ -1501,11 +1601,9 @@ fn waterbend_obligations(cost: &ManaCost, waterbend: u8) -> Vec<Obligation> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::{
-        ManaActivation, ManaSource, Obligation, PaymentModel, PaymentSearchState, PaymentStep,
-        SourcePolicy,
+        ManaActivation, ManaSource, Obligation, PaymentModel, PaymentSearch, PaymentSearchState,
+        PaymentStep, SourcePolicy,
     };
     use crate::cards::content_pack::ContentPack;
     use crate::state::{
@@ -1524,6 +1622,300 @@ mod tests {
             cost: ManaCost::default(),
             outputs,
             life_cost: 0,
+        }
+    }
+
+    fn forests(count: usize) -> PaymentModel {
+        PaymentModel {
+            sources: (0..count)
+                .map(|index| ManaSource {
+                    permanent: PermanentId(index),
+                    card: CardId(index),
+                    untapped: true,
+                    fixed: Some(Mana::parse("G")),
+                    abilities: Vec::new(),
+                    waterbend: false,
+                })
+                .collect(),
+            life: 20,
+        }
+    }
+
+    fn pay(text: &str) -> Obligation {
+        Obligation::Pay {
+            cost: ManaCost::parse(text),
+            waterbend: false,
+        }
+    }
+
+    fn search_state(model: &PaymentModel, obligations: Vec<Obligation>) -> PaymentSearchState {
+        PaymentSearchState {
+            resources: model.resources(),
+            pool: Mana::default(),
+            life: model.life,
+            obligations,
+            prefix: None,
+        }
+    }
+
+    /// Compare full concrete witnesses with the identity-keyed DFS on small
+    /// boards; on large boards fail during exploration, before a stall can grow.
+    fn bounded_search(
+        model: &PaymentModel,
+        state: PaymentSearchState,
+        policy: SourcePolicy,
+        limit: usize,
+        compare: bool,
+    ) -> Option<Vec<PaymentStep>> {
+        let mut search = PaymentSearch::new(model, &state.obligations);
+        search.max_states = Some(limit);
+        let path = model.witness(state.clone(), policy, &mut search);
+        if compare {
+            let mut identities = PaymentSearch {
+                max_states: Some(20_000),
+                ..Default::default()
+            };
+            let original = model.witness(state, policy, &mut identities);
+            assert_eq!(path, original);
+        }
+        path
+    }
+
+    #[test]
+    fn payment_search_bounds_identical_land_subsets_in_automatic_prefixes() {
+        for count in [8, 24] {
+            let model = forests(count);
+            let mut state = search_state(&model, vec![pay(&count.to_string())]);
+            state.prefix = Some(count - 1);
+            assert!(bounded_search(
+                &model,
+                state,
+                SourcePolicy::AutomaticPrefix,
+                count,
+                count == 8
+            )
+            .is_none());
+            let path = model
+                .plan(
+                    Mana::default(),
+                    vec![pay(&count.to_string())],
+                    SourcePolicy::AutomaticPrefix,
+                )
+                .unwrap();
+            assert_eq!(
+                path[..count],
+                (0..count)
+                    .map(|index| PaymentStep::Fixed(PermanentId(index)))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    #[test]
+    fn payment_search_bounds_modal_and_restricted_bottlenecks() {
+        for count in [8, 24] {
+            let mut model = forests(count);
+            // One Herbalist-shaped source: any color, or two restricted mana.
+            model.sources.push(ManaSource {
+                permanent: PermanentId(count),
+                card: CardId(count),
+                untapped: true,
+                fixed: None,
+                waterbend: true,
+                abilities: vec![tapping_ability(vec![
+                    Mana::parse("U"),
+                    Mana::parse("R"),
+                    Mana::restricted_to(ManaRestriction::spell(["Lesson"]), [0, 2, 0, 0, 0, 0]),
+                ])],
+            });
+            let state = search_state(&model, vec![pay("U"), pay("U")]);
+            assert!(bounded_search(
+                &model,
+                state,
+                SourcePolicy::All,
+                20 * (count + 1),
+                count == 8
+            )
+            .is_none());
+            // Fixed-only probes must not enumerate the lands trying to reach
+            // a color available solely from a visible modal activation.
+            let state = search_state(&model, vec![pay("U")]);
+            assert!(bounded_search(
+                &model,
+                state,
+                SourcePolicy::FixedOnly,
+                count + 1,
+                count == 8
+            )
+            .is_none());
+        }
+    }
+
+    #[test]
+    fn payment_search_bounds_counted_taps_competing_with_mana() {
+        for count in [8, 24] {
+            let model = forests(count);
+            let state = search_state(
+                &model,
+                vec![
+                    Obligation::Tap {
+                        candidates: model
+                            .sources
+                            .iter()
+                            .map(|source| source.permanent)
+                            .collect(),
+                        remaining: count / 2,
+                    },
+                    pay(&(count / 2 + 1).to_string()),
+                ],
+            );
+            assert!(bounded_search(&model, state, SourcePolicy::All, count, count == 8).is_none());
+        }
+    }
+
+    #[test]
+    fn payment_search_bounds_seedless_nested_filters() {
+        for count in [6, 24] {
+            let mut model = forests(count);
+            let mut filter = tapping_ability(vec![Mana::parse("U")]);
+            filter.cost = ManaCost::parse("U");
+            for index in count..count + 2 {
+                model.sources.push(ManaSource {
+                    permanent: PermanentId(index),
+                    card: CardId(index),
+                    untapped: true,
+                    fixed: None,
+                    abilities: vec![filter.clone()],
+                    waterbend: false,
+                });
+            }
+            let state = search_state(&model, vec![pay("U")]);
+            assert!(bounded_search(
+                &model,
+                state,
+                SourcePolicy::All,
+                10 * (count + 1),
+                count == 6
+            )
+            .is_none());
+        }
+    }
+
+    #[test]
+    fn payment_search_preserves_witnesses_and_counted_tap_membership() {
+        let mut model = forests(4);
+        let mut sacrifice = tapping_ability(vec![Mana::parse("U"), Mana::parse("R")]);
+        sacrifice.tap_source = false;
+        sacrifice.sacrifice_source = true;
+        for source in &mut model.sources {
+            source.abilities.push(sacrifice.clone());
+            source.waterbend = true;
+        }
+        // Only the first land can pay a later counted tap. A failed branch
+        // spending it must not hide the successful branch spending land #1.
+        let obligations = vec![
+            pay("1"),
+            Obligation::Tap {
+                candidates: vec![PermanentId(0)],
+                remaining: 1,
+            },
+            pay("U"),
+        ];
+        let state = search_state(&model, obligations);
+        let path = bounded_search(&model, state, SourcePolicy::All, 1000, true).unwrap();
+        assert!(matches!(path[0], PaymentStep::Fixed(PermanentId(1))));
+        // Vary initial resources, colors and prefix policy; compare the
+        // complete first witness, not only feasibility or a final mana total.
+        for mask in 0..16 {
+            for text in ["2", "GU", "UU", "UR", "5"] {
+                for policy in [
+                    SourcePolicy::All,
+                    SourcePolicy::FixedOnly,
+                    SourcePolicy::AutomaticPrefix,
+                ] {
+                    let mut state = search_state(&model, vec![pay(text)]);
+                    for index in 0..4 {
+                        state.resources.untapped[index] = mask & (1 << index) == 0;
+                    }
+                    if policy == SourcePolicy::AutomaticPrefix {
+                        state.prefix = Some(2);
+                    }
+                    bounded_search(&model, state, policy, 2000, true);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn payment_search_keeps_future_tap_membership_and_limited_uses() {
+        let mut model = forests(4);
+        let mut filter = tapping_ability(vec![Mana::parse("U")]);
+        filter.cost = ManaCost::parse("1");
+        filter.tap_count = 1;
+        filter.tap_candidates = vec![PermanentId(0)];
+        model.sources.push(ManaSource {
+            permanent: PermanentId(4),
+            card: CardId(4),
+            untapped: true,
+            fixed: None,
+            abilities: vec![filter],
+            waterbend: false,
+        });
+        let state = search_state(&model, vec![pay("U")]);
+        let path = bounded_search(&model, state, SourcePolicy::All, 200, true).unwrap();
+        assert!(matches!(path[0], PaymentStep::Fixed(PermanentId(1))));
+
+        let mut model = forests(3);
+        let mut limited = tapping_ability(vec![Mana::parse("U")]);
+        limited.tap_source = false;
+        limited.limited = true;
+        limited.life_cost = 1;
+        for source in &mut model.sources {
+            source.abilities.push(limited.clone());
+        }
+        for mask in 0..8 {
+            let mut state = search_state(&model, vec![pay("UU")]);
+            state.life = 1; // Output life costs, too, survive canonicalization.
+            for index in 0..3 {
+                state.resources.used[index][0] = mask & (1 << index) != 0;
+                state.resources.present[index] = index != 2;
+            }
+            assert!(bounded_search(&model, state.clone(), SourcePolicy::All, 200, true).is_none());
+            state.life = 2;
+            bounded_search(&model, state, SourcePolicy::All, 200, true);
+        }
+    }
+
+    #[test]
+    fn payment_search_bounds_repeat_activations_sharing_counted_taps() {
+        for count in [6, 24] {
+            let mut model = forests(count);
+            // Two Cabbage Merchant-shaped abilities share the same Food taps.
+            for source in &mut model.sources {
+                source.fixed = None;
+            }
+            let mut counted = tapping_ability(vec![Mana::parse("U")]);
+            counted.tap_source = false;
+            counted.tap_count = 2;
+            counted.tap_candidates = model
+                .sources
+                .iter()
+                .map(|source| source.permanent)
+                .collect();
+            for index in count..count + 2 {
+                model.sources.push(ManaSource {
+                    permanent: PermanentId(index),
+                    card: CardId(index),
+                    untapped: true,
+                    fixed: None,
+                    abilities: vec![counted.clone()],
+                    waterbend: false,
+                });
+            }
+            let state = search_state(&model, vec![pay(&"U".repeat(count / 2 + 1))]);
+            assert!(bounded_search(&model, state, SourcePolicy::All, 1000, count == 6).is_none());
+            let state = search_state(&model, vec![pay(&"U".repeat(count / 2))]);
+            assert!(bounded_search(&model, state, SourcePolicy::All, 1000, count == 6).is_some());
         }
     }
 
@@ -1548,7 +1940,7 @@ mod tests {
             })
             .collect();
         let model = PaymentModel { sources, life: 20 };
-        let mut visited = HashSet::new();
+        let mut visited = PaymentSearch::default();
         let state = PaymentSearchState {
             resources: model.resources(),
             pool: Mana::default(),
@@ -1569,7 +1961,7 @@ mod tests {
             .witness(state, SourcePolicy::All, &mut visited)
             .is_none());
         // Count explored states instead of asserting a host-dependent duration.
-        assert!(visited.is_empty());
+        assert!(visited.visited.is_empty());
 
         let path = model
             .plan(

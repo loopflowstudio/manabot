@@ -276,7 +276,14 @@ joins. Single-object costs keep their serialized definition shape.
 Every registered mana ability must consume a finite resource. The total and
 spend-purpose bounds count repeatable outputs optimistically; every accepted
 payment still requires an identity-preserving witness with explicit tap choices.
-This is finite search, without a general large-board performance guarantee.
+The whole-payment bound counts only spendable outputs and takes the maximum
+of competing uses of one tap. Search memoization shares feasibility across
+interchangeable sources (including membership in every counted-tap set), while
+retaining source order and exact identities in the first witness. Repeated lands
+therefore contribute resource counts instead of all identity subsets. Distinct
+source behaviors, overlapping tap sets, nested obligations and concrete pool
+remainders can still make exact search combinatorial; there is no general
+large-board work limit or truncation of legal payments.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
