@@ -33,7 +33,8 @@ reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 ```sh
 uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
+uv run etude launch experiments/elemental.py --revision COMMIT --updates 3200 \
+    --hours 11.9 --usd-per-run 9 --rent l4
 ```
 
 A file defining `report()` or `eval(state)` is an Etude experiment, named for
@@ -48,7 +49,7 @@ draws them. Etude tells each run it launches from the file that stem, and the
 | file | `runs()` | `eval(state)` | `report()` |
 | --- | --- | --- | --- |
 | [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, pairs |
-| [seat_comparison](seat_comparison.py) (MTG-165) | one- and two-seat arms × four seeds | — | score on learner transitions, one-seat dotted |
+| [seat_comparison](seat_comparison.py) (MTG-165) | retired; requires pre-cutover source `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` | — | score on learner transitions, one-seat dotted |
 | [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups, head to head |
 
 Perf and ML details draw self-play's own keys ([`manabot.training.panels`](../manabot/training/panels.py)),

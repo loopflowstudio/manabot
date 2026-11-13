@@ -1,6 +1,7 @@
 """Step 1 of the training-throughput experiment: is collection the bottleneck? (Task b015d5)
 
-Execution is retired; use the named historical revision.
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
 
 Protocol: experiments/protocols/training-throughput-b015d5-v1.md. One Etude run per
 rented machine runs `PHASES` in sequence on that host. Each phase starts its

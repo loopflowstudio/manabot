@@ -1,5 +1,8 @@
 """MTG-301: where an L4 learner step and a collection forward spend their time.
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Exploratory. One rented L4 runs, in order:
 
 1. `insitu`: the frozen MTG-267 w160l8 regime (`experiments.tla_frontier.frozen()`)

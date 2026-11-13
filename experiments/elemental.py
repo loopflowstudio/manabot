@@ -11,7 +11,8 @@ experiments/protocols/elemental-174.md and elemental-183.md.
 
 This file is the experiment `elemental` for Etude:
 
-- `runs()` trains fresh seeds of the frozen recipe (`etude launch`);
+- `runs()` trains fresh seeds with the current loop and `elemental_self_play()`
+  settings, without current-game recovery (`etude launch`);
 - `eval(state)` asks for the grid and pairs of each run's rated checkpoints,
   played by `experiments.elemental_long_eval.play` (`etude eval`);
 - `report()` draws them beside training (`etude report`).

@@ -1,5 +1,8 @@
 """Ataraxos treatment ablation arms (experiments/ataraxos-mtg-ablations.md).
 
+The command below records historical execution and refuses at this
+revision; retained reports and evaluation remain readable.
+
 Each arm is `direct_self_play`'s setup with only some Ataraxos treatments kept:
 separate policy/value estimators (value lambda 1), advantage filtering (half the
 samples retained) and coordinated learning-rate/regularization decay.

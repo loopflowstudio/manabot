@@ -1,5 +1,8 @@
 """MTG-186: one two-seat seed trained only on UR vs GW, compared with MTG-181.
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Jack Heart's question (2026-10-25): does training on the one matchup beat
 MTG-181's training on all ten Elemental decks, on that matchup and across the
 other 99 grid cells? The protocol is experiments/protocols/mtg186.md; the

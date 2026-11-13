@@ -30,7 +30,8 @@ reusable instruments. A file defining `report()` or `eval(state)` is an
 runs track under its stem:
 
 ```sh
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
+uv run etude launch experiments/elemental.py --revision COMMIT --updates 3200 \
+    --hours 11.9 --usd-per-run 9 --rent l4
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs     # play what is new
 uv run etude report experiments/elemental.py --source r2://manabot/jobs --serve  # draw what it played
 ```

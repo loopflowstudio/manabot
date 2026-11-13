@@ -1,5 +1,8 @@
 """MTG-317: CUDA training under TF32 and BF16 against float32 on one L4.
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Report and the acceptance rule fixed before any scored run:
 `experiments/cuda_precision.md`. One rented L4 runs `measure` (`etude.call`):
 

@@ -1,5 +1,8 @@
 """One-seat versus two-seat self-play from scratch, matched per learner decision (MTG-165).
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Jack Heart's question (2026-10-22): is score against the heuristic at N
 learner decisions the same whether the decisions come from one seat or both?
 If so, two-seat at E environment decisions matches one-seat at 2E. Four seeds

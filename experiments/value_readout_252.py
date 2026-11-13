@@ -11,7 +11,8 @@ the Etude launch of every arm under one shared seed list. The completed study
 extended the original 3 arms x 3 seeds x 150 updates to 300 updates and two
 depth-4 arms, under a USD55 total cap. Results are in
 `experiments/value-readout-252-results.md`. The commands below record the
-historical launch procedure; executed runs require their pinned revisions:
+historical launch procedure and refuse at this revision; executed runs require
+their pinned revisions, and reports and evaluation still read:
 
     doppler run -p etude -c prd -- doppler run -p manabot -c prd \\
         --preserve-env=RUNPOD_API_KEY -- \\

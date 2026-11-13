@@ -109,22 +109,12 @@ cost). `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pyt
 SDK release/pin, installed-consumer checks and launcher/service proofs remain
 pending.
 
-Fifth recheck (after review 4 implementation): PR #103 still open at
-`105abdd`; origin/main still `105e7e2aa`; pins still 0.2.16. Code matches
-the review-4 section (loop phase/resource rows, `training_seconds`, the
-benchmark calling `self_play`, `FROZEN_EXECUTION_REVISION` in regime.py). No
-tests rerun.
-Fourth recheck (after review 3 implementation): PR #103 unchanged, open at
-`105abdd`; main has not moved past `105e7e2aa`; nothing new to merge.
-Third realign recheck: Etude PR #103 is still OPEN at
-`105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (`mergedAt: null`); `pyproject.toml`
-still requires 0.2.16. Main advanced to `105e7e2aa` (player-chosen mana
-spending, Heartbeat of Spring), merged here as `117f2d22b`/`85fd4607e`. Among
-training-adjacent paths it changed only `manabot/env/observation.py` and
-`manabot/semantic/text_observation.py`; no loop, learner, recipe, fixture or
-dependency file. The parity proof compared against main `6ce618b8a`, before
-that observation change; it is not rerun here. Gate's focused checks cover the
-merged observation code. No tests were rerun for realign.
+Rechecks three to five found PR #103 unchanged and merged main `105e7e2aa`
+(`117f2d22b`/`85fd4607e`), which among training-adjacent paths changed only
+`manabot/env/observation.py` and `manabot/semantic/text_observation.py`. The
+parity proof compared against main `6ce618b8a`, before that observation
+change, and was not rerun; gate's focused checks cover the merged code.
+Detail: `6c955b5d6:scratch/plan.md`.
 
 ## Concept reviews 1–3: implemented — 2026-11-13
 
@@ -218,33 +208,30 @@ SDK release/pin, installed-consumer and actual launcher/service proofs remain
 delivery obligations. Open CLI-config/local-follower judgments remain in
 questions.md. Focused validation is recorded in implementation.md.
 
-## Concept review 6: next implement direction — 2026-11-13
+## Concept review 6: implemented — 2026-11-13
 
-Proposals drawn from the design, not statements anyone made. Walked the three
+Proposals drawn from the design, not statements anyone made. Walking the three
 paths a person takes (local train/stop/resume/extend, `etude launch` of an
-experiment file, reading a frozen experiment). Recipes, loop, CLI, recovery
-table and the nightly call agree with the guides. One mismatch remains: the
-current guides still present a frozen launcher as the way to launch.
+experiment file, reading a frozen experiment) found recipes, loop, CLI,
+recovery table and the nightly call agreeing with the guides, except that the
+guides launched a frozen experiment. Now:
 
-1. `docs/experiments.md` ("What an experiment is") and `experiments/README.md`
-   ("Etude experiment files") show `etude launch experiments/seat_comparison.py`,
-   whose `runs()` now refuses. Use `experiments/elemental.py` (the one file
-   whose `runs()` launches the current loop) in both examples. In the README
-   table, the seat_comparison `runs()` cell says it is retired and names the
-   pre-cutover source, as the recipe table above it already does.
-2. Frozen experiment modules whose header still describes launching in the
-   present tense (`seat_comparison`, `training_throughput`, `l4_step_profile`,
-   `cuda_precision`, `value_readout_252`, `mtg186`, `ataraxos_ablation`) get
-   one header sentence: the launch commands record how it ran and refuse at
-   this revision; reports and evaluation still read. Keep the commands; do not
-   touch report `.md` files, protocols or data (frozen evidence).
-3. `experiments/elemental.py` header says `runs()` "trains fresh seeds of the
-   frozen recipe"; it launches the current loop with `elemental_self_play()`
-   settings (no current-game recovery). Say that, matching its `runs()`
-   docstring.
+- `docs/experiments.md` and `experiments/README.md` launch
+  `experiments/elemental.py` with its required `--updates`, `--hours` and
+  `--usd-per-run`; the README table marks seat_comparison's `runs()` retired,
+  naming the pre-cutover source.
+- The frozen modules with launch commands in their headers (`seat_comparison`,
+  `training_throughput`, `l4_step_profile`, `cuda_precision`,
+  `value_readout_252`, `mtg186`, `ataraxos_ablation`) say those commands record
+  how the experiment ran and refuse at this revision. Commands, report `.md`
+  files, protocols and data are unchanged.
+- `experiments/elemental.py`'s header says `runs()` launches the current loop
+  with `elemental_self_play()` settings, without current-game recovery.
 
-Docs and docstrings only; no test or parity rerun follows from this. Checked
-and left alone: nightly train and evaluate each get 1680 s under the 1800 s
-step timeout, the same shape as main's recipe (`wall_seconds` for training and
-again for monitoring). Etude PR #103 still OPEN at `105abdd`. Open choices are
-unchanged (questions.md: CLI recipe-config fields, local follower).
+Docs and docstrings only; no test or parity rerun follows. Checked and left
+alone: nightly train and evaluate each get 1680 s under the 1800 s step
+timeout, the shape of main's recipe. Open choices are unchanged (questions.md:
+CLI recipe-config fields, local follower).
+
+Validation: `git diff --check` and Ruff on the touched modules passed; launch
+arguments checked against `experiments.elemental.runs`.
