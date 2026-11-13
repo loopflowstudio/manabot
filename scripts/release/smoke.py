@@ -56,7 +56,7 @@ def main() -> None:
         timeout=180,
     )
     policy, _ = load_checkpoint(
-        str(output / "etude/track/local/smoke/out/policies/00000002-raw.pt")
+        str(output / "etude/track/local/smoke-seed-0/out/policies/00000002-raw.pt")
     )
     assert not policy.training
     print(

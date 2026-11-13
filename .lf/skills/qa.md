@@ -227,12 +227,15 @@ publish, land or choose the next Graph step from here.
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
 - Training recipes: run `uv run etude run manabot/recipes/local.py --name smoke`.
-  Inspect `~/.etude/track/local/smoke/` (or `$ETUDE_HOME/track/local/smoke/`):
-  `run.json`, logged rows, `out/state/state.json`, framework state files and
+  Inspect `~/.etude/track/local/smoke-seed-0/` (or `$ETUDE_HOME/track/local/smoke-seed-0/`):
+  `run.json`, logged rows, `out/state/current.json` and the save folder it
+  names (`state.json` with the framework state files), and
   immutable `out/policies/`. A second new run with that name must refuse.
   For a planned stop, use a larger config update count with `--seconds 1`;
   expect exit 75, then `--resume RUN` to finish the same run. To extend a
-  finished run, use `etude continue --run RUN --until updates=N`.
+  finished run, use `--resume RUN --until updates=N`; without a later target
+  it must refuse. `etude continue --run RUN --until updates=N` makes a child
+  run and leaves the first unchanged.
   Device and other recipe fields are passed with `--config JSON`; the seed
   is the run's `--seed`, not a config field. Check raw/EMA checkpoint tensors
   with matched small inputs. Fetch artifacts through Doppler without printing

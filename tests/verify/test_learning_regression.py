@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from etude.train.run import local_launch
 import pytest
 
 from manabot.recipes.baseline import BaselineConfig, settings, train
@@ -118,15 +117,20 @@ def test_complete_cohort_keeps_no_update_inconclusive(tmp_path: Path) -> None:
 
 def test_recipe_report_preserves_paired_deals_and_policy_inspection(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
 
-    config = BaselineConfig(updates=1, seed=197, device="cpu")
-    with local_launch(out=tmp_path, experiment="baseline"):
-        train(config)
+    config = BaselineConfig(updates=1, device="cpu")
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "baseline")
+    monkeypatch.setenv("ETUDE_RUN", "baseline-seed-197")
+    monkeypatch.setenv("ETUDE_SEED", "197")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    train(config)
     report = report_recipe(
         tmp_path,
         settings(config),
-        seed=config.seed,
+        seed=197,
         updates=1,
         deals=(1_915_100_000, 1_915_100_001),
         seconds=90,

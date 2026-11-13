@@ -33,7 +33,7 @@ from pathlib import Path
 from etude.eval.records import Benchmark, Inference, Matchup, Player
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation, training
-from etude.launch.records import Job, Run
+from etude.launch.records import Job
 from etude.report import (
     Anchors,
     Curve,
@@ -92,20 +92,19 @@ def runs(
     hours: float,
     usd_per_run: float,
     seed: int = 18101,
-) -> list[Run]:
+) -> Job:
     """Launch current-world self-play; frozen regimes use their recorded revision."""
     return training(
         train,
-        config=ElementalConfig(
-            seed=seed, updates=updates, device="cuda", validate_numerics=True
-        ),
-        smoke=ElementalConfig(seed=seed, updates=1, device="cpu", streams=2),
+        config=ElementalConfig(updates=updates, device="cuda", validate_numerics=True),
+        smoke=ElementalConfig(updates=1, device="cpu", streams=2),
+        seeds=(seed,),
         repo=str(ROOT),
         revision=revision,
         setup=machine_setup(" --extra artifacts"),
         max_hours=hours,
         max_usd=Decimal(str(usd_per_run)),
-    ).runs(seed)
+    )
 
 
 # ---------------------------------------------------------------------------

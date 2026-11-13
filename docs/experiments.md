@@ -149,14 +149,14 @@ and evaluates its checkpoints on the existing paired-deal grid. A local run
 calls the same function:
 
 ```bash
-uv run etude run manabot/recipes/elemental.py --seed 197 --name elemental-197
-uv run etude run manabot/recipes/elemental.py --resume elemental-197
+uv run etude run manabot/recipes/elemental.py --seed 197
+uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197
 ```
 
-The first command is always a new run; the second is another attempt of that
-run from its last saved state. An Etude continuation sets the target
-with `--until updates=N`, preserving the recipe's settings and the parent's
-output. See [training](training.md#recovery) for the guarantees and limits.
+The first command is always a new run, named for its job and seed; the second
+is another attempt of that run from its last saved state. `--resume RUN
+--until updates=N` takes the same run to a later target, and `etude continue`
+starts a new run from its state; neither changes the recipe's settings. See [training](training.md#recovery) for the guarantees and limits.
 
 The nightly baseline runs `manabot/recipes/baseline.py` with `etude run` and
 then calls `evaluate(config, directory)` on that run's `out`. Evaluation compares the initial and final raw

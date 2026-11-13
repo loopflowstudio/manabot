@@ -38,40 +38,44 @@ records is ordinary files in a directory you own.
 
 ```bash
 uv run etude run manabot/recipes/local.py                                # a two-update smoke on CPU
-uv run etude run manabot/recipes/elemental.py --seed 197 --name elemental-197
+uv run etude run manabot/recipes/elemental.py --seed 197
 ```
 
 Each command starts a new run and prints its id. The second trains the current
 Elemental recipe (damped-policy self-play on the ten Elemental decks, both
-seats learning) as the run `elemental-197` of the experiment `elemental`, the
-recipe file's name. Local runs are written under `~/.etude/track` (moved by
-`ETUDE_HOME`):
+seats learning) as the run `elemental-seed-197` of the experiment `elemental`:
+a run is named for its job and its seed, and both the job and the experiment
+take the recipe file's name. Local runs are written under `~/.etude/track`
+(moved by `ETUDE_HOME`):
 
 ```text
-~/.etude/track/elemental/elemental-197/
-  run.json              the job, seed, config and clocks
-  ...                   logged rows and tables
+~/.etude/track/elemental/elemental-seed-197/
+  run.json                the job, seed, config and clocks
+  ...                     logged rows and tables
   out/
-    state/              what the next attempt loads; replaced whole at each save
-      state.json        where each clock stood, the seed, the commit, cumulative counts and the file names
-      learner.pt        raw weights (a `state_dict` written with `torch.save`)
-      optimizer.pt      Adam
-      ema.pt            EMA weights
-    policies/           world-bound raw and EMA policies, named by update and never rewritten
-    game-attempts/      append-only ledgers when game-error handling is configured
-    failures/           private replay evidence, created when a game fails
+    state/                what the next attempt loads
+      current.json        names the save to load; written last
+      save-00000012/      one save, complete in itself and never changed
+        state.json        where each clock stood, the seed, the commit, cumulative counts and the file names
+        learner.pt        raw weights (a `state_dict` written with `torch.save`)
+        optimizer.pt      Adam
+        ema.pt            EMA weights
+    policies/             world-bound raw and EMA policies, named by update and never rewritten
+    game-attempts/        append-only ledgers when game-error handling is configured
+    failures/             private replay evidence, created when a game fails
 ```
 
 The policy a run trained is its last checkpoint: `out/policies/00003200-ema.pt`
 for a recipe that reached update 3200. `state/` reads with `json` and
-`torch.load`, without Etude or manabot.
+`torch.load`, without Etude or manabot. Read it through `current.json`: a save
+folder it does not name is being written or waiting to be removed.
 
 | Option | Sets |
 | --- | --- |
 | `--config JSON` | Fields of the recipe's config; the rest keep their defaults. `--config '{"device": "cuda", "streams": 64}'` |
 | `--seed N` | The run's seed (0 when omitted). The seed is the run's, never a config field. |
-| `--name NAME` | The run's id. It must be new within its experiment: a taken name is refused, never resumed. |
-| `--until updates=N` | Where this run stops, in place of the recipe's own update count. |
+| `--name NAME` | The job's name in place of the file's, so the run is `NAME-seed-N`. A run id must be new within its experiment: a taken one is refused, never resumed. |
+| `--until updates=N` | Where this run stops, in place of the recipe's own update count. With `--resume`, a later target for that run. |
 | `--seconds N` | A deadline. A run that reaches it saves its state and stops. |
 | `--resume RUN` | Another attempt of an existing run instead of a new one ([recovery](#recovery)). |
 
@@ -81,18 +85,23 @@ failed. A run that ended without finishing, whether it stopped, failed or was
 interrupted with Ctrl-C, is carried on with `--resume`:
 
 ```bash
-uv run etude run manabot/recipes/elemental.py --resume elemental-197
+uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197
 ```
 
 That is a new attempt of the same run on the current code, from its last saved
-state, with the config and seed the run recorded. Work since that save is
-repeated. `--resume` refuses a finished run, and refuses a config or seed that
-differs from the run's, naming the fields. To train a finished run further,
-continue it as a new run that starts from the first one's state:
+state, with the config, seed and target the run recorded. Work since that save
+is repeated. `--resume` refuses a config or seed that differs from the run's,
+naming the fields. A later target takes the same run further, whether or not
+it had finished:
 
 ```bash
-uv run etude continue --run elemental-197 --until updates=6400
+uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197 --until updates=6400
 ```
+
+Its rows, checkpoints and id go on as one run. A finished run resumed with no
+later target has nothing left to do and is refused. `etude continue` is for
+the other case, a new run that starts from this one's state and leaves it as
+it is ([recovery](#recovery)).
 
 `--until updates=N` sets only the stop target. It leaves the recipe's own
 update count, which fixes the baseline rates and the checkpoint grid,
@@ -209,27 +218,40 @@ would write:
 
 ```python
 def self_play(settings: SelfPlay, run: Run, *, updates: int) -> Path:
-    """Train to the run's update target and return the final policy's path."""
+    """Train to the run's update target and return its final world-bound policy."""
+    settings = SelfPlay.model_validate(settings.model_dump())
+    if updates < 1:
+        raise ValueError("updates must be positive")
     with device_settings(settings):
         learner, ema = create(settings, seed=run.seed)
-        counts = run.resume(
-            learner=learner.agent, optimizer=learner.optimizer, ema=ema, extra=Counts()
-        )
-        with self_play_games(settings, run) as collector:
-            if counts.updates == 0:
-                publish(run, learner, ema, counts)  # the untrained policy
+        # No EMA object exists for recipes that do not average their policy.
+        objects: dict[str, object] = {
+            "learner": learner.agent,
+            "optimizer": learner.optimizer,
+        }
+        if ema is not None:
+            objects["ema"] = ema
+        counts = run.resume(**objects, extra=Counts())
+        rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
+        # Repair an unrecorded milestone without rewriting its immutable bytes.
+        if counts.updates == 0 or is_checkpoint(settings, counts.updates):
+            publish(settings, run, learner, ema, counts)
+        with self_play_games(settings, run, counts) as collector:
             for update in run.steps("updates", to=updates):
-                counts, row = step(settings, learner, ema, collector, counts)
-                run.log(row, training_seconds=counts.training_seconds)
-                run.log_table(
-                    OUTCOME_TABLE,
-                    collector.stats.self_play.drain(),
-                    training_seconds=counts.training_seconds,
+                row = step(
+                    settings, learner, ema, collector, counts, rng, out=run.out
                 )
+                run.log(row, training_seconds=counts.training_seconds)
+                if settings.behavior != "random":
+                    run.log_table(
+                        OUTCOME_TABLE,
+                        collector.stats.self_play.drain(),
+                        training_seconds=counts.training_seconds,
+                    )
                 run.save()
                 if is_checkpoint(settings, update):
-                    publish(run, learner, ema, counts)
-        return publish(run, learner, ema, counts)
+                    publish(settings, run, learner, ema, counts)
+        return publish(settings, run, learner, ema, counts)
 ```
 
 It returns the policy it trained: the EMA checkpoint of its last update when
@@ -240,9 +262,9 @@ branch, stop check or state file in it. Those are the run's:
 | --- | --- |
 | `track(clocks=, config=)` | The run. Leaving the block finishes the attempt: as stopped when the block raised `Stopped`, as failed on any other exception. |
 | `run.seed` | This run's seed. |
-| `run.resume(**objects, extra=)` | Registers what the run keeps, anything with `state_dict()` and `load_state_dict()`, and loads the last save into it. `extra` is a Pydantic model for the loop's own numbers, here `Counts`; it comes back as saved, or as given on a fresh run. |
-| `run.steps("updates", to=)` | Counts from the resumed update to the target: the launch's (`--until`, a continuation) or else `to`. When a stop is asked for or the deadline is near, the current pass finishes and the next raises `Stopped`, so the lines after the loop run only when the target was reached. |
-| `run.save()` | Called every pass. Etude writes the registered objects when a save is due and always on the last pass before a stop; a write replaces the previous state whole or not at all. |
+| `run.resume(**objects, extra=)` | Registers what the run keeps, anything with `state_dict()` and `load_state_dict()`, and loads the last save into it. `extra` is a Pydantic model for the loop's own numbers, here `Counts`; it comes back with the saved values loaded, or as given on a fresh run, and Etude saves that object as it stands, so the loop changes its fields in place. |
+| `run.steps("updates", to=)` | Counts from the resumed update to the target: the launch's (`--until`) or else `to`. When a stop is asked for or the deadline is near, the current pass finishes and the next raises `Stopped`, so the lines after the loop run only when the target was reached. |
+| `run.save()` | Called every pass. Etude writes the registered objects when a save is due and always on the last pass before a stop; each save is a new folder that `current.json` names only once it is complete, so the next attempt loads weights, Adam and EMA from one save. |
 | `run.log`, `run.log_table` | Metric rows and row tables on the declared clocks. The stepped clock is filled in; the loop passes `training_seconds`. |
 | `run.checkpoint(path)` | Publishes an immutable policy with where every clock stood. Evaluations, reports and other runs read these. |
 | `run.out` | The run's directory, the same on every attempt. Under a launch Etude carries it to storage as it is written and restores it before an attempt on another machine. |
@@ -258,11 +280,11 @@ The pieces that are manabot's:
 | --- | --- |
 | `SelfPlay` | The loop's settings: match and decks, model and observation configs, the update and its learning record, streams, transitions, learning seats, batch closure, game-error policy, workers, device, precision and `checkpoint_every`. A Pydantic model holding data only; everything the loop does with it is a function. A recipe builds one in its body (`elemental_self_play()`). |
 | `create(settings, seed=)` | A `Learner` (model and Adam) with fresh weights from `seed`, and the EMA as a copy, or `None` when the learning record keeps none. `run.resume` then loads a saved run over them. |
-| `Counts` | Cumulative work across every attempt: completed updates, `training_seconds`, games, decisions, learner transitions and optimizer calls. A Pydantic model, saved in `state.json`. |
-| `self_play_games(settings, run)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. Streams, sampling and minibatch order are seeded from `run.seed` and the update the attempt starts at, so a resumed loop plays fresh, reproducible games. |
-| `step(settings, learner, ema, collector, counts)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `Counts` with the metric row. The learner, Adam and EMA are updated in place. |
+| `Counts` | Cumulative work across every attempt: completed updates, `training_seconds`, games, decisions, learner transitions and optimizer calls. A Pydantic model, saved in each save's `state.json`. |
+| `self_play_games(settings, run, counts)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. Streams, sampling and minibatch order are seeded from `run.seed` and the update the attempt starts at, so a resumed loop plays fresh, reproducible games. |
+| `step(settings, learner, ema, collector, counts, rng, out=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the metric row. The learner, Adam, EMA and `counts` are updated in place. |
 | `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
-| `publish(run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
+| `publish(settings, run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
 The loop takes Etude's `Run`; there is no untracked path through it. The
 updates and pieces it calls need no run
@@ -319,10 +341,10 @@ def train(config: BeliefConfig) -> None:
 
 def runs() -> list[Job]:
     policy = training(
-        belief_policy.train, config=PolicyConfig(), seeds=(197,), max_hours=1, max_usd=Decimal(1)
+        belief_policy.train, name="policy", config=PolicyConfig(), seeds=(197,), max_hours=1, max_usd=Decimal(1)
     )
     sampler = training(
-        train, config=BeliefConfig(), start=policy, seeds=(197,), max_hours=1, max_usd=Decimal(1)
+        train, name="sampler", config=BeliefConfig(), start=policy, seeds=(197,), max_hours=1, max_usd=Decimal(1)
     )
     return [policy, sampler]
 ```
@@ -348,9 +370,10 @@ belief_sampler/sampler-seed-197/out/histories.json
 belief_sampler/sampler-seed-197/out/belief.pt
 ```
 
-A policy trained further is another run (`etude continue`), and a sampler for
-it is another sampler run started from it; nothing made from the earlier
-policy is overwritten or mistaken for the later one's.
+A policy run taken further publishes later checkpoints beside the one a
+sampler read, which never changes. A sampler for the later policy is another
+sampler run started from it; nothing made from the earlier policy is
+overwritten or mistaken for the later one's.
 
 `collect_belief` (`manabot.belief.collect`) plays `games` complete games with a
 frozen policy and writes each viewer's history with its private hand label;
@@ -395,7 +418,7 @@ evaluation output with its own clock. The selection rule is
 
 ### Schedules and clocks
 
-The target (`updates`, `--until updates=N`, `etude continue --until`) says where
+The target (`updates`, or `--until updates=N` on a new, resumed or continued run) says where
 training stops and nothing else. Rates are set by the learning record, so the
 updates a run has already made are the same whatever target it is later given:
 
@@ -601,9 +624,10 @@ before freezing a new run; never upgrade dependencies inside a training attempt.
 
 Pick the machine at launch (`--pool`, `--rent`); read progress with
 `etude status`, `etude logs` and `etude usage`. To train an existing run
-further, `etude continue --run RUN --until updates=6400` makes a child run that
-starts from a copy of the parent's `run.out` with the same config;
-`run.steps` counts to the new target, so the config does not change.
+further, `uv run etude launch experiments/elemental.py --resume RUN --until
+updates=6400` gives the same run a later target, finished or not; `run.steps`
+counts to it, so the config does not change. `etude continue --run RUN` makes
+a child run instead ([recovery](#recovery)).
 See Etude's
 [launcher guide](https://github.com/loopflowstudio/etude/blob/main/docs/launcher.md).
 
@@ -698,7 +722,7 @@ policy at absolute updates n, 2n, … with `run.checkpoint`; the loop always
 publishes the untrained policy at update 0 and its last update. A run's final
 checkpoint is the last one of a finished run, including after extension.
 Elemental uses a 50-update grid, chosen by the recipe rather than estimated
-from wall time. The grid is absolute: a run continued from 26,000 with
+from wall time. The grid is absolute: a run taken further from 26,000 with
 `checkpoint_every=1000` publishes 27,000 next. A published policy carries raw
 or EMA weights only; `state/` carries what resuming needs. A failed write
 fails the update rather than leaving a silent gap. `run.checkpoints()` lists
@@ -891,11 +915,15 @@ registers its learner, Adam, EMA and counts with `run.resume` and calls
 | --- | --- |
 | lost its machine, reached its deadline or was asked to stop, under a launch | Nothing to do: the launcher calls `train` again as another attempt, with the same `run.out`, until the run finishes or uses up its hours, dollars or attempts. |
 | ended unfinished: it failed and the bug is fixed, ran out of hours, was cancelled, or was interrupted locally | `uv run etude run RECIPE --resume RUN` here, `uv run etude launch FILE --resume RUN` on machines: another attempt of the same run on the current code. |
-| finished, and should go further | `uv run etude continue --run RUN --until updates=N`: a new run descended from it ([portable learner continuation](#portable-learner-continuation)). |
+| should go further than its target, finished or not | The same commands with `--until updates=N`: another attempt of the same run to a later target. A finished run is unfinished again until it reaches it. |
+| should branch: changed settings, or further while the first run stays as it is | `uv run etude continue --run RUN --until updates=N`, with `--config JSON` for changed fields: a new run descended from it ([portable learner continuation](#portable-learner-continuation)). |
 
 A new run and a resumed one are different commands; nothing is inferred from
-a directory that happens to exist. `--resume` refuses a finished run, and
-refuses a config or seed that differs from the run's, naming the fields.
+a directory that happens to exist. The same config and seed is the same run.
+`--resume` refuses a config or seed that differs from the run's, naming the
+fields, and refuses a finished run given no later target. A refused or
+interrupted attempt changes nothing already recorded: a finished run stays
+finished.
 Attempts, retries, deadlines, the stop reserve, the carriage of `run.out` and
 the run record are Etude's. A retried attempt's first logged row sets where
 its rows replace the earlier attempt's, so the record reads as one run.
@@ -905,9 +933,11 @@ its rows replace the earlier attempt's, so the record reads as one run.
 | Raw weights, EMA, Adam moments, the completed update count and the other cumulative counts, the schedules that follow the update count, and every published checkpoint | Native game streams (seeded from the run seed and the update they start at), RNG state, and every update after the last save |
 
 Work after the last save repeats, and Etude charges its hours and dollars to
-the run. Etude writes state on a wall-time interval and always on the last
-update before a planned stop, so a deadline stop repeats nothing; an update is
-the unit, so nothing mid-collection is saved.
+the run. Etude writes a save five minutes after the last one and always on the
+last update before a planned stop, so a deadline stop repeats nothing; an
+update is the unit, so nothing mid-collection is saved. Under a launch each
+save is uploaded whole and then `current.json`; Etude removes the saves it
+replaces, on the machine and in storage, so storage holds no history of them.
 
 Etude compares the config and the seed between attempts and nothing else.
 Keeping the code compatible is the recipe author's: an attempt may run a later
@@ -940,11 +970,13 @@ policies stay world-bound, so `load_checkpoint` refuses one from another world.
 
 ### Portable learner continuation
 
-A run continued with `etude continue --run RUN --until updates=N` starts from a
-copy of its parent's `run.out`, so from its saved state with Adam and EMA: it is
-the same learner trained further. The child runs the parent's config and
-seed; `run.steps` counts to the new target, and only that target and the
-machine may change. Rates do not move
+A run continued with `etude continue --run RUN --until updates=N` is a new run
+that starts from a copy of its parent's `run.out`, so from its saved state with
+Adam and EMA: the same learner trained further, with the parent and its
+directory unchanged. The child runs the parent's job and seed, and its config
+unless `--config JSON` changes fields; `run.steps` counts to the new target.
+Use it to branch. A run that should simply go further is resumed with a later
+target and stays one run. Rates do not move
 with the target ([schedules and clocks](#schedules-and-clocks)). A parent at 26,000
 updates can produce a child ending at 63,000 and then one ending at 100,000;
 damped-policy rates keep their absolute formulas (update 26,001 uses LR

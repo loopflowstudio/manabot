@@ -2,7 +2,6 @@
 
 from typing import Literal
 
-from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import BaseModel, Field
 
@@ -10,7 +9,7 @@ from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import BatchClosure, IterationSchedule
-from manabot.training.loops.self_play import SelfPlay, self_play
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 import managym
 
@@ -153,7 +152,6 @@ def lambda_sweep(
 
 
 class BatchedConfig(BaseModel):
-    seed: int = 197
     updates: int = Field(default=128, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cuda"
 
@@ -172,18 +170,5 @@ def train(config: BatchedConfig) -> None:
         device=config.device,
         checkpoint_every=64,
     )
-    with track(
-        clocks=[
-            Step("updates", "collection/update iterations"),
-            Time("training_seconds", "active collection and learning seconds"),
-        ],
-        seed=config.seed,
-        config=config.model_dump(mode="json"),
-    ) as run:
-        self_play(
-            inputs,
-            run.out,
-            seed=config.seed,
-            updates=int(run.until("updates", default=config.updates)),
-            run=run,
-        )
+    with track(clocks=CLOCKS, config=config) as run:
+        self_play(inputs, run, updates=config.updates)

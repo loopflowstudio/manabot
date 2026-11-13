@@ -1,8 +1,4 @@
-"""Step: fit the autoregressive belief sampler on a histories file.
-
-`train_belief` returns at once when its output exists. The sampler checkpoint
-is written atomically and admitted against the dataset before it returns.
-"""
+"""Fit the belief sampler and atomically publish an admitted checkpoint."""
 
 from pathlib import Path
 
@@ -30,8 +26,6 @@ def train_belief(
     histories: Path, out: Path, config: SamplerConfig, *, seed: int
 ) -> Path:
     """Fit on `histories` and write the sampler to `out`; the policy is untouched."""
-    if out.exists():
-        return out
     dataset = read_dataset(histories)
     result = fit_belief_sampler(dataset, **config.model_dump(), seed=seed)
     identity = save_belief_sampler(out, result, dataset)

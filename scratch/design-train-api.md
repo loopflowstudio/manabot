@@ -14,8 +14,8 @@ This document replaces the client-facing shape of EXP-56 (PR #103 at
 `105abdd`) and the loop and recipe shape of MTG-329. The launcher machinery
 PR #103 built (out carriage, planned-stop retries, attempt cutoffs,
 continuation, digest-checked inputs) is kept and built on. The independent
-Manabot CLI retirement is implemented (plan.md); the new loop and recipe API
-has not been implemented or run.
+Manabot CLI retirement is implemented (plan.md); the proposed loop and recipe client cut is now written but has not run
+against the required SDK. See plan.md for the dependency boundary.
 
 ## Where this is going
 
@@ -215,6 +215,22 @@ framework, without Etude.
         checkpoint.json           {"at": {"updates": 100}, "files": {"policy": "policy.pt"}}
         policy.pt
 ```
+
+How a save is stored (Jack Heart, 2026-11-13, after EXP-56 showed an
+interrupted save through the real carrier leaves the model from one save
+beside the optimizer of another): "snapshot directory + pointer published
+last, recovery follows the pointer"; "local storage probably fine, but ideally
+avoid remote extra storage"; and, choosing self-contained saves over shared
+files, "1b is fine, my other feedback was that extra stuff locally we can
+cleanup automatically is ok, but extra uploads are not". So each save is its
+own folder (`out/state/save-N/`), a pointer (`out/state/current.json`) is
+published last, a local save need not be kept once its upload is confirmed
+("i dont think it should need to save if its confirmed published online, but
+i also think we can have some grace in our cleanups"), and replaced
+remote saves are deleted by the launcher, which holds full credentials
+("2a is the best of thse options"), so remote holds no history. The layout drawn above
+(`out/state/state.json` directly) is superseded by this; EXP-56's docs hold
+the exact spelling.
 
 A checkpoint folder is digested as a whole (a manifest of its files'
 digests), since `CheckpointRecord` holds one digest today.
@@ -430,15 +446,29 @@ population reads and ratings (EXP-60); a spending limit across launches
 
 ## Open
 
-Jack Heart has not settled these; the design takes the first option and the
-change is cheap either way.
+Status on 2026-11-13 after Jack Heart was asked each point again.
 
-1. The name `track`: "tracking doesnt clearly say like 'save logs, and
-   checkpoints, ...'". Kept; alternatives `record`, `open_run`.
-2. `etude continue` with nothing changed but the target: a child run (built)
-   or the same run extended.
-3. Whether the docs show saving games in flight (Jace keeps unfinished games
-   between batches) or say an attempt starts them fresh.
-4. Which public, non-Magic example the docs and the front-page clip use.
-5. How `run.save()` decides it is due when not stopping: wall time (taken) or
-   a count.
+1. The name `track`. He said "I mostly like this", raised "tracking doesnt
+   clearly say like 'save logs, and checkpoints, ...'", and tried
+   "tracked_run?" and "track_run?". That was to avoid two classes named `Run`,
+   which "ok, RunRequest works" then solved. `track` stands; he has not said
+   so in words.
+2. `etude continue` with only the target changed. Asked with three options, he
+   chose "Both": `--resume RUN --until ...` extends the same run; `continue`
+   stays for anything that changes config and makes a child run. The rule:
+   the same config and seed is the same run. A finished run must therefore be
+   reopenable to a further target.
+3. Games in flight. He chose "Show how to keep them": the docs carry a worked
+   example of keeping pending games by passing an object that holds them to
+   `run.resume`, for environments that can serialise a game mid-play.
+4. The public example. Jack Heart, 2026-11-13: "I think we shoudl be open
+   about the idea that etude was built to support manabot, and use it as a
+   flagship example. but otherwise i think we should look at trying to
+   support pufferRL's games and work well with them, as well as softmax's".
+   So the docs say plainly that Etude was built for Manabot and show it as
+   the flagship; the other examples are a PufferLib game and Softmax's
+   Coworld ("and not mettagrid, coworld"). Filed unstarted as EXP-62. Not said by him and still mine: acceptance tests keep a
+   tiny in-repository fixture so they need no outside dependency, and the
+   PufferLib and Coworld examples live under `examples/`.
+5. When `run.save()` writes outside a stop. Not answered. Taken for now: by
+   wall time, or by step count when `every=` is given.

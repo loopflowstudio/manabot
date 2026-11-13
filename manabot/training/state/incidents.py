@@ -19,7 +19,9 @@ from manabot.backends.torch.rl import NumericalError
 from manabot.model.world import checkpoint_source
 
 if TYPE_CHECKING:
-    from manabot.training.loops.self_play import LoopState
+    from manabot.backends.torch.learner import Learner
+    from manabot.backends.torch.policy import ActorCritic
+    from manabot.training.loops.self_play import Counts
     from manabot.training.rollout.collection import Collector, RolloutBatch
 
 EVIDENCE_BYTES = 32 * 1024**2
@@ -40,7 +42,9 @@ def _tensor_bytes(value: object) -> int:
 def save_incident(
     directory: Path,
     error: NumericalError,
-    state: "LoopState",
+    learner: "Learner",
+    ema: "ActorCritic | None",
+    counts: "Counts",
     collector: "Collector",
     batch: "RolloutBatch | None",
     rng: np.random.Generator,
@@ -54,7 +58,6 @@ def save_incident(
     offending rows and the full current learner/Adam are enough to inspect or
     repeat a failing loss; this is NOT a promise to replay an entire iteration.
     """
-    learner, ema = state.learner, state.ema
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     tensors = dict(error.tensors)
     batch_tensors: dict[str, Tensor] = {}
@@ -177,8 +180,8 @@ def save_incident(
         "run": out.name,
         "recipe": settings_digest,
         "stage": "self-play",
-        "iteration": state.update + 1,
-        "completed_updates": state.update,
+        "iteration": counts.updates + 1,
+        "completed_updates": counts.updates,
         "source": {
             **checkpoint_source(),
             "torch": str(torch.__version__),
@@ -196,7 +199,7 @@ def save_incident(
         "sampling_contract": "masked-log-softmax-v1",
         "attempted_collection": collector.stats.to_dict(),
         "last_valid_exports": [
-            str(path) for path in sorted((out / "checkpoints").glob("*.pt"))
+            str(path) for path in sorted((out / "policies").glob("*.pt"))
         ],
         "recovery": "diagnostic only; no engine journal or collection-time RNG",
     }

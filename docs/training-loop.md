@@ -225,6 +225,10 @@ from manabot.training.rollout.collection import (
 )
 
 
+class Progress(BaseModel):
+    updates: int = 0
+
+
 class MinimalConfig(BaseModel):
     updates: int = Field(default=3, ge=1)
     streams: int = Field(default=4, ge=2)
@@ -240,7 +244,10 @@ def train(config: MinimalConfig) -> None:
         averaged = deepcopy(agent)
         optimizer = torch.optim.Adam(agent.parameters(), lr=2.5e-4, eps=1e-5)
         # Loads the last save into all three; a fresh run starts at update 0.
-        start = int(run.resume(agent=agent, averaged=averaged, optimizer=optimizer)["updates"])
+        progress = run.resume(
+            agent=agent, averaged=averaged, optimizer=optimizer, extra=Progress()
+        )
+        start = progress.updates
         # Only the registered objects carry on: an attempt plays fresh games.
         torch.manual_seed(run.seed + start)
         rng = np.random.default_rng(run.seed + start)
@@ -253,7 +260,7 @@ def train(config: MinimalConfig) -> None:
             opponent_mode="self",  # one model plays and learns from both seats
         )
         try:
-            for _update in run.steps("updates", to=config.updates):
+            for update in run.steps("updates", to=config.updates):
                 # Whole games, at least `decisions` learner rows per stream.
                 batch = collect(collector, agent, config.decisions)
                 ends = torch.as_tensor(batch.dones)
@@ -261,7 +268,12 @@ def train(config: MinimalConfig) -> None:
                 # Complete games end every trajectory, so the tail value is never read.
                 tail = torch.zeros(ends.shape[1])
                 advantages, returns = rl.transition_gae(
-                    torch.as_tensor(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
+                    torch.as_tensor(batch.rewards),
+                    values,
+                    ends,
+                    tail,
+                    gamma=1.0,
+                    lam=0.95,
                 )
                 # Time-major [T,E] rows, the order `batch.observations` indexes.
                 advantages, returns = advantages.flatten(), returns.flatten()
@@ -291,6 +303,7 @@ def train(config: MinimalConfig) -> None:
                         learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
                 learner.update_ema(averaged, agent, rate=0.99)
                 run.log({"loss": float(loss)})  # the last minibatch's
+                progress.updates = update
                 run.save()
         finally:
             close_collector(collector)
@@ -311,8 +324,9 @@ its deadline, saved, and exits 75; the third carries that run on to update
 
 ```text
 ~/.etude/track/minimal/RUN/out/
-  state/state.json                       {"at": {"updates": 3}, "seed": 0, "files": {"agent": "agent.pt", ...}}
-  state/agent.pt  averaged.pt  optimizer.pt
+  state/current.json                     {"save": "save-00000001"}: the save to load
+  state/save-00000001/state.json         {"at": {"updates": 3}, "seed": 0, "files": {"agent": "agent.pt", ...}}
+  state/save-00000001/agent.pt  averaged.pt  optimizer.pt
   checkpoints/updates-00000003/checkpoint.json
   checkpoints/updates-00000003/policy.pt   torch.save(averaged.state_dict())
 ```

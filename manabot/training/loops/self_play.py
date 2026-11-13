@@ -1,44 +1,31 @@
-"""The self-play loop every current recipe uses, written to be read and copied.
+"""Self-play learning with Etude owning run identity, saves and stopping.
 
-`self_play(settings, out, seed=, updates=, run=)` plays games with the current
-learner, learns from each batch and saves the learner to `out / "state.pt"`
-atomically. Running it again with the same arguments resumes from that file; a
-finished loop returns its final policy at once. Nothing else drives it: there
-is no executor, attempt record or lease here. A tracker (`Tracker`, which
-Etude's run satisfies) receives rows, checkpoints and the stop signal.
+`SelfPlay` describes the learning problem; `Counts` is the cumulative work
+registered with the run. `step` collects and learns in place. `self_play`
+registers raw weights, Adam, EMA and counts, then publishes immutable,
+world-bound policies for evaluation. No native game or RNG is persisted.
 
-`SelfPlay` holds validated settings; `LoopState` carries the learner.
-`step` collects and learns, returning the next state and its metric row.
-`new_state`, `load_state`, `save_state` and `save_checkpoint` own the state
-file and published policies.
-
-Seeds. With run seed `s` and starting update `u` (0 for a fresh loop): model
-initialization uses `s`; native streams `s + 10000 + u`; Torch, NumPy and
-Python sampling `s + u`; minibatch order `s + 20000 + u`. At `u = 0` these are
-the streams the retired regime executor used for a fresh one-stage self-play
-regime. This preserves seed offsets; numerical parity also depends on the
-collector and update implementation. A resumed loop starts fresh, reproducible
-streams at the update it resumes from.
+Model initialization uses the run seed s. At starting update u, native streams
+use s + 10000 + u, sampling s + u, and minibatches s + 20000 + u. A fresh
+run preserves the retired executor's offsets; resume starts fresh streams.
 """
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
-from dataclasses import asdict, dataclass, replace
 import os
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal
 from uuid import uuid4
 
-from etude.stopping import Stopped
+from etude.train.records import Step, Time
+from etude.train.run import Run
 import numpy as np
 import psutil
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    JsonValue,
-    TypeAdapter,
     model_validator,
 )
 import torch
@@ -63,7 +50,6 @@ from manabot.infra.config import (
 )
 from manabot.infra.identity import canonical_sha256
 from manabot.model.world import (
-    checkpoint_source,
     validate_agent_decks,
     validate_agent_setup,
 )
@@ -77,7 +63,6 @@ from manabot.training.learning import (
 from manabot.training.mps import mps_torch_error
 from manabot.training.rollout.collection import (
     Collector,
-    CollectorStats,
     RolloutBatch,
     close_collector,
     collect,
@@ -109,6 +94,10 @@ import managym
 # Offsets that separate a run seed's random streams (see the module docstring).
 COLLECTION_SEED = 10_000
 MINIBATCH_SEED = 20_000
+CLOCKS = [
+    Step("updates", "collection/update iterations"),
+    Time("training_seconds", "active collection and learning seconds"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +138,6 @@ class SelfPlay(BaseModel):
     live_tokens: bool = False
     # A published policy to start from; only its weights are inherited.
     pretrained: Path | None = None
-    save_every: int = Field(default=1, ge=1)
     # Checkpoint at absolute updates 0, n, 2n, …; a continued run keeps the grid.
     checkpoint_every: int | None = Field(default=None, ge=1)
 
@@ -229,14 +217,11 @@ def root_match(settings: SelfPlay) -> MatchConfig:
     return settings.match
 
 
-def learner_settings(settings: SelfPlay) -> dict[str, JsonValue]:
-    """Resume identity fields; device, workers and threads may change between attempts."""
-    return settings.model_dump(mode="json", exclude={"device", "workers", "threads"})
-
-
 def learner_digest(settings: SelfPlay) -> str:
     """Identity of the learner `settings` train; machine fields excluded."""
-    return canonical_sha256(learner_settings(settings))
+    return canonical_sha256(
+        settings.model_dump(mode="json", exclude={"device", "workers", "threads"})
+    )
 
 
 def is_checkpoint(settings: SelfPlay, update: int) -> bool:
@@ -282,41 +267,13 @@ def self_play_collector(
 
 
 # ---------------------------------------------------------------------------
-# What a loop asks of a tracker
+# Cumulative work, saved by Etude alongside the framework objects
 
 
-class Tracker(Protocol):
-    """Etude run declaring updates/training_seconds, or None for untracked work."""
+class Counts(BaseModel):
+    """Cumulative completed work, changed in place so Etude saves this object."""
 
-    def log(self, values: dict[str, object], /, **clocks: float) -> None: ...
-
-    def log_table(
-        self, name: str, rows: list[dict[str, object]], /, **clocks: float
-    ) -> object: ...
-
-    def checkpoint(
-        self, path: Path, /, *, tags: Sequence[str] = (), **clocks: float
-    ) -> object: ...
-
-    def stopping(self) -> bool: ...
-
-
-# ---------------------------------------------------------------------------
-# The learner a loop carries
-
-
-class StateMismatch(ValueError):
-    """An output directory belongs to another run: its `state.pt` was saved for
-    other settings, seed or world, or it holds checkpoints without one.
-
-    Raised before anything is trained or written; the message names what differs.
-    """
-
-
-@dataclass(frozen=True)
-class Counts:
-    """Cumulative work across every attempt of the loop."""
-
+    updates: int = 0
     training_seconds: float = 0.0
     games: int = 0
     environment_decisions: int = 0
@@ -326,48 +283,14 @@ class Counts:
     optimizer_exposures: int = 0
 
 
-@dataclass(frozen=True)
-class LoopState:
-    """Raw learner and Adam, EMA, the absolute update count and cumulative counts.
-
-    The learner, its optimizer and the EMA are Torch objects that `step`
-    updates in place; the update count and counts are replaced, so each
-    `step` returns the next state.
-    """
-
-    settings: SelfPlay
-    seed: int
-    space: ObservationSpace
-    learner: Learner
-    ema: ActorCritic | None
-    update: int = 0
-    counts: Counts = Counts()
-
-
-def behavior(state: LoopState) -> ActorCritic:
-    """The policy that plays the games: the EMA for ema-self, else the raw learner."""
-    if state.settings.behavior == "ema-self":
-        assert state.ema is not None
-        return state.ema
-    return state.learner.agent
-
-
-def create_model(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
-    return ActorCritic(
-        space,
-        settings.model,
-        bucketed_shapes=settings.bucketed_shapes,
-        live_tokens=settings.live_tokens,
-    ).to(settings.device)
-
-
-def create_learner(settings: SelfPlay, agent: ActorCritic) -> Learner:
-    return Learner(
-        agent,
-        settings.device,
-        minibatch_rows=settings.streams,
-        precision=settings.precision,
-    )
+def behavior(
+    settings: SelfPlay, learner: Learner, ema: ActorCritic | None
+) -> ActorCritic:
+    """The EMA plays for ema-self; otherwise the raw learner plays."""
+    if settings.behavior == "ema-self":
+        assert ema is not None
+        return ema
+    return learner.agent
 
 
 def pretrained_weights(
@@ -392,113 +315,36 @@ def pretrained_weights(
     return weights
 
 
-def new_state(settings: SelfPlay, seed: int) -> LoopState:
+def create(settings: SelfPlay, *, seed: int) -> tuple[Learner, ActorCritic | None]:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     space = ObservationSpace(settings.observation)
     torch.manual_seed(seed)
-    agent = create_model(settings, space)
+    agent = ActorCritic(
+        space,
+        settings.model,
+        bucketed_shapes=settings.bucketed_shapes,
+        live_tokens=settings.live_tokens,
+    ).to(settings.device)
     if settings.pretrained is not None:
         agent.load_state_dict(pretrained_weights(settings, space))
-    learner = create_learner(settings, agent)
+    learner = Learner(
+        agent,
+        settings.device,
+        minibatch_rows=settings.streams,
+        precision=settings.precision,
+    )
     ema = deepcopy(agent) if settings.learning.ema is not None else None
-    return LoopState(settings, seed, space, learner, ema)
-
-
-def setting_differences(
-    saved: dict[str, JsonValue], current: dict[str, JsonValue], prefix: str = ""
-) -> list[str]:
-    """Describe changed learner fields, including nested learning/model settings."""
-    differences: list[str] = []
-    for key in sorted(saved.keys() | current.keys()):
-        name = f"{prefix}.{key}" if prefix else key
-        if key not in saved:
-            differences.append(
-                f"{name}: missing in saved state, requested {current[key]!r}"
-            )
-        elif key not in current:
-            differences.append(
-                f"{name}: saved {saved[key]!r}, missing in requested settings"
-            )
-        elif isinstance(saved[key], dict) and isinstance(current[key], dict):
-            differences.extend(setting_differences(saved[key], current[key], name))
-        elif saved[key] != current[key]:
-            differences.append(
-                f"{name}: saved {saved[key]!r}, requested {current[key]!r}"
-            )
-    return differences
-
-
-def load_state(path: Path, settings: SelfPlay, seed: int) -> LoopState | None:
-    """The learner saved at `path`, or None when there is none.
-
-    Refuses a state written for other settings, another seed or another world,
-    naming what differs.
-    """
-    if not path.exists():
-        return None
-    saved = torch.load(path, map_location="cpu", weights_only=False)
-    for name, expected in (
-        ("world", settings.world),
-        ("seed", seed),
-    ):
-        if saved[name] != expected:
-            raise StateMismatch(
-                f"{path} was written for another {name}: {saved[name]!r}, not {expected!r}"
-            )
-    if saved["settings"] != learner_digest(settings):
-        stored = TypeAdapter(dict[str, JsonValue]).validate_python(
-            saved["learner_settings"]
-        )
-        current = learner_settings(settings)
-        differences = setting_differences(stored, current)
-        raise StateMismatch(
-            f"{path} has different learner settings: " + "; ".join(differences)
-        )
-    space = ObservationSpace(settings.observation)
-    agent = create_model(settings, space)
-    agent.load_state_dict(saved["raw"])
-    learner = create_learner(settings, agent)
-    learner.optimizer.load_state_dict(saved["optimizer"])
-    ema = None
-    if saved["ema"] is not None:
-        ema = deepcopy(learner.agent)
-        ema.load_state_dict(saved["ema"])
-    return LoopState(
-        settings,
-        seed,
-        space,
-        learner,
-        ema,
-        update=int(saved["update"]),
-        counts=Counts(**saved["counts"]),
-    )
-
-
-def save_state(path: Path, state: LoopState) -> None:
-    """Write the learner to a temporary file, then rename it over `path`."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp")
-    torch.save(
-        {
-            "format": "manabot.self-play-state/v1",
-            "world": state.settings.world,
-            "seed": state.seed,
-            "settings": learner_digest(state.settings),
-            "learner_settings": learner_settings(state.settings),
-            "source_commit": checkpoint_source()["commit"],
-            "update": state.update,
-            "counts": asdict(state.counts),
-            "raw": state.learner.agent.state_dict(),
-            "ema": None if state.ema is None else state.ema.state_dict(),
-            "optimizer": state.learner.optimizer.state_dict(),
-        },
-        temporary,
-    )
-    os.replace(temporary, path)
+    return learner, ema
 
 
 def write_policy(
-    model: ActorCritic, state: LoopState, path: Path, weights: Literal["raw", "ema"]
+    model: ActorCritic,
+    settings: SelfPlay,
+    counts: Counts,
+    path: Path,
+    weights: Literal["raw", "ema"],
+    *,
+    seed: int,
 ) -> Path:
     if path.exists():
         return path
@@ -506,13 +352,13 @@ def write_policy(
     # A deck-source run binds the world (`None`); a fixed match binds its setups.
     players = (
         None
-        if state.settings.deck_source is not None
-        else Match(root_match(state.settings)).to_rust()
+        if settings.deck_source is not None
+        else Match(root_match(settings)).to_rust()
     )
     averaging = {
         "clock": "collect-update-iteration",
-        "iteration": state.update,
-        "rate": state.settings.learning.ema,
+        "iteration": counts.updates,
+        "rate": settings.learning.ema,
     }
     # A fresh model constructed for admission must not draw from the loop's RNG.
     device = next(model.parameters()).device.type
@@ -522,13 +368,14 @@ def write_policy(
     ):
         save_policy(
             model,
-            state.space,
+            model.observation_space,
             temporary,
             player_configs=players,
             extra={
                 "weights": weights,
-                "update": state.update,
-                "seed": state.seed,
+                "update": counts.updates,
+                "counts": counts.model_dump(mode="json"),
+                "seed": seed,
                 "value_semantic": "signed_outcome",
                 "averaging": averaging if weights == "ema" else None,
             },
@@ -538,14 +385,33 @@ def write_policy(
     return path
 
 
-def save_checkpoint(directory: Path, state: LoopState) -> Path:
-    """Write immutable raw/EMA policies; return EMA when kept, otherwise raw."""
+def publish(
+    settings: SelfPlay,
+    run: Run,
+    learner: Learner,
+    ema: ActorCritic | None,
+    counts: Counts,
+) -> Path:
+    """Keep immutable raw/EMA policies and record the policy used for evaluation."""
+    directory = run.out / "policies"
     directory.mkdir(parents=True, exist_ok=True)
-    name = f"{state.update:08d}"
-    raw = write_policy(state.learner.agent, state, directory / f"{name}-raw.pt", "raw")
-    if state.ema is not None:
-        return write_policy(state.ema, state, directory / f"{name}-ema.pt", "ema")
-    return raw
+    name = f"{counts.updates:08d}"
+    path = write_policy(
+        learner.agent,
+        settings,
+        counts,
+        directory / f"{name}-raw.pt",
+        "raw",
+        seed=run.seed,
+    )
+    if ema is not None:
+        path = write_policy(
+            ema, settings, counts, directory / f"{name}-ema.pt", "ema", seed=run.seed
+        )
+    run.checkpoint(
+        path, updates=counts.updates, training_seconds=counts.training_seconds
+    )
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -553,122 +419,114 @@ def save_checkpoint(directory: Path, state: LoopState) -> Path:
 
 
 def learn(
-    state: LoopState, batch: RolloutBatch, rng: np.random.Generator
+    settings: SelfPlay,
+    learner: Learner,
+    ema: ActorCritic | None,
+    counts: Counts,
+    batch: RolloutBatch,
+    rng: np.random.Generator,
 ) -> UpdateDiagnostics:
     """Learn from one batch in place: the update its learning record selects, then EMA.
 
-    The update made is `state.update + 1`. Damped-policy schedules read that
-    absolute iteration; PPO schedules read `state.update / learning.horizon`.
+    The update made is `counts.updates + 1`. Damped-policy schedules read that
+    absolute iteration; PPO schedules read `counts.updates / learning.horizon`.
     Both keep the recipe horizon when a launch extends its target.
     """
-    settings = state.settings
     if isinstance(settings.learning, DampedPolicyLearning):
         metrics = update_damped_iteration(
             torch_backend,
-            state.learner,
+            learner,
             batch,
             settings.learning,
-            state.update + 1,
-            bootstrap_agent=behavior(state),
+            counts.updates + 1,
+            bootstrap_agent=behavior(settings, learner, ema),
         )
     else:
         assert settings.learning.horizon is not None
         metrics = update_iteration(
             torch_backend,
-            state.learner,
+            learner,
             batch,
             settings.learning,
-            state.update / settings.learning.horizon,
+            counts.updates / settings.learning.horizon,
             rng,
-            iteration=state.update + 1,
-            bootstrap_agent=behavior(state),
+            iteration=counts.updates + 1,
+            bootstrap_agent=behavior(settings, learner, ema),
         )
-    if state.ema is not None:
+    if ema is not None:
         assert settings.learning.ema is not None
-        update_ema(state.ema, state.learner.agent, settings.learning.ema)
+        update_ema(ema, learner.agent, settings.learning.ema)
     return metrics
 
 
-def counted(
-    counts: Counts,
-    base: Counts,
-    stats: CollectorStats,
-    metrics: UpdateDiagnostics,
-    seconds: float,
-) -> Counts:
-    """Counts after one more update that took `seconds` of collection and learning.
-
-    `stats` are this attempt's collector totals, added to `base`, the counts
-    saved by earlier attempts; optimizer counts and seconds accumulate per update.
-    """
-    return Counts(
-        training_seconds=counts.training_seconds + seconds,
-        games=base.games + stats.games,
-        environment_decisions=base.environment_decisions + stats.micro_steps,
-        learner_transitions=base.learner_transitions + stats.learner_transitions,
-        idle_stream_steps=base.idle_stream_steps + stats.idle_stream_steps,
-        optimizer_updates=counts.optimizer_updates
-        + metrics.get("numerical", {}).get("optimizer_steps", 0),
-        optimizer_exposures=counts.optimizer_exposures
-        + metrics.get("optimizer_exposures", 0),
-    )
-
-
 def step(
-    state: LoopState,
+    settings: SelfPlay,
+    learner: Learner,
+    ema: ActorCritic | None,
     collector: Collector,
+    counts: Counts,
     rng: np.random.Generator,
     *,
-    base: Counts,
-    out: Path | None = None,
-) -> tuple[LoopState, dict[str, object]]:
-    """Collect one batch, learn from it, and return the next state and its metric row.
+    out: Path,
+) -> dict[str, object]:
+    """Collect one batch, learn from it, and return its metric row; update learner, EMA and counts in place.
 
     The collector and learner profilers are the one phase measurement: their
     per-update deltas are the row's `time/` keys, and `time/collection` plus
-    `time/learning` is the update's active training time.
+    `time/learning` is the update's active training time. A numerical failure
+    leaves a bounded incident under `out` before it propagates.
     """
-    device = state.settings.device
-    before = phase_seconds(collector.profiler, state.learner.profiler)
+    device = settings.device
+    stats = collector.stats
+    games, decisions, transitions, idle = (
+        stats.games,
+        stats.micro_steps,
+        stats.learner_transitions,
+        stats.idle_stream_steps,
+    )
+    before = phase_seconds(collector.profiler, learner.profiler)
     batch: RolloutBatch | None = None
     try:
-        batch = collect(collector, behavior(state), state.settings.transitions)
+        batch = collect(
+            collector, behavior(settings, learner, ema), settings.transitions
+        )
         synchronize(device)
-        with state.learner.profiler.track("Learning"):
-            metrics = learn(state, batch, rng)
+        with learner.profiler.track("Learning"):
+            metrics = learn(settings, learner, ema, counts, batch, rng)
             synchronize(device)
     except NumericalError as error:
-        if out is not None:
-            try:
-                save_incident(
-                    out / "numerical-incident" / uuid4().hex,
-                    error,
-                    state,
-                    collector,
-                    batch,
-                    rng,
-                    out=out,
-                    settings_digest=learner_digest(state.settings),
-                )
-            except Exception as capture_error:
-                error.add_note(f"incident capture failed: {capture_error}")
+        try:
+            save_incident(
+                out / "numerical-incident" / uuid4().hex,
+                error,
+                learner,
+                ema,
+                counts,
+                collector,
+                batch,
+                rng,
+                out=out,
+                settings_digest=learner_digest(settings),
+            )
+        except Exception as capture_error:
+            error.add_note(f"incident capture failed: {capture_error}")
         raise
-    phases = time_since(
-        before, phase_seconds(collector.profiler, state.learner.profiler)
-    )
-    seconds = phases["time/collection"] + phases["time/learning"]
-    state = replace(
-        state,
-        update=state.update + 1,
-        counts=counted(state.counts, base, collector.stats, metrics, seconds),
-    )
-    row = (
+    phases = time_since(before, phase_seconds(collector.profiler, learner.profiler))
+    # The collector's totals are this attempt's; counts span every attempt.
+    counts.updates += 1
+    counts.training_seconds += phases["time/collection"] + phases["time/learning"]
+    counts.games += stats.games - games
+    counts.environment_decisions += stats.micro_steps - decisions
+    counts.learner_transitions += stats.learner_transitions - transitions
+    counts.idle_stream_steps += stats.idle_stream_steps - idle
+    counts.optimizer_updates += metrics.get("numerical", {}).get("optimizer_steps", 0)
+    counts.optimizer_exposures += metrics.get("optimizer_exposures", 0)
+    return (
         metric_row(metrics)
-        | {f"coordinates/{k}": v for k, v in asdict(state.counts).items()}
+        | {f"coordinates/{k}": v for k, v in counts.model_dump().items()}
         | phases
         | resource_metrics(device)
     )
-    return state, row
 
 
 def resource_metrics(device: str) -> dict[str, float | int]:
@@ -692,11 +550,6 @@ def resource_metrics(device: str) -> dict[str, float | int]:
             "memory/driver_allocated_mps_bytes": torch.mps.driver_allocated_memory(),
         }
     return values
-
-
-def clocks(state: LoopState) -> dict[str, float]:
-    """Coordinates shared by an update's metrics, outcome table and policies."""
-    return {"updates": state.update, "training_seconds": state.counts.training_seconds}
 
 
 def synchronize(device: str) -> None:
@@ -751,95 +604,67 @@ def game_ledger(
 # The loop
 
 
-def self_play(
-    settings: SelfPlay,
-    out: Path,
-    *,
-    seed: int,
-    updates: int,
-    run: Tracker | None = None,
-) -> Path:
-    """Train to the absolute update `updates` and return the final policy's path.
+@contextmanager
+def self_play_games(
+    settings: SelfPlay, run: Run, counts: Counts
+) -> Iterator[Collector]:
+    """Scope fresh native streams, append-only game ledgers and failure capture."""
+    failures = CaptureScope(
+        run.out / "failures",
+        lambda: {"seed": run.seed, "update": counts.updates, "out": str(run.out)},
+    )
+    record_attempt: RecordAttempt | None = None
+    errors = GameErrorState()
+    if settings.game_errors is not None:
+        ledger, errors = game_ledger(run.out, settings.game_errors)
 
-    Saves `out / "state.pt"` every `settings.save_every` updates and when it
-    stops; raises `Stopped` when `run.stopping()` ends it early. Run it again
-    to carry on.
-    """
+        def record_attempt(
+            errors: GameErrorState, attempt: GameAttempt
+        ) -> GameErrorState:
+            return append_attempt(ledger, errors, attempt, failures.context())
+
+    collector = self_play_collector(
+        settings, seed=run.seed, start=counts.updates, record_attempt=record_attempt
+    )
+    collector.game_error_state = errors
+    seed_random(run.seed + counts.updates)
+    try:
+        with capture_scope(failures):
+            yield collector
+    finally:
+        close_collector(collector)
+
+
+def self_play(settings: SelfPlay, run: Run, *, updates: int) -> Path:
+    """Train to the run's update target and return its final world-bound policy."""
     settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
-    out = Path(out)
-    out.mkdir(parents=True, exist_ok=True)
     with device_settings(settings):
-        state = load_state(out / "state.pt", settings, seed)
-        if state is None:
-            if any((out / "checkpoints").glob("*.pt")):
-                raise StateMismatch(
-                    "checkpoints exist without state.pt; choose a fresh output directory"
-                )
-            state = new_state(settings, seed)
-        if state.update >= updates:
-            # Records again in case an earlier attempt saved state but crashed
-            # before recording; the file is written once and Etude derives `final`.
-            return record_checkpoint(out, state, run)
-        if is_checkpoint(settings, state.update):
-            # Update 0 of a fresh run, or a milestone whose attempt was lost
-            # after saving state and before recording.
-            save_state(out / "state.pt", state)
-            record_checkpoint(out, state, run)
-
-        # Only the learner is durable. Each attempt starts fresh random streams
-        # and adds its collector's totals to the counts saved before it.
-        base = state.counts
-        rng = np.random.default_rng(seed + MINIBATCH_SEED + state.update)
-        # Reads `state` when a failure is captured, so it names the current update.
-        failures = CaptureScope(
-            out / "failures",
-            lambda: {"seed": seed, "update": state.update, "out": str(out)},
-        )
-        record_attempt: RecordAttempt | None = None
-        errors = GameErrorState()
-        if settings.game_errors is not None:
-            ledger, errors = game_ledger(out, settings.game_errors)
-
-            def record_attempt(
-                errors: GameErrorState, attempt: GameAttempt
-            ) -> GameErrorState:
-                return append_attempt(ledger, errors, attempt, failures.context())
-
-        collector = self_play_collector(
-            settings, seed=seed, start=state.update, record_attempt=record_attempt
-        )
-        collector.game_error_state = errors
-        # After the collector, which may draw from these streams while it starts.
-        seed_random(seed + state.update)
-        try:
-            with capture_scope(failures):
-                while state.update < updates and not (run and run.stopping()):
-                    state, row = step(state, collector, rng, base=base, out=out)
-                    if run:
-                        run.log(row, **clocks(state))
-                        if settings.behavior != "random":
-                            outcomes = collector.stats.self_play.drain()
-                            run.log_table(OUTCOME_TABLE, outcomes, **clocks(state))
-                    checkpoint_due = state.update < updates and is_checkpoint(
-                        settings, state.update
+        learner, ema = create(settings, seed=run.seed)
+        # No EMA object exists for recipes that do not average their policy.
+        objects: dict[str, object] = {
+            "learner": learner.agent,
+            "optimizer": learner.optimizer,
+        }
+        if ema is not None:
+            objects["ema"] = ema
+        counts = run.resume(**objects, extra=Counts())
+        rng = np.random.default_rng(run.seed + MINIBATCH_SEED + counts.updates)
+        # Repair an unrecorded milestone without rewriting its immutable bytes.
+        if counts.updates == 0 or is_checkpoint(settings, counts.updates):
+            publish(settings, run, learner, ema, counts)
+        with self_play_games(settings, run, counts) as collector:
+            for update in run.steps("updates", to=updates):
+                row = step(settings, learner, ema, collector, counts, rng, out=run.out)
+                run.log(row, training_seconds=counts.training_seconds)
+                if settings.behavior != "random":
+                    run.log_table(
+                        OUTCOME_TABLE,
+                        collector.stats.self_play.drain(),
+                        training_seconds=counts.training_seconds,
                     )
-                    # Commit resume state once, before publishing immutable policy bytes.
-                    if checkpoint_due or state.update % settings.save_every == 0:
-                        save_state(out / "state.pt", state)
-                    if checkpoint_due:
-                        record_checkpoint(out, state, run)
-        finally:
-            close_collector(collector)
-        save_state(out / "state.pt", state)
-        if state.update < updates:
-            raise Stopped(f"stopped at update {state.update}; run again to resume")
-        return record_checkpoint(out, state, run)
-
-
-def record_checkpoint(out: Path, state: LoopState, run: Tracker | None) -> Path:
-    path = save_checkpoint(out / "checkpoints", state)
-    if run:
-        run.checkpoint(path, **clocks(state))
-    return path
+                run.save()
+                if is_checkpoint(settings, update):
+                    publish(settings, run, learner, ema, counts)
+        return publish(settings, run, learner, ema, counts)

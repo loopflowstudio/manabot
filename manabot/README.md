@@ -14,8 +14,8 @@ their pieces and a loop to copy.
 ```bash
 uv run etude run manabot/recipes/local.py      # local production-path smoke
 uv run etude run manabot/recipes/baseline.py   # ordinary self-play; evaluate separately
-uv run etude run manabot/recipes/elemental.py --seed 197 --name elemental-197  # current recipe
-uv run etude run manabot/recipes/elemental.py --resume elemental-197           # carry that run on
+uv run etude run manabot/recipes/elemental.py --seed 197                    # current recipe; run elemental-seed-197
+uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197   # carry that run on
 uv run etude run experiments/batched_baseline.py  # batched GPU baseline
 uv run etude run manabot/recipes/local.py --config '{"learning_seats": "one"}'  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
@@ -26,9 +26,10 @@ uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 Training runs through [Etude](https://github.com/loopflowstudio/etude):
 `etude run FILE` calls the file's `train(config)` as a new run, prints the
 run's id and writes it under `~/.etude/track`. `--config JSON` sets fields of
-the recipe's config, `--seed` the run's seed, `--name` its id, `--until
-updates=N` its stop target and `--seconds` a deadline; `--resume RUN` is
-another attempt of an existing run ([run training](../docs/training.md#run-training)).
+the recipe's config, `--seed` the run's seed, `--name` its job's name (the
+run is `NAME-seed-N`), `--until updates=N` its stop target and `--seconds` a
+deadline; `--resume RUN` is another attempt of an existing run, to a later
+target when `--until` is given ([run training](../docs/training.md#run-training)).
 `manabot train` is removed and names that command.
 
 The `local` recipe runs two collection/update iterations
@@ -679,8 +680,8 @@ with those packages blocked.
 - `infra/`: runtime context, shared file operations and provenance identities.
 
 A policy checkpoint can be loaded for play without a trainer. Resuming a run
-needs its run folder: `out/state/` (weights, EMA, Adam and the cumulative
-counts) and the `game-attempts/` ledgers. Moving files changes source identity;
+needs its run folder: the save `out/state/current.json` names (weights, EMA,
+Adam and the cumulative counts) and the `game-attempts/` ledgers. Moving files changes source identity;
 it does not admit an old run under new source or alter its frozen world,
 protocol or cost limits.
 

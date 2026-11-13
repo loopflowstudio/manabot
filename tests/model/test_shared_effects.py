@@ -3,6 +3,7 @@
 from copy import deepcopy
 from pathlib import Path
 
+from etude.train.run import track
 import numpy as np
 import pytest
 import torch
@@ -17,7 +18,7 @@ from manabot.recipes.baseline import settings
 from manabot.recipes.local import LocalConfig
 from manabot.sim.rollout import BatchedSampler
 from manabot.sim.search.value import ValueScorer
-from manabot.training.loops.self_play import SelfPlay, load_state, self_play
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.verify.action_cases import reorder_objects
 from manabot.verify.representation import shared_effect_root
 import managym
@@ -116,7 +117,7 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("card_capacity", (60, 128))
 def test_shared_effect_policy_uses_ordinary_learner_and_export(
-    tmp_path: Path, card_capacity: int
+    tmp_path: Path, card_capacity: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     inputs = settings(LocalConfig(updates=1)).model_copy(
         update={
@@ -126,10 +127,12 @@ def test_shared_effect_policy_uses_ordinary_learner_and_export(
         }
     )
     inputs = SelfPlay.model_validate(inputs.model_dump())
-    path = self_play(inputs, tmp_path / "training", seed=73200, updates=1)
-    state = load_state(tmp_path / "training/state.pt", inputs, 73200)
-    assert state is not None and state.update == 1
-    assert state.counts.learner_transitions > 0
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "training"))
+    monkeypatch.setenv("ETUDE_SEED", "73200")
+    with track(
+        experiment="test", run="effects", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        path = self_play(inputs, run, updates=1)
     model, space = load_checkpoint(str(path))
     assert isinstance(model.shared_effects, SharedEffectEncoder)
     assert space.encoder.config == inputs.observation

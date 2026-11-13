@@ -7,7 +7,6 @@ the loop. Evaluation is a separate Etude pass over its immutable checkpoints.
 from pathlib import Path
 from typing import Literal
 
-from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,7 +14,7 @@ from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
-from manabot.training.loops.self_play import SelfPlay, self_play
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.verify.learning_regression import BaselineReport, report_recipe
 
 BASELINE_STEPS = 128
@@ -25,7 +24,6 @@ BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
 class BaselineConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    seed: int = 197
     updates: int = Field(default=BASELINE_STEPS, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cuda"
     learning_seats: Literal["one", "both"] = "both"
@@ -60,31 +58,18 @@ def settings(config: BaselineConfig) -> SelfPlay:
 
 
 def train(config: BaselineConfig) -> None:
-    with track(
-        clocks=[
-            Step("updates", "collection/update iterations"),
-            Time("training_seconds", "active collection and learning seconds"),
-        ],
-        seed=config.seed,
-        config=config.model_dump(mode="json"),
-    ) as run:
-        self_play(
-            settings(config),
-            run.out,
-            seed=config.seed,
-            updates=int(run.until("updates", default=config.updates)),
-            run=run,
-        )
+    with track(clocks=CLOCKS, config=config) as run:
+        self_play(settings(config), run, updates=config.updates)
 
 
 def evaluate(
-    config: BaselineConfig, directory: Path, *, seconds: float = 1680
+    config: BaselineConfig, directory: Path, *, seed: int, seconds: float = 1680
 ) -> BaselineReport:
     """Evaluate the initial and endpoint policies on the nightly paired-deal cohort."""
     return report_recipe(
         directory,
         settings(config),
-        seed=config.seed,
+        seed=seed,
         updates=config.updates,
         deals=BASELINE_DEALS,
         seconds=seconds,

@@ -2,24 +2,29 @@
 
 from pathlib import Path
 
+from etude.train.run import track
 import pytest
 import torch
 
 from manabot.recipes.builders import gray_ogre_self_play
-from manabot.training.loops.self_play import new_state, self_play
+from manabot.training.loops.self_play import CLOCKS, create, self_play
 
 
 def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = gray_ogre_self_play(horizon=1)
-    path = self_play(settings, tmp_path / "parent", seed=197, updates=1)
-    state = new_state(settings.model_copy(update={"pretrained": path}), 198)
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "parent"))
+    with track(
+        experiment="test", run="pretrained", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        path = self_play(settings, run, updates=1)
+    learner, _ = create(settings.model_copy(update={"pretrained": path}), seed=198)
     saved = torch.load(path, weights_only=False)["model_state_dict"]
-    for name, value in state.learner.agent.state_dict().items():
+    for name, value in learner.agent.state_dict().items():
         torch.testing.assert_close(value, saved[name], rtol=0, atol=0)
-    assert state.update == 0 and state.counts.optimizer_updates == 0
-    assert not state.learner.optimizer.state
+    assert not learner.optimizer.state
     changed = settings.model_copy(
         update={
             "model": settings.model.model_copy(update={"hidden_dim": 32}),
@@ -27,4 +32,4 @@ def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
         }
     )
     with pytest.raises(ValueError, match="other model or observation"):
-        new_state(changed, 198)
+        create(changed, seed=198)

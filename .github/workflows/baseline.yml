@@ -47,26 +47,29 @@ jobs:
           timeout --signal=TERM 1800s uv run --no-sync python - <<'PY'
           import os
           from pathlib import Path
-          from datetime import datetime, timedelta, timezone
-          from etude.train.run import local_launch
-          from manabot.recipes.baseline import BASELINE_STEPS, BaselineConfig, train, evaluate
+          import subprocess
+          from manabot.recipes.baseline import BASELINE_STEPS, BaselineConfig, evaluate
 
           config = BaselineConfig(
               updates=int(os.environ["BASELINE_STEPS"] or BASELINE_STEPS),
-              seed=int(os.environ["BASELINE_SEED"]), device="cpu",
+              device="cpu",
           )
-          destination = Path(".runs/baseline")
-          os.environ["ETUDE_DEADLINE"] = (datetime.now(timezone.utc) + timedelta(seconds=1680)).isoformat()
-          with local_launch(out=destination, experiment="baseline"):
-              train(config)
-          result = evaluate(config, destination)
+          seed = int(os.environ["BASELINE_SEED"])
+          os.environ["ETUDE_HOME"] = str(Path(".runs/baseline").resolve())
+          subprocess.run([
+              "uv", "run", "--no-sync", "etude", "run", "manabot/recipes/baseline.py",
+              "--seed", str(seed), "--config", config.model_dump_json(), "--seconds", "1680",
+          ], check=True)
+          destination = Path(f".runs/baseline/track/baseline/baseline-seed-{seed}/out")
+          result = evaluate(config, destination, seed=seed)
           raise SystemExit(result.software != "passed")
           PY
       - name: Summary
         if: always()
         run: |
-          if [ -f .runs/baseline/report.md ]; then
-            cat .runs/baseline/report.md >> "$GITHUB_STEP_SUMMARY"
+          report=$(find .runs/baseline -name report.md -print -quit)
+          if [ -n "$report" ]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Baseline did not finish; retained partial evidence is not a learning pass.' >> "$GITHUB_STEP_SUMMARY"
           fi

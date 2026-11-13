@@ -34,7 +34,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
-from manabot.training.loops.self_play import SelfPlay, learner_digest, load_state
+from manabot.training.loops.self_play import Counts, SelfPlay, learner_digest
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainSelfPlay
 from manabot.training.update_metrics import read_updates, stage_rows
@@ -538,22 +538,18 @@ def report_recipe(
     previous_threads = torch.get_num_threads()
     torch.set_num_threads(1)
     try:
-        state = load_state(directory / "state.pt", settings, seed)
-        if (
-            state is None
-            or state.update != updates
-            or state.counts.optimizer_updates == 0
-        ):
-            raise ValueError(
-                "training did not complete the requested optimizer updates"
-            )
         exported = [
             PolicyPoint(path, int(path.stem.split("-")[0]), file_sha256(path))
-            for path in sorted((directory / "checkpoints").glob("*-raw.pt"))
+            for path in sorted((directory / "policies").glob("*-raw.pt"))
         ]
         if not exported or exported[0].updates != 0 or exported[-1].updates != updates:
             raise ValueError("missing initial or endpoint checkpoint")
         payload = torch.load(exported[-1].path, weights_only=False, map_location="cpu")
+        counts = Counts.model_validate(payload.get("bc", {}).get("counts"))
+        if counts.updates != updates or counts.optimizer_updates == 0:
+            raise ValueError(
+                "training did not complete the requested optimizer updates"
+            )
         source = payload.get("source", {}).get("commit")
         if not isinstance(source, str):
             raise ValueError("checkpoint has no source revision")

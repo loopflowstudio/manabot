@@ -365,8 +365,9 @@ Training recipes are Python functions: ours in [manabot/recipes/](manabot/recipe
 built from the settings in
 [manabot/recipes/builders.py](manabot/recipes/builders.py), and one module per
 current experiment in [experiments/](experiments/). The current recipe is
-`uv run etude run manabot/recipes/elemental.py --seed 197 --name elemental-197`;
-`--resume elemental-197` carries that run on after an interruption.
+`uv run etude run manabot/recipes/elemental.py --seed 197`, which starts the
+run `elemental-seed-197`; `--resume elemental-seed-197` carries that run on
+after an interruption.
 [docs/training.md](docs/training.md) covers running, monitoring and recovering
 runs, and [manabot/README.md](manabot/README.md) covers the package.
 

@@ -1,25 +1,24 @@
-"""A recipe with several steps: train a policy, collect its histories, fit a sampler.
+"""Collect histories and fit a sampler from a linked policy run.
 
-Each step writes one file and returns at once when that file exists, so
-running the recipe again after any failure skips the steps it finished.
+Each attempt restarts collection and fitting. Etude checks and carries the
+immutable policy input, and records the resulting sampler checkpoint.
 """
 
-from typing import Literal
+from decimal import Decimal
 
-from etude.train.records import Step, Time
+from etude.jobs import training
+from etude.launch.records import Job
+from etude.train.records import Step
 from etude.train.run import track
 from pydantic import BaseModel, Field
 
 from manabot.belief.collect import collect_belief
 from manabot.belief.train import SamplerConfig, train_belief
-from manabot.recipes.builders import gray_ogre_self_play
-from manabot.training.loops.self_play import root_match, self_play
+from manabot.recipes import belief_policy
+from manabot.recipes.belief_policy import PolicyConfig
 
 
 class BeliefConfig(BaseModel):
-    seed: int = 197
-    updates: int = Field(default=1, ge=1)
-    device: Literal["cpu", "mps", "cuda"] = "cpu"
     games: int = Field(default=3, ge=3)
     max_steps: int = Field(default=1000, ge=1)
     sampler: SamplerConfig = SamplerConfig(
@@ -28,40 +27,38 @@ class BeliefConfig(BaseModel):
 
 
 def train(config: BeliefConfig) -> None:
-    settings = gray_ogre_self_play(horizon=config.updates).model_copy(
-        update={"device": config.device}
-    )
-    with track(
-        clocks=[
-            Step("updates", "collection/update iterations"),
-            Time("training_seconds", "active collection and learning seconds"),
-        ],
-        seed=config.seed,
-        config=config.model_dump(mode="json"),
-    ) as run:
-        updates = int(run.until("updates", default=config.updates))
-        policy = self_play(
-            settings,
-            run.out / "policy",
-            seed=config.seed,
-            updates=updates,
-            run=run,
-        )
-        policy_record = run.latest_checkpoint()
-        if policy_record is None:
-            raise RuntimeError("policy checkpoint was not recorded")
+    with track(clocks=[Step("steps", "sampler gradient steps")], config=config) as run:
+        policy = run.input("start")  # the policy run's final checkpoint
         histories = collect_belief(
             policy,
-            run.out / f"histories-{policy.stem}.json",
-            match=root_match(settings),
+            run.out / "histories.json",
+            match=belief_policy.match(),
             games=config.games,
-            seed=config.seed,
+            seed=run.seed,
             max_steps=config.max_steps,
         )
         sampler = train_belief(
-            histories,
-            run.out / f"belief-{policy.stem}.pt",
-            config.sampler,
-            seed=config.seed,
+            histories, run.out / "belief.pt", config.sampler, seed=run.seed
         )
-        run.checkpoint(sampler, tags=("belief",), **policy_record.at)
+        run.checkpoint(sampler, steps=config.sampler.steps)
+
+
+def runs() -> list[Job]:
+    policy = training(
+        belief_policy.train,
+        name="policy",
+        config=PolicyConfig(),
+        seeds=(197,),
+        max_hours=1,
+        max_usd=Decimal(1),
+    )
+    sampler = training(
+        train,
+        name="sampler",
+        config=BeliefConfig(),
+        start=policy,
+        seeds=(197,),
+        max_hours=1,
+        max_usd=Decimal(1),
+    )
+    return [policy, sampler]

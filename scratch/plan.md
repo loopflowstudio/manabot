@@ -10,8 +10,9 @@ learning, world-bound policies and game-error evidence. Pydantic is required.
 The affected user docs already describe the new API; preserve those edits.
 
 Jack Heart, 2026-11-13: "you can run both. i dont care that manabot cant be test. just make sure to clarify it should build what ican then stop".
-The implementation boundary is: build independent changes, then stop at the
-missing EXP-56 calls; no local stub and no delivery. EXP-56 owns the SDK and
+Latest direction, 2026-11-13: "i still think we should restart mtg-329 to match the proposed API,
+and just have it wait after its done writing to block then". Build the full
+client cut against the proposed API; no local stub and no delivery. EXP-56 owns the SDK and
 its naming migration. The full design conversation and earlier review history
 are preserved at `bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/` (plan, positioning,
 cutover, ontology, etude-api, functional-audit, etude-readme-draft, with exact
@@ -41,12 +42,11 @@ train_command body, recipes/device.py and its boundary allowlist entry;
 exclusive CLI tests from test_recipe_etude, test_regimes and test_mps_training.
 Their surviving non-CLI coverage remains. test_train_command covers migration.
 
-Still to delete with the SDK cut: Tracker/untracked path; saved LoopState;
-load_state/save_state, setting_differences/StateMismatch and format/world
-resume guards; manual stop/resume branches and SelfPlay.save_every;
-recipe config seeds and local_launch uses; belief's cached pipeline; benchmark
-Rows tracker. Their exclusive tests/fixtures go in that same cut, with behavior
-coverage on the real surviving SDK path. No compatibility loading for state.pt.
+Deleted in the proposed-API cut: Tracker/untracked path, saved LoopState,
+load_state/save_state, setting_differences/StateMismatch and resume guards,
+manual stop/resume branches, SelfPlay.save_every, recipe seeds, local_launch
+callers, cached belief pipeline and benchmark Rows. Their exclusive fixtures
+are replaced by real SDK save/resume, immutable-policy and failure tests.
 
 Must survive: raw/Adam/EMA/counts, schedules independent of stop targets,
 checkpoint_source, immutable world-bound policies, game-error ledgers and
@@ -57,23 +57,17 @@ Older collector snapshots use 439379869. Never rewrite frozen evidence.
 
 ## Remaining implementation
 
-1. EXP-56 must provide run.seed/resume/steps/save/input, Pydantic track config,
-   checkpoint folders and start= jobs, and etude run/--resume. Realign,
-   2026-11-13: EXP-56 (`etude.exp-56-give-a-training`, fe0d95c) has stopped
-   before any API code and sent state publication back to design review. Its
-   note: "A controlled interrupted delivery retained new weights beside the
-   previous optimizer and metadata" (`scratch/state-publication.py` there).
-   run.save's whole-save atomicity, which our raw/Adam/EMA/counts survival
-   depends on, is therefore unsettled; do not design around a partial save.
-   The new API ships no earlier than an Etude release after 0.3.1.
-   MTG-348 (`manabot.mtg-348-move-to-etude`) is moving Manabot from 0.2.16 to
-   etude-sdk 0.3.2 (eval/report renames, versioned launcher-<schema>.db) and
-   lands first. Rebase onto it, then pin the EXP-56 release and refresh
-   requirements, runtime pins, lock and consumer checks together.
-2. Rebuild self_play and minimal, configs/recipes and experiment seeds against
-   the actual API. Split belief_policy and belief_sampler into linked jobs.
-   Migrate baseline evaluation, benchmark and remaining local_launch callers.
-   Keep all user docs consistent; questions.md lists unresolved contracts.
+1. Rebase onto MTG-348's Etude naming migration, then pin EXP-56's released
+   SDK with requirements, runtime pins, lock and consumer checks together.
+   No source override or compatibility shim is committed. EXP-56 at dda6b17
+   now implements run.seed/resume/steps/save/input and snapshot-pointer saves;
+   its CLI, job seeds and start=Job contracts remain unfinished. A real-source
+   import stops at Manabot's `etude.run.records` (removed in EXP-56); the
+   prerequisite naming migration belongs to MTG-348.
+2. Proposed-API client cut is written: self_play and minimal, Pydantic counts,
+   seed-free configs, linked belief jobs, baseline policy evidence, Etude CLI
+   benchmark and nightly/release callers. User docs and surviving tests move
+   with the cut. This is unvalidated execution code until dependency work lands.
 3. Real fresh/stop/resume/continuation and immutable-policy checks, seed-197
    learner parity, installed consumers, launch restore/retry and service
    continuation. Do not count the older state.pt evidence as new-API proof.
@@ -82,5 +76,17 @@ Older collector snapshots use 439379869. Never rewrite frozen evidence.
    no current-game resume, exact uninterrupted equivalence or in-run source
    repair. Frozen staged/adaptive/frozen-opponent launchers remain retired.
 
+User docs for the rebuild, written against the proposed API and unrun:
+`docs/training.md` (run, write a recipe, stages, remote, checkpoint cadence,
+recovery), `docs/training-loop.md` (minimal loop), `docs/experiments.md`,
+`README.md`, `manabot/README.md`, `.lf/skills/qa.md`. The 2026-11-13 docs pass
+moved them to the save-folder layout, in-place `Counts`, job-and-seed run ids
+and `--resume RUN --until`; questions.md lists what that took from EXP-56's
+draft. The implementation follows these docs: `step` updates `counts` in
+place, and the smoke callers read `track/local/smoke-seed-0/`.
+
 Validation for this pass is recorded in implementation.md. No paid run,
 publication, landing, or background service is part of this pass.
+
+Historical ontology and Etude README proposals: `bd14801a72:scratch/ontology.md` and
+`bd14801a72:scratch/etude-readme-draft.md`; these belong to EXP-56.

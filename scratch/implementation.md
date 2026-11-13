@@ -47,11 +47,15 @@ as passing. No server, watcher, provider job or child agent was started.
 
 ## Compress — 2026-11-13
 
-Removed the release smoke's `train --help` call, inlined the local recipe's
-update default, corrected the development guide's `--recipe` mention, restored
-the dated `experiments/baseline-nightly.md` to main, and merged six historical
-scratch pointers into plan.md.
-`uv run --no-sync --with pytest --with typer pytest tests/training/test_train_command.py tests/infra/test_release.py -q`: 42 passed (1.96s); ruff clean on both changed Python files.
+CLI cut: removed the release smoke's `train --help` call, inlined the local
+recipe's update default, restored the dated `experiments/baseline-nightly.md`;
+test_train_command + test_release: 42 passed.
+Client cut: `step` adds each update's collector deltas to `counts` in place,
+so `counted`, the `base` argument and the copy-back loop are gone; `out` is
+required; `learner_settings`, `create_model` and `create_learner` are inlined;
+docs/training.md's loop listing and the stop test follow.
+Ruff check/format and py_compile clean on the six changed files; `git diff
+--check` clean. test_self_play_loop was not run: it needs the unreleased SDK.
 
 ## Realign — 2026-11-13
 
@@ -60,3 +64,16 @@ resume/steps/save/input or run.seed; fe0d95c returned state publication to
 design review over an interrupted multi-file save. Etude main released 0.3.0
 and 0.3.1; this branch and main still pin 0.2.16; MTG-348 holds for 0.3.2.
 No code changed and no tests rerun in this pass.
+
+## Proposed-API client cut — 2026-11-13
+
+Wrote the loop/recipe/consumer cut against the proposed API; no stub or SDK
+change. Real source dda6b17 has the run methods but importing self_play stops
+at `manabot.infra.artifacts`: `ModuleNotFoundError: etude.run`. MTG-348's naming
+migration must land before EXP-56 execution, CLI, parity or consumer proof.
+The installed pin remains 0.2.16; no new training result is claimed.
+
+Validation: 21 changed/new Python sources and both workflow heredocs compile;
+Ruff clean and formatted; minimal guide equals source; diff check clean.
+`PYTHONPATH=. uv run --no-sync --with pytest --with 'etude-sdk==0.2.16' --with torch --with psutil --with gymnasium --with nbformat pytest tests/training/test_train_command.py tests/infra/test_release.py -q`: 42 passed (13.35s).
+No background work, paid run or delivery.
