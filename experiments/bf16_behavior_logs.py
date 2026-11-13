@@ -1,8 +1,9 @@
 """Exploratory MTG-345 subnormal-exp and fixed-weight forward probe, then BF16 proof.
 
-One capped Etude job writes probe.json before running precision_ladder's BF16
-recipe with its original 300-update horizon and a shorter wall window. Smoke
-uses CPU, a small model and the same probe paths; it makes no CUDA claim.
+One capped Etude job runs `probe` (writes probe.json), then the ordinary
+training worker on precision_ladder's BF16 recipe with its original 300-update
+horizon and a shorter wall window. `smoke` runs the same probe paths and one
+real worker update on CPU with a small model; it makes no CUDA claim.
 """
 
 from __future__ import annotations
@@ -14,9 +15,7 @@ from decimal import Decimal
 import json
 import os
 from pathlib import Path
-import signal
 import tempfile
-from types import FrameType
 
 from etude.launch.records import Run
 from etude.report import Report
@@ -30,9 +29,8 @@ from manabot.backends.torch.rl import policy_logs
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup, run_worker
+from manabot.experiment.job import TrainingJob, run_worker
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.infra.source import bind_etude_source
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference, transfer_admitted
 from manabot.policy.buckets import BucketSizes
@@ -59,11 +57,6 @@ class ForwardDifference:
     p95: float
     p99: float
     maximum: float
-
-
-def _write(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
 
 
 def exp_probe(device: torch.device, *, smoke: bool) -> dict[str, object]:
@@ -208,11 +201,18 @@ def probe(output: Path, *, smoke: bool = False) -> None:
         "exp": exp_probe(device, smoke=smoke),
         "fixed_weights": [asdict(row) for row in forward_probe(device, smoke=smoke)],
     }
-    _write(output / "probe.json", result)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "probe.json").write_text(
+        json.dumps(result, indent=2, allow_nan=False) + "\n"
+    )
 
 
 def runs(revision: str) -> list[Run]:
-    """One L4 proof, with the USD 5 ceiling on the job itself."""
+    """One L4 proof, with the USD 5 ceiling on the job itself.
+
+    The probe is its own process ahead of the unmodified training worker, so
+    training starts from a fresh interpreter and binds its source exactly once.
+    """
     recipe = arm("bf16")
     recipe.wall_seconds = TRAIN_SECONDS
     recipe.stages[0].execution.wall_seconds = TRAIN_SECONDS
@@ -222,12 +222,9 @@ def runs(revision: str) -> list[Run]:
         milestones=(140, 141, 200),
         finalization_seconds=300,
     ).job(repo=ROOT, revision=revision, max_hours=HOURS, max_usd=Decimal("5"))
-    job = job.model_copy(
-        update={
-            "setup": machine_setup(""),
-            "command": f"{TOOLCHAIN_ENV}\nuv run --locked python -m experiments.bf16_behavior_logs worker",
-        }
-    )
+    setup, train = job.command.split("\n")
+    probe_command = "uv run --locked python -m experiments.bf16_behavior_logs probe"
+    job = job.model_copy(update={"command": f"{setup}\n{probe_command} && {train}"})
     return job.runs(SEED)
 
 
@@ -235,73 +232,43 @@ def report() -> Report:
     return Report(perf=PERF, ml=ML)
 
 
-def worker(*, smoke: bool = False) -> None:
-    spec = TrainingJob.model_validate_json(Path(os.environ["ETUDE_CONFIG"]).read_text())
-    if spec.source_bundle is not None:
-        bind_etude_source()
-    output = Path(os.environ["ETUDE_OUTPUT_DIR"])
-    deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"])
-    if deadline.tzinfo is None:
-        raise ValueError("launcher deadline must include timezone")
-    remaining = (deadline - datetime.now(timezone.utc)).total_seconds()
-    if remaining < spec.regime.wall_seconds + spec.finalization_seconds:
-        raise ValueError("remaining allocation cannot cover training and finalization")
-    probe(output, smoke=smoke)
-    # The ordinary worker rechecks the remaining lifetime and owns tracking,
-    # cancellation, numerical incidents and final raw/EMA/optimizer exports.
-    run_worker()
-
-
-def smoke_worker(output: Path) -> None:
-    """Exercise the probe and real training worker through local SDK inputs."""
+def smoke(output: Path) -> None:
+    """The probe, then one real training update through local SDK worker inputs."""
     output.mkdir(parents=True, exist_ok=True)
     spec = TrainingJob(
-        regime=local_smoke(steps=1, device="cpu"), experiment="bf16_behavior_logs"
+        regime=local_smoke(steps=1, device="cpu"), experiment=Path(__file__).stem
     )
     config = output / "config.json"
     config.write_text(spec.model_dump_json())
-    environment = {
-        "ETUDE_RUN": "bf16-logs-smoke",
-        "ETUDE_TRACK_DIR": str(output / "tracking"),
-        "ETUDE_CONFIG": str(config),
-        "ETUDE_OUTPUT_DIR": str(output / "output"),
-        "ETUDE_STOP_FILE": str(output / "stop"),
-        "ETUDE_SEED": str(SEED),
-        "ETUDE_UNTIL_CLOCK": "updates",
-        "ETUDE_UNTIL_VALUE": str(spec.updates),
-        "ETUDE_DEADLINE": (
+    for key in [key for key in os.environ if key.startswith("ETUDE_")]:
+        del os.environ[key]
+    os.environ.update(
+        ETUDE_RUN="bf16-logs-smoke",
+        ETUDE_TRACK_DIR=str(output / "tracking"),
+        ETUDE_CONFIG=str(config),
+        ETUDE_OUTPUT_DIR=str(output / "output"),
+        ETUDE_STOP_FILE=str(output / "stop"),
+        ETUDE_SEED=str(SEED),
+        ETUDE_UNTIL_CLOCK="updates",
+        ETUDE_UNTIL_VALUE=str(spec.updates),
+        ETUDE_DEADLINE=(
             datetime.now(timezone.utc) + timedelta(seconds=180)
         ).isoformat(),
-    }
-    saved = {
-        key: value for key, value in os.environ.items() if key.startswith("ETUDE_")
-    }
-    for key in saved:
-        del os.environ[key]
-    try:
-        os.environ.update(environment)
-        worker(smoke=True)
-    finally:
-        for key in environment:
-            os.environ.pop(key, None)
-        os.environ.update(saved)
-
-
-def _interrupt(signum: int, frame: FrameType | None) -> None:
-    raise KeyboardInterrupt(f"signal {signum}")
+    )
+    probe(output / "output", smoke=True)
+    run_worker()
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("smoke", "worker"))
+    parser.add_argument("command", choices=("smoke", "probe"))
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
-    if args.command == "worker":
-        signal.signal(signal.SIGTERM, _interrupt)
-        worker()
+    if args.command == "probe":
+        probe(Path(os.environ["ETUDE_OUTPUT_DIR"]))
     else:
         output = args.out or Path(tempfile.mkdtemp(prefix="bf16-logs-smoke-"))
-        smoke_worker(output.resolve())
+        smoke(output.resolve())
         print(output)
 
 

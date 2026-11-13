@@ -69,29 +69,27 @@ uv run --with 'etude-sdk[s3,eval]==0.2.15' etude launch \
   --cohort mtg345-bf16-proof --max-usd 5 --revision COMMIT
 ```
 
-Dated line, 2026-11-13: CPU smoke completed all eight forward combinations
-and the strided exp probe (2138 inputs). This verifies wiring only, with a
-w16l1 model and eight native rows; it is not CUDA evidence. The extended smoke also completed one real CPU learner update through the
-ordinary SDK worker and emitted an admitted policy in `etude-result.json`.
-The CUDA proof has not run.
+The job runs the probe as its own process, then the unmodified training
+worker, so training starts from a fresh interpreter.
 
-Dated line, 2026-11-13: the initial quote saw no available capacity. Direct
-launch `ebd68228bef4` was refused before recording a run: "job dollars do not
-cover the hours". Etude adds the on-demand's 900-second startup allowance
-to the job window for rental admission. Shortened only the job window from
-7.1 to 6.99 hours, retaining the USD 5 caps and 300-update learning horizon.
-The corrected quote again returned "provider reports no available machines".
-No rental or training run was created. No launcher run-cost number exists.
+CPU smoke, 2026-11-13 (wiring only: w16l1, eight native rows, strided exp
+probe; not CUDA evidence). All eight chosen-log delta distributions were zero;
+the same-device exp comparison had 2138 zero-spacing gaps, zero old-rule
+rejections and three underflows; one real learner update through the ordinary
+SDK worker emitted an admitted policy. Receipts (`probe.json`, `run.json`,
+`etude-result.json`) are in the artifact manifest under
+`experiments/data/bf16_behavior_logs/cpu-smoke/`.
 
-CPU evidence is retained under `experiments/data/bf16_behavior_logs/cpu-smoke/`
-in the artifact manifest: `probe.json`, the completed worker's `run.json`,
-and `etude-result.json` (one update, admitted raw policy). All eight CPU
-chosen-log delta distributions were zero at this smoke scale; the same-device
-exp comparison had 2138 zero-spacing gaps, zero old-rule rejections and three
-underflows. These are wiring results only. Production CUDA differences,
-legal-probability/gap/underflow time series, health rejections and passing
-update 141 remain unmeasured. Re-run the capped command when L4 capacity is
-available; wait for completion and terminate its machine before reporting it.
+Dated line, 2026-11-13: launch `ebd68228bef4` was refused before recording a
+run ("job dollars do not cover the hours"): Etude adds the on-demand's
+900-second startup allowance to the job window for rental admission. The job
+window went from 7.1 to 6.99 hours; the USD 5 caps and 300-update horizon are
+unchanged. Quotes before and after returned "provider reports no available
+machines". No rental or training run was created, so there is no cost.
+
+The CUDA proof has not run: production device differences, the
+legal-probability/gap/underflow series, health rejections and passing update
+141 remain unmeasured.
 
 ## Decision
 
