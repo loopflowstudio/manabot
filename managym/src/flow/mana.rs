@@ -225,6 +225,8 @@ impl PaymentModel {
         policy: SourcePolicy,
         visited: &mut std::collections::HashSet<PaymentSearchState>,
     ) -> Option<Vec<PaymentStep>> {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::call();
         if state.obligations.is_empty() {
             return Some(Vec::new());
         }
@@ -299,6 +301,8 @@ impl PaymentModel {
         if total < owed || !visited.insert(state.clone()) {
             return None;
         }
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::state();
         let first = state.obligations[0].clone();
         let rest = state.obligations[1..].to_vec();
         match first {
@@ -512,6 +516,20 @@ impl PaymentModel {
     fn plan_after_tap(
         &self,
         pool: Mana,
+        obligations: Vec<Obligation>,
+        permanent: PermanentId,
+    ) -> Option<Vec<PaymentStep>> {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::begin_plan(self.sources.len());
+        let path = self.search_after_tap(pool, obligations, permanent);
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::end_plan();
+        path
+    }
+
+    fn search_after_tap(
+        &self,
+        pool: Mana,
         mut obligations: Vec<Obligation>,
         permanent: PermanentId,
     ) -> Option<Vec<PaymentStep>> {
@@ -543,6 +561,20 @@ impl PaymentModel {
     }
 
     fn plan(
+        &self,
+        pool: Mana,
+        obligations: Vec<Obligation>,
+        policy: SourcePolicy,
+    ) -> Option<Vec<PaymentStep>> {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::begin_plan(self.sources.len());
+        let path = self.search(pool, obligations, policy);
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::end_plan();
+        path
+    }
+
+    fn search(
         &self,
         pool: Mana,
         obligations: Vec<Obligation>,
