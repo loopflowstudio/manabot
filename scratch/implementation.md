@@ -52,3 +52,11 @@ update default, corrected the development guide's `--recipe` mention, restored
 the dated `experiments/baseline-nightly.md` to main, and merged six historical
 scratch pointers into plan.md.
 `uv run --no-sync --with pytest --with typer pytest tests/training/test_train_command.py tests/infra/test_release.py -q`: 42 passed (1.96s); ruff clean on both changed Python files.
+
+## Realign — 2026-11-13
+
+Seen: EXP-56 checkout at ddf6df5 (mid-merge with conflicts) has no
+resume/steps/save/input or run.seed; fe0d95c returned state publication to
+design review over an interrupted multi-file save. Etude main released 0.3.0
+and 0.3.1; this branch and main still pin 0.2.16; MTG-348 holds for 0.3.2.
+No code changed and no tests rerun in this pass.

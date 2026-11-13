@@ -58,10 +58,18 @@ Older collector snapshots use 439379869. Never rewrite frozen evidence.
 ## Remaining implementation
 
 1. EXP-56 must provide run.seed/resume/steps/save/input, Pydantic track config,
-   checkpoint folders and start= jobs, and etude run/--resume. The available
-   SDK source remains 105abdd; none of resume/steps/save/input or run.seed is
-   implemented there (source inspection this pass). Pin a real release and
-   refresh requirements, runtime pins, lock and consumer checks together.
+   checkpoint folders and start= jobs, and etude run/--resume. Realign,
+   2026-11-13: EXP-56 (`etude.exp-56-give-a-training`, fe0d95c) has stopped
+   before any API code and sent state publication back to design review. Its
+   note: "A controlled interrupted delivery retained new weights beside the
+   previous optimizer and metadata" (`scratch/state-publication.py` there).
+   run.save's whole-save atomicity, which our raw/Adam/EMA/counts survival
+   depends on, is therefore unsettled; do not design around a partial save.
+   The new API ships no earlier than an Etude release after 0.3.1.
+   MTG-348 (`manabot.mtg-348-move-to-etude`) is moving Manabot from 0.2.16 to
+   etude-sdk 0.3.2 (eval/report renames, versioned launcher-<schema>.db) and
+   lands first. Rebase onto it, then pin the EXP-56 release and refresh
+   requirements, runtime pins, lock and consumer checks together.
 2. Rebuild self_play and minimal, configs/recipes and experiment seeds against
    the actual API. Split belief_policy and belief_sampler into linked jobs.
    Migrate baseline evaluation, benchmark and remaining local_launch callers.
