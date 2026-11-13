@@ -281,6 +281,7 @@ Checks at the merged HEAD (`d1554835be` base) with these renames:
 - `uv run --no-sync python scratch/observation_digest.py` -> 3,512 decisions, SHA-256 `14c102e4...100a`, identical to baseline.
 - Frozen fixture/vocabulary diff against `d1554835be` -> empty.
 - Compress: after the `_permanent_names` zip (Python only, no rebuild), the same tests plus `tests/semantic/test_player_control.py` -> 27 passed (8.16s).
+- Realign at `b89559f62b` (merged main `e363e4058e`, Etude 0.3.2; no `managym/` or Rust change, so the extension built above still matches): `.lf/skills/qa.md` read `.agent_cards`; now `agent_objects`. Same 27 tests -> 27 passed (7.47s); digest -> 3,512, `14c102e4...100a`. Remaining old-name text is buffer fields/keys (`encoded.agent_cards`, MLX `batch.agent_cards`), the deprecated-names table, `manabot/eval/card_query.CardData` (unrelated), and historical notes (`experiments/milestone-1-*.md`, `.lf/wave/coverage/MEMORY.md:681`, read-only here).
 - Remaining gate suites (Acceptance at gate) and the alias-removal Task stay with later delivery steps.
 
 Constraint for the alias-removal Task filed at landing: `v0.2.3` is the latest

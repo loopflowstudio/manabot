@@ -203,7 +203,7 @@ publish, land or choose the next Graph step from here.
   decks built around the cards involved, and a scripted policy over
   `obs.action_space.actions`. Actions carry no `description`; match
   `action.focus` ids against `env.observation_for_player(env.current_agent_index())`
-  card ids to pick a card. Read `observation_for_player(p).agent_cards`
+  object ids to pick a card. Read `observation_for_player(p).agent_objects`
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
   game end is a "Game Over" dialog with "Play Again".
