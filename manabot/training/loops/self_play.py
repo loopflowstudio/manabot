@@ -305,6 +305,14 @@ class Tracker(Protocol):
 # The learner a loop carries
 
 
+class StateMismatch(ValueError):
+    """An output directory belongs to another run: its `state.pt` was saved for
+    other settings, seed or world, or it holds checkpoints without one.
+
+    Raised before anything is trained or written; the message names what differs.
+    """
+
+
 @dataclass(frozen=True)
 class Counts:
     """Cumulative work across every attempt of the loop."""
@@ -434,7 +442,7 @@ def load_state(path: Path, settings: SelfPlay, seed: int) -> LoopState | None:
         ("seed", seed),
     ):
         if saved[name] != expected:
-            raise ValueError(
+            raise StateMismatch(
                 f"{path} was written for another {name}: {saved[name]!r}, not {expected!r}"
             )
     if saved["settings"] != learner_digest(settings):
@@ -443,7 +451,7 @@ def load_state(path: Path, settings: SelfPlay, seed: int) -> LoopState | None:
         )
         current = learner_settings(settings)
         differences = setting_differences(stored, current)
-        raise ValueError(
+        raise StateMismatch(
             f"{path} has different learner settings: " + "; ".join(differences)
         )
     space = ObservationSpace(settings.observation)
@@ -766,7 +774,7 @@ def self_play(
         state = load_state(out / "state.pt", settings, seed)
         if state is None:
             if any((out / "checkpoints").glob("*.pt")):
-                raise ValueError(
+                raise StateMismatch(
                     "checkpoints exist without state.pt; choose a fresh output directory"
                 )
             state = new_state(settings, seed)

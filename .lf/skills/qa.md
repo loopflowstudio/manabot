@@ -200,6 +200,17 @@ publish, land or choose the next Graph step from here.
   transitions and stream counts small for functional checks; a throughput
   measurement needs the declared workload. Fetch artifacts through Doppler
   without printing credentials. See docs/workflows.md for the output contract.
+  While the pinned SDK lacks `etude.stopping`, overlay a newer SDK checkout
+  with `uv run --no-sync --with <etude checkout> manabot train ...`; zsh does
+  not word-split a command held in a variable, so put it in a small wrapper
+  script. `--seconds 1 --updates 12` gives a planned stop (exit 75) after one
+  update. `etude checkpoints --source <out>` lists recorded checkpoints and
+  their clocks; `etude.train.read.read(<out>/etude, <experiment>, <basename of
+  out>)` gives rows (`.metrics()`, `.points(name, "updates")`, `.attempts`).
+  `etude smoke experiments/elemental.py --step train --revision HEAD` also
+  needs `runs()`'s `--updates/--hours/--usd-per-run`, and builds the
+  revision's own venv from the lock (about 2.5 minutes), so it tests the
+  pinned SDK, not an overlay.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of

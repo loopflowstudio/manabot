@@ -21,6 +21,7 @@ from manabot.infra.config import MatchConfig
 from manabot.recipes import baseline, belief_sampler, elemental, local
 from manabot.recipes.device import accelerator
 from manabot.sim.sim import run_simulation
+from manabot.training.loops.self_play import StateMismatch
 from manabot.training.regime import FROZEN_EXECUTION_REVISION
 import managym
 
@@ -188,6 +189,10 @@ def train_command(
     except Stopped as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(75) from error
+    except StateMismatch as error:
+        raise typer.BadParameter(
+            f"--out {directory} belongs to another run: {error}"
+        ) from error
     finally:
         for key, value in previous.items():
             if value is None:

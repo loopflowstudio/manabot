@@ -140,6 +140,11 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     assert data.reached["training_seconds"] == after.final.clocks["training_seconds"]
     assert before.final in after.checkpoints
     assert all("final" not in checkpoint.tags for checkpoint in after.checkpoints)
+    other_seed = runner.invoke(app, command + ["--seed", "5"])
+    assert other_seed.exit_code == 2
+    assert "belongs to another run" in other_seed.output
+    assert "another seed: 197, not 5" in other_seed.output
+    assert "Traceback" not in other_seed.output
 
 
 @pytest.mark.parametrize("published", [False, True])
