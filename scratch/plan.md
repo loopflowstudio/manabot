@@ -266,10 +266,9 @@ only; full text at `626dab4b48:scratch/plan.md`. Obligations unchanged.
 
 ## Concept review 12: nothing to change in the design — 2026-11-13
 
-Read `self_play.py`, `cli.py`, the four recipes and docs/training.md against
-this plan on a fresh run, a planned stop, a rerun, a target-only extension and
-the belief recipe's rerun. No concept, name or interaction needs to change.
-Etude PR #103 is still open at `105abdd`.
+Read the loop, CLI, four recipes and docs/training.md against this plan
+(fresh run, stop, rerun, extension, belief rerun). No concept, name or
+interaction needs to change. Etude PR #103 is still open at `105abdd`.
 
 Checked and left as is: after a finished belief run, `run.latest_checkpoint()`
 and `TrainingRun.final` name the sampler (tag `belief`), not the policy. The
