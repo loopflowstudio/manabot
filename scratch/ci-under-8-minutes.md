@@ -35,10 +35,11 @@ The repair has two parts:
   and the shared WDL baseline are unchanged. `TrainSelfPlay.batch_closure` in
   `manabot/training/regime.py` owns the contract: complete-game transitions
   are a floor; exact-quota needs one learning seat.
-- `.github/workflows/manabot-integration.yml` selects the existing CPU Torch
+- Integration and Python unit select the existing CPU Torch
   via `--no-default-groups --group play-runtime`, with setup-uv defaults.
   Tests, selections, native debug build, dependency definitions and lockfile
-  are unchanged. `docs/development.md` owns the job budget and balancing;
+  are unchanged. Python unit repeats the runtime flags on `uv run` to preserve
+  that selection. `docs/development.md` owns the job budget and balancing;
   `TESTING.md` owns parallel isolation; `.lf/skills/qa.md` owns hosted checks.
 
 No selected test needed a CUDA-built Torch on a CPU host: actual GPU cases
@@ -116,9 +117,9 @@ comparison took 138.45 s. Experiment build took 70 s, tests 239 s, install 5 s.
 | Engine Budget (exempt) | 571 |
 
 The maximum ordinary job leaves 74 s. This is dispatch evidence, not PR-event
-or post-merge proof, and does not guarantee runner timing. Python unit and
-Academy Integration still use the default CUDA runtime. Adding the observed
-163-second download tail to the merged push's 308-second Python unit job
+or post-merge proof, and does not guarantee runner timing. At that revision,
+Python unit and Academy Integration still used the default CUDA runtime. Adding
+the observed 163-second download tail to the merged push's 308-second Python unit job
 would put it near 471 s; that is a timing-risk estimate, not an observed job.
 
 ## Reconciled revision
@@ -181,9 +182,9 @@ Pre-consolidation evidence, QA and delivery history: `e22af480b:scratch/`.
 
 ## Remaining delivery
 
-Publish the fixture/CPU repair in Task 38ef25, keeping #506 as delivery history.
-Generate fresh PR copy; the removed copy described #506. Retain MTG-263 scope
-and before/after evidence. Obtain PR-event timing on the final revision and
+The fixture/CPU repair is published as PR #508 at `6a453e3f4`, keeping #506
+as delivery history. Its description retains MTG-263 scope and before/after
+evidence. Obtain PR-event timing on the final revision and
 successful post-merge verification before completing the Task: every selected
 ordinary Ubuntu job must pass below 480 s including setup and cache overhead.
 Retain the six Integration groups' CPU install logs and job totals; Engine
@@ -196,3 +197,25 @@ before changing an allowance. Do not add that diagnostic path speculatively.
 Reconciliation reused the existing focused and hosted checks; no tests were
 rerun for these context-only corrections. Check: `git diff --check` passed;
 `lf context` reports memory and scratch below both configured limits.
+
+## Gate (2026-11-12)
+
+Reviewed the diff against `origin/main`, including the fixture, both workflows,
+hosted QA guidance and documentation. No implementation defect found. The local
+tree differs from measured `ef0839c9c` only in memory and scratch evidence;
+reuse its full hosted matrix and the recorded fixture checks. The changed-path
+selector requests all CI jobs because `ci.yml` changed; those run on the PR,
+not as a second local full-suite pass. No browser interaction changed.
+
+- `git diff --name-only -z origin/main...HEAD | bash .github/ci/select-tests.sh` — all nine job selectors true.
+- `uv run --no-sync pytest tests/infra/test_ci_selection.py -q` — 53 passed in 0.33 s.
+- `uv run --no-sync ruff check --fix tests/training/test_experiment_runner.py` — passed, no edits.
+- `uv run --no-sync ruff format tests/training/test_experiment_runner.py` — unchanged.
+- `actionlint .github/workflows/ci.yml .github/workflows/manabot-integration.yml` — passed.
+- `uv run --no-sync python scripts/check_loopflow_workflows.py` — all nine graphs compiled; boundaries valid.
+- `uv lock --check` — passed, 176 packages resolved.
+- `git diff --check` — passed after the gate's evidence-only edits.
+- `gh run view 43353030839 --json conclusion,headSha,jobs` — rechecked green dispatch, ordinary max 406 s; unchanged test/workflow inputs reused.
+
+PR-event run `43355252190` is already in progress on `6a453e3f4`; no additional
+run was launched. Successful post-merge verification remains a delivery check.
