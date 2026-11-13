@@ -12,6 +12,7 @@ import sys
 import time
 
 from etude.experiment import observe
+from etude.launch.records import Until
 from etude.train.read import read_all
 import pytest
 
@@ -86,7 +87,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     spec = specification()
     job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
     assert job.max_attempts == 1
-    assert job.until == "updates=2"
+    assert job.until == Until(clock="updates", value=2)
     assert job.config is not None
     frozen = TrainingJob.model_validate_json(job.config)
     # Etude unpacks the commit without .git; the config carries its bundle.
@@ -388,7 +389,7 @@ def test_continuation_trains_parent_learner_to_absolute_target(
         ("parent-ema.pt", "mtg-fixture/parent-ema.pt"),
         ("parent-optimizer.pt", "mtg-fixture/parent-optimizer.pt"),
     }
-    assert job.until == "updates=4"
+    assert job.until == Until(clock="updates", value=4)
     worker_environment(tmp_path, monkeypatch, spec)
     monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
     run = run_worker()

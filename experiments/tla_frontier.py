@@ -55,8 +55,8 @@ from etude.eval.records import (
     Environment,
     Inference,
     Match,
-    Matchup,
     Model,
+    Seating,
 )
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
@@ -509,22 +509,62 @@ class ScheduledComparison:
 
     tag: str
     update: int | None
-    matchup: Matchup | None
+    matchup: Seating | None
     unreached: bool = False
     hours: tuple[float, float] | None = None
 
 
 def paired_matchup(
     name: str, players: tuple[Model, Model | Code], tag: str, protocol: Protocol
-) -> Matchup:
+) -> Seating:
     """One comparison: every frozen pair, four legs each, as `play` admits."""
-    return Matchup(
+    return Seating(
         name=name,
         players=players,
         conditions=tuple(pair.model_dump(mode="json") for pair in protocol.pairs),
         games=GAMES_PER_PAIR,
         tags=(tag,),
     )
+
+
+# Frozen launcher outcome, recorded in tla-frontier-c5fba4-results.md's cost
+# table: "machine lost; 931 updates stored, last checkpoint u925". Reports
+# must retain that endpoint without the original machine's launcher database.
+LOST_RUNS: frozenset[str] = frozenset({"5b7d8fa7b38c"})
+
+
+def _equal_update_seating(update: int) -> str:
+    return f"{LARGE} u{update} vs {SMALL} u{update}"
+
+
+def _equal_hours_seating(point: str, partner: int) -> str:
+    return f"{LARGE} {point} vs {SMALL} u{partner} at equal hours"
+
+
+# The Large-vs-Small pairs the stored tla-frontier-c5fba4-paired-v1 and -cuda-v1
+# tournaments hold, named as the schedule named them. report() has no state from
+# which to recover the equal-hours partners, and later planned milestones were
+# never played, so the recorded pairs are listed.
+EQUAL_UPDATE_SEATINGS: tuple[str, ...] = tuple(
+    _equal_update_seating(update)
+    for update in (25, 50, 75, 100, 150, 200, 300, 400, 600, 800)
+)
+EQUAL_HOURS_SEATINGS: tuple[str, ...] = tuple(
+    _equal_hours_seating(point, partner)
+    for point, partner in (
+        ("u25", 50),
+        ("u50", 100),
+        ("u75", 175),
+        ("u100", 225),
+        ("u150", 350),
+        ("u200", 475),
+        ("u300", 700),
+        ("u400", 875),
+        ("u600", 1200),
+        ("u800", 1525),
+        ("final u925", 1700),
+    )
+)
 
 
 def with_launcher_ends(state: ExperimentState) -> ExperimentState:
@@ -535,13 +575,15 @@ def with_launcher_ends(state: ExperimentState) -> ExperimentState:
     reach an endpoint. The launcher owns whether an attempt is over and the store
     what it kept, so such a run ends at its last export. A `succeeded` run with
     no end state is delivery lag and stays running. A running run the launcher
-    does not know raises, so a read away from the launcher fails loudly rather
-    than taking a dead pod for a live one.
+    does not know raises, except for the frozen lost-run record above, so a read
+    away from the launcher fails loudly rather than taking a dead pod for a live one.
     """
 
     def lost(run: TrainingRun) -> bool:
         if run.ended:
             return False
+        if run.name in LOST_RUNS:
+            return True
         found = client.status(run.name)
         return found.done and found.outcome != "succeeded"
 
@@ -562,7 +604,7 @@ def size_label(run: TrainingRun) -> SizeLabel | None:
 
 
 def checkpoint_update(checkpoint: Checkpoint) -> int:
-    return int(checkpoint.clocks["updates"])
+    return int(checkpoint.at["updates"])
 
 
 def last_update(run: TrainingRun) -> int | None:
@@ -715,7 +757,7 @@ def comparison_schedule(
                 LARGE,
                 update,
                 model(SMALL, update),
-                f"{LARGE} u{update} vs {SMALL} u{update}",
+                _equal_update_seating(update),
                 unreached=any(past_endpoint(label, update) for label in SIZES),
             )
     for label in SIZES:
@@ -769,7 +811,7 @@ def comparison_schedule(
             tag="equal-hours",
             update=update,
             matchup=paired_matchup(
-                f"{LARGE} {point} vs {SMALL} u{found[0]} at equal hours",
+                _equal_hours_seating(point, found[0]),
                 (candidate, partner),
                 "equal-hours",
                 protocol,
@@ -866,7 +908,7 @@ def eval(state: ExperimentState) -> list[Job]:
     )
 
 
-def _distinct(matchups: Iterable[Matchup]) -> tuple[Matchup, ...]:
+def _distinct(matchups: Iterable[Seating]) -> tuple[Seating, ...]:
     """Each set of matches once, under its first comparison's name.
 
     An equal-hours pair can be an equal-update or endpoint pair as well, most
@@ -874,7 +916,7 @@ def _distinct(matchups: Iterable[Matchup]) -> tuple[Matchup, ...]:
     by match key, so both slots read the one set of games.
     """
     seen: set[frozenset[str]] = set()
-    kept: list[Matchup] = []
+    kept: list[Seating] = []
     for matchup in matchups:
         keys = frozenset(match.key for match in matchup.matches())
         if keys not in seen:
@@ -896,7 +938,7 @@ def pass_name(name: str) -> str:
 
 
 def evaluation_jobs(
-    name: str, env: Environment, matchups: Sequence[Matchup]
+    name: str, env: Environment, matchups: Sequence[Seating]
 ) -> list[Job]:
     """One rented pass of `play` over `matchups`, none without any.
 
@@ -905,7 +947,7 @@ def evaluation_jobs(
     if not matchups:
         return []
     job = evaluation(
-        Benchmark(name=pass_name(name), environment=env, matchups=tuple(matchups)),
+        Benchmark(name=pass_name(name), environment=env, seatings=tuple(matchups)),
         # Etude discovers this file with runpy; callbacks need an importable
         # module identity even when eval itself came from <run_path>.
         play=tla_frontier.play,
@@ -1100,7 +1142,7 @@ def report() -> Report:
     """Progress curves by update; `experiments.tla_frontier_analysis` owns claims.
 
     Etude's report axes are checkpoint clocks, and hours are not one yet, so the
-    equal-hours curve is drawn at w160l8's update; a pair that is also an
+    equal-hours pair is drawn once, at Large's update; a pair that is also an
     equal-update or endpoint pair is played once, under that tag.
     """
     regimes, _ = frozen()
@@ -1119,18 +1161,10 @@ def report() -> Report:
             ),
             against_fixed(
                 "Model vs heuristic",
-                "heuristic",
                 tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
-            # Drawn at w160l8's updates; each pair's two hours are in analysis.
-            head_to_head(
-                "Large vs Small at fixed training time",
-                subject=large,
-                tag="equal-hours",
-            ),
-            head_to_head(
-                "Large vs Small at fixed # updates", subject=large, tag="head-to-head"
-            ),
+            head_to_head("Large vs Small at fixed training time", EQUAL_HOURS_SEATINGS),
+            head_to_head("Large vs Small at fixed # updates", EQUAL_UPDATE_SEATINGS),
         ),
         perf=PERF,
         ml=(*learning_schedule(jobs), *ML),

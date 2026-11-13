@@ -17,8 +17,8 @@ from etude.eval.records import (
     Inference,
     Match,
     MatchRecord,
-    Matchup,
     Model,
+    Seating,
     Version,
     digest,
 )
@@ -183,8 +183,8 @@ def test_load_real_etude_tables_and_reject_changed_frozen_identity(
     tournament = Benchmark(
         name="held-out",
         environment=world,
-        matchups=tuple(
-            Matchup(
+        seatings=tuple(
+            Seating(
                 name=arm, players=(policies[arm], anchor), conditions=({},), games=6
             )
             for arm in ARMS
@@ -277,8 +277,8 @@ def test_load_real_etude_tables_and_reject_changed_frozen_identity(
     invalid = Benchmark(
         name="invalid-only",
         environment=world,
-        matchups=(
-            Matchup(
+        seatings=(
+            Seating(
                 name="invalid",
                 players=(policies["U"], anchor),
                 conditions=({"invalid": True},),
