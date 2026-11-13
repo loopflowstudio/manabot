@@ -87,6 +87,10 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
+Seventh recheck (after review 6, `43ba82024`): PR #103 still open at
+`105abdd`; origin/main has nothing new; the guide commands match
+`experiments.elemental.runs(revision, updates, hours, usd_per_run)`.
+
 Sixth recheck (after review 5 and the #510 sync): PR #103 still open at
 `105abdd`; pins 0.2.16. Main advanced to `f4e1822fa` (#510, precision `auto`,
 new frozen `experiments/precision_ladder.py`), merged as `2f00cbbf6`. That
