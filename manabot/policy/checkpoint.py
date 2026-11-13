@@ -268,7 +268,7 @@ def read_container(path: str | Path) -> PolicyCheckpoint:
     container metadata; convert its PyTorch checkpoint again.
     """
     path = Path(path)
-    remedy = "convert the PyTorch .pt with `python -m manabot.backends.convert`"
+    remedy = "convert the PyTorch .pt with `uv run python -m manabot.backends.convert`"
     try:
         arrays, metadata = read_safetensors(path)
     except (struct.error, ValueError, KeyError) as error:

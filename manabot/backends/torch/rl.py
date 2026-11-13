@@ -8,8 +8,8 @@ selection and the named numerical refusals they raise. The updates in
 They read tensors and small typed records and import nothing else from
 manabot beyond the framework-free host recursions in `manabot.policy.returns`
 (`tests/test_package_boundaries.py` enforces it), so another role reuses them
-unchanged. Every backend under `manabot.backends` has the same
-functions over its own arrays; the gradient step and EMA live in
+unchanged. Other backends expose matching functions over their own arrays
+for the operations they support; the gradient step and EMA live in
 `manabot.backends.torch.learner`.
 """
 

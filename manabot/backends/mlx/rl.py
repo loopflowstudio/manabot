@@ -8,7 +8,7 @@ the legal support. Targets, behavior likelihoods and references are
 constants: gradients reach only the current policy and value outputs.
 
 Three differences from torch are deliberate. MLX's GPU has no float64, so the
-surrogate ratio is float32 (`clipped_surrogate` states the bound) and
+surrogate ratio is float32 (`clipped_surrogate` states the limit) and
 `float64_operand` is the identity. Returns and advantage selection run on the
 host through `manabot.policy.returns`, whose NumPy functions match torch's
 bit for bit. The categorical critic's functions are absent: the backend
@@ -181,10 +181,12 @@ def clipped_surrogate(
 ) -> mx.array:
     """Negative clipped surrogate [B] (Schulman et al. 2017, eq. 7) from log ratios.
 
-    PyTorch evaluates the ratio in float64 so exp(log ratio) cannot overflow;
-    MLX's GPU has no float64, so the ratio is float32 here. The two differ only
-    for |log ratio| > 88, which no sampled action reaches in practice; the
-    parity check would fail first. Advantages are constants.
+    PyTorch evaluates the ratio in float64 to cover sampled float32 actions;
+    MLX's GPU has no float64, so the ratio is float32 here. Besides rounding
+    differences, positive log ratios above about 88 can overflow. Nonfinite
+    objectives or gradients are refused before the optimizer step; parity on
+    captured inputs does not establish agreement outside them. Advantages are
+    constants.
     """
     ratio = mx.exp(log_ratio)
     advantages = mx.stop_gradient(advantages)

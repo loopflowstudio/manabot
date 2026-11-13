@@ -35,8 +35,6 @@ from manabot.backends.torch.arrays import to_numpy
 from manabot.backends.torch.rl import legal_mask
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
-    PERMANENT_LINK_INDEXES,
-    RELATION_VALID_INDEX,
 )
 from manabot.model.continuation import admit_relations
 from manabot.model.facts import admit_facts
@@ -48,6 +46,7 @@ from manabot.model.semantic_cards import (
     definition_rows,
 )
 from manabot.model.shared_effects import admit_shared_effects
+from manabot.policy import admission
 from manabot.policy.buckets import BucketSizes, row_needs, sizes_of
 
 if TYPE_CHECKING:
@@ -348,12 +347,9 @@ def _admit_beliefs(agent: "ActorCritic", obs: Mapping[str, torch.Tensor]) -> Non
 
 def _admit_permanent_links(obs: Mapping[str, torch.Tensor], object_count: int) -> None:
     """Links are object index + 1 (zero: none) into the object sequence."""
-    for column in PERMANENT_LINK_INDEXES:
-        links = torch.cat([obs[key][..., column] for key in _PERMANENT_KEYS], dim=1)
-        if not (
-            (links == links.floor()) & (links >= 0) & (links <= object_count)
-        ).all():
-            raise ValueError("invalid permanent link object reference")
+    admission.permanent_links(
+        {key: to_numpy(obs[key]) for key in _PERMANENT_KEYS}, object_count
+    )
 
 
 def _admit_actions(
@@ -364,21 +360,13 @@ def _admit_actions(
     valid_count: int,
 ) -> None:
     """Legal rows' continuation, naming and focus references."""
-    batches, slots = legal.nonzero(as_tuple=True)
-    indexes = obs["actions"][batches, slots][..., -2]
-    if not ((indexes == indexes.floor()) & (indexes >= 0) & (indexes <= 64)).all():
-        raise ValueError("invalid action continuation reference")
-    rows = obs["relations"]
-    present = (
-        (indexes[:, None] == rows[..., 1][batches])
-        & (rows[..., RELATION_VALID_INDEX][batches] == 1)
-    ).any(-1)
-    if ((indexes != 0) & ~present).any():
-        raise ValueError("action continuation reference has no frame")
-    candidates = obs["name_candidates"][batches, slots]
-    agent.name_candidates.admit(candidates)
-    if lookup is not None:
-        admit_definition_ids(candidates[..., 1], len(lookup), lookup)
-    focus = obs["action_focus"][batches, slots]
-    if not ((focus == focus.floor()) & (focus >= -1) & (focus < valid_count)).all():
-        raise ValueError("invalid action focus reference")
+    admission.actions(
+        {
+            key: to_numpy(obs[key])
+            for key in ("actions", "relations", "name_candidates", "action_focus")
+        },
+        to_numpy(legal),
+        valid_count,
+        to_numpy(buffer_on(agent.name_candidates, "definitions", torch.device("cpu"))),
+        None if lookup is None else to_numpy(lookup),
+    )

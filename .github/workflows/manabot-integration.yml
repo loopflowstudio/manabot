@@ -42,6 +42,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --python 3.13 --no-install-package managym \
+            --no-default-groups --group play-runtime \
             --extra dev --extra play --extra notebook --extra artifacts \
             --extra reports --extra llm --extra evaluation
 
@@ -74,6 +75,7 @@ jobs:
             tests/training/test_matchups.py tests/training/test_training_decks.py tests/training/test_tla_corpus.py \
             tests/training/test_deck_building_foundations.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
+            tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py \
             tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
             tests/training/test_action_cutoff.py tests/training/test_packed_action_rollouts.py \
             tests/training/test_credit_assignment.py \

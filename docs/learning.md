@@ -173,8 +173,9 @@ recursion with λ = 0.8, which leans more on what actually happened. A
 categorical value head uses a three-way loss/draw/win mixture with the same λ
 and a one-hot terminal. A scalar head uses $A_t + V_t$.
 
-From `transition_gae` in
-[`manabot/backends/torch/rl.py`](../manabot/backends/torch/rl.py):
+The backend's `transition_gae` calls the shared
+[`policy/returns.py`](../manabot/policy/returns.py) recursion. Its equivalent
+row-by-row form is:
 
 ```python
 for step in reversed(range(len(rewards))):

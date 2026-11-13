@@ -52,8 +52,8 @@ diagnostics = update_damped_iteration(
 )
 ```
 
-The damped update runs on torch and on MLX. The same batch and the same
-weights give the same diagnostics on both, within the
+The damped update runs on torch and on MLX. One minibatch at the same
+weights gives the same diagnostics on both, within the
 [parity check](#parity-check)'s bars
 (`tests/training/test_update_backends.py` runs it on every installed
 backend):
@@ -67,7 +67,12 @@ diagnostics = update_damped_iteration(
 )
 ```
 
-Inside an update, array math goes only through the backend's modules:
+Inside an update, array math goes only through the backend's modules. The
+Protocols in `manabot/training/updates/backend.py` state this surface
+(`Backend` for the damped update; `PPOBackend`, torch only, adds what PPO
+calls; `CategoricalRL`, torch only, the categorical critic), and
+`tests/training/test_update_backend_protocols.py` checks every installed
+backend against them:
 
 - `backend.arrays`: moving host rows in and out (`from_numpy`, `to_numpy`)
   and `float32` for a forward output.
@@ -112,9 +117,10 @@ the returns and selection recursions (`returns.py`), which both backends'
 `transition_gae` wrap; torch keeps advantage selection on the minibatch's
 device (`selected_rows`, `torch.quantile`), matching `returns.quantile` bit
 for bit. The
-update modules import no framework and no backend at runtime
-(`tests/test_package_boundaries.py` enforces it); the torch types they name
-are annotations only.
+algorithm modules (`damped_policy.py` and `ppo.py`) import no framework and no backend, even for annotations
+(`tests/test_package_boundaries.py` enforces it); they name the backend's
+arrays, devices and observation batches as the opaque `Array`, `Device` and
+`Observations`.
 
 A function has the same name, arguments, shapes and per-row results in every
 backend that has it; the torch backend's signatures are the reference, and
@@ -132,6 +138,8 @@ documents them. A backend never carries its own copy of an update's loss:
   `selected_rows`, which only PPO calls.
 - `OptimizerHealth` counts steps and rejections on every backend; its sampled
   gradient and parameter detail reads torch modules and is absent on MLX.
+  Health reporting and rollout storage still import torch, so running the MLX
+  update currently requires torch installed too.
 - The PPO update calls torch tensor methods (`.float()`, `.flatten()`,
   `.detach()`) and torch's `get_value`; only the damped update runs on MLX.
 
@@ -158,6 +166,10 @@ learner = Learner(agent, "cpu", minibatch_rows=64)
 their first bytes; `save_checkpoint` writes `.pt` until the container carries
 every configuration the torch policy runs (belief inputs, history, FiLM and
 the rest refused below).
+Both formats honor the `bucketed_shapes` and `live_tokens` execution options
+passed to `load_checkpoint`.
+Only ZIP-format `.pt` files are recognized; older non-ZIP PyTorch serialization
+is reported as `NotAContainer`.
 
 `BACKEND` is torch's `manabot.policy.protocol.Backend`, beside the native
 torch API: `load` returns a `TorchPolicy` and a `Learner`, whose parameters
@@ -167,8 +179,9 @@ maps canonical names back). Until `ActorCritic` reads `Prepared` indices, its
 observation on it (`Retained`), so parity can run torch against its own torch
 reference.
 
-`rl.py`, `learner.py` and `arrays.py` import nothing else from manabot at
-runtime, so another role reuses them unchanged.
+The reusable pieces in `rl.py`, `learner.py` and `arrays.py` depend only on
+their own backend, the shared host returns and the profiler at runtime;
+they load neither the policy network nor the training configuration.
 
 ## Convert a PyTorch checkpoint
 
@@ -206,6 +219,8 @@ that enables anything else (belief inputs, policy history, another critic,
 FiLM, input v10) is refused with every unsupported
 field named (`UnsupportedPolicy`), rather than run partially. Checkpoints of
 the `local` recipe use FiLM and are refused.
+Conversion also currently omits the scalar critic's `value_semantic` metadata;
+PUCT refuses that converted scalar policy. Use the original `.pt` for PUCT.
 
 ## Parity check
 
@@ -214,22 +229,20 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
 ```
 
 ```text
-mlx minibatch   0  B  46  logits 5.8e-09  values 2.4e-07  loss 1.4e-07  min cosine 1.000000 (...)
-...
-torch  forward logits                           max |Δ| 9.7e-09 (tol 1e-4)  ok
-torch  forward values                           max |Δ| 2.7e-07 (tol 1e-4)  ok
+torch  clipped Adam weights                     max |Δ| 7.5e-09 (tol 1e-6)  ok
+torch  forward logits                           max |Δ| 4.8e-09 (tol 1e-4)  ok
+torch  forward values                           max |Δ| 1.8e-07 (tol 1e-4)  ok
 torch  collection logits                        max |Δ| 0.0e+00 (tol 1e-4)  ok
 torch  collection values                        max |Δ| 0.0e+00 (tol 1e-4)  ok
 torch  learner loss                             rel Δ 0.0000% (tol 0.1%)  ok
-torch  gradient ...                             min cosine 1.000000 over 169 tensors (tol 0.999)  ok
-torch  one step                                 params max |Δ| 7.5e-09, update min cosine 1.000000 (informative)
-mlx    forward logits                           max |Δ| 7.7e-09 (tol 1e-4)  ok
-mlx    forward values                           max |Δ| 3.6e-07 (tol 1e-4)  ok
-mlx    collection logits                        max |Δ| 7.0e-09 (tol 1e-4)  ok
-mlx    collection values                        max |Δ| 3.3e-07 (tol 1e-4)  ok
-mlx    learner loss                             rel Δ 0.0000% (tol 0.1%)  ok
-mlx    gradient ...                             min cosine 0.999940 over 201 tensors (tol 0.999)  ok
-mlx    one step                                 params max |Δ| 9.4e-05, update min cosine 0.944017 (informative)
+torch  gradient semantic_cards.token_embedding.weight min cosine 1.000000 over 169 tensors (tol 0.999)  ok
+mlx    clipped Adam weights                     max |Δ| 1.2e-07 (tol 1e-6)  ok
+mlx    forward logits                           max |Δ| 5.9e-09 (tol 1e-4)  ok
+mlx    forward values                           max |Δ| 3.9e-07 (tol 1e-4)  ok
+mlx    collection logits                        max |Δ| 4.9e-09 (tol 1e-4)  ok
+mlx    collection values                        max |Δ| 2.7e-07 (tol 1e-4)  ok
+mlx    learner loss                             rel Δ 0.0004% (tol 0.1%)  ok
+mlx    gradient extra_attention.5.mlp.layers.0.weight min cosine 1.000000 over 201 tensors (tol 0.999)  ok
 parity: pass (torch, mlx)
 ```
 
@@ -240,10 +253,13 @@ capture directory written by `experiments/mlx_pilot.py capture` (real learner
 minibatches with their targets and settings, and real collection calls). Each
 backend loads the reference's weights through the canonical names and is
 compared in its own parameter layout. The check compares logits on legal
-actions and values (absolute difference), the update's loss (relative difference)
-and each parameter's gradient (cosine similarity). Tolerances are fixed:
+actions and values (absolute difference), the update's loss (relative difference),
+each parameter's gradient (cosine similarity), and every weight after one
+Adam step with gradient clipping. Tolerances are fixed:
 logits and values within 1e-4, loss within 0.1%, every gradient cosine at
-least 0.999. A tensor whose gradient norm is below 1e-6 of the global norm in
+least 0.999, post-step weights within 1e-6 absolute. The weight bar includes
+every parameter; only the gradient-cosine check treats negligible tensors as
+zero. A tensor whose gradient norm is below 1e-6 of the global norm in
 both frameworks counts as zero: the policy-score bias and every attention key
 bias have analytically zero gradients (softmax ignores a shift shared by all
 its inputs), so both sides hold rounding noise. The check exits 1 naming each

@@ -152,11 +152,11 @@ def cpu(captures: Path, out: Path) -> dict[str, Any]:
 
 def checkpoint(path: Path, size: str = SIZE) -> None:
     """Save a seeded random policy of `size`, bound to the selected matchup."""
+    from manabot.backends.torch.checkpoint import save_checkpoint
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.match import Match
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig, ObservationConfig
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.model.checkpoint import save_checkpoint
     from manabot.recipes.builders import PACK
     from manabot.sim.matchup import selected_match
 

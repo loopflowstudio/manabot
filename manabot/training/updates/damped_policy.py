@@ -7,9 +7,10 @@ receive gradients. MTG uses same-viewer transitions and an action-type magnet;
 see docs/learning.md#fidelity-to-the-sources for the fidelity boundary and unresolved source details.
 
 The update is written once over a backend module (`manabot.backends.torch`,
-`manabot.backends.mlx`): array math goes through `backend.rl`,
-`backend.learner` and `backend.arrays`, observations are admitted by
-`backend.rollout`, and row bookkeeping and diagnostics (which rows train,
+`manabot.backends.mlx`; the surface it calls is
+`manabot.training.updates.backend.Backend`): array math goes through
+`backend.rl`, `backend.learner` and `backend.arrays`, observations are
+admitted by `backend.rollout`, and row bookkeeping and diagnostics (which rows train,
 minibatch indexes, selection groups, value scale) are NumPy. The minibatch
 loss is `minibatch_objective`, equation (6) in `backend.rl.damped_policy_loss`
 plus the critic's loss; the learner differentiates it as a closure over the
@@ -18,8 +19,7 @@ gradient.
 """
 
 from dataclasses import dataclass
-from types import ModuleType
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 
@@ -27,6 +27,15 @@ from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.backend import (
+    RL,
+    AdmittedRollout,
+    Array,
+    Backend,
+    Learner,
+    Policy,
+    categorical_rl,
+)
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
@@ -39,39 +48,31 @@ from manabot.training.updates.selection import (
     value_scale,
 )
 
-if TYPE_CHECKING:
-    # The torch backend's types are the reference signatures.
-    from torch import Tensor
-
-    from manabot.backends.torch.learner import Learner
-    from manabot.backends.torch.policy import ActorCritic
-    from manabot.backends.torch.rollout import AdmittedRollout
-
 
 @dataclass(frozen=True)
 class DampedTargets:
-    advantages: "Tensor"
-    values: "Tensor"
-    selected: "Tensor"
+    advantages: Array
+    values: Array
+    selected: Array
 
 
 def minibatch_objective(
-    rl: ModuleType,
-    logits: "Tensor",
-    value_logits: "Tensor",
-    valid: "Tensor",
+    rl: RL,
+    logits: Array,
+    value_logits: Array,
+    valid: Array,
     *,
-    actions: "Tensor",
-    advantages: "Tensor",
-    value_targets: "Tensor",
-    behavior_logs: "Tensor",
-    reference: "Tensor",
-    actor_mask: "Tensor",
+    actions: Array,
+    advantages: Array,
+    value_targets: Array,
+    behavior_logs: Array,
+    reference: Array,
+    actor_mask: Array,
     categorical: bool,
     clip: float,
     collection_kl: float,
     tau: float,
-) -> "tuple[Tensor, Tensor, Tensor]":
+) -> tuple[Array, Array, Array]:
     """The damped rule's loss on one minibatch: (loss, policy loss, value loss).
 
     `rl` is a backend's `rl` module and every array is that backend's:
@@ -98,7 +99,9 @@ def minibatch_objective(
         actor_mask,
     )
     if categorical:
-        value_loss = rl.categorical_value_loss(value_logits, value_targets).mean()
+        value_loss = (
+            categorical_rl(rl).categorical_value_loss(value_logits, value_targets)
+        ).mean()
     else:
         # Representation ablation, not the paper's outcome objective.
         value_loss = rl.squared_value_loss(value_logits, value_targets).mean()
@@ -106,11 +109,11 @@ def minibatch_objective(
 
 
 def _targets(
-    backend: ModuleType,
-    learner: "Learner",
-    admitted: "AdmittedRollout",
+    backend: Backend,
+    learner: Learner,
+    admitted: AdmittedRollout,
     learning: DampedPolicyLearning,
-    bootstrap_agent: "ActorCritic | None" = None,
+    bootstrap_agent: Policy | None = None,
 ) -> DampedTargets:
     rl, device = backend.rl, learner.device
     batch = admitted.batch
@@ -139,11 +142,12 @@ def _targets(
                     "saved value differs from collection outcome probabilities"
                 )
             probabilities = backend.arrays.from_numpy(outcomes, device)
-            bootstrap = rl.outcome_probabilities(next_raw)
-            value_targets = rl.categorical_lambda_returns(
+            wdl = categorical_rl(rl)
+            bootstrap = wdl.outcome_probabilities(next_raw)
+            value_targets = wdl.categorical_lambda_returns(
                 probabilities, rewards, ends, bootstrap, learning.value_lambda
             )
-            next_value = rl.expected_outcome(bootstrap)
+            next_value = wdl.expected_outcome(bootstrap)
         else:
             next_value = next_raw.squeeze(-1)
             _, value_targets = rl.transition_gae(
@@ -165,18 +169,17 @@ def _targets(
 
 
 def update_damped_iteration(
-    backend: ModuleType,
-    learner: "Learner",
+    backend: Backend,
+    learner: Learner,
     batch: RolloutBatch,
     learning: DampedPolicyLearning,
     iteration: int,
     *,
-    bootstrap_agent: "ActorCritic | None" = None,
+    bootstrap_agent: Policy | None = None,
 ) -> UpdateDiagnostics:
     """One fresh epoch grouped by native stream count, with frozen targets.
 
-    `backend` is the module whose arrays `learner` holds
-    (`manabot.backends.torch`). EMA belongs to the calling stage and advances
+    `backend` is the module whose arrays `learner` holds. EMA belongs to the calling stage and advances
     once even on an empty filter. No batch shuffling, advantage normalization,
     replay or hidden truth. Scalar value is an explicit MSE ablation;
     categorical uses equation (5).
@@ -228,7 +231,9 @@ def update_damped_iteration(
         diagnostics["numerical"] = health
         observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
         expected_targets = (
-            rl.expected_outcome(targets.values) if categorical else targets.values
+            categorical_rl(rl).expected_outcome(targets.values)
+            if categorical
+            else targets.values
         )
         expected_rows = to_host(expected_targets)
         # In the backend's arithmetic: these residuals are credit evidence.
@@ -288,7 +293,7 @@ def update_damped_iteration(
                 actor_selected = actor_rows[rows_host]
                 actor_mask = to_device(actor_selected, device)
 
-                def _objective() -> "tuple[Tensor, ...]":
+                def _objective() -> tuple[Array, ...]:
                     with learner.forward_precision():
                         logits, value_logits = learner.agent.forward_distribution(obs)
                     logits, value_logits = float32(logits), float32(value_logits)

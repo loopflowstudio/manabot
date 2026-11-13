@@ -52,7 +52,7 @@ class EvalAllocation(EvalCompute):
     cache_catalog: bool = True
     resident: bool = True
     # Bucketed padding and live-token attention for served policies
-    # (`manabot.model.buckets`, `manabot.model.live_tokens`); opt-in.
+    # (`manabot.policy.buckets`, `manabot.backends.torch.live_tokens`); opt-in.
     bucketed_shapes: bool = False
     live_tokens: bool = False
 

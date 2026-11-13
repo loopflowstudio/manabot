@@ -9,7 +9,9 @@ object/catalog encoders and this projection; no memory survives a decision.
 import torch
 from torch import nn
 
-from manabot.env.observation import RELATION_ROWS, RELATION_VALID_INDEX
+from manabot.backends.torch.arrays import to_numpy
+from manabot.env.observation import RELATION_VALID_INDEX
+from manabot.policy import admission
 
 # One-based object joins of a relation row (0: none).
 _OBJECT_COLUMNS = (6, 24)
@@ -17,25 +19,7 @@ _OBJECT_COLUMNS = (6, 24)
 
 def admit_relations(rows: torch.Tensor, relation_dim: int, object_count: int) -> None:
     """Reject malformed relation rows [B,64,relation_dim] before any forward."""
-    if rows.shape[1:] != (RELATION_ROWS, relation_dim):
-        raise ValueError(f"expected [batch, 64, {relation_dim}] relations")
-    valid = rows[..., RELATION_VALID_INDEX]
-    if not ((valid == 0) | (valid == 1)).all():
-        raise ValueError("relation validity must be binary")
-    clean = torch.where(valid.bool().unsqueeze(-1), rows, 0)
-    if not torch.isfinite(clean).all():
-        raise ValueError("relations must be finite")
-    for column in _OBJECT_COLUMNS:
-        indexes = clean[..., column]
-        if not (
-            (indexes == indexes.floor()) & (indexes >= 0) & (indexes <= object_count)
-        ).all():
-            raise ValueError("invalid continuation object reference")
-    ids = rows[..., 1]
-    if not (
-        ((ids == ids.floor()) & (ids >= 1) & (ids <= RELATION_ROWS)) | (valid == 0)
-    ).all():
-        raise ValueError("invalid continuation frame reference")
+    admission.relations(to_numpy(rows), relation_dim, object_count)
 
 
 class ContinuationEncoder(nn.Module):

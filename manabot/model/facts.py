@@ -29,12 +29,12 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_sequence, unpack_sequence
 
+from manabot.backends.torch.arrays import to_numpy
 from manabot.env.observation import (
     FACT_COMBAT_RESTRICTION,
     FACT_CONTINUATION_PROGRAM,
     FACT_COPY_EXCEPTION,
     FACT_DETAIL_INDEX,
-    FACT_DIM,
     FACT_DURATION_INDEX,
     FACT_EFFECT,
     FACT_EFFECT_PROGRAM,
@@ -51,14 +51,14 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
 )
-from manabot.model.numerics import buffer_on
 from manabot.model.records import program_number
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
     RecordNamespace,
     SemanticCardEncoder,
-    admit_definition_ids,
+    admission_catalog,
 )
+from manabot.policy import admission
 
 RecordVocabulary = Literal["hashed", "catalog"]
 
@@ -289,75 +289,5 @@ def admit_facts(
     object_count: int,
     cards: SemanticCardEncoder | None,
 ) -> None:
-    """Reject malformed fact rows before any forward.
-
-    Checks shape, binary validity, object joins into `object_count` objects,
-    kinds and contiguous programs; padding rows are ignored. With `cards`
-    (catalog ids), ids, details, program tokens and sources must be in its
-    vocabulary.
-    """
-    if facts.shape[1:] != (max_facts, FACT_DIM):
-        raise ValueError(f"expected [batch, {max_facts}, {FACT_DIM}] facts")
-    valid = facts[..., FACT_VALID_INDEX]
-    if not ((valid == 0) | (valid == 1)).all():
-        raise ValueError("fact validity must be binary")
-    facts = torch.where(valid.bool().unsqueeze(-1), facts, 0)
-    links = facts[..., FACT_OBJECT_INDEX]
-    kinds = facts[..., FACT_KIND_INDEX]
-    if not ((links == links.floor()) & (links >= 0) & (links <= object_count)).all():
-        raise ValueError("invalid fact object reference")
-    if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= FACT_KINDS)).all():
-        raise ValueError("invalid fact kind")
-    if cards is not None:
-        _admit_catalog_ids(facts, kinds.long(), cards)
-    _admit_programs(facts, kinds)
-
-
-def _admit_catalog_ids(
-    facts: torch.Tensor, kinds: torch.Tensor, cards: SemanticCardEncoder
-) -> None:
-    ident, detail = _word(facts, FACT_ID_INDEX), _word(facts, FACT_DETAIL_INDEX)
-    named, named_detail, program, id_space, detail_space = _catalog_columns(
-        kinds, detail
-    )
-    if bool((~(program | named_detail) & (detail != 0)).any()):
-        raise ValueError("fact kind carries no detail")
-    cards.require_record_names(id_space[named], ident[named])
-    cards.require_record_names(detail_space[named_detail], detail[named_detail])
-    cards.require_record_tokens(facts[..., FACT_VALUE_INDEX][program], detail[program])
-    lookup = buffer_on(cards, "definition_rows", facts.device)
-    admit_definition_ids(facts[..., FACT_SOURCE_INDEX], len(lookup), lookup)
-
-
-def _admit_programs(facts: torch.Tensor, kinds: torch.Tensor) -> None:
-    """Programs are contiguous runs with consecutive zero-based ordinals."""
-    program = _isin(kinds, _PROGRAM_KINDS)
-    if not program.any():
-        return
-    positions = program.nonzero()
-    rows = facts[program]
-    ordinals = rows[:, FACT_VALUE_INDEX + 1]
-    starts = (ordinals == 0).nonzero().flatten().tolist()
-    if not starts or starts[0] != 0:
-        raise ValueError("fact program must start at ordinal zero")
-    lengths = _program_lengths(rows)
-    expected = torch.cat(
-        [torch.arange(length, device=facts.device) for length in lengths]
-    )
-    if not torch.equal(ordinals, expected):
-        raise ValueError("fact program ordinals must be consecutive")
-    # A sequence cannot change batch, holder, kind, frame/modification ID,
-    # duration, timestamp or source halfway through its program.
-    owners = torch.cat(
-        (
-            positions[:, :1],
-            rows[:, :FACT_DETAIL_INDEX],
-            rows[:, FACT_DURATION_INDEX:FACT_VALID_INDEX],
-        ),
-        -1,
-    )
-    expected_owners = torch.repeat_interleave(
-        owners[starts], owners.new_tensor(lengths, dtype=torch.long), dim=0
-    )
-    if not torch.equal(owners, expected_owners):
-        raise ValueError("fact program changes owner or provenance")
+    """Validate host fact rows through the shared policy admission contract."""
+    admission.facts(to_numpy(facts), max_facts, object_count, admission_catalog(cards))

@@ -17,30 +17,29 @@ encoder's host reads only build CSR routes.
 import torch
 from torch import nn
 
+from manabot.backends.torch.arrays import to_numpy
 from manabot.env.shared_effects import (
     DETAIL_DIM,
     DETAIL_ROWS,
     EFFECT_DIM,
     EFFECT_ROWS,
     MEMBER_DIM,
-    MEMBER_ROWS,
 )
 from manabot.model.facts import RecordVocabulary
-from manabot.model.numerics import buffer_on, embedding_rows
+from manabot.model.numerics import embedding_rows
 from manabot.model.records import (
     RecordReducer,
-    admit_record_rows,
     join_record_rows,
     masked_record_rows,
     program_number,
-    record_indexes,
 )
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
     RecordNamespace,
     SemanticCardEncoder,
-    admit_definition_ids,
+    admission_catalog,
 )
+from manabot.policy import admission
 
 
 class SharedEffectEncoder(nn.Module):
@@ -186,80 +185,11 @@ def admit_shared_effects(
     object_count: int,
     cards: SemanticCardEncoder | None,
 ) -> None:
-    """Reject malformed shared-effect buffers before any forward.
-
-    Checks shapes, binary validity, one-based joins into `object_count`
-    objects, contiguous CSR partitions, live detail kinds and unique membership
-    order; padding rows are ignored, even when poisoned. With `cards` (catalog
-    ids), modification, detail and source ids must be in its vocabulary.
-    """
-    host = admit_record_rows(headers.detach().cpu(), EFFECT_ROWS, EFFECT_DIM, 17)
-    batch = host.shape[0]
-    if details.shape != (batch, DETAIL_ROWS, DETAIL_DIM) or members.shape != (
-        batch,
-        MEMBER_ROWS,
-        MEMBER_DIM,
-    ):
-        raise ValueError("invalid shared effect buffer shape")
-    live_positions = host[..., 17].nonzero()
-    if len(live_positions) == 0:
-        return
-    live = host[live_positions[:, 0], live_positions[:, 1]]
-    halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
-    source = record_indexes(live[:, 11], 2**24, "effect source definition")
-    links = record_indexes(live[:, [10, 12]], object_count, "effect source/controller")
-    if (links[:, 0] == 0).any():
-        raise ValueError("effect controller is absent")
-    offsets = record_indexes(
-        live[:, 13:17], max(MEMBER_ROWS, DETAIL_ROWS), "effect CSR offset/count"
-    ).tolist()
-    detail_indexes: list[int] = []
-    member_indexes: list[int] = []
-    member_records: list[int] = []
-    previous_batch = -1
-    d_end = m_end = 0
-    for i, ((b, _), (d, count, m, targets)) in enumerate(
-        zip(live_positions.tolist(), offsets, strict=True)
-    ):
-        if b != previous_batch:
-            d_end = m_end = 0
-            previous_batch = b
-        if (
-            d != d_end
-            or m != m_end
-            or d + count > DETAIL_ROWS
-            or targets == 0
-            or m + targets > MEMBER_ROWS
-        ):
-            raise ValueError("invalid effect CSR partition")
-        d_end, m_end = d + count, m + targets
-        detail_indexes.extend(range(b * DETAIL_ROWS + d, b * DETAIL_ROWS + d_end))
-        member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
-        member_records.extend([i] * targets)
-    # Validate all live details/members together, ignoring poisoned padding.
-    detail_host = details.detach().cpu().reshape(-1, DETAIL_DIM)[detail_indexes]
-    kinds = record_indexes(detail_host[:, 0], 19, "effect detail kind")
-    ids = record_indexes(detail_host[:, 1:], 65535, "effect detail half")
-    if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
-        raise ValueError("live effect detail has no kind")
-    member_host = members.detach().cpu().reshape(-1, MEMBER_DIM)[member_indexes]
-    record_indexes(member_host[:, 0], object_count, "effect member")
-    orders = record_indexes(member_host[:, 1], MEMBER_ROWS, "effect membership order")
-    if (member_host[:, 0] == 0).any():
-        raise ValueError("effect membership is absent")
-    if (orders == 0).any():
-        raise ValueError("effect membership order is absent")
-    global_orders = live_positions[:, 0][member_records] * (MEMBER_ROWS + 1) + orders
-    if len(global_orders.unique()) != len(global_orders):
-        raise ValueError("duplicate effect membership order")
-    if cards is None:
-        return
-    cards.require_record_names(
-        RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
+    """Validate host effect partitions through the shared policy admission contract."""
+    admission.shared_effects(
+        to_numpy(headers),
+        to_numpy(details),
+        to_numpy(members),
+        object_count,
+        admission_catalog(cards),
     )
-    lookup = buffer_on(cards, "definition_rows", source.device)
-    admit_definition_ids(source, len(lookup), lookup)
-    unsigned = (ids[:, 0] << 16) | ids[:, 1]
-    program = kinds > 10
-    cards.require_record_names(RecordNamespace.TOKEN, unsigned[~program])
-    cards.require_record_tokens(kinds[program] - 10, unsigned[program])

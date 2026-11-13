@@ -149,13 +149,12 @@ def capture(out: Path) -> None:
         local = frame.f_back.f_locals
         assert frame.f_back.f_code.co_name == "update_damped_iteration"
         indexes = local["indexes"]
-        targets = local["targets"]
         learning = local["learning"]
         arrays = {f"obs/{k}": v.detach().numpy() for k, v in local["obs"].items()}
         arrays.update(
             actions=local["actions"][indexes].numpy(),
-            advantages=targets.advantages[indexes].numpy(),
-            value_targets=targets.values[indexes].numpy(),
+            advantages=local["advantages"][indexes].numpy(),
+            value_targets=local["value_targets"][indexes].numpy(),
             actor_mask=local["actor_mask"].numpy(),
             behavior_logs=local["behavior_logs"].numpy(),
         )
@@ -166,7 +165,7 @@ def capture(out: Path) -> None:
                 "B": int(len(indexes)),
                 "loss": float(loss.detach()),
                 "iteration": int(local["iteration"]),
-                "learning_rate": float(self.optimizer.param_groups[0]["lr"]),
+                "learning_rate": float(local["rate"]),
                 "tau": float(local["tau"]),
                 "clip": learning.clip,
                 "collection_kl": learning.collection_kl,

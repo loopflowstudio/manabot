@@ -56,7 +56,8 @@ Two departures from the PyTorch forward are exact up to float rounding. The
 catalog GRU always encodes every definition, where PyTorch learning encodes
 only the rows a batch references; the others never reach the loss either way.
 And the clipped surrogate's likelihood ratio is float32, where PyTorch uses
-float64 (the GPU has none); the two differ only for |log ratio| > 88.
+float64 (the GPU has none). Ordinary values can differ by rounding; a
+float32 ratio can also overflow sooner, which the numerical checks refuse.
 
 ## Layout mapping
 
@@ -65,11 +66,10 @@ float64 (the GPU has none); the two differ only for |log ratio| > 88.
 - **Attention.** The canonical packed in-projection `qkv_weight` `[3·d, d]` and
   `qkv_bias` `[3·d]` (PyTorch's `in_proj_*`) split, in that order, into
   `query_proj`, `key_proj` and `value_proj` of MLX's `MultiHeadAttention`.
-- **GRU.** MLX's `GRU` layout holds `Wx`, `Wh`, one input bias `b` and a hidden
-  bias `bhn` for the new gate only. Both order gates reset, update, new, so the
-  weights copy unchanged; the reset and update hidden biases fold into `b`,
-  which is exact because those gates add both biases before the sigmoid, and
-  the new gate's stays as `bhn`.
+- **GRU.** `PackedGRU` holds `Wx`, `Wh`, `input_bias` and `hidden_bias`, with
+  gates ordered reset, update, new. All four tensors copy unchanged. Keeping
+  both biases preserves their independent Adam moments and their separate
+  contributions to the global gradient norm used for clipping.
 - **Containers.** `nn.Sequential` children `N` become `layers.N`.
 
 Every canonical parameter maps to MLX arrays, or loading fails naming the key.

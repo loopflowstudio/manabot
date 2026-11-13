@@ -46,6 +46,7 @@ from manabot.model.world import (
     validate_policy_input,
 )
 from manabot.policy.checkpoint import (
+    NotAContainer,
     PolicyCheckpoint,
     canonical_name,
     read_container,
@@ -100,18 +101,27 @@ def load_checkpoint(
     """Load saved configuration and validate world/schema; verify S3 bytes before loading.
 
     A PyTorch `.pt` file (a zip archive) loads as written; any other file is
-    read as the shared container, which raises `NotAContainer` if it is not
-    one and `UnsupportedPolicy` for a configuration the container does not
-    carry. Raises `UnsupportedPolicyInput` for a checkpoint of another policy
-    input. `bucketed_shapes` and `live_tokens` select the forward's padding and
-    attention layout (see `ActorCritic`); they are execution choices, not
-    checkpoint fields.
+    read as the shared container. Raises `NotAContainer` for a file that is
+    neither (a truncated download, say), `UnsupportedPolicy` for a
+    configuration the container does not carry, and `UnsupportedPolicyInput`
+    for a checkpoint of another policy input. `bucketed_shapes` and
+    `live_tokens` select the forward's padding and attention layout (see
+    `ActorCritic`); they are execution choices, not checkpoint fields.
     """
 
     if isinstance(path, StoredArtifact):
         path = str(materialize_artifact(path))
     if not _is_torch_file(Path(path)):
-        agent, obs_space = _load_container(Path(path), bucketed_shapes)
+        try:
+            agent, obs_space = _load_container(
+                Path(path), bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+            )
+        except NotAContainer as error:
+            raise NotAContainer(
+                f"{path} is neither a PyTorch checkpoint (a zip archive) nor a "
+                "policy checkpoint container; it may be truncated or another "
+                "kind of file"
+            ) from error
         if include_belief_binding:
             return agent, obs_space, None
         return agent, obs_space
@@ -161,7 +171,7 @@ def _is_torch_file(path: Path) -> bool:
 
 
 def _load_container(
-    path: Path, bucketed_shapes: bool
+    path: Path, *, bucketed_shapes: bool, live_tokens: bool
 ) -> tuple[ActorCritic, ObservationSpace]:
     """An eval-mode policy from a container. `read_container` has validated
     the world binding and refused unsupported configurations, so no belief
@@ -171,7 +181,9 @@ def _load_container(
         key: json.loads(container.metadata[key])
         for key in ("world_binding", "source", "architecture")
     }
-    agent = assemble(container, bucketed_shapes=bucketed_shapes)
+    agent = assemble(
+        container, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+    )
     world_binding = validate_checkpoint_world(record, container.space)
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding
@@ -184,12 +196,18 @@ def _load_container(
 
 
 def assemble(
-    checkpoint: PolicyCheckpoint, *, bucketed_shapes: bool = False
+    checkpoint: PolicyCheckpoint,
+    *,
+    bucketed_shapes: bool = False,
+    live_tokens: bool = False,
 ) -> ActorCritic:
     """An `ActorCritic` holding a container's parameters and buffers; binds
     no world (`load_checkpoint` validates the binding)."""
     agent = ActorCritic(
-        checkpoint.space, checkpoint.model, bucketed_shapes=bucketed_shapes
+        checkpoint.space,
+        checkpoint.model,
+        bucketed_shapes=bucketed_shapes,
+        live_tokens=live_tokens,
     )
     torch_names = {canonical_name(name): name for name in agent.state_dict()}
     arrays = {**checkpoint.parameters, **checkpoint.buffers}

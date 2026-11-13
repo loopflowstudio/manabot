@@ -11,8 +11,8 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
-from manabot.model.admission import admit_observation
 from manabot.infra.identity import canonical_sha256
+from manabot.model.admission import admit_observation
 from manabot.model.architecture import (
     architecture_identity,
     architecture_receipt,

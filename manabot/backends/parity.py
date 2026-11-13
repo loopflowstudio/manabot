@@ -14,7 +14,7 @@ backend's `rl` functions and learner (`minibatch_loss`). For each minibatch,
 at the checkpoint's weights:
 
 - forward logits on legal actions and values: max absolute difference <= 1e-4;
-- PPO loss: relative difference <= 0.1%;
+- damped policy loss: relative difference <= 0.1%;
 - every parameter's gradient: cosine similarity >= 0.999. A tensor whose
   gradient norm is below 1e-6 of the global gradient norm in both frameworks
   counts as zero: the policy-score bias and every attention key bias have
@@ -23,9 +23,11 @@ at the checkpoint's weights:
   meaningless.
 
 Collection calls compare inference logits and values with the same 1e-4 bar.
-The first minibatch also takes one clipped Adam step in both frameworks and
-reports how far the parameters then differ; that comparison is informative and
-not part of the bar. The command prints one line per check and backend, writes
+The first minibatch also takes one clipped Adam step in both frameworks:
+every parameter must agree within 1e-6 absolute, including near-zero-gradient
+tensors. This is 0.4% of the default learning rate (2.5e-4), tight enough to
+reject a missing or doubled update. The command prints one line per check and
+backend, writes
 `--json` (one report per backend) when given, and exits 1 naming each failing
 backend's worst components if any check fails; it exits 2 when the checkpoint
 or capture is missing, the checkpoint is refused or no backend is installed.
@@ -49,7 +51,6 @@ import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.model.admission import admit_observation
 from manabot.policy.checkpoint import (
-    UnsupportedPolicy,
     canonical_parameters,
     from_torch_state,
 )
@@ -61,11 +62,13 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
+from manabot.training.updates.backend import Backend as UpdateBackend
 from manabot.training.updates.damped_policy import minibatch_objective
 
 LOGIT_TOLERANCE = 1e-4
 LOSS_TOLERANCE = 1e-3
 COSINE_TOLERANCE = 0.999
+STEP_PARAMETER_TOLERANCE = 1e-6
 ZERO_GRADIENT = 1e-6  # of the global gradient norm
 
 # Backend name -> the framework it needs; each provides
@@ -91,7 +94,7 @@ def backend(name: str) -> Backend:
 
 
 def minibatch_loss(
-    module: ModuleType,
+    module: UpdateBackend,
     policy: BackendPolicy,
     learner: BackendLearner,
     batch: Prepared,
@@ -147,11 +150,21 @@ class Report:
     collection_values: float = 0.0
     step_parameter_max_abs: float = 0.0
     step_update_min_cosine: float = 1.0
+    step_checked: bool = False
+    step_reference_norm: float = 0.0
+    step_backend_norm: float = 0.0
+    step_max_grad_norm: float = 0.0
     minibatches: list[dict[str, Any]] = field(default_factory=list)
 
     def checks(self) -> list[tuple[str, str, bool]]:
         """(component, measured against its bar, passed) for every gated check."""
         return [
+            (
+                "clipped Adam weights",
+                f"max |Δ| {self.step_parameter_max_abs:.1e} (tol 1e-6)",
+                self.step_checked
+                and self.step_parameter_max_abs <= STEP_PARAMETER_TOLERANCE,
+            ),
             (
                 "forward logits",
                 f"max |Δ| {self.forward_logits:.1e} (tol 1e-4)",
@@ -281,7 +294,7 @@ def check(
         batch = policy.prepare(obs)
         port_logits, port_values = policy.evaluate(batch)
         port_loss = minibatch_loss(module, policy, learner, batch, targets, settings)
-        loss_value = float(port_loss)
+        loss_value = float(module.arrays.to_numpy(port_loss))
         grads = learner.gradients(port_loss)
         absolute, relative = _legal_difference(port_logits, logits.numpy(), valid)
         value_difference = float(np.abs(port_values - values.numpy().reshape(-1)).max())
@@ -289,7 +302,6 @@ def check(
             abs(reference_loss), 1e-12
         )
         cosines: dict[str, float] = {}
-        zero: set[str] = set()
         both_zero = 0
         floor = ZERO_GRADIENT * float(
             np.sqrt(
@@ -300,7 +312,6 @@ def check(
             cosine = _cosine(grad, expected[name], floor)
             if cosine is None:
                 both_zero += 1
-                zero.add(name)
             else:
                 cosines[name] = cosine
         worst = min(cosines, key=cosines.__getitem__)
@@ -342,7 +353,6 @@ def check(
                 learner,
                 minibatch_loss(module, policy, learner, batch, targets, settings),
                 settings,
-                zero,
                 report,
             )
             policy, learner = port.load(weights)
@@ -367,21 +377,23 @@ def _compare_step(
     learner: BackendLearner,
     loss: Any,
     settings: Settings,
-    zero: set[str],
     report: Report,
 ) -> None:
     """One clipped Adam step in both frameworks from the same weights.
 
-    Tensors with structurally zero gradients (`zero`) are skipped: Adam's
-    first step moves their rounding noise by +-lr in either direction.
+    All parameters count, including tensors with near-zero gradients. Cosine
+    is diagnostic only: the absolute weight difference is the acceptance bar.
     """
     before = reference.parameters()
     reference.set_learning_rate(settings.learning_rate)
-    reference.step(reference_loss, settings.max_grad_norm)
+    report.step_reference_norm = float(
+        reference.step(reference_loss, settings.max_grad_norm)
+    )
     now = reference.parameters()
     initial = learner.parameters()
     learner.set_learning_rate(settings.learning_rate)
-    learner.step(loss, settings.max_grad_norm)
+    report.step_backend_norm = float(learner.step(loss, settings.max_grad_norm))
+    report.step_max_grad_norm = settings.max_grad_norm
     after = learner.parameters()
     expected_after = port.parameter_layout(canonical_parameters(now))
     expected_delta = port.parameter_layout(
@@ -390,14 +402,13 @@ def _compare_step(
     worst = 1.0
     largest = 0.0
     for name, value in after.items():
-        if name in zero:
-            continue
         largest = max(largest, float(np.abs(value - expected_after[name]).max()))
         cosine = _cosine(value - initial[name], expected_delta[name])
         if cosine is not None:
             worst = min(worst, cosine)
     report.step_parameter_max_abs = largest
     report.step_update_min_cosine = worst
+    report.step_checked = True
 
 
 def _collection(
@@ -439,7 +450,7 @@ def _print(name: str, report: Report) -> None:
     print(
         f"{name:<6} {'one step':<40} params max |Δ| "
         f"{report.step_parameter_max_abs:.1e}, update min cosine "
-        f"{report.step_update_min_cosine:.6f} (informative)"
+        f"{report.step_update_min_cosine:.6f} (cosine diagnostic only)"
     )
 
 
@@ -466,7 +477,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.collection,
                 backend_name=name,
             )
-    except (FileNotFoundError, UnsupportedPolicy) as error:
+    except (FileNotFoundError, ValueError) as error:
         parser.error(str(error))  # exits 2; 1 means the models disagree
     failures = {name: report.failures() for name, report in reports.items()}
     for name, report in reports.items():
