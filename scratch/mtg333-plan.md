@@ -335,3 +335,35 @@ The L4 launch quote was refused for lack of stock; trying the planned A40 fallba
   $0.75/hour ceiling. Quote $0.69/hour, rentable at 16:11 UTC. Launch succeeded: run `047fa57e0e5e`, machine
   `mtg333-a6000-3a2a673ba16f`, source `296c90f33`; setting up.
   Equivalence, speed and optimization use this A6000, not the L4 reference.
+
+### CUDA equivalence: `047fa57e0e5e` (A6000)
+
+Succeeded; launcher cost **$0.04**. All 3,410 tensors captured in each arm.
+Logits, values, losses, inference and CPU-trained weights are bitwise exact.
+95 gradients differ, max `3.725290298461914e-9` (masked-mean bucketed
+`semantic_cards.encoder.bias_hh_l0` and `name_candidates.embedding.weight`).
+Head-repeat: seven belief gradients differ, max `5.529727786779404e-10`.
+Text receipts: `/tmp/mtg333/cuda-retry/{base_vs_head,head_vs_repeat}.txt`;
+full tensors retained by Etude as `base.pt`, `head.pt`, `head_repeat.pt`.
+
+The Task numeric CUDA bar (≤1e-8) holds; the stronger plan condition
+“no worse than the head-vs-head repeat” does **not**. Keep this contrary
+finding for gate review; speed measurement proceeds under the Task numeric
+tolerance without claiming the stricter condition passed. No gradient
+threshold or receipt was changed. Speed launch uses the same A6000 template
+and frozen source `296c90f33`.
+
+### Speed admission
+
+Two admissions (`cb8fa16ee59e`, then `b3a50357784a` with a shorter job
+allowance) refused at the one-machine limit: the completed equivalence
+session was not reusable. Neither job started. Terminated
+`mtg333-a6000-3a2a673ba16f`; provider pod list returned `[]`. Fresh speed
+rental uses the original 2.5-hour allowance and $10 cohort cap, same A6000
+card type, both comparison arms on that single new machine.
+
+The fresh speed create (`e91a37b6f51b` / requested run `3b240dc55ea4`)
+failed with RunPod HTTP 400 before any command. Combined the speed launcher
+with the existing equivalence capture and one separate, unreported cProfile
+pass after speed summaries. Benchmark code, workload and repeats stay frozen;
+all checks can now finish on one rental without needing session reuse.

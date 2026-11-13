@@ -6,6 +6,8 @@ revision's, and every `<arm>.patch` here gives one more arm (`base.patch`:
 baseline 105e7e2aa's `manabot/`, the merge-base).
 `bench.py` runs the arms interleaved, `REPEATS` processes each, then
 `compare.py` writes `summary.txt`.
+The same rental first captures equivalence and ends with an untimed profiling
+pass, so completing a session never strands the next check behind its rental.
 
 Patches are generated, not tracked: commit them only on the launch commit
 (`git diff HEAD 105e7e2aa -- manabot > scratch/speed/base.patch`).
@@ -41,6 +43,12 @@ for arm in $arms; do
   find "$work/$arm/manabot" -type d -empty -delete
 done
 uv run --locked python -c "import torch; print('GPU', torch.cuda.get_device_name(), torch.__version__, torch.version.cuda)"
+for arm in base head head; do
+  name=$arm; test -e "$out/$arm.pt" && name=${{arm}}_repeat
+  EQUIV_DEVICE=cuda PYTHONPATH="$work/$arm" uv run --locked python scratch/equivalence/run.py "$out/$name.pt"
+done
+uv run --locked python scratch/equivalence/compare.py "$out/base.pt" "$out/head.pt" | tee "$out/base_vs_head.txt"
+uv run --locked python scratch/equivalence/compare.py "$out/head.pt" "$out/head_repeat.pt" | tee "$out/head_vs_repeat.txt"
 for i in $(seq 1 ${{REPEATS:-3}}); do
   for arm in $arms head; do
     echo "== $arm $i"
@@ -48,6 +56,9 @@ for i in $(seq 1 ${{REPEATS:-3}}); do
   done
 done
 uv run --locked python {_HERE}/compare.py "$out" | tee "$out/compare.txt"
+# Profile separately after reporting: instrumentation never enters speed samples.
+PYTHONPATH="$work/head" uv run --locked python {_HERE}/bench.py "$out/profile.json" --repeats 1 --inference 1 --checkpoints 1 --profile "$out/profile"
+uv run --locked python -c "import pstats; pstats.Stats('$out/profile.damped').sort_stats('cumulative').print_stats(40); pstats.Stats('$out/profile.ppo').sort_stats('cumulative').print_stats(40)" > "$out/profile.txt"
 """
 
 
