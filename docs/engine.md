@@ -722,9 +722,11 @@ One bonus-sheet card, Heartbeat of Spring, is not yet defined: it waits for a
 redesign of how mana production triggers see what a land produced. A deck
 listing it raises `managym.DeckImportError` naming it as unknown.
 
-Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, 997
-admit; the three that fail list Heartbeat of Spring. Do not drop or substitute
-the card to admit such a deck; it admits once its definition exists.
+The expected admission result for the first 1,000 TLA PremierDraft trophy
+decks in the MTG-213 corpus is 997 admitted, with only the three decks listing
+Heartbeat of Spring failing. Direct re-admission of that corpus remains to be
+verified. Do not drop or substitute the card to admit such a deck; it admits
+once its definition exists.
 
 Two bonus-sheet cards create tokens that need care when reading a board.
 Release to Memory makes plain 1/1 colorless Spirits, which block and are

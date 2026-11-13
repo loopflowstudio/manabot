@@ -633,7 +633,7 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::CreatedThisWay => "that token".into(),
         ObjectSelector::Remembered => "the remembered objects".into(),
         ObjectSelector::Grantor => "the permanent granting this ability".into(),
-        ObjectSelector::Moved => "objects moved this way".into(),
+        ObjectSelector::Moved => "it".into(),
         ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
         ObjectSelector::Selected => "the selected cards".into(),
         ObjectSelector::Zone(zone) => format!("your {}", format!("{zone:?}").to_lowercase()),
@@ -750,6 +750,13 @@ fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
+        EffectValue::Objects { of, predicate } if matches!(of.as_ref(), ObjectSelector::Moved) => {
+            let cards = match predicate {
+                None => "cards".into(),
+                Some(predicate) => predicate_description(predicate, "cards"),
+            };
+            format!("the number of {cards} moved this way")
+        }
         EffectValue::Objects { of, predicate } => {
             let objects = selector_description(of);
             match predicate {
@@ -1380,14 +1387,34 @@ mod tests {
         };
         assert_eq!(
             value_description(&count),
-            "the number of creature cards among objects moved this way"
+            "the number of creature cards moved this way"
         );
         assert_eq!(
             value_description(&EffectValue::Objects {
                 of: Box::new(ObjectSelector::Moved),
                 predicate: None,
             }),
-            "the number of objects moved this way"
+            "the number of cards moved this way"
+        );
+    }
+
+    #[test]
+    fn flicker_descriptions_keep_the_moved_object_pronoun() {
+        assert_eq!(
+            effects_description(&[
+                Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
+                Effect::Move {
+                    what: ObjectSelector::Moved,
+                    to: ZoneType::Battlefield,
+                    tapped: false,
+                    transformed: false,
+                    under: Some(PlayerSelector::Owner),
+                    with_counter: None,
+                    linked: None,
+                    library_end: None,
+                },
+            ]),
+            "Exile target creature you control. Put it onto the battlefield under its owner's control"
         );
     }
 }
