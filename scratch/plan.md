@@ -87,39 +87,17 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
-Eighth recheck (after review 7, `11ba67310`): PR #103 open at `105abdd`;
-origin/main has nothing new; all eight review-7 headers name the revision.
-Seventh recheck (after review 6, `43ba82024`): the guide commands match
-`experiments.elemental.runs(revision, updates, hours, usd_per_run)`.
-
-Sixth recheck (after review 5 and the #510 sync): PR #103 still open at
-`105abdd`; pins 0.2.16. Main advanced to `f4e1822fa` (#510, precision `auto`,
-new frozen `experiments/precision_ladder.py`), merged as `2f00cbbf6`. That
-merge hardcoded branch-only `2f00cbbf6` in the ladder's refusal and
-reintroduced a digest test hashing a different object than main's. Fixed:
-`FROZEN_EXECUTION_REVISION` (and guides, refusal tests) now name
-`f4e1822faf46bbc9cdc43909293f8cbc8de4a300`, the last main revision with the
-executor and precision resolution; the ladder calls `refuse_frozen_execution`.
-The digest test pins `digest_recipe()`'s hash `81ba5762…`, computed identical
-in an origin/main worktree (main's own test hashed the launched job's regime,
-`wall_seconds` 600, which refuses here). Live `SelfPlay` keeps explicit
-`precision="float32"`; at `f4e1822fa` `auto` also resolves to float32
-(`ladder_precision`), so no behavior is lost.
-
-Post-sync focused check (compress, after `da2ef4e3e`; origin/main still
-`f4e1822fa`, ancestry check exit 0): `precision_ladder.runs` now refuses
-directly like the other frozen launchers; its arm builder, single-axis check
-and launch-only constants are deleted (the report keeps seeds, horizon and
-cost). `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_precision.py tests/training/test_attack_execution.py tests/training/test_recipe_etude.py tests/training/test_regimes.py tests/eval/test_experiment_files.py -q`: 39 passed (23.18s); Ruff clean.
-SDK release/pin, installed-consumer checks and launcher/service proofs remain
-pending.
-
-Rechecks three to five found PR #103 unchanged and merged main `105e7e2aa`
-(`117f2d22b`/`85fd4607e`), which among training-adjacent paths changed only
-`manabot/env/observation.py` and `manabot/semantic/text_observation.py`. The
-parity proof compared against main `6ce618b8a`, before that observation
-change, and was not rerun; gate's focused checks cover the merged code.
-Detail: `6c955b5d6:scratch/plan.md`.
+Full recheck history is retained at
+`9eb98a6aaee9f9eeaabea17ec40dd56717b63f22:scratch/plan.md`.
+Eighth recheck: Etude PR #103 remains open at `105abdd`, pins remain 0.2.16,
+and origin/main has nothing new. Main `f4e1822fa` (#510) was merged; it is
+an ancestor of HEAD and owns the frozen-execution reference. Frozen precision
+ladder execution refuses; its retained digest and report remain. Live SelfPlay
+keeps explicit float32 (main's auto also resolves to float32). After that sync,
+39 focused precision/refusal/recipe/regime/experiment checks passed (23.18s).
+The parity proof predates main's observation changes; merged code still needs
+gate coverage. SDK release/pin, installed consumers and launcher/service proofs
+remain pending.
 
 ## Concept reviews 1–3: implemented — 2026-11-13
 
@@ -269,47 +247,25 @@ found only module docstrings differ. No test or parity rerun for prose-only
 edits. Open choices (questions.md: CLI recipe-config fields, local follower)
 and the delivery obligations above are unchanged.
 
-## Concept review 8: next implement direction — 2026-11-13
+## Concept review 8: implemented — 2026-11-13
 
-Proposals drawn from the design, not statements anyone made. Reading the
-guide's code as a person writing their own recipe or experiment would copy it
-(`docs/training.md`), against the code and Etude `105abdd`. Recipes, loop, CLI
-and `experiments/elemental.py` agree with each other; four excerpts lag them.
-Docs only; no code, test or parity change follows.
+docs/training.md only. The loop template and `record_checkpoint` row pass
+`**clocks(state)`, and `clocks(state)` is among the pieces. The belief excerpt
+matches `manabot/recipes/belief_sampler.py`: it checks
+`run.latest_checkpoint()` and records the sampler at `**policy_record.at`;
+the Etude table lists that lookup. The remote excerpt has the shape of
+`experiments.elemental.runs`: `runs(revision: str) -> list[Run]` from
+`training(..., revision=, setup=machine_setup(...)).runs(197, 198)`, and the
+smoke command passes `--revision`. The single-Job README example is valid and
+stays.
 
-1. **Two clocks declared, one logged.** Every recipe declares `updates` and
-   `training_seconds` (review 4) and the loop passes `**clocks(state)`. The
-   guide's loop template still writes `run.log(row, updates=state.update)`,
-   and its pieces table says `record_checkpoint` calls
-   `run.checkpoint(path, updates=)`. Etude requires every declared clock; a
-   checkpoint missing one warns and is not recorded. Show `**clocks(state)` in
-   the template and the table, and name `clocks(state)` among the pieces.
-2. **Belief excerpt.** The guide ends with
-   `run.checkpoint(sampler, tags=("belief",), updates=updates)`; the recipe
-   reads `policy_record = run.latest_checkpoint()` and records the sampler at
-   `**policy_record.at`. Copy the code, say in a sentence that a later step's
-   output is recorded at the coordinate of the policy it was made from, and
-   add `run.latest_checkpoint()` to the "From Etude" table.
-3. **Remote training example does not launch.** Its `runs()` takes no
-   parameters and returns a list of `Job`s. `read_job_file` accepts a Job, a
-   Run or a nonempty list of Runs, and binds launch flags to `runs()`
-   parameters, so the list is refused and `--revision COMMIT` in the command
-   below it has nothing to bind to. It also omits `setup`, though the next
-   paragraph describes the Rust/uv setup. Write it in the shape of
-   `experiments.elemental.runs`: `runs(revision: str) -> list[Run]` returning
-   `training(train, config=..., smoke=..., revision=revision,
-   setup=machine_setup(...), max_hours=, max_usd=).runs(197, 198)`. The
-   single-Job excerpt in `manabot/README.md` is valid and stays.
-4. Check the corrected example with `read_job_file` on a scratch copy under
-   the SDK override; do not add a test for a guide excerpt.
+Validation (rerun at compress): the exact Python fence, extracted to a
+temporary file, through `read_job_file(Path, ["--revision", HEAD])` with
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training python`:
+two Runs (seeds 197, 198), bound revision, setup, 12 h / USD 9 and the file
+stem as experiment. `git diff --check` passed. No test or parity rerun for
+prose. Compress found nothing further to cut in the guide.
 
-Checked and left alone: the Elemental recipe excerpt (abridged as it says),
-the `local_launch` excerpt, the untracked `self_play` call, README and
-experiments guide commands, `etude continue --run --until` and `--cohort`
-(real flags). `run.latest_checkpoint()` depends on the loop's last tracker
-call being the returned policy; the belief test asserts the recording, so the
-loop's return type stays a path.
-
-Open choices are unchanged and still do not stop the Graph (questions.md: CLI
-recipe-config fields, local follower). Delivery obligations above are
-unchanged.
+Open choices (questions.md: CLI recipe-config fields, local follower) and the
+SDK release/pin, installed-consumer, launcher/service, recovery review and
+retained replay obligations are unchanged.

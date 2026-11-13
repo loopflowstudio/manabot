@@ -172,6 +172,7 @@ asks for them where it uses them:
 | `run.until("updates", default=...)` | The absolute update to train to: the launch's target when it names one (a retry or `etude continue`), otherwise the recipe's own. |
 | `run.stopping()` | True once a stop was requested or the attempt's deadline is nearer than the slowest update so far. |
 | `run.log`, `run.log_table`, `run.checkpoint` | Metric rows, row tables and checkpoints in the run's record. |
+| `run.latest_checkpoint()` | The last recorded checkpoint, including its complete clock coordinate in `.at`, or `None` when none has been recorded. |
 | `Stopped` | Raised by a loop that saved its state short of its target. Under a launch the function is called again while the run has hours, dollars and attempts left. |
 
 `track` names no experiment. Under `etude launch` the run belongs to the
@@ -213,7 +214,7 @@ def self_play(
         while state.update < updates and not (run and run.stopping()):
             state, row = step(state, collector, rng, base=base)
             if run:
-                run.log(row, updates=state.update)
+                run.log(row, **clocks(state))
             checkpoint_due = state.update < updates and is_checkpoint(settings, state.update)
             if checkpoint_due or state.update % settings.save_every == 0:
                 save_state(out / "state.pt", state)
@@ -239,8 +240,9 @@ The pieces it uses:
 | `load_state(path, settings, seed)` | The saved learner, or `None` when `path` does not exist. Refuses a state written for other settings, another seed or another world, naming what differs. `device`, `workers` and `threads` may change between attempts. The target `updates` is not part of the state, so a later target carries on; a schedule's horizon is a learning setting, so a changed horizon is refused. |
 | `save_state(path, state)` | Writes raw weights, EMA, Adam, the update count and the source revision to a temporary file, then renames it over `path`. A crash leaves the previous state whole. |
 | `save_checkpoint(directory, state)` | World-bound raw and EMA policies at this update (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`; returns the EMA path when the learning record keeps an EMA and the raw path otherwise. A file is written once: when it already exists for this update the path is returned and nothing is rewritten, because Etude records a checkpoint inside `run.out` where it is and readers verify its digest. |
-| `record_checkpoint(out, state, run)` | `save_checkpoint` into `out / "checkpoints"`, then `run.checkpoint(path, updates=)`. The loop adds no `final` tag: Etude's `TrainingRun.final` is the last checkpoint of a finished run. |
+| `record_checkpoint(out, state, run)` | `save_checkpoint` into `out / "checkpoints"`, then `run.checkpoint(path, **clocks(state))`. The loop adds no `final` tag: Etude's `TrainingRun.final` is the last checkpoint of a finished run. |
 | `self_play_collector(settings, seed=, start=)` | A `Collector` (`open_collector` in `manabot.training.rollout.collection`) whose streams are seeded from the run seed and the update it starts at, so a resumed loop plays fresh, reproducible games. Sampling (`seed_random`) and minibatch order are reseeded the same way. With `start=0` these use the retired executor's seed offsets. A two-update CPU comparison against the retired executor after the backend merge produced bitwise-equal raw and EMA weights for PPO and damped policy (seed 197, two streams); this does not promise uninterrupted equivalence after resume. |
+| `clocks(state)` | Both coordinates of this update: `updates` and `training_seconds`, the completed updates' active collection and learning time. Pass all declared clocks to metrics, tables and checkpoints. |
 | `step(state, collector, rng, base=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `LoopState` (update and counts replaced; the learner, Adam and EMA are updated in place) with its metric row. |
 | `learn(state, batch, rng)` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the state alone: damped-policy schedules read the absolute iteration, PPO schedules read `state.update / horizon`, and neither reads the target ([schedules and clocks](#schedules-and-clocks)). |
 | `Tracker` | What a loop asks of a tracker: `log(values, **clocks)`, `log_table(name, rows, **clocks)`, `checkpoint(path, **clocks)` and `stopping()`. Etude's `Run` is one; pass `None` to train with no tracking. |
@@ -301,6 +303,9 @@ def train(config: BeliefConfig) -> None:
         policy = self_play(
             settings, run.out / "policy", seed=config.seed, updates=updates, run=run
         )  # policy/checkpoints/00000001-raw.pt
+        policy_record = run.latest_checkpoint()
+        if policy_record is None:
+            raise RuntimeError("policy checkpoint was not recorded")
         histories = collect_belief(
             policy,
             run.out / f"histories-{policy.stem}.json",
@@ -312,8 +317,11 @@ def train(config: BeliefConfig) -> None:
         sampler = train_belief(
             histories, run.out / f"belief-{policy.stem}.pt", config.sampler, seed=config.seed
         )
-        run.checkpoint(sampler, tags=("belief",), updates=updates)
+        run.checkpoint(sampler, tags=("belief",), **policy_record.at)
 ```
+
+A later step's output is recorded at the complete clock coordinate of the
+policy it was made from (`policy_record.at`).
 
 Its defaults are a pilot's: one update, three games and a small sampler, enough
 to exercise every step in seconds.
@@ -518,25 +526,29 @@ An experiment file keeps its explicit functions: `train(config)` is what a run
 does, `runs()` declares what to launch, `eval(state)` says which matches its
 checkpoints should play and `report()` draws them
 ([experiment files](../experiments/README.md#etude-experiment-files)). `runs()`
-returns Etude training jobs that call the training function with a config:
+returns Etude runs whose training job calls the training function with a config:
 
 ```python
 # experiments/<name>.py
 from decimal import Decimal
 
 from etude.jobs import training
-from etude.launch.records import Job
+from etude.launch.records import Run
 
+from manabot.experiment.setup import machine_setup
 from manabot.recipes.elemental import ElementalConfig, train
 
 
-def runs() -> list[Job]:
-    return [
-        training(train, config=ElementalConfig(seed=seed, updates=3200),
-                 smoke=ElementalConfig(seed=seed, updates=1, streams=2),
-                 max_hours=12, max_usd=Decimal(9))
-        for seed in (197, 198)
-    ]
+def runs(revision: str) -> list[Run]:
+    return training(
+        train,
+        config=ElementalConfig(updates=3200, device="cuda", validate_numerics=True),
+        smoke=ElementalConfig(updates=1, device="cpu", streams=2),
+        revision=revision,
+        setup=machine_setup(" --extra artifacts"),
+        max_hours=12,
+        max_usd=Decimal(9),
+    ).runs(197, 198)
 ```
 
 An experiment whose training differs from a maintained recipe defines its own
@@ -544,7 +556,7 @@ An experiment whose training differs from a maintained recipe defines its own
 that to `training`.
 
 ```sh
-uv run etude smoke experiments/<name>.py     # the smoke config here, spending nothing
+uv run etude smoke experiments/<name>.py --revision COMMIT  # local smoke, spending nothing
 uv run etude launch experiments/<name>.py --revision COMMIT --cohort <name>-1 --rent l4
 uv run etude status
 uv run etude report experiments/<name>.py --source r2://manabot/jobs --open
