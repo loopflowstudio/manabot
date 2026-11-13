@@ -2377,6 +2377,44 @@ mod tests {
     }
 
     #[test]
+    fn a_payment_scan_keeps_sources_until_its_last_guard_ends() {
+        use crate::{
+            flow::game::Game,
+            state::{game_object::PlayerId, player::PlayerConfig},
+        };
+        let deck: std::collections::BTreeMap<String, usize> = [("Mountain".into(), 40)].into();
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new("a", deck.clone()),
+                PlayerConfig::new("b", deck),
+            ],
+            339,
+            true,
+        );
+        game.play();
+        let player = PlayerId(0);
+        let kept = |game: &Game| game.payment_sources.borrow().sources[player.0].clone();
+
+        // Outside a scan every question builds its own sources.
+        let unshared = game.payment_model(player, None).sources;
+        assert_eq!(kept(&game), None);
+        {
+            let _outer = game.payment_scan();
+            {
+                let _inner = game.payment_scan();
+                assert_eq!(game.payment_model(player, None).sources, unshared);
+            }
+            // The first question's sources outlive the nested computation,
+            // and a later question reads them.
+            assert_eq!(kept(&game), Some(unshared.clone()));
+            assert_eq!(game.payment_model(player, None).sources, unshared);
+            // A clone can be written to, so it starts with nothing shared.
+            assert_eq!(kept(&game.clone()), None);
+        }
+        assert_eq!(kept(&game), None);
+    }
+
+    #[test]
     fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
         // Source order, not usefulness: the Forest ahead of the Islands is tapped.
         let model = PaymentModel {
