@@ -176,6 +176,12 @@ with `Action index 2 out of bounds: 2`. With the improved diagnostic the
 optimized debug build identifies zero-based step 145, action 2. This is
 pre-existing relative to the scan reduction, consistent with the stale
 executable found above; the earlier 426-step success cannot describe HEAD.
+Realign check (2026-11-13): main's own `bench_payment replay` at the checkout
+base `2f00cbbf6d` (release, `benchmark`, source-built) fails identically
+(`AgentError("Action index 2 out of bounds: 2")`). Upstream engine changes
+since PR #504 broke the index-only recording; this branch did not. CI never
+runs the `bench_states` example test (no `benchmark` feature), so the failing
+construction test is local-only.
 The full construction test is left failing, the fixture remains byte-identical,
 and no index is remapped or historical world rebound. Default all-state audits
 therefore fail as well. A current-world replay needs semantic decision mapping
@@ -192,11 +198,16 @@ bench_states --manifest-path managym/Cargo.toml -- distinct-restrictions
 
 ## Remaining
 
-1. Resolve recorded replay compatibility before claiming complete corpus
-   validation or a passing gate. Do not repair it by changing the frozen script,
-   skipping its test or remapping action indices without semantic evidence.
+1. Decision needed: what `recorded` means now that main cannot replay it.
+   Exact choice: (a) keep the byte-identical fixture and pin the `recorded`
+   state / `bench_payment replay` to a named compatible historical revision,
+   (b) drop the `recorded` state from `bench_states` and say in docs that the
+   recording replays only on its original runtime, or (c) another Task builds
+   a semantic (non-index) recording. Until chosen, the local example test and
+   default all-state audits fail on `recorded`. Do not edit the fixture, skip
+   the test or remap indices without semantic evidence.
 2. Gate, review, PR body with the state x layer table and the optimization,
-   residual reasons and replay failure above. Shipping stays held (comment
-   `d55bd16b`); the text `announcement` gap is outside this Task.
+   residual reasons (in `--list`) and the replay finding above. Shipping stays
+   held (comment `d55bd16b`); the text `announcement` gap is outside this Task.
 
 Earlier replay CI implementation history is retained at `6691ed956:scratch/payment-search.md`.

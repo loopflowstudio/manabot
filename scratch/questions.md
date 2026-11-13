@@ -59,3 +59,5 @@ Open design issue from the fresh source build:
   historical runtime or independently evidenced semantic mapping, not guessed
   index edits. This blocks complete validation, not the independent scan
   reduction or constructed-state measurements.
+- Main at `2f00cbbf6d` fails the same replay, so the break is upstream. The
+  (a)/(b)/(c) choice is in the plan's Remaining; no option is taken here.
