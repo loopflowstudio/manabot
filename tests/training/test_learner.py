@@ -4,12 +4,12 @@ from pathlib import Path
 
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.training.updates.learner import Learner
 
 
 def test_checkpoint_admission_restores_training_mode(tmp_path: Path) -> None:

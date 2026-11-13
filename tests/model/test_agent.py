@@ -20,10 +20,11 @@ import pytest
 import torch
 import torch.nn as nn
 
+from manabot.backends.torch.policy import ActorCritic
+
 # Local imports
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 
 # Configure logging

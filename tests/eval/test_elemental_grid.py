@@ -24,6 +24,8 @@ from experiments.elemental_grid import (
     summarize,
 )
 from experiments.elemental_long_eval import H2HRequest, LocalCheckpoint, play_h2h_group
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.eval.execution import bind_execution
@@ -31,8 +33,6 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.performance import EvalPerformance

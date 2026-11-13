@@ -10,6 +10,8 @@ import httpx
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
@@ -17,8 +19,6 @@ from manabot.llm.budget import BudgetConfig, BudgetLedger
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterResult, OpenRouterSession
 from manabot.llm.schema import DecisionInput
 from manabot.llm.selection import REPAIR, decision_messages
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.verify.llm_game import CheckpointOpponent, GameConfig, play
 import managym
 

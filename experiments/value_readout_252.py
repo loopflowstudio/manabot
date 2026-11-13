@@ -65,10 +65,10 @@ from experiments.learning_signal import (
     benchmark_jobs,
     training_runs,
 )
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import LearnerContinuation, TrainingJob
 from manabot.infra.config import ValueAggregation
-from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_capacity, with_value_aggregation
 from manabot.training.execution import validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay

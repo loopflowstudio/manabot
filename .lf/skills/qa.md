@@ -71,6 +71,25 @@ publish, land or choose the next Graph step from here.
   process supervised through completion or cleanup. Measurements require the
   Task's scope and resource authority; never create artificial contention to
   test them (see `TESTING.md`).
+- Engine changes that must not alter play (performance work in `managym/src`):
+  build `main`'s release extension from a detached worktree with its own
+  `CARGO_TARGET_DIR`, unzip the wheel's `.so` into that worktree's `managym/`,
+  and play the same seeded random games on both engines by switching
+  `PYTHONPATH` (print `managym.__file__` to confirm which loaded). Per game,
+  hash `obs.toJSON()` at every decision and step `rng.randrange(len(
+  obs.action_space.actions))`; equal digests mean equal offers, taps and
+  events. Use the authored setups (`managym.authored_deck_keys`) plus the TLA
+  pool corpus human builds (`experiments/data/mtg282/pools-v2/corpus.json`,
+  `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
+  and any-color sources the curated benchmark decks lack; 2,400 games took
+  about two minutes per engine. A few games end in `PyAgentError` on `main`
+  too; the error must match, not be absent. `maturin build` without
+  `--release` gives an extension with `debug_assert!` live, about 10x slower;
+  unzip it to its own directory, never over `managym/`.
+- Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
+  (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
+  the panel is not an offer). Tapped lands show only in a `fullPage`
+  screenshot, not in the board's text.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
@@ -182,6 +201,12 @@ publish, land or choose the next Graph step from here.
   the Rust is unchanged), and run the driver with
   `PYTHONPATH=/private/tmp/<x>`; use the resolved `/private` path, or
   `_source()`'s `relative_to(ROOT)` fails. Remove the worktree afterwards.
+- CI workflow or test-timing changes: the user surface is hosted CI on the
+  pushed branch: `gh workflow run ci.yml --ref <branch>`. Read job and step
+  timestamps with `gh run view <id> --json jobs`; read logs with
+  `gh run view <id> --job <job-id> --log`. Compare install time with peers in
+  the same run and inspect dependency logs for unexpected downloads.
+  See `docs/development.md` (Job time) for the budget.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell

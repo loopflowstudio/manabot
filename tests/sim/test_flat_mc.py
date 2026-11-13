@@ -8,10 +8,10 @@ determinization invariants, playout termination) and the Python matchup loop
 import numpy as np
 import pytest
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.runtime import ManabotPlayer
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim.anchors import RandomMatchupPlayer
 import manabot.sim.search.flat_mc as flat_mc
 from manabot.sim.search.flat_mc import (

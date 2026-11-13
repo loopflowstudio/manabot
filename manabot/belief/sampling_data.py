@@ -18,22 +18,22 @@ import random
 import tempfile
 from typing import Literal, cast
 
+import torch
+
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.belief.sampling import SamplerInput, SamplerSchema
+from manabot.belief.state import ViewerHistory
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.sim.search.flat_mc import AgentMatchupPlayer
+import managym
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
     Command,
     DecisionFrame,
     Observation,
 )
-import torch
-
-from manabot.belief.sampling import SamplerInput, SamplerSchema
-from manabot.belief.state import ViewerHistory
-from manabot.env.env import Env
-from manabot.env.match import Match, Reward
-from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.search.flat_mc import AgentMatchupPlayer
-import managym
 
 Split = Literal["train", "validation", "test"]
 HISTORY_SCHEMA = "manabot.public-commitment-counts/actor-kind-card-sqrt-v1"

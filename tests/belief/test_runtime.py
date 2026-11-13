@@ -2,21 +2,21 @@
 
 import json
 
-from managym.decision import SEMANTIC_DECISION_VERSION
-from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import belief_schema_from_engine
 from manabot.belief.range import BeliefError
 from manabot.belief.runtime import ManabotPlayer
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import checkpoint_world
 from manabot.sim.search.flat_mc import make_player
+from managym.decision import SEMANTIC_DECISION_VERSION
+from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
 from tests.belief.support import fixture_torch_observation
 
 

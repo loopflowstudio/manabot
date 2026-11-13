@@ -2149,7 +2149,9 @@ impl Game {
         if !ability.tap_source {
             return self.can_pay_with_waterbend(player, &cost);
         }
-        self.waterbend_payment_after_taps(player, &cost, cost.generic(), std::iter::once(source))
+        !self
+            .waterbend_taps_keeping_payable(player, &cost, cost.generic(), vec![source], None)
+            .is_empty()
     }
 
     /// Can `player` cover `cost` with untapped waterbend candidates

@@ -7,12 +7,11 @@ import hashlib
 import time
 from typing import Mapping
 
-from managym.decision import Command
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import BeliefEncodingSchema, encode_belief
 from manabot.belief.range import BeliefError, BeliefState
 from manabot.belief.state import (
@@ -20,8 +19,9 @@ from manabot.belief.state import (
     BeliefUpdate,
     ViewerHistory,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import admit_on_device
+from managym.decision import Command
+from managym.possible_worlds import PossibleWorldSpace
 
 
 def _output_bytes(policy: NDArray[np.float32], value: np.float32) -> bytes:
