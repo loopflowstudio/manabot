@@ -208,11 +208,11 @@ import torch
 
 from manabot.backends.torch import learner, rl
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.backends.torch.rollout import AdmittedRollout
 
 
 def train(

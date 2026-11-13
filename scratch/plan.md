@@ -37,8 +37,7 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   repeated its docstring and `__init__` comments (`Learner` gains a docstring);
   `model/admission.measure_buckets` and `model/inference` use
   `arrays.to_numpy`/`device_of`; the generic-pieces boundary test compares
-  module names without line numbers. `arrays.from_numpy`/`flat_numpy` stay
-  unused until the torch parity `BACKEND` (Remaining 3), matching MLX's file.
+  module names without line numbers.
 
 - `61b87f84a`: `load_checkpoint` reads `.pt` (zip magic) or the container
   (`read_container`, then world/policy-input/architecture checks); save stays
@@ -537,55 +536,16 @@ the code diff against #474 was 4,332 / 2,500.
 - Pass 2 queued as Etude e978886d15e5: revision bb7c3e6a0 (base main a343904ee), cohort
   `mtg325-speed-2`, `--max-usd 9` (pass 1 counts against the USD10).
 
-## Speed check pass 2 (Etude e978886d15e5, revision bb7c3e6a0, base main a343904ee)
+## Speed check passes 2 and 3 (Etude e978886d15e5, 4668724056dc)
 
-3 ABAB pairs, `scratch/speed/run2/compare.txt`; same 53,341 learner rows and
-208 damped steps everywhere. Medians [min, max], base vs head:
-damped 6.05 [5.96, 6.37] vs 6.38 [6.20, 6.39] steps/s (1.055); PPO 0.2199
-[0.2194, 0.2210] vs 0.2108 [0.2105, 0.2116] (0.959, REGRESSION);
-`PolicyInference` 831 vs 1,257 obs/s (1.51); save 0.033 vs 0.032 s; load
-0.165 vs 0.173 s [0.168, 0.188] (within spread). Launcher cost ~$0.27; the
-machine stayed rented after success and was terminated by hand.
-PPO is +0.19 s per step (16 steps of ~3,300 rows: 4 epochs x 4). Host bucket
-measurement explains about half (67 ms per 3,300 rows on the laptop, every
-epoch). Pass 3 (Etude cohort `mtg325-speed-3`, revision f3b7fbaa4) adds a
-`backend` arm (#503's tree) and the learner's profiler sections, to place
-the rest in #503 or #501.
-
-## PPO fix (#503 ee01ec9df, "bucket needs measured once and regrouped")
-
-`row_needs` measures each row once (reading only the prefix the batch uses;
-97.5 ms per 3,300 rows on the laptop vs 69 ms for one batch measurement);
-`AdmittedRollout.admit_rows` stores the needs and `bind_admitted(needs=)`
-buckets every epoch's minibatches from them (`sizes_of`, 0.015 ms). PPO's 4
-epochs measure once instead of 4 times; the damped update pays ~2 ms more per
-256-row step. Sizes identical on the parity harness; new
-`test_row_needs_regroup_to_the_measured_buckets`; forward 0 differ; updates
-byte-identical to `before.json` (#503) and `after.json` (#501). Pass 3
-(4668724056dc) measures the code before this fix; pass 4 validates it.
-
-## Speed check pass 3 (Etude 4668724056dc, revision f3b7fbaa4; another, faster L4 host)
-
-Three arms x2 (`scratch/speed/run3/compare.txt`; the job's last `compare`
-line failed on a quoting typo, compared locally from the fetched files).
-Same 53,341 rows everywhere. base / #503 tree / #501 head: damped 9.46 / 8.93
-/ 9.16 steps/s; PPO 0.2539 / 0.2448 / 0.2439; inference 1,284 / 2,382 /
-2,373 obs/s; save and load within spread. The gap is all in the learner's
-"Forward and loss" section (damped 8.26 / 9.92 / 9.67 s, PPO 12.2 / 14.6 /
-15.0 s per update; backward and optimizer equal), and #503 already shows it:
-host bucket measurement, not the written-once updates. Launcher cost ~$0.56;
-the machine was terminated by hand.
-
-Fix (#503): collection records each row's needs (admission keeps them on
-`AdmittedObservation.needs`, `_ObservationRows` stores them beside the rows,
-`RecordedObservations.gather_needs` reads them) and `AdmittedRollout`
-regroups them, so a learner update measures only the bootstrap rows (1 of
-6,199 rows in a CPU check). `row_needs` always counts object references, so
-recorded needs serve a learner with or without object trimming. Tests:
-`test_collection_records_each_rows_measured_needs`,
-`test_row_needs_regroup_to_the_measured_buckets`; forward 0 differ; updates
-byte-identical (#503 and #501). Pass 4 (cohort `mtg325-speed-4`, revision
-7820d1e8d, three arms x3) validates it. 
+Details in `scratch/speed/run{2,3}/compare.txt` and git (`855ff1cf8:scratch/plan.md`).
+Pass 2 (base main a343904ee): damped fixed (6.05 vs 6.38 steps/s), PPO 4%
+slower (0.2199 vs 0.2108), the host bucket measurement repeated every epoch.
+#503 ee01ec9df measured needs once per update. Pass 3 (three arms: base /
+#503 / #501) put the remaining gap in "Forward and loss" and already in #503,
+so not the written-once updates. Fix (#503 c314838a9): collection records
+each row's needs (`AdmittedObservation.needs`,
+`RecordedObservations.gather_needs`), and `AdmittedRollout` regroups them.
 
 ## Speed check pass 4 (Etude 8a376219e430, revision 7820d1e8d): no regression
 
@@ -602,3 +562,14 @@ loss 11.77 vs 12.03 s). Machine terminated by hand.
 
 Speed-check cost (launcher, final): $0.58 + $0.46 + $0.34 + $0.66 = $2.04 of
 the USD10 cap.
+
+## Compress pass (after speed pass 4)
+
+Cut dead helpers: MLX `rl.magnitude_quantile` (no caller; the updates call
+`selection_mask`), torch `arrays.flat_numpy` (no caller; `Learner.parameters`
+copies explicitly) and its README row; `minimal.py` and its guide copy sort
+the `AdmittedRollout` import with the backend imports. `returns.magnitude_quantile`
+stays: `value_scale`'s `quantile` argument shadows `returns.quantile`. Check:
+returns, boundaries, update backends, minimal loop, torch protocol, mlx
+backend: 64 passed.
+

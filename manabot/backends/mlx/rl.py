@@ -271,11 +271,6 @@ def clip_fraction(log_ratio: mx.array, clip: float) -> float:
 # -- Selection -----------------------------------------------------------------
 
 
-def magnitude_quantile(advantages: mx.array, quantile: float) -> float:
-    """The inclusive `quantile` of |advantages| over every row."""
-    return returns.magnitude_quantile(np.array(advantages), quantile)
-
-
 def selection_mask(
     advantages: mx.array,
     kind: Literal["top_count", "quantile"],

@@ -143,7 +143,7 @@ documents them. A backend never carries its own copy of an update's loss:
 | `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout`, `observation_tensors` |
-| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `flat_numpy`, `device_of` |
+| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `device_of` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
 
 ```python

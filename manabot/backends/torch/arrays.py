@@ -6,8 +6,6 @@ Neither changes a dtype, so a float64 operand stays float64 and an integer
 index keeps its width.
 """
 
-from collections.abc import Iterable
-
 import numpy as np
 import torch
 from torch import Tensor, nn
@@ -24,11 +22,6 @@ def to_numpy(tensor: Tensor) -> np.ndarray:
 def float32(tensor: Tensor) -> Tensor:
     """A forward output in float32, whatever precision the forward ran in."""
     return tensor.float()
-
-
-def flat_numpy(named: Iterable[tuple[str, Tensor]]) -> dict[str, np.ndarray]:
-    """Named parameters, buffers or gradients as host arrays under the same names."""
-    return {name: to_numpy(value) for name, value in named}
 
 
 def device_of(module: nn.Module) -> torch.device:
