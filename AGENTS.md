@@ -541,6 +541,11 @@ relocated evidence and resumed runs keep the same meaning.
 
 ### Etude card evaluation
 
+Etude page builds reload repository neighbours, including imported helpers.
+Tests that build pages and retain module-level references must restore saved
+`sys.modules` entries and remove neighbours first imported during the build,
+while keeping new dependency imports (including Torch lazy registrations).
+
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
 namespace. Exercise discovery with `read_experiment` in runner tests, or
