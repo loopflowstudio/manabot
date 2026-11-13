@@ -676,7 +676,17 @@ def _referenced_definitions(
 def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
     batch = len(facts)
     valid = facts[..., FACT_VALID_INDEX] == 1
-    facts = np.where(valid[..., None], facts, 0)
+    source = facts
+    # Index only live facts on the host. Restore padding before the forward:
+    # its matrix shapes and gradient reduction order must remain unchanged.
+    facts = facts[valid]
+
+    def padded(values: Array, fill: int = 0) -> Array:
+        shape = (*valid.shape, *values.shape[1:])
+        result = np.full(shape, fill, dtype=values.dtype)
+        result[valid] = values
+        return result
+
     kinds = facts[..., FACT_KIND_INDEX].astype(np.int64)
     duration = facts[..., FACT_DURATION_INDEX]
     ident, detail = (
@@ -725,21 +735,24 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         detail_rows = detail % tables.record_buckets
         sources = facts[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets
         named = named_detail = np.ones(kinds.shape, bool)
-    links = facts[..., FACT_OBJECT_INDEX].astype(np.int64)
+    links = padded(facts[..., FACT_OBJECT_INDEX].astype(np.int64))
     base = np.arange(batch)[:, None] * objects
+    all_programs = padded(program)
     return FactRoutes(
-        kinds=kinds,
-        columns=columns,
-        id_rows=id_rows,
-        id_mask=named.astype(np.float32),
-        detail_rows=detail_rows,
-        detail_mask=named_detail.astype(np.float32),
-        token_rows=token_rows,
-        token_mask=program.astype(np.float32),
-        source_rows=sources,
+        kinds=padded(kinds),
+        columns=padded(columns),
+        id_rows=padded(id_rows),
+        id_mask=padded(named.astype(np.float32), int(not tables.catalog_records)),
+        detail_rows=padded(detail_rows),
+        detail_mask=padded(
+            named_detail.astype(np.float32), int(not tables.catalog_records)
+        ),
+        token_rows=padded(token_rows),
+        token_mask=all_programs.astype(np.float32),
+        source_rows=padded(sources),
         targets=(base + (links - 1).clip(min=0)).reshape(-1),
         linked=(valid & (links > 0)).astype(np.float32),
-        programs=_fact_programs(facts, program, tables.order_lengths),
+        programs=_fact_programs(source, all_programs, tables.order_lengths),
     )
 
 
