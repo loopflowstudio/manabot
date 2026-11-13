@@ -1,11 +1,10 @@
 # scratch
 
-- `mtg333-plan.md`: slices 1–6b implemented; `105e7e2aa` merged. Fresh CPU
-  oracle: 3,410 tensors and five update cases exact. A6000 CUDA outputs exact,
-  gradients ≤3.73e-9 but above the repeat floor. Speed/optimization remain
-  incomplete. Per the steers, speed launches now on any CUDA card, under a new
-  template name. Main's #513 still needs a merge that ports `torch/capture.py`
-  to `Prepared`. See the plan's "Next actions".
+- `mtg333-plan.md`: Prepared cutover and shared saves implemented; #513 merged
+  as `6e20654c34`, capture recorder and experiment consumers ported. Current
+  native rebuilt; same-input CPU oracle: 3,410 tensors exact. A40 retry
+  `2f98203dd0a7` is measuring speed/profile; CUDA outputs exact, gradients
+  ≤3.26e-9 but above repeat. Optimization follows its profile.
 - `questions.md`: reversible assumptions. MTG-324's `plan.md`, `qa.html` and
   questions section arrived with main's #510 merge and were removed here; they
   remain at `f4e1822fa`.
@@ -15,7 +14,8 @@
 - `speed/`: frozen benchmark and combined equivalence/speed/profile launcher.
   `run*/compare.txt` are MTG-325 evidence, not results of this Task.
   Integrated launch patches survive in `296c90f33` and `c150d5f25`, not the
-  final diff. Launch the latter commit or regenerate patches for changed code.
+  final diff. Latest launch: `cd7afaec86`, with a shared retained belief corpus; regenerate
+  patches for changed code.
 
 Full slice 1–6 receipts: `1f634d89b:scratch/mtg333-plan.md`.
 Earlier uncommitted notes: `/tmp/mtg333-compress-before/`.

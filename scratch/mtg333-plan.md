@@ -56,8 +56,9 @@ orchestrations, and `save_checkpoint` wrote a format only torch reads.
 ## Demo
 
 ```
-uv run python scratch/equivalence/run.py /tmp/mtg333/head.pt
-uv run python scratch/equivalence/compare.py /tmp/mtg333/integrated-base.pt /tmp/mtg333/head.pt
+uv run python scratch/equivalence/run.py --belief-input /tmp/mtg333/current-belief-input.pt
+EQUIV_BELIEF_INPUT=/tmp/mtg333/current-belief-input.pt uv run python scratch/equivalence/run.py /tmp/mtg333/current-shared-head.pt
+uv run python scratch/equivalence/compare.py /tmp/mtg333/current-shared-base.pt /tmp/mtg333/current-shared-head.pt
   -> tensors 3410 ... differing 0
 ```
 
@@ -380,19 +381,10 @@ left alone.
 
 ### Upstream #513 (`a289fe066`, merged as `6e20654c34`)
 
-Trial `git merge-tree HEAD origin/main` conflicts in `manabot/policy/{prepare,protocol}.py`,
-`manabot/policy/README.md`, `manabot/backends/{parity.py,mlx/checkpoint.py,mlx/learner.py,mlx/policy.py}`,
-`tests/model/test_mlx_backend.py` and modify/delete of `scratch/questions.md`.
-Breakage beyond conflicts: new `manabot/backends/torch/capture.py` (and
-`tests/model/test_backend_capture.py`) imports the deleted
-`manabot.model.admission.AdmittedObservation` and
-`manabot.model.inference.PreparedObservation` and hooks
-`ActorCritic.forward(AdmittedObservation)`; it must move to `Prepared`. The new
-`test_half_precision_head_keeps_finite_public_logits` calls
-`admit_observation`; port it to `policy.prepare`. `Prepared` gains
-`ownership` [N] (bucket-trimmed coordinates), used by MLX; torch's `.float()` on
-`policy_head` scores is a no-op at float32, so the CPU oracle against the
-`105e7e2aa` base should stay exact. This needs a recapture to confirm.
+The shared recorder and its callers use Prepared; initial policy capture
+files carry container bytes. MLX uses Prepared.is_agent for bucket-trimmed
+ownership. Both half precisions preserve float32 masters and public outputs.
+The prior conflict inventory is at `9fe9eb1e7:scratch/mtg333-plan.md`.
 
 ### Next actions
 
@@ -447,3 +439,25 @@ duplicate card/token names. The retained-input harness avoids that obsolete
 generator. The rental was terminated. Local probes additionally reveal the
 loaded native extension predates TLE (it allows baseline schema generation);
 rebuild current native source before final CPU captures.
+
+Retry `2f98203dd0a7`, source `cd7afaec86`, machine
+`mtg333-speed-a40-029a57d11bfc`, cohort `mtg333-speed-shared`, $10 cap:
+identical-input CUDA oracle captures 3,410 tensors. All outputs, losses and
+trained weights are exact; 95 gradients differ ≤3.259629011154175e-9.
+Head-repeat has seven differing belief gradients ≤3.026798367500305e-9.
+The Task's ≤1e-8 bar holds; the stricter repeat-floor condition remains open.
+Speed samples are running. Previous cohort name could not be reused; refused
+request `d6e61bbf0407` created no pod or job. Current native release rebuild
+completed in 3m18s and the cp313 extension was installed atomically.
+
+Current-engine CPU oracle with the retained head corpus:
+`compare.py current-shared-base.pt current-shared-head.pt` → **3,410 tensors,
+differing 0**. The pre-TLE local captures remain in /tmp as earlier evidence;
+new comparisons use current-shared files and current-belief-input.pt.
+
+Current native validation: five update cases (`updates-current-{base,head}.json`)
+are cmp-identical. Package boundaries, real capture replay and experiment
+discovery: **20 passed, 66.98s**. Fresh current-engine capture parity passes
+Torch and MLX; MLX clipped-step parameter max difference 1.2e-7. Generic MLX
+learner annotations now stay under TYPE_CHECKING so importing the helper does
+not eagerly load observation/checkpoint contracts.
