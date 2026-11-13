@@ -144,7 +144,7 @@ Probed 2026-11-13 against Etude main's #109 (`--with-editable`
   `LOST_RUNS`.
 
 Launcher and kept files under 0.3.2 (read from #110's diff and
-`etude/eval/query.py`; not yet run):
+`etude/eval/query.py`; the State runs agree):
 
 - #110 opens `$ETUDE_HOME/launcher-17.db` and never touches `launcher.db`.
   A new file starts empty: `etude status` and `etude runs` list nothing, and
@@ -152,8 +152,8 @@ Launcher and kept files under 0.3.2 (read from #110's diff and
   0.2.15 runs stay visible only to the 0.2.15 client.
 - `statsdb` keeps one DuckDB file per experiment and store under
   `ETUDE_HOME/statsdb`, and deletes and rebuilds one written by another schema.
-  `~/.etude/statsdb` does not exist today, so a report under the real home
-  deletes nothing; the first frontier build there writes it.
+  `~/.etude/statsdb` was absent before the 0.3.2 frontier build, which
+  wrote it; nothing older was deleted.
 - `etude launch --quote` prints machines and planned cost without renting.
 
 ## Approach
@@ -169,7 +169,7 @@ not change, so no match key moves and `etude eval` wants nothing new. Tests are
 in `tests/training/test_report_helpers.py`; the docs and the dated line in
 `experiments/tla-frontier-c5fba4-results.md` are written.
 
-### Slice 2 (pins done; confirmation remaining)
+### Slice 2 (pins, launcher check and frontier build done; gate remaining)
 
 1. Done: pins, lock, launcher check (see State). `RELEASE_NOTES.md` and the
    `==0.2.15` launch lines in `experiments/cuda_precision.py` and
@@ -250,8 +250,9 @@ the launcher confirmation and Demo use the real home, per the second comment.
   writes a page.
 - Launcher: `uv run etude status` exits 0; afterwards `~/.etude/launcher.db`
   and `~/.etude/launcher-17.db` both exist.
-- Frontier report: the Demo command, background, 30-minute allowance. A page
-  is written; the slice 1 probe on the pinned SDK shows 11 and 10 points, all
+- Frontier report: passed on pinned 0.3.2 at 96fa62e307 (see State); rerun
+  only if report or experiment code changes. It needs the Demo command in the
+  background with a 30-minute allowance and must show 11 and 10 points, all
   on `5b7d8fa7b38c`, and no "which nothing holds" note.
 
 CI runs the suite; nothing here needs a display or a person.
