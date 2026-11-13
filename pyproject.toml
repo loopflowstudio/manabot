@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "manabot"
-version = "0.2.2"
+version = "0.2.3"
 description = "The trainable Magic: The Gathering agent for Manabot"
 readme = "README.md"
 license = "MIT"
