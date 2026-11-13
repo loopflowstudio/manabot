@@ -15050,8 +15050,8 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         deck(&[]),
         239,
     );
-    let object = outside.game().state.players[0].sideboard[0];
-    assert_eq!(outside.game().object_power(object), 0);
+    let card = outside.game().state.players[0].sideboard[0];
+    assert_eq!(outside.game().object_power(card.into()), 0);
 }
 
 #[test]

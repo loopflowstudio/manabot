@@ -450,7 +450,9 @@ impl<'a> Projection<'a> {
                             ActivationSource::Permanent(id) => {
                                 self.target("paid source", Target::Permanent(*id))
                             }
-                            ActivationSource::Card(card) => self.card("paid source", *card),
+                            ActivationSource::Card(card) => {
+                                self.card("paid source", (*card).into())
+                            }
                         }
                         self.field("ability", ability_index);
                         self.field("X", x);

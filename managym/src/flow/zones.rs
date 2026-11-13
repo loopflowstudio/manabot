@@ -17,8 +17,8 @@ use crate::{
         card::{CardDefId, Restriction, StaticAbility},
         effect::{CopyEffect, Modification},
         game_object::{
-            Incarnation, Object, ObjectId, ObjectKind, ObjectLki, ObjectRef, PermanentId, PlayerId,
-            PublicId, Target,
+            CardId, Incarnation, Object, ObjectId, ObjectKind, ObjectLki, ObjectRef, PermanentId,
+            PlayerId, PublicId, Target,
         },
         permanent::CounterKind,
         permanent::Permanent,
@@ -84,10 +84,17 @@ impl Game {
 
     /// Zone inspection never reveals a library's order. All consumers use
     /// this stable order for private selection candidates and visible cards.
-    pub(crate) fn selection_zone_cards(&self, owner: PlayerId, zone: ZoneType) -> Vec<ObjectId> {
+    pub(crate) fn selection_zone_objects(&self, owner: PlayerId, zone: ZoneType) -> Vec<ObjectId> {
         let mut objects = self.state.zones.zone_objects(zone, owner).to_vec();
         objects.sort_unstable_by_key(|object| (self.state.objects[*object].definition_id, *object));
         objects
+    }
+
+    pub(crate) fn selection_zone_cards(&self, owner: PlayerId, zone: ZoneType) -> Vec<CardId> {
+        self.selection_zone_objects(owner, zone)
+            .into_iter()
+            .filter_map(|object| self.state.card_id(object))
+            .collect()
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
@@ -99,7 +106,7 @@ impl Game {
 
     /// Reveal before moving; public hand knowledge retains definition counts,
     /// never the identity of the physical copy.
-    pub(crate) fn reveal_card_to_hand(&mut self, object: ObjectId, player: PlayerId) {
+    pub(crate) fn reveal_object_to_hand(&mut self, object: ObjectId, player: PlayerId) {
         let definition = self.state.objects[object].definition_id;
         self.emit(GameEvent::CardRevealed {
             owner: player,
@@ -445,10 +452,8 @@ impl Game {
         predicate: &CardPredicate,
     ) -> usize {
         self.state
-            .zones
-            .zone_objects(ZoneType::Graveyard, player)
-            .iter()
-            .filter(|object_id| self.object_matches_predicate(**object_id, predicate))
+            .zone_cards(ZoneType::Graveyard, player)
+            .filter(|card| self.object_matches_predicate((*card).into(), predicate))
             .count()
     }
 

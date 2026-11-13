@@ -1,5 +1,3 @@
-use std::array;
-
 use rand::seq::SliceRandom;
 
 use super::game_object::{ObjectId, PlayerId};
@@ -16,7 +14,7 @@ pub enum ZoneType {
     Command = 6,
 }
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Serialize)]
 pub struct ZoneManager {
     library: [Vec<ObjectId>; 2],
     hand: [Vec<ObjectId>; 2],
@@ -27,21 +25,6 @@ pub struct ZoneManager {
     command: [Vec<ObjectId>; 2],
     #[serde(rename = "card_zones")]
     object_zones: Vec<Option<ZoneType>>,
-}
-
-impl Default for ZoneManager {
-    fn default() -> Self {
-        Self {
-            library: array::from_fn(|_| Vec::new()),
-            hand: array::from_fn(|_| Vec::new()),
-            battlefield: array::from_fn(|_| Vec::new()),
-            graveyard: array::from_fn(|_| Vec::new()),
-            stack: array::from_fn(|_| Vec::new()),
-            exile: array::from_fn(|_| Vec::new()),
-            command: array::from_fn(|_| Vec::new()),
-            object_zones: Vec::new(),
-        }
-    }
 }
 
 impl ZoneManager {
@@ -62,39 +45,12 @@ impl ZoneManager {
         self.object_zones.get(object.0).copied().flatten()
     }
 
-    fn remove_object_in_place(objects: &mut Vec<ObjectId>, object: ObjectId) {
-        objects.retain(|c| *c != object);
-    }
-
     fn remove_from_zone(&mut self, object: ObjectId, zone: ZoneType) {
         let Some(holder) = self.holder_in(object, zone) else {
             return;
         };
-        let idx = holder.0;
-        match zone {
-            ZoneType::Library => Self::remove_object_in_place(&mut self.library[idx], object),
-            ZoneType::Hand => Self::remove_object_in_place(&mut self.hand[idx], object),
-            ZoneType::Battlefield => {
-                Self::remove_object_in_place(&mut self.battlefield[idx], object)
-            }
-            ZoneType::Graveyard => Self::remove_object_in_place(&mut self.graveyard[idx], object),
-            ZoneType::Stack => Self::remove_object_in_place(&mut self.stack[idx], object),
-            ZoneType::Exile => Self::remove_object_in_place(&mut self.exile[idx], object),
-            ZoneType::Command => Self::remove_object_in_place(&mut self.command[idx], object),
-        }
-    }
-
-    fn insert_to_zone(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
-        let idx = holder.0;
-        match zone {
-            ZoneType::Library => self.library[idx].push(object),
-            ZoneType::Hand => self.hand[idx].push(object),
-            ZoneType::Battlefield => self.battlefield[idx].push(object),
-            ZoneType::Graveyard => self.graveyard[idx].push(object),
-            ZoneType::Stack => self.stack[idx].push(object),
-            ZoneType::Exile => self.exile[idx].push(object),
-            ZoneType::Command => self.command[idx].push(object),
-        }
+        self.zone_objects_mut(zone, holder)
+            .retain(|candidate| *candidate != object);
     }
 
     /// Remove an object from all zones entirely (CR 704.5d — tokens cease to
@@ -116,7 +72,7 @@ impl ZoneManager {
         if let Some(old_zone) = self.zone_of(object) {
             self.remove_from_zone(object, old_zone);
         }
-        self.insert_to_zone(object, holder, to_zone);
+        self.zone_objects_mut(to_zone, holder).push(object);
         self.object_zones[object.0] = Some(to_zone);
     }
 

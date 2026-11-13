@@ -314,6 +314,8 @@ admission. Admission-rejection fixtures must mark the config as submitted
 - **CI runs the Rust suite in debug, so validate in debug before landing.**
   The dev profile is opt-level 1 with debug assertions on; CI runs it with
   `cargo nextest run --profile ci`, which terminates any test after 5 minutes.
+  Limit nextest builds with `CARGO_BUILD_JOBS=2`, and tests with
+  `--test-threads 2`; nextest `-j` aliases test threads, not build jobs.
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
   pass green in release and still fail CI. `create_token` is the live example —

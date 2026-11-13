@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::{
     card::CardDefId,
     deck::Deck,
-    game_object::{ObjectId, PublicId},
+    game_object::{CardId, PublicId},
     mana::Mana,
 };
 
@@ -92,9 +92,9 @@ impl PlayerConfig {
 pub struct Player {
     pub id: PublicId,
     pub index: usize,
-    pub deck: Vec<ObjectId>,
+    pub deck: Vec<CardId>,
     /// Immutable owned outside-game roster; availability is derived from zones.
-    pub sideboard: Vec<ObjectId>,
+    pub sideboard: Vec<CardId>,
     /// What the opponent knows of `deck` and `sideboard`; fixed for the game.
     #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
     pub disclosure: DecklistDisclosure,

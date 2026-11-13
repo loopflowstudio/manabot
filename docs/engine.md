@@ -620,7 +620,23 @@ turn:
 
 At no point is the Spirit a card. An effect that says "card" (return target
 creature card from your graveyard) never sees it, because "card" means only a
-Magic card (CR 108.2); engine code asks `is_card()`.
+Magic card (CR 108.2). The types say the same thing: the Spirit has an
+`ObjectId` and can never have a `CardId`.
+
+```rust
+// "Return target creature card from your graveyard to your hand."
+let Some(card) = game.state.card_id(object_id) else {
+    return; // a token or a copy of a spell: an object, not a card
+};
+let name = &game.state.objects[card].name; // a CardId indexes the same store
+
+let object_id: ObjectId = card.into(); // free: every card is an object
+```
+
+`GameState::card_id` is the one checked conversion from an object to a card;
+it returns `None` for a token or a copy. Going back is `ObjectId::from(card)`
+and costs nothing. A `CardId` stays valid for the whole game, because an
+object never becomes a card or stops being one.
 
 ### Objects
 
@@ -629,8 +645,8 @@ it:
 
 | Rules term | Rule | Engine type | Holds |
 | --- | --- | --- | --- |
-| Card | CR 108 | `Object` with `ObjectKind::Card` (a separate `Card` named by `CardId` is [planned](#planned-split)) | the physical card: owner and definition, for the whole game |
-| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one card, token or spell copy, kept across zone changes ([What is built](#what-is-built)): characteristics, counters, copy effect and `ObjectKind` |
+| Card | CR 108 | `Object` with `ObjectKind::Card`, named by `CardId` (a separate `Card` store is [planned](#planned-split)) | the physical card: owner and definition, for the whole game |
+| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one card, token or spell copy, kept across zone changes ([What is built](#what-is-built)): owner, definition, copy effect and `ObjectKind` |
 | Token | CR 111 | `Object` with `ObjectKind::Token`, from a `TokenDefinition` or a copy effect | no card |
 | Copy of a spell | CR 707.10 | `Object` with `ObjectKind::SpellCopy`, made on the stack | no card |
 | Copy of a card | CR 707.12 | none yet; no defined card casts a copy of a card | no card |
@@ -644,17 +660,25 @@ of a permanent spell, which becomes a token as it resolves (CR 111.12,
 608.3f). A definition's `is_token` says only that its catalog row is a token
 definition's; an object's kind is the authority for what it is.
 
-Engine names follow the same rule: `object`, `objects` and `ObjectId` for
-anything that may be a token or copy (the battlefield, the stack, targets,
-events, last known information); `card` and `cards` only where the rules mean
-a card (a decklist, a `CardDefinition`, or an effect whose text says "card").
+#### Names
 
-```rust
-let object = &game.state.objects[object_id];
-if object.is_card() {
-    // "return target creature card": cards only, never a token or copy
-}
-```
+A runtime id binding's name says which id it holds:
+
+| Name | Holds | Use it for |
+| --- | --- | --- |
+| `card`, `card_id`, `cards` | `CardId` | card-only zone readers, decklists, sideboards, and effects whose text says "card" |
+| `object`, `object_id`, `objects` | `ObjectId` | mixed zone lists, spells, permanents, targets, events and last known information |
+
+A function taking `CardId` needs no `is_card()` check. One taking `ObjectId`
+converts once with `card_id` when it needs a card, then passes that `CardId` on.
+`Object::is_card()` remains for code that only asks the question.
+
+Names that do not bind runtime ids keep `card`: definitions
+(`CardDefinition`, `CardDefId`, `card.rs`, which describe a card rather than
+name an object in a game), card-name strings, and the published observation
+and Python names
+(`CardData`, `StackTargetData.card_id`, serialized `card` fields), which keep
+their spelling for recorded evidence.
 
 #### What is built
 
@@ -663,11 +687,12 @@ keeps it across zone changes:
 
 - `ObjectId` is the row's index and outlives a zone change. `ObjectRef`
   (`EntityId` plus `Incarnation`) is the appearance: its incarnation advances
-  on every zone change (CR 400.7), and `Game::current_object_ref` refuses a
-  stale one. Last known information is the `ObjectLkiLog`, keyed by
-  `ObjectRef`.
-- The row carries the owner and definition a `Card` will hold, and
-  `Object::is_card()` answers "is this a card".
+  on every zone change (CR 400.7). Callers compare it with
+  `Game::current_object_ref`; `lookup_current_permanent` rejects a stale
+  reference. Last known information is the `ObjectLkiLog`, keyed by `ObjectRef`.
+- `CardId` names a row whose kind is `ObjectKind::Card` and has the same
+  index as that row's `ObjectId`. Setup uses the same checked store conversion
+  as `GameState::card_id` after inserting each deck or sideboard object.
 - `PublicId` is the match-unique number observations show for players,
   objects and abilities, also used to order timestamps; it is not a storage
   index.
@@ -682,10 +707,12 @@ Not built. The rules make a new object on every zone change (CR 400.7), stack
 to battlefield included (CR 608.3a). The plan is to store that directly: a
 `Card` store for the physical card and an `Object` store with one row per
 appearance, so `ObjectId` would name one appearance and go stale when the
-object moves, as `ObjectRef` does today. Code that means "which object" (a
+object moves, as `ObjectRef` does today, and `CardId` would index the `Card`
+store instead of sharing the object's row. Code that means "which object" (a
 target, "that creature", last known information) would name the appearance;
 code that means "which card" (ownership, a decklist, "return that card") would
-name the card. Nothing else would cross a zone change: the only bridge from
+name the card, as its `CardId` already does. Nothing else would cross a zone
+change: the only bridge from
 the old object to the new one would be a carry-over record holding what
 CR 400.7's sub-rules let the new object know (whether it was cast or kicked,
 and linked effects finding the object they moved).
@@ -698,32 +725,44 @@ change adds layer-view or `TriggerIndex` invalidation before relying on it.
 
 ### Zones
 
-CR 400.1 names seven zones (ante aside). Each holds only the objects its rule allows:
+CR 400.1 names seven zones (ante aside). Each holds only the objects its rule
+allows, and each engine list is typed for what can be in it:
 
-| Zone | Rule | Holds |
-| --- | --- | --- |
-| Library | CR 401 | cards |
-| Hand | CR 402 | cards |
-| Graveyard | CR 404 | cards |
-| Exile | CR 406 | cards |
-| Battlefield | CR 403 | permanents: cards and tokens |
-| Stack | CR 405 | spells (cards and copies) and abilities |
-| Command | CR 408 | cards (commanders, CR 903.6) and emblems (CR 114.1); empty until a format or card puts something there |
+| Zone | Rule | Holds | Engine list |
+| --- | --- | --- | --- |
+| Library | CR 401 | cards, transient non-card objects | `ObjectId` |
+| Hand | CR 402 | cards, transient non-card objects | `ObjectId` |
+| Graveyard | CR 404 | cards, transient non-card objects | `ObjectId` |
+| Exile | CR 406 | cards, transient non-card objects | `ObjectId` |
+| Battlefield | CR 403 | permanents: cards and tokens | `ObjectId` |
+| Stack | CR 405 | spells (cards and copies) and abilities | `ObjectId` for spells; `GameState::stack_objects` includes abilities and owns stack order |
+| Command | CR 408 | cards (commanders, CR 903.6) and emblems (CR 114.1); empty until a format or card puts something there | `ObjectId` |
+
+Decklists and sideboards are outside the game and hold cards alone.
+
+```rust
+for card in game.state.zone_cards(ZoneType::Hand, player) {
+    // card: CardId
+}
+for object in game.state.zones.zone_objects(ZoneType::Graveyard, player) {
+    // object: &ObjectId; a token that just died may be here
+}
+```
 
 A token or copy that leaves the battlefield or stack is briefly in another
 zone until state-based actions are checked: a token in any zone but the
 battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and
-a copy of a card in any zone but the stack or battlefield (CR 704.5e). Library,
-hand, graveyard and exile therefore hold cards plus, for that moment, those
-objects. They keep their kind there; such a token can't return to the
-battlefield (CR 111.8), exile grants and "card" selections skip it, and
-`flow/sba.rs` removes it by its kind.
+a copy of a card in any zone but the stack or battlefield (CR 704.5e). It keeps
+its kind there; such a token can't return to the battlefield (CR 111.8), exile
+grants and "card" selections skip it, and `flow/sba.rs` removes it by its kind.
 
-So every zone list holds `ObjectId`s, the library and hand included: a token
-returned to a hand or put into a library really is there until state-based
-actions are checked (CR 111.8 keeps a token that would move again in the zone
-it is in). Only decklists and sideboards, which are outside the game, hold
-cards alone.
+All zone lists retain ordered `ObjectId`s until that check, including library
+and hand. `zone_objects`, `size`, `top` and shuffles preserve transient occupants
+and their positions; observations and the match-state hash read the same lists.
+`GameState::zone_cards` narrows them for card-only consumers. There is no second
+card list or visitor store to synchronize. This matters even at decisions: a
+Treasure sacrificed for mana remains in the graveyard during its color choice,
+before state-based actions run.
 
 Outside the game is not a zone (CR 400.11). Sideboards are fixed rosters held
 beside the game (see [Decks](#decks)); a companion starts there and is put into

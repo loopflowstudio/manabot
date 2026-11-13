@@ -14,7 +14,7 @@ use crate::{
     state::{
         ability::Effect,
         card::ActivationZone,
-        game_object::{ObjectId, PlayerId, PublicId},
+        game_object::{CardId, ObjectId, PlayerId, PublicId},
         mana::Mana,
         zone::ZoneType,
     },
@@ -242,13 +242,10 @@ impl Game {
     /// Cards `player` might play at priority: their hand and graveyard, and
     /// exiled cards they hold grants for, and a library top a permanent lets
     /// them cast. `priority_action_for_card` decides.
-    fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = ObjectId> + '_ {
-        let zones = &self.state.zones;
-        zones
-            .zone_objects(ZoneType::Hand, player)
-            .iter()
-            .chain(zones.zone_objects(ZoneType::Graveyard, player))
-            .copied()
+    fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
+        self.state
+            .zone_cards(ZoneType::Hand, player)
+            .chain(self.state.zone_cards(ZoneType::Graveyard, player))
             .chain(self.exile_granted_cards(player))
             .chain(self.library_top_castable(player))
     }
@@ -257,7 +254,7 @@ impl Game {
         let _scan = self.board_scan();
         let mut actions: Vec<Action> = self
             .priority_candidate_cards(player)
-            .filter_map(|object| self.priority_action_for_card(player, object))
+            .filter_map(|card| self.priority_action_for_card(player, card))
             .collect();
         actions.extend(self.priority_activate_ability_actions(player));
         actions.push(Action::PassPriority { player });
@@ -290,9 +287,9 @@ impl Game {
                     || (ability.discard_card
                         && self
                             .state
-                            .zones
-                            .zone_objects(ZoneType::Hand, player)
-                            .is_empty())
+                            .zone_cards(ZoneType::Hand, player)
+                            .next()
+                            .is_none())
                 {
                     continue;
                 }
@@ -364,11 +361,12 @@ impl Game {
         actions.extend(self.priority_card_ability_actions(player));
         actions.extend(
             self.state
-                .zones
-                .zone_objects(ZoneType::Hand, player)
-                .iter()
-                .filter(|object| self.can_foretell(player, **object))
-                .map(|&object| Action::Foretell { player, object }),
+                .zone_cards(ZoneType::Hand, player)
+                .filter(|card| self.can_foretell(player, *card))
+                .map(|card| Action::Foretell {
+                    player,
+                    object: card.into(),
+                }),
         );
         actions
     }
@@ -378,13 +376,14 @@ impl Game {
     fn priority_card_ability_actions(&self, player: PlayerId) -> Vec<Action> {
         let mut actions = Vec::new();
         for zone in [ZoneType::Hand, ZoneType::Graveyard] {
-            for &object in self.state.zones.zone_objects(zone, player) {
-                for ability_index in 0..self.state.objects[object].activated_abilities.len() {
-                    let Some(ability) = self.card_ability_in_zone(player, object, ability_index)
+            for card in self.state.zone_cards(zone, player) {
+                let object = ObjectId::from(card);
+                for ability_index in 0..self.state.objects[card].activated_abilities.len() {
+                    let Some(ability) = self.card_ability_in_zone(player, card, ability_index)
                     else {
                         continue;
                     };
-                    let source = ActivationSource::Card(object);
+                    let source = ActivationSource::Card(card);
                     if self.check_activation_terms(player, &ability).is_err()
                         || !self.activation_targets_available(player, source, ability_index)
                     {
@@ -410,8 +409,9 @@ impl Game {
         actions
     }
 
-    fn priority_action_for_card(&self, player: PlayerId, object_id: ObjectId) -> Option<Action> {
-        let object = &self.state.objects[object_id];
+    fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<Action> {
+        let object_id = ObjectId::from(card);
+        let object = &self.state.objects[card];
         if !self.may_play_from_zone(player, object_id) {
             return None;
         }
@@ -433,7 +433,7 @@ impl Game {
         if !can_cast_now {
             return None;
         }
-        self.can_cast_with(player, object_id, Default::default())
+        self.can_cast_with(player, card, Default::default())
             .then_some(Action::CastSpell {
                 player,
                 object: object_id,
@@ -443,13 +443,9 @@ impl Game {
     /// Whether `card_id`'s modes and mandatory targets admit casting it and
     /// `player` can pay its total cost with `cast`'s choices. Timing and zone
     /// permission are the caller's.
-    pub(crate) fn can_cast_with(
-        &self,
-        player: PlayerId,
-        object_id: ObjectId,
-        cast: CastChoices,
-    ) -> bool {
-        let object = &self.state.objects[object_id];
+    pub(crate) fn can_cast_with(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
+        let object_id = ObjectId::from(card);
+        let object = &self.state.objects[card];
         if object.spell_modes().is_some() && self.legal_spell_modes(player, object_id).is_empty() {
             return false;
         }
@@ -596,9 +592,9 @@ impl Game {
                     .map(|object| self.exile_alternative_cards(*player, object))
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|object| Action::SelectCard {
+                    .map(|card| Action::SelectCard {
                         player: *player,
-                        object,
+                        object: card.into(),
                     })
                     .collect(),
                 focus: Vec::new(),
@@ -608,12 +604,10 @@ impl Game {
                 kind: ActionSpaceKind::Discard,
                 actions: self
                     .state
-                    .zones
-                    .zone_objects(ZoneType::Hand, *player)
-                    .iter()
-                    .map(|object| Action::SelectCard {
+                    .zone_cards(ZoneType::Hand, *player)
+                    .map(|card| Action::SelectCard {
                         player: *player,
-                        object: *object,
+                        object: card.into(),
                     })
                     .collect(),
                 focus: Vec::new(),
@@ -805,17 +799,26 @@ impl Game {
         }
     }
 
+    /// Narrow untrusted action ids at card-only entry points.
+    fn chosen_card(&self, object: ObjectId) -> Result<CardId, AgentError> {
+        self.state
+            .card_id(object)
+            .ok_or_else(|| AgentError("choice must name a card".into()))
+    }
+
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
         match action {
             Action::ChooseTrigger { player, trigger_id } => {
                 self.choose_trigger(*player, *trigger_id)
             }
             Action::PlayLand { player, object } => {
-                self.play_land(*player, *object)?;
+                self.play_land(*player, self.chosen_card(*object)?)?;
                 self.restart_priority_round();
                 Ok(())
             }
-            Action::CastSpell { player, object } => self.cast_spell_action(*player, *object),
+            Action::CastSpell { player, object } => {
+                self.cast_spell_action(*player, self.chosen_card(*object)?)
+            }
             Action::ActivateAbility {
                 player,
                 permanent,
@@ -836,7 +839,7 @@ impl Game {
                 if self.state.priority.holder != *player {
                     return Err(AgentError("player does not have priority".to_string()));
                 }
-                self.foretell(*player, *object)
+                self.foretell(*player, self.chosen_card(*object)?)
             }
             Action::ChooseTarget { player, target } => {
                 let target = *target;
@@ -917,7 +920,7 @@ impl Game {
                     Some(PendingChoice::ExileFromHandPayment { .. })
                 ) =>
             {
-                self.exile_payment_action(*player, *object)
+                self.exile_payment_action(*player, self.chosen_card(*object)?)
             }
             Action::SelectCard { player, object }
                 if matches!(
@@ -925,7 +928,7 @@ impl Game {
                     Some(PendingChoice::DiscardPayment { .. })
                 ) =>
             {
-                self.discard_payment_action(*player, *object)
+                self.discard_payment_action(*player, self.chosen_card(*object)?)
             }
             Action::SelectCard { player, object }
                 if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) =>

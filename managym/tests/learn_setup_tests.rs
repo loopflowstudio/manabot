@@ -60,10 +60,10 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
         for (player, config) in configs.iter().enumerate() {
             let roster = &game.state.players[player].sideboard;
             assert_eq!(roster.len(), config.deck.sideboard.values().sum::<usize>());
-            for &object in roster {
-                assert_eq!(game.state.objects[object].owner, PlayerId(player));
-                assert_eq!(game.state.zones.zone_of(object), None);
-                assert!(!game.state.players[player].deck.contains(&object));
+            for &card in roster {
+                assert_eq!(game.state.objects[card].owner, PlayerId(player));
+                assert_eq!(game.state.zones.zone_of(card.into()), None);
+                assert!(!game.state.players[player].deck.contains(&card));
             }
         }
     }

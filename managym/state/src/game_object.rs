@@ -1,3 +1,8 @@
+//! Runtime objects, checked card ids, and exact identities across zone changes.
+//!
+//! `ObjectVec` owns rows; `CardId` narrows a row by kind, while `ObjectRef`
+//! binds its incarnation. `PublicId` joins observations and orders timestamps.
+
 use std::{collections::BTreeMap, sync::Arc};
 
 use super::zone::ZoneType;
@@ -12,6 +17,20 @@ pub struct PublicId(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ObjectId(pub usize);
+
+/// A checked reference to an object of kind `Card` (CR 108.2).
+///
+/// The index is private: only the object store can certify it. Serialization
+/// retains the underlying row number used in saved decisions and rosters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct CardId(ObjectId);
+
+impl From<CardId> for ObjectId {
+    fn from(card: CardId) -> Self {
+        card.0
+    }
+}
 
 /// Stable match-local identity of a physical card or token.
 ///
@@ -231,6 +250,37 @@ impl<T> std::ops::IndexMut<ObjectId> for ObjectVec<T> {
     }
 }
 
+impl ObjectVec<Object> {
+    /// Narrow a storage id once; missing rows, tokens and spell copies are not cards.
+    pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
+        self.get(object.0)
+            .filter(|value| value.is_card())
+            .map(|_| CardId(object))
+    }
+}
+
+impl std::ops::Index<CardId> for ObjectVec<Object> {
+    type Output = Object;
+    fn index(&self, card: CardId) -> &Object {
+        let object = &self[ObjectId::from(card)];
+        debug_assert!(object.is_card(), "CardId must still name a card");
+        object
+    }
+}
+impl std::ops::Index<&CardId> for ObjectVec<Object> {
+    type Output = Object;
+    fn index(&self, card: &CardId) -> &Object {
+        &self[*card]
+    }
+}
+impl std::ops::IndexMut<CardId> for ObjectVec<Object> {
+    fn index_mut(&mut self, card: CardId) -> &mut Object {
+        let object = &mut self[ObjectId::from(card)];
+        debug_assert!(object.is_card(), "CardId must still name a card");
+        object
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct PermanentVec<T>(pub Vec<T>);
 
@@ -296,7 +346,7 @@ impl IdGenerator {
 pub enum ObjectKind {
     /// A Magic card (CR 108.2), from a card definition.
     Card,
-    /// A token (CR 111.1), from a [`TokenDefinition`] or a copy effect. It
+    /// A token (CR 111.1), from a [`TokenDefinition`](crate::card::TokenDefinition) or a copy effect. It
     /// ceases to exist in any zone but the battlefield (CR 111.7, 704.5d).
     Token,
     /// A copy of a spell (CR 707.10), made on the stack. It ceases to exist

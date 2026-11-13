@@ -23,7 +23,7 @@ use crate::{
     },
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId, PublicId, Target},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, PublicId, Target},
         mana::ManaCost,
         permanent::CounterKind,
         predicate::CardPredicate,
@@ -705,7 +705,7 @@ impl Decision {
     /// Exact top-of-library cards inspected by scry/look decisions, top first.
     /// These enter the deciding player's observation and stay pinned during
     /// `Game::determinize`. Search candidates are derived separately.
-    pub fn revealed_cards(&self) -> &[ObjectId] {
+    pub fn revealed_objects(&self) -> &[ObjectId] {
         match self {
             Decision::ChoosePaymentX { .. }
             | Decision::NameCard { .. }
@@ -749,15 +749,18 @@ impl Decision {
     }
 }
 
-/// `player` selects one of `cards`; `decline` adds the option to choose none.
-fn select_cards(
+/// `player` selects one of the objects; `decline` adds the option to choose none.
+fn select_objects<I: Into<ObjectId>>(
     player: PlayerId,
-    objects: impl IntoIterator<Item = ObjectId>,
+    objects: impl IntoIterator<Item = I>,
     decline: bool,
 ) -> Vec<Action> {
     objects
         .into_iter()
-        .map(|object| Action::SelectCard { player, object })
+        .map(|id| Action::SelectCard {
+            player,
+            object: id.into(),
+        })
         .chain(decline.then_some(Action::Decline { player }))
         .collect()
 }
@@ -1049,7 +1052,7 @@ impl Game {
 
     /// Search permission reveals all cards in the searched zones only to
     /// the chooser; eligibility by name restricts actions, not information.
-    pub(crate) fn named_search_cards(
+    pub(crate) fn named_search_objects(
         &self,
         owner: PlayerId,
     ) -> impl Iterator<Item = ObjectId> + '_ {
@@ -1058,10 +1061,14 @@ impl Game {
             .flat_map(move |zone| self.state.zones.zone_objects(zone, owner).iter().copied())
     }
 
-    fn card_focus(&self, objects: &[ObjectId]) -> Vec<PublicId> {
-        objects
-            .iter()
-            .map(|object| self.state.objects[*object].id)
+    pub(crate) fn named_search_cards(&self, owner: PlayerId) -> impl Iterator<Item = CardId> + '_ {
+        self.named_search_objects(owner)
+            .filter_map(|object| self.state.card_id(object))
+    }
+
+    fn object_focus<I: Copy + Into<ObjectId>>(&self, ids: &[I]) -> Vec<PublicId> {
+        ids.iter()
+            .map(|id| self.state.objects[(*id).into()].id)
             .collect()
     }
 
@@ -1441,11 +1448,10 @@ impl Game {
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(
+                actions: select_objects(
                     *player,
-                    self.named_search_cards(*owner).filter(|object_id| {
-                        self.state.objects[*object_id].name == *name && *remaining > 0
-                    }),
+                    self.named_search_cards(*owner)
+                        .filter(|card| self.state.objects[*card].name == *name && *remaining > 0),
                     true,
                 ),
                 focus: source_focus,
@@ -1527,7 +1533,7 @@ impl Game {
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(
+                actions: select_objects(
                     *player,
                     self.choice_candidates(&suspended.decision)
                         .into_iter()
@@ -1560,7 +1566,7 @@ impl Game {
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(
+                actions: select_objects(
                     *player,
                     self.exile_choice_candidates(*controller, predicate, chosen)
                         .into_iter()
@@ -1572,7 +1578,7 @@ impl Game {
             Decision::KeepCreatures { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(
+                actions: select_objects(
                     *player,
                     self.keep_candidates(&suspended.decision)
                         .into_iter()
@@ -1597,7 +1603,7 @@ impl Game {
             Decision::SearchDistinctNames { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(
+                actions: select_objects(
                     *player,
                     self.distinct_name_search_candidates(&suspended.decision),
                     true,
@@ -1607,7 +1613,7 @@ impl Game {
             Decision::DiscardFromRevealedHand { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Discard,
-                actions: select_cards(
+                actions: select_objects(
                     *player,
                     self.revealed_hand_candidates(&suspended.decision),
                     false,
@@ -1615,21 +1621,21 @@ impl Game {
                 focus: source_focus,
             },
             Decision::ExileLinked { player, up_to, .. } => {
-                let object_ids = self.linked_exile_candidates(&suspended.decision);
+                let cards = self.linked_exile_candidates(&suspended.decision);
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
-                    focus: self.card_focus(&object_ids),
-                    actions: select_cards(*player, object_ids, *up_to),
+                    focus: self.object_focus(&cards),
+                    actions: select_objects(*player, cards, *up_to),
                 }
             }
             Decision::CastDuringResolution { player, .. } => {
-                let object_ids = self.resolution_cast_candidates(&suspended.decision);
+                let cards = self.resolution_cast_candidates(&suspended.decision);
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
-                    focus: self.card_focus(&object_ids),
-                    actions: select_cards(*player, object_ids, true),
+                    focus: self.object_focus(&cards),
+                    actions: select_objects(*player, cards, true),
                 }
             }
             Decision::OpponentSplitsRevealed {
@@ -1639,8 +1645,8 @@ impl Game {
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(*player, object_ids.iter().copied(), false),
-                focus: self.card_focus(object_ids),
+                actions: select_objects(*player, object_ids.iter().copied(), false),
+                focus: self.object_focus(object_ids),
             },
             Decision::OrderLibrary {
                 player,
@@ -1650,19 +1656,15 @@ impl Game {
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: select_cards(*player, object_ids[*next..].iter().copied(), false),
-                focus: self.card_focus(&object_ids[*next..]),
+                actions: select_objects(*player, object_ids[*next..].iter().copied(), false),
+                focus: self.object_focus(&object_ids[*next..]),
             },
             Decision::Discard { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Discard,
-                actions: select_cards(
+                actions: select_objects(
                     *player,
-                    self.state
-                        .zones
-                        .zone_objects(ZoneType::Hand, *player)
-                        .iter()
-                        .copied(),
+                    self.state.zone_cards(ZoneType::Hand, *player),
                     false,
                 ),
                 focus: source_focus,
@@ -1686,12 +1688,12 @@ impl Game {
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
-                    actions: select_cards(
+                    actions: select_objects(
                         *player,
                         object_ids.iter().copied(),
                         selected.len() >= *min,
                     ),
-                    focus: self.card_focus(&object_ids),
+                    focus: self.object_focus(&object_ids),
                 }
             }
             Decision::Surveil {
@@ -1707,8 +1709,8 @@ impl Game {
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
-                    actions: select_cards(*player, remaining.iter().copied(), true),
-                    focus: self.card_focus(&remaining),
+                    actions: select_objects(*player, remaining.iter().copied(), true),
+                    focus: self.object_focus(&remaining),
                 }
             }
             Decision::Scry {
@@ -1726,7 +1728,7 @@ impl Game {
                         })
                     })
                     .collect(),
-                focus: self.card_focus(remaining),
+                focus: self.object_focus(remaining),
             },
             Decision::LookAndSelect {
                 player,
@@ -1751,7 +1753,7 @@ impl Game {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
                     actions,
-                    focus: self.card_focus(looked),
+                    focus: self.object_focus(looked),
                 }
             }
             Decision::NameCard { player, scope, .. } => ActionSpace {
@@ -1779,28 +1781,26 @@ impl Game {
             Decision::LegendRule { player, groups, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LegendRule,
-                actions: select_cards(*player, groups[0].iter().copied(), false),
-                focus: self.card_focus(&groups[0]),
+                actions: select_objects(*player, groups[0].iter().copied(), false),
+                focus: self.object_focus(&groups[0]),
             },
             Decision::Learn { player } => {
                 let mut actions: Vec<Action> = self
                     .state
-                    .zones
-                    .zone_objects(ZoneType::Hand, *player)
-                    .iter()
-                    .map(|object_id| Action::LearnDiscard {
+                    .zone_cards(ZoneType::Hand, *player)
+                    .map(|card| Action::LearnDiscard {
                         player: *player,
-                        object: *object_id,
+                        object: card.into(),
                     })
                     .collect();
                 actions.extend(
                     self.state.players[player.0]
                         .sideboard
                         .iter()
-                        .filter(|object_id| self.eligible_lesson(*player, **object_id))
-                        .map(|object_id| Action::LearnTakeLesson {
+                        .filter(|card| self.eligible_lesson(*player, **card))
+                        .map(|card| Action::LearnTakeLesson {
                             player: *player,
-                            object: *object_id,
+                            object: (*card).into(),
                         }),
                 );
                 actions.push(Action::Decline { player: *player });
@@ -2213,6 +2213,7 @@ impl Game {
                     .state
                     .zones
                     .contains(*object_id, ZoneType::Hand, *player)
+                    || self.state.card_id(*object_id).is_none()
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
@@ -2225,9 +2226,9 @@ impl Game {
                 if *remaining == 0
                     || self
                         .state
-                        .zones
-                        .zone_objects(ZoneType::Hand, *player)
-                        .is_empty()
+                        .zone_cards(ZoneType::Hand, *player)
+                        .next()
+                        .is_none()
                 {
                     self.run_frame(suspended.frame);
                 } else {
@@ -2313,7 +2314,7 @@ impl Game {
                     )]))
                 } else {
                     if *reveal {
-                        self.reveal_card_to_hand(*object_id, player);
+                        self.reveal_object_to_hand(*object_id, player);
                     } else {
                         self.move_object(*object_id, ZoneType::Hand);
                     }
@@ -2406,7 +2407,8 @@ impl Game {
             ) => {
                 if !self
                     .distinct_name_search_candidates(&suspended.decision)
-                    .contains(object_id)
+                    .iter()
+                    .any(|card| ObjectId::from(*card) == *object_id)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a distinct-name search candidate".into()));
@@ -2440,6 +2442,7 @@ impl Game {
                     .state
                     .zones
                     .contains(*object_id, ZoneType::Hand, *owner)
+                    || self.state.card_id(*object_id).is_none()
                     || !self.object_matches_predicate(*object_id, predicate)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2459,7 +2462,8 @@ impl Game {
             ) => {
                 if !self
                     .resolution_cast_candidates(&suspended.decision)
-                    .contains(object_id)
+                    .iter()
+                    .any(|card| ObjectId::from(*card) == *object_id)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
@@ -2506,7 +2510,8 @@ impl Game {
                 let (grant, grantee, source) = (*grant, *grantee, *source);
                 if !self
                     .linked_exile_candidates(&suspended.decision)
-                    .contains(object_id)
+                    .iter()
+                    .any(|card| ObjectId::from(*card) == *object_id)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not an offered card to exile".into()));
@@ -2522,7 +2527,7 @@ impl Game {
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
                 match offer {
                     ResolutionCastOffer::Exiled { object: object_id } => {
-                        self.reveal_card_to_hand(*object_id, *player);
+                        self.reveal_object_to_hand(*object_id, *player);
                     }
                     ResolutionCastOffer::Cascade { exiled, .. } => {
                         self.put_exiled_on_bottom_in_random_order(exiled.clone());
@@ -2729,6 +2734,7 @@ impl Game {
                     .state
                     .zones
                     .contains(*object_id, ZoneType::Hand, player)
+                    || self.state.card_id(*object_id).is_none()
                 {
                     let err = AgentError("card to discard is not in hand".to_string());
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -2745,13 +2751,17 @@ impl Game {
                     object: object_id, ..
                 },
             ) => {
-                if !self.eligible_lesson(*player, *object_id) {
+                if !self
+                    .state
+                    .card_id(*object_id)
+                    .is_some_and(|card| self.eligible_lesson(*player, card))
+                {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError(
                         "card is not an available owned sideboard Lesson".to_string(),
                     ));
                 }
-                self.reveal_card_to_hand(*object_id, *player);
+                self.reveal_object_to_hand(*object_id, *player);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -2767,19 +2777,20 @@ impl Game {
         }
     }
 
-    fn eligible_lesson(&self, player: PlayerId, object: ObjectId) -> bool {
+    fn eligible_lesson(&self, player: PlayerId, card: CardId) -> bool {
+        let object = ObjectId::from(card);
         self.decision_controller(player) == player
-            && self.state.players[player.0].sideboard.contains(&object)
-            && self.state.objects[object].owner == player
+            && self.state.players[player.0].sideboard.contains(&card)
+            && self.state.objects[card].owner == player
             && self.state.zones.zone_of(object).is_none()
-            && self.state.objects[object]
+            && self.state.objects[card]
                 .subtypes
                 .iter()
                 .any(|subtype| subtype == "Lesson")
     }
 
-    /// The top `count` cards of `player`'s library, top first.
-    pub(crate) fn library_top(&self, player: PlayerId, count: usize) -> Vec<ObjectId> {
+    /// The top `count` objects of `player`'s library, including transient visitors.
+    pub(crate) fn library_top_objects(&self, player: PlayerId, count: usize) -> Vec<ObjectId> {
         self.state
             .zones
             .zone_objects(ZoneType::Library, player)
@@ -2791,17 +2802,16 @@ impl Game {
     }
 
     /// The top card of `player`'s library.
-    pub(crate) fn library_top_card(&self, player: PlayerId) -> Option<ObjectId> {
+    pub(crate) fn library_top_card(&self, player: PlayerId) -> Option<CardId> {
         self.state
             .zones
-            .zone_objects(ZoneType::Library, player)
-            .last()
-            .copied()
+            .top(ZoneType::Library, player)
+            .and_then(|object| self.state.card_id(object))
     }
 
     /// The cards an `ExileLinked` decision may exile: matching graveyard
     /// cards, or the cards of matching nontoken permanents `owner` controls.
-    pub(crate) fn linked_exile_candidates(&self, decision: &Decision) -> Vec<ObjectId> {
+    pub(crate) fn linked_exile_candidates(&self, decision: &Decision) -> Vec<CardId> {
         let Decision::ExileLinked {
             owner,
             zone,
@@ -2817,15 +2827,12 @@ impl Game {
                 .into_iter()
                 .filter(|id| self.permanent_matches_predicate(*id, predicate))
                 .filter_map(|id| self.state.permanents[id].as_ref().map(|p| p.object))
-                .filter(|object| self.state.objects[*object].is_card())
+                .filter_map(|object| self.state.card_id(object))
                 .collect(),
             _ => self
                 .state
-                .zones
-                .zone_objects(ZoneType::Graveyard, *owner)
-                .iter()
-                .copied()
-                .filter(|object| self.object_matches_predicate(*object, predicate))
+                .zone_cards(ZoneType::Graveyard, *owner)
+                .filter(|card| self.object_matches_predicate((*card).into(), predicate))
                 .collect(),
         }
     }
@@ -2833,7 +2840,7 @@ impl Game {
     /// The cards a `CastDuringResolution` decision offers: hand spells matching
     /// its predicate (one per definition, so resampled copies stay
     /// consistent) or the exiled card, each castable for free right now.
-    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<ObjectId> {
+    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
         let Decision::CastDuringResolution {
             player,
             offer,
@@ -2843,29 +2850,31 @@ impl Game {
         else {
             return Vec::new();
         };
+        // Casting from exile or a library is casting from outside the hand
+        // (Drannith Magistrate).
+        if !matches!(offer, ResolutionCastOffer::Hand { .. }) && self.casts_only_from_hand(*player)
+        {
+            return Vec::new();
+        }
         let free = CastChoices {
             free: !paid,
             resolving: *paid,
             ..Default::default()
         };
-        let mut candidates: Vec<ObjectId> = match offer {
+        let mut cards: Vec<CardId> = match offer {
             ResolutionCastOffer::Hand { predicate } => self
                 .state
-                .zones
-                .zone_objects(ZoneType::Hand, *player)
-                .iter()
-                .copied()
-                .filter(|object| {
-                    self.state.objects[*object].types.is_castable()
-                        && self.object_matches_predicate(*object, predicate)
+                .zone_cards(ZoneType::Hand, *player)
+                .filter(|card| {
+                    self.state.objects[*card].types.is_castable()
+                        && self.object_matches_predicate((*card).into(), predicate)
                 })
                 .collect(),
             ResolutionCastOffer::Exiled { object }
             | ResolutionCastOffer::Cascade { object, .. } => self
                 .state
-                .zones
-                .contains(*object, ZoneType::Exile, *player)
-                .then_some(*object)
+                .card_id(*object)
+                .filter(|_| self.state.zones.contains(*object, ZoneType::Exile, *player))
                 .into_iter()
                 .collect(),
             ResolutionCastOffer::ExiledWith { source, predicate } => self
@@ -2873,40 +2882,33 @@ impl Game {
                 .exile_links
                 .iter()
                 .filter(|link| link.source == *source)
-                .map(|link| link.exiled_object)
-                .filter(|object| {
-                    let definition = &self.state.objects[*object];
-                    self.state.zones.contains(*object, ZoneType::Exile, *player)
+                .filter_map(|link| self.state.card_id(link.exiled_object))
+                .filter(|card| {
+                    let definition = &self.state.objects[*card];
+                    self.state
+                        .zones
+                        .contains((*card).into(), ZoneType::Exile, *player)
                         && definition.types.is_castable()
-                        && self.object_matches_predicate(*object, predicate)
+                        && self.object_matches_predicate((*card).into(), predicate)
                 })
                 .collect(),
-            ResolutionCastOffer::LibraryTop { object } => (self
-                .state
-                .zones
-                .zone_objects(ZoneType::Library, *player)
-                .last()
-                == Some(object)
-                && self.state.objects[*object].types.is_castable())
-            .then_some(*object)
-            .into_iter()
-            .collect(),
+            ResolutionCastOffer::LibraryTop { object } => self
+                .library_top_card(*player)
+                .filter(|card| {
+                    ObjectId::from(*card) == *object
+                        && self.state.objects[*card].types.is_castable()
+                })
+                .into_iter()
+                .collect(),
         };
-        // Casting from exile or a library is casting from outside the hand
-        // (Drannith Magistrate).
-        if !matches!(offer, ResolutionCastOffer::Hand { .. }) && self.casts_only_from_hand(*player)
-        {
-            candidates.clear();
-        }
-        candidates.retain(|object| self.can_cast_with(*player, *object, free));
-        candidates
-            .sort_unstable_by_key(|object| (self.state.objects[*object].definition_id, *object));
-        candidates.dedup_by_key(|object| self.state.objects[*object].definition_id);
-        candidates
+        cards.retain(|card| self.can_cast_with(*player, *card, free));
+        cards.sort_unstable_by_key(|card| (self.state.objects[*card].definition_id, *card));
+        cards.dedup_by_key(|card| self.state.objects[*card].definition_id);
+        cards
     }
 
     /// One hand card per matching definition for `DiscardFromRevealedHand`.
-    pub(crate) fn revealed_hand_candidates(&self, decision: &Decision) -> Vec<ObjectId> {
+    pub(crate) fn revealed_hand_objects(&self, decision: &Decision) -> Vec<ObjectId> {
         let Decision::DiscardFromRevealedHand {
             owner, predicate, ..
         } = decision
@@ -2927,9 +2929,16 @@ impl Game {
         candidates
     }
 
+    pub(crate) fn revealed_hand_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        self.revealed_hand_objects(decision)
+            .into_iter()
+            .filter_map(|object| self.state.card_id(object))
+            .collect()
+    }
+
     /// Library cards matching a `SearchDistinctNames` predicate whose names
     /// differ from every card it already selected.
-    pub(crate) fn distinct_name_search_candidates(&self, decision: &Decision) -> Vec<ObjectId> {
+    pub(crate) fn distinct_name_search_objects(&self, decision: &Decision) -> Vec<ObjectId> {
         let Decision::SearchDistinctNames {
             player,
             predicate,
@@ -2958,6 +2967,13 @@ impl Game {
         candidates
     }
 
+    pub(crate) fn distinct_name_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        self.distinct_name_search_objects(decision)
+            .into_iter()
+            .filter_map(|object| self.state.card_id(object))
+            .collect()
+    }
+
     /// The revealed cards go to `end`: into hand, or to an opponent's split.
     /// With none revealed, or once in hand, the library is shuffled.
     fn finish_distinct_name_search(&mut self, mut suspended: SuspendedResolution) {
@@ -2983,7 +2999,7 @@ impl Game {
             }
             _ => {
                 for object in std::mem::take(selected) {
-                    self.reveal_card_to_hand(object, player);
+                    self.reveal_object_to_hand(object, player);
                 }
                 self.shuffle_library(player);
                 self.run_frame(suspended.frame);
@@ -3133,6 +3149,41 @@ mod learn_tests {
         )
     }
 
+    #[test]
+    fn card_choices_exclude_transient_tokens_without_removing_them() {
+        let mut game = game(&[]);
+        let player = PlayerId(0);
+        let permanent = game.create_token("token.spirit", player, false).unwrap();
+        let token = game.state.permanents[permanent].as_ref().unwrap().object;
+        game.move_object(token, ZoneType::Hand);
+        learn(&mut game);
+        assert!(game.action_space().unwrap().actions.iter().all(|action| {
+            !matches!(action, Action::LearnDiscard { object, .. } if *object == token)
+        }));
+        assert!(game
+            .execute_decision_action(&Action::LearnDiscard {
+                player,
+                object: token
+            })
+            .is_err());
+        assert!(game.state.zones.contains(token, ZoneType::Hand, player));
+        assert!(game.state.suspended_decision.is_some());
+        game.move_object(token, ZoneType::Graveyard);
+        let card = game.state.players[player.0].deck[0];
+        game.move_object(card.into(), ZoneType::Graveyard);
+        let spec = crate::state::ability::TargetSpec::GraveyardCard {
+            predicate: CardPredicate::default(),
+        };
+        let token_target = Target::GraveyardCard(game.current_object_ref(token).unwrap());
+        assert!(!game.target_is_legal(token_target, &spec, player));
+        assert_eq!(
+            game.legal_targets_for_spec(&spec, player),
+            vec![Target::GraveyardCard(
+                game.current_object_ref(card.into()).unwrap()
+            ),]
+        );
+    }
+
     fn learn(game: &mut Game) {
         game.run_frame(EffectFrame::new(PlayerId(0), vec![Effect::Learn]));
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
@@ -3156,10 +3207,10 @@ mod learn_tests {
             "Fancy Footwork",
         ] {
             let mut game = game(&[(name, 1)]);
-            let object = game.state.players[0].sideboard[0];
-            assert!(game.current_object_ref(object).is_none());
+            let card = game.state.players[0].sideboard[0];
+            assert!(game.current_object_ref(card.into()).is_none());
             let deck = game.state.players[0].deck.clone();
-            assert!(!deck.contains(&object));
+            assert!(!deck.contains(&card));
             learn(&mut game);
             let before = witness(&game);
             let library = game
@@ -3170,7 +3221,7 @@ mod learn_tests {
             let hand_count = game.state.zones.size(ZoneType::Hand, PlayerId(0));
             let card_count = game.state.objects.len();
             let event_count = game.state.events.len();
-            take(&mut game, object);
+            take(&mut game, card.into());
             assert_eq!(game.state.objects.len(), card_count);
             assert_eq!(
                 game.state.zones.size(ZoneType::Hand, PlayerId(0)),
@@ -3179,9 +3230,9 @@ mod learn_tests {
             assert!(game
                 .state
                 .zones
-                .contains(object, ZoneType::Hand, PlayerId(0)));
-            assert_eq!(game.state.objects[object].name, name);
-            assert!(game.current_object_ref(object).is_some());
+                .contains(card.into(), ZoneType::Hand, PlayerId(0)));
+            assert_eq!(game.state.objects[card].name, name);
+            assert!(game.current_object_ref(card.into()).is_some());
             assert_eq!(game.state.players[0].deck, deck);
             assert_eq!(
                 game.state
@@ -3195,7 +3246,7 @@ mod learn_tests {
             );
             assert!(game.state.suspended_decision.is_none());
             let events: Vec<_> = game.state.events.iter().skip(event_count).collect();
-            assert!(events.iter().any(|event| matches!(event, GameEvent::CardMoved { object_id: moved, from: None, to: ZoneType::Hand, .. } if *moved == object)));
+            assert!(events.iter().any(|event| matches!(event, GameEvent::CardMoved { object_id: moved, from: None, to: ZoneType::Hand, .. } if *moved == card.into())));
             assert!(!events
                 .iter()
                 .any(|event| matches!(event, GameEvent::CardDrawn { .. })));
@@ -3208,20 +3259,20 @@ mod learn_tests {
             let mut game = game(&[("Firebending Lesson", 2)]);
             let roster = game.state.players[0].sideboard.clone();
             learn(&mut game);
-            take(&mut game, roster[0]);
+            take(&mut game, roster[0].into());
             if destination != ZoneType::Hand {
-                game.move_object(roster[0], destination);
+                game.move_object(roster[0].into(), destination);
             }
             learn(&mut game);
             let before = witness(&game);
             assert!(game
                 .execute_decision_action(&Action::LearnTakeLesson {
                     player: PlayerId(0),
-                    object: roster[0]
+                    object: roster[0].into()
                 })
                 .is_err());
             assert_eq!(witness(&game), before);
-            take(&mut game, roster[1]);
+            take(&mut game, roster[1].into());
             learn(&mut game);
             assert!(!game
                 .action_space()
@@ -3251,11 +3302,11 @@ mod learn_tests {
         for action in [
             Action::LearnTakeLesson {
                 player: PlayerId(0),
-                object: opponent_card,
+                object: opponent_card.into(),
             },
             Action::LearnTakeLesson {
                 player: PlayerId(0),
-                object: nonlesson,
+                object: nonlesson.into(),
             },
             Action::LearnTakeLesson {
                 player: PlayerId(0),
@@ -3263,11 +3314,11 @@ mod learn_tests {
             },
             Action::LearnTakeLesson {
                 player: PlayerId(1),
-                object: lesson,
+                object: lesson.into(),
             },
             Action::LearnDiscard {
                 player: PlayerId(0),
-                object: lesson,
+                object: lesson.into(),
             },
         ] {
             let before = witness(&game);
@@ -3496,12 +3547,12 @@ mod learn_tests {
     fn learn_reveal_is_ordered_public_definition_and_known_hand_is_not_a_hand_leak() {
         use crate::agent::observation::{EventEntityKind, EventType, Observation};
         let mut game = game(&[("Firebending Lesson", 1)]);
-        let object = game.state.players[0].sideboard[0];
-        let definition = game.state.objects[object].definition_id;
+        let card = game.state.players[0].sideboard[0];
+        let definition = game.state.objects[card].definition_id;
         learn(&mut game);
         let before = game.semantic_observation(PlayerId(1)).unwrap();
         let event_start = game.state.events.len();
-        take(&mut game, object);
+        take(&mut game, card.into());
         let events: Vec<_> = game.state.events.iter().skip(event_start).collect();
         assert!(
             matches!(events[0], GameEvent::CardRevealed { owner: PlayerId(0), definition: d } if *d == definition)
@@ -3526,7 +3577,7 @@ mod learn_tests {
         assert!(!other
             .opponent_cards
             .iter()
-            .any(|object| object.zone == ZoneType::Hand));
+            .any(|card| card.zone == ZoneType::Hand));
         assert_ne!(
             before.identity.viewer_state_hash,
             game.semantic_observation(PlayerId(1))
@@ -3566,19 +3617,19 @@ mod learn_tests {
         );
         // One unknown hand slot, a residual pool of two Lessons and two Islands.
         let deck = game.state.players[0].deck.clone();
-        for object in deck {
-            game.move_object(object, ZoneType::Library);
+        for card in deck {
+            game.move_object(card.into(), ZoneType::Library);
         }
         let island = game.state.players[0]
             .deck
             .iter()
             .copied()
-            .find(|object| game.state.objects[*object].name == "Island")
+            .find(|card| game.state.objects[*card].name == "Island")
             .unwrap();
-        game.move_object(island, ZoneType::Hand);
+        game.move_object(island.into(), ZoneType::Hand);
         learn(&mut game);
-        let object = game.state.players[0].sideboard[0];
-        take(&mut game, object);
+        let card = game.state.players[0].sideboard[0];
+        take(&mut game, card.into());
         game
     }
 
@@ -3728,11 +3779,11 @@ mod learn_tests {
         swapped
             .state
             .zones
-            .move_object(retrieved, PlayerId(0), ZoneType::Library);
+            .move_object(retrieved.into(), PlayerId(0), ZoneType::Library);
         swapped
             .state
             .zones
-            .move_object(duplicate, PlayerId(0), ZoneType::Hand);
+            .move_object(duplicate.into(), PlayerId(0), ZoneType::Hand);
         assert_eq!(
             crate::possible_worlds::viewer_observation(&swapped, PlayerId(1)),
             crate::possible_worlds::viewer_observation(&source, PlayerId(1))
@@ -3760,13 +3811,13 @@ mod learn_tests {
             .copied()
             .find(|object| game.state.objects[*object].definition_id == definition)
             .unwrap();
-        game.move_object(duplicate, ZoneType::Hand);
+        game.move_object(duplicate.into(), ZoneType::Hand);
         assert_eq!(game.state.players[0].known_hand.get(&definition), Some(&1));
-        game.move_object(duplicate, ZoneType::Graveyard);
+        game.move_object(duplicate.into(), ZoneType::Graveyard);
         assert!(game
             .state
             .zones
-            .contains(retrieved, ZoneType::Hand, PlayerId(0)));
+            .contains(retrieved.into(), ZoneType::Hand, PlayerId(0)));
         assert!(game.state.players[0].known_hand.is_empty());
     }
 
@@ -3786,9 +3837,9 @@ mod learn_tests {
         let mut branch = source.clone();
         let sibling = source.clone();
         let outer = branch.clone();
-        let object = branch.state.players[0].sideboard[0];
+        let card = branch.state.players[0].sideboard[0];
         let index = branch.action_space().unwrap().actions.iter().position(|action|
-            matches!(action, Action::LearnDiscard { object: chosen, .. } if *chosen == object)).unwrap();
+            matches!(action, Action::LearnDiscard { object: chosen, .. } if *chosen == card.into())).unwrap();
         branch.step(index).unwrap();
         assert!(branch.state.players[0].known_hand.is_empty());
         let departed = witness(&branch);
@@ -3960,14 +4011,14 @@ mod payment_tests {
         );
         let mut sources = Vec::new();
         for name in ["Hermitic Herbalist", "Prophetic Prism"] {
-            let object = game.state.players[0]
+            let card = game.state.players[0]
                 .deck
                 .iter()
                 .copied()
-                .find(|object| game.state.objects[*object].name == name)
+                .find(|card| game.state.objects[*card].name == name)
                 .unwrap();
-            game.move_object(object, ZoneType::Battlefield);
-            sources.push(game.current_object_ref(object).unwrap());
+            game.move_object(card.into(), ZoneType::Battlefield);
+            sources.push(game.current_object_ref(card.into()).unwrap());
         }
         let waterbend = game.lookup_current_permanent(sources[0]).unwrap();
         let prism = game.lookup_current_permanent(sources[1]).unwrap();

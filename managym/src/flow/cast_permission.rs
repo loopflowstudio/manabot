@@ -18,7 +18,7 @@ use crate::{
     flow::{game::Game, proposed_event::ZoneEntry},
     state::{
         ability::{LinkedGrant, PlayWindow},
-        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId},
         mana::ManaCost,
         zone::ZoneType,
     },
@@ -159,9 +159,10 @@ impl Game {
 
     /// Whether `player` may foretell `card` now: a card with foretell in
     /// their hand, during their turn, with {2} available (CR 702.143a).
-    pub(crate) fn can_foretell(&self, player: PlayerId, object: ObjectId) -> bool {
+    pub(crate) fn can_foretell(&self, player: PlayerId, card: CardId) -> bool {
+        let object = ObjectId::from(card);
         self.active_player() == player
-            && self.state.objects[object].foretell().is_some()
+            && self.state.objects[card].foretell().is_some()
             && self.state.zones.contains(object, ZoneType::Hand, player)
             && self.can_pay_mana_cost(player, &ManaCost::parse(FORETELL_ACTION_COST))
     }
@@ -169,12 +170,9 @@ impl Game {
     /// The foretell special action: pay {2} and exile `card` face down
     /// without using the stack. Its owner may cast it on a later turn for
     /// its foretell cost.
-    pub(crate) fn foretell(
-        &mut self,
-        player: PlayerId,
-        object_id: ObjectId,
-    ) -> Result<(), AgentError> {
-        if !self.can_foretell(player, object_id) {
+    pub(crate) fn foretell(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
+        let object_id = ObjectId::from(card);
+        if !self.can_foretell(player, card) {
             return Err(AgentError("card cannot be foretold now".into()));
         }
         let cost = ManaCost::parse(FORETELL_ACTION_COST);
@@ -216,7 +214,7 @@ impl Game {
         player: PlayerId,
         pool: &mut Vec<ObjectId>,
     ) -> bool {
-        let slots = self.foretold_cards(player);
+        let slots: Vec<ObjectId> = self.foretold_cards(player).map(ObjectId::from).collect();
         let bearers = pool
             .iter()
             .filter(|object_id| self.state.objects[**object_id].foretell().is_some())
@@ -253,14 +251,10 @@ impl Game {
     }
 
     /// `player`'s face-down foretold cards in exile.
-    pub(crate) fn foretold_cards(&self, player: PlayerId) -> Vec<ObjectId> {
+    pub(crate) fn foretold_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
         self.state
-            .zones
-            .zone_objects(ZoneType::Exile, player)
-            .iter()
-            .copied()
-            .filter(|object| self.is_foretold(*object))
-            .collect()
+            .zone_cards(ZoneType::Exile, player)
+            .filter(|card| self.is_foretold((*card).into()))
     }
 
     /// Exile `card` linked to `source`: while `player` controls `source`,
@@ -464,13 +458,13 @@ impl Game {
 
     /// Cards named by `player`'s exile grants, stale ones included; callers
     /// check [`Game::may_play_from_zone`].
-    pub(crate) fn exile_granted_cards(&self, player: PlayerId) -> Vec<ObjectId> {
+    pub(crate) fn exile_granted_cards(&self, player: PlayerId) -> Vec<CardId> {
         self.state
             .cast_permissions
             .exile_grants
             .iter()
             .filter(|grant| grant.player == player)
-            .map(|grant| ObjectId::from(grant.object.entity))
+            .filter_map(|grant| self.state.card_id(grant.object.entity.into()))
             .collect()
     }
 }

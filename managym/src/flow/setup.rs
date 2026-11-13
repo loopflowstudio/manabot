@@ -52,7 +52,7 @@ impl Game {
             Player::new(id_gen.next_id(), 1, player_configs[1].name.clone()),
         ];
 
-        let mut cards = ObjectVec::default();
+        let mut objects = ObjectVec::default();
         let mut object_to_permanent = ObjectVec::default();
         let mut object_incarnations = ObjectVec::default();
         let mut zones = ZoneManager::default();
@@ -61,11 +61,14 @@ impl Game {
             players[player_index].disclosure = config.disclosure;
             for (name, qty) in &config.deck.main {
                 for _ in 0..*qty {
-                    let card = content
+                    let object = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
                         .unwrap_or_else(|| panic!("unknown card in decklist: {name}"));
-                    let card_id = ObjectId(cards.len());
-                    cards.push(card);
+                    let object_id = ObjectId(objects.len());
+                    objects.push(object);
+                    let card_id = objects
+                        .card_id(object_id)
+                        .expect("deck entries must be cards");
                     object_to_permanent.push(None);
                     object_incarnations.push(Incarnation::INITIAL);
                     players[player_index].deck.push(card_id);
@@ -88,11 +91,14 @@ impl Game {
                     "token cannot be a sideboard card: {name}"
                 );
                 for _ in 0..*qty {
-                    let card = content
+                    let object = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
                         .expect("validated sideboard definition");
-                    let card_id = ObjectId(cards.len());
-                    cards.push(card);
+                    let object_id = ObjectId(objects.len());
+                    objects.push(object);
+                    let card_id = objects
+                        .card_id(object_id)
+                        .expect("deck entries must be cards");
                     object_to_permanent.push(None);
                     object_incarnations.push(Incarnation::INITIAL);
                     players[player_index].sideboard.push(card_id);
@@ -105,14 +111,14 @@ impl Game {
         for player in [PlayerId(0), PlayerId(1)] {
             let deck = players[player.0].deck.clone();
             for card in deck {
-                zones.move_object(card, player, ZoneType::Library);
+                zones.move_object(card.into(), player, ZoneType::Library);
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
             // CR 103.3, 103.5 — Shuffle, then draw the ordinary seven-card hand.
             // This setup does not offer the mulligan procedure in CR 103.5.
             for _ in 0..7 {
-                if let Some(card) = zones.top(ZoneType::Library, player) {
-                    zones.move_object(card, player, ZoneType::Hand);
+                if let Some(object) = zones.top(ZoneType::Library, player) {
+                    zones.move_object(object, player, ZoneType::Hand);
                 }
             }
         }
@@ -120,7 +126,7 @@ impl Game {
         let mut game = Self {
             derived: Default::default(),
             state: TrackedState::new(GameState {
-                objects: cards,
+                objects,
                 permanents: PermanentVec::default(),
                 object_to_permanent,
                 object_incarnations,

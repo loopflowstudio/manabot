@@ -11,8 +11,7 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        game_object::ObjectKind,
-        game_object::{ObjectId, PlayerId, Target},
+        game_object::{ObjectId, ObjectKind, PlayerId, Target},
         stack_object::StackObject,
     },
 };
@@ -171,12 +170,13 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
-                let mut object_id = self.state.objects[spell.object].clone();
-                object_id.id = id;
-                object_id.owner = controller;
-                let object_id = object_id.with_kind(ObjectKind::SpellCopy);
+                let mut copy = self.state.objects[spell.object]
+                    .clone()
+                    .with_kind(ObjectKind::SpellCopy);
+                copy.id = id;
+                copy.owner = controller;
                 let copied = ObjectId(self.state.objects.len());
-                self.state.objects.push(object_id);
+                self.state.objects.push(copy);
                 self.state.object_to_permanent.push(None);
                 self.state
                     .object_incarnations

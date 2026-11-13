@@ -25,8 +25,8 @@ use crate::{
     state::{
         card::ActivatedAbilityDefinition,
         game_object::{
-            IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef, ObjectVec, PermanentId,
-            PermanentVec, PlayerId, Target,
+            CardId, IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef, ObjectVec,
+            PermanentId, PermanentVec, PlayerId, Target,
         },
         mana::Mana,
         permanent::{CounterKind, Permanent},
@@ -76,13 +76,33 @@ pub struct GameState {
     pub id_gen: IdGenerator,
 }
 
+impl GameState {
+    /// A card keeps its kind across moves, transformations and copy effects.
+    pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
+        self.objects.card_id(object)
+    }
+
+    /// Card-only consumers narrow at the zone boundary; the ordered zone itself
+    /// also retains transient tokens and copies until state-based actions.
+    pub fn zone_cards(
+        &self,
+        zone: ZoneType,
+        player: PlayerId,
+    ) -> impl Iterator<Item = CardId> + '_ {
+        self.zones
+            .zone_objects(zone, player)
+            .iter()
+            .filter_map(|object| self.card_id(*object))
+    }
+}
+
 /// The object whose activated ability is being activated: a battlefield
 /// permanent, or a card in its owner's hand or graveyard (CR 602.1, 113.6).
 /// Card abilities index the card's printed `activated_abilities`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ActivationSource {
     Permanent(PermanentId),
-    Card(ObjectId),
+    Card(CardId),
 }
 
 /// What a caster announces while casting a spell (CR 601.2b) that changes

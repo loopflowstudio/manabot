@@ -1105,11 +1105,11 @@ impl Observation {
         counts
     }
 
-    /// `Game::unseen_cards` less the copies the viewer has seen revealed in
+    /// `Game::unseen_objects` less the copies the viewer has seen revealed in
     /// an opponent's hand. The possible-world pool keeps those copies, since
     /// a sampled world must still place them in the hand.
     fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
-        let mut counts = Self::definition_counts(game, game.unseen_cards(player, viewer));
+        let mut counts = Self::definition_counts(game, game.unseen_objects(player, viewer));
         if player != viewer {
             for (definition, known) in &game.state.players[player.0].known_hand {
                 if let Some(count) = counts.get_mut(&definition.0) {
@@ -1140,12 +1140,18 @@ impl Observation {
                     .sideboard
                     .iter()
                     .copied()
-                    .filter(|object| game.state.zones.zone_of(*object).is_none());
+                    .filter(|object| game.state.zones.zone_of((*object).into()).is_none());
                 (
-                    Some(Self::definition_counts(game, p.deck.iter().copied())),
+                    Some(Self::definition_counts(
+                        game,
+                        p.deck.iter().copied().map(ObjectId::from),
+                    )),
                     Some(Self::unseen_counts(game, player, viewer)),
-                    Some(Self::definition_counts(game, p.sideboard.iter().copied())),
-                    Some(Self::definition_counts(game, outside)),
+                    Some(Self::definition_counts(
+                        game,
+                        p.sideboard.iter().copied().map(ObjectId::from),
+                    )),
+                    Some(Self::definition_counts(game, outside.map(ObjectId::from))),
                 )
             } else {
                 (None, None, None, None)
@@ -1207,7 +1213,7 @@ impl Observation {
 
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
-            if game.state.zones.zone_of(*card).is_none() {
+            if game.state.zones.zone_of((*card).into()).is_none() {
                 let card = &game.state.objects[*card];
                 self.agent_sideboard.push(SideboardCardData {
                     candidate_id: card.id.0 as i32,
@@ -1250,7 +1256,9 @@ impl Observation {
 
             // A library top the viewer or controlled player may inspect (CR 401.2).
             if let Some(card) = game
-                .library_top_card(perspective)
+                .state
+                .zones
+                .top(ZoneType::Library, perspective)
                 .filter(|_| game.looks_at_library_top(perspective))
             {
                 add_card(card, ZoneType::Library);
@@ -1266,7 +1274,7 @@ impl Observation {
             for decision in suspended.decisions().filter(|d| d.player() == perspective) {
                 let cards = match decision {
                     Decision::SearchNamed { owner, .. } => game
-                        .named_search_cards(*owner)
+                        .named_search_objects(*owner)
                         .filter(|card| {
                             game.state.zones.zone_of(*card) == Some(ZoneType::Library)
                                 || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
@@ -1275,16 +1283,16 @@ impl Observation {
                         .collect(),
                     Decision::SelectCards {
                         from: Some(source), ..
-                    } => game.selection_zone_cards(source.owner, source.zone),
+                    } => game.selection_zone_objects(source.owner, source.zone),
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
-                        game.revealed_hand_candidates(decision)
+                        game.revealed_hand_objects(decision)
                     }
                     decision @ Decision::SearchDistinctNames { selected, .. } => {
                         let mut cards = selected.clone();
-                        cards.extend(game.distinct_name_search_candidates(decision));
+                        cards.extend(game.distinct_name_search_objects(decision));
                         cards
                     }
-                    decision => decision.revealed_cards().to_vec(),
+                    decision => decision.revealed_objects().to_vec(),
                 };
                 for card in cards {
                     let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
@@ -1933,31 +1941,21 @@ impl Observation {
                 .and_then(|r| game.visible_reference(r, *player).object)
                 .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
-            Action::PlayLand {
-                object: object_id, ..
-            }
-            | Action::CastSpell {
-                object: object_id, ..
-            } => {
-                vec![game.state.objects[object_id].id]
-            }
-            Action::ActivateCardAbility {
-                object: object_id, ..
-            }
-            | Action::Foretell {
-                object: object_id, ..
-            } => {
-                vec![game.state.objects[object_id].id]
-            }
-            Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
+            Action::PlayLand { object, .. }
+            | Action::CastSpell { object, .. }
+            | Action::ActivateCardAbility { object, .. }
+            | Action::Foretell { object, .. }
+            | Action::ScryCard { object, .. }
+            | Action::SelectCard { object, .. }
+            | Action::LearnDiscard { object, .. }
+            | Action::LearnTakeLesson { object, .. } => vec![game.state.objects[object].id],
+            Action::ActivateAbility { permanent, .. }
+            | Action::DeclareAttacker { permanent, .. }
+            | Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
                 .unwrap_or_default(),
             Action::PassPriority { .. } => vec![],
-            Action::DeclareAttacker { permanent, .. } => game.state.permanents[permanent]
-                .as_ref()
-                .map(|perm| vec![perm.id])
-                .unwrap_or_default(),
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => {
@@ -1989,24 +1987,6 @@ impl Observation {
                 }
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
-            Action::ScryCard {
-                object: object_id, ..
-            }
-            | Action::SelectCard {
-                object: object_id, ..
-            }
-            | Action::LearnDiscard {
-                object: object_id, ..
-            }
-            | Action::LearnTakeLesson {
-                object: object_id, ..
-            } => {
-                vec![game.state.objects[object_id].id]
-            }
-            Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
-                .as_ref()
-                .map(|perm| vec![perm.id])
-                .unwrap_or_default(),
             Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
                 if let (
                     Action::ChooseMode { mode, .. },
@@ -2047,17 +2027,17 @@ impl Observation {
                             ..
                         }) => Some(*object_id),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
-                            source: crate::flow::game::ActivationSource::Card(object_id),
+                            source: crate::flow::game::ActivationSource::Card(card),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
-                            source: crate::flow::game::ActivationSource::Card(object_id),
+                            source: crate::flow::game::ActivationSource::Card(card),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::TapPayment {
-                            source: crate::flow::game::ActivationSource::Card(object_id),
+                            source: crate::flow::game::ActivationSource::Card(card),
                             ..
-                        }) => Some(*object_id),
+                        }) => Some((*card).into()),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..

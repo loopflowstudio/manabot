@@ -99,7 +99,7 @@ impl Game {
                 self.shuffle_private_library(opponent, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
-                residual.extend(self.foretold_cards(opponent));
+                residual.extend(self.foretold_cards(opponent).map(ObjectId::from));
                 residual.sort_unstable_by_key(|object| object.0);
                 residual.shuffle(&mut rng);
                 assert!(
@@ -108,7 +108,7 @@ impl Game {
                 );
                 let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
                 let mut library = residual.split_off(unknown_slots);
-                let pending = commitments.pinned_library_cards(self, opponent);
+                let pending = commitments.pinned_library_objects(self, opponent);
                 if !pending.is_empty() {
                     library.extend(pending);
                     library.shuffle(&mut rng);
@@ -166,7 +166,9 @@ impl Game {
     /// Shuffle an unknown library order while preserving its permitted top.
     pub(crate) fn shuffle_private_library(&mut self, player: PlayerId, rng: &mut ChaCha8Rng) {
         let known_top = self
-            .library_top_card(player)
+            .state
+            .zones
+            .top(ZoneType::Library, player)
             .filter(|_| self.looks_at_library_top(player));
         self.state
             .zones
@@ -205,7 +207,7 @@ impl Game {
         player: PlayerId,
         commitments: &HiddenCommitments,
     ) -> (Vec<ObjectId>, Vec<ObjectId>) {
-        let is_fixed = |object: ObjectId| commitments.pins_card(object);
+        let is_fixed = |object: ObjectId| commitments.pins_object(object);
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
             .flat_map(|zone| self.state.zones.zone_objects(zone, player).iter().copied())
@@ -273,7 +275,7 @@ impl Game {
         };
         let inspections: Vec<_> = suspended
             .decisions()
-            .map(|decision| decision.revealed_cards().to_vec())
+            .map(|decision| decision.revealed_objects().to_vec())
             .filter(|objects| !objects.is_empty())
             .collect();
         for revealed in inspections {

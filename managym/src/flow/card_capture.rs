@@ -99,12 +99,10 @@ fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
         incarnation: game.state.object_incarnations[object].0,
         owner: data.owner.0,
         zone: game.state.zones.zone_of(object),
-        origin: if player.deck.contains(&object) {
-            "deck"
-        } else if player.sideboard.contains(&object) {
-            "outside"
-        } else {
-            "generated"
+        origin: match game.state.card_id(object) {
+            Some(card) if player.deck.contains(&card) => "deck",
+            Some(card) if player.sideboard.contains(&card) => "outside",
+            _ => "generated",
         },
     }
 }

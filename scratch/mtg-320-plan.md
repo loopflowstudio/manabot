@@ -1,112 +1,132 @@
-# MTG-320: runtime object kinds by zone
+# MTG-320: runtime objects and checked card ids
 
-## Outcome and constraints
+## Outcome and accepted scope
 
-Runtime names and kinds follow the rules: tokens and spell copies are objects, never
-cards. Keep observations, Python/PyO3 surfaces, serialized names and frozen evidence
-byte-identical relative to MTG-298. Design: `docs/engine.md#objects-and-zones`.
+Tokens and spell copies are objects, never cards. Runtime design and examples:
+`docs/engine.md#objects-and-zones`. Preserve observation/Python/PyO3 names,
+serialized numeric ids, zone order, seeded deals, and frozen evidence. Stop at
+review; the task steer says "Stop at review. Do not enable auto-merge."
 
-The full design separates the physical card from each appearance in a zone. Steer
-`dbf13009` permits staging it: "If the full split is too big for one PR, land the
-rename plus the typed ids here, and say what is left in the PR body." The same steer
-requires flat stores, a tiny Copy card record, an inline CR 400.7 carry-over record,
-checked object-to-card conversion, and measurements of cache invalidation. Those
-requirements remain for the split; this PR does not implement it.
+Steer dbf13009: "If the full split is too big for one PR, land the rename plus
+the typed ids here, and say what is left in the PR body."
+Steer f81d37a0: "Typed card ids. Add a `CardId` that can only name an object whose
+kind is Card. Converting an ObjectId to a CardId is checked once; converting a
+CardId to an ObjectId is free. Library, hand, decklists/sideboards and effects
+that say \"card\" hold or take CardId"; "`card`/`card_id`/`cards` always holds a
+CardId (or a collection of them), and `object`/`object_id`/`objects` always holds
+an ObjectId"; "`game.state.objects[*card]` must not survive unless `card` is a
+CardId". Definitions, published observation fields and card-name strings are
+not runtime-id bindings.
 
-## Built
+## Zone decision
 
-At a45df9d4b:
-- `state::game_object::ObjectKind { Card, Token, SpellCopy }` is private runtime
-  state. `resolve_into_token()` changes a permanent spell copy at battlefield entry;
-  `become_copy_of` preserves kind. SBA, token predicates, exile grants, card selection,
-  return guards and `TriggerCondition::PutIntoGraveyard` read kind.
-- Runtime `Card` -> `Object`, `CardId` -> `ObjectId`, `CardVec` -> `ObjectVec`,
-  `GameState::cards` -> `objects`, `card_to_permanent` -> `object_to_permanent`;
-  old public u32 `ObjectId` -> `PublicId`. Serde keeps wire spelling. Observation
-  `is_token` and hash bytes still encode non-card objects as before. Token predicates
-  now exclude spell copies; no defined card filters spells by token status.
-- `ObjectId` remains a persistent storage row; `ObjectRef` (`EntityId`, `Incarnation`)
-  names the appearance and goes stale. `ObjectLkiLog` retains departed facts.
-- Every `ZoneManager` list holds `ObjectId`, including library and hand, so moved
-  tokens remain there until SBA. Decklists and sideboards alone are card-only.
-- Concept-review cleanup is done in 5dc528319: `move_object_with_entry`,
-  `capture_object_move`, `subject_matches_moved_object`, stack locals, object-path
-  comments and `move_object` accessor mentions. CLAUDE.md links AGENTS.md.
-  `docs/engine.md#objects` presents the built identity first and labels the split
-  planned. Card-named selection helpers and published observation names stay.
-- d608ff5ba simplified `assert_stack_consistent` to compare sorted object lists.
-  The a45df9d4b parent sync adds only scratch notes and QA artifacts; no runtime diff.
-- Realign fixed README's stale `card_matches_predicate` reference to the actual
-  `flow/statics.rs::object_matches_predicate`. No runtime changes in this pass.
+The preceding design permits this fallback: "If the visitor cannot be kept
+byte-exact cheaply, take the second and change the two \"Zones\" rows and the
+library/hand bullet." Use ordered `ObjectId` lists for hand/library as well as
+graveyard/exile; narrow at card-only consumers with `GameState::zone_cards`.
+A parallel card/visitor store would duplicate membership, insertion positions
+and shuffle authority. Hidden sampling, observed library tops, zone size,
+shuffles and draws must still see non-card occupants in their original places.
+In particular, do not fix the existing tucked-token draw behavior here.
 
-The supplied iteration feedback predates 5dc528319 and d608ff5ba. Its code/doc work
-is complete; its CI check and PR-body draft are accounted for below.
+QA from the preceding rename saw Treasures in the graveyard at a mana-choice
+decision after sacrificing them. That observation rules out removing tokens
+inside the move instead of waiting for SBA.
 
-## Validation evidence
+## Delete — do not maintain
 
-- CI 43325427802 on 2a3eae3b0: all 13 jobs passed, including debug Rust, both
-  conformance jobs, Engine Budget, Clean-machine Play, Python Unit, Academy and
-  Integration core/long/evaluation. Read on 2026-11-12; core is no longer pending.
-- Same-run Engine Budget versus rebuilt 7ef6ce588: search total 173.303 vs 173.206 s,
-  worst reply 5.102 vs 5.123 s; steps 12,174.4/s vs 12,398.8/s. Search/decision
-  digests matched and the 10% budget passed. Source: run 43325427802, job
-  131556645087. These numbers precede the helper cleanup.
-- After 5dc528319: fmt, workspace test build and clippy `-D warnings` passed;
-  focused debug zone/stack/trigger/SBA/scenario tests 30 passed, token/Azula 41 passed.
-  After d608ff5ba: clippy passed, focused debug stack/copy/counter/cr_6 tests 160 passed.
-- Earlier, before parent 15e50b205: debug nextest 1166 passed; four tests hit the
-  limit under observed host load and passed alone (conformance 508 s, base revision
-  345 s at similar load). These timings do not justify relaxing the five-minute limit.
-- Earlier Python: 907 passed, 1 failed (`test_v10_vector_buffers_reach_the_model`,
-  "policy forward requires an observation from admit_observation"), 1 deselected
-  for the time limit. Python matched main then, but the claim that the failure was
-  inherited was an inference, not an isolated cause reproduction. Later CI passed.
-- Release QA: 60 random games, 150 Azula games and four Academy games finished.
-  Treasures persisted in the graveyard during a mana choice, consistent with SBA
-  waiting for priority. Academy permanent-spell-copy and spell-copy-to-hand paths
-  were not reached. Semantic-kernel-w17-v2 reproduced after fixing a serde drift
-  on `ObjectLki.counters`; no evidence regenerated for this rename.
+Completed in this branch: runtime `Card`, unchecked runtime `CardId`, `CardVec`,
+`GameState::cards`, `card_to_permanent`, and the old public u32 `ObjectId`;
+object-based deck/sideboard rosters and `ActivationSource::Card`; misleading
+mixed-object helper names; the proposed second visitor store.
 
-## Remaining for this PR
+Compression also removes `ZoneManager::insert_to_zone` and
+`remove_object_in_place`, the manual empty-zone constructor, the intermediate
+object list in `resolution_cast_candidates`, and eager `foretold_cards` vectors.
+`zone_objects_mut` owns zone dispatch; card-only consumers narrow before filtering.
+There are no remaining deletion targets in this slice. The physical-card split
+below is separate work, not a second implementation to maintain here.
 
-- Confirm final-head checks. Release packages 43330293430 and CI 43330293531 on
-  a45df9d4b were in progress when read on 2026-11-12; the older green run does not
-  cover helper cleanup.
-- Publish the corrected body from `scratch/pr-491-body.md`, preserving the existing
-  task context block and refreshing CI status. PR #491's live body still says the
-  runtime record is Card and the main readers have not moved; both are obsolete.
-- Parent #476 remains open at 4bc48211e and must land first. Delivery stops at review;
-  the task steer says "Stop at review. Do not enable auto-merge."
-- Main advanced from a343904ee to 85ed9214e (CUDA layout defaults): the compare
-  lists training/evaluation/docs/tests and `.lf/skills/qa.md`, no engine or evidence
-  changes. No change to the object approach follows from it. Reconcile any required
-  upstream sync through the delivery workflow; this pass did not merge it.
+## Implementation
 
-## Concept review, second pass (2026-11-12, a45df9d4b plus the README fix)
+The earlier object-kind/rename implementation is in df58f2bff and its history.
+This slice adds checked store conversion, debug-asserted card indexing, typed
+rosters, card-only candidates and card-specific play/cost/activation entry
+points, including graveyard targets and card-type counts. Generic Action/selection
+transport and captured ObjectRefs remain object-based: they also carry
+permanents, spell copies and stale identities.
+Command ingress narrows card-only operations before they run. Card choices
+exclude transient tokens while object-inclusive observation readers keep them.
 
-No design change for this PR. The remaining `card`-named helpers that return
-`ObjectId` (`library_top_card`, `revealed_cards`, `foretold_cards`,
-`exile_granted_cards`, `selection_zone_cards`, `priority_candidate_cards`,
-`unseen_cards`, `pinned_library_cards`) read library, hand, graveyard or exile, where
-the rules mean cards; the agent-side `card`/`cards`/`card_reference` writers are
-published observation names. The one open choice below belongs to the split and does
-not change what this PR builds.
+## Validation and remaining work
 
-Optional wording nit, not worth an iteration alone: `state/src/game_object.rs`
-describes `EntityId` and `ObjectRef` in terms of "physical card" where a token
-qualifies too.
+The following typed-id checks precede compression; compression results go below.
 
-## Later split and unresolved choice
+- `cargo check --manifest-path managym/Cargo.toml --workspace --tests -j 2`:
+  passed before compression. Focused debug nextest: 3 regressions passed;
+  the expanded card-choice/graveyard-target regression passed again after the
+  typed-id narrowing (0.012 s). Commands used `CARGO_BUILD_JOBS=2`, `--profile ci`
+  and `--test-threads 2`; the two id/zone tests are in `cr_400_identity.rs`.
+- Root `uv run --extra play maturin build --release -i .venv/bin/python
+  -m managym/Cargo.toml -o managym/target/wheels`: passed (5m 12s), cp313/arm64
+  wheel. Replaced `_managym.cpython-313-darwin.so` atomically; fresh native import
+  passed. Workspace rustfmt and `git diff --check` passed.
+- Gate: affected suites and final-head semantic conformance, seeded before/after
+  QA, and Engine Budget (unchanged digests; same-run numbers in PR body).
+- Delivery: refresh the draft PR body and current CI status, preserve the Task
+  context block, publish through the caller's delivery step. Do not auto-merge.
 
-Still required: a separate tiny Copy `Card`/`CardId` store; a fresh object row per
-zone change; an inline carry-over record citing CR 400.7 sub-rules; and measurements
-of layer-view/TriggerIndex invalidation cost, with Engine Budget passing. The current
-incarnation/LKI machinery supplies the starting point, not the completed split.
+## Earlier evidence (not validation of this slice)
 
-Steer dbf13009 says "Card-only zones (library, hand, decklists) hold card ids."
-Current library and hand retain ObjectIds because moved tokens occupy those zones
-until SBA (CR 111.7-111.8, 704.5d), and byte identity forbids removing them early.
-For the split, resolve whether those zones keep object lists or use card-id lists
-with an explicit representation of transient non-card occupants. Neither alternative
-is a settled product decision. Preserve this conflict for review/demo; the staged
-rename can be reviewed with the current behavior documented.
+- CI 43325427802 on 2a3eae3b0: all 13 jobs passed, including debug Rust,
+  conformance, Engine Budget, Clean-machine Play, Python and Academy.
+- Same-run Engine Budget numbers and the runner baseline are in
+  `scratch/pr-491-body.md`; they predate typed ids and compression.
+- After 5dc528319, fmt/test build/clippy passed, focused debug engine tests 30
+  passed and token/Azula tests 41 passed. After d608ff5ba, clippy and focused
+  stack/copy/counter/cr_6 tests passed (160).
+- Earlier QA: 60 random games, 150 Azula games and four Academy games finished.
+  Permanent-spell-copy and spell-copy-to-hand paths were not reached in Academy.
+  Semantic-kernel-w17-v2 reproduced after fixing ObjectLki counter serde drift;
+  no evidence was regenerated for the rename.
+- Historical validation details and older findings: git history of this plan
+  at df58f2bff. The older Python failure attribution was inference, not a
+  reproduced cause; subsequent CI passed.
+
+## Compression rationale
+
+Use the existing zone accessor for insertion/removal and derive empty defaults;
+keep all ordered lists and their wire names. Build cast candidates as `CardId`s
+and stop at a hand-only restriction before scanning other zones. Foretold scans
+return an iterator, so sampling collects once and counts need no vector.
+`flow/action.rs::chosen_card` owns the repeated action-boundary error. Observation
+focus has one arm for actions that all identify an object; projection locals
+name records as records, not ids. No action order, RNG call or serialized field
+changes intentionally. The layer benchmark fixture now reads object kind instead
+of the removed `is_token` field; all-target Clippy exposed that missed caller.
+
+Compression validation (2026-11-12):
+
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml
+  --lib --test rules_tests --test cards --test learn_setup_tests --profile ci
+  --test-threads 2 -E 'test(cr_400_identity) | test(cr_704_sba) | test(foretold)
+  | test(card_capture) | test(learn_tests) | test(learn_authored_setup)
+  | test(partial_waterbend) | test(cascade) | test(drannith)
+  | test(fire_lord_azula) | test(boiling_rock) | test(yue_casts)
+  | test(solstice_revelations) | test(planetarium_casts)'`: 53 passed, no failures
+  or errors (1.732 s; JUnit run 823626c6-c439-42d4-b354-a4b6b4911a47).
+- Workspace `cargo fmt -- --check` and `git diff --check`: passed.
+- `CARGO_BUILD_JOBS=2 PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy
+  --manifest-path managym/Cargo.toml --workspace --all-targets --all-features
+  -- -D warnings`: passed after fixing the benchmark caller (4.06 s).
+- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release
+  -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`: passed
+  (4m 00s). Atomically installed the matching cp313/arm64 extension; a fresh
+  `uv run python` import of `managym._managym` passed.
+
+## Later split
+
+Not built: a tiny Copy physical Card store, a new object per zone change, the
+inline CR 400.7 carry-over record, and measurements of layer-view/TriggerIndex
+invalidation costs. CardId currently shares its object's row index. No new
+emblem or copy-of-a-card kind until there is a producer.

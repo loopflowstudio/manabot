@@ -781,17 +781,15 @@ impl Game {
             TargetSpec::GraveyardCardYouOwn { .. }
             | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => self
                 .state
-                .zones
-                .zone_objects(ZoneType::Graveyard, controller)
-                .iter()
-                .filter_map(|object| self.current_object_ref(*object))
+                .zone_cards(ZoneType::Graveyard, controller)
+                .filter_map(|card| self.current_object_ref(card.into()))
                 .map(Target::GraveyardCard)
                 .collect(),
             TargetSpec::GraveyardCard { .. } | TargetSpec::GraveyardCardOpponentOwns { .. } => {
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
-                    .flat_map(|player| self.state.zones.zone_objects(ZoneType::Graveyard, player))
-                    .filter_map(|object| self.current_object_ref(*object))
+                    .flat_map(|player| self.state.zone_cards(ZoneType::Graveyard, player))
+                    .filter_map(|card| self.current_object_ref(card.into()))
                     .map(Target::GraveyardCard)
                     .collect()
             }

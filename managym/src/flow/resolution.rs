@@ -486,7 +486,8 @@ impl Game {
             Target::Permanent(id) => self.permanent_object_ref(id).is_some(),
             Target::GraveyardCard(object) => {
                 let object_id = ObjectId::from(object.entity);
-                self.current_object_ref(object_id) == Some(object)
+                self.state.card_id(object_id).is_some()
+                    && self.current_object_ref(object_id) == Some(object)
                     && self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
             }
             Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id).is_some(),
@@ -930,7 +931,7 @@ impl Game {
                 };
                 let count = self.effect_value(count, frame).max(0) as usize;
                 frame.this_way.clear();
-                let object_ids = self.library_top(player, count);
+                let object_ids = self.library_top_objects(player, count);
                 let events = object_ids
                     .into_iter()
                     .map(|object_id| {
@@ -958,7 +959,11 @@ impl Game {
                     .select(from, frame)
                     .into_iter()
                     .filter(|object| {
-                        self.object_matches_predicate(ObjectId::from(object.entity), predicate)
+                        self.state
+                            .card_id(object.entity.into())
+                            .is_some_and(|card| {
+                                self.object_matches_predicate(card.into(), predicate)
+                            })
                     })
                     .collect();
                 let max = self.effect_value(max, frame).max(0) as usize;
@@ -1015,11 +1020,11 @@ impl Game {
                 let [Affected::Player(player)] = self.resolve_affected(what, frame)[..] else {
                     return None;
                 };
-                (!self
+                (self
                     .state
-                    .zones
-                    .zone_objects(ZoneType::Hand, player)
-                    .is_empty()
+                    .zone_cards(ZoneType::Hand, player)
+                    .next()
+                    .is_some()
                     && *count > 0)
                     .then_some(Decision::Discard {
                         player,
@@ -1221,7 +1226,7 @@ impl Game {
                 {
                     return Some(decision);
                 }
-                self.reveal_card_to_hand(object_id, player);
+                self.reveal_object_to_hand(object_id, player);
                 None
             }
             Effect::CumulativeUpkeep { each } => {
@@ -1652,7 +1657,10 @@ impl Game {
                 let Some(Target::Permanent(id)) = frame.context_target else {
                     return None;
                 };
-                let object_id = self.departed_permanent_lki(id)?.object;
+                let card = self
+                    .state
+                    .card_id(self.departed_permanent_lki(id)?.object)?;
+                let object_id = ObjectId::from(card);
                 if self.state.zones.zone_of(object_id) != Some(ZoneType::Graveyard) {
                     return None;
                 }
@@ -1811,7 +1819,7 @@ impl Game {
                         player: frame.controller,
                     });
                 }
-                let remaining = self.library_top(frame.controller, *count);
+                let remaining = self.library_top_objects(frame.controller, *count);
                 if remaining.is_empty() {
                     return None;
                 }
@@ -1829,7 +1837,7 @@ impl Game {
                         player: frame.controller,
                     });
                 }
-                let looked = self.library_top(frame.controller, *count);
+                let looked = self.library_top_objects(frame.controller, *count);
                 (!looked.is_empty()).then_some(Decision::Surveil {
                     player: frame.controller,
                     looked,
@@ -1846,7 +1854,7 @@ impl Game {
                 predicate,
             } => {
                 let look = self.effect_value(look, frame).max(0) as usize;
-                let looked = self.library_top(frame.controller, look);
+                let looked = self.library_top_objects(frame.controller, look);
                 if looked.is_empty() {
                     return None;
                 }
@@ -1863,7 +1871,7 @@ impl Game {
                 })
             }
             Effect::PutTopCardsInHand { count } => {
-                for object_id in self.library_top(frame.controller, *count) {
+                for object_id in self.library_top_objects(frame.controller, *count) {
                     self.move_object(object_id, ZoneType::Hand);
                 }
                 self.invalidate_mana_cache(frame.controller);
@@ -2123,7 +2131,7 @@ impl Game {
                 };
                 self.selection_zone_cards(owner, zone)
                     .into_iter()
-                    .filter_map(|object_id| self.current_object_ref(object_id))
+                    .filter_map(|card| self.current_object_ref(card.into()))
                     .collect()
             }
             ObjectSelector::You => Vec::new(),
@@ -2365,7 +2373,8 @@ impl Game {
                     _ => return false,
                 };
                 let object_id = ObjectId::from(object.entity);
-                self.current_object_ref(object_id) == Some(object)
+                self.state.card_id(object_id).is_some()
+                    && self.current_object_ref(object_id) == Some(object)
                     && self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
                     && (!you_own || self.state.objects[object_id].owner == controller)
                     && self.object_matches_predicate(object_id, predicate)

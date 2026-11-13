@@ -66,12 +66,12 @@ impl Game {
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
         for visible in agent.agent_cards.iter().chain(&agent.opponent_cards) {
-            let (index, object_id) = self
+            let (index, object) = self
                 .state
                 .objects
                 .iter()
                 .enumerate()
-                .find(|(_, object_id)| object_id.id.0 as i32 == visible.id)
+                .find(|(_, object)| object.id.0 as i32 == visible.id)
                 .ok_or(SemanticError::ViewerSafetyViolation)?;
             let reference = self
                 .current_object_ref(crate::state::game_object::ObjectId(index))
@@ -84,16 +84,16 @@ impl Game {
                 .and_then(|id| self.state.permanents[id].as_ref())
                 .map(|permanent| permanent.id.0);
             objects.insert(
-                object_id.id.0 as i32,
+                object.id.0 as i32,
                 json!({"permanent_id": permanent, "incarnation": reference.incarnation.0}),
             );
         }
         let mut ids = BTreeSet::new();
-        for object_id in agent.agent_cards.iter().chain(&agent.opponent_cards) {
-            ids.insert(object_id.registry_key as u32);
+        for object in agent.agent_cards.iter().chain(&agent.opponent_cards) {
+            ids.insert(object.registry_key as u32);
         }
-        for object_id in &agent.agent_sideboard {
-            ids.insert(object_id.registry_key as u32);
+        for object in &agent.agent_sideboard {
+            ids.insert(object.registry_key as u32);
         }
         for stack in &agent.stack_objects {
             ids.insert(stack.source_card_registry_key as u32);
@@ -129,7 +129,7 @@ impl Game {
                             .agent_cards
                             .iter()
                             .chain(&agent.opponent_cards)
-                            .any(|object_id| object_id.id == *id)
+                            .any(|object| object.id == *id)
                     });
                     json!({"kind": "card", "definition": definition, "owner": owner.0,
                         "zone": zone.map(|zone| zone as i32), "context_id": visible})

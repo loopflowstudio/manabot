@@ -192,3 +192,105 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         Some(ZoneType::Battlefield)
     );
 }
+
+/// A checked card id survives moves and copy effects; token and spell-copy
+/// rows never pass the card boundary, even when they have a card's definition.
+#[test]
+fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
+    use managym::state::game_object::{ObjectId, ObjectKind, ObjectVec};
+
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
+        deck(&[("Island", 40)]),
+        400_708,
+    );
+    let object = owned_card(&s, 0, "Gray Ogre");
+    let card = s.game().state.card_id(object).expect("deck card");
+    assert_eq!(ObjectId::from(card), object);
+    assert_eq!(
+        serde_json::to_value(card).unwrap(),
+        serde_json::to_value(object).unwrap()
+    );
+    assert!(s.game().state.card_id(ObjectId(usize::MAX)).is_none());
+
+    let template = s.game().state.objects[card].clone();
+    let mut objects = ObjectVec(vec![
+        template.clone(),
+        template.clone().with_kind(ObjectKind::Token),
+        template.with_kind(ObjectKind::SpellCopy),
+    ]);
+    let checked = objects.card_id(ObjectId(0)).unwrap();
+    assert!(objects.card_id(ObjectId(1)).is_none());
+    assert!(objects.card_id(ObjectId(2)).is_none());
+    objects[ObjectId(2)].resolve_into_token();
+    assert!(objects.card_id(ObjectId(2)).is_none());
+    let token = objects[ObjectId(1)].clone();
+    objects[checked].become_copy_of(&token, &[]);
+    assert_eq!(objects.card_id(ObjectId(0)), Some(checked));
+
+    for zone in [
+        ZoneType::Hand,
+        ZoneType::Graveyard,
+        ZoneType::Exile,
+        ZoneType::Library,
+    ] {
+        s.game_mut().move_object(object, zone);
+        assert_eq!(s.game().state.card_id(object), Some(card));
+        assert!(s
+            .game()
+            .state
+            .zone_cards(zone, PlayerId(0))
+            .any(|found| found == card));
+    }
+}
+
+/// Mixed zones keep their physical order and RNG consumption. Card-only
+/// readers exclude visitors, while observations and moves still see them.
+#[test]
+fn card_zone_readers_preserve_transient_token_occupants() {
+    use managym::agent::observation::Observation;
+    use managym::state::game_object::ObjectId;
+    use rand::seq::SliceRandom;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    for zone in [
+        ZoneType::Hand,
+        ZoneType::Library,
+        ZoneType::Graveyard,
+        ZoneType::Exile,
+    ] {
+        let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 400_709);
+        let player = PlayerId(0);
+        let permanent = s
+            .game_mut()
+            .create_token("token.spirit", player, false)
+            .unwrap();
+        let token = s.game().state.permanents[permanent]
+            .as_ref()
+            .unwrap()
+            .object;
+        s.game_mut().move_object(token, zone);
+        let before = s.game().state.zones.zone_objects(zone, player).clone();
+        assert_eq!(before.last(), Some(&token));
+        let cards: Vec<_> = s.game().state.zone_cards(zone, player).collect();
+        assert!(!cards.iter().any(|card| ObjectId::from(*card) == token));
+        assert_eq!(cards.len() + 1, before.len());
+        assert_eq!(s.game().state.zones.zone_objects(zone, player), &before);
+        assert!(s.game().state.card_id(token).is_none());
+        if zone == ZoneType::Hand {
+            let observation = Observation::for_player(s.game(), player);
+            assert!(observation
+                .agent_cards
+                .iter()
+                .any(|row| row.id == s.game().state.objects[token].id.0 as i32));
+        }
+        let mut expected = before;
+        expected.shuffle(&mut ChaCha8Rng::seed_from_u64(400_710));
+        s.game_mut()
+            .state
+            .zones
+            .shuffle(zone, player, &mut ChaCha8Rng::seed_from_u64(400_710));
+        assert_eq!(s.game().state.zones.zone_objects(zone, player), &expected);
+    }
+}

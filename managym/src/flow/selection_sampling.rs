@@ -87,7 +87,7 @@ impl HiddenCommitments {
         self.pinned.binary_search(&object).is_ok()
     }
 
-    pub(crate) fn pins_card(&self, object_id: ObjectId) -> bool {
+    pub(crate) fn pins_object(&self, object_id: ObjectId) -> bool {
         self.pinned
             .iter()
             .any(|object| object.entity == object_id.into())
@@ -95,17 +95,17 @@ impl HiddenCommitments {
 
     /// Pinned cards currently in `owner`'s library: they rejoin the sampled
     /// library after the deal instead of entering the unseen pool.
-    pub(crate) fn pinned_library_cards(&self, game: &Game, owner: PlayerId) -> Vec<ObjectId> {
-        pinned_library_cards(game, owner, &self.pinned)
+    pub(crate) fn pinned_library_objects(&self, game: &Game, owner: PlayerId) -> Vec<ObjectId> {
+        pinned_library_objects(game, owner, &self.pinned)
     }
 
-    /// `owner`'s cards this viewer cannot see; see [`Game::unseen_cards`].
-    pub(crate) fn unseen_cards(&self, game: &Game, owner: PlayerId) -> Vec<ObjectId> {
-        unseen_cards(game, owner, self.viewer, &self.pinned)
+    /// `owner`'s cards this viewer cannot see; see [`Game::unseen_objects`].
+    pub(crate) fn unseen_objects(&self, game: &Game, owner: PlayerId) -> Vec<ObjectId> {
+        unseen_objects(game, owner, self.viewer, &self.pinned)
     }
 }
 
-fn pinned_library_cards(game: &Game, owner: PlayerId, pinned: &[ObjectRef]) -> Vec<ObjectId> {
+fn pinned_library_objects(game: &Game, owner: PlayerId, pinned: &[ObjectRef]) -> Vec<ObjectId> {
     pinned
         .iter()
         .map(|object| object.entity.into())
@@ -117,13 +117,13 @@ fn pinned_library_cards(game: &Game, owner: PlayerId, pinned: &[ObjectRef]) -> V
         .collect()
 }
 
-fn unseen_cards(
+fn unseen_objects(
     game: &Game,
     owner: PlayerId,
     viewer: PlayerId,
     pinned: &[ObjectRef],
 ) -> Vec<ObjectId> {
-    let pinned_library = pinned_library_cards(game, owner, pinned);
+    let pinned_library = pinned_library_objects(game, owner, pinned);
     let zones: &[ZoneType] = if owner == viewer {
         &[ZoneType::Library]
     } else {
@@ -135,7 +135,7 @@ fn unseen_cards(
         .filter(|object| !pinned_library.contains(object))
         .collect();
     if !game.shares_information(viewer, owner) {
-        objects.extend(game.foretold_cards(owner));
+        objects.extend(game.foretold_cards(owner).map(ObjectId::from));
     }
     objects
 }
@@ -302,8 +302,8 @@ impl Game {
     /// opponent also the hand and face-down foretold exile. For an opponent
     /// this is exactly the possible-world pool, including any publicly known
     /// hand cards. Pinned library cards are excluded; they never move.
-    pub fn unseen_cards(&self, owner: PlayerId, viewer: PlayerId) -> Vec<ObjectId> {
-        unseen_cards(self, owner, viewer, &self.pinned_objects(viewer))
+    pub fn unseen_objects(&self, owner: PlayerId, viewer: PlayerId) -> Vec<ObjectId> {
+        unseen_objects(self, owner, viewer, &self.pinned_objects(viewer))
     }
 
     /// Prospective battlefield entries are public even while their move awaits
@@ -511,7 +511,7 @@ impl Game {
     ) -> Vec<ForetoldAllocation> {
         let owner = PlayerId(1 - commitments.viewer.0);
         let mut pool = BTreeMap::<String, Vec<ObjectId>>::new();
-        for object in commitments.unseen_cards(self, owner) {
+        for object in commitments.unseen_objects(self, owner) {
             pool.entry(self.state.objects[object].name.clone())
                 .or_default()
                 .push(object);
@@ -532,7 +532,7 @@ impl Game {
                 )
             })
             .collect();
-        let count = self.foretold_cards(owner).len() as u32;
+        let count = self.foretold_cards(owner).count() as u32;
         let mut allocations = Vec::new();
         enumerate_foretold(&bearers, count, 1, &mut BTreeMap::new(), &mut allocations);
         let orders: u128 = (1..=count).map(u128::from).product();
@@ -545,7 +545,7 @@ impl Game {
                     .iter()
                     .filter(|object| {
                         self.state.zones.contains(**object, ZoneType::Hand, owner)
-                            && commitments.pins_card(**object)
+                            && commitments.pins_object(**object)
                     })
                     .count();
                 for index in pinned_hand..objects.len() - foretold {
@@ -723,10 +723,10 @@ impl Game {
                     *candidates = self
                         .selection_zone_cards(source.owner, source.zone)
                         .into_iter()
-                        .filter(|object_id| {
-                            self.object_matches_predicate(*object_id, &source.predicate)
+                        .filter(|card| {
+                            self.object_matches_predicate((*card).into(), &source.predicate)
                         })
-                        .filter_map(|object_id| self.current_object_ref(object_id))
+                        .filter_map(|card| self.current_object_ref(card.into()))
                         .collect();
                 } else {
                     rebind(candidates.iter_mut(), &rebinding.objects);

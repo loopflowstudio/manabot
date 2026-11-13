@@ -560,12 +560,12 @@ fn pop_quiz_learn_retrieves_owned_lesson_and_finalizes_once() {
         s.advance_to_active_step(0, StepKind::Main);
         cast_and_resolve(&mut s);
         assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
-        let object = s.game().state.players[0].sideboard[0];
+        let card = s.game().state.players[0].sideboard[0];
         let library_before = library(&s, 0);
         let hand_before = hand(&s, 0).len();
         s.drain_events();
         assert!(s.take_action_by_type(ActionType::LearnTakeLesson));
-        assert!(hand(&s, 0).contains(&object));
+        assert!(hand(&s, 0).contains(&card.into()));
         assert_eq!(hand(&s, 0).len(), hand_before + 1);
         assert_eq!(library(&s, 0), library_before);
         assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);

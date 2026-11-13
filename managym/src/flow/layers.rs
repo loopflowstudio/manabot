@@ -802,8 +802,8 @@ impl<'a> Context<'a> {
             LayerValue::GraveyardCardTypes { offset } => {
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
-                    .flat_map(|p| self.game.state.zones.zone_objects(ZoneType::Graveyard, p))
-                    .flat_map(|id| self.game.state.objects[*id].types.types.iter())
+                    .flat_map(|player| self.game.state.zone_cards(ZoneType::Graveyard, player))
+                    .flat_map(|card| self.game.state.objects[card].types.types.iter())
                     .collect::<BTreeSet<_>>()
                     .len() as i32
                     + offset

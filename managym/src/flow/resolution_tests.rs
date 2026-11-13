@@ -1719,7 +1719,7 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
     for player in [PlayerId(0), PlayerId(1)] {
         let (mut root, _, _) = fixture(player);
         // More than two kept cards exposes an intermediate ordered prefix.
-        let looked = root.library_top(player, 4);
+        let looked = root.library_top_objects(player, 4);
         let original_refs: Vec<_> = looked
             .iter()
             .map(|object| root.current_object_ref(*object))
@@ -1814,13 +1814,13 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
                     let mut sampled = branch.clone();
                     sampled.determinize(player, 119).unwrap();
                     assert_eq!(
-                        sampled.library_top(player, 3),
-                        branch.library_top(player, 3)
+                        sampled.library_top_objects(player, 3),
+                        branch.library_top_objects(player, 3)
                     );
                 }
             }
             assert_eq!(branch.state.zones.zone_of(order[0]), Some(ZoneType::Hand));
-            assert_eq!(branch.library_top(player, 2), order[1..]);
+            assert_eq!(branch.library_top_objects(player, 2), order[1..]);
             for object in &order[1..] {
                 let index = looked
                     .iter()
@@ -1862,7 +1862,7 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
         .unwrap();
     let object = game.state.permanents[source].as_ref().unwrap().object;
     let source_ref = game.permanent_object_ref(source).unwrap();
-    let looked = game.library_top(player, 2);
+    let looked = game.library_top_objects(player, 2);
     let caller = SuspendedResolution {
         frame: EffectFrame::new(player, vec![Effect::gain_life(3)]),
         decision: Decision::ManaChoice {
@@ -1947,7 +1947,7 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
     for player in [PlayerId(0), PlayerId(1)] {
         let opponent = PlayerId(1 - player.0);
         let (mut game, _, _) = fixture(player);
-        let looked = game.library_top(player, 3);
+        let looked = game.library_top_objects(player, 3);
         let caller = SuspendedResolution {
             frame: EffectFrame::new(player, vec![Effect::gain_life(2)]),
             decision: Decision::OrderLibrary {
@@ -1981,7 +1981,7 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
         let original = game.state.deterministic_hash();
         let mut sampled = game.clone();
         sampled.determinize(player, 241).unwrap();
-        assert_eq!(sampled.library_top(player, 3), looked);
+        assert_eq!(sampled.library_top_objects(player, 3), looked);
         assert_eq!(visible_library(&sampled, player), expected);
         checked_command(
             &mut sampled,
@@ -2001,7 +2001,7 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
             );
         }
         assert_eq!(
-            sampled.library_top(player, 3),
+            sampled.library_top_objects(player, 3),
             looked.into_iter().rev().collect::<Vec<_>>()
         );
         assert_eq!(sampled.state.players[player.0].life, 22);
@@ -2090,7 +2090,7 @@ fn retained_search_permission_preserves_opponent_membership_until_caller_finishe
 fn surveil_commits_the_partition_once_and_announces_only_after_kept_order() {
     for player in [PlayerId(0), PlayerId(1)] {
         let (mut game, _, _) = fixture(player);
-        let objects = game.library_top(player, 4);
+        let objects = game.library_top_objects(player, 4);
         stack(
             &mut game,
             Entry::Spell,
@@ -2116,7 +2116,7 @@ fn surveil_commits_the_partition_once_and_announces_only_after_kept_order() {
                     object: *object,
                 },
             );
-            assert_eq!(game.library_top(player, 4), objects);
+            assert_eq!(game.library_top_objects(player, 4), objects);
             assert_eq!(surveils(&game), 0);
             assert_eq!(game.state.players[player.0].life, 20);
         }
@@ -2159,7 +2159,7 @@ fn library_keyword_completion_handles_empty_libraries_and_zero_counts() {
     for scry in [false, true] {
         for count in [0, 2] {
             let (mut game, _, _) = fixture(PlayerId(0));
-            for object in game.library_top(PlayerId(0), usize::MAX) {
+            for object in game.library_top_objects(PlayerId(0), usize::MAX) {
                 game.move_object(object, ZoneType::Graveyard);
             }
             stack(
@@ -2195,7 +2195,7 @@ fn library_keyword_completion_handles_empty_libraries_and_zero_counts() {
 fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
     for player in [PlayerId(0), PlayerId(1)] {
         let (mut game, _, _) = fixture(player);
-        let milled = game.library_top(player, 3);
+        let milled = game.library_top_objects(player, 3);
         let select = |min, max, effects| Effect::SelectCards {
             from: ObjectSelector::CardsThisWay,
             predicate: CardPredicate::default(),
@@ -2534,7 +2534,7 @@ fn retained_batch_inspection_finishes_entry_before_more_selection_or_ordering() 
         counter_replacement_drivers(&mut game, player);
         let entrant = exiled_counter_entry(&mut game, player);
         game.move_object(entrant, ZoneType::Library);
-        let looked = game.library_top(player, 4);
+        let looked = game.library_top_objects(player, 4);
         assert_eq!(looked[0], entrant);
         game.run_frame(EffectFrame::new(
             player,
@@ -3443,7 +3443,7 @@ fn hidden_selection_foretold_measure_preserves_every_committed_slot() {
             }
             checked_command(&mut branch, Action::Decline { player });
             assert_eq!(branch.state.zones.size(ZoneType::Hand, player), 2);
-            assert_eq!(branch.foretold_cards(player).len(), 2);
+            assert_eq!(branch.foretold_cards(player).count(), 2);
             assert!(branch
                 .state
                 .zones
@@ -3611,7 +3611,7 @@ fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unkn
             .to_vec();
         let mut known = root.clone();
         known.determinize(player, 241).unwrap();
-        assert_eq!(known.library_top(player, 3), before);
+        assert_eq!(known.library_top_objects(player, 3), before);
         assert_eq!(
             known.state.suspended_decision,
             root.state.suspended_decision
@@ -3634,7 +3634,7 @@ fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unkn
                 .1
                 .to_vec();
             assert_eq!(looked.len(), 3);
-            assert_eq!(looked, branch.library_top(player, 3));
+            assert_eq!(looked, branch.library_top_objects(player, 3));
             assert_ne!(
                 looked, before,
                 "the unknown prefix is sampled, not secretly pinned"

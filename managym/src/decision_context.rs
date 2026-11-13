@@ -124,15 +124,13 @@ impl Game {
                                 .agent_cards
                                 .iter()
                                 .chain(observation.opponent_cards.iter())
-                                .find(|object_id| object_id.id == id.0 as i32)
+                                .find(|card| card.id == id.0 as i32)
                                 .and_then(|_| {
                                     self.state
                                         .objects
                                         .iter()
-                                        .position(|object_id| object_id.id == *id)
-                                        .and_then(|object_id| {
-                                            self.decision_card(ObjectId(object_id))
-                                        })
+                                        .position(|object| object.id == *id)
+                                        .and_then(|index| self.decision_card(ObjectId(index)))
                                 })
                         }?;
                         let role = match action {

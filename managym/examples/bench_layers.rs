@@ -77,7 +77,7 @@ fn root() -> (Env, PermanentId) {
             old.owner,
             old.definition_id,
             Arc::new(definition),
-            old.is_token,
+            !old.is_card(),
         );
         game.state.objects[object_id] = object;
     }

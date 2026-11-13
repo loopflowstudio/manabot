@@ -15,8 +15,8 @@ use crate::{
 };
 
 impl Game {
-    /// Exact identity of the object currently represented by `card` in a
-    /// zone. Cards removed from all zones have no current rules object.
+    /// Exact identity of `object` in its current zone. An object removed
+    /// from every zone has no current rules identity.
     pub fn current_object_ref(&self, object: ObjectId) -> Option<ObjectRef> {
         self.state.zones.zone_of(object)?;
         let incarnation = *self.state.object_incarnations.get(object.0)?;
@@ -118,7 +118,7 @@ impl Game {
         self.state.object_lki.for_permanent(permanent_id)
     }
 
-    /// Last known information of `card`'s most recent battlefield object.
+    /// Last known information of `object`'s most recent battlefield appearance.
     pub(crate) fn latest_object_lki(&self, object: ObjectId) -> Option<&ObjectLki> {
         self.state.object_lki.latest_for_object(object)
     }

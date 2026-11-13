@@ -288,7 +288,7 @@ impl Game {
         );
         suspended.decisions().any(|decision| {
             self.shares_information(viewer, decision.player())
-                && (decision.revealed_cards().contains(&object)
+                && (decision.revealed_objects().contains(&object)
                     || matches!(decision, Decision::SelectCards { from: Some(source), .. }
                         if source.owner == owner && Some(source.zone) == zone))
         })
@@ -305,7 +305,7 @@ impl Game {
             ActivationSource::Permanent(permanent) => {
                 self.target_reference(Target::Permanent(permanent), viewer)
             }
-            ActivationSource::Card(object) => self.card_reference(object, viewer),
+            ActivationSource::Card(card) => self.card_reference(card.into(), viewer),
         }
     }
 
