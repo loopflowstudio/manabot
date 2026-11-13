@@ -180,8 +180,7 @@ worker timeout is 900 seconds and a timeout is a failed attempt, not OOM.
 The three-replay, same-hour requirement remains unchanged. Each repetition
 interleaves all executable arms call by call and step by step. Their total
 elapsed span, including the gaps spent running the other arms, determines the
-window; phase sums exclude those gaps. Establish durations at a selected width
-before scheduling the full matrix. The timeout applies to an individual worker
+window; phase sums exclude those gaps. The timeout applies to an individual worker
 call, not a complete update. Increasing it never relaxes the one-hour window.
 
 ```sh

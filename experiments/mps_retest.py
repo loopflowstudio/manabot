@@ -638,18 +638,20 @@ def _provenance(capture: Path, laptop: bool) -> dict[str, Any]:
 
 
 def _latest_parity(
-    out: Path, metadata: dict[str, Any], width: int, arm: Arm
-) -> dict[int, dict[str, Any]]:
-    """Latest attempt per row count; failures supersede earlier successes too."""
-    return {
-        r["rows"]: r
-        for r in _rows(out / "bench.jsonl")
-        if r["event"] == "parity"
-        and r["width"] == width
-        and r["arm"] == arm
-        and r["host"] == metadata["host"]
-        and r["capture_id"] == metadata["capture_id"]
-    }
+    out: Path, metadata: dict[str, Any], width: int
+) -> dict[Arm, dict[int, dict[str, Any]]]:
+    """Read all arms once; latest failures supersede earlier successes too."""
+    latest: dict[Arm, dict[int, dict[str, Any]]] = {arm: {} for arm in ARMS}
+    for row in _rows(out / "bench.jsonl"):
+        if (
+            row["event"] == "parity"
+            and row["width"] == width
+            and row["arm"] in latest
+            and row["host"] == metadata["host"]
+            and row["capture_id"] == metadata["capture_id"]
+        ):
+            latest[row["arm"]][row["rows"]] = row
+    return latest
 
 
 def bench(
@@ -662,6 +664,7 @@ def bench(
     laptop: bool,
     repeats: int,
 ) -> Iterator[dict[str, Any] | None]:
+    """Evaluate parity, or time calls admitted by the interleaving coordinator."""
     metadata = _provenance(capture, laptop)
     row: dict[str, Any] = {
         "event": phase,
@@ -674,32 +677,6 @@ def bench(
         "started": time.time(),
         "load_before": os.getloadavg()[0],
     }
-    # Receipt admission needs no model, device allocation or capture arrays.
-    if phase != "parity":
-        parity = _latest_parity(out, metadata, width, arm).get(size)
-        if parity is None or parity["status"] != "ok":
-            if parity is not None and parity["status"] == "unsupported":
-                row.update(
-                    status="unsupported",
-                    error=parity["error"],
-                    failure_phase="parity",
-                    load_after=os.getloadavg()[0],
-                    ended=time.time(),
-                )
-                yield row
-                return
-            raise ValueError(
-                "run parity for this host, revision, capture, width, rows and arm first"
-            )
-        row["parity"] = {
-            k: parity[k]
-            for k in (
-                "gradient_cosine",
-                "gradient_min_cosine",
-                "logits_max_abs",
-                "passes_gradient",
-            )
-        }
     batch = _batch(capture, "learner" if phase == "parity" else phase, size)
     with _runner(capture, width, arm) as runner:
         yield None  # All workers allocate before the coordinator admits the block.
@@ -877,6 +854,7 @@ def capture(out: Path, streams: int, laptop: bool) -> None:
         wall_seconds=7200,
     )
     data["wall_seconds"] = 7200
+    regime = TrainingRegime.model_validate(data)
     if out.exists():
         raise FileExistsError(out)
     attempts: list[tuple[Path, dict[str, Any]]] = []
@@ -897,7 +875,7 @@ def capture(out: Path, streams: int, laptop: bool) -> None:
         try:
             record(
                 path,
-                TrainingRegime.model_validate(data),
+                regime,
                 protocol.training_seed,
                 experiment="mps_retest",
             )
@@ -1098,6 +1076,9 @@ def _interleaved(
     so existing latest-attempt readers never combine arms from different tries.
     """
     metadata = _provenance(args.capture, args.laptop)
+    # Admission belongs here, before any worker reads inputs or allocates a
+    # model. Both retry attempts use the same parity evidence for every arm.
+    parities = _latest_parity(args.out, metadata, width)
     attempts: list[list[dict[str, Any]]] = []
     ledger = args.out / ("updates.jsonl" if phase == "update" else "bench.jsonl")
     for attempt in range(2):
@@ -1121,7 +1102,7 @@ def _interleaved(
                     "interleaved": True,
                     "memory_scope": "per-process; all arm models resident",
                 }
-                parity = _latest_parity(args.out, metadata, width, arm)
+                parity = parities[arm]
                 admitted = (
                     parity.get(size)
                     if size
@@ -1139,6 +1120,16 @@ def _interleaved(
                         + str(admitted and admitted.get("error")),
                     )
                     continue
+                if phase != "update":
+                    rows[arm]["parity"] = {
+                        key: admitted[key]
+                        for key in (
+                            "gradient_cosine",
+                            "gradient_min_cosine",
+                            "logits_max_abs",
+                            "passes_gradient",
+                        )
+                    }
                 try:
                     worker = CallWorker(args, phase, width, arm, size, rep)
                     workers[arm] = worker
@@ -1215,11 +1206,9 @@ def matrix(args: argparse.Namespace) -> None:
 def replays(args: argparse.Namespace) -> None:
     metadata = _provenance(args.capture, args.laptop)
     for width in args.widths:
+        parities = _latest_parity(args.out, metadata, width)
         for arm in ARMS:
-            if not any(
-                r["status"] == "ok"
-                for r in _latest_parity(args.out, metadata, width, arm).values()
-            ):
+            if not any(r["status"] == "ok" for r in parities[arm].values()):
                 _quiet(args.laptop)
                 _parity(args, width, arm, 64)
         for rep in range(3):
