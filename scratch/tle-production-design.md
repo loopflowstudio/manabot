@@ -119,26 +119,40 @@ kept. `PooledManaView`, token programs and buffer layouts survive unchanged.
 
 ## Pooled-mana presentation decision (concept review, 2026-11-12)
 
-One name is wrong; behavior is unchanged. `PlayerData.spend_effect_mana` /
-`SpendEffectManaData` also carries ordinary combat mana with no spend effect,
-and its own comment says "The field name predates expiry projection". It is
-new in this change, so rename it before it is published (afterwards it needs
-a deprecated alias in six protocol schemas):
+Implemented in `fcc7a514c`. The former `PlayerData.spend_effect_mana` /
+`SpendEffectManaData` also carried ordinary combat mana with no spend effect.
+Its comment said "The field name predates expiry projection", although the
+surface was new in this change. Renaming before publication avoids a
+compatibility alias; the behavior and learning representation are unchanged.
 
-- The player's `pooled_mana_classes`: one row per `ManaClass` that the plain
+- The player's `pooled_mana_classes` has one row per `ManaClass` that the plain
   totals cannot state (a spend effect or combat expiry). Rust
-  `PooledManaClassData`, PyO3 `PooledManaClass`; `PooledManaView` keeps its
-  name. Rename through the encoders, bindings, `experience*.py`, the text
-  renderer, `types.ts`, `PlayerArea.svelte`, tests and regenerated schemas.
-  Token programs, fact kinds and buffers do not change.
+  `agent/observation.rs::PooledManaClassData` and PyO3 `PooledManaClass` own
+  the native and Python shapes; `PooledManaView` keeps its name. Encoders,
+  bindings, `experience*.py`, text, Academy and all six schemas use the new
+  field. Token programs, fact kinds and buffers are unchanged.
 - No restriction or no effect is absent (`Option<String>` / `str | None`,
   omitted when serialized), not an empty string.
 - Text observation states each row the same way (amounts, then restriction,
   effect and expiry when present) instead of titling an effect-less row
   "Combat mana:".
 - Academy shows the aggregate "N mana expires at end of combat" line only when
-  a frame has no class rows, as `lesson_mana` already falls back; with rows it
-  repeats them.
-- Delete the "predates" comment.
+  a frame has no class rows, as `lesson_mana` already falls back. The class rows
+  otherwise carry expiry themselves (`PlayerArea.svelte`).
+- The obsolete "predates" comment is removed.
 
-No open product choice.
+The implementation and compression checks are recorded in
+`mtg-297-heartbeat-of-spring.md`. Remaining work is gate acceptance there:
+current-world evidence, affected checks and corpus admission. No open product
+choice; the presentation repair is no longer pending implementation.
+
+## Concept review after the pooled-class rename (2026-11-12)
+
+Reviewed `fcc7a514c` against this contract: pool rows, spend offers
+(`flow/action.rs`, "Spend {G} (…)"), text and Academy name one `ManaClass` by
+the same four facts, and no old name survives. Nothing to change; no open
+product choice. Noted, not directed: a non-combat class and a non-combat spend
+offer both say "expires at step end", where plain totals and "Add" labels
+leave ordinary expiry unstated. The wording is the class's default expiry
+(CR 106.4); retention (`keeps_red_mana`) stays its own line, as it already
+does for combat mana.

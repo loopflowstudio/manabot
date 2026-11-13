@@ -58,9 +58,12 @@ The later merge `0c2a366e6` incorporates main `b53ebf6f4` and the paired
 v0.2.3 release preparation (`e82a20033`). Compared with the repaired checkpoint
 `fffbe7816`, it changes release notes, package/crate versions, locks and release
 validation guidance; mana source, card definitions and focused witnesses are
-unchanged. The recorded repair/compression results below remain evidence for
-that source, not a fresh build of the v0.2.3 packages. Gate's rebuild and
-current-world checks must use the merged checkout.
+unchanged. The earlier search repair/compression results below remain evidence
+for that source. The later pooled-class implementation and compression rebuilt
+the extension on this merged checkout and passed the focused checks recorded
+below; that rebuild is complete. Gate's broader current-world checks remain
+open. Remote main still resolves to `e82a20033` at this reconciliation; its
+release changes are already incorporated.
 
 The new bound's `PaymentSearchState::usable` still called the removed
 restriction-only pool API; the first realign debug build failed there. It now
@@ -88,6 +91,14 @@ state. No known implementation blocker remains.
 
 ## Remaining acceptance
 
+The preceding iteration's pooled-class implementation direction is complete
+in `fcc7a514c`: code inspection confirms the renamed native/Python surfaces,
+optional omitted qualifiers, amount-first text, Academy's expiry fallback and
+all six schemas. The old names and obsolete comment have no remaining source
+consumers. The recorded 11 debug and 18 Python passes include the final
+compression; the earlier 3 parity passes are not the latest evidence. No
+runtime change or test rerun was needed for this reconciliation.
+
 Gate still needs the affected suites, current-world authored parity/authority,
 fixture binding and belief receipts, world-admission checks, and the three
 Heartbeat events among the first 1,000 MTG-213 corpus decks. Keep
@@ -102,6 +113,13 @@ include `tests/academy/test_authored_match_parity.py`,
 receipt and fixture generators, and the world-admission/monitoring files in
 AGENTS.md. Focused debug card tests pass with the combined search; CI owns
 the full debug suite and Engine Budget.
+
+The affected-check list also includes the observation/action-selection checks
+in `docs/development.md#validation-by-change-area`:
+`tests/env/test_observation.py`, `tests/training/test_action_cutoff.py`,
+`tests/verify/test_native_buffer_capacities.py` and
+`tests/training/test_active_training.py`. The focused presentation checks below
+do not substitute for those checks or current-world admission.
 
 Release to Memory and Lita are outside this Task; the token representation
 prerequisite landed but their card definitions are absent. Production limits
