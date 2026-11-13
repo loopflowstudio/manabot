@@ -26,12 +26,10 @@ import argparse
 from collections.abc import Iterator
 from dataclasses import dataclass
 import gc
-import inspect
 import json
 from pathlib import Path
 import platform
 import resource
-import shutil
 import subprocess
 import sys
 import time
@@ -69,154 +67,23 @@ def _host() -> dict[str, Any]:
 
 
 def capture(out: Path) -> None:
-    """Run one CPU8 update of the w160l8 regime, keeping its inputs as npz."""
-    import torch
-
+    """Run the pilot's one-update capture using the shared recorder."""
     from experiments.tla_frontier import frozen
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.model.inference import PolicyInference
-    from manabot.training.execution import execute_regime
+    from manabot.backends.capture import capture as record
     from manabot.training.regime import TrainingRegime
-    from manabot.training.rollout.collection import SeatRoutedCollector
-    from manabot.training.updates.health import OptimizerHealth
-    from manabot.verify.store import VerifyStore
 
-    out.mkdir(parents=True, exist_ok=False)
-    (out / "collection").mkdir()
-    (out / "learner").mkdir()
     regimes, protocol = frozen()
     data = regimes["w160l8"].model_dump()
     stage = data["stages"][0]
     stage["updates"] = 1
-    # Regimes allow at most four threads; the capture keeps only inputs and the
-    # engine's share of collection time, which policy threads do not change.
     stage["execution"].update(device="cpu", workers=1, threads=4, wall_seconds=7200.0)
     data["wall_seconds"] = 7200.0
-    regime = TrainingRegime.model_validate(data)
-    (out / "regime.json").write_text(regime.model_dump_json(indent=2))
-
-    calls: list[dict[str, Any]] = []
-    minibatches: list[dict[str, Any]] = []
-    clock: dict[str, float] = {}
-    in_collection = False
-    original_prepare = PolicyInference.prepare
-    original_forward = ActorCritic.forward
-    original_collect = SeatRoutedCollector.collect
-    original_check = OptimizerHealth.check
-
-    def prepare(self: PolicyInference, obs: dict[str, torch.Tensor]) -> Any:
-        if not in_collection:
-            return original_prepare(self, obs)
-        tick = time.perf_counter()
-        prepared = original_prepare(self, obs)
-        calls.append(
-            {
-                "index": len(calls),
-                "B": int(obs["actions_valid"].shape[0]),
-                "prepare": time.perf_counter() - tick,
-                "forward": 0.0,
-            }
-        )
-        np.savez(
-            out / "collection" / f"{len(calls) - 1:05d}.npz",
-            **{key: value.numpy() for key, value in obs.items()},
-        )
-        return prepared
-
-    def forward(self: ActorCritic, obs: Any) -> Any:
-        tick = time.perf_counter()
-        result = original_forward(self, obs)
-        if in_collection and calls:
-            calls[-1]["forward"] += time.perf_counter() - tick
-        return result
-
-    def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> Any:
-        nonlocal in_collection
-        in_collection = True
-        tick = time.perf_counter()
-        try:
-            batch = original_collect(self, *args, **kwargs)
-        finally:
-            in_collection = False
-            clock["collection"] = time.perf_counter() - tick
-        clock["learning_start"] = time.perf_counter()
-        return batch
-
-    def check(self: OptimizerHealth, loss: torch.Tensor) -> None:
-        original_check(self, loss)
-        frame = inspect.currentframe()
-        assert frame is not None and frame.f_back is not None
-        local = frame.f_back.f_locals
-        assert frame.f_back.f_code.co_name == "update_damped_iteration"
-        indexes = local["indexes"]
-        targets = local["targets"]
-        learning = local["learning"]
-        arrays = {f"obs/{k}": v.detach().numpy() for k, v in local["obs"].items()}
-        arrays.update(
-            actions=local["actions"][indexes].numpy(),
-            advantages=targets.advantages[indexes].numpy(),
-            value_targets=targets.values[indexes].numpy(),
-            actor_mask=local["actor_mask"].numpy(),
-            behavior_logs=local["behavior_logs"].numpy(),
-        )
-        np.savez(out / "learner" / f"{len(minibatches):03d}.npz", **arrays)
-        minibatches.append(
-            {
-                "index": len(minibatches),
-                "B": int(len(indexes)),
-                "loss": float(loss.detach()),
-                "iteration": int(local["iteration"]),
-                "learning_rate": float(self.optimizer.param_groups[0]["lr"]),
-                "tau": float(local["tau"]),
-                "clip": learning.clip,
-                "collection_kl": learning.collection_kl,
-                "reference": learning.reference,
-                "max_grad_norm": learning.max_grad_norm,
-                "time": time.perf_counter(),
-            }
-        )
-        del local, frame
-
-    PolicyInference.prepare = prepare  # type: ignore[method-assign]
-    ActorCritic.forward = forward  # type: ignore[method-assign]
-    SeatRoutedCollector.collect = collect  # type: ignore[method-assign]
-    OptimizerHealth.check = check  # type: ignore[method-assign]
-    started = time.perf_counter()
-    meta: dict[str, Any] = {"host_before": _host(), "torch": torch.__version__}
-    try:
-        with VerifyStore(out / "capture.sqlite") as store:
-            result = execute_regime(
-                regime,
-                protocol.training_seed,
-                out / "execution",
-                store,
-                experiment="mlx-pilot-capture",
-                training_exposure=False,
-            )
-    finally:
-        PolicyInference.prepare = original_prepare  # type: ignore[method-assign]
-        ActorCritic.forward = original_forward  # type: ignore[method-assign]
-        SeatRoutedCollector.collect = original_collect  # type: ignore[method-assign]
-        OptimizerHealth.check = original_check  # type: ignore[method-assign]
-    initial = sorted((out / "execution").rglob("*-initial-raw.pt"))
-    if len(initial) != 1:
-        raise RuntimeError(f"expected one initial checkpoint, found {initial}")
-    shutil.copyfile(initial[0], out / "initial.pt")
-    policy = sum(c["prepare"] + c["forward"] for c in calls)
-    meta.update(
-        status=str(result.status),
-        wall=time.perf_counter() - started,
-        collection_wall=clock.get("collection"),
-        collection_policy=policy,
-        engine=clock["collection"] - policy,
-        calls=len(calls),
-        minibatches=len(minibatches),
-        host_after=_host(),
+    record(
+        out,
+        TrainingRegime.model_validate(data),
+        protocol.training_seed,
+        experiment="mlx-pilot-capture",
     )
-    (out / "calls.json").write_text(json.dumps(calls, indent=1))
-    (out / "minibatches.json").write_text(json.dumps(minibatches, indent=1))
-    (out / "capture.json").write_text(json.dumps(meta, indent=2, default=str))
-    print(json.dumps(meta, indent=2, default=str))
 
 
 # -- shared bench helpers ------------------------------------------------------

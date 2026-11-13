@@ -7,7 +7,9 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
 
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
-  GRU schedules, shared-effect routes and inference column compaction. A
+  GRU schedules, shared-effect routes and inference column compaction. Object
+  joins and ownership follow each admitted batch's actual axes, including
+  bucket-trimmed inputs whose references were remapped by the caller. A
   backend's graph then holds only gathers, scatters and arithmetic.
 - `checkpoint.py` is the checkpoint container: one safetensors file of
   canonical float32 parameters, lookup buffers and the checkpoint's

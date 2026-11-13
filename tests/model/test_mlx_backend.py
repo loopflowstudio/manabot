@@ -175,3 +175,62 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     assert "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in str(
         refused.value
     )
+
+
+def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
+    """Remapped opponent joins and ownership survive changes in object capacity."""
+    from manabot.backends.mlx.checkpoint import build
+    from manabot.backends.mlx.learner import MLXLearner
+    from manabot.model.buckets import bucket_sizes, trim_observation
+    from manabot.policy.protocol import Settings, Targets
+
+    torch.set_num_threads(1)
+    _, _, agent = _converted(tmp_path)
+    encoder = agent.observation_space.encoder
+    obs = {k: torch.zeros((2, *shape)) for k, shape in encoder.shapes.items()}
+    obs["agent_player_valid"][:] = 1
+    obs["opponent_player_valid"][:] = 1
+    obs["agent_cards_valid"][:, 1] = 1
+    obs["opponent_permanents_valid"][:, 0] = 1
+    obs["actions_valid"][:, :2] = 1
+    obs["action_focus"].fill_(-1)
+    obs["action_focus"][:, 0, 0] = 0
+    obs["action_focus"][:, 1, 0] = (
+        2 + 2 * encoder.cards_per_player + encoder.perms_per_player
+    )
+    sizes = bucket_sizes(obs, encoder, objects=True)
+    assert sizes is not None and sizes.trims_objects
+    trimmed = trim_observation(obs, sizes)
+    policy, _ = build(
+        agent.config,
+        encoder.config,
+        {k: v.numpy() for k, v in agent.state_dict().items()},
+    )
+    learner = MLXLearner(policy)
+    settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
+    results = []
+    for tensors in (obs, trimmed):
+        prepared = policy.prepare({k: v.numpy() for k, v in tensors.items()})
+        assert prepared.ownership.shape == (prepared.validity.shape[1],)
+        logits, values = policy.evaluate(prepared)
+        legal = prepared.legal
+        logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
+        reference = np.where(legal, 0.5, 0).astype(np.float32)
+        targets = Targets(
+            np.zeros(2, np.int64),
+            np.array([1, -1], np.float32),
+            np.ones(2, np.float32),
+            np.ones(2, bool),
+            logs,
+            reference,
+        )
+        loss, gradients = learner.gradients(prepared, targets, settings)
+        results.append((logits[:, :2], values, loss, gradients))
+    expected, actual = results
+    for a, b in zip(actual[:3], expected[:3], strict=True):
+        np.testing.assert_allclose(a, b, atol=2e-6)
+    assert actual[3].keys() == expected[3].keys()
+    for key in expected[3]:
+        np.testing.assert_allclose(
+            actual[3][key], expected[3][key], atol=2e-6, err_msg=key
+        )

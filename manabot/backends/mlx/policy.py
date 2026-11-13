@@ -224,7 +224,6 @@ class _Static:
     catalog: Packed
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
-    sign: mx.array  # [1,N,1]
     tables: Tables
     cache: dict[str, mx.array] = field(default_factory=dict)
 
@@ -266,7 +265,6 @@ class MLXActorCritic(nn.Module):
         self.continuation = Continuation(dims)
         tokens, schedule = catalog_schedule(tables)
         named = np.nonzero(tables.name_definitions != 0)[0]
-        sign = np.where(tables.is_agent, 1.0, -1.0).astype(np.float32)
         # Underscore attributes outside the module tree: never parameters.
         object.__setattr__(
             self,
@@ -276,7 +274,6 @@ class MLXActorCritic(nn.Module):
                 schedule,
                 mx.array(tables.name_program_rows[named]),
                 mx.array(named),
-                mx.array(sign[None, :, None]),
                 tables,
             ),
         )
@@ -420,7 +417,7 @@ class MLXActorCritic(nn.Module):
 
         # Attention over the object table.
         validity = mx.array(batch.validity)
-        sign = static.sign
+        sign = mx.array(batch.ownership)[None, :, None]
         attended, attended_validity = objects, validity
         columns = batch.attention_columns
         if columns is not None:

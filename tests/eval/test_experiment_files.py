@@ -58,6 +58,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "elemental_lambda",
         "lambda_sweep",
         "mlx_pilot",
+        "mps_retest",
         "mtg183-elemental-eval",
         "seat_comparison",
         "tla_frontier",

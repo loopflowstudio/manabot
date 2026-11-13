@@ -12,6 +12,17 @@ every backend is checked against.
 | --- | --- | --- |
 | `mlx` | policy and learner step, parity-checked; measurement only | [mlx.md](mlx.md) |
 
+## Which backend on Apple Silicon
+
+PyTorch is the incumbent training backend. MLX remains a measurement backend;
+keeping it needs a clear advantage in the whole training update to justify
+maintaining the extra implementation. The [MLX pilot](../../experiments/mlx_pilot.md)
+measured an advantage over CPU8 on its M2 workload, but used padded shapes and
+float32 MPS. The [MPS retest](../../experiments/mps_retest.md) compares the current
+bucketed recipe, both MPS half dtypes, wider/smaller models and larger stream
+counts. Its measurements are pending; it has no automatic adoption threshold.
+Defaults and off-CUDA precision refusals remain unchanged.
+
 ## Layout
 
 Every backend is one package, `manabot/backends/<name>/`, with the same files:
