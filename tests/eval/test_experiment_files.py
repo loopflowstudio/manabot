@@ -5,7 +5,9 @@ its panels name and a flame graph of its phases; `eval(state)` asks for the
 same games the MTG-183 follower plays.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
+import sys
 
 from etude.eval.records import Match
 from etude.experiment import Checkpoint, Checkpoints, ExperimentState, TrainingRun
@@ -34,30 +36,43 @@ ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = ROOT / "experiments"
 
 
+@pytest.fixture
+def keep_imported_modules() -> Iterator[None]:
+    """Restore modules `build` drops so later tests keep their imported objects.
+
+    `etude.page.build` re-imports the page file's neighbours by popping every
+    `experiments.*` module; without this, a later test's module-level import and
+    a fresh import (pickling, monkeypatching) disagree about which object is real.
+    """
+    saved = dict(sys.modules)
+    yield
+    sys.modules.update(saved)
+
+
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
         "batch_closure",
-        "curriculum_adapters",
         "elemental",
         "elemental_closure",
         "elemental_lambda",
-        "growing_pool",
         "lambda_sweep",
+        "mlx_pilot",
+        "mps_retest",
         "mtg183-elemental-eval",
+        "precision_ladder",
         "seat_comparison",
-        "state_representation_v7",
-        "state_representation_gpu",
         "tla_frontier",
         "tla_frontier_calibration",
         "tla_frontier_vocabulary",
-        "tla_pilot_v10",
         "two_seat",
         "value_readout_252",
     }
 
 
-def test_a_tracked_self_play_run_draws_every_named_metric(tmp_path: Path) -> None:
+def test_a_tracked_self_play_run_draws_every_named_metric(
+    tmp_path: Path, keep_imported_modules: None
+) -> None:
     stage = TrainSelfPlay(
         id="learn",
         operation="train_self_play",

@@ -1,5 +1,6 @@
 """Device-specific arithmetic boundaries that preserve learning semantics."""
 
+import torch
 from torch import Tensor, nn
 
 
@@ -15,12 +16,17 @@ def embedding_rows(embedding: nn.Embedding, rows: Tensor) -> Tensor:
     return embedding(rows)
 
 
-def float64_operand(tensor: Tensor) -> Tensor:
-    """Move MPS operands to the host, where float64 is supported.
+def buffer_on(module: nn.Module, name: str, device: torch.device) -> Tensor:
+    """An immutable lookup buffer of `module` on `device`, for admission checks.
 
-    MPS has no float64 tensors. The CPU transfer preserves autograd; callers
-    retain their explicit double casts and keep companion operands together.
-    Elsewhere this is a no-op relabel: the identical tensor, dtype and device
-    are returned, with no transfer or additional tensor operation.
+    CPU copies are cached per buffer object and version, so admitting CPU
+    observations never reads from an accelerator. The cache is not module state.
     """
-    return tensor.cpu() if tensor.device.type == "mps" else tensor
+    buffer = getattr(module, name)
+    if device.type != "cpu" or buffer.device.type == "cpu":
+        return buffer.to(device)
+    cache = module.__dict__.setdefault("_host_buffers", {})
+    key = (id(buffer), buffer._version)
+    if name not in cache or cache[name][0] != key:
+        cache[name] = (key, buffer.detach().cpu())
+    return cache[name][1]

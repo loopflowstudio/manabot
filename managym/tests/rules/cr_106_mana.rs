@@ -6,6 +6,34 @@ use managym::{
 
 use crate::support::game::*;
 
+/// CR 106.12a: a produced type is present regardless of its amounts or
+/// spending restrictions. Adding class totals here would overflow at 256.
+#[test]
+fn cr_106_12a_produced_types_ignore_amounts_and_restrictions() {
+    use managym::state::{
+        card::TriggeredManaOutput,
+        mana::{Mana, ManaRestriction},
+    };
+
+    let bonus = TriggeredManaOutput::OneProducedType;
+    assert!(bonus.alternatives(&Mana::default()).is_empty());
+    for slot in 0..6 {
+        let mut unit = Mana::default();
+        unit.mana[slot] = 1;
+        for (ordinary, restricted) in [(0, 1), (1, 0), (255, 1)] {
+            let mut produced = Mana::default();
+            produced.mana[slot] = ordinary;
+            let mut amounts = [0; 6];
+            amounts[slot] = restricted;
+            produced.add(&Mana::restricted_to(
+                ManaRestriction::spell(["Lesson"]),
+                amounts,
+            ));
+            assert_eq!(bonus.alternatives(&produced), vec![unit.clone()]);
+        }
+    }
+}
+
 /// CR 106.3 — Mana abilities can be activated to produce mana used for casting.
 #[test]
 fn cr_106_3_casting_uses_mana_abilities() {
@@ -103,7 +131,14 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
                 );
                 if expected {
                     let mut remaining = pool.clone();
-                    remaining.pay(&cost);
+                    let mut owed = cost.clone();
+                    while owed.mana_value > 0 {
+                        // This fixture chooses one valid path; the engine offers
+                        // every distinct unit instead of preferring a color.
+                        let choice = remaining.spending_choices(&owed).remove(0);
+                        remaining.spend(&choice.unit, &owed.purpose);
+                        owed = choice.remaining;
+                    }
                     assert_eq!(remaining.total(), pool.total() - generic as u16 - 1);
                     assert_eq!(remaining.mana[slot], 0);
                     assert!(remaining
@@ -121,25 +156,139 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
 /// unrelated cost. Clearing a pool loses both restricted and ordinary mana.
 #[test]
 fn audit_restricted_mana_never_pays_unrelated_costs() {
-    use managym::state::mana::{Mana, ManaCost, ManaUse};
+    use managym::state::mana::{Mana, ManaCost, ManaRestriction, SpendingContext};
 
-    let lesson = ManaUse::spell(["Lesson"]);
+    let lesson = ManaRestriction::spell(["Lesson"]);
     for slot in 0..6 {
         for eligible in [false, true] {
             let mut amounts = [0; 6];
             amounts[slot] = 1;
-            let mut pool = Mana::restricted_to(lesson, amounts);
+            let mut pool = Mana::restricted_to(lesson.clone(), amounts);
             let mut cost = ManaCost::parse("1");
             if eligible {
-                cost.purpose = lesson;
+                cost.purpose = SpendingContext::cast(["Lesson"], []);
             }
             assert_eq!(pool.can_pay(&cost), eligible);
+            let choices = pool.spending_choices(&cost);
+            assert_eq!(choices.len(), usize::from(eligible));
             if eligible {
-                pool.pay(&cost);
+                pool.spend(&choices[0].unit, &cost.purpose);
                 assert_eq!(pool.total(), 0);
             }
             pool.clear();
             assert_eq!(pool, Mana::default());
+        }
+    }
+}
+
+/// CR 106.6: a restriction may name any subtype. Mana for Ogre spells casts
+/// Gray Ogre and nothing else; mana for abilities of Scarecrow sources pays
+/// Scarecrow Guide's activation but not a Scarecrow spell. The observation
+/// keeps each restriction whole, and the policy input, whose columns name
+/// only Lesson, Shrine and Ally purposes, refuses it rather than drop it.
+#[test]
+fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
+    use managym::{
+        agent::{
+            action::Action,
+            observation::{Observation, RestrictedManaData},
+            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
+        },
+        state::{
+            game_object::PlayerId,
+            mana::{Mana, ManaRestriction},
+        },
+    };
+
+    use crate::support::{inspect::can_cast, play::command};
+
+    let ogre_spells = ManaRestriction::spell(["Ogre"]);
+    let mut s = five_color_unfunded_setup(&["Gray Ogre", "Lightning Strike"]);
+    let ogre = move_to_hand(&mut s, "Gray Ogre");
+    let strike = move_to_hand(&mut s, "Lightning Strike");
+    s.game_mut().state.players[0].mana_pool =
+        Mana::restricted_to(ogre_spells.clone(), [0, 0, 0, 3, 0, 0]);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, ogre));
+    assert!(!can_cast(&s, strike));
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let restricted = &observation.agent.restricted_mana;
+    assert_eq!(restricted.len(), 1);
+    assert_eq!(restricted[0].spells, ["Ogre"]);
+    assert_eq!(restricted[0].mana, [0, 0, 0, 3, 0, 0]);
+    assert!(matches!(
+        encode(&observation, &ObservationEncoderConfig::default()),
+        Err(ObservationEncodeError::Unrepresentable(state)) if state == "mana restricted to Ogre spells"
+    ));
+    // The columns sum Lesson, Shrine and Ally purposes, so only the classes
+    // they solve for encode: these two pools would share one encoding.
+    let class = |spells: &[&str], abilities: &[&str]| RestrictedManaData {
+        spells: spells.iter().map(|name| name.to_string()).collect(),
+        abilities: abilities.iter().map(|name| name.to_string()).collect(),
+        except_nonartifact_spells: false,
+        mana: [0, 0, 0, 1, 0, 0],
+    };
+    for (pool, refused) in [
+        (
+            [
+                class(&["Lesson"], &[]),
+                class(&["Shrine", "Ally"], &["Ally"]),
+            ],
+            "mana restricted to Ally or Shrine spells or abilities of Ally sources",
+        ),
+        (
+            [
+                class(&["Lesson", "Shrine"], &[]),
+                class(&["Ally"], &["Ally"]),
+            ],
+            "",
+        ),
+        (
+            [
+                class(&["Lesson", "Shrine"], &[]),
+                class(&["Ally", "Lesson"], &["Ally"]),
+            ],
+            "mana restricted to Ally or Lesson spells or abilities of Ally sources",
+        ),
+    ] {
+        let mut observation = observation.clone();
+        observation.agent.restricted_mana = pool.to_vec();
+        match encode(&observation, &ObservationEncoderConfig::default()) {
+            Err(ObservationEncodeError::Unrepresentable(state)) => assert_eq!(state, refused),
+            Ok(_) => assert!(refused.is_empty()),
+            Err(error) => panic!("{error}"),
+        }
+    }
+    command(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == ogre),
+    );
+    // The restricted pool pays the whole cost, so payment is automatic.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
+    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Stack));
+
+    for (restriction, activates) in [
+        (ManaRestriction::only([], ["Scarecrow"]), true),
+        (ManaRestriction::spell(["Scarecrow"]), false),
+    ] {
+        let mut s = five_color_unfunded_setup(&["Scarecrow Guide"]);
+        let guide = s.force_permanent_on_battlefield(0, "Scarecrow Guide");
+        s.game_mut().state.players[0].mana_pool =
+            Mana::restricted_to(restriction.clone(), [0, 0, 0, 0, 0, 1]);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let offered =
+            s.action_space().actions.iter().any(
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == guide),
+            );
+        assert_eq!(offered, activates, "{}", restriction.describe());
+        if activates {
+            command(
+                &mut s,
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == guide),
+            );
+            assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
+            command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+            assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("W"));
         }
     }
 }

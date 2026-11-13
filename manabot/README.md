@@ -5,7 +5,9 @@ training, and verification. You train *a* manabot; this package is how.
 
 The central loop is self-play: play a batch, turn game results into per-decision
 credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
-explains it, and [training.md](../docs/training.md) covers running it.
+explains it, [training.md](../docs/training.md) covers running it, and
+[training loops](../docs/training-loop.md) lists the updates we maintain,
+their pieces and a loop to copy.
 
 ## Quickstart
 
@@ -27,9 +29,11 @@ actual counts through Etude and exports admitted checkpoints. `--steps`,
 `--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
 explicit. This is a software smoke, not playing-strength evidence.
 
-The local recipe selects CUDA, then Apple MPS, when available and CPU otherwise.
-`--recipe baseline` requires CUDA or Apple MPS. `--device cpu|mps|cuda` overrides
-the local device; baseline rejects CPU. MPS self-play uses float32; evaluation
+The local recipe selects CUDA when available and CPU otherwise; Apple MPS is used
+only with an explicit `--device mps`. `--recipe baseline` requires CUDA or an
+explicit `--device mps`. `--device cpu|mps|cuda` overrides the local device;
+baseline rejects CPU. MPS self-play uses float32 and requires
+Torch 2.15 or newer; evaluation
 and search run on CPU. MPS process recovery, belief inputs and frozen opponents
 are unsupported. This makes no speed or strength claim.
 
@@ -71,7 +75,7 @@ catalog. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `MatchConfig.decklists` is `"open"` (default:
 both players know each other's main deck and sideboard) or `"closed"`; search
 players cannot play closed matches. `Match.swapped()` moves both lists together;
-`Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
+`Env.reset(options={"match": match})` also replaces the setup used by later resets.
 
 
 Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).
@@ -100,14 +104,11 @@ simulation retain pending Commands before execution. The same bounded replay com
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
-The current prospective TLA trophy pilot uses `experiments/tla_corpus.py`
-for the fixed admitted corpus and `experiments/tla_pilot_v10.py` for Etude
-training and paired evaluation. Its [v10 protocol](../experiments/protocols/tla-trophy-213-v10.md)
-selects 64 permanent rows per player and isolated
-[capacity recovery](../docs/training.md#game-failures), and requires fresh
-initialization. Historical runs retain their original protocols and execute
-from their pinned source; see the [pilot evidence](../experiments/tla-trophy-pilot.md).
-V10 has not yet produced a trained endpoint or completed paired evaluation.
+The TLA frontier run uses `experiments/tla_corpus.py` for the fixed admitted
+corpus and `experiments/tla_frontier.py` for Etude training and paired
+evaluation ([report](../experiments/tla-frontier-c5fba4-results.md)).
+The earlier trophy pilots execute from their pinned source; see the
+[pilot evidence](../experiments/tla-trophy-pilot.md).
 
 `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
@@ -115,11 +116,11 @@ contract. Stable population entry IDs distinguish events even when lists match;
 checkpoints still bind the world, never the population.
 
 Run its local evaluation from the training run's pinned source and native world.
-Local Etude evaluation needs an explicit directory for the pilot's replay evidence
+Local Etude evaluation needs an explicit directory for its replay evidence
 (rented jobs receive this directory from the launcher):
 
 ```sh
-ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot_v10.py --source r2://manabot/jobs
+ETUDE_OUTPUT_DIR="$PWD/.runs/tla-frontier-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_frontier.py --source r2://manabot/jobs
 ```
 
 ## Local-update search
@@ -193,6 +194,94 @@ remain independent, but a probability at a sampling threshold can turn that
 rounding into a different trajectory; replay uses the retained allocation and
 implementation identity.
 
+### Rollout evidence
+
+Search retains compact evidence by default. An audit run selects full evidence
+in the search config to keep a per-Command witness and viewer hash for every
+rollout step:
+
+```python
+player, observation_space = make_player(
+    {
+        "kind": "local_update",
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": file_sha256(checkpoint),
+        "config": {
+            "worlds": 16,
+            "depth": 20,
+            "decision_seconds": 30,
+            "rollout_evidence": "full",
+        },
+    },
+    seed=42,
+)
+```
+
+Omit `"rollout_evidence"` (or set it to `"compact"`) and
+`player.last_receipt.schema` is `regularized-local-update/v4`. Every rollout
+keeps its seed, signed value, terminal flag and Command count. Its
+`actor_observation_hashes` list is empty, and its branch audit records
+`audit: false` with empty tapes. During rollouts, search records no native
+witness for each Command and computes no viewer hash for each actor. Each
+Command it applies still increments a count, and the receipt checks that count
+against the native session's counters. Search still checks the root viewer,
+validates every sampled world, checks Command preconditions and keeps the same
+policy inputs and rollout budgets. Compact receipts cannot show that each
+rollout step matches the witness that full evidence would have recorded.
+`verify_replay` checks only the evidence a receipt retains.
+
+`rollout_evidence="full"` writes `regularized-local-update/v3` receipts, with
+the same `config_json` bytes that receipts had before the field existed. For
+the same checkpoint, root, history and seed, compact and full evidence choose
+the same Commands and produce the same tensors and values; they differ only in
+what the receipt retains.
+
+The evidence mode is part of the implementation and receipt identity. Readers
+accept historical v1–v4 receipts, and a v1–v3 receipt is always read as full
+evidence. A registration whose config omits `rollout_evidence` predates the
+field and also means full evidence, so frozen registrations keep their
+meaning; a new registration states the mode, and one selecting compact evidence
+declares `search_semantics.branch_audit: false`. Changing the default never
+relabels an existing experiment's receipts or registrations.
+
+### Native frontier encoding
+
+Each teacher keeps frontier buffers from
+`ObservationEncoder.allocate(capacity)` for its whole life. Native code writes
+every live branch's acting-player observation into these buffers with one call,
+`managym.encode_observations_into(envs, buffers, capacity)`, which returns each
+row's legal-action count. The buffers grow only when a frontier exceeds their
+capacity, and rows past the live frontier are left untouched. The tensor layout
+is the checkpoint's own, and every legal action is still required. The encoder
+leaves inference threads, rollout depth, legal support and the search config
+unchanged, and is not recorded in the receipt, so registered evaluation players
+use it without changing their identity.
+
+`LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
+`"native_encoder": false` beside `"config"` in a `make_player` spec, instead
+allocates a fresh batch for each frontier forward and fills its rows one branch
+at a time in Python. Use it to compare encoders; both write identical tensors.
+
+A teacher reuses its buffers between calls, so only one search may use it at a
+time; give each concurrent search its own teacher. An extension without the
+batch writer, or a buffer whose shape, dtype or writability does not match the
+selected observation space, raises before any inference. Search never falls
+back to the Python encoder: rebuild the extension, or select
+`native_encoder=False` explicitly.
+
+### Inference threads
+
+Search never changes Torch's thread settings. A process chooses its intra-op
+thread count once, before constructing a teacher, with
+`torch.set_num_threads(n)`. Evaluation game children always use one thread.
+`scripts/bench_local_update.py --inference-threads N` (default 1) sets the
+count before loading the model and records the requested and effective intra-op
+counts, plus the inter-op count, which it leaves unchanged. A single-process
+measurement with more threads does not predict throughput when several workers
+share the machine.
+
+### Budgets and failures
+
 The decision budget includes viewer-history work. Exceeding it raises
 `TimeoutError` with no target; increase `decision_seconds` or reduce `worlds` or
 `depth` before retrying. The 30-second example is an explicit budget, not a
@@ -222,7 +311,7 @@ For the semantic card model, use `ModelConfig(world="world")`. The ordinary
 model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
-public definition minima, not hidden hand slots, and v5 `decklists` rows hold
+public definition minima, not hidden hand slots, and `decklists` rows hold
 each known decklist's main, unseen, sideboard and remaining-sideboard counts. Selected compiled checkpoints
 without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
@@ -310,14 +399,6 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
-The prospective [growing-pool reference league](../experiments/protocols/growing-pool-245-v1.md)
-freezes authored decks, sampling tickets and held-out experience splits through
-the existing deck source, training job and replay evaluator. Its read-only
-`uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check`
-checks admission without playing games; v1 rejects the changed engine source.
-Task 04 owns the integrated freeze and actual pilot results. The frozen proxy
-is not evidence of learning.
-
 The reference league's TrainingJob enables private exposure capture through the
 ordinary native vector collector. Digest-bound game receipts preserve actual
 sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
@@ -357,12 +438,12 @@ and [the calibration command](../docs/experiments.md#freeze-step-targets).
 
 ## Shared effect inputs
 
-`ObservationConfig(policy_input_version=7)` encodes representable resolved effects
-once, before per-holder fact expansion. It cannot encode every composable layer
-payload. `env/shared_effects.py` mirrors the native
-128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
-subtypes, names, used abilities and copy exceptions still use `facts` (default
-128 rows). The model encodes each payload once and routes its contribution into
+The policy input encodes each resolved effect once, before per-holder fact
+expansion. `env/shared_effects.py` mirrors the native 128 × 18 header,
+4,096 × 3 detail and 2,048 × 2 membership buffers. Details carry structured
+granted, copy-exception and continuation programs, changed colors and
+keyword-counter timestamps. Local counters, subtypes, names, used abilities and
+copy exceptions use `facts` (default 512 rows). The model encodes each payload once and routes its contribution into
 named objects before attention; action focus remains addressable. Sum reduction
 preserves edge multiplicity and shared gradients; it is learned compression,
 not a proof of injective embeddings or improved play.
@@ -374,20 +455,10 @@ the unnormalized sum. Input features, object joins and encoder parameters retain
 their gradients, including duplicate memberships. An unused continuation module
 keeps absent gradients so Adam does not update its momentum spuriously.
 
-For new runs requiring structured granted, copy-exception or continuation
-programs, changed colors or keyword-counter timestamps, explicitly select
-`ObservationConfig(policy_input_version=8)` before constructing the model and
-collector. V8 keeps v7's header/member layouts, expands details to 4,096 × 3
-and defaults to 512 local fact rows. Both encoders reject unrepresentable
-v1–v7 layer payloads before inference, naming v8 as the required input.
-Defined-card eligibility does not guarantee policy-input compatibility. See
-[input v8](../docs/observation-and-model.md#composable-layer-input-v8) for a recipe
-example and the separate saved-checkpoint/world admission requirements.
-
-The version is explicit in saved observation/configuration identities. Fresh
-construction remains v6/512; frozen v1–v7 inputs and omitted historical fields
-retain their meanings. Historical captures without shared provenance cannot be
-promoted to v7 by guessing a source/controller. Text representation
+The input version is explicit in saved observation and configuration
+identities, and main loads only v9; see
+[policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
+and the saved-checkpoint and world admission requirements. Text representation
 `manabot-text-6` renders each native payload once with exact public source and
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory.
@@ -444,8 +515,8 @@ The learned compound-decision decoder has been removed; checkpoints and
 regimes that select it fail validation. See
 [compound decisions](../docs/training.md#compound-decisions-removed).
 
-Self-play update diagnostics live only in the run's Etude metrics;
-TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
+Self-play update diagnostics live in the run's Etude metrics and referenced
+outcome tables; TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
 Optional [public recent-event input](../docs/observation-and-model.md#policy-inputs) uses the existing
@@ -509,22 +580,21 @@ or caching trainable outputs across updates. Completed states return to their
 original definition rows. These counts describe representation cost, not
 observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
-On explicit inputs v8 and v9, fresh models (`ModelConfig.record_vocabulary`,
+Fresh models (`ModelConfig.record_vocabulary`,
 default `catalog`) embed fact and shared-effect ids through the same token
-embedding. Native `learning_record_names` lists every counter kind, color,
+embedding. Native `record_vocabulary` lists every counter kind, color,
 subtype, keyword, modification, set name and combat restriction the encoders
 hash. Each reads the row of the card token for the same concept (a granted
 `flying` and a printed `Keyword::flying` share one row) or a row appended after
 the card tokens. Captured program tokens read their card-token rows; integers
 and booleans read one row per kind plus their exact value. Fact and effect
 sources read the card encoder's row for that definition, and ability or frame
-ordinals are numbers. An id outside the vocabulary fails. V8+ world checkpoints
+ordinals are numbers. An id outside the vocabulary fails. World checkpoints
 that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
 (elsewhere both values build the same model and omission reads as the default): 4096
-learned rows per id column, which held 80% of a w64 L2 v9 model (1,958,402
+learned rows per id column, which held 80% of a w64 L2 model (1,958,402
 parameters; 412,482 with catalog ids) and 42% at w160 L8 h8 (9,470,402;
-5,605,602). Inputs before v8 and models without a world keep only the hashed
-layout.
+5,605,602). Models without a world keep only the hashed layout.
 
 `manabot.semantic.policy_catalog` owns explicit native admission. Policy
 construction checks the engine's learning catalog against the world pool's
@@ -566,9 +636,20 @@ training, experiment scheduling or reports, even when loading a frozen model.
 The package-boundary tests import every simulation module and play a checkpoint
 with those packages blocked.
 
-- `model/`: network construction/inference and portable checkpoint admission.
-  `model.checkpoint.save_checkpoint` and `load_checkpoint` own policy files;
-  their serialized historical keys remain unchanged.
+- `policy/`: the framework-free policy contract: host preparation, bucket
+  selection, the safetensors checkpoint container and the backend Protocols.
+  It imports no array framework ([policy contract](policy/README.md)).
+- `backends/<framework>/`: one folder per array framework with the same files
+  (`policy.py`, `rl.py`, `learner.py`, `rollout.py`, `arrays.py`,
+  `checkpoint.py`);
+  `backends/torch/` is the reference and `backends/parity.py` checks the others
+  against it ([backends](backends/README.md)).
+  `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
+  files: `save_checkpoint` writes a `.pt` file, whose serialized historical
+  keys remain unchanged, and `load_checkpoint` reads either that or the shared
+  container.
+- `model/`: the torch model's components, observation admission and
+  inference preparation, architecture receipts and world binding.
 - `sim/`: registered players, bounded game execution, replay, native card evidence,
   search and batched games.
 - `training/`: regime execution, seat-routed collection, learning rules,
@@ -577,8 +658,14 @@ with those packages blocked.
   `execution.py` sequences stages and owns the run lifecycle.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
   complete-game accounting.
-- `training/learning/`: Learner, optimization rules, per-seat returns, sample
-  selection and numerical health.
+- `training/updates/`: an update learns from one collected batch. The damped
+  policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
+  and their host-side pieces: numerical health and selection diagnostics.
+  Each takes a backend module as its first argument and does its array math
+  through it; recipes pass `manabot.backends.torch`
+  ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
+- `training/loops/`: a loop keeps playing and updating until it is done; a
+  one-page example (`minimal.py`).
 - `training/state/`: policy admission, exact learning snapshots, recovery and
   retained game-failure state.
 - `belief/`: viewer histories, world distributions and belief models;
@@ -641,7 +728,7 @@ atomically checks origin, reset generation and current captured facts before
 executing the ordinary Command. A cloned Env needs its own capture. Retained
 JSON can be rendered with `render_decision` but cannot authorize submission.
 Capture/text v4 labels each ordered target’s retained “Legal when resolution
-began” fact; historical v3 captures retain unknown eligibility. Policy input v4
+began” fact; historical v3 captures retain unknown eligibility. The policy input
 uses the same native fact, separately from current object presence.
 
 Run the local response-stub proof with

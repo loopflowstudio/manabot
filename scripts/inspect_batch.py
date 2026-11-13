@@ -16,16 +16,17 @@ import argparse
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline_test
-from manabot.training.learning.damped_policy import _targets
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates.damped_policy import _targets, update_damped_iteration
 
 STREAMS = 2
 
@@ -53,7 +54,9 @@ def _trajectories(ends: np.ndarray) -> list[range]:
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = _targets(learner, batch, learning)
+    targets = _targets(
+        torch_backend, learner, AdmittedRollout(learner.agent, batch), learning
+    )
     advantages = targets.advantages.flatten().numpy()
     value_targets = targets.values.flatten().numpy()
     kept = targets.selected.flatten().numpy()
@@ -101,11 +104,10 @@ def main() -> None:
         opponent_mode="self",
     )
     learner = Learner(agent, "cpu", minibatch_rows=STREAMS)
-    rng = np.random.default_rng(args.seed)
     try:
         for iteration in range(1, args.updates + 1):
             batch = collector.collect(agent, 64)
-            update_iteration(learner, batch, learning, 0.0, rng, iteration=iteration)
+            update_damped_iteration(torch_backend, learner, batch, learning, iteration)
         _report(collector.collect(agent, 64), learner, learning, args.rows)
     finally:
         collector.close()

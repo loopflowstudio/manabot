@@ -12,13 +12,16 @@ jobs:
   integration:
     name: Integration (${{ inputs.runner }}, ${{ matrix.group }})
     runs-on: ${{ inputs.runner }}
-    # Each group runs on its own runner after the shared install and extension
-    # build (~2.5 min); balance groups by measured pytest time so no single
-    # group sets the critical path (core ~10 min, evaluation ~9, long ~6).
+    # Balance groups for an 8-minute job budget, including install and build
+    # (docs/development.md, Job time). Include new tests by file or directory.
     strategy:
       fail-fast: false
       matrix:
-        group: [core, evaluation, long]
+        group: [model, training, recovery, experiment, evaluation, evaluation-long]
+    env:
+      # Sync dependencies once, then build managym below. Later syncs would
+      # rebuild the engine.
+      UV_NO_SYNC: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -34,70 +37,100 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
-
-      - name: Cache uv downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+          python-version: '3.13'
 
       - name: Install dependencies
-        run: uv sync --python 3.12 --extra dev --extra play
+        run: |
+          uv sync --python 3.13 --no-install-package managym \
+            --no-default-groups --group play-runtime \
+            --extra dev --extra play --extra notebook --extra artifacts \
+            --extra reports --extra llm --extra evaluation
 
       - name: Build managym extension
-        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
+        run: uv run maturin develop --features python --manifest-path managym/Cargo.toml
 
       - name: Setup Node for offline report tests
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Integration tests
-        if: matrix.group == 'core'
+      - name: Environment and model tests
+        if: matrix.group == 'model'
         run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
+          uv run pytest -n logical --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
             tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
             tests/academy/test_trigger_order.py \
             tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
             tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py tests/sim/test_search_command_evidence.py \
-            tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py tests/training/test_scenario_validation.py \
-            tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py tests/training/test_state_representation_study.py \
-            tests/verify/test_observation_parity.py::test_v5_encodes_every_observed_permanent_and_card_field_in_parity \
-            tests/verify/test_observation_parity.py::test_versioned_fact_capacity_preserves_provenance_and_rejects_overflow \
-            tests/verify/test_observation_parity.py::test_v6_vector_buffers_derive_fact_capacity \
-            tests/verify/test_observation_parity.py::test_v5_source_dependent_duration_matches_native_authority \
+            tests/training/test_scenario_validation.py \
+            tests/belief/test_sampling_report.py \
+            tests/bench/test_structured_policy_benchmark.py
+
+      - name: Training tests
+        if: matrix.group == 'training'
+        run: |
+          uv run pytest -n logical --durations=20 \
             tests/training/test_matchups.py tests/training/test_training_decks.py tests/training/test_tla_corpus.py \
-            tests/training/test_step_cadence.py tests/training/test_learning_state.py \
+            tests/training/test_deck_building_foundations.py \
             tests/training/test_numerical_health.py tests/training/test_ataraxos_gradients.py \
+            tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py \
             tests/training/test_ataraxos_regime.py tests/training/test_rl_objectives.py tests/training/test_collection.py \
             tests/training/test_action_cutoff.py tests/training/test_packed_action_rollouts.py \
             tests/training/test_credit_assignment.py \
             tests/training/test_monitoring.py \
             tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \
-            tests/training/test_active_training.py tests/training/test_active_recovery.py \
+            tests/training/test_active_training.py \
             tests/training/test_process_tree_rss.py \
-            tests/training/test_precision.py tests/training/test_training_throughput_sizes.py tests/training/test_throughput_c1_readings.py \
+            tests/training/test_precision.py tests/training/test_training_throughput_sizes.py \
             tests/training/test_experiment_data.py \
             tests/training/test_checkpoint_queue.py \
             tests/training/test_experiments.py tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_study.py \
-            tests/belief/test_sampling_report.py \
-            tests/bench/test_structured_policy_benchmark.py
+            tests/training/test_batch_closure.py tests/training/test_frozen_opponent.py \
+            tests/training/test_outcome_tables.py
 
-      - name: Two-seat and Etude evaluation integration
+      - name: Recovery and cadence tests
+        if: matrix.group == 'recovery'
+        run: |
+          uv run pytest -n logical --durations=20 \
+            tests/training/test_recovery.py tests/training/test_active_recovery.py \
+            tests/training/test_step_cadence.py tests/training/test_learning_state.py
+
+      - name: Experiment runner, monitoring and verification tests
+        if: matrix.group == 'experiment'
+        run: |
+          uv run pytest -n logical --durations=20 \
+            tests/training/test_experiment_runner.py \
+            tests/training/test_monitor_evaluation.py \
+            tests/training/test_rl_runtime.py \
+            tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py \
+            tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py \
+            tests/verify/test_observation_parity.py::test_encodes_every_observed_permanent_and_card_field_in_parity \
+            tests/verify/test_observation_parity.py::test_fact_capacity_fills_exactly_and_rejects_overflow \
+            tests/verify/test_observation_parity.py::test_vector_buffers_derive_fact_capacity
+
+      - name: Two-seat, Elemental and Etude evaluation integration
         if: matrix.group == 'evaluation'
         run: |
-          uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
+          uv run pytest -n logical --durations=20 \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
             tests/training/test_adaptive_sampler.py tests/training/test_adaptive_two_seat.py \
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
-            tests/training/test_growing_pool_protocol.py tests/training/test_growing_pool_analysis.py tests/training/test_training_exposure.py \
-            tests/eval/ -q
+            tests/training/test_elemental_uniform.py \
+            tests/eval/ -q \
+            --ignore=tests/eval/test_elemental_long_report.py --ignore=tests/eval/test_elemental_long_eval.py \
+            --ignore=tests/eval/test_card_evaluation.py --ignore=tests/eval/test_mtg186_cards.py \
+            --ignore=tests/eval/test_learning_signal.py --ignore=tests/eval/test_authored_matchup.py
+
+      - name: Long evaluation matches
+        if: matrix.group == 'evaluation-long'
+        run: |
+          uv run pytest -n logical --durations=20 \
+            tests/eval/test_elemental_long_report.py tests/eval/test_elemental_long_eval.py \
+            tests/eval/test_card_evaluation.py tests/eval/test_mtg186_cards.py \
+            tests/eval/test_learning_signal.py tests/eval/test_authored_matchup.py
 
       - name: Evaluation Perf report proof
         if: matrix.group == 'evaluation'
@@ -108,19 +141,9 @@ jobs:
 
       - name: Enum smoke test
         if: matrix.group == 'evaluation'
-        run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
+        run: uv run python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 
       - name: Training smoke test
         if: matrix.group == 'evaluation'
         run: |
-          uv run --python 3.12 manabot train --out .runs/ci-local-smoke
-
-      - name: Long integration tests
-        if: matrix.group == 'long'
-        run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 \
-            tests/training/test_experiment_runner.py \
-            tests/training/test_monitor_evaluation.py \
-            tests/training/test_batch_closure.py tests/training/test_credit_assignment.py \
-            tests/training/test_frozen_opponent.py tests/training/test_rl_runtime.py \
-            tests/training/test_recovery.py tests/training/test_elemental_uniform.py
+          uv run manabot train --out .runs/ci-local-smoke

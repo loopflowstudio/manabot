@@ -6,7 +6,7 @@ honestly, and are understood well enough that we know why they improve or
 fail, repeated until a bounded superhuman claim is earned.
 
 This document says what we are doing now, what we know, what we plan to do
-later, and how we judge results. Preregistered predictions, results and
+later, and how we judge results. Questions, results and
 provenance live in [`experiments/`](../experiments/README.md); the system
 design is in the [README](../README.md#the-system). Live task
 status lives in Linear, not here.
@@ -74,8 +74,12 @@ they guide the next experiment rather than settle a method.
 
 Belief sampling and local search run end to end. In their
 pilots, 840 held-out sampled hands had no support violations and local search
-replayed 183 commands with no mismatch. Neither has shown a strength gain over
-the policy alone yet.
+replayed 183 commands with no mismatch. On MTG-183's frozen w13 policy,
+magnetic-mirror local search with playable uniform hand sampling beat the
+policy's own sampled play by +12.5 to +17.4 points from 4 to 16 shuffles, and
+beat PUCT-1024 at lower cost; knowing the true hand added at most +5.2 points
+([mirror search](../experiments/search-mirror.md), exploratory, one policy).
+The learned belief sampler has not yet been tested in search.
 
 ### Earlier: the search era
 
@@ -137,7 +141,7 @@ Constraints that apply throughout:
   measured rather than assumed.
 
 The protocols for sampler quality, search with learned sampling and exploiters
-are preregistered
+are written down
 ([transfer protocols](../experiments/ataraxos-transfer.md)).
 
 ### Training dynamics
@@ -259,8 +263,9 @@ Build the league only as far as the current population justifies:
 5. **Wider anchors:** add fixed deck suites and human cohorts only after the
    corresponding world, information, and compute contracts are stable.
 
-Promotion requires a preregistered rating improvement at fixed compute plus no
-material integrity or competency regression. Elo chooses promising builds;
+Promotion follows a rating improvement at fixed compute with no material
+integrity or competency regression, judged on the matches played rather than
+on a bar set before them. Elo chooses promising builds;
 the payoff matrix and exploiters decide whether the gain is robust.
 
 ### Experiment principles
@@ -331,7 +336,7 @@ prerequisites for the first bounded play-policy claim.
 | Source | Owns |
 | --- | --- |
 | This document | What we are doing, what we know, what we plan, and how we measure |
-| [`experiments/`](../experiments/README.md) | Preregistrations, immutable reports, raw evidence links, and reproduction |
+| [`experiments/`](../experiments/README.md) | Questions, immutable reports, raw evidence links, and reproduction |
 | [`README.md`](../README.md) | System design, ownership and the enforced contracts |
 | [`WORLDS.md`](../WORLDS.md) | Observation/action worlds and artifact compatibility |
 | Linear | Projects, Tasks, owners, dependencies, and live execution state |

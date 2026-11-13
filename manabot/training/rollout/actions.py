@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 
-from manabot.model.policy_distribution import (
+from manabot.backends.torch.rl import (
     NumericalError,
     check_behavior,
     legal_mask,

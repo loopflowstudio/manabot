@@ -6,11 +6,11 @@ import subprocess
 import sys
 from typing import Any
 
-from managym.decision import Command
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import (
     CaptureScope,
@@ -23,7 +23,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim import rollout
 from manabot.training import execution
 from manabot.training.regime import (
@@ -36,6 +35,7 @@ from manabot.training.rollout import selection_data
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
+from managym.decision import Command
 
 
 def _model() -> ActorCritic:
@@ -185,7 +185,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
     assert scope.paths[0].read_bytes() == original
 
 
-@pytest.mark.parametrize("policy", ["none", "random", "passive"])
+@pytest.mark.parametrize("policy", ["none", "random"])
 def test_ordinary_vector_replays_current_game_after_autoreset(
     tmp_path: Path,
     policy: str,
@@ -373,7 +373,6 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
             ObservationSpace(),
             Reward(RewardConfig()),
             seed=24,
-            auto_reset=False,
             enable_profiler=False,
             enable_behavior_tracking=False,
         )

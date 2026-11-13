@@ -17,6 +17,7 @@ import torch
 
 from experiments import learning_signal, value_readout_252
 from experiments.learning_signal import ELEMENTAL_PAIRS
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
@@ -26,7 +27,6 @@ from manabot.infra.config import (
     RewardConfig,
     ValueAggregation,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_agent
 from manabot.training.rollout.collection import SeatRoutedCollector
 

@@ -20,10 +20,12 @@ import pytest
 import torch
 import torch.nn as nn
 
+from manabot.backends.torch.policy import ActorCritic
+
 # Local imports
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -60,13 +62,13 @@ def agent(
 
 @pytest.fixture
 def real_observation(
-    observation_space: ObservationSpace,
+    observation_space: ObservationSpace, agent: ActorCritic
 ) -> Generator[Dict[str, torch.Tensor], None, None]:
     """
     Create a real observation using a vector env and the real observation encoder.
 
-    Returns a dictionary of torch.Tensors with a batch dimension (here, batch_size=2)
-    as produced by the real environment.
+    Returns the batch (batch_size=2) as produced by the real environment,
+    admitted for `agent`.
     """
     # Local imports
     from manabot.env.match import Match, Reward
@@ -82,10 +84,10 @@ def real_observation(
         observation_space=observation_space,
         reward=reward,
         device="cpu",
-        opponent_policy="passive",
+        opponent_policy="random",
     )
     obs, _ = vec_env.reset()
-    yield obs
+    yield admit_observation(agent, obs)
     vec_env.close()
 
 
@@ -136,7 +138,14 @@ def test_gradient_flow(agent: ActorCritic, real_observation: Dict[str, torch.Ten
     loss = logits.mean() + value.mean()
     loss.backward()
 
+    # Program and shared-effect reducers keep absent (never zero) gradients
+    # until an observation carries a program or an effect record; an opening
+    # observation has neither.
+    unused = ("facts.program_", "shared_effects.")
     for name, param in agent.named_parameters():
+        if name.startswith(unused):
+            assert param.grad is None, f"Unexpected gradient for parameter {name}"
+            continue
         assert param.grad is not None, f"No gradient for parameter {name}"
         assert not torch.isnan(param.grad).any(), f"NaN gradient in parameter {name}"
         assert not torch.isinf(param.grad).any(), (

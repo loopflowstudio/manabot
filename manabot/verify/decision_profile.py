@@ -12,13 +12,13 @@ Plays full games through the manabot Env and records, per game:
 Evaluation is seat-balanced by default (C0.5 protocol amendment A1): the hero
 alternates between player seat 0 (on the play) and seat 1 (on the draw), and
 win rates are reported overall and per seat. Multi-init untrained baselines
-(amendment A2) via --untrained-inits / --baseline-inits.
+(amendment A2) via --untrained-inits.
 
 Run as a script:
 
-    python -m manabot.verify.decision_profile \
-        --games-random 400 --games-untrained 400 --games-baseline 400 \
-        --untrained-inits 5 --baseline-inits 3 --deck standard \
+    uv run python -m manabot.verify.decision_profile \
+        --games-random 400 --games-untrained 400 \
+        --untrained-inits 5 --deck standard \
         --seed 0 --out scratch/exp00c-standard.json
 """
 
@@ -39,6 +39,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
+from manabot.model.admission import admit_observation
 from manabot.verify.games import (
     INTERACTIVE_DECK,
     STANDARD_DECK,
@@ -91,7 +92,7 @@ class GameProfile:
 
 
 def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
 
     torch.manual_seed(seed)
     agent = ActorCritic(observation_space, config.agent)
@@ -101,10 +102,13 @@ def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
 
 def _agent_policy(agent) -> Callable[[dict[str, np.ndarray]], int]:
     def policy(obs: dict[str, np.ndarray]) -> int:
-        tensor_obs = {
-            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-            for key, value in obs.items()
-        }
+        tensor_obs = admit_observation(
+            agent,
+            {
+                key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
+                for key, value in obs.items()
+            },
+        )
         with torch.no_grad():
             action, _, _, _ = agent.get_action_and_value(
                 tensor_obs, deterministic=False
@@ -165,7 +169,6 @@ def play_profile_games(
         observation_space,
         reward,
         seed=seed,
-        auto_reset=False,
         enable_profiler=False,
         enable_behavior_tracking=False,
     )
@@ -459,12 +462,6 @@ def main() -> None:
         default=200,
         help="untrained-vs-random games (E0a + E0c)",
     )
-    parser.add_argument(
-        "--games-baseline",
-        type=int,
-        default=200,
-        help="untrained-vs-passive games (E0c)",
-    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--deck",
@@ -486,12 +483,6 @@ def main() -> None:
         help="number of fresh untrained inits for "
         "untrained-vs-random (each plays "
         "--games-untrained games)",
-    )
-    parser.add_argument(
-        "--baseline-inits",
-        type=int,
-        default=1,
-        help="number of fresh untrained inits for untrained-vs-passive",
     )
     parser.add_argument(
         "--out", type=str, default=None, help="write full JSON results to this path"
@@ -531,24 +522,6 @@ def main() -> None:
                     agent_seed=agent_seed,
                 )
             )
-    if args.games_baseline > 0:
-        for init in range(args.baseline_inits):
-            agent_seed = args.seed + 200_000 + 1_000 * init
-            matchups.append(
-                run_matchup(
-                    label=(
-                        f"untrained-vs-passive ({args.deck}, init seed {agent_seed})"
-                    ),
-                    hero="untrained",
-                    villain="passive",
-                    num_games=args.games_baseline,
-                    seed=args.seed + 200_000 + 1_000 * init,
-                    deck=deck,
-                    seat_balanced=args.seat_balanced,
-                    agent_seed=agent_seed,
-                )
-            )
-
     for matchup in matchups:
         _print_summary(matchup["label"], matchup["summary"])
 

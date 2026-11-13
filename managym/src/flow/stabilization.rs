@@ -28,6 +28,7 @@ impl Game {
             // deterministic because events, trigger sources, and enqueue
             // order all have canonical sequence order.
             self.process_game_events();
+            self.check_state_triggers();
 
             // CR 704.3 — after any SBA is performed, check the complete set
             // again before putting waiting triggers on the stack.

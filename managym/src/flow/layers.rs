@@ -7,12 +7,12 @@ use crate::{
     state::{
         ability::{Condition, Effect, EffectiveTrigger},
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keyword, Keywords,
-            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, CardType, Keyword, Keywords, LayerValue,
+            PowerCda, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
-        game_object::{ObjectId, PermanentId, PlayerId},
-        mana::Mana,
+        game_object::{Object, ObjectKind, PermanentId, PlayerId, PublicId},
+        mana::{Mana, SpendingContext, SpendingObject},
         permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         subtype::is_creature_type,
@@ -62,7 +62,7 @@ impl Layer {
 #[derive(Clone, Debug, PartialEq)]
 struct StaticEntry {
     key: Vec<usize>,
-    timestamp: ObjectId,
+    timestamp: PublicId,
     ability: StaticAbility,
 }
 #[derive(Clone, Debug, PartialEq)]
@@ -86,7 +86,7 @@ pub(super) struct Context<'a> {
 struct Node {
     source: PermanentId,
     key: Vec<usize>,
-    timestamp: ObjectId,
+    timestamp: PublicId,
     targets: Option<Vec<PermanentId>>,
     plan: Arc<SourcePlan>,
 }
@@ -112,9 +112,9 @@ impl std::ops::Deref for Node {
 /// card keeps definition identity valid even when a fixture/copy detaches it.
 #[derive(Clone)]
 pub(super) struct SourceSeed {
-    card: Card,
-    incarnation: ObjectId,
-    timestamp: ObjectId,
+    source: Object,
+    incarnation: PublicId,
+    timestamp: PublicId,
     object: Arc<LayerObject>,
     nodes: Vec<Node>,
 }
@@ -141,6 +141,9 @@ impl ReadSet {
         }
         if p.supertype.is_some() {
             self.fields |= SUPERTYPES;
+        }
+        if !p.colors_any.is_empty() {
+            self.fields |= COLORS;
         }
         if p.flying {
             self.fields |= KEYWORDS;
@@ -228,7 +231,7 @@ impl Node {
     fn resolved(
         source: PermanentId,
         key: Vec<usize>,
-        timestamp: ObjectId,
+        timestamp: PublicId,
         part: (Layer, Operation),
     ) -> Self {
         Self {
@@ -355,22 +358,26 @@ impl<'a> Context<'a> {
                 continue;
             };
             let id = PermanentId(slot);
-            let card = &game.state.cards[p.card];
+            let source = &game.state.objects[p.object];
             let reusable = seeds[slot].as_ref().is_some_and(|seed| {
-                seed.card.shares_definition_with(card)
+                seed.source.shares_definition_with(source)
                     && seed.incarnation == p.id
                     && seed.timestamp == p.timestamp
             });
             if !reusable {
-                seeds[slot] = Some(Arc::new(context.seed(id, p, card)));
+                seeds[slot] = Some(Arc::new(context.seed(id, p, source)));
             }
             let seed = seeds[slot].as_ref().unwrap();
             context.objects.insert(id, seed.object.clone());
             known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
-            for node in &seed.nodes {
-                context.reads_mana |= node.reads.mana;
-                context.reads_tapped |= node.reads.tapped;
-                nodes.push(node.clone());
+            // A phased-out permanent's static abilities apply to nothing
+            // (CR 702.26b); its own view still takes the records on it.
+            if !game.is_phased_out(id) {
+                for node in &seed.nodes {
+                    context.reads_mana |= node.reads.mana;
+                    context.reads_tapped |= node.reads.tapped;
+                    nodes.push(node.clone());
+                }
             }
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
@@ -456,9 +463,10 @@ impl<'a> Context<'a> {
             }
             if layer == Layer::ModifyPower {
                 for (&id, object) in &mut context.objects {
-                    let count = game
-                        .live_permanent(id)
-                        .counter_count(CounterKind::PlusOnePlusOne);
+                    // CR 613.4c: +1/+1 and -1/-1 counters apply together.
+                    let permanent = game.live_permanent(id);
+                    let count = permanent.counter_count(CounterKind::PlusOnePlusOne)
+                        - permanent.counter_count(CounterKind::MinusOneMinusOne);
                     if count != 0 {
                         let view = Arc::make_mut(&mut Arc::make_mut(object).view);
                         view.power += count;
@@ -469,32 +477,32 @@ impl<'a> Context<'a> {
         }
         for (&id, object) in &mut context.objects {
             if !retain_sources || !Arc::ptr_eq(object, &seeds[id.0].as_ref().unwrap().object) {
-                let card = &game.state.cards[game.live_permanent(id).card];
-                Self::finish_object(Arc::make_mut(object), card);
+                let record = &game.state.objects[game.live_permanent(id).object];
+                Self::finish_object(Arc::make_mut(object), record);
             }
         }
         context
     }
 
     /// The copiable object and bound static plans of one live incarnation.
-    fn seed(&self, id: PermanentId, permanent: &Permanent, card: &Card) -> SourceSeed {
+    fn seed(&self, id: PermanentId, permanent: &Permanent, source: &Object) -> SourceSeed {
         #[cfg(feature = "benchmark")]
         crate::benchmark_layers::record(|m| m.source_plans += 1);
         let mut object = LayerObject {
             view: Arc::new(Characteristics {
-                name: card.name.clone(),
-                subtypes: card.subtypes.clone(),
-                types: card.types.clone(),
-                colors: card.colors(),
-                mana_abilities: card.mana_abilities.clone(),
-                triggered_mana_abilities: card.triggered_mana_abilities.clone(),
-                is_legendary: card.is_legendary(),
-                keywords: card.keywords,
-                ward: card.ward().cloned(),
-                power: card.power.unwrap_or(0),
-                toughness: card.toughness.unwrap_or(0),
-                activated_abilities: card.activated_abilities.clone(),
-                triggered_abilities: card
+                name: source.name.clone(),
+                subtypes: source.subtypes.clone(),
+                types: source.types.clone(),
+                colors: source.colors(),
+                mana_abilities: source.mana_abilities.clone(),
+                triggered_mana_abilities: source.triggered_mana_abilities.clone(),
+                is_legendary: source.is_legendary(),
+                keywords: source.keywords,
+                ward: source.ward().cloned(),
+                power: source.power.unwrap_or(0),
+                toughness: source.toughness.unwrap_or(0),
+                activated_abilities: source.activated_abilities.clone(),
+                triggered_abilities: source
                     .abilities
                     .iter()
                     .cloned()
@@ -505,7 +513,7 @@ impl<'a> Context<'a> {
                     .collect(),
                 ..Default::default()
             }),
-            statics: card
+            statics: source
                 .statics
                 .iter()
                 .enumerate()
@@ -516,14 +524,14 @@ impl<'a> Context<'a> {
                 })
                 .collect(),
         };
-        Self::finish_object(&mut object, card);
+        Self::finish_object(&mut object, source);
         let nodes = object
             .statics
             .iter()
             .filter_map(|entry| self.node(id, entry))
             .collect();
         SourceSeed {
-            card: card.clone(),
+            source: source.clone(),
             incarnation: permanent.id,
             timestamp: permanent.timestamp,
             object: Arc::new(object),
@@ -531,9 +539,9 @@ impl<'a> Context<'a> {
         }
     }
 
-    fn finish_object(object: &mut LayerObject, card: &Card) {
+    fn finish_object(object: &mut LayerObject, record: &Object) {
         let view = Arc::make_mut(&mut object.view);
-        view.is_animated = view.is_creature() && !card.types.is_creature();
+        view.is_animated = view.is_creature() && !record.types.is_creature();
         view.creature_types = if view.is_creature() {
             view.subtypes
                 .iter()
@@ -545,6 +553,31 @@ impl<'a> Context<'a> {
         };
         view.creature_types.sort();
         view.creature_types.dedup();
+        // Activations are paid as abilities of this source (CR 106.6), read
+        // from its final subtypes; an unchanged source keeps sharing its
+        // earlier snapshot.
+        if !view.activated_abilities.is_empty() {
+            let shared = view
+                .activated_abilities
+                .iter()
+                .map(|ability| &ability.mana_cost.purpose)
+                .find(|purpose| {
+                    matches!(purpose, SpendingContext::Activate {
+                        zone: ZoneType::Battlefield,
+                        source,
+                    } if source.describes(&view.subtypes))
+                })
+                .cloned();
+            let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
+                zone: ZoneType::Battlefield,
+                source: SpendingObject::new(view.subtypes.iter().map(String::as_str)),
+            });
+            for ability in &mut view.activated_abilities {
+                if ability.mana_cost.purpose != purpose {
+                    ability.mana_cost.purpose = purpose.clone();
+                }
+            }
+        }
         view.static_abilities = object
             .statics
             .iter()
@@ -555,6 +588,9 @@ impl<'a> Context<'a> {
         // Occurrence provenance preserves duplicate grants, including statics
         // discovered during layer 6 that start applying in a later layer.
         for (&id, object) in &self.objects {
+            if self.game.is_phased_out(id) {
+                continue;
+            }
             for entry in &object.statics {
                 if known.insert(entry.key.clone()) {
                     if let Some(node) = self.node(id, entry) {
@@ -760,14 +796,14 @@ impl<'a> Context<'a> {
     fn value(&self, value: &LayerValue, id: PermanentId) -> i32 {
         match value {
             LayerValue::Fixed(n) => *n,
-            LayerValue::ManaValue => self.game.state.cards[self.game.live_permanent(id).card]
+            LayerValue::ManaValue => self.game.state.objects[self.game.live_permanent(id).object]
                 .mana_value_cost()
                 .map_or(0, |m| i32::from(m.mana_value)),
             LayerValue::GraveyardCardTypes { offset } => {
                 [PlayerId(0), PlayerId(1)]
                     .into_iter()
-                    .flat_map(|p| self.game.state.zones.zone_cards(ZoneType::Graveyard, p))
-                    .flat_map(|id| self.game.state.cards[*id].types.types.iter())
+                    .flat_map(|player| self.game.state.zone_cards(ZoneType::Graveyard, player))
+                    .flat_map(|card| self.game.state.objects[card].types.types.iter())
                     .collect::<BTreeSet<_>>()
                     .len() as i32
                     + offset
@@ -922,8 +958,8 @@ impl<'a> Context<'a> {
             }
             StaticAbility::AttachedHas(ability) => {
                 plan.scope = StaticScope::Attached;
-                let card = &self.game.state.cards[self.game.live_permanent(source).card];
-                let index = card
+                let object = &self.game.state.objects[self.game.live_permanent(source).object];
+                let index = object
                     .attached_grants()
                     .position(|a| a == ability)
                     .unwrap_or(0);
@@ -1159,16 +1195,19 @@ pub(super) fn matches_view(
     let Some(permanent) = game.state.permanents[id].as_ref() else {
         return false;
     };
-    let card = &game.state.cards[permanent.card];
-    let mana_value = card.mana_value_cost().map_or(0, |m| m.mana_value);
-    (!p.namesake || source_name == Some(view.name.as_str()))
+    let object = &game.state.objects[permanent.object];
+    let mana_value = object.mana_value_cost().map_or(0, |m| m.mana_value);
+    // A permanent is on the battlefield, never a graveyard card.
+    !p.from_battlefield_this_turn
+        && (!p.namesake || source_name == Some(view.name.as_str()))
         && (!p.flying || view.keywords.has(Keyword::Flying))
         && (!p.no_counters || !permanent.has_counters())
         && (!p.in_combat || game.permanent_in_combat(id))
         && (!p.with_counter || permanent.counter_count(CounterKind::PlusOnePlusOne) > 0)
         && (!p.attacking || permanent.attacking)
         && (!p.tapped || permanent.tapped)
-        && p.token.is_none_or(|token| token == card.is_token)
+        && p.token
+            .is_none_or(|token| token == (object.kind() == ObjectKind::Token))
         && (p.any_of.is_empty()
             || p.any_of
                 .iter()
@@ -1177,11 +1216,11 @@ pub(super) fn matches_view(
             if s.eq_ignore_ascii_case("legendary") {
                 view.is_legendary
             } else {
-                card.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
+                object.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s))
             }
         })
         && (!p.nonbasic
-            || !card
+            || !object
                 .supertypes
                 .iter()
                 .any(|s| s.eq_ignore_ascii_case("basic")))
@@ -1195,6 +1234,7 @@ pub(super) fn matches_view(
             .all(|t| !view.types.types.contains(t))
         && p.subtype.as_ref().is_none_or(|s| view.subtypes.contains(s))
         && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| view.subtypes.contains(s)))
+        && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| view.colors.contains(c)))
         && p.not_subtypes.iter().all(|s| !view.subtypes.contains(s))
         && p.min_power.is_none_or(|min| view.power >= min)
         && p.max_power.is_none_or(|max| view.power <= max)

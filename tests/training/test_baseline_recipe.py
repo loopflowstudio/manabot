@@ -1,6 +1,7 @@
 """Recipe identity, horizon schedules and CLI routing without training."""
 
 from pathlib import Path
+import re
 from types import SimpleNamespace
 from typing import Literal
 
@@ -17,6 +18,7 @@ from manabot.reports.notebook import write_comparison_notebook
 from manabot.training.regime import (
     DampedPolicyLearning,
     IterationSchedule,
+    Layout,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -93,6 +95,7 @@ def test_cli_smoke_and_named_recipe(
             seconds=LOCAL_SECONDS,
             learning_seats="both",
             device=None,
+            padded_shapes=False,
         )
     ]
     result = runner.invoke(
@@ -107,6 +110,7 @@ def test_cli_smoke_and_named_recipe(
         seconds=None,
         learning_seats="both",
         device=None,
+        padded_shapes=False,
     )
     result = runner.invoke(
         cli.app, ["train", "--steps", "1", "--learning-seats", "one"]
@@ -152,7 +156,11 @@ def test_cpu_baseline_differs_only_in_device(
         accelerated.regime.model_dump(),
     )
     assert cpu_data["stages"][0]["execution"].pop("device") == "cpu"
-    assert accelerated_data["stages"][0]["execution"].pop("device") == device
+    accelerated_execution = accelerated_data["stages"][0]["execution"]
+    assert accelerated_execution.pop("device") == device
+    on_cuda = device == "cuda"
+    assert accelerated_execution.pop("bucketed_shapes", False) is on_cuda
+    assert accelerated_execution.pop("live_tokens", False) is on_cuda
     assert cpu_data == accelerated_data
     assert cpu.model_dump(exclude={"regime"}) == accelerated.model_dump(
         exclude={"regime"}
@@ -165,7 +173,7 @@ def test_cpu_baseline_differs_only_in_device(
 
 @pytest.mark.parametrize(
     "cuda,mps,expected",
-    [(True, True, "cuda"), (False, True, "mps"), (False, False, None)],
+    [(True, True, "cuda"), (False, True, None), (False, False, None)],
 )
 @pytest.mark.parametrize("override", [None, "cpu", "cuda", "mps"])
 @pytest.mark.parametrize("recipe", ["baseline", "local"])
@@ -183,7 +191,9 @@ def test_recipe_and_cli_device_selection(
     assert accelerator() == expected
     selected = override if override is not None else expected
     rejected = recipe == "baseline" and selected in {None, "cpu"}
-    message = "baseline requires CUDA or Apple MPS; use --recipe local for CPU"
+    message = (
+        "baseline requires CUDA or an explicit --device mps; use --recipe local for CPU"
+    )
     if rejected:
         with pytest.raises(ValueError, match=message):
             baseline(device=override)
@@ -228,3 +238,57 @@ def test_recipe_and_cli_device_selection(
 def test_test_baseline_is_not_a_cli_recipe() -> None:
     result = CliRunner().invoke(cli.app, ["train", "--recipe", "baseline_test"])
     assert result.exit_code != 0
+
+
+@pytest.mark.parametrize("recipe", ["baseline", "local"])
+def test_cli_padded_shapes_reaches_the_recipe_stage(
+    recipe: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CUDA recipes resolve both layouts on; `--padded-shapes` turns both off."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    observed: list[tuple[Layout, Layout]] = []
+    result = SimpleNamespace(
+        status="completed",
+        id="fixture",
+        notebook="baseline.ipynb",
+        stages=[SimpleNamespace(artifacts={"raw": {"path": "policy.pt"}})],
+    )
+
+    def record(regime: TrainingRegime) -> None:
+        execution = regime.stages[0].execution
+        observed.append((execution.bucketed_shapes, execution.live_tokens))
+
+    def run_plan(self: TrainingRecipe, **kwargs: object) -> SimpleNamespace:
+        record(self.regime)
+        return result
+
+    def execute(plan: TrainingRegime, *args: object) -> SimpleNamespace:
+        record(plan)
+        return result
+
+    monkeypatch.setattr(TrainingRecipe, "run", run_plan)
+    monkeypatch.setattr(local, "execute_regime", execute)
+    args = ["train", "--recipe", recipe, "--out", str(tmp_path / "run")]
+    for extra in ([], ["--padded-shapes"], ["--bucketed-shapes"]):
+        invoked = CliRunner().invoke(cli.app, args + extra)
+        assert invoked.exit_code == 0, invoked.output
+    assert observed == [(True, True), (False, False), (True, True)]
+    assert "--bucketed-shapes is deprecated and removed in 0.3.0" in invoked.output
+
+
+def test_cli_padded_shapes_requires_a_recipe(tmp_path: Path) -> None:
+    invoked = CliRunner().invoke(
+        cli.app,
+        [
+            "train",
+            "--regime",
+            str(tmp_path / "regime.json"),
+            "--out",
+            str(tmp_path / "run"),
+            "--padded-shapes",
+        ],
+    )
+    assert invoked.exit_code != 0
+    # Typer forces rich colour under GitHub Actions, which splits option names
+    # with escape codes.
+    assert "--padded-shapes" in re.sub(r"\x1b\[[0-9;]*m", "", invoked.output)

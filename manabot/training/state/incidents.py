@@ -15,8 +15,8 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from manabot.model.policy_distribution import NumericalError
-from manabot.training.learning.learner import Learner
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.rl import NumericalError
 
 if TYPE_CHECKING:
     from manabot.training.records import TrainingRun

@@ -2,8 +2,9 @@
 
 One seed per size trains under the same damped self-play rule, population,
 input v9, four producers and wall budget; the large size is the frozen w64
-regime with only its width, depth, heads and damping horizon replaced (see the
-protocol `experiments/protocols/tla-frontier-c5fba4-v1.md`). Primary progress is
+regime with only its width, depth, heads and damping horizon replaced. The
+design and results are `experiments/tla-frontier-c5fba4-results.md`; the
+executed source is revision ab2b757d9. Primary progress is
 each learner against its latest trained checkpoint at or before half its elapsed
 training hours, on the frozen random 17Lands deck pairs. `eval` also plays, at
 every shared update milestone, each size against the matched first-64 heuristic and
@@ -28,9 +29,8 @@ A pass's launcher id is a digest of its pending matches, and the launcher refuse
 a known id, so `pass_name` gives a relaunched pass a new tournament name. Match
 keys exclude that name, so a relaunch plays only what no pass attempted.
 
-The MTG-213 v10 runner (`experiments.tla_pilot_v10`) is executed evidence and
-stays unchanged, so its evaluation callback, whose identities name that
-pilot's source and artifacts, is mirrored here rather than shared.
+The MTG-213 v10 pilot's runner, which this experiment's evaluation callback
+mirrors, exists at revisions up to ac601834d.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from pathlib import Path
 import shutil
 from statistics import median
 from tempfile import TemporaryDirectory
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 from etude.eval.match import Row, Tables
 from etude.eval.records import (
@@ -62,29 +62,37 @@ from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch import client
 from etude.launch.records import Job, Run
-from etude.report import Curve, Matches, Report, Score
+from etude.report import Report, Score
 from etude.run.storage import Storage
 from etude.train.read import RunData
+from pydantic import Field
 import torch
 
 from experiments import tla_frontier
-from experiments.tla_pilot_v10 import HeuristicSpec, Pair, RuntimeWorld
-from manabot.env.observation import ObservationSpace
+from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
+from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
-from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
+from manabot.training.panels import ML, PERF
 from manabot.training.regime import (
     DampedPolicyLearning,
     IterationSchedule,
     TrainingRegime,
     TrainSelfPlay,
+)
+from manabot.training.report import (
+    against_earlier_self,
+    against_fixed,
+    head_to_head,
+    job_labels,
+    learning_schedule,
 )
 from manabot.training.state.game_errors import GameErrorState
 import managym
@@ -92,7 +100,6 @@ import managym
 ROOT = Path(__file__).resolve().parents[1]
 # `etude eval` and `etude launch` both name the experiment for this file.
 EXPERIMENT = Path(__file__).stem
-PROTOCOL = ROOT / "experiments/protocols/tla-frontier-c5fba4-v1.json"
 REGIME = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
 GAMES_PER_PAIR = 4
 # One single-threaded game per worker on a 32-vCPU rental, leaving room for its
@@ -108,6 +115,14 @@ PASS_ATTEMPT = "C5FBA4_PASS_ATTEMPT"
 # different sizes compare directly. Update 1 carries warm-up.
 STEP_PHASE = "time/collection/environment_step_and_encoding"
 HOST_UPDATES = range(2, 7)
+
+
+class HeuristicSpec(TypedDict):
+    kind: Literal["heuristic"]
+    max_actions: int
+    action_overflow: Literal["first-legal"]
+
+
 HEURISTIC: HeuristicSpec = {
     "kind": "heuristic",
     "max_actions": 64,
@@ -123,6 +138,14 @@ SIZES: tuple[SizeLabel, SizeLabel] = (SMALL, LARGE)
 # -- Frozen contract ----------------------------------------------------------
 
 
+class Pair(StrictModel):
+    """Two corpus decks and the deal their four legs share."""
+
+    first: int = Field(ge=0)
+    second: int = Field(ge=0)
+    deal: int = Field(ge=0)
+
+
 class LargeSize(StrictModel):
     """The large arm's compute network and damping horizon; all else is w64's."""
 
@@ -134,10 +157,7 @@ class LargeSize(StrictModel):
 
 
 class Protocol(StrictModel):
-    runtime_world: RuntimeWorld
     corpus_sha256: str
-    observation_shapes: dict[str, tuple[int, ...]]
-    regime_sha256: str
     large: LargeSize
     training_seed: int
     deck_seed: int
@@ -157,25 +177,76 @@ class Protocol(StrictModel):
     evaluation_usd: Decimal
 
 
+PROTOCOL = Protocol(
+    corpus_sha256="2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
+    large=LargeSize(
+        hidden_dim=160,
+        attention_layers=8,
+        num_attention_heads=8,
+        expected_updates=999,
+    ),
+    training_seed=21501,
+    deck_seed=21590001,
+    # Random 17Lands deck pairs, each with the deal its four legs share.
+    pairs=(
+        Pair(first=107, second=89, deal=21591000),
+        Pair(first=5, second=90, deal=21591001),
+        Pair(first=133, second=122, deal=21591002),
+        Pair(first=2, second=112, deal=21591003),
+        Pair(first=33, second=41, deal=21591004),
+        Pair(first=76, second=108, deal=21591005),
+        Pair(first=18, second=10, deal=21591006),
+        Pair(first=112, second=20, deal=21591007),
+        Pair(first=95, second=68, deal=21591008),
+        Pair(first=97, second=40, deal=21591009),
+        Pair(first=74, second=57, deal=21591010),
+        Pair(first=123, second=21, deal=21591011),
+        Pair(first=28, second=28, deal=21591012),
+        Pair(first=17, second=2, deal=21591013),
+        Pair(first=127, second=10, deal=21591014),
+        Pair(first=132, second=53, deal=21591015),
+    ),
+    milestones=(
+        25,
+        50,
+        75,
+        100,
+        150,
+        200,
+        300,
+        400,
+        600,
+        800,
+        1200,
+        1600,
+        2400,
+        3200,
+        4800,
+        6400,
+    ),
+    export_every=25,
+    game_seconds=600.0,
+    max_commands=10000,
+    bootstrap_seed=21592001,
+    max_paid_usd=Decimal("110"),
+    training_usd=Decimal("38"),
+    training_hours=56.0,
+    evaluation_usd=Decimal("14"),
+)
+
+
 def _regime_id(label: SizeLabel) -> str:
     return f"tla-frontier-c5fba4-{label}"
 
 
 def frozen() -> tuple[dict[SizeLabel, TrainingRegime], Protocol]:
-    """Both regimes and the protocol, rejecting drift from the frozen bytes.
+    """Both regimes and the protocol.
 
-    The hash fixes the regime's contents; `tests/eval/test_tla_frontier.py`
-    checks what those bytes must declare. Only the world and the tensor shapes
-    the encoder derives can still move underneath them.
+    The large regime is the shared w64 regime with `PROTOCOL.large`'s network
+    and damping horizon. The executed values are fixed by revision ab2b757d9.
     """
-    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
-    if protocol.runtime_world.model_dump() != managym.world_identity():
-        raise ValueError("frontier runtime world differs from the frozen protocol")
-    if file_sha256(REGIME) != protocol.regime_sha256:
-        raise ValueError("frontier regime differs from frozen protocol")
+    protocol = PROTOCOL
     small = TrainingRegime.model_validate_json(REGIME.read_bytes())
-    if ObservationSpace(small.observation).shapes != protocol.observation_shapes:
-        raise ValueError("frontier tensor capacities differ from frozen protocol")
     stage = _stage(small)
     size = protocol.large.model_dump(exclude={"expected_updates"})
     schedule = _schedule(small).model_copy(
@@ -306,9 +377,7 @@ def _source() -> list[Path]:
     return [
         *sorted((ROOT / "manabot").rglob("*.py")),
         Path(__file__),
-        ROOT / "experiments/tla_pilot_v10.py",
         REGIME,
-        PROTOCOL,
     ]
 
 
@@ -881,25 +950,26 @@ def _registration(
     observation: ObservationConfig,
 ) -> tuple[PlayerRegistration, Path | None]:
     setup = matchup.match()
-    fingerprints = runtime_fingerprints(match_config=setup)
-    common = dict(
-        player_id=name,
-        display_name=player.name,
-        role="challenger" if name == "candidate" else "anchor",
-        world=managym.WORLD_VERSION,
-        content_suite=matchup.content_suite,
-        information_boundary="acting-viewer",
-        observation_abi_sha256=fingerprints["observation_abi_sha256"],
-        action_abi_sha256=fingerprints["action_abi_sha256"],
-        matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
-        player_seed_derivation_id="arena-pair-deal-player-v1",
-        compute_class_id="policy-cpu-one-thread-one-pass",
+    role: Literal["challenger", "anchor"] = (
+        "challenger" if name == "candidate" else "anchor"
     )
     if isinstance(player, Code):
         if player.config != HEURISTIC:
             raise ValueError("heuristic support differs from frontier protocol")
+        # Code players read no policy input; their ABI fields name the fresh space.
+        fingerprints = runtime_fingerprints(match_config=setup)
         return PlayerRegistration(
-            **common,
+            player_id=name,
+            display_name=player.name,
+            role=role,
+            world=managym.WORLD_VERSION,
+            content_suite=matchup.content_suite,
+            information_boundary="acting-viewer",
+            observation_abi_sha256=fingerprints["observation_abi_sha256"],
+            action_abi_sha256=fingerprints["action_abi_sha256"],
+            matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
+            player_seed_derivation_id="arena-pair-deal-player-v1",
+            compute_class_id="policy-cpu-one-thread-one-pass",
             runner_kind="code",
             player_spec=dict(HEURISTIC),
             source_sha256=canonical_sha256(
@@ -907,25 +977,19 @@ def _registration(
             ),
         ), None
     path = local_checkpoint_file(player)
-    agent, space = load_checkpoint(str(path))
-    if space.encoder.config != observation:
+    admission = register_checkpoint(
+        path,
+        match=setup,
+        content_suite=matchup.content_suite,
+        player_id=name,
+        display_name=player.name,
+        role=role,
+        artifact_prefix="c5fba4",
+        allow_deck_repetition=True,
+    )
+    if admission.space.encoder.config != observation:
         raise ValueError("checkpoint observation differs from frontier protocol")
-    digest = file_sha256(path)
-    return PlayerRegistration(
-        **common,
-        runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "device": "cpu",
-            "batch_size": 1,
-            "deterministic": False,
-            "allow_deck_repetition": True,
-        },
-        checkpoint_sha256=digest,
-        checkpoint_bytes=path.stat().st_size,
-        parameter_count=sum(p.numel() for p in agent.parameters()),
-        artifact_id=f"c5fba4/{digest}",
-    ), path
+    return admission.registration, path
 
 
 @contextmanager
@@ -1039,34 +1103,35 @@ def report() -> Report:
     equal-hours curve is drawn at w160l8's update; a pair that is also an
     equal-update or endpoint pair is played once, under that tag.
     """
+    regimes, _ = frozen()
+    jobs = {_regime_id(label): regimes[label] for label in SIZES}
+    small, large = jobs
     return Report(
-        score=Score(table="games", value="score", reference=0.5),
+        score=Score(table="games", value="score", reference=0.5, unit="games"),
         clock="updates",
+        labels=job_labels(
+            {small: ("Small", jobs[small]), large: ("Large", jobs[large])}
+        ),
         evals=(
-            Curve(
-                title="Width 64 vs itself at half the training hours (primary)",
-                matches=Matches(tag=f"half-training-{SMALL}"),
+            against_earlier_self(
+                "Model vs itself at half training time",
+                tags=tuple(f"half-training-{label}" for label in SIZES),
             ),
-            Curve(
-                title="Width 160, 8 layers vs itself at half the training hours (primary)",
-                matches=Matches(tag=f"half-training-{LARGE}"),
-            ),
-            Curve(
-                title="Width 64 vs fixed heuristic",
-                matches=Matches(tag=f"heuristic-{SMALL}"),
-            ),
-            Curve(
-                title="Width 160, 8 layers vs fixed heuristic",
-                matches=Matches(tag=f"heuristic-{LARGE}"),
-            ),
-            Curve(
-                title="Width 160, 8 layers vs width 64 at equal updates",
-                matches=Matches(tag="head-to-head"),
+            against_fixed(
+                "Model vs heuristic",
+                "heuristic",
+                tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
             # Drawn at w160l8's updates; each pair's two hours are in analysis.
-            Curve(
-                title="Width 160, 8 layers vs width 64 at equal training hours",
-                matches=Matches(tag="equal-hours"),
+            head_to_head(
+                "Large vs Small at fixed training time",
+                subject=large,
+                tag="equal-hours",
+            ),
+            head_to_head(
+                "Large vs Small at fixed # updates", subject=large, tag="head-to-head"
             ),
         ),
+        perf=PERF,
+        ml=(*learning_schedule(jobs), *ML),
     )

@@ -10,17 +10,18 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi.testclient import TestClient
-from managym.experience import ExperienceFrame, InteractionOffer
-from managym.experience_projection import decision_surface_view
 import numpy as np
 import pytest
 import torch
 
 from academy import server, trace as trace_store
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 import managym
+from managym.experience import ExperienceFrame, InteractionOffer
+from managym.experience_projection import decision_surface_view
 
 
 def _command(
@@ -167,10 +168,14 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
                 model.zero_grad()
                 torch.nn.functional.cross_entropy(
-                    model(obs)[0], torch.tensor([wanted])
+                    model(admit_observation(model, obs))[0], torch.tensor([wanted])
                 ).backward()
                 optimizer.step()
-                selected = int(model.get_action_and_value(obs, deterministic=True)[0])
+                selected = int(
+                    model.get_action_and_value(
+                        admit_observation(model, obs), deterministic=True
+                    )[0]
+                )
                 if selected == wanted:
                     return frame.offers[selected]
             raise AssertionError("policy did not reach the supervised offer")

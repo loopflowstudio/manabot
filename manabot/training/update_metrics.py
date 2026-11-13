@@ -1,9 +1,11 @@
 """Per-update self-play diagnostics as Etude metrics, written once and read back.
 
-The learner logs each update's diagnostics to its Etude run (RunContext) and
-nowhere else; TrainingRun keeps counters and receipts. `metric_row` is the one
-shape those rows take: Etude's flat "/"-joined names, with keyed lists so a
-selection group or matchup keeps its name instead of a list position.
+The learner logs each update's diagnostics to its Etude run (RunContext);
+TrainingRun keeps counters and receipts. Matchup outcomes are an Etude row
+table per update (`OUTCOME_TABLE`, logged with `Run.log_table`), so deck pairs
+add rows rather than metric columns. `metric_row` produces flat "/"-joined
+names; readers project outcome tables to the same named matchup counts
+historical scalar metrics exposed.
 `read_updates` reads runs' Etude rows under a directory once, and `stage_rows`
 splits a run's rows by stage, from Etude for tracked self-play stages and from
 the record's retained rows for every other stage.
@@ -20,6 +22,7 @@ import re
 from typing import Protocol
 
 from etude.run.listing import runs
+from etude.train.manifest import StoredBlock
 from etude.train.read import RunData, read
 
 from manabot.training.records import PhaseTiming, StageRecord
@@ -29,7 +32,15 @@ type MetricRow = dict[str, MetricValue]
 # One Etude run's rows by completed-update coordinate.
 type Updates = dict[int, MetricRow]
 
-# Lists whose entries are named by fields, not by position.
+# The Etude row table holding each self-play update's SelfPlayOutcome rows.
+OUTCOME_TABLE = "self_play_outcomes"
+# Runs written from 1659b0e29 referenced manabot-written tables by this metric;
+# earlier revisions such as bf4e280f7 read them.
+_RETIRED_OUTCOME_REFERENCE = "self_play_outcomes/table"
+
+# Lists whose entries are named by fields, not by position. Self-play lists
+# occur only in historical StageRecord diagnostics and the offline projection;
+# live updates log an outcome table instead.
 _KEYED_LISTS = {
     "adaptive/exposures": ("cell", "seat"),
     "adaptive/allocations": ("stream", "game"),
@@ -146,41 +157,64 @@ def read_updates(source: Path, records: Iterable[_Run]) -> dict[str, Updates]:
 
 
 def _updates(data: RunData) -> Updates:
-    """Each update's latest row, by `etude.train.read`'s rule on the updates clock.
+    """Each update's metrics, by `etude.train.read`'s rule on the updates clock.
 
     A later attempt's rows replace an earlier attempt's from the update it
-    resumed at (or first logged); a later write of one update replaces an
-    earlier one. Rows without values mark a clock position, not an update.
+    resumed at (or first logged); within an attempt, a later write of a metric
+    at one update replaces an earlier one, so an outcome table logged beside
+    the update's metrics joins them. Rows without values mark a clock position,
+    not an update. Etude selects and verifies outcome tables the same way.
     """
-    # Blocks arrive in attempt start order; each writer is one attempt.
-    written: dict[str, list[tuple[int, MetricRow]]] = {}
-    start = {
-        attempt.writer: attempt.resumed_at["updates"]
-        for attempt in data.attempts
-        if "updates" in attempt.resumed_at
+    # Group blocks, not decoded rows: read one block at a time without populating
+    # RunData.tables, which caches the entire history. Keep empty attempts too.
+    writers: dict[str, list[StoredBlock]] = {
+        attempt.writer: [] for attempt in data.attempts
     }
-    for block, table in zip(data.blocks, data.tables, strict=True):
-        rows = written.setdefault(block.header.writer, [])
-        for index in range(table.rows):
-            logged = table.row(index)
-            clocks, values = logged["clocks"], logged["values"]
-            if not isinstance(clocks, dict) or "updates" not in clocks:
-                continue
-            update = clocks["updates"]
-            if not isinstance(update, (int, float)):
-                raise ValueError("Etude updates clock is not a number")
-            start.setdefault(block.header.writer, update)
-            if isinstance(values, dict) and values:
-                rows.append((int(update), _integral(values)))
-    result: Updates = {}
-    cutoff: float | None = None
-    for writer in reversed(list(written)):
-        for update, values in reversed(written[writer]):
-            if cutoff is None or update <= cutoff:
-                result.setdefault(update, values)
-        if writer in start:
-            cutoff = min(start[writer], cutoff if cutoff is not None else start[writer])
-    return dict(sorted(result.items()))
+    started = {attempt.writer: attempt.started_ms for attempt in data.attempts}
+    for block in data.blocks:
+        writer = block.header.writer
+        writers.setdefault(writer, []).append(block)
+        started.setdefault(writer, block.header.wall_first)
+    attempts = {attempt.writer: attempt for attempt in data.attempts}
+    selected: dict[int, MetricRow] = {}
+    for writer in sorted(writers, key=started.__getitem__):
+        attempt = attempts.get(writer)
+        resumed = attempt.resumed_at.get("updates") if attempt is not None else None
+        rows: dict[int, MetricRow] = {}
+        for block in writers[writer]:
+            table = block.table()
+            for index in range(table.rows):
+                logged = table.row(index)
+                clocks, values = logged["clocks"], logged["values"]
+                if not isinstance(clocks, dict) or "updates" not in clocks:
+                    continue
+                update = clocks["updates"]
+                if not isinstance(update, (int, float)):
+                    raise ValueError("Etude updates clock is not a number")
+                if resumed is None:
+                    resumed = update
+                if isinstance(values, dict) and values:
+                    rows.setdefault(int(update), {}).update(_integral(values))
+        # A later attempt replaces history beyond its resume point, including
+        # when it has no rows. Within an attempt each metric's latest write wins.
+        if resumed is not None:
+            selected = {u: row for u, row in selected.items() if u <= resumed}
+        selected.update(rows)
+    if any(_RETIRED_OUTCOME_REFERENCE in row for row in selected.values()):
+        raise ValueError(
+            f"run {data.name} records self-play outcomes in the retired "
+            f"{_RETIRED_OUTCOME_REFERENCE!r} format; read it from a manabot "
+            "revision that still reads it, such as bf4e280f7"
+        )
+    # `log_table` indexes its table's digest as a metric of the same name;
+    # the rows replace it.
+    for update in selected.values():
+        update.pop(OUTCOME_TABLE, None)
+    for table in data.read_table(OUTCOME_TABLE, "updates"):
+        selected.setdefault(int(table.x), {}).update(
+            metric_row({OUTCOME_TABLE: table.rows})
+        )
+    return dict(sorted(selected.items()))
 
 
 def _integral(values: Mapping[str, object]) -> MetricRow:

@@ -19,6 +19,8 @@ from etude.train.records import Step
 from etude.train.run import track
 import numpy as np
 
+from manabot.backends.torch.checkpoint import load_checkpoint, load_etude_checkpoint
+
 # Local imports
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -26,7 +28,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.infra.runtime import seed_random
-from manabot.model.checkpoint import load_checkpoint, load_etude_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.sim.player import (
     DefaultPlayer,
@@ -451,7 +452,6 @@ def simulate_models(
             match,
             observation_space,
             reward,
-            auto_reset=False,
             enable_profiler=True,
             enable_behavior_tracking=True,
         )

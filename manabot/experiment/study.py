@@ -29,6 +29,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.observation import ObservationSpace
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
@@ -39,7 +40,6 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     source_bundle_sha256,
 )
-from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import report, valid_game, verify_saved_inputs
 from manabot.sim.matchup import SELECTED_SUITE
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
@@ -229,7 +229,7 @@ def smoke_recipe(recipe: TrainingRegime) -> TrainingRegime:
             stage.transitions = 64
             stage.updates = 2
             stage.learning.epochs = 1
-    return TrainingRegime.model_validate(recipe.model_dump())
+    return TrainingRegime.model_validate(recipe.authored_dump())
 
 
 def calibration_plan(study: Study, arms: Sequence[Arm]) -> ResolvedStudy:
@@ -315,7 +315,7 @@ def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedSt
             stages.append(stage)
         predicted.append(updates * rate)
         recipe.stages = stages
-        recipes.append(TrainingRegime.model_validate(recipe.model_dump()))
+        recipes.append(TrainingRegime.model_validate(recipe.authored_dump()))
     expected = 5
     if len(recipes) != expected or len({r.id for r in recipes}) != expected:
         raise ValueError("calibration must contain exactly one run per study arm")

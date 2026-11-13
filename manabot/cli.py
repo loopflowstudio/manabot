@@ -79,6 +79,17 @@ def train_command(
         None,
         help="Training device (default: CUDA, then MPS; local alone falls back to CPU)",
     ),
+    padded_shapes: bool = typer.Option(
+        False,
+        "--padded-shapes",
+        help="Train local/baseline recipes on CUDA without bucketed shapes or live tokens",
+    ),
+    bucketed_shapes: bool = typer.Option(
+        False,
+        "--bucketed-shapes",
+        help="Deprecated and removed in 0.3.0; bucketed shapes are the CUDA default",
+        hidden=True,
+    ),
     steps: int | None = typer.Option(
         None, min=1, help="Recipe horizon in collection/update iterations"
     ),
@@ -118,6 +129,12 @@ def train_command(
             "or an explicit --regime JSON. Historical reward and optimizer settings "
             "are not translated."
         )
+    if bucketed_shapes:
+        typer.echo(
+            "--bucketed-shapes is deprecated and removed in 0.3.0; CUDA recipes "
+            "use bucketed shapes by default (--padded-shapes turns them off)",
+            err=True,
+        )
     if recipe is None and regime is None and regime_name is None:
         recipe = "local"
     if recipe is not None:
@@ -146,6 +163,7 @@ def train_command(
                 seconds=LOCAL_SECONDS if seconds is None else seconds,
                 learning_seats=learning_seats or "both",
                 device=device,
+                padded_shapes=padded_shapes,
             )
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
@@ -161,6 +179,7 @@ def train_command(
                 seconds=seconds,
                 learning_seats=learning_seats or "both",
                 device=device,
+                padded_shapes=padded_shapes,
             )
             status = baseline_result.status
             typer.echo(
@@ -169,9 +188,12 @@ def train_command(
         if status != "completed":
             raise typer.Exit(1)
         return
-    if any(value is not None for value in (steps, seconds, learning_seats, device)):
+    if padded_shapes or any(
+        value is not None for value in (steps, seconds, learning_seats, device)
+    ):
         raise typer.BadParameter(
-            "--steps, --seconds, --learning-seats and --device require a recipe"
+            "--steps, --seconds, --learning-seats, --device and --padded-shapes "
+            "require a recipe; a regime sets them in its stages' execution"
         )
     if regime is not None and regime_name is not None:
         raise typer.BadParameter("select --regime or --regime-name, not both")

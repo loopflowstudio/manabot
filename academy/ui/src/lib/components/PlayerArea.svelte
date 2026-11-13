@@ -8,6 +8,7 @@
     CastPermission,
     PermanentState,
     PlayerState,
+    PlayerTurnHistory,
     RestrictedMana
   } from '$lib/types';
   import Card from './Card.svelte';
@@ -82,6 +83,7 @@
   }
 
   function spendingText(restricted: RestrictedMana): string {
+    if (restricted.except_nonartifact_spells) return 'anything but nonartifact spells';
     const parts = [];
     if (restricted.spells?.length) parts.push(`${restricted.spells.join(' or ')} spells`);
     if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
@@ -145,7 +147,11 @@
           · {manaText(restricted.mana)} only for {spendingText(restricted)}
         {/each}
       {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
-      {#if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
+      <!-- Class rows are subsets of the amounts above, not additional mana. -->
+      {#each player.pooled_mana_classes ?? [] as pooled, index}
+        {index ? '; ' : ' — including '}{manaText(pooled.mana)}{pooled.restriction ? ` only for ${pooled.restriction}` : ''}{pooled.effect ? ` that puts ${pooled.effect}` : ''}, expiring {pooled.combat ? 'at end of combat' : 'at step end'}
+      {/each}
+      {#if !player.pooled_mana_classes?.length && player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
       {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
     </p>
   {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}
@@ -162,8 +168,8 @@
       {label} has no maximum hand size.
     </p>
   {/if}
-  {#if player.turn_history}
-    {@const history = player.turn_history}
+  {#if player.turn_history || player.spells_cast}
+    {@const history: PlayerTurnHistory = player.turn_history ?? {}}
     <p class="type-caption py-1" data-testid="turn-history">
       {label} this turn: {[
         history.attacked && 'attacked',
@@ -171,6 +177,8 @@
         history.land_entered && 'a land entered',
         history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
         history.bent && `bent ${['water', 'earth', 'fire', 'air'].filter((_, index) => (history.bent ?? 0) & (1 << index)).join(', ')}`,
+        history.life_lost && `lost ${history.life_lost} life`,
+        player.spells_cast && `cast ${player.spells_cast} spell${player.spells_cast === 1 ? '' : 's'}`,
       ].filter(Boolean).join(' · ')}.
     </p>
   {/if}

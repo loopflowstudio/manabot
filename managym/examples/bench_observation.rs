@@ -170,14 +170,7 @@ fn encoded_digest(encoded: &EncodedObservation) -> String {
 }
 
 fn main() {
-    let config = ObservationEncoderConfig {
-        policy_input_version: if std::env::args().any(|arg| arg == "--legacy") {
-            1
-        } else {
-            2
-        },
-        ..Default::default()
-    };
+    let config = ObservationEncoderConfig::default();
     let corpus = corpus();
     let digest = format!(
         "{:x}",

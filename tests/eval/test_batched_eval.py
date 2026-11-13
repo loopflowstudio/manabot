@@ -10,14 +10,16 @@ import signal
 import socket
 import threading
 import time
-from typing import Literal
 
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
+from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.execution import bind_execution
 from manabot.eval.match import play_cell
@@ -25,8 +27,6 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.model.inference import transfer
 from manabot.sim import child, serving
 from manabot.sim.execution import EvalComputeV1, EvalExecution
@@ -56,16 +56,9 @@ from tests.eval.arena_fixture import arena_fixture
 def fixture_policy(
     directory: Path,
     seed: int = 83,
-    *,
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6] | None = None,
 ) -> tuple[EvaluationKey, PlayerRegistration, PlayerRegistration, Path]:
     contract = arena_fixture()
-    observation = (
-        ObservationConfig(policy_input_version=policy_input_version)
-        if policy_input_version is not None
-        else ObservationConfig()
-    )
-    space = ObservationSpace(observation)
+    space = ObservationSpace(ObservationConfig())
     torch.manual_seed(seed)
     agent = ActorCritic(
         space,
@@ -155,11 +148,8 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
         sample_rows(logits, torch.zeros_like(masks), [5, 7], False)
 
 
-@pytest.mark.parametrize("version", (1, 2, 3, 4, 5, 6))
-def test_served_checkpoint_preserves_input_version(
-    tmp_path: Path, version: Literal[1, 2, 3, 4, 5, 6]
-) -> None:
-    key, player, anchor, path = fixture_policy(tmp_path, policy_input_version=version)
+def test_served_checkpoint_records_its_input_version(tmp_path: Path) -> None:
+    key, player, anchor, path = fixture_policy(tmp_path)
     _, trace, replay = play_cell(
         key=key,
         player_a=player,
@@ -173,11 +163,10 @@ def test_served_checkpoint_preserves_input_version(
     assert replay["passed"]
     for game in read_trace(Path(trace["path"])):
         assert len(game["decisions"]) == 2, game.get("failure")
-        assert game["observation_hypers"].get("policy_input_version", 1) == version
-        assert ("policy_input_version" in game["observation_hypers"]) == (version >= 2)
+        assert game["observation_hypers"]["policy_input_version"] == 9
         env, observation = replay_prefix(game, 1)
         try:
-            assert ("relations" in observation) == (version >= 2)
+            assert "relations" in observation
         finally:
             env.close()
 
@@ -235,6 +224,51 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
         resident.scope.catalog()
     assert PolicyKey.from_registration(second, execution) != requests[0].policy
     store.close()
+
+
+def test_registered_non_default_checkpoint_is_admitted_by_serving(
+    tmp_path: Path,
+) -> None:
+    key, _, _, _ = fixture_policy(tmp_path)
+    space = ObservationSpace(ObservationConfig(max_facts=256))
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
+        ),
+    )
+    path = tmp_path / "non-default.pt"
+    save_checkpoint(
+        agent, space, path, player_configs=Match(selected_match()).to_rust()
+    )
+    player = register_checkpoint(
+        path,
+        match=selected_match(),
+        content_suite=SELECTED_SUITE,
+        player_id="non-default",
+        display_name="Non-default space",
+    ).registration
+    fresh = runtime_fingerprints(match_config=selected_match())
+    assert player.observation_abi_sha256 != fresh["observation_abi_sha256"]
+    execution = EvalExecution(deadline_unix=time.time() + 120)
+    _, (player,) = bind_execution(key, (player,), execution)
+    store = PolicyStore(execution, EvalPerformance("test"))
+    try:
+        assert store.admit(PolicyAdmission(player, str(path), (selected_match(),))) == (
+            space.encoder.config
+        )
+    finally:
+        store.close()
+    # A registration hashed from fresh defaults is the refusal it replaces.
+    drifted = player.model_copy(
+        update={"observation_abi_sha256": fresh["observation_abi_sha256"]}
+    )
+    store = PolicyStore(execution, EvalPerformance("test"))
+    try:
+        with pytest.raises(ValueError, match="checkpoint observation ABI drift"):
+            store.admit(PolicyAdmission(drifted, str(path), (selected_match(),)))
+    finally:
+        store.close()
 
 
 def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
@@ -420,8 +454,12 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
     clock = [10.0]
     load = serving.load_checkpoint
 
-    def delayed_load(filename: str) -> tuple[ActorCritic, ObservationSpace]:
-        result = load(filename)
+    def delayed_load(
+        filename: str, *, bucketed_shapes: bool, live_tokens: bool
+    ) -> tuple[ActorCritic, ObservationSpace]:
+        result = load(
+            filename, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+        )
         clock[0] += 40  # Inject the duration; never create resource pressure.
         return result
 
@@ -736,6 +774,44 @@ def test_expired_allocation_starts_no_games_and_search_stays_unbound(
         EvalExecution(deadline_unix=time.time() + 30),
     )
     assert search == contract.anchors[2]
+
+
+def test_forward_layout_is_opt_in_and_outside_identity() -> None:
+    deadline = time.time() + 30
+    cuda = EvalExecution(device="cuda", deadline_unix=deadline)
+    assert (cuda.bucketed_shapes, cuda.live_tokens) == (False, False)
+    layout = EvalExecution(
+        device="cuda", deadline_unix=deadline, bucketed_shapes=True, live_tokens=True
+    )
+    assert layout.identity == cuda.identity
+    receipt = layout.model_dump()
+    assert (receipt["bucketed_shapes"], receipt["live_tokens"]) == (True, True)
+    assert EvalExecution.model_validate(receipt) == layout
+    with pytest.raises(ValueError, match="live tokens require CUDA"):
+        EvalExecution(deadline_unix=deadline, live_tokens=True)
+
+
+def test_served_bucketed_policy_matches_the_padded_path(tmp_path: Path) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    logits = []
+    for bucketed in (False, True):
+        execution = EvalExecution(
+            deadline_unix=time.time() + 120, bucketed_shapes=bucketed
+        )
+        _, (bound,) = bind_execution(key, (player,), execution)
+        store = PolicyStore(execution, EvalPerformance(str(bucketed)))
+        store.admit(PolicyAdmission(bound, str(path), (selected_match(),)))
+        request = request_for(bound, execution)
+        policy = store.get(request.policy)
+        assert policy.agent.bucketed_shapes is bucketed
+        with torch.no_grad():
+            inputs = {
+                k: torch.from_numpy(v).float().unsqueeze(0)
+                for k, v in request.observation.items()
+            }
+            logits.append(policy.agent(policy.scope.prepare(inputs))[0])
+        store.close()
+    torch.testing.assert_close(logits[0], logits[1], atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA runner")

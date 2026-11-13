@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     PERMANENT_ATTACHED_INDEX,
     PERMANENT_LINK_INDEXES,
@@ -11,7 +12,7 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import reorder_objects
 import managym
 
@@ -30,7 +31,7 @@ def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], in
     first, second = obs.agent_permanents
     second.attached_to = first.id
     obs.agent_permanents = [first, second]
-    space = ObservationSpace(ObservationConfig(policy_input_version=5))
+    space = ObservationSpace(ObservationConfig())
     host = 2 + 2 * space.encoder.cards_per_player
     return space, space.encode(obs), host
 
@@ -51,29 +52,20 @@ def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
     with torch.no_grad():
         # Zero-initialized joins leave the initial function unchanged.
         same = [
-            agent._gather_object_embeddings(_batch(e)).objects
+            agent._gather_object_embeddings(admit_observation(agent, _batch(e))).objects
             for e in (encoded, detached)
         ]
         torch.testing.assert_close(same[0], same[1])
         for layer in (*agent.link_to_target, *agent.link_from_target):
             layer.weight.normal_()
         linked, unlinked = (
-            agent._gather_object_embeddings(_batch(e)).objects
+            agent._gather_object_embeddings(admit_observation(agent, _batch(e))).objects
             for e in (encoded, detached)
         )
     changed = (linked - unlinked).abs().sum(-1)[0]
     assert changed[host] > 0, "the host reads its attachment"
     assert changed[host + 1] > 0, "the attachment reads its host"
     assert changed[host + 2 :].sum() == 0 and changed[:host].sum() == 0
-
-
-def test_permanent_link_joins_exist_only_for_v5() -> None:
-    torch.manual_seed(5)
-    v4 = ActorCritic(
-        ObservationSpace(ObservationConfig(policy_input_version=4)),
-        ModelConfig(hidden_dim=16, num_attention_heads=2),
-    )
-    assert not any("link_" in name for name in v4.state_dict())
 
 
 @pytest.mark.parametrize("column", PERMANENT_LINK_INDEXES)
@@ -92,8 +84,8 @@ def test_object_permutation_preserves_learned_permanent_links(column: int) -> No
         permuted = reorder_objects(obs)
         count = obs["agent_permanents"].shape[1]
         assert permuted["agent_permanents"][0, count - 2, column] == host + count
-        expected_logits, expected_value = agent(obs)
-        logits, value = agent(permuted)
+        expected_logits, expected_value = agent(admit_observation(agent, obs))
+        logits, value = agent(admit_observation(agent, permuted))
         torch.testing.assert_close(logits.softmax(-1), expected_logits.softmax(-1))
         torch.testing.assert_close(value, expected_value)
         for key, original in obs.items():

@@ -42,13 +42,14 @@ from pydantic import BaseModel, ConfigDict
 import torch
 
 from experiments.elemental_grid import DECKS, PACK as ELEMENTAL_PACK
+from manabot.eval.admission import register_checkpoint
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
+from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.panels import ML, PERF
@@ -301,23 +302,24 @@ def _registration(
     name: str, player: Model | Code, matchup: AuthoredMatchup, arena: str
 ) -> tuple[PlayerRegistration, Path | None]:
     setup = matchup.match()
-    fingerprints = runtime_fingerprints(match_config=setup)
-    common = dict(
-        player_id=name,
-        display_name=player.name,
-        role="challenger" if name == "candidate" else "anchor",
-        world=managym.WORLD_VERSION,
-        content_suite=matchup.content_suite,
-        information_boundary="acting-viewer",
-        observation_abi_sha256=fingerprints["observation_abi_sha256"],
-        action_abi_sha256=fingerprints["action_abi_sha256"],
-        matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
-        player_seed_derivation_id="arena-pair-deal-player-v1",
-        compute_class_id="policy-cpu-one-thread-one-pass",
+    role: Literal["challenger", "anchor"] = (
+        "challenger" if name == "candidate" else "anchor"
     )
     if isinstance(player, Code):
+        # Code players read no policy input; their ABI fields name the fresh space.
+        fingerprints = runtime_fingerprints(match_config=setup)
         return PlayerRegistration(
-            **common,
+            player_id=name,
+            display_name=player.name,
+            role=role,
+            world=managym.WORLD_VERSION,
+            content_suite=matchup.content_suite,
+            information_boundary="acting-viewer",
+            observation_abi_sha256=fingerprints["observation_abi_sha256"],
+            action_abi_sha256=fingerprints["action_abi_sha256"],
+            matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
+            player_seed_derivation_id="arena-pair-deal-player-v1",
+            compute_class_id="policy-cpu-one-thread-one-pass",
             runner_kind="code",
             player_spec={"kind": "heuristic"},
             source_sha256=canonical_sha256(
@@ -325,23 +327,17 @@ def _registration(
             ),
         ), None
     path = local_checkpoint_file(player)
-    agent, _ = load_checkpoint(str(path))
-    digest = file_sha256(path)
-    return PlayerRegistration(
-        **common,
-        runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "device": "cpu",
-            "batch_size": 1,
-            "deterministic": False,
-            "allow_deck_repetition": True,
-        },
-        checkpoint_sha256=digest,
-        checkpoint_bytes=path.stat().st_size,
-        parameter_count=sum(p.numel() for p in agent.parameters()),
-        artifact_id=f"{arena}/{digest}",
-    ), path
+    admission = register_checkpoint(
+        path,
+        match=setup,
+        content_suite=matchup.content_suite,
+        player_id=name,
+        display_name=player.name,
+        role=role,
+        artifact_prefix=arena,
+        allow_deck_repetition=True,
+    )
+    return admission.registration, path
 
 
 def play_deal(match: Match) -> Tables:

@@ -27,10 +27,12 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.builders import PACK
 from manabot.recipes.device import accelerator
 from manabot.sim.matchup import selected_match
+from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
     IterationSchedule,
+    Layout,
     Strict,
     TrainingRegime,
     TrainSelfPlay,
@@ -114,15 +116,25 @@ def baseline(
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
     device: Literal["cpu", "mps", "cuda"] | None = None,
+    padded_shapes: bool = False,
 ) -> TrainingRecipe:
     """Resolve accelerated self-play; CPU smoke runs use the local recipe."""
     selected = accelerator() if device is None else device
+    # Reject unadmitted MPS here: the experiment runner would only report it from
+    # the training child's log.
+    if selected == "mps" and (error := mps_torch_error()) is not None:
+        raise ValueError(error)
     if selected is None or selected == "cpu":
         raise ValueError(
-            "baseline requires CUDA or Apple MPS; use --recipe local for CPU"
+            "baseline requires CUDA or an explicit --device mps; "
+            "use --recipe local for CPU"
         )
     return _baseline(
-        steps, seconds=seconds, learning_seats=learning_seats, device=selected
+        steps,
+        seconds=seconds,
+        learning_seats=learning_seats,
+        device=selected,
+        padded_shapes=padded_shapes,
     )
 
 
@@ -131,10 +143,15 @@ def baseline_test(
     *,
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
+    padded_shapes: bool = False,
 ) -> TrainingRecipe:
     """The baseline on CPU for tests and diagnostics without accelerator hardware."""
     return _baseline(
-        steps, seconds=seconds, learning_seats=learning_seats, device="cpu"
+        steps,
+        seconds=seconds,
+        learning_seats=learning_seats,
+        device="cpu",
+        padded_shapes=padded_shapes,
     )
 
 
@@ -144,6 +161,7 @@ def _baseline(
     seconds: float | None,
     learning_seats: Literal["one", "both"],
     device: Literal["cpu", "mps", "cuda"],
+    padded_shapes: bool,
 ) -> TrainingRecipe:
     """Resolve horizon-scaled Ataraxos self-play on the current authored world.
 
@@ -152,8 +170,10 @@ def _baseline(
     mapping is a new recipe choice: its first and last rates match iterations 1
     and 10,000 of the historical rule. Short runs are compressed schedules, not
     prefixes of a longer run. Reward remains the executor's terminal game
-    outcome. Wall time is only a failure bound.
+    outcome. Wall time is only a failure bound. `padded_shapes` turns the
+    CUDA forward layout off for comparison; otherwise the regime resolves it.
     """
+    layout: Layout = False if padded_shapes else "auto"
     schedule = IterationSchedule(steps=steps)
     allowance = seconds if seconds is not None else max(1680.0, steps * 8.0 + 600)
     return TrainingRecipe(
@@ -190,7 +210,11 @@ def _baseline(
                         gradient="damped_policy", iteration_schedule=schedule
                     ),
                     execution=Execution(
-                        wall_seconds=allowance * 0.85, threads=1, device=device
+                        wall_seconds=allowance * 0.85,
+                        threads=1,
+                        device=device,
+                        bucketed_shapes=layout,
+                        live_tokens=layout,
                     ),
                 )
             ],
@@ -208,9 +232,14 @@ def run_baseline(
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
     device: Literal["cpu", "mps", "cuda"] | None = None,
+    padded_shapes: bool = False,
 ) -> ExperimentRun:
     """Train, export and evaluate; retain every failure without automatic retry."""
     plan = baseline(
-        steps, seconds=seconds, learning_seats=learning_seats, device=device
+        steps,
+        seconds=seconds,
+        learning_seats=learning_seats,
+        device=device,
+        padded_shapes=padded_shapes,
     )
     return plan.run(seed=seed, out=out)

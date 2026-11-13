@@ -5,8 +5,11 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{
-        action::AgentError, env::Env, observation::Observation,
-        observation_encoder::ObservationEncodeError, opponent::OpponentPolicy,
+        action::AgentError,
+        env::{Env, HandSnapshot},
+        observation::Observation,
+        observation_encoder::ObservationEncodeError,
+        opponent::OpponentPolicy,
     },
     infra::profiler::{InfoDict, InfoValue},
     state::player::PlayerConfig,
@@ -290,6 +293,32 @@ impl VectorEnv {
     /// Exact current-game seeds; auto-reset succession remains native authority.
     pub fn current_game_seeds(&self) -> Vec<u64> {
         self.envs.iter().map(Env::seed).collect()
+    }
+
+    /// Opaque process-local game generations, changed by every reset or slot
+    /// replacement (including a repeated seed). Never a replay or world identity.
+    pub fn current_game_generations(&self) -> Vec<u64> {
+        self.envs.iter().map(|env| env.capture_generation).collect()
+    }
+
+    /// Read all requested seats in slot order. After autoreset these describe the
+    /// replacement games; no terminal hands are cached and no capacities apply.
+    pub fn hand_snapshots(&self, players: &[usize]) -> Result<Vec<HandSnapshot>, AgentError> {
+        if players.len() != self.len() {
+            return Err(AgentError(format!(
+                "expected {} hand snapshot players, got {}",
+                self.len(),
+                players.len()
+            )));
+        }
+        self.validate_ready_for_step().map_err(|_| {
+            AgentError("vector env must be reset before reading hand snapshots".to_string())
+        })?;
+        self.envs
+            .iter()
+            .zip(players)
+            .map(|(env, &player)| env.hand_snapshot(player))
+            .collect()
     }
 
     /// Retain the exact surfaced offers before a strict batch can mutate any row.
@@ -952,6 +981,101 @@ mod tests {
     };
 
     #[test]
+    fn hand_snapshots_keep_native_seats_when_another_player_chooses() {
+        let mut vector = VectorEnv::new(1, 42, true, OpponentPolicy::None);
+        vector
+            .reset_all(vec![
+                PlayerConfig::new("a", BTreeMap::from([("Mountain".into(), 20)])),
+                PlayerConfig::new("b", BTreeMap::from([("Island".into(), 20)])),
+            ])
+            .unwrap();
+        let env = &mut vector.envs[0];
+        let before = [env.hand_snapshot(0).unwrap(), env.hand_snapshot(1).unwrap()];
+        env.scenario_control_player(0, 1);
+        assert_eq!(env.current_agent_index(), Some(1));
+        for (player, previous) in before.iter().enumerate() {
+            let scalar = vector.envs[0].hand_snapshot(player).unwrap();
+            let batch = vector.hand_snapshots(&[player]).unwrap();
+            assert_eq!(batch[0], scalar);
+            assert_eq!(scalar.cards, previous.cards);
+        }
+        assert_eq!(before[0].cards, BTreeMap::from([("Mountain".into(), 7)]));
+        assert_eq!(before[1].cards, BTreeMap::from([("Island".into(), 7)]));
+    }
+
+    #[test]
+    fn hand_snapshots_are_complete_detached_native_seat_snapshots() {
+        let players: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
+            .collect();
+        let mut vector = VectorEnv::new(2, 42, true, OpponentPolicy::None);
+        assert!(vector.hand_snapshots(&[0, 1]).is_err());
+        vector.reset_all(players).unwrap();
+        assert!(vector.hand_snapshots(&[0]).is_err());
+        assert!(vector.hand_snapshots(&[0, 2]).is_err());
+        vector.envs[0].scenario_clear_hand(1).unwrap();
+        vector.envs[1].scenario_clear_hand(0).unwrap();
+        for _ in 0..70 {
+            vector.envs[1]
+                .scenario_force_card_in_hand(0, "Mountain")
+                .unwrap();
+        }
+        let snapshots = vector.hand_snapshots(&[1, 0]).unwrap();
+        for (slot, player) in [1, 0].into_iter().enumerate() {
+            assert_eq!(
+                snapshots[slot],
+                vector.envs[slot].hand_snapshot(player).unwrap()
+            );
+        }
+        assert!(snapshots[0].cards.is_empty());
+        assert_eq!(
+            snapshots[1].cards,
+            BTreeMap::from([("Mountain".into(), 70)])
+        );
+        assert_eq!(snapshots[1].player, 0);
+        vector.envs[1].scenario_clear_hand(0).unwrap();
+        assert!(vector.hand_snapshots(&[1, 0]).unwrap()[1].cards.is_empty());
+        assert_eq!(
+            snapshots[1].cards,
+            BTreeMap::from([("Mountain".into(), 70)])
+        );
+    }
+
+    #[test]
+    fn hand_snapshots_distinguish_same_seed_resets_reassignment_and_replacement() {
+        let mut vector = VectorEnv::new(2, 42, true, OpponentPolicy::None);
+        vector.reset_all(sample_player_configs()).unwrap();
+        let original = vector.hand_snapshots(&[0, 1]).unwrap();
+        vector
+            .reset_seeds_into(vec![42, 43], |_, _, _, _, _| Ok(()))
+            .unwrap();
+        let reset = vector.hand_snapshots(&[0, 1]).unwrap();
+        for (before, after) in original.iter().zip(&reset) {
+            assert_ne!(before.game_id, after.game_id);
+            assert_eq!(before.seed, after.seed);
+            assert_eq!(before.cards, after.cards);
+        }
+        vector
+            .reassign_roots_into(
+                vec![Some(sample_player_configs()), None],
+                |_, _| Ok(()),
+                |_, _, _, _, _| Ok(()),
+            )
+            .unwrap();
+        let reassigned = vector.hand_snapshots(&[0, 1]).unwrap();
+        assert_ne!(reset[0].game_id, reassigned[0].game_id);
+        assert_eq!(reset[0].seed, reassigned[0].seed);
+        assert_eq!(reset[1], reassigned[1]);
+        vector
+            .replace_failed_into(&[true, false], |_, _, _, _, _| Ok(()))
+            .unwrap();
+        let replaced = vector.hand_snapshots(&[0, 1]).unwrap();
+        assert_ne!(reassigned[0].game_id, replaced[0].game_id);
+        assert_eq!(reassigned[1], replaced[1]);
+    }
+
+    #[test]
     fn exposure_capture_retains_old_seed_before_reset() {
         let players: Vec<_> = ["a", "b"]
             .into_iter()
@@ -1410,8 +1534,8 @@ mod tests {
     }
 
     #[test]
-    fn reset_skips_to_hero_turn_with_passive_policy() {
-        let mut env = VectorEnv::new(1, 11, true, OpponentPolicy::Passive);
+    fn reset_skips_to_hero_turn_with_random_policy() {
+        let mut env = VectorEnv::new(1, 11, true, OpponentPolicy::Random);
         let reset = env
             .reset_all(sample_player_configs())
             .expect("reset_all should succeed");
@@ -1420,7 +1544,7 @@ mod tests {
 
     #[test]
     fn terminal_step_returns_post_reset_observation() {
-        let mut env = VectorEnv::new(1, 23, true, OpponentPolicy::Passive);
+        let mut env = VectorEnv::new(1, 23, true, OpponentPolicy::Random);
         env.reset_all(sample_player_configs())
             .expect("reset_all should succeed");
 
@@ -1441,7 +1565,7 @@ mod tests {
 
     #[test]
     fn step_into_and_reset_all_into() {
-        let mut env = VectorEnv::new(3, 31, true, OpponentPolicy::Passive);
+        let mut env = VectorEnv::new(3, 31, true, OpponentPolicy::Random);
 
         let reset_infos = env
             .reset_all_into(
@@ -1465,8 +1589,8 @@ mod tests {
 
     #[test]
     fn masked_step_preserves_paused_stream_and_ignores_its_action() {
-        let mut paused = VectorEnv::new(2, 99, true, OpponentPolicy::Passive);
-        let mut control = VectorEnv::new(2, 99, true, OpponentPolicy::Passive);
+        let mut paused = VectorEnv::new(2, 99, true, OpponentPolicy::None);
+        let mut control = VectorEnv::new(2, 99, true, OpponentPolicy::None);
         paused.reset_all(sample_player_configs()).unwrap();
         control.reset_all(sample_player_configs()).unwrap();
         paused
@@ -1547,7 +1671,7 @@ mod tests {
 
     #[test]
     fn step_into_errors_are_returned_in_index_order() {
-        let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::Passive);
+        let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::None);
         env.reset_all_into(sample_player_configs(), |_, _, _, _, _| Ok(()))
             .expect("reset_all_into should succeed");
 

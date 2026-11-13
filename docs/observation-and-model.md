@@ -38,11 +38,21 @@ frozen input version never silently falls behind the rules.
 
 ## What the network does
 
+Every observation batch is admitted once, on CPU, before any forward:
+`admit_observation(agent, obs)` checks shapes, references, programs and the
+legal-action mask and returns an `AdmittedObservation`. The forward reads only
+admitted input, raises `TypeError` for a plain tensor dictionary and does no
+validation of its own
+([observation admission](../manabot/model/agent.md#observation-admission)).
+
 1. **Embed.** Each visible object gets a typed projection. A card's rules tokens
    pass through a token embedding and a GRU, so the model can read what a card
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
+   [Live-token attention](#live-token-attention) attends over valid
+   objects only; it replaced the pooled token stream
+   ([token-stream report](../experiments/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
@@ -64,7 +74,7 @@ and paying costs. The action's own features are concatenated with the
 post-attention embeddings of the objects it names.
 
 From `_add_focus` in
-[`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py):
+[`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py):
 
 ```python
 focus_embeds = torch.gather(post_attention_focus_objects, 2, focus_indices)
@@ -109,7 +119,7 @@ cards and 64 permanents per seat; a fresh `ObservationConfig` allots 60 and
 action concatenates its 64-channel projection with two 64-channel focus objects,
 giving 192 channels, and passes through 192 → 64 → 64 to the policy head.
 
-V7 encodes each complete shared effect once and sums its vector into every
+The model encodes each complete shared effect once and sums its vector into every
 explicitly named affected object before attention. Duplicate memberships retain
 multiplicity, and every affected object's loss reaches the shared encoder. Local
 facts remain a separate sum. Neither path adds attention tokens.
@@ -117,7 +127,296 @@ facts remain a separate sum. Neither path adds attention tokens.
 Complete shared records retain duration, timestamp, controller and exact source
 bindings that can change future behavior.
 
+### Bucketed padding
+
+Each buffer arrives padded to its declared capacity, but a real batch uses
+little of it. Across 300 captured collection batches the median batch needed 59
+of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
+padded path the network still processes every slot, and skips lookups for an
+axis that is empty in the batch, so tensor shapes change from batch to batch.
+
+Bucketed padding, the default for CUDA training, avoids most of that. After an
+observation is admitted, the network trims each variable axis (facts, effect
+headers, details and members, relations, actions, events, cards, permanents,
+known hands and decklists) to a bucket: the next power of two at or
+above what the batch uses, at least 8 and at most the declared capacity. What a
+batch uses includes every row a reference can name, so trimming removes only
+empty rows nothing refers to. Trimming cards and permanents renumbers object
+references; it is skipped under `historical_mean` value aggregation, whose
+average includes padding, and with belief rows. Logits keep their full action
+capacity. Admission measures the buckets on the host
+(`manabot.policy.buckets`), before any device transfer, for inference and
+learning alike, so the device forward reads nothing back to find them.
+
+Inside the network, fact ids are looked up at the fact axis's shape instead of
+for selected rows, and learning encodes the complete card catalog instead of
+the definitions a batch references. Shared-effect routing, fact programs and
+legal-action selection keep their packed, data-dependent layouts. A forward
+therefore takes one of a few shapes per input axis instead of a new shape for
+nearly every batch, and does much less work than padding everything to
+capacity. The complete catalog is more work than the padded path's
+referenced definitions: captured Elemental learner batches referenced 65 to
+154 of 360 definitions, so learning encodes 2.3 to 5.8 times as many catalog
+tokens. On CPU, where the recurrent catalog encoder dominates learning, a
+learner forward and backward is therefore slower than on the padded path,
+most of all for small decks.
+
+A training stage's execution settings choose it, with
+[live-token attention](#live-token-attention), from the device. Both default to
+`auto`, which the regime resolves when it is built: on for a CUDA
+`train_self_play` stage, off on CPU and MPS and for every other operation:
+
+```python
+from experiments.batched_baseline import batched_baseline
+
+regime = batched_baseline()  # one CUDA train_self_play stage, fields unset
+execution = regime.stages[0].execution
+execution.bucketed_shapes, execution.live_tokens  # (True, True)
+```
+
+The regime keeps the resolved value: a stage that resolves on records both
+fields as `true` in `run.json`; one that resolves off omits them, so CPU and
+MPS regimes keep their hashes, and a saved regime that omits them reads as off
+([stage operations](training.md#stage-operations)). Builders that rebuild a
+regime (`with_capacity`, `with_agent`) resolve `auto` again and keep explicit
+values. To compare the paths on CUDA, write
+`Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
+`--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
+Bucketed shapes may still be written explicitly on CPU or MPS, where they are
+slower to learn, as described above.
+
+The stage's collection and learner policies, including a frozen opponent,
+use the resolved layout. Code that builds a policy outside a regime chooses it
+itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
+off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
+[Served evaluation](evaluation.md#shared-inference) accepts both switches and
+leaves them off: its batches are small, and the padded forward was the faster
+one there. Search players load their policies padded.
+
+Bucketed shapes are 2.4× faster per learner step than padding to capacity at
+w160l8 and 2.6× at w384l8 on an L4. Collection over full tables was faster at
+w160l8, 2.4 s against 2.9 s per pass with both settings on
+([live-token attention](../experiments/live_token_attention.md)). That is the
+known cost of the default at small widths; it stays on at every width.
+
+The setting changes how a forward is computed, not the model. It changes no
+`ModelConfig` field, checkpoint, world binding or policy input, so a checkpoint
+trained with either setting loads and runs with the other. On CPU,
+action probabilities, values, losses and gradients agree with the padded path
+up to the order of floating-point sums. A batch that references no card
+definition is the one difference in gradient support: the catalog encoder then
+receives exactly zero gradients instead of none. Capacity overflow and
+malformed inputs are rejected with the same error and message as on the
+padded path.
+
+### Live-token attention
+
+Bucketed padding still attends over every slot in a bucket, and most of those
+slots are empty: a batch whose largest board holds 9 permanents pads every
+observation to 16 permanent slots, including those with two. Live-token
+attention, on by default for CUDA training, computes object attention and the
+per-object layers only for valid objects, so cost follows what the board holds
+rather than what the bucket allows.
+
+The forward packs the valid objects of every observation in the batch into one
+sequence and records where each observation's objects begin. Attention is
+restricted to objects of the same observation, so each object attends over
+exactly the objects it attended over before, and nothing else. A value token
+is one more packed token per observation. Every attention layer (projections,
+attention, normalization and feedforward) runs on the packed sequence, which
+is then scattered back to the object table with zero padding, as the padded
+layers leave it. Permanent links, shared-effect membership and local facts join
+the table before packing; action focus slots and the critic read it after, so
+an action still scores against the post-attention embeddings of the objects it
+names. The catalog encoder, shared-effect routing, fact programs and the action
+head run as they do without the setting; with `bucketed_shapes=True` their axes
+are still trimmed to buckets.
+
+Attention within each observation uses `scaled_dot_product_attention` on
+jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
+CPU it falls back to one attention call per observation, which is correct but
+slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
+padded on a laptop CPU
+([measurement](../experiments/eval_forward_layout.md)). A stage therefore uses
+live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
+`live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
+as a reduced precision does.
+
+Packing needs one host read per forward, the batch's total number of valid
+objects, to size the packed sequence. Collection measures it on the host while
+preparing a batch, as it does for buckets, so the device forward reads nothing
+back; learning reads it once per forward. The layout adds no other
+data-dependent reads.
+
+The setting resolves, serializes and reaches policies exactly as
+[bucketed shapes](#bucketed-padding) do, and the two are independent: either
+may be on without the other. Code that builds a policy directly passes
+`ActorCritic(..., live_tokens=True)` and `load_checkpoint(..., live_tokens=True)`,
+which allow it on any device so CPU tests can compare the layouts. Like
+bucketed shapes, it changes no model, checkpoint or input contract. Action
+probabilities, values, losses and gradients agree with the padded path to
+within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
+shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster than bucketed shapes
+alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
+([live-token attention](../experiments/live_token_attention.md)).
+
 ## Policy inputs
+
+Main carries policy input v9, the fresh default, and explicit input v10
+([below](#input-v10-turn-history-and-powerstone-mana)).
+`ObservationConfig.policy_input_version` is always serialized. A checkpoint,
+replay or saved configuration bound to any other version, or omitting it,
+raises `UnsupportedPolicyInput`, which names the revision to run it from
+([`ac601834d`](https://github.com/loopflowstudio/manabot/tree/ac601834d) is the
+last revision supporting v1–v8). Load saved configurations through
+`ObservationConfig.from_checkpoint`; do not edit a checkpoint's version or
+reshape its weights to get past the error.
+
+A layout change on main does not bump the version. Every checkpoint records the
+revision and Etude run that wrote it, and its world binding holds each buffer's
+shape. A checkpoint from an earlier layout is refused with the buffers that
+differ and the revision to run it from. Loading an architecture does not
+admit a checkpoint to the current world; see
+[world identity](../manabot/README.md#world-identity).
+
+### Input v10: turn history and Powerstone mana
+
+Three TLE bonus-sheet cards read state v9 has no place for:
+
+| Card | State v10 adds |
+| --- | --- |
+| Bloodchief Ascension | Life each player has lost this turn |
+| Brought Back | Which graveyard cards were put there from the battlefield this turn |
+| Cityscape Leveler | Mana that can't be spent to cast nonartifact spells (its Powerstone tokens) |
+
+Select v10 explicitly before constructing the collector and model:
+
+```python
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
+from manabot.recipes.local import local_smoke
+
+regime = local_smoke(steps=1).model_copy(
+    update={"observation": ObservationConfig(policy_input_version=10)}
+)
+space = ObservationSpace(regime.observation)
+```
+
+Use that `space` for `SeatRoutedCollector` and `ActorCritic(space, regime.agent)`;
+the serialized `TrainingRegime` keeps the selection. V10 is v9 plus this state,
+in the same native scalar, vector and Python encoders, the LLM text observation
+and the learning tokens.
+
+V10 adds two buffers to the v9 layout; their presence is what selects v10 in
+the native encoders:
+
+| Key | Shape | Holds |
+| --- | --- | --- |
+| `player_turn_state` | 2 × 8 | Per seat, agent first: life lost this turn / 20, spells cast this turn / 10, then mana that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10 |
+| `card_turn_state` | 2 × 60 | Per seat card row (aligned with `semantic_cards`): 1 for a graveyard card put there from the battlefield this turn |
+
+The model appends each seat's row to its player row and each card value to its
+card row before embedding them.
+
+V9 and its checkpoints are unchanged: w17 checkpoints keep loading, and fresh
+configurations stay v9. A v9 encoder refuses a position that needs v10 state:
+a card visible to the viewer reads life lost this turn or graveyard cards put
+there from the battlefield and that state is present, or a pool holds mana
+that can't be spent to cast nonartifact spells. `managym.input_v10_state(obs)`
+names the needed state. The Python encoder raises `UnsupportedPolicyInput`
+naming v10 and the state, and the native encoders raise `ValueError` with the
+same reason, before writing any buffer. A v9 run over decks with these cards
+stops at the first such position, so train on them with v10.
+A game, replay or Academy session needs no policy input and plays these cards
+under any configuration. A v9 checkpoint cannot be widened to v10; train a new
+one.
+
+### Layout
+
+A fresh `ObservationConfig` gives these float32 buffers. Capacities are
+configuration; widths are the layout.
+
+| Key | Shape | Holds |
+| --- | --- | --- |
+| `agent_player`, `opponent_player` | 1 × 73 | Player state |
+| `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield |
+| `agent_permanents`, `opponent_permanents` | 40 × 38 | Permanents |
+| `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
+| `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |
+| `effects`, `effect_details`, `effect_members` | 128 × 18, 4096 × 3, 2048 × 2 | Each active effect once, with its payload tokens and affected objects |
+| `decklists`, `known_hand`, `semantic_cards` | 2 × 60 × 5, 2 × 60 × 2, 2 × 60 | Disclosed lists, known-hand minima, definition joins |
+| `actions`, `action_focus`, `name_candidates` | 512 × 22, 512 × 2, 512 × 4 | Legal actions, the objects each names, name choices |
+| `events` | 32 × 7, or 32 × 12 with recent events | Public events |
+
+Allocate and collect every key from the supplied `ObservationSpace`, on both
+the scalar and vector paths. Fact, relation, effect and action overflow is a
+typed Capacity error, never truncation; the one declared exception is the TLA
+pilot's first-64 action prefix.
+`agent/continuation.rs` projects the relation frames and
+`agent/observation_encoder.rs` the fact rows once per observation;
+`manabot/env/observation.py` is the matching reference encoder. A buffer that
+is missing or has the wrong shape fails before any write. Column names and
+value encodings for every buffer come from `managym.observation_layout()`
+([reading arrays by name](engine.md#reading-arrays-by-name)).
+
+### Relations and facts
+
+Relation validity is column 31. Only the acting viewer receives private
+continuation. Transport IDs are joins to the card catalog and object table,
+never numeric features. At `Decision::ManaChoice` the frame's source is the
+mana ability's source; a triggered mana ability's type choice (Heartbeat of
+Spring) names that ability's source, with the permanent tapped for mana as
+its context.
+
+Waiting delayed abilities (frame kind 10) carry event codes independently of
+frequency and expiry. Relation row kind 9 carries frequency in column 28 (1
+once, 2 each matching event); column 48 retains cleanup expiry. Remembered
+objects are kind-8 reference rows, separate from event context. Ordered control
+schedules and delegated decisions use kinds 13 and 14.
+
+Pooled mana whose spending has an effect (Animal Attendant's "that creature
+enters with an additional +1/+1 counter") counts in its player's ordinary
+or restricted mana aggregate, according to its restriction, and is stated as
+an effect program on that player: fact kind 11
+under the id `PooledMana`, one program per class, in the tokens the producing
+card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is
+an execution occurrence of its stack or resolution frame (`mana spent`, a
+kind-14 continuation program) when a rule still reads it: the definition
+counts that mana (Toph, converge) or a spend effect applied. These programs
+use the same representation in v9 and v10. Combat mana also has a pool
+program, including ordinary combat mana; its class records combat expiry.
+Regular and combat units never merge during payment search. Academy shows each
+rider, restriction and expiry alongside the public amounts in
+`pooled_mana_classes`. A class without a restriction or spend effect omits that
+qualifier. Class rows state amounts first; Academy uses the aggregate combat
+expiry only when no class rows are recorded.
+
+Spending offers select one color and class at a time. The native obligation
+frame (decision code 31) carries the remaining cost; its execution program
+joins each offer's mode to the exact unit and retains the partial receipt.
+Every offer preserves all saved payments, including nested mana-ability fees.
+Equivalent units and permutations of a single forced payment need no choice.
+Submitting a spending Command commits that unit; replay, forks and stale
+rejection use the same authority as other decisions.
+
+Fact rows carry source, duration and timestamp rank. The model divides
+timestamp ranks by 128, independent of fact capacity.
+
+### Shared effects
+
+Each active effect is one `effects` header owning bounded slices of
+`effect_details` and `effect_members`. Details hold the payload as learning
+tokens, including granted, copy-exception and captured continuation programs,
+changed colors and keyword-counter timestamps; members keep one-based public
+object joins, and duplicate memberships survive. No rules record is deleted or
+semantically coalesced. The layout, routing and sum/normalization tradeoff are
+in [`manabot/model/shared_effects.py`](../manabot/model/shared_effects.py) and
+[shared effect inputs](../manabot/README.md#shared-effect-inputs). The transport
+is an engineering result; it establishes no learning-quality advantage.
+
+Encode-only benchmark: `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`.
+Matched full-vector benchmarks use `scripts/bench_breakdown.py --matched-corpus`
+on a release extension built with the `benchmark` feature.
 
 ### Catalog naming input
 
@@ -135,20 +434,19 @@ equal one flat choice over every name. Single-option prompts follow the native
 trivial-decision skip. Reconnect, replay and forks restore the actual current
 prompt; Commands bound to an earlier prompt are stale.
 
-`ObservationConfig(policy_input_version=9)` retains v7's object, relation and
-shared-effect layouts and adds `name_candidates[A,4]` at the ordinary action
-capacity `A = max_actions`: one-based public name row, optional one-based
-definition reference, then the one-based first and last name rows of a group
-choice (zero means absent). Sorted names make the span a viewer-safe identity
-of every member. No card/permanent row is fabricated for a name or group. These
-rows suppress the positional mode feature, so identity comes from categorical
-joins, never from magnitude.
+`name_candidates[A,4]` at the ordinary action capacity `A = max_actions` holds
+a one-based public name row, an optional one-based definition reference, then
+the one-based first and last name rows of a group choice (zero means absent).
+Sorted names make the span a viewer-safe identity of every member. No
+card/permanent row is fabricated for a name or group. These rows suppress the
+positional mode feature, so identity comes from categorical joins, never from
+magnitude.
 
 The policy adds a trainable vector per name and, where present, the
 definition's learning-program embedding from the table used by game objects. A
 group's vector is the mean of its members' name vectors, computed exactly from
 a prefix sum over the name table: every member receives the group's gradient,
-and no member programs are encoded for a group prompt. V9 joins name vectors to
+and no member programs are encoded for a group prompt. Name vectors join
 viewer-visible program references before card, known-hand and decklist pooling,
 so equal-rule cards with different public names support different preferences;
 closed native decklist rows contribute no identities. Action networks score
@@ -159,125 +457,14 @@ The checkpoint binding includes the ordered naming vocabulary with definition
 joins, `naming_representation="public-groups-v1"` and `naming_branching`, in
 addition to tensor shapes and the content manifest. A changed vocabulary,
 order, join or branching bound fails admission; there is no warm start or
-remapping.
-
-V9 composes the [v8 layer layout](#composable-layer-input-v8) with
-`name_candidates[A,4]`. V1–v8 have no name identity: group and name choices
-appear as ordinary modal choices, within their capacities. Missing-checkpoint defaults and fresh v6
-defaults are unchanged; using v9 is explicit. The semantic observation/capture
-contracts are 8/5, so earlier semantic world bindings are rejected for current
-execution.
+remapping. The semantic observation/capture contracts are 8/5, so earlier
+semantic world bindings are rejected for current execution.
 
 The default universe remains real non-token catalog names, including back faces.
 A separate immutable vocabulary can hold validated names without playable card
 definitions; this is exercised only by the offline large-vocabulary fixture.
 This does not claim that the supported catalog exhausts every name legal under
 Magic's rules, and does not broaden deck admission.
-
-### Current continuation input
-
-Fresh `ObservationConfig` uses policy input v6 with serialized `max_facts=512`.
-V6 retains v5's fact columns and all other tensor layouts; v5 keeps exactly
-128 fact rows. Facts remain one row per object/detail with source, duration and
-timestamp rank. The model divides fact timestamp ranks by **128** in both
-versions; capacity does not change the numeric scale. Larger finite buffers
-still reject overflow rather than dropping state. Configuration owns allocation,
-native scalar/vector buffer shapes, model shape checks and checkpoint receipts.
-
-A native `relations[64,49]` float32 buffer carries ordered stack entries,
-announced targets and clauses, chosen modes and abilities, kicker, reserved
-sacrifices, suspended payments and waiting triggers. V5–v8 player, card and
-permanent widths are 73/56/38. Native buffers bind relation semantics by width
-(32 for v2/v3, 33 for v4, 49 for v5–v8); validity stays at column 31. The fact
-axis binds capacity; at 128 rows v5 and v6 encode identically, while the saved
-configuration still distinguishes their identities. Checkpoints omitting the
-version load as v1 through `ObservationConfig.from_checkpoint`; legacy configs
-omit `max_facts`, preserving historical architecture hashes.
-`agent/continuation.rs` projects the continuation frames and
-`agent/observation_encoder.rs` the fact rows once per observation;
-`manabot/env/observation.py` is the matching reference encoder. Only the
-acting viewer receives private continuation; overflow fails rather than
-truncating. Transport IDs are joins to the card catalog and object table,
-never numeric features. At `Decision::ManaChoice` the activation source is
-unavailable because rules state has discarded it.
-Waiting delayed abilities (frame kind 10) carry event codes independently of
-frequency and expiry. In v5–v8, relation row kind 9 carries frequency in column
-28 (1 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
-objects remain kind-8 reference rows, separate from event context. Historical
-captures without a frequency field retain unknown frequency rather than
-inferring it from the event. V1–v4 omit these delayed facts.
-
-Encode-only benchmark: `cargo run --release --features benchmark --manifest-path managym/Cargo.toml --example bench_observation`.
-Matched full-vector benchmarks use `scripts/bench_breakdown.py --matched-corpus`
-and `scripts/bench_observation_pair.py` on a release extension built with the
-`benchmark` feature.
-
-### Input v7 capacity
-
-Select `ObservationConfig(policy_input_version=7)` for the new transport: 128
-headers × 18 columns, 512 detail tokens × 3, and 2,048 memberships × 2, plus a
-configurable local-fact table (128 rows by default). Overflow fails explicitly.
-The retained 140/270-fragment Drill positions become 7/9 complete payloads and
-70/135 memberships. All original timestamps and duplicate edges survive; no
-rules records are deleted or semantically coalesced.
-
-The three padded effect arrays use 31,744 bytes per observation; local facts add
-6,144. This exceeds v6/256's 12,288-byte fact array, although the retained
-270-fragment case needs only 1,944 active effect bytes. The layout, routing and
-sum/normalization tradeoff are in [`manabot/model/shared_effects.py`](../manabot/model/shared_effects.py)
-and [shared effect inputs](../manabot/README.md#shared-effect-inputs). These
-engineering proofs establish no learning-quality advantage. Fresh defaults
-remain v6; frozen v1–v6 checkpoints keep their meanings, and the TLA v10 pilot
-trains on v7.
-
-### Composable layer input v8
-
-For a new run requiring composable layer programs, explicitly select v8 before
-constructing the collector and model. Fresh configurations remain v6. For example,
-this prepares a recipe and its model input without starting training:
-
-```python
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ObservationConfig
-from manabot.recipes.local import local_smoke
-
-recipe = local_smoke(steps=1)
-recipe.observation = ObservationConfig(policy_input_version=8)
-space = ObservationSpace(recipe.observation)
-```
-
-Use that same `space` for `SeatRoutedCollector` and
-`ActorCritic(space, recipe.agent)`. The serialized `TrainingRegime` retains the
-selected input. V8 carries structured granted, copy-exception and captured
-continuation programs, changed colors and keyword-counter timestamps. V7 remains
-available for representable shared effects; it cannot encode every new layer
-payload.
-
-The shared `validate_policy_input` boundary rejects unrepresentable v1–v7 layer
-payloads in both native and Python encoders before writing encoded observations,
-selecting an action prefix or running inference. The diagnostic names the
-selected version, for example: `policy input v6 cannot represent layer payload;
-select v8`. A starting state may encode successfully and a later state fail;
-this is observation admission, not whole-game preflight or rollback of an action
-already executed. Defined-card eligibility, input representability and
-checkpoint/world admission are separate checks.
-
-On rejection, preserve the failed run's configuration and evidence. For new work
-requiring these payloads, configure v8 and construct a compatible model. Load saved
-observation configurations through `ObservationConfig.from_checkpoint` and keep
-their saved versions, omissions and model shapes; an absent version means v1.
-Do not edit a checkpoint's input version or reshape its weights to bypass the
-error. Saved-policy evaluation uses that policy's input and normal world
-admission. Successful architecture loading alone does not admit a checkpoint to
-the current world; see [world identity](../manabot/README.md#world-identity).
-Selecting v8 does not restart a failed run or swap its live policy.
-
-V7 and v8 share `effects[128,18]` headers and `effect_members[2048,2]` joins.
-V7 has `effect_details[512,3]` and defaults to `facts[128,12]`; v8 has
-`effect_details[4096,3]` and defaults to `facts[512,12]`. Local fact capacity is
-configurable through `max_facts` in either version. Headers own bounded slices
-of details and members. Allocate and collect every key from the selected
-`ObservationSpace`; overflow rejects rather than truncating a payload.
 
 ### Optional recent public events
 
@@ -311,7 +498,7 @@ inference from past behavior, compared against this stateless reference.
 "Sufficient" here means the viewer's decision-relevant observable state; it
 does not make hidden cards observable or the game fully observed.
 
-| Layer | Holds | Shipped in v7/v8 | Must not carry |
+| Layer | Holds | Shipped | Must not carry |
 | --- | --- | --- | --- |
 | Effective state | Current characteristics from `Game::characteristics`, zones, stack, suspended decisions, waiting triggers, known-hand minima, deck disclosure | Object rows and the 64 × 49 relation table | Raw effect bookkeeping a consumer must replay to learn the current value |
 | Shared records | Each active effect once: payload, duration, timestamp rank, controller, source definition, exact visible source, exact memberships | `effects`, `effect_details`, `effect_members`; local facts for copy exceptions and other per-object kinds | A recomputed layer result, or a merged record that loses a future difference |
@@ -327,7 +514,7 @@ Unless marked, the anchor shows the rule; it is not a paired-observation proof.
   now and diverges at cleanup: `cr_514_2_an_end_of_turn_record_ends_at_cleanup`.
 - **Source dependence.** Equal-looking records tethered to different sources
   diverge when one source leaves or changes control:
-  `ty_lee_chi_blocker_locks_a_creature_down_while_you_control_her`. The v7
+  `ty_lee_chi_blocker_locks_a_creature_down_while_you_control_her`. The effect
   header carries the exact source join
   (`test_source_dependent_shared_transport_has_exact_public_join`).
 - **Timestamp order.** Add-then-remove and remove-then-add hold the same
@@ -344,10 +531,10 @@ Unless marked, the anchor shows the rule; it is not a paired-observation proof.
 - **Ability loss.** Effective activated-ability order fixes activation and
   payment indices, so losing a grant can remove an action while power,
   toughness and keywords stay equal. The lost-abilities status alone is paired
-  (`a_creature_that_lost_its_abilities_differs_only_in_v5`, on a creature with
+  (`a_creature_that_lost_its_abilities_differs`, on a creature with
   no abilities to lose); the action difference is reasoned.
 - **History eviction.** Paired native positions on real Commands fill the
-  window with equal rows while their v7 headers differ, and only one record
+  window with equal rows while their effect headers differ, and only one record
   survives cleanup:
   `test_effect_older_than_history_window_survives_only_in_current_state`. Its
   two grants also differ in payload and target, so it shows the window cannot
@@ -367,8 +554,8 @@ this proof first.
 | Mechanism | Assessment |
 | --- | --- |
 | Larger fixed fact and relation tables | Admission control only. Removes neither duplication nor source-identity loss. |
-| Typed shared records pooled into objects and frames | Shipped as v7 with pre-attention routing. Cheapest; a learned sum can still compress away a distinction that transport preserved. |
-| Per-record token GRU with sparse joins | Tested against pooling on v7 and not separated from it ([GPU report](../experiments/state-representation-gpu.md)). V8 requires it for ordered programs, so that comparison does not cover v8's effect path. |
+| Typed shared records pooled into objects and frames | Shipped with pre-attention routing. Cheapest; a learned sum can still compress away a distinction that transport preserved. |
+| Per-record token GRU with sparse joins | Tested against pooling on the earlier v7 input and not separated from it ([GPU report](../experiments/state-representation-gpu.md)). The current input requires it for ordered programs, so that comparison does not cover the current effect path. |
 | Variable-length game-state tokens | Unbuilt. Variable length alone does not reduce memory: the card encoder allocates padded tokens before packing. Ordered payloads suit token sequences, while unordered objects and effects need equivariant joins with explicit order features. |
 | Split the relation table into typed stack, execution and trigger structures | Unbuilt. The table is a flattened typed structure, not wrong in itself. Its costs are repeated headers, capacity shared across unrelated structures, overloaded index and order features, and uniform pooling. A split must keep public stack rank, parent links, retained target eligibility and action continuation joins. |
 | All objects, effects and frames as global attention tokens | Unmeasured. Moves attention from N² to (N + E + F)². Memberships need not become tokens. Compact transport alone does not justify it. |
@@ -413,14 +600,15 @@ is not evidence for any of them:
   memory, so "stateless first" is reasoned, not shown. Whether memory helps at
   all is open.
 - The GPU comparison found no qualified plateau and no pool-versus-GRU
-  difference (−1.95 points, 95% [−5.88, +1.98]). It covers v7 on one matchup, so
+  difference (−1.95 points, 95% [−5.88, +1.98]). It covers the earlier v7 input on one matchup, so
   it selects no reducer.
 - No paired observation test shows a lost activated ability removing an action,
   or a source that leaves and re-enters as the same physical card. Those cases
   rest on rules anchors and reasoning.
-- Fixed padded capacity against packed variable length is open. V7's effect
-  arrays use 31,744 bytes against 12,288 for v6's 256-row facts, and natural
-  length distributions have not been gathered.
+- Bucketed shapes and live tokens are measured for speed and output equality
+  ([bucketed padding](#bucketed-padding)), not for learning: changed
+  accumulation order is assumed not to move strength, and no matched-seed
+  comparison has tested that.
 - Learned sums preserve multiplicity but are not injective; whether that loses
   decision-relevant distinctions in practice is unmeasured.
 - Sequence training changes collection, sampling and recovery, and that cost has
@@ -438,14 +626,15 @@ is not evidence for any of them:
   ([value token](../experiments/value-token-screen.md),
   [pooling follow-up](../experiments/pooling-filter-followup.md),
   [three-seed depth/readout results](../experiments/value-readout-252-results.md)).
-- **No history input has shown a training benefit**, and the v7 shared-effect
+- **No history input has shown a training benefit**, and the shared-effect
   transport is an engineering proof, not a learning result.
 
 ## Where the code lives
 
 | Part | Code |
 | --- | --- |
-| Network | `ActorCritic` in [`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py) |
+| Network | `ActorCritic` in [`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py) |
+| Observation admission | [`manabot/model/admission.py`](../manabot/model/admission.py) |
 | Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |

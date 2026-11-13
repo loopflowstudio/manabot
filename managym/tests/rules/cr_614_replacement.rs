@@ -29,10 +29,10 @@ fn resolve_bolt_with_drivers(
 
     for effects in driver_effects {
         let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
-        let card = card_of(&s, permanent);
+        let object = card_of(&s, permanent);
         // Scenario-local COW definitions make these rule drivers without
         // expanding the production card pack.
-        s.game_mut().state.cards[card].replacement_effects = effects;
+        s.game_mut().state.objects[object].replacement_effects = effects;
     }
 
     s.force_card_in_hand(1, "Mountain");
@@ -159,9 +159,9 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
         deck(&[("Mountain", 40)]),
         614_004,
     );
-    let card = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
-    s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().state.cards[card].replacement_effects = vec![
+    let object = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().state.objects[object].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
         ReplacementEffect::EntersWithPlusOneCounters {
             count: 2,
@@ -174,23 +174,23 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
     s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::parse("RRR");
     // Re-publish the position after controlled fixture mana was supplied.
     s.game_mut().scenario_refresh_priority().unwrap();
-    crate::support::play::cast_card(&mut s, card);
+    crate::support::play::cast_card(&mut s, object);
     let from = Some(ZoneType::Stack);
-    let old_ref = s.game().current_object_ref(card).expect("spell object");
+    let old_ref = s.game().current_object_ref(object).expect("spell object");
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Stack));
+    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Stack));
     crate::support::play::choose_mode(&mut s, 0);
 
-    let permanent_id = s.game().state.card_to_permanent[card].expect("entered permanent");
+    let permanent_id = s.game().state.object_to_permanent[object].expect("entered permanent");
     let permanent = s.game().state.permanents[permanent_id]
         .as_ref()
         .expect("entered permanent facts");
     assert!(permanent.tapped);
     assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
-    assert_ne!(s.game().current_object_ref(card), Some(old_ref));
+    assert_ne!(s.game().current_object_ref(object), Some(old_ref));
     assert!(s.drain_events().contains(&GameEvent::CardMoved {
-        card,
+        object_id: object,
         from,
         to: ZoneType::Battlefield,
         controller: PlayerId(0),
@@ -206,19 +206,19 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
         614_005,
     );
     let driver = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
-    s.game_mut().state.cards[driver].replacement_effects = vec![
+    s.game_mut().state.objects[driver].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
         ReplacementEffect::EntersWithPlusOneCounters {
             count: 2,
             condition: None,
         },
     ];
-    s.game_mut().move_card(driver, ZoneType::Graveyard);
-    assert_eq!(s.game().state.card_to_permanent[driver], None);
+    s.game_mut().move_object(driver, ZoneType::Graveyard);
+    assert_eq!(s.game().state.object_to_permanent[driver], None);
 
     let mountain = find_owned_card_off_battlefield(&s, 0, "Mountain");
-    s.game_mut().move_card(mountain, ZoneType::Battlefield);
-    let permanent_id = s.game().state.card_to_permanent[mountain].expect("mountain permanent");
+    s.game_mut().move_object(mountain, ZoneType::Battlefield);
+    let permanent_id = s.game().state.object_to_permanent[mountain].expect("mountain permanent");
     let permanent = s.game().state.permanents[permanent_id]
         .as_ref()
         .expect("mountain facts");

@@ -13,6 +13,9 @@ from academy.public_commitment_parity import (
 )
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/rul-9-played-workloads-v1.measurement.json"
+)
 def test_checked_public_commitment_receipt_closes_selected_trace() -> None:
     receipt = verify_receipt()
 
@@ -43,6 +46,9 @@ def test_checked_public_commitment_receipt_closes_selected_trace() -> None:
     } == {"0": 68, "1": 135}
 
 
+@pytest.mark.experiment_data(
+    "experiments/data/rul-9-played-workloads-v1.measurement.json"
+)
 def test_public_commitment_receipt_binds_hypothesis_atomicity_and_frozen_evidence() -> (
     None
 ):

@@ -1577,6 +1577,12 @@
           "maximum": 255,
           "minimum": 0
         },
+        "pooled_mana_classes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PooledManaView"
+          }
+        },
         "remaining_sideboard_counts": {
           "type": [
             "object",
@@ -1611,6 +1617,12 @@
             "format": "uint32",
             "minimum": 0
           }
+        },
+        "spells_cast": {
+          "description": "Spells this player cast this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "stack": {
           "type": "array",
@@ -1667,6 +1679,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "except_nonartifact_spells": {
+          "type": "boolean"
         },
         "mana": {
           "type": "array",
@@ -1833,6 +1848,12 @@
           "description": "A land entered the battlefield under this player's control.",
           "type": "boolean"
         },
+        "life_lost": {
+          "description": "Life this player lost (CR 119.3; damage, payment or a set life total\nlower than before), summed over every loss this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "permanents_sacrificed": {
           "description": "Permanents this player sacrificed (CR 701.21).",
           "type": "integer",
@@ -1841,6 +1862,40 @@
         }
       },
       "additionalProperties": false
+    },
+    "PooledManaView": {
+      "type": "object",
+      "properties": {
+        "combat": {
+          "type": "boolean"
+        },
+        "effect": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mana": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 6,
+          "minItems": 6
+        },
+        "restriction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mana",
+        "combat"
+      ]
     },
     "PresentationEvent": {
       "type": "object",

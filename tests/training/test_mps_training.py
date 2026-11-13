@@ -4,7 +4,7 @@ from copy import deepcopy
 import math
 from pathlib import Path
 import time
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Literal
 
 import numpy as np
@@ -15,6 +15,11 @@ from typer.testing import CliRunner
 from experiments import training_throughput_packing as packing
 from experiments.tla_frontier import frozen
 from manabot import cli
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import clipped_surrogate, float64_operand
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
@@ -22,20 +27,17 @@ from manabot.env.observation import (
     FACT_EFFECT,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
-    FACT_KINDS_V8,
     FACT_OBJECT_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
 )
-from manabot.env.shared_effects import shared_effect_shapes
+from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model import semantic_cards, shared_effects
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.facts import FactEncoder
-from manabot.model.numerics import embedding_rows, float64_operand
-from manabot.model.policy_distribution import clipped_surrogate
+from manabot.model.numerics import embedding_rows
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
     RecordNamespace,
@@ -43,11 +45,10 @@ from manabot.model.semantic_cards import (
 )
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.baseline import baseline
+from manabot.recipes.device import accelerator
 from manabot.recipes.local import local_smoke
 from manabot.training import execution
-from manabot.training.learning import damped_policy
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.selection import UpdateDiagnostics
+from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -57,6 +58,8 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates import damped_policy, ppo
+from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -75,7 +78,7 @@ def test_mps_admitted_without_changing_saved_regimes() -> None:
         packing.runs("HEAD", "d1")[0].job.config or ""
     )
     assert canonical_sha256(saved.regime.model_dump(mode="json")) == (
-        "0366ff8d8548a0540976b7e3bb26b96f9326b82b250bfa11539cf197bc731c3e"
+        "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
     )
     for plan in (local_smoke(device="mps"), baseline(device="mps").regime):
         assert TrainingRegime.model_validate_json(plan.model_dump_json()) == plan
@@ -115,6 +118,52 @@ def test_unavailable_mps_fails_without_fallback(
                 tmp_path / "unavailable",
                 store,
             )
+
+
+@pytest.mark.parametrize(
+    "version,admitted",
+    [("2.10.0", False), ("2.14.1", False), ("2.15.0", True), ("3.0.0+cpu", True)],
+)
+def test_mps_torch_minimum_gates_selection(
+    version: str, admitted: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(torch, "__version__", version)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert (mps_torch_error() is None) == admitted
+    # MPS is never selected automatically, whatever the Torch version.
+    assert accelerator() is None
+    assert local_smoke().stages[0].execution.device == "cpu"
+    if admitted:
+        assert baseline(device="mps").regime.stages[0].execution.device == "mps"
+        assert local_smoke(device="mps").stages[0].execution.device == "mps"
+    else:
+        with pytest.raises(
+            ValueError, match=f"installed Torch {version} is below that minimum"
+        ):
+            baseline(device="mps")
+
+
+def test_old_torch_mps_stage_fails_before_training(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(torch, "__version__", "2.10.0")
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    with VerifyStore(tmp_path / "runs.sqlite") as store:
+        with pytest.raises(
+            ValueError,
+            match=(
+                "MPS training requires Torch 2.15 or newer; installed Torch 2.10.0 "
+                "is below that minimum"
+            ),
+        ):
+            execution.execute_regime(
+                local_smoke(steps=1, seconds=600, learning_seats="one", device="mps"),
+                197,
+                tmp_path / "old-torch",
+                store,
+            )
+    assert not (tmp_path / "old-torch" / "checkpoints").exists()
 
 
 def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:
@@ -209,26 +258,25 @@ def test_mps_one_update_and_export(
     assert isinstance(stage, TrainSelfPlay)
     stage.learning.min_advantage = 0
     observed: list[UpdateDiagnostics] = []
-    original = execution.update_iteration
+    assert isinstance(stage.learning, DampedPolicyLearning)
+    original = execution.update_damped_iteration
 
     def update(
+        backend: ModuleType,
         learner: Learner,
         batch: RolloutBatch,
-        learning: Learning | DampedPolicyLearning,
-        progress: float,
-        rng: np.random.Generator,
+        learning: DampedPolicyLearning,
+        iteration: int,
         *,
-        iteration: int = 1,
         bootstrap_agent: ActorCritic | None = None,
     ) -> UpdateDiagnostics:
         assert all(p.device.type == "mps" for p in learner.agent.parameters())
         result = original(
+            backend,
             learner,
             batch,
             learning,
-            progress,
-            rng,
-            iteration=iteration,
+            iteration,
             bootstrap_agent=bootstrap_agent,
         )
         assert all(torch.isfinite(p).all() for p in learner.agent.parameters())
@@ -236,7 +284,7 @@ def test_mps_one_update_and_export(
         observed.append(result)
         return result
 
-    monkeypatch.setattr(execution, "update_iteration", update)
+    monkeypatch.setattr(execution, "update_damped_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         run = execution.execute_regime(plan, 197, tmp_path / "mps", store)
     assert run.status == "completed", run.error
@@ -273,9 +321,9 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
         ):
             if column == FACT_DETAIL_INDEX and family != "detail":
                 continue
-            word = managym.learning_token_value(name) & 0xFFFFFFFF
+            word = managym.catalog_token_value(name) & 0xFFFFFFFF
             row[column : column + 2] = torch.tensor([word >> 16, word & 0xFFFF])
-    encoder = FactEncoder(4, 4, kinds=FACT_KINDS_V8, vocabulary="catalog")
+    encoder = FactEncoder(4, 4, vocabulary="catalog")
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(4))
     original = torch.nn.ModuleList([cards, encoder])
@@ -393,12 +441,13 @@ def test_mps_w64_single_selected_row_without_program_facts(
     original = damped_policy._targets
 
     def singleton(
+        backend: ModuleType,
         learner: Learner,
-        batch: RolloutBatch,
+        batch: AdmittedRollout,
         learning: DampedPolicyLearning,
         bootstrap_agent: ActorCritic | None = None,
     ) -> damped_policy.DampedTargets:
-        targets = original(learner, batch, learning, bootstrap_agent)
+        targets = original(backend, learner, batch, learning, bootstrap_agent)
         selected = torch.zeros_like(targets.selected)
         selected.flatten()[0] = True
         return damped_policy.DampedTargets(targets.advantages, targets.values, selected)
@@ -413,8 +462,8 @@ def test_mps_w64_single_selected_row_without_program_facts(
     monkeypatch.setattr(damped_policy, "_targets", singleton)
     monkeypatch.setattr(semantic_cards, "embedding_rows", checked)
     learner = Learner(agent, "mps", minibatch_rows=256)
-    result = execution.update_iteration(
-        learner, batch, stage.learning, 0, np.random.default_rng(197), iteration=1
+    result = damped_policy.update_damped_iteration(
+        torch_backend, learner, batch, stage.learning, 1
     )
     assert empty_calls
     assert result["retained"] == result["optimizer_exposures"] == 1
@@ -424,7 +473,8 @@ def test_mps_w64_single_selected_row_without_program_facts(
 
     # PPO shares the catalog owner; an empty actor filter still trains its critic.
     empty_calls.clear()
-    result = execution.update_iteration(
+    result = ppo.update_iteration(
+        torch_backend,
         learner,
         batch,
         Learning(epochs=1, minibatches=1, filter_scope="actor", min_advantage=1e6),
@@ -440,7 +490,6 @@ def test_mps_w64_single_selected_row_without_program_facts(
     _assert_finite(result)
 
 
-@pytest.mark.parametrize("version", [7, 8])
 @pytest.mark.parametrize(
     "device",
     [
@@ -454,19 +503,19 @@ def test_mps_w64_single_selected_row_without_program_facts(
     ],
 )
 def test_empty_shared_effect_details_backward(
-    version: int, device: str, monkeypatch: pytest.MonkeyPatch
+    device: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A live header/member need not have detail tokens (e.g. a v7 numeric buff)."""
+    """A live header/member need not have detail tokens (e.g. a numeric buff)."""
     torch.manual_seed(19)
     values = {
         key: torch.zeros(1, *shape, device=device)
-        for key, shape in shared_effect_shapes(version).items()
+        for key, shape in SHARED_EFFECT_SHAPES.items()
     }
     values["effects"][0, 0, 10] = 1  # Controller object.
     values["effects"][0, 0, 16:18] = 1  # One member, live header.
     values["effect_members"][0, 0] = 1  # Object 1, ordinal 1.
     objects = torch.ones(1, 2, 4, device=device)
-    encoder = SharedEffectEncoder(4, "typed_gru", version=version).to(device)
+    encoder = SharedEffectEncoder(4).to(device)
     before = deepcopy(encoder)
     loss = (
         encoder(

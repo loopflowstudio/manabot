@@ -119,13 +119,13 @@ fn cr_602_source_leaves_before_resolution_no_effect() {
     let shivan_card = s.game().state.permanents[shivan]
         .as_ref()
         .expect("shivan should exist")
-        .card;
-    s.game_mut().state.zones.move_card(
+        .object;
+    s.game_mut().state.place_object(
         shivan_card,
         managym::state::game_object::PlayerId(0),
         ZoneType::Graveyard,
     );
-    s.game_mut().state.card_to_permanent[shivan_card] = None;
+    s.game_mut().state.object_to_permanent[shivan_card] = None;
     s.game_mut().state.permanents[shivan] = None;
 
     s.pass_priority();
@@ -148,8 +148,8 @@ fn cr_602_observation_exposes_stack_object_metadata_for_ability() {
     let shivan_card = s.game().state.permanents[shivan_perm]
         .as_ref()
         .expect("shivan should exist")
-        .card;
-    let shivan_registry_key = s.game().state.cards[shivan_card].registry_key.0 as i32;
+        .object;
+    let shivan_registry_key = s.game().state.objects[shivan_card].registry_key.0 as i32;
     let controller_id = s.game().state.players[0].id.0 as i32;
 
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
@@ -171,9 +171,8 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
     use managym::{
         agent::{
             action::Action,
-            observation_encoder::{
-                encode, ObservationEncoderConfig, ACTION_ABILITY_INDEX, ACTION_DIM,
-            },
+            observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
+            observation_layout::action,
         },
         state::{
             ability::{Effect, ObjectSelector},
@@ -183,14 +182,14 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
     for chosen in 0..2 {
         let mut s = setup_shivan_with_mountains(60220, 1);
         let shivan = s.battlefield_permanents_named(0, "Shivan Dragon")[0];
-        let card = s.game().state.permanents[shivan].as_ref().unwrap().card;
+        let object = s.game().state.permanents[shivan].as_ref().unwrap().object;
         // Detach this scenario's printed definition; no production card is added.
-        let mut second = s.game().state.cards[card].activated_abilities[0].clone();
+        let mut second = s.game().state.objects[object].activated_abilities[0].clone();
         second.effects = vec![Effect::until_end_of_turn(
             ObjectSelector::This,
             Modification::pump(0, 1),
         )];
-        s.game_mut().state.cards[card]
+        s.game_mut().state.objects[object]
             .activated_abilities
             .push(second);
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -210,7 +209,7 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
         for (ability, &index) in indices.iter().enumerate() {
             assert_eq!(obs.action_space.actions[index].ability_index, Some(ability));
             assert_eq!(
-                encoded.actions[index * ACTION_DIM + ACTION_ABILITY_INDEX],
+                encoded.actions[index * ACTION_DIM + action::ABILITY],
                 (ability + 1) as f32
             );
         }

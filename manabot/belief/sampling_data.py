@@ -7,7 +7,6 @@ The native constraint projection shares exact-range semantics without enumeratio
 
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 import hashlib
@@ -19,22 +18,22 @@ import random
 import tempfile
 from typing import Literal, cast
 
+import torch
+
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.belief.sampling import SamplerInput, SamplerSchema
+from manabot.belief.state import ViewerHistory
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.sim.search.flat_mc import AgentMatchupPlayer
+import managym
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
     Command,
     DecisionFrame,
     Observation,
 )
-import torch
-
-from manabot.belief.sampling import SamplerInput, SamplerSchema
-from manabot.belief.state import ViewerHistory
-from manabot.env.env import Env
-from manabot.env.match import Match, Reward
-from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.search.flat_mc import AgentMatchupPlayer
-import managym
 
 Split = Literal["train", "validation", "test"]
 HISTORY_SCHEMA = "manabot.public-commitment-counts/actor-kind-card-sqrt-v1"
@@ -336,16 +335,11 @@ def collect_frozen_policy(
                     history = histories[viewer]
                     inputs, _ = public_sampler_input(env._engine, history, schema)
                     # Privileged label access begins only after all inference inputs exist.
-                    authority = env._engine.observation_for_player(1 - viewer)
-                    hand = Counter(
-                        str(card.name)
-                        for card in authority.agent_cards
-                        if int(card.zone) == 1
-                    )
+                    hand = env.hand_snapshot(1 - viewer).cards
                     examples.append(
                         SamplerExample(
                             inputs,
-                            tuple(hand[name] for name in schema.card_names),
+                            tuple(hand.get(name, 0) for name in schema.card_names),
                             viewer,
                             history.current_revision,
                             history.current_viewer_state_hash,

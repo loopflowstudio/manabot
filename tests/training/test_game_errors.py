@@ -11,6 +11,10 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import transition_gae
 from manabot.env.failures import read_failure
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -21,13 +25,9 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim import match as simulation
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
-from manabot.training.learning.returns import transition_gae
 from manabot.training.regime import BatchClosure, Learning
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.state.game_errors import (
@@ -38,6 +38,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     replay_attempt,
 )
+from manabot.training.updates.ppo import update_iteration
 import managym
 from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
@@ -179,7 +180,6 @@ def test_resource_limit_receipt_replays_its_retained_encoding_boundary(
         error="observation capacity exceeded: agent_permanents 41 > 40",
         frame_json=game.frame,
         observation=ObservationConfig(
-            policy_input_version=7,
             max_cards_per_player=128,
             max_permanents_per_player=40,
             max_actions=64,
@@ -297,6 +297,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     assert not any(collector._pending) and not any(collector._streams)
     learner = Learner(model, "cpu", minibatch_rows=collector.num_envs)
     result = update_iteration(
+        torch_backend,
         learner,
         batch,
         Learning(epochs=1, minibatches=1),
@@ -320,14 +321,14 @@ def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
 
     # Stream 1 learns from seat 1: its game pauses at its second decision.
     first = collector.collect(model, 1)
-    assert first.obs["agent_player"][0, 1, 0, 0] == 11
+    assert first.observations().observation["agent_player"][0, 1, 0, 0] == 11
     assert not first.next_done[1] and ledger.state.crashed == 0
 
     # That decision overflows. The learned row stays learned, the pending one goes
     # and the replacement game fills the quota.
     second = collector.collect(model, 1)
     assert second.actions.shape == (1, 2)
-    assert second.obs["agent_player"][0, 1, 0, 0] == 111
+    assert second.observations().observation["agent_player"][0, 1, 0, 0] == 111
     assert not second.dones[0, 1]
     failure = GameAttempt.model_validate(
         json.loads(ledger.path.read_text().splitlines()[-1])["attempt"]

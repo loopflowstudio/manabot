@@ -82,7 +82,7 @@ interaction with previews and Back; costs and other small choices stay direct.
 The eight-choice threshold and text filtering are reversible product
 hypotheses. Human usability acceptance (ETU-77) remains open.
 
-[academy/fixtures/choice-navigation-w17.json](../academy/fixtures/choice-navigation-w17.json)
+[academy/fixtures/choice-navigation-w17-token-cards.json](../academy/fixtures/choice-navigation-w17-token-cards.json)
 pins actual GameSession positions (UR Lessons versus GW Allies) for five
 families: `CHOOSE_TARGET`, `DISCARD`, `LEARN`, `DECLARE_BLOCKER` and
 `PAY_OR_NOT`. `tests/academy/test_choice_navigation.py` reconstructs each

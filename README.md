@@ -82,7 +82,7 @@ from real trophy decks: 134 seven-win Premier Draft lists admitted whole from
 the [17Lands public dataset](https://www.17lands.com/public_datasets) (CC BY
 4.0), built by [`experiments/tla_corpus.py`](experiments/tla_corpus.py) and
 frozen in the pilot's corpus and
-[regime](experiments/regimes/tla-trophy-213-v10.json)
+[regime](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/regimes/tla-trophy-213-v10.json)
 ([protocol](experiments/protocols/tla-trophy-213-v10.md)).
 
 The pilot's question is whether the recipe learns on a population of real
@@ -125,9 +125,10 @@ deals. A rule-based `heuristic` bot and frozen checkpoints anchor the scale,
 ratings are fit across the whole population, and tactical scenarios and
 bounded attacks probe what a win rate hides ([evaluation](docs/evaluation.md)).
 
-A result counts as evidence only when its question, numeric prediction, kill
-criteria and cost cap were committed to git before the run, and claims about a
-method need independent training seeds. Refutations stay on the record
+Most runs are exploratory. A result cited as a finding commits its question,
+method and cost cap to git before the run and decides what it means after
+reading the data, and claims about a method need independent training seeds.
+Refutations stay on the record
 ([experiments](docs/experiments.md)).
 
 ## Contracts the code enforces
@@ -193,9 +194,11 @@ deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
 `heuristic` and frozen checkpoints as working anchors. No win rate, rating or
 report promotes a checkpoint; scores never enter the loss.
 
-**Evidence is preregistered.** The question, prediction, kill criteria and
-cost cap are committed before a run; the training seed is the unit of
-evidence for a method; refutations stay on the record.
+**Findings decide after the data.** A result cited as a finding commits its
+question, method and cost cap before the run and gives its recommendation, with
+the reasoning, in the report; nothing fixes the verdict in advance. Everything
+else is exploratory and says so. The training seed is the unit of evidence for
+a method; refutations stay on the record.
 
 ## Beside the loop
 
@@ -253,8 +256,8 @@ dollars or hours. We add a row when a run sets a new high.
 The parameter count of a 64×2 network depends on its inputs, not only its
 width and depth. The card encoder's token vocabulary adds 64 parameters per
 distinct learning token, card names among them, which is the 8,000 between the
-two-deck and ten-deck runs. The fact encoder (input v5 and later) and the shared-effect encoder
-(input v7) each hold about 0.8M parameters in hash-bucket embedding tables, so
+two-deck and ten-deck runs. The fact encoder and the shared-effect encoder
+each hold about 0.8M parameters in hash-bucket embedding tables, so
 the current TLA recipe has 1,883,650 with the same 64×2 attention core.
 The first two rows predate the current world and
 encoding, so they record scale only. The one-seat ladder's $10 checkpoint
@@ -334,12 +337,13 @@ matchup.
 
 ## Quickstart
 
-You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
+You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain. Development uses
+CPython 3.13; the library also supports ordinary CPython 3.12.
 
 ```bash
 git clone git@github.com:loopflowstudio/manabot.git
 cd manabot
-uv sync --python 3.12 --extra dev
+uv sync --locked --python 3.13 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
@@ -348,11 +352,13 @@ uv run python scripts/inspect_batch.py     # one real batch and how credit reach
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints under
-`.runs/`. The local recipe uses CUDA, then Apple MPS, when available and CPU
-otherwise. `--recipe baseline` requires CUDA or Apple MPS and trains on that
-accelerator; its evaluation and search run on CPU. `--device cpu|mps|cuda`
-overrides local selection; baseline accepts only CUDA or MPS. MPS training uses
-float32. This makes no speed or strength claim.
+`.runs/`. The local recipe uses CUDA when available and CPU otherwise, including
+on Apple Silicon. `--recipe baseline` requires CUDA (or an explicit
+`--device mps`) and trains on that accelerator; its evaluation and search run on
+CPU. `--device cpu|mps|cuda` overrides local selection; baseline accepts only
+CUDA or MPS. MPS is never selected automatically: it was not faster than CPU in
+our measurements. MPS training uses float32 and requires Torch 2.15 or newer.
+This makes no speed or strength claim.
 Training recipes are typed *regimes* composed in Python, one module per
 current experiment in [experiments/](experiments/), from reusable parts in
 [manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
@@ -365,9 +371,13 @@ There is also a local browser table (`./scripts/play`, needs Node) for playing
 one game against a checkpoint or stepping through a replay. It is for
 inspecting what a bot does, not a way to play Magic.
 
-Versioned PyPI release preparation, platform support, CPU/CUDA installation
-and maintainer publishing are in [the release guide](docs/development.md#releases).
-[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/).
+For an engine-only project, start with [installing managym](docs/engine-python.md).
+For training, see [installation and dependency choices](docs/development.md#install).
+The release guide also covers supported platforms and CPU/CUDA selection.
+The [0.2.2 release notes](release/v0.2.2/NOTES.md) cover the separate engine
+package; the [0.2.1 notes](release/v0.2.1/NOTES.md) cover CPython 3.12/3.13
+support and collector API migrations. The historical
+[0.2.0 release](https://pypi.org/project/manabot/0.2.0/) requires CPython 3.12.
 
 ## Experiment data
 
@@ -401,10 +411,11 @@ know and where the code lives.
 | Guide | What |
 |---|---|
 | [engine.md](docs/engine.md) | The rules engine: one decision, forced choices, who chooses, observations, forks, replay, cards as programs, decks, worlds |
-| [observation-and-model.md](docs/observation-and-model.md) | What the policy sees, how it scores legal actions and estimates value, policy input versions |
+| [observation-and-model.md](docs/observation-and-model.md) | What the policy sees, how it scores legal actions and estimates value, the policy input layout |
 | [learning.md](docs/learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run, down to the code |
 | [evaluation.md](docs/evaluation.md) | One deal, what counts, anchors and ratings, scenarios, frozen-policy attacks, LLM players, shared inference, card data |
 | [experiments.md](docs/experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring a comparison |
+| [training-loop.md](docs/training-loop.md) | Training loops: the damped policy and PPO updates we maintain, the pieces they are made of, and a complete self-play loop to copy |
 | [training.md](docs/training.md) | Running training: regimes and stages, remote training, monitoring, numerical health, recovery, game failures |
 | [experiment-metrics.md](docs/experiment-metrics.md) | Metric definitions the experiment reports read |
 | [workflows.md](docs/workflows.md) | Wave responsibilities, Coverage loops and experiment execution boundaries |
@@ -415,7 +426,7 @@ know and where the code lives.
 |---|---|
 | `managym/` | Rust rules engine, vectorized env, and PyO3 bindings ([README](managym/README.md)) |
 | `manabot/` | Agents: models, training, search, beliefs, evaluation, verification ([README](manabot/README.md)) |
-| `experiments/` | Preregistered experiment reports, protocols, and data |
+| `experiments/` | Experiment modules, their reports, and data |
 | `content/` | Deck lists and card content notes |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
 | `docs/` | The guides above and their diagrams |
@@ -450,6 +461,10 @@ guides are in each package README.
   documents also use *Etude* and *Fantasia* for this project.
 - **Loopflow**: the agent development tool
   ([`loopflowstudio/loopflow`](https://github.com/loopflowstudio/loopflow)).
+
+## Licence
+
+Manabot is licensed under the [MIT licence](LICENSE).
 
 Manabot is an independent research project and unofficial Fan Content
 permitted under the Wizards of the Coast

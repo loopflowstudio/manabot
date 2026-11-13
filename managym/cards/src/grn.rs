@@ -1,6 +1,6 @@
 //! Guilds of Ravnica.
 use managym_state::{
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -15,14 +15,17 @@ fn healer_s_hawk() -> CardDefinition {
     CardDefinition {
         key: "grn.healer_s_hawk",
         scryfall_id: "3313bd5c-b657-47a3-822a-dd0d9165492a",
-        name: "Healer's Hawk".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Bird".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flying, Keyword::Lifelink]),
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Healer's Hawk".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Lifelink]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

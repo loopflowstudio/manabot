@@ -4,8 +4,6 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
-from managym.decision import SemanticContractError
-from managym.decision_capture import DecisionInput
 import numpy as np
 import pytest
 
@@ -28,6 +26,8 @@ from manabot.semantic.text_observation import (
 )
 from manabot.verify.text_observation import collision_branches, priority_root, run_demo
 import managym
+from managym.decision import SemanticContractError
+from managym.decision_capture import DecisionInput
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -225,6 +225,13 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
 
 
+def test_x_cost_definition_renders_its_x() -> None:
+    """A visible {X} card renders instead of failing capture validation."""
+    env = priority_root(("Black Sun's Zenith",), ("Swamp", "Swamp"))
+    text = capture_text_decision(env).text
+    assert "Black Sun's Zenith. Sorcery; cost {X}{B}{B};" in text
+
+
 def _viewer_observation(decision: TextDecision) -> managym.Observation:
     source = DecisionInput.model_validate_json(decision.capture_json)
     return managym.Observation.from_json(json.dumps(source.observation.viewer_state))
@@ -267,11 +274,10 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
 @pytest.mark.parametrize(
     "config",
     [
-        ObservationConfig(policy_input_version=5),
-        ObservationConfig(policy_input_version=6, max_facts=256),
+        ObservationConfig(max_facts=256),
         ObservationConfig(),
     ],
-    ids=["v5", "v6-pilot", "current-default"],
+    ids=["256-facts", "default"],
 )
 def test_once_each_turn_use_reaches_text_and_both_encoders(
     config: ObservationConfig,
@@ -301,11 +307,7 @@ def test_once_each_turn_use_reaches_text_and_both_encoders(
         if permanent.once_each_turn_used
     )
     assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
-    native = env.encode_observation(
-        observation,
-        policy_input_version=config.policy_input_version,
-        max_facts=config.max_facts,
-    )
+    native = env.encode_observation(observation, max_facts=config.max_facts)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
 
@@ -536,6 +538,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "face_down": "face down",
         "cast_permission": "may be played from exile by",
         "x": "announced X",
+        "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
         "stack_object_id": "S<n>",
@@ -556,6 +559,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "life_lost": "lost N life",
     },
     managym.Player: {
         "id": "the player's alias",
@@ -576,11 +580,20 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "keeps_red_mana": "Keeps unspent red mana",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
+        "spells_cast": "cast N spells",
         "extra_turns": "extra turn",
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
+        "pooled_mana_classes": "Of the mana above",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
+    },
+    managym.PooledManaClass: {
+        "effect": "puts",
+        "mana": "amounts by color",
+        "restriction": "only for",
+        "combat": "expires at end of combat or at step end",
+        "program": "the same class stated by rider, restriction and expiry",
     },
     managym.ContinuousEffect: {
         "description": "the effect phrase of a rules payload",
@@ -649,12 +662,17 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
         "extra_turns": 1,
+        "spells_cast": 2,
         "turn_history": {
             "attacked": True,
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
+            "life_lost": 3,
         },
+        "restricted_mana": [
+            {"except_nonartifact_spells": True, "mana": [0, 0, 0, 0, 0, 2]}
+        ],
     }
     text = render_decision(_redigest(payload)).text
     assert "; blocking C2 (Gray Ogre);" in text
@@ -667,8 +685,31 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 card." in text
+        "their control; drew 1 card; lost 3 life; cast 2 spells." in text
     )
+    assert "Restricted mana for anything but nonartifact spells: C 2." in text
+
+
+def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    payload["observation"]["viewer_state"]["agent"]["pooled_mana_classes"] = [
+        {"mana": [0, 0, 0, 2, 0, 0], "combat": True, "program": []},
+        {
+            "mana": [0, 0, 0, 0, 1, 0],
+            "restriction": "creature spells",
+            "effect": "a +1/+1 counter on a non-Human creature spell it casts",
+            "combat": False,
+            "program": [],
+        },
+    ]
+    text = render_decision(_redigest(payload)).text
+    assert "Of the mana above: R 2; expires at end of combat." in text
+    assert (
+        "Of the mana above: G 1; only for creature spells; puts a +1/+1 counter on a "
+        "non-Human creature spell it casts; expires at step end."
+    ) in text
+    assert "Combat mana:" not in text
 
 
 def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
@@ -1186,10 +1227,8 @@ def _assert_native_observation_parity(
     # Read the native observation: captured viewer JSON omits continuation frames.
     viewer = DecisionInput.model_validate_json(decision.capture_json).observation.viewer
     observation = env.observation_for_player(viewer)
-    encoded = ObservationSpace(ObservationConfig(policy_input_version=5)).encode(
-        observation
-    )
-    native = env.encode_observation(observation, policy_input_version=5)
+    encoded = ObservationSpace(ObservationConfig()).encode(observation)
+    native = env.encode_observation(observation)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
     return observation

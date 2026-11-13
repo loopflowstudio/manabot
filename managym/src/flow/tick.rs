@@ -7,9 +7,12 @@ use crate::{
         combat::CombatState,
         event::GameEvent,
         game::Game,
-        turn::{StepKind, TurnState},
+        turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
-    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind},
+    state::{
+        card::StaticAbility, game_object::PlayerId, permanent::CounterKind,
+        stack_object::StackObject, zone::ZoneType,
+    },
 };
 
 impl Game {
@@ -166,6 +169,9 @@ impl Game {
             if let Some(space) = self.tick_priority() {
                 return Some(space);
             }
+            if !self.state.turn.step_initialized {
+                return None;
+            }
         }
 
         // CR 106.4 — Unspent mana empties at the end of each step and phase.
@@ -173,8 +179,54 @@ impl Game {
         self.on_step_end(step);
         self.remember_controlled_hands();
         self.state.advance_step();
+        self.skip_combat_phases_if_required();
 
         None
+    }
+
+    /// End the turn (CR 723.1): exile every spell on the stack and remove
+    /// every ability from it (723.1a), drop triggered abilities waiting to be
+    /// put on it (723.1b), end combat, and skip every remaining phase and
+    /// step but cleanup (723.1d). The cleanup step then runs normally, and
+    /// may repeat if anything triggers during it (723.1e).
+    pub(crate) fn end_the_turn(&mut self) {
+        while let Some(object) = self.state.stack_objects.last() {
+            match object {
+                StackObject::Spell(spell) => {
+                    let object_id = spell.object;
+                    self.move_object(object_id, ZoneType::Exile);
+                }
+                _ => {
+                    self.state.stack_objects_mut().pop();
+                }
+            }
+        }
+        self.state.pending_triggers_mut().clear();
+        if self.state.combat.is_some() {
+            self.on_step_end(StepKind::EndOfCombat);
+        }
+        self.clear_mana_pools();
+        let turn = &mut self.state.turn;
+        turn.additional_combats.clear();
+        turn.combat_attackers = None;
+        let ending = PhaseKind::Ending as usize;
+        turn.current_phase = ending;
+        turn.current_step = PHASE_STEPS[ending].len() - 1;
+        turn.step_initialized = false;
+        turn.turn_based_actions_complete = false;
+        turn.cleanup_priority = false;
+    }
+
+    /// A player skipping their combat phases passes from the precombat main
+    /// phase to the postcombat one, past any additional combat (CR 500.11).
+    fn skip_combat_phases_if_required(&mut self) {
+        while self.state.turn.current_phase_kind() == PhaseKind::Combat
+            && self.state.turn.current_step == 0
+            && self.skips_combat_phases(self.active_player())
+        {
+            self.state.turn.current_step = PHASE_STEPS[PhaseKind::Combat as usize].len() - 1;
+            self.state.advance_step();
+        }
     }
 
     /// Give the active player priority with no passes yet in the round, as
@@ -248,7 +300,11 @@ impl Game {
         match step {
             StepKind::Untap => {
                 // CR 502.2 — Active player untaps permanents they control.
+                // "Until your next turn" ends as the turn begins, and their
+                // phased-out permanents phase in first (CR 502.1).
                 let active = self.active_player();
+                self.end_until_your_next_turn_effects(active);
+                self.phase_in(active);
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
                 self.untap_all_permanents(active);
@@ -381,11 +437,21 @@ impl Game {
                         });
                     }
                 }
-                actions.push(Action::DeclareBlocker {
-                    player: defending,
-                    blocker,
-                    attacker: None,
-                });
+                // CR 509.1c: a blocker able to block an attacker every able
+                // creature must block declares one of those blocks.
+                let required = |action: &Action| {
+                    matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
+                        if self.must_be_blocked_by_all_able(*attacker))
+                };
+                if actions.iter().any(required) {
+                    actions.retain(required);
+                } else {
+                    actions.push(Action::DeclareBlocker {
+                        player: defending,
+                        blocker,
+                        attacker: None,
+                    });
+                }
 
                 Some(ActionSpace {
                     player: Some(defending),
@@ -407,13 +473,7 @@ impl Game {
                             .static_abilities
                             .contains(&StaticAbility::NoMaximumHandSize)
                     });
-                if !unlimited
-                    && self
-                        .state
-                        .zones
-                        .size(crate::state::zone::ZoneType::Hand, player)
-                        > 7
-                {
+                if !unlimited && self.state.zones.size(ZoneType::Hand, player) > 7 {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {
                         player,
                         remaining: 1,
@@ -459,6 +519,11 @@ impl Game {
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
+                    if !self.state.turn.step_initialized {
+                        // The resolution ended the turn (CR 723.1d): the
+                        // cleanup step begins without priority.
+                        return None;
+                    }
                     self.restart_priority_round();
                     stabilized = false;
                     continue;

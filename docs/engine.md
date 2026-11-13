@@ -17,8 +17,11 @@ cross-package contract is in the
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
 - [Built-in heuristic opponent](#built-in-heuristic-opponent)
+- [Hand snapshots](#hand-snapshots)
+- [Encoded observations](#encoded-observations)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
+- [Decks](#decks)
 - [What we know](#what-we-know)
 - [Where the code lives](#where-the-code-lives)
 
@@ -124,6 +127,9 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 - The same observation feeds the policy tensor, the LLM text and Academy. A
   mechanic that reaches one reaches all three in the same change
   ([observations and the policy network](observation-and-model.md)).
+
+Consumers read the encoded arrays by name; see
+[encoded observations](#encoded-observations).
 
 ### Executing an action
 
@@ -239,6 +245,13 @@ is scored and reset in place. By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
 
+`opponent_policy="none"` (the default) surfaces both seats' decisions to the
+caller. `opponent_policy="random"` plays the opponent's decisions natively and
+returns seat 0's next decision. These are the only built-in vector policies;
+`"passive"` is removed and raises an unsupported-policy `ValueError`, including
+through CapturedVector and Torch. Retained failure evidence keeps its original
+policy name, but replaying a passive-policy receipt requires its original source.
+
 Collection was 75–83% of active time across the profiled training runs
 ([training time](../experiments/training-time.md)), so engine and inference
 throughput are the cost levers. CI keeps an
@@ -331,6 +344,251 @@ IDs or observation order to resolve ties. Unhandled prompts use the scripted
 greedy fallback: prefer land, spell, then pass at priority; attack or block
 when offered; otherwise take the first non-decline choice. These rules are a
 baseline, not a claim of optimal play or exact combat search.
+### Choosing a Python API
+
+The [scalar/batch API audit](python-api-audit.md) records the capability
+comparison, source evidence and independent follow-ups.
+
+Install the native API as the [engine-only `managym` distribution](engine-python.md)
+and use `import managym`. Installing `manabot` adds training and keeps
+`from manabot import managym` as a compatibility alias to the same engine.
+The Torch wrapper and the capture wrapper are separate Python classes:
+
+| Need | API |
+|---|---|
+| One game, explicit reset, readable observations | `managym.Env` |
+| A fixed viewer's observation | `Env.observation_for_player(player_index)` |
+| Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
+| Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
+| Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
+| Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |
+| Torch observation/reward tensors on a selected device | `manabot.env.vector_env.VectorEnv` |
+
+Scalar native `Env.step` returns the terminal state and leaves resetting to the
+caller. Native vector steps reset finished slots before returning: reward and
+`terminated` / `truncated` describe the completed game, while its returned
+observation describes the replacement game. The Torch wrapper keeps this
+behavior. Its observation tensors are reused; clone anything retained across
+steps. The Gymnasium wrapper `manabot.env.env.Env` never resets on its own:
+a terminal `step` returns the terminal observation and true done flags, and the
+caller calls `reset`. Its former `auto_reset` argument is removed; passing it
+raises `TypeError`, and step info no longer carries `true_terminated` /
+`true_truncated`. Vector autoreset is the only automatic-reset contract.
+
+Torch `VectorEnv.reset(seed=s)` restarts slot `i` at seed `s + i` for any
+explicit seed, including the current one, so equal seeds reproduce deals.
+`reset()` without a seed continues native seed succession. Its
+`current_agent_indices()` names each slot's chooser.
+
+`CapturedVector` delegates only native reads (seeds, generations, choosers,
+frames, setups, diagnostics). Readable `reset_all` / `step` and other native
+mutators raise `AttributeError`; use its `reset_*_into_buffers` and
+`step_*_into_buffers` methods, which keep replay prefixes aligned. It starts a
+new prefix whenever the native game generation changes, so a same-seed reset
+or a replacement at the saturated maximum seed never extends the old game.
+
+Native buffered stepping and `CapturedVector.step_into_buffers` accept an
+`active` boolean per slot. Inactive games and observation rows stay unchanged;
+the Python buffer bindings clear their rewards and done flags to zero/false.
+Apply the same mask when collecting transitions. The Torch wrapper's `step`
+advances every slot and does not accept an active mask.
+
+Strict batch errors can occur after other slots have advanced. Do not retry
+the same batch assuming nothing changed. `CapturedVector` retains private
+pre-call replay inputs; explicit `step_isolated_into_buffers` instead reports
+individual game failures for replacement. Buffer-integrity failures remain
+fatal, and capacity recovery requires its separate opt-in. See
+[game failures](training.md#game-failures).
+
+### Hand snapshots
+
+Read authoritative hand contents for explicit native seats at the current
+read boundary in scalar or batched games. This is an opt-in hidden-information API:
+
+```python
+from manabot import managym
+from manabot.env.match import Match
+
+games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="none")
+observations = games.reset_all(Match().to_rust())
+snapshots = games.hand_snapshots([1, 0])
+
+for slot, snapshot in enumerate(snapshots):
+    print(slot, snapshot.player, snapshot.cards)
+    # snapshot.cards is a name-count mapping, e.g. {"Mountain": 2, ...}.
+
+game = managym.Env(seed=42)
+game.reset(Match().to_rust())
+hand = game.hand_snapshot(1)  # The same HandSnapshot contract for one game.
+print(hand.player, hand.cards)
+
+# These snapshots remain unchanged when the games advance.
+```
+
+`hand_snapshots(players: list[int])` returns one `HandSnapshot` per slot, in slot
+order; the list index is the slot. Supply exactly one native seat (`0` or `1`)
+per slot: `[1, 0]` reads seat 1 in slot 0 and seat 0 in slot 1. There is no implicit opponent. Seats are not
+remapped under player-control effects: `current_agent_indices()` names the
+chooser, which can differ from the turn or rules-decision owner.
+
+Scalar `Env.hand_snapshot(player: int)` returns the same `HandSnapshot` record
+for one native seat. The Gym `manabot.env.env.Env` wrapper exposes it directly.
+
+Each snapshot contains:
+
+| Field | Meaning |
+|---|---|
+| `player: int` | Requested native seat, unchanged by control effects |
+| `game_id: int` | Opaque game generation; fresh for every reset, replacement, fork or materialized world, including identical deals |
+| `seed: int` | The originating native reset seed; unchanged by scheduling a reset or reseeding a branch's RNG |
+| `revision: int` | The current game's decision revision at the read |
+| `cards: dict[str, int]` | Complete hand, by card name with positive counts; `{}` means an empty hand |
+
+Save your collection/run identity with `(game_id, revision, player)` and, for
+batches, the list index identifying the slot.
+Game IDs are allocated process-wide, including across Torch native-vector
+rebuilds; they are not portable replay identifiers, consecutive counters or
+reproducible values. A seed alone cannot distinguish repeated resets to the same
+deal. For replay, retain the match configuration and runtime identity separately.
+
+`set_seed(s)` schedules the next reset; existing snapshots and subsequent reads
+of the live game retain its original reset seed until reset succeeds. Forks and
+materialized worlds inherit that originating reset seed and receive distinct
+game IDs. The seed passed to possible-world materialization controls that
+branch's randomness; it does not replace the snapshot's reset seed. Capture
+origin and stale checks still apply independently of these snapshot fields.
+
+Both methods synchronously read authoritative hand zones, with one native call
+for the whole batch, without stepping, resetting, consuming randomness or
+building viewer observations. Counts are detached snapshots; dictionary edits cannot affect the
+game or retained snapshot. `CapturedVector` and Torch `VectorEnv` expose the same
+method and CPU records. Ordinary reset/step calls do not collect snapshots.
+
+Read before stepping to capture the current hands; copy reused observation
+buffers too if retaining both. After a successful step, snapshots describe the
+returned game states. Scalar games retain their terminal hands until explicit
+reset. Vector done slots describe replacement games; terminal hands are not
+retained by vectors. Partial stepping leaves inactive games unchanged, but
+snapshots still include every slot: apply the same active mask when selecting results.
+
+A wrong-length seat list, a seat outside `0..1` or reading before reset raises
+an error. After a failed step, discard that call's results and recover or reset
+before reading further snapshots. An empty hand never denotes a failure;
+observation capacities never truncate snapshots.
+
+Snapshots contain hidden information, including with closed decklists. They
+remain separate from policy inputs, viewer-safe observations, shared decision
+captures and viewer trace exports. Public `known_hand` counts describe only
+revealed knowledge. Reading snapshots does not change deck disclosure or what a
+player may observe, and requires no policy-input version or checkpoint migration.
+
+## Encoded observations
+
+The native encoder turns an observation into NumPy arrays, one layout per
+engine release. manabot reads the same arrays as its policy input
+(`ObservationConfig.policy_input_version`, v9); how its network reads them is in
+[observations and the policy network](observation-and-model.md#policy-inputs).
+
+### Reading arrays by name
+
+To read a permanent's card definition without hard-coding column 24, ask the
+native API for the layout:
+
+```python
+import managym
+
+layout = managym.observation_layout()
+definition = layout["agent_permanents"]["columns"]["definition"]
+print(definition["index"], definition["kind"])
+# 24 id
+print(definition["encoding"])
+# CardDefId + 1; 0 means absent
+```
+
+The scalar encoder writes the arrays the layout describes. This example starts
+a game with fixed decks and reads only valid permanent rows (the first
+decision can have none):
+
+```python
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+arrays = game.encode_observation(observation)
+valid = arrays["agent_permanents_valid"].astype(bool)
+references = arrays["agent_permanents"][valid, definition["index"]]
+definition_ids = [int(reference) - 1 for reference in references if reference != 0]
+```
+
+These are definition IDs for catalog joins, not object identities or numeric
+features. Do not log-scale them or infer similarity from their magnitude.
+Retain the installed world's content identity with saved arrays and catalog
+references.
+
+`observation_layout(*, policy_history=False, turn_state=False)` returns a mapping keyed by the
+encoder's array names. Each array describes its `axes`, `shape` and stored
+`dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
+default. The seat axis is viewer-relative (agent first, opponent second).
+Feature arrays have a `columns` mapping keyed by column name. Each column gives
+its zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish
+identities and references, categorical codes, flags, counts, numeric values and
+ranks. The encoding explains scaling, join targets, index bases and absence
+sentinels; the range describes stored values, including when no fixed bound
+exists. A `tagged` kind needs its row-kind description before preprocessing.
+Tagged fact, relation and effect rows describe meanings conditional on their
+row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
+scalar-valued arrays have empty `columns` and describe their `element` meaning
+without inventing a feature axis. Shared headers own the detail/member slices;
+unused rows are zero. `policy_history=True` describes the 12-column public
+history rows of `events` instead of the 7-column raw events; public history is
+bounded to 32 rows, even though its allocated event capacity is selected
+separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
+`life_lost`, `spells_cast`, then `nonartifact_mana_white` through
+`nonartifact_mana_colorless`) and `card_turn_state`.
+
+Read the stored encoding before adding preprocessing: permanent damage, power
+and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
+Fact timestamp ranks are stored as ranks; the built-in model divides them by
+128, independently of fact capacity. The layout describes the array values,
+not a blanket normalization to apply to every column.
+
+The layout comes from the column table the native encoder writes through, so
+it cannot drift from the arrays. Reading it starts no game and imports no
+Torch. Row capacities are a separate allocation choice: use
+`ObservationSpace.shapes` when allocating caller-owned buffers, and retain all
+its keys. Capacity errors need larger buffers and a compatible model; state is
+never truncated.
+
+A later engine release can change the layout. Save the package version and
+world identity with collected arrays, and look columns up by name rather than
+by position.
+
+### Card definition IDs
+
+A `CardDefId` is the definition's position in the installed catalog, sorted by
+definition key. Adding a card renumbers every definition after it, so IDs are
+stable only within one installed build. Do not key a saved embedding table or
+dataset by raw IDs. Join each ID to a stable identity for the installed build:
+`managym.content_pool("world")["definitions"]` maps every `card_def_id` to its
+`registry_name`, definition `key` and `scryfall_id` (back faces have a name but
+no key). Join on `key`: a printed name does not identify a definition, since
+two tokens may share one and a token may share a card's. For card features
+rather than identities, `managym.catalog_tokens()` gives each definition's
+tokenized rules text, rows by `CardDefId`, with the same `keys` and
+`registry_names` beside them, so the tokens describe cards a model has not
+seen.
+
+### Deprecated names
+
+Engine names describe what managym produces. These earlier spellings, named for
+manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
+
+| Deprecated | Use |
+|---|---|
+| `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
+| `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
+| `managym.learning_record_names()` | `managym.record_vocabulary()` |
 
 ## Cards as programs
 
@@ -347,23 +605,66 @@ fn lightning_bolt() -> CardDefinition {
     CardDefinition {
         key: "lea.lightning_bolt",
         scryfall_id: "d573ef03-4730-45aa-93dd-e45ac1dbaf4a",
-        name: "Lightning Bolt".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::deal_damage(
-            3,
-            ObjectSelector::Target(TargetSpec::AnyTarget),
-        )],
-        targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Lightning Bolt".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::deal_damage(
+                3,
+                ObjectSelector::Target(TargetSpec::AnyTarget),
+            )],
+            targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
 ```
 
+`PrintedCharacteristics` is what a card and a token share: name, cost, types,
+colors, keywords, abilities, text and power/toughness as printed. It is the
+input to the layer system; `Game::characteristics(id)` returns the layered
+view of a game object after continuous effects. A `CardDefinition` adds the
+card's identity (`key` and a required `scryfall_id`) and, for a transforming
+card, its back face's `PrintedCharacteristics` (`back_face`; the outer
+`..Default::default()` leaves it empty).
+
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
   variant with a directed test, never a special case for one card.
+- A trigger is "whenever X does Y": an event over its actor, with the event's
+  own parameters as fields. Monastery Swiftspear's prowess
+  ([`managym/cards/src/ktk.rs`](../managym/cards/src/ktk.rs)) is the cast event
+  with you as the actor:
+
+  ```rust
+  condition: TriggerCondition::casts(
+      Actor::You,
+      CardPredicate {
+          not_card_types: vec![CardType::Creature],
+          ..Default::default()
+      },
+  ),
+  ```
+
+  `casts` builds `Casts { who, predicate, nth: None }`. Changing `who` to
+  `Actor::Opponent` or `Actor::AnyPlayer` gives "whenever an opponent casts" or
+  "whenever a player casts"; `nth: Some(2)` gives "your second spell each
+  turn". The same applies to draws (`Draws { who, nth }`), steps
+  (`BeginningOf { step, whose }`), keyword actions such as searching, scrying
+  or bending (`Performs { who, any_of }`), cards reaching a graveyard
+  (`PutIntoGraveyard { whose, predicate }`) and putting counters
+  (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
+  instead, whose controller is the same kind of `Actor` ("a creature an
+  opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
+  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
+  `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
+  more" creatures trigger once per batch or once each, and `attackers` says
+  whether the attack is alone or with at least one other creature. The ability
+  description ("Whenever an opponent draws their second card each turn, ...")
+  and the learning tokens come from one template per event, so a card that
+  needs a new actor or count needs no new variant.
 - Learning tokens derive from the same definition
   ([`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs)), so the
   policy can read what a card does and a new variant reaches the model without
@@ -373,6 +674,248 @@ fn lightning_bolt() -> CardDefinition {
   bug-free.
 - Each definition lives in the set file of its first printing and carries that
   printing's Scryfall id; `cargo test` in `managym/` covers all three crates.
+- Tokens are not cards. A token is a `TokenDefinition` in
+  [`managym/cards/src/tokens.rs`](../managym/cards/src/tokens.rs), in its own
+  catalog under `token.*` keys: a key, an optional Scryfall id and the same
+  `PrintedCharacteristics`. Effects name the token by key, so tokens that
+  share a printed name stay distinct:
+
+  ```rust
+  Effect::create_tokens("token.spirit", 1)
+  ```
+
+  A token carries the Scryfall id of its first token printing, or none when it
+  was never printed. Tokens are never deck entries or part of the card pool.
+- The engine registers each card, back face and token as one
+  `ObjectDefinition`, the row a `CardDefId` names: its identity, its
+  `PrintedCharacteristics` and whether it is a token. Token status is not a
+  printed characteristic, so copy effects copy `printed` and never token
+  status; a token copy of a card is a token because it was created as one.
+
+## Objects and zones
+
+The engine's runtime types and their names come from the Comprehensive Rules.
+A definition says what something is; an object is one instance of it in a
+game, and a zone says where that object is. Take one Spirit token through a
+turn:
+
+| Step | What the rules say | What the engine holds |
+| --- | --- | --- |
+| `Effect::create_tokens("token.spirit", 1)` resolves | A token enters the battlefield under its creator's control (CR 111.2); it is a permanent (CR 110.1) | an object of kind `ObjectKind::Token` from `TokenDefinition` `token.spirit`, with a `Permanent` for its battlefield state |
+| The Spirit is destroyed | It is put into its owner's graveyard and dies (CR 700.4); it is still a token | the same token, now in the graveyard; death triggers read its last known information |
+| State-based actions are checked | A token in a zone other than the battlefield ceases to exist (CR 111.7, 704.5d) | the token leaves every zone and no longer exists |
+
+At no point is the Spirit a card. An effect that says "card" (return target
+creature card from your graveyard) never sees it, because "card" means only a
+Magic card (CR 108.2). The types say the same thing: the Spirit has an
+`ObjectId` and can never have a `CardId`.
+
+```rust
+// "Return target creature card from your graveyard to your hand."
+let Some(card) = game.state.card_id(object_id) else {
+    return; // a token or a copy of a spell: an object, not a card
+};
+let name = &game.state.objects[card].name; // a CardId indexes the same store
+
+// Every card is an object, so what takes any object takes the card as it is.
+let zone = game.state.zones.zone_of(card);
+let reference = game.current_object_ref(card);
+```
+
+`GameState::card_id` is the one checked conversion from an object to a card;
+it returns `None` for a token or a copy. Object APIs accept a `CardId` or an
+`ObjectId` directly.
+A `CardId` stays valid for the whole game, because an object never becomes a
+card or stops being one.
+
+### Objects
+
+Each runtime type takes its name and its contents from the rule that defines
+it:
+
+| Rules term | Rule | Engine type | Holds |
+| --- | --- | --- | --- |
+| Card | CR 108 | `Object` with `ObjectKind::Card`, named by `CardId` (a separate `Card` store is [planned](#planned-split)) | the physical card: owner and definition, for the whole game |
+| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one card, token or spell copy, kept across zone changes ([What is built](#what-is-built)): owner, definition, copy effect and `ObjectKind` |
+| Token | CR 111 | `Object` with `ObjectKind::Token`, from a `TokenDefinition` or a copy effect | no card |
+| Copy of a spell | CR 707.10 | `Object` with `ObjectKind::SpellCopy`, made on the stack | no card |
+| Copy of a card | CR 707.12 | none yet; no defined card casts a copy of a card | no card |
+| Permanent | CR 110 | `Permanent`, named by `PermanentId`, beside the object it is | battlefield state: tapped, damage, attachment |
+| Spell | CR 112 | `StackObject::Spell`, beside the object it is | cast choices: targets, X, modes, kicker |
+| Ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` | source, effects and choices; not an `Object` row |
+| Emblem | CR 114 | none yet; no defined card creates one | no card |
+
+An object keeps its kind for its whole life. The one change of kind is a copy
+of a permanent spell, which becomes a token as it resolves (CR 111.12,
+608.3f). A definition's `is_token` says only that its catalog row is a token
+definition's; an object's kind is the authority for what it is.
+
+#### Names
+
+A runtime id binding's name says which id it holds:
+
+| Name | Holds | Use it for |
+| --- | --- | --- |
+| `card`, `card_id`, `cards` | `CardId` | card-only zone readers, decklists, sideboards, and effects whose text says "card" |
+| `object`, `object_id`, `objects` | `ObjectId` | mixed zone lists, spells, permanents, targets, events and last known information |
+
+The parameter type says which of the two a function works on:
+
+```rust
+// Works on any object: callers pass a CardId or an ObjectId.
+pub fn zone_of(&self, object: impl Into<ObjectId>) -> Option<ZoneType>
+
+// Works on cards alone: a token or a spell copy cannot be passed.
+pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError>
+```
+
+- **Any object** takes `impl Into<ObjectId>` and converts once, or hands the
+  id on to the object function it wraps. Zone lookups and membership, object
+  references, public ids, predicates and moves are written this way, so a
+  caller holding a `CardId` passes it without `.into()` or `ObjectId::from`.
+- **Cards alone** takes `CardId` and needs no `is_card()` check. No function
+  accepts an `ObjectId` where a card is required. A caller holding an
+  `ObjectId` narrows once with `card_id`, then passes that `CardId` on.
+- **A plain `ObjectId` parameter** remains where a generic does not fit: a
+  trait-object or function-pointer signature, a serialized field, a PyO3
+  binding, or a hot path where the generic measurably costs. A caller holding
+  a `CardId` writes `card.into()` there. Explicit widening also remains when
+  storing a card in an `ObjectId` field or collection (an `Action` or event
+  field, a mixed list), returning it as an `ObjectId`, comparing mixed ids,
+  or implementing the checked indexing traits. Private test command builders
+  can retain their concrete transport signature. A function does not widen a
+  card into an `ObjectId` local only to call object functions with it; it
+  passes the `CardId`.
+
+`Object::is_card()` remains for code that only asks the question.
+
+Names that do not bind runtime ids keep `card`: definitions
+(`CardDefinition`, `CardDefId`, `card.rs`, which describe a card rather than
+name an object in a game), card-name strings, and the published observation
+and Python names
+(`CardData`, `StackTargetData.card_id`, serialized `card` fields), which keep
+their spelling for recorded evidence.
+
+#### What is built
+
+The engine stores one `Object` row per card, token or spell copy and keeps
+it across zone changes:
+
+- `ObjectId` is the row's index and outlives a zone change. `ObjectRef`
+  (`EntityId` plus `Incarnation`) is the appearance: its incarnation advances
+  on every zone change (CR 400.7). Callers compare it with
+  `Game::current_object_ref`; `lookup_current_permanent` rejects a stale
+  reference. Last known information is the `ObjectLkiLog`, keyed by `ObjectRef`.
+- `CardId` names a row whose kind is `ObjectKind::Card` and has the same
+  index as that row's `ObjectId`. Setup uses the same checked store conversion
+  as `GameState::card_id` after inserting each deck or sideboard object.
+- `PublicId` is the match-unique number observations show for players,
+  objects and abilities, also used to order timestamps; it is not a storage
+  index.
+
+A Clone is still a card. A copy effect changes a card's or token's copiable
+values (CR 707.2) and is recorded on that object (`copy`); it does not make a
+copy object.
+
+#### Planned split
+
+Not built in this change; the split below is separate follow-up work.
+The rules make a new object on every zone change (CR 400.7), stack
+to battlefield included (CR 608.3a). The plan is to store that directly: a
+`Card` store for the physical card and an `Object` store with one row per
+appearance, so `ObjectId` would name one appearance and go stale when the
+object moves, as `ObjectRef` does today, and `CardId` would index the `Card`
+store instead of sharing the object's row. Code that means "which object" (a
+target, "that creature", last known information) would name the appearance;
+code that means "which card" (ownership, a decklist, "return that card") would
+name the card, as its `CardId` already does. Nothing else would cross a zone
+change: the only bridge from
+the old object to the new one would be a carry-over record holding what
+CR 400.7's sub-rules let the new object know (whether it was cast or kicked,
+and linked effects finding the object they moved).
+
+The split must keep `Card` small and `Copy` (owner, definition id, current
+`ObjectId`), keep both stores flat id-indexed vectors with no hash map on hot
+paths (search clones `Game` constantly), check an object-to-card conversion
+once and assert kinds in debug builds, and measure whether a new id per zone
+change adds layer-view or `TriggerIndex` invalidation before relying on it.
+
+### Zones
+
+CR 400.1 names seven zones (ante aside). Each holds only the objects its rule
+allows. Library and hand entries record which occupants are cards; the other
+lists hold `ObjectId`s, and card-only readers narrow them through
+`GameState::zone_cards`:
+
+| Zone | Rule | Holds | Engine list |
+| --- | --- | --- | --- |
+| Library | CR 401 | cards, transient non-card objects | ordered `CardZoneEntry::Card(CardId)` or `Transient(ObjectId)` |
+| Hand | CR 402 | cards, transient non-card objects | ordered `CardZoneEntry::Card(CardId)` or `Transient(ObjectId)` |
+| Graveyard | CR 404 | cards, transient non-card objects | `ObjectId` |
+| Exile | CR 406 | cards, transient non-card objects | `ObjectId` |
+| Battlefield | CR 403 | permanents: cards and tokens | `ObjectId` |
+| Stack | CR 405 | spells (cards and copies) and abilities | `ObjectId` for spells; `GameState::stack_objects` includes abilities and owns stack order |
+| Command | CR 408 | cards (commanders, CR 903.6) and emblems (CR 114.1); empty until a format or card puts something there | `ObjectId` |
+
+Decklists and sideboards are outside the game and hold cards alone.
+
+```rust
+for card in game.state.zone_cards(ZoneType::Hand, player) {
+    // card: CardId
+}
+for object in game.state.zones.zone_objects(ZoneType::Graveyard, player).iter() {
+    // object: &ObjectId; a token that just died may be here
+}
+```
+
+A token or copy that leaves the battlefield or stack is briefly in another
+zone until state-based actions are checked: a token in any zone but the
+battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and
+a copy of a card in any zone but the stack or battlefield (CR 704.5e). It keeps
+its kind there; such a token can't return to the battlefield (CR 111.8), exile
+grants skip it, and `flow/sba.rs` removes it by its kind. A selection that
+reads a zone or the cards milled or discarded this way (`Effect::SelectCards`
+over `Zone`, `TargetPlayersZone` or `CardsThisWay`) offers cards alone; a
+selection over other objects, such as the token an effect just created
+(`CreatedThisWay`), still offers that token.
+
+Library and hand store each card as a checked `CardId`, alongside explicit
+`Transient(ObjectId)` entries for non-cards awaiting state-based actions. The
+single entry sequence owns membership and order; there is no parallel list to
+synchronize. `GameState::zone_cards` delegates to the borrowed view's `cards`
+iterator, which reads stored card ids and skips visitors. Other zones keep
+mixed `ObjectId` lists and narrow at that same boundary.
+
+`zone_objects` borrows an ordered view of the underlying object ids without
+allocating. Size, top, shuffles, hidden-world reassignment and observations
+include visitors at their original positions. Reordering moves the typed entry;
+it cannot insert an unchecked id. Both entry variants serialize as their numeric
+id, preserving the old zone bytes and match-state hash. Shuffles operate on the
+whole entry sequence, preserving RNG consumption. This matters even at decisions:
+a Treasure sacrificed for mana remains in the graveyard during its color choice,
+before state-based actions run.
+
+Outside the game is not a zone (CR 400.11). Sideboards are fixed rosters held
+beside the game (see [Decks](#decks)); a companion starts there and is put into
+its owner's hand by a special action (CR 702.139a, 116.2g), becoming a card in that
+zone.
+
+### Where the engine departs from the rules
+
+- **Shared zones are stored per player.** Battlefield, stack, exile and command
+  are shared zones (CR 400.1); the engine keeps one list per player for each.
+  Stack order is `GameState::stack_objects`.
+- **Drawing retains the existing mixed-zone behavior.** `Game::draw_cards`
+  moves the top library object to hand and increments draw history even when
+  that object is a transient token. Card-only selection skips that token, but
+  drawing does not skip ahead to another object.
+- **Ante is not modeled** (CR 407).
+- **Observations keep their names and columns.** The observation API's
+  `CardData` rows cover cards, tokens and copies alike, and its `is_token`
+  column is set for tokens and for copies of spells. Observations stay
+  byte-identical to the layout frozen evidence was recorded with; the column
+  reads "not a card", which is what a viewer can tell. The match-state hash
+  likewise records a token's or copy's characteristics with `is_token` set.
 
 ## Resolution contracts
 
@@ -464,6 +1007,58 @@ to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through
 **Import decklist files**; the CLI takes `--hero-deck-file` and
 `--villain-deck-file` ([Academy](academy.md)).
+
+### TLA decks with TLE bonus-sheet cards
+
+TLA play boosters include a bonus sheet of 61 Avatar: The Last Airbender
+Eternal (TLE) cards, collector numbers 1–61. TLA Limited decks use the same
+importer, with no extra pack or flag. The engine defines all 61:
+
+```python
+import managym
+
+decklist = managym.Decklist(
+    "1 Avatar Enthusiasts\n1 Scout's Warning\n17 Plains\n",
+    filename="tla-with-bonus-sheet.txt",
+)
+admitted, = managym.admit_decklists([("hero", decklist)])
+print(managym.check_decks([admitted.deck]))
+# [[]] — no admission issues
+```
+
+Every defined non-token card belongs to the world pool. This small example
+checks `development-v1` admission, not Limited construction or booster
+contents; use a complete deck for play.
+
+All bonus-sheet cards now have definitions, including Heartbeat of Spring,
+Release to Memory and Lita, Mechanical Engineer. Re-admitting the first 1,000
+TLA PremierDraft trophy decks in the retained MTG-213 corpus admits all 1,000.
+This check reparses each retained deck's original source against the current
+world, preserving the corpus and its historical diagnostics.
+
+Two bonus-sheet cards create tokens that need care when reading a board.
+Release to Memory makes plain 1/1 colorless Spirits, which block and are
+blocked normally; TLA's own Spirit token shares the name and can't block or be
+blocked by non-Spirit creatures. The two are separate token definitions, and
+observations and learning tokens tell them apart. Lita, Mechanical Engineer
+makes a 5/5 colorless Zeppelin Vehicle with flying and crew 3, a token with no
+printing and so no Scryfall id.
+
+Bloodchief Ascension, Brought Back and Cityscape Leveler depend on state that
+policy input v9 cannot hold: life lost this turn, cards put into a graveyard
+from the battlefield this turn, and Powerstone mana that can't be spent on
+nonartifact spells. Their decks admit and play under any input, but a v9 policy
+refuses an observation that needs that state; train on them with input v10
+([policy inputs](observation-and-model.md#input-v10-turn-history-and-powerstone-mana)).
+
+`managym.set_cards(["tla"])` selects definitions by their first-printing set.
+Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
+actual counted decklist against the world to include its bonus-sheet cards.
+
+For unknown names in `DeckImportError`, check spelling and the installed
+engine's definitions. Engine and checkpoint worlds must remain compatible;
+keep frozen runs on their recorded world. New card support does not expand
+saved training corpora or change their split assignments.
 
 ## What we know
 

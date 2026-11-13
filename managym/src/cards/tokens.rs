@@ -1,6 +1,7 @@
 //! Learning tokens derived from the engine's own card types.
 //!
-//! A card's rules live once, in the [`CardDefinition`] its set file writes.
+//! A card's or token's rules live once, in the [`PrintedCharacteristics`]
+//! its set file writes, registered as an [`ObjectDefinition`] row.
 //! The policy reads each definition as a token sequence produced by walking
 //! that same value with a `serde` serializer, so every field, `Effect`,
 //! `TriggerCondition` and keyword reaches the tokens without a second
@@ -9,8 +10,8 @@
 //! Each definition contributes one *characteristics* span and one span per
 //! program (each triggered, mana, triggered-mana and activated ability, plus
 //! the spell). Identity and printed text (`key`, `scryfall_id`, `name`,
-//! `text_box`) are never tokens. A `token_name` becomes a definition
-//! reference to the created token's row, and a double-faced card's
+//! `text_box`) are never tokens. A created token's key (serialized as
+//! `token_name`) becomes a definition reference to that token's row, and a double-faced card's
 //! `back_face` one to its back face's row, so the policy reads that
 //! definition in place.
 //!
@@ -18,7 +19,7 @@
 //! `"amount"`, a subtype such as `"Ally"`); integers and booleans carry their
 //! value. Rows are the pack's [`CardDefId`]s.
 //!
-//! Entry point: [`learning_catalog`].
+//! Entry point: [`catalog_tokens`].
 
 use serde::ser::{self, Serialize};
 
@@ -26,7 +27,7 @@ use super::ContentError;
 use crate::cards::content_pack::ContentPack;
 use crate::state::{
     ability::{Effect, TargetRequirement},
-    card::{CardDefId, CardDefinition},
+    card::{CardDefId, ObjectDefinition, PrintedCharacteristics},
 };
 
 /// What a token's value means. Numbering is part of the learning schema.
@@ -81,7 +82,7 @@ pub enum ProgramKind {
 /// `definition_program_rows[definition_program_offsets[row]..]` lists its
 /// program spans in `program_offsets`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct LearningCatalog {
+pub struct CatalogTokens {
     pub token_kind: Vec<u16>,
     pub token_value: Vec<i32>,
     pub definition_offsets: Vec<i32>,
@@ -116,7 +117,7 @@ pub fn name_value(name: &str) -> i32 {
 /// One definition's tokens, characteristics then programs, as `(kind, value)`.
 /// Token names in its effects must name definitions in `pack`.
 pub fn definition_tokens(
-    definition: &CardDefinition,
+    definition: &ObjectDefinition,
     pack: &ContentPack,
 ) -> Result<Vec<(TokenKind, i32)>, ContentError> {
     let mut writer = TokenWriter::new(pack);
@@ -139,8 +140,8 @@ pub fn rules_tokens<T: Serialize>(
 }
 
 /// The token catalog of every definition in `pack`, rows in `CardDefId` order.
-pub fn learning_catalog(pack: &ContentPack) -> Result<LearningCatalog, ContentError> {
-    let mut out = LearningCatalog::default();
+pub fn catalog_tokens(pack: &ContentPack) -> Result<CatalogTokens, ContentError> {
+    let mut out = CatalogTokens::default();
     let mut programs: Vec<Span> = Vec::new();
     let mut definition_programs: Vec<Vec<i32>> = Vec::new();
 
@@ -184,7 +185,7 @@ struct Span {
     references: Vec<(usize, i32)>,
 }
 
-fn append(out: &mut LearningCatalog, span: Span) {
+fn append(out: &mut CatalogTokens, span: Span) {
     let offset = out.token_kind.len();
     for (index, row) in span.references {
         out.definition_ref_source_tokens
@@ -205,7 +206,7 @@ struct SpellProgram<'a> {
 }
 
 fn definition_programs_of(
-    definition: &CardDefinition,
+    definition: &PrintedCharacteristics,
     pack: &ContentPack,
 ) -> Result<Vec<(ProgramKind, Span)>, ContentError> {
     fn tokens<T: Serialize>(value: &T, pack: &ContentPack) -> Result<Span, ContentError> {
@@ -246,9 +247,10 @@ pub(crate) struct TokenWriter<'p> {
     tokens: Vec<(u16, i32)>,
     /// Positions of definition reference tokens and their target rows.
     references: Vec<(usize, i32)>,
-    /// Name of the struct field being written, for `token_name` references.
+    /// Name of the struct field being written, for definition references.
     field: Option<&'static str>,
-    /// Depth of nested structs; the top-level `CardDefinition` is depth 1.
+    /// Depth of nested structs; the top-level row (serialized as
+    /// `CardDefinition`) is depth 1.
     depth: usize,
 }
 
@@ -270,7 +272,7 @@ impl<'p> TokenWriter<'p> {
 
     pub(crate) fn append_definition(
         &mut self,
-        definition: &CardDefinition,
+        definition: &ObjectDefinition,
     ) -> Result<(), ContentError> {
         definition.serialize(&mut *self)?;
         for (kind, span) in definition_programs_of(definition, self.pack)? {
@@ -405,11 +407,13 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         unsupported("characters")
     }
     fn serialize_str(self, value: &str) -> Result<(), ContentError> {
-        if matches!(self.field, Some("token_name" | "back_face")) {
-            let row = self
-                .pack
-                .definition_id(value)
-                .ok_or_else(|| ContentError(format!("{value:?} is not in the pack")))?;
+        let reference = match self.field {
+            Some("token_name") => Some(self.pack.token_id(value)),
+            Some("back_face") => Some(self.pack.definition_id(value)),
+            _ => None,
+        };
+        if let Some(row) = reference {
+            let row = row.ok_or_else(|| ContentError(format!("{value:?} is not in the pack")))?;
             let CardDefId(row) = row;
             self.references.push((self.tokens.len(), row as i32));
             self.push(TokenKind::DefinitionRef, row as i32);
@@ -707,13 +711,13 @@ mod tests {
     #[test]
     fn retained_rules_tokens_preserve_created_definition_identity() {
         let pack = default_content_pack();
-        let food = rules_tokens(&Effect::create_tokens("Food", 1), pack).unwrap();
-        let ally = rules_tokens(&Effect::create_tokens("Ally", 1), pack).unwrap();
+        let food = rules_tokens(&Effect::create_tokens("token.food", 1), pack).unwrap();
+        let ally = rules_tokens(&Effect::create_tokens("token.ally", 1), pack).unwrap();
         assert_ne!(food, ally);
-        for (name, tokens) in [("Food", food), ("Ally", ally)] {
+        for (key, tokens) in [("token.food", food), ("token.ally", ally)] {
             assert!(tokens.contains(&(
                 TokenKind::DefinitionRef as u16,
-                pack.definition_id(name).unwrap().0 as i32
+                pack.token_id(key).unwrap().0 as i32
             )));
         }
     }
@@ -721,7 +725,7 @@ mod tests {
     #[test]
     fn default_catalog_spans_every_definition_and_resolves_token_references() {
         let pack = default_content_pack();
-        let catalog = learning_catalog(pack).unwrap();
+        let catalog = catalog_tokens(pack).unwrap();
         assert_eq!(catalog.definition_offsets.len(), pack.len() + 1);
         assert_eq!(
             catalog.definition_ref_source_tokens.len(),

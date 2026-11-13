@@ -46,7 +46,7 @@ import argparse
 from collections.abc import Iterable, Mapping
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from etude.eval.query import statsdb
 from etude.experiment import ExperimentState, TrainingRun, observe
@@ -55,11 +55,14 @@ from etude.run.storage import Storage, storage_from_uri
 from etude.train.read import read_all
 import numpy as np
 import numpy.typing as npt
+from pydantic import Field
 
 from experiments.tla_frontier import (
     EXPERIMENT,
+    GAMES_PER_PAIR,
     PROTOCOL,
     SIZES,
+    Pair,
     PodReading,
     Protocol,
     ScheduledComparison,
@@ -77,22 +80,189 @@ from experiments.tla_frontier import (
     update_cap,
     with_launcher_ends,
 )
-from experiments.tla_pilot_analysis import (
-    BOOTSTRAP_RESAMPLES,
-    Counts,
-    PairResult,
-    field_totals,
-    game_columns,
-    pair_result,
-    stored_game_columns,
-)
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import StrictModel, file_sha256
+from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.training.regime import TrainingRegime
 
 if TYPE_CHECKING:
     import duckdb
+
+
+BOOTSTRAP_RESAMPLES = 2000
+
+
+class Counts(StrictModel):
+    """Game counts: expected = valid + failed + missing; attempted is a lower bound.
+
+    A failed Etude callback can lose all per-game outcomes. Those games remain
+    missing, and the separate failed-match count retains the known failure.
+    """
+
+    expected: int = 0
+    attempted: int = 0
+    valid: int = 0
+    failed: int = 0
+    missing: int = 0
+    wins: int = 0
+    draws: int = 0
+    losses: int = 0
+    truncated: int = 0
+    expected_matches: int = 0
+    attempted_matches: int = 0
+    failed_matches: int = 0
+    missing_matches: int = 0
+
+
+class PairResult(StrictModel):
+    pair: Pair
+    match: str | None
+    counts: Counts
+    score: float | None = None
+    error: str | None = None
+    sources: tuple[str | None, ...] = ()
+
+
+class _Game(StrictModel):
+    game: int = Field(ge=0, lt=GAMES_PER_PAIR)
+    attempted: bool
+    valid: bool
+    # Etude may omit columns whose values are all null.
+    score: Literal[0.0, 0.5, 1.0] | None = None
+    terminated: bool
+    truncated: bool
+    failure: str | None = None
+
+
+class _Receipt(StrictModel):
+    run: str
+    state: Literal["done", "failed"]
+    error: str | None
+
+
+def field_totals[T: StrictModel](model: type[T], rows: list[T]) -> T:
+    """Each field's sum over `rows`; `model` names the type of an empty list."""
+    return model(
+        **{
+            field: sum(getattr(row, field) for row in rows)
+            for field in model.model_fields
+        }
+    )
+
+
+def stored_game_columns(db: duckdb.DuckDBPyConnection) -> set[str]:
+    """The `games` table's columns; Etude omits a column that is all null."""
+    return {
+        row[0]
+        for row in db.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
+        ).fetchall()
+    }
+
+
+def game_columns(db: duckdb.DuckDBPyConnection) -> tuple[str, ...]:
+    """One validated `games` projection for every pair; empty without results.
+
+    Required columns stay in the query so malformed tables fail; only absent
+    nullable fields get defaults.
+    """
+    available = stored_game_columns(db)
+    if not available:
+        return ()
+    return tuple(
+        name
+        for name, field in _Game.model_fields.items()
+        if field.is_required() or name in available
+    )
+
+
+def pair_result(
+    db: duckdb.DuckDBPyConnection,
+    pair: Pair,
+    key: str | None,
+    environment_id: str,
+    game_columns: tuple[str, ...],
+) -> PairResult:
+    receipts = (
+        db.execute(
+            "SELECT m.run, m.state, m.error FROM matches m JOIN runs r USING (run) "
+            "WHERE m.match = ? AND r.environment = ?",
+            [key, environment_id],
+        ).fetchall()
+        if key is not None
+        else []
+    )
+    if len(receipts) > 1:
+        raise ValueError(f"repeated match {key}: the frozen protocol forbids retries")
+    if not receipts:
+        return PairResult(
+            pair=pair,
+            match=key,
+            counts=Counts(
+                expected=GAMES_PER_PAIR,
+                expected_matches=1,
+                missing=GAMES_PER_PAIR,
+                missing_matches=1,
+            ),
+        )
+    receipt = _Receipt.model_validate(
+        dict(zip(("run", "state", "error"), receipts[0], strict=True))
+    )
+    source_rows = db.execute(
+        "SELECT seat, source FROM seats WHERE run = ? AND match = ? ORDER BY seat",
+        [receipt.run, key],
+    ).fetchall()
+    sources = tuple(source for _, source in source_rows)
+    if [seat for seat, _ in source_rows] != [0, 1]:
+        sources += (None,)
+    games: list[_Game] = []
+    if receipt.state == "done" and game_columns:
+        rows = db.execute(
+            f"SELECT {', '.join(game_columns)} FROM games "
+            "WHERE run = ? AND match = ? AND seat = 0 ORDER BY game",
+            [receipt.run, key],
+        ).fetchall()
+        games = [
+            _Game.model_validate(dict(zip(game_columns, row, strict=True)))
+            for row in rows
+        ]
+    if len({game.game for game in games}) != len(games):
+        raise ValueError(f"duplicate legs in {key}")
+    if any(
+        not game.attempted and (game.valid or game.score is not None) for game in games
+    ):
+        raise ValueError(f"unattempted game has a result in {key}")
+    attempted = [game for game in games if game.attempted]
+    scores = [
+        game.score
+        for game in attempted
+        if game.valid
+        and game.terminated
+        and not game.truncated
+        and not game.failure
+        and game.score is not None
+    ]
+    return PairResult(
+        pair=pair,
+        match=key,
+        error=receipt.error,
+        sources=sources,
+        counts=Counts(
+            expected=GAMES_PER_PAIR,
+            attempted=len(attempted),
+            valid=len(scores),
+            failed=len(attempted) - len(scores),
+            missing=GAMES_PER_PAIR - len(attempted),
+            wins=scores.count(1),
+            draws=scores.count(0.5),
+            losses=scores.count(0),
+            truncated=sum(game.truncated for game in attempted),
+            expected_matches=1,
+            attempted_matches=1,
+            failed_matches=int(receipt.state == "failed"),
+        ),
+        score=sum(scores) / GAMES_PER_PAIR if len(scores) == GAMES_PER_PAIR else None,
+    )
 
 
 class Bounded(StrictModel):
@@ -428,7 +598,7 @@ def analyze(
         issues.append(f"{unscored} of {played} played games have no score.")
     endpoints = next(c for c in comparisons if c.tag == "endpoint-head-to-head")
     return FrontierAnalysis(
-        protocol_sha256=file_sha256(PROTOCOL),
+        protocol_sha256=canonical_sha256(PROTOCOL.model_dump(mode="json")),
         bootstrap_seed=protocol.bootstrap_seed,
         counts=field_totals(Counts, [p.counts for p in unique_pairs]),
         policy_actions=field_totals(

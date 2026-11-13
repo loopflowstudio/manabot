@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use managym::{
     cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
-        game_object::{CardId, PlayerId},
+        card::{PrintedCharacteristics, TokenDefinition},
+        game_object::{ObjectId, ObjectKind, PlayerId, PublicId},
         player::PlayerConfig,
         zone::{ZoneManager, ZoneType},
     },
@@ -52,9 +53,9 @@ fn zone_trace(zones: &ZoneManager) -> Vec<(ZoneType, PlayerId, Vec<usize>)> {
                 zone,
                 player,
                 zones
-                    .zone_cards(zone, player)
+                    .zone_objects(zone, player)
                     .iter()
-                    .map(|card| card.0)
+                    .map(|object| object.0)
                     .collect(),
             ));
         }
@@ -65,9 +66,16 @@ fn zone_trace(zones: &ZoneManager) -> Vec<(ZoneType, PlayerId, Vec<usize>)> {
 fn trace_point(game: &Game) -> String {
     let card_definitions: Vec<_> = game
         .state
-        .cards
+        .objects
         .iter()
-        .map(|card| (card.id, card.definition_id, card.registry_key, card.owner))
+        .map(|object| {
+            (
+                object.id,
+                object.definition_id,
+                object.registry_key,
+                object.owner,
+            )
+        })
         .collect();
     format!(
         "turn={:?};priority={:?};players={:?};cards={card_definitions:?};zones={:?};\
@@ -78,7 +86,7 @@ fn trace_point(game: &Game) -> String {
         game.state.players,
         zone_trace(&game.state.zones),
         game.state.permanents,
-        game.state.card_to_permanent,
+        game.state.object_to_permanent,
         game.state.stack_objects,
         game.state.combat,
         game.state.events,
@@ -111,7 +119,6 @@ fn stable_card_def_ids_are_deterministic() {
         "Lightning Bolt",
         "Counterspell",
         "Kyoshi Warriors",
-        "Clue",
     ] {
         let first_id = first.definition_id(name).expect("definition in first pack");
         let second_id = second
@@ -121,17 +128,64 @@ fn stable_card_def_ids_are_deterministic() {
         assert_eq!(first.definition(first_id).unwrap().name, name);
     }
 
+    let clue = first.token_id("token.clue").expect("token in first pack");
+    assert_eq!(
+        second.token_id("token.clue"),
+        Some(clue),
+        "unstable token CardDefId"
+    );
+    assert_eq!(first.definition(clue).unwrap().name, "Clue");
+    assert_eq!(
+        first.definition_id("Clue"),
+        None,
+        "tokens are not found by name"
+    );
+
     let game = make_game(7);
-    for card in game.state.cards.iter() {
-        assert_eq!(card.registry_key.0, card.definition_id.0);
+    for object in game.state.objects.iter() {
+        assert_eq!(object.registry_key.0, object.definition_id.0);
         assert_eq!(
             default_content_pack()
-                .definition(card.definition_id)
+                .definition(object.definition_id)
                 .unwrap()
                 .name,
-            card.name
+            object.name
         );
     }
+}
+
+/// Tokens resolve by key, never by printed name, so a plain Spirit can sit
+/// beside TLA's `token.spirit`.
+#[test]
+fn tokens_sharing_a_printed_name_stay_distinct_by_key() {
+    let mut pack = ContentPack::default();
+    let printed = pack.token_id("token.spirit").unwrap();
+    pack.register_token(&TokenDefinition {
+        key: "token.fixture_spirit",
+        scryfall_id: None,
+        printed: PrintedCharacteristics {
+            name: "Spirit".into(),
+            power: Some(1),
+            toughness: Some(1),
+            ..Default::default()
+        },
+    });
+    let plain = pack.token_id("token.fixture_spirit").unwrap();
+    assert_ne!(plain, printed);
+    assert_eq!(pack.definition_id("Spirit"), None);
+    for (key, row) in [("token.spirit", printed), ("token.fixture_spirit", plain)] {
+        let token = pack
+            .instantiate_token(key, PlayerId(0), PublicId(1))
+            .unwrap();
+        assert_eq!(token.definition_id, row);
+        assert!(
+            token.kind() == ObjectKind::Token && token.name == "Spirit",
+            "{key}"
+        );
+    }
+    assert_eq!(pack.definition(printed).unwrap().statics.len(), 2);
+    assert!(pack.definition(plain).unwrap().statics.is_empty());
+    assert_eq!(pack.definition(plain).unwrap().scryfall_id, None);
 }
 
 #[test]
@@ -142,7 +196,7 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
     let expected_digest = admitted.content_digest();
     let mut branch = game.clone();
     let sibling = game.clone();
-    let first_card = CardId(0);
+    let first_card = ObjectId(0);
 
     assert!(std::ptr::eq(admitted, default_content_pack()));
     assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);
@@ -150,11 +204,11 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
 
     for (((original, branched), sibling_card), other_card) in game
         .state
-        .cards
+        .objects
         .iter()
-        .zip(branch.state.cards.iter())
-        .zip(sibling.state.cards.iter())
-        .zip(other_match.state.cards.iter())
+        .zip(branch.state.objects.iter())
+        .zip(sibling.state.objects.iter())
+        .zip(other_match.state.objects.iter())
     {
         assert_eq!(original.definition_id, branched.definition_id);
         assert_eq!(original.definition_id, sibling_card.definition_id);
@@ -175,13 +229,15 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
 
     // The legacy scenario mutation seam is copy-on-write and cannot mutate a
     // definition in either the source branch or the process-wide pack.
-    branch.state.cards[first_card]
+    branch.state.objects[first_card]
         .subtypes
         .push("scenario-only".to_string());
-    assert!(!game.state.cards[first_card].has_subtype("scenario-only"));
-    assert!(!branch.state.cards[first_card].shares_definition_with(&game.state.cards[first_card]));
+    assert!(!game.state.objects[first_card].has_subtype("scenario-only"));
+    assert!(
+        !branch.state.objects[first_card].shares_definition_with(&game.state.objects[first_card])
+    );
     assert!(!admitted
-        .definition(game.state.cards[first_card].definition_id)
+        .definition(game.state.objects[first_card].definition_id)
         .unwrap()
         .subtypes
         .iter()

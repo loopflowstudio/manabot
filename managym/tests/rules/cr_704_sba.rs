@@ -13,7 +13,7 @@ use managym::{
         },
         card::{Keyword, Keywords},
         effect::Modification,
-        game_object::{CardId, ObjectRef, PlayerId},
+        game_object::{ObjectId, ObjectRef, PlayerId},
         predicate::CardPredicate,
         stack_object::StackObject,
         zone::ZoneType,
@@ -33,7 +33,7 @@ fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
     s.advance_to_active_step(0, StepKind::Main);
 
     let lesson = owned_card(&s, 0, "Firebending Lesson");
-    s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    s.game_mut().move_object(lesson, ZoneType::Graveyard);
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let swarm_ref = s
         .game()
@@ -45,10 +45,10 @@ fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
         .game()
         .state
         .zones
-        .zone_cards(ZoneType::Library, PlayerId(0))
+        .zone_objects(ZoneType::Library, PlayerId(0))
         .to_vec();
-    for card in library {
-        s.game_mut().state.zones.remove_card(card);
+    for object in library {
+        s.game_mut().state.zones.remove_object(object);
     }
     s.game_mut().state.permanents[swarm]
         .as_mut()
@@ -209,17 +209,17 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
         .iter()
         .filter_map(|event| match event {
             GameEvent::CardMoved {
-                card,
+                object_id: object,
                 from: Some(ZoneType::Battlefield),
                 to: ZoneType::Graveyard,
                 ..
-            } => Some(*card),
+            } => Some(*object),
             _ => None,
         })
         .collect();
     let expected_cards: Vec<_> = expected
         .iter()
-        .map(|object_ref| CardId::from(object_ref.entity))
+        .map(|object_ref| ObjectId::from(object_ref.entity))
         .collect();
     assert_eq!(committed, expected_cards);
     assert!(expected
@@ -246,7 +246,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
     let ability = Ability::Triggered {
         intervening_if: None,
         condition: TriggerCondition::Dies {
-            subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+            subject: TriggerSubject::another_you_control(CardPredicate::creature()),
         },
         effects: vec![Effect::gain_life(1)],
     };
@@ -257,11 +257,11 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
             .permanent_object_ref(permanent_id)
             .expect("ogre ref");
         expected_sources.push(object_ref);
-        let card = s.game().state.permanents[permanent_id]
+        let object_id = s.game().state.permanents[permanent_id]
             .as_ref()
             .expect("ogre")
-            .card;
-        s.game_mut().state.cards[card].abilities = vec![ability.clone()];
+            .object;
+        s.game_mut().state.objects[object_id].abilities = vec![ability.clone()];
         s.game_mut().state.permanents[permanent_id]
             .as_mut()
             .expect("ogre")
@@ -300,18 +300,18 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
     );
     s.advance_to_active_step(0, StepKind::Main);
     let old_permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let card = s.game().state.permanents[old_permanent]
+    let object = s.game().state.permanents[old_permanent]
         .as_ref()
         .expect("old ogre")
-        .card;
+        .object;
     let old_ref = s
         .game()
         .permanent_object_ref(old_permanent)
         .expect("old ref");
 
-    s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().move_card(card, ZoneType::Battlefield);
-    let new_permanent = s.game().state.card_to_permanent[card].expect("new permanent");
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let new_permanent = s.game().state.object_to_permanent[object].expect("new permanent");
     let new_ref = s
         .game()
         .permanent_object_ref(new_permanent)
@@ -325,7 +325,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
             or_exiled: true,
         },
         controller: PlayerId(0),
-        source_card: card,
+        source_object: object,
         source_ref: Some(old_ref),
         effects: vec![Effect::Move {
             library_end: None,
@@ -348,7 +348,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
     s.pass_priority();
 
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Graveyard)
     );
     assert!(s.game().state.delayed_triggers.is_empty());
@@ -403,7 +403,7 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
                         s.advance_to_active_step(0, StepKind::Main);
                         let id = s.force_permanent_on_battlefield(controller, "Gray Ogre");
                         let perm = s.game_mut().state.permanents[id].as_mut().unwrap();
-                        let card = perm.card;
+                        let object = perm.object;
                         perm.damage = damage;
                         // A deathtouch flag describes positive damage, never zero.
                         perm.deathtouch_damage = deathtouch && damage > 0;
@@ -428,7 +428,7 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
                                 && damage > 0
                                 && (damage >= toughness || deathtouch));
                         assert_eq!(
-                            s.game().state.zones.zone_of(card),
+                            s.game().state.zones.zone_of(object),
                             Some(if dies { ZoneType::Graveyard } else { ZoneType::Battlefield }),
                             "controller={controller}, toughness={toughness}, damage={damage}, deathtouch={deathtouch}, indestructible={indestructible}"
                         );

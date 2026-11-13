@@ -5,7 +5,7 @@ import type { ExperienceFrame } from '$lib/types';
 import DecisionContext from './DecisionContext.svelte';
 
 it('renders native pending resolution without adding a choice', () => {
-  const fixture = JSON.parse(readFileSync(new URL('../../../../../academy/fixtures/choice-navigation-w17.json', import.meta.url), 'utf8'));
+  const fixture = JSON.parse(readFileSync(new URL('../../../../../academy/fixtures/choice-navigation-w17-token-cards.json', import.meta.url), 'utf8'));
   const frame = fixture.positions.LEARN.frame as ExperienceFrame;
   const observation = structuredClone(frame.projection);
   if (!observation.decision_context) throw new Error('expected decision context');

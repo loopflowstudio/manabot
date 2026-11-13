@@ -13,9 +13,22 @@ are in [AGENTS.md](../AGENTS.md); test-resource rules in [TESTING.md](../TESTING
 
 ## Environment and commands
 
-The root project is both the development environment and the single `manabot`
-distribution. Python is CPython 3.12; every Python command runs through uv
-(`uv run ...`). `uv sync` builds the bundled extension; CI and existing scripts
+From the repository root:
+
+```bash
+uv sync --locked --python 3.13 --extra dev --extra artifacts
+uv run manabot --help
+```
+
+This prepares the development environment and displays the CLI commands. The
+root project owns that environment and the `manabot` distribution; the uv
+workspace installs its matching `managym` member from this source tree.
+Development uses ordinary CPython 3.13; consumer compatibility includes 3.12.
+Keep shared Python source compatible with 3.12. Free-threaded builds and newer
+interpreters are outside the supported contract.
+
+Every Python command runs through uv (`uv run ...`). `uv sync` builds the local
+engine extension; CI and existing scripts
 also use `uv run --extra play maturin develop --manifest-path managym/Cargo.toml`
 (add `--features python`, and `--release` for timing-sensitive use). After
 changing Rust, rebuild as described in AGENTS.md and replace the `.so`
@@ -28,17 +41,23 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
-Etude is pinned to release 0.2.15 in `pyproject.toml` and `uv.lock` for the
-launcher, extras and remote workers. This includes the checkpoint wall-time
-API and current launcher database compatibility. To update it, change all SDK
-requirements together, regenerate the lock, then use the locked environment:
+The `manabot` public dependency requirements are `etude-sdk>=0.2.16` (also for
+its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
+requirements. A downstream project resolves those with its own dependencies. The repository's
+`uv.lock` records exact versions, and its dedicated training and play runtime
+groups retain exact Torch/backend choices. Those development pins are not
+constraints exported to consumers.
+
+To update the locked Etude version without raising the public minimum:
 
 ```bash
 uv lock --upgrade-package etude-sdk
-uv sync --locked --python 3.12 --extra dev --extra artifacts
+uv sync --locked --python 3.13 --extra dev --extra artifacts
 ```
 
-Commit both `pyproject.toml` and `uv.lock` before preparing a new experiment.
+Commit the lock change before preparing a new experiment. When raising a public
+minimum, update every requirement for that dependency and commit the metadata
+with the lock.
 Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
 Retained experiments keep their original source and lock, including the v7
 representation study's historical Git source pin. Never downgrade the current
@@ -64,8 +83,9 @@ The dev profile builds at opt-level 1, keeping debug assertions and overflow
 checks while running the suite about 3x faster; release-only passes are not
 enough. `cargo nextest run` runs every binary's tests in parallel, where
 `cargo test` runs binaries one after another; `--profile ci` adds CI's 5-minute
-per-test limit (`managym/.config/nextest.toml`). Use `-j 2` and
-`--test-threads 2` on shared hosts, and select a binary while iterating
+per-test limit (`managym/.config/nextest.toml`). Use `CARGO_BUILD_JOBS=2` and
+`--test-threads 2` for nextest on shared hosts (`-j` is its test-thread alias),
+and select a binary while iterating
 (`cargo nextest run -E 'binary(rules_tests)'`). Keep one Cargo operation per
 build directory. `--all-features` builds the PyO3 bindings; if the default `python3`
 is newer than PyO3 supports, set `PYO3_PYTHON=../.venv/bin/python`. A failure of
@@ -75,7 +95,7 @@ setup, not engine correctness. Record unavailable tooling in the gate summary.
 **Authored rules, worlds and setups.** Run the complete debug Rust suite,
 including semantic-kernel conformance, and focused browser interactions. Also:
 
-- `uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q`
+- `uv run --extra dev pytest tests/semantic/test_elemental_world.py -q`
   for Elemental roster or training-admission changes; its PPO smoke reloads the
   final checkpoint written by the recipe's `execute_regime` after tracking closes.
 - `uv run pytest tests/academy/test_choice_navigation.py -q`: browser coverage
@@ -109,13 +129,24 @@ closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
+Changes to retained execution or its record vocabulary also require
+`uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
+the native extension. This bounded sweep checks that emitted execution tokens
+have catalog rows, including decisions reached through changed game paths.
 
 **Local-update search.** Run `tests/sim/test_local_update.py`,
 `tests/sim/test_local_update_sampling.py` and
-`tests/sim/test_search_command_evidence.py` together. The core integration job
+`tests/sim/test_search_command_evidence.py` together. The model integration group
 includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
+`tests/sim/test_local_update.py` checks the defaults, compact rollout evidence
+and native frontier encoding, against full evidence and the Python per-branch
+encoder: the same roots and seeds must choose identical Commands and write
+identical tensors. It also checks that v3 receipts and registrations omitting
+`rollout_evidence` still read as full evidence. A change to
+`managym.encode_observations_into` also runs `tests/env/test_observation.py`
+and the debug native suite.
 Inspect collector fixtures before selecting laptop-safe model tests:
 `SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
 `collect(model, 1)` can play a complete game.
@@ -139,16 +170,34 @@ focused tests too. Synthetic scheduling/analysis fixtures must pin both identity
 and schema; test real runtime rejection separately, and keep those fixtures off
 replay, encoding and training paths. Never rewrite frozen protocols to fit the
 current runtime.
-Checkpoint-time scheduling changes also require
-`uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_frontier.py -q`.
-Store synthetic checkpoints with an injected wall clock, and cover both relative
-run speeds; filesystem timing must not decide the expected matchup set.
+Store synthetic checkpoints for checkpoint-time scheduling tests with an injected
+wall clock, and cover both relative run speeds; filesystem timing must not decide
+the expected matchup set.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
+Package initializer changes also require
+`uv run --extra dev --extra artifacts --extra evaluation pytest tests/test_package_boundaries.py tests/eval/test_inference_receipts.py -q`;
+offline receipt reports must work without probing the native engine, even to
+diagnose an installation problem.
 Training CLI changes need the installed-wheel smoke from
 [Build and verify](#build-and-verify); a source-tree smoke cannot verify the
 installed entry point.
+
+Check changed Python modules and type stubs with
+`uv run --extra dev ruff check --fix <paths>` and
+`uv run --extra dev ruff format <paths>`. Include moved `.pyi` files: the
+compatibility stub is part of the public package surface.
+
+**Policy backends.** Shared damped-update or backend changes need
+`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
+The installed-backend tests run the real update, force gradient clipping,
+compare every post-Adam weight and reject malformed raw rollout rows. MLX
+cases skip where it is unavailable; run them on Apple Silicon with the `mlx`
+extra before claiming MLX parity. For a changed forward or parameter mapping,
+also run the [captured parity check](../manabot/backends/README.md#parity-check)
+against a capture whose world binding still matches; it gates the optimizer
+step as well as forward, loss and gradients.
 
 **Loopflow workflows.** With `lf` installed, run
 `uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
@@ -176,7 +225,7 @@ advice evidence as gate blockers; never regenerate fixtures or relax historical
 checkpoint validation to pass.
 
 **Website** (`website/**`): from `website/`, run
-`uv run --python 3.12 --extra test pytest tests/ -q`. Keep coverage for
+`uv run --extra test pytest tests/ -q`. Keep coverage for
 parseable blog-only sitemap XML, the root redirect, and the plain-text
 `/healthz` Fly probe.
 
@@ -202,10 +251,10 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 |---|---|
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
-| Integration | `manabot-integration.yml` (`core`, `evaluation` and `long` groups on separate runners; Perf report proof and training smoke in `evaluation`) |
+| Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
-| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v2` |
+| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v3` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
 | Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |
@@ -216,6 +265,46 @@ drifted case is written to `target/semantic-conformance/<corpus>/`, which Rust
 Tests uploads on failure; fuzz failures keep exact seeds under
 `target/semantic-conformance/failures/`. Rust Tests runs whenever the fuzzing
 job does.
+
+**Job time.** Pull-request jobs have an 8-minute budget on the ordinary
+Ubuntu runner, measured from job start to job end, so installation and
+the extension build count against it. Read a job's time from the run:
+
+```console
+$ gh run view <run-id> --json jobs \
+    --jq '.jobs[] | select(.conclusion == "success") | "\(((.completedAt | fromdate) - (.startedAt | fromdate)) / 60 | floor) min  \(.name)"' | sort -rn | head -4
+15 min  Engine Budget / Engine Budget
+6 min  Rust Tests
+6 min  Integration / Integration (ubuntu-latest, training)
+6 min  Integration / Integration (ubuntu-latest, experiment)
+```
+
+Integration and Academy Integration install every extra they use in one
+`uv sync` that leaves `managym` out, build the extension once with
+`maturin develop`, and run with `UV_NO_SYNC=1` so no later `uv run` compiles the
+engine a second time. Each Integration group runs one pytest worker per logical core
+(`pytest -n logical`; [TESTING.md](../TESTING.md) says what that asks of a test)
+and prints its 20 slowest tests (`--durations=20`) at the end of its test step.
+
+Integration and Python unit install the locked CPU Torch with
+`--no-default-groups --group play-runtime` because hosted Ubuntu runners have no GPU.
+
+When a job passes 8 minutes, in order of preference:
+
+1. Make its slowest tests cheaper (a smaller fixture, fewer updates or games,
+   a shared setup) while keeping what they assert.
+2. Cut the shared installation and build time.
+3. Move test files to a faster group, or add a group to the matrix, balanced by
+   the measured times; `tests/infra/test_ci_selection.py` checks that every
+   path a group names exists.
+
+Never skip, deselect or delete a test to fit, and never raise the five-minute
+single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
+files and individual tests. If a new file is not covered by a directory
+selection, add it to the group with the most room.
+Engine Budget is the exception: it builds and measures the change and its
+reference on one runner and keeps that shape, whatever it takes. The macOS
+nightly reuses the same groups without this limit.
 
 **Selection.** Detect Changes pipes the NUL-delimited diff (`--no-renames`, so
 both sides of a rename) into `.github/ci/select-tests.sh`. Manual dispatch, an
@@ -323,7 +412,39 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference.** Commit `ea316ff14` is adopted from
+**Current reference: MTG-297 mana spending.** Commit `d53220d36` is adopted
+from [dedicated run 43417765062](https://github.com/loopflowstudio/manabot/actions/runs/43417765062)
+(2026-11-13 UTC, AMD EPYC 7763). Native unit/class spending adds decisions to
+these decks: all three search digests and the step digest change, with 102,209
+steps instead of 101,650 across 512 games. The previous reference reproduces
+all committed digests. Every timing threshold passes; both samples agree
+closely and user CPU tracks wall time. Changed gameplay means these are
+budget measurements of different workloads, not an isolated algorithmic
+speedup. The 10% tolerance is unchanged.
+
+| Metric | Previous reference `7ef6ce588` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.928 s | 3.611 s |
+| Total search | 169.080 s | 125.545 s |
+| Step throughput | 11,760.9/s | 13,728.0/s |
+
+**Previous reference: MTG-286 TLE rules.** Commit `7ef6ce588` was adopted from
+[PR #469 CI run 43221435403](https://github.com/loopflowstudio/manabot/actions/runs/43221435403)
+(2026-11-12 UTC, AMD EPYC 7763) as an accepted cost. MTG-286's TLE rules
+additions (mana payment, casting, proposed events and triggers) leave every
+search digest, the step digest and the 101,650-step count unchanged, but slow
+headless steps by 9.2%. Both candidate step samples (8.79 s, 8.64 s) were slower
+than both reference samples (7.98 s, 7.84 s), with user CPU time matching wall
+time, so the gap is engine cost rather than scheduling. Search stayed within
+budget.
+
+| Metric | Previous reference `ea316ff14` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.913 s | 4.944 s |
+| Total search | 167.486 s | 169.186 s |
+| Step throughput | 12,880.0/s | 11,693.6/s |
+
+**Previous reference: MTG-239 rules.** Commit `ea316ff14` was adopted from
 [PR #415 CI run 41711692234](https://github.com/loopflowstudio/manabot/actions/runs/41711692234)
 (2026-11-03 UTC, AMD EPYC 7763). MTG-239 gives Accumulate Wisdom explicit
 bottom-order decisions and makes Rallier evaluate Suki's power in the library.
@@ -397,10 +518,14 @@ locally only as a smoke check:
 
 ## Releases
 
-Manabot ships as one PyPI distribution, `manabot`, containing the Python library
-and the native engine at `manabot.managym`; `import managym` is a compatibility
-alias. Versions are `X.Y.Z`, tagged `vX.Y.Z`, shared by Python metadata and the
-bundled crate; the first public release is
+One release contains two PyPI distributions at the same `X.Y.Z` version:
+`managym`, the native engine and its Python API, and `manabot`, the Python
+training library and clients. `manabot` requires `managym==X.Y.Z`.
+`import managym` owns the engine; `manabot.managym` remains a compatibility
+alias when `manabot` is installed. One `vX.Y.Z` tag builds and publishes both;
+neither package has an independent release cadence. The Python projects and
+Rust workspace crates share that version, checked before building. The first
+public release, before this split, is
 [0.2.0](https://pypi.org/project/manabot/0.2.0/). Package versions do not replace
 world, content, observation or checkpoint identities, and an upgrade does not
 make old checkpoints compatible. Releases are research releases, not
@@ -408,53 +533,135 @@ certification of playing strength or rules coverage.
 
 ### Install
 
+For an unpublished candidate, install the local wheels using
+[Build and verify](#build-and-verify). The PyPI commands below apply after the
+paired release is published.
+
+For the rules engine alone, follow [installing managym](engine-python.md).
+For training, install `manabot` in a fresh directory outside this checkout:
+
 ```bash
-uv venv --python 3.12
-uv pip install --python .venv/bin/python --torch-backend cpu 'manabot==0.2.0'
-uv run --no-project manabot --help
+mkdir manabot-example
+cd manabot-example
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
+uv run --no-project --python .venv/bin/python manabot --help
 ```
 
-For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
-explicitly. CI validates CPU, not GPU, execution.
+This installs the library and its exact-version engine dependency into `.venv`;
+the last command lists CLI commands without starting training. No repository dependency groups
+are installed. For CPython 3.12, create the environment with
+`--python 3.12`; installation selects the matching engine wheel. Pin both
+distributions to the same published version in reproducible projects. See the
+[0.2.2 release notes](../release/v0.2.2/NOTES.md) for upgrading from the bundled
+0.2.0/0.2.1 wheels, and the [0.2.1 release notes](../release/v0.2.1/NOTES.md)
+for API migration guidance.
+The historical 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
+environment when reproducing that release.
 
-Supported: CPython 3.12 (no free-threaded ABI) on Linux x86-64 with glibc
-2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
-MPS is admitted for float32 self-play training with Torch 2.10. Baseline requires
-CUDA or Apple MPS; local selects the available accelerator (CUDA first) or CPU.
+For Linux NVIDIA training use `--torch-backend cu132`; always select the backend
+explicitly. Torch 2.15 publishes no CUDA 12 wheels, so the CUDA 13.2 build needs
+an NVIDIA driver from the 580 series or newer and a Turing or newer GPU
+(compute capability 7.5+). CI validates CPU, not GPU, execution.
+
+Supported: ordinary CPython 3.12 and 3.13 (no free-threaded ABI) on Linux x86-64 with glibc
+2.28+ (CPU or CUDA 13.2 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
+MPS is admitted, on explicit request, for float32 self-play training with Torch 2.15 or
+newer. Baseline requires CUDA or an explicit `--device mps`; local selects CUDA when
+available and CPU otherwise.
 Evaluation and search run on CPU for this workflow. GPU-less tests use
 `baseline_test()`, which shares baseline construction and changes only the device.
 No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 
-Wheels contain the compiled engine; the sdist needs Rust and a C linker
-(`--only-binary :all:` refuses source builds). Extras: `academy` (backend only;
-use `./scripts/play` for the browser), `evaluation`, `reports`, `artifacts`,
-`notebook`. `--regime-name`, experiment drivers and data-ledger tools need a
+The platform-specific `managym` wheels contain the compiled engine; its sdist
+needs Rust and a C linker (`--only-binary :all:` refuses source builds).
+`manabot` is a pure-Python wheel and gets the engine through its exact dependency.
+The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.2.16`.
+These minimums allow newer versions to resolve; they do not certify every future
+dependency release. Keep your project's lockfile for reproducibility. If
+resolution fails, check for an incompatible Python version, an older exact
+Torch/Etude pin in your project, or a missing wheel on the selected backend.
+Do not bypass dependency checks with `--no-deps`.
+
+Notebook file generation remains a core dependency because ordinary experiment
+reporting creates an editable notebook. Pandas is no longer a direct requirement;
+no library entry point consumes it.
+
+Choose extras for the features you use:
+
+| Extra | Use |
+|---|---|
+| `academy` | Academy backend; use `./scripts/play` from a checkout for the browser |
+| `evaluation` | Etude evaluation and plots |
+| `reports` | Reports and Etude S3 report sources |
+| `artifacts` | Artifact-store access |
+| `notebook` | Jupyter and notebook execution |
+| `llm` | Local transformer inference |
+| `openrouter` | OpenRouter inference |
+
+For notebook work, use `'manabot[notebook]'` in the install command and retain
+the resolved versions in your lockfile.
+In a checkout, use `uv sync --locked --extra notebook`. If a command reports
+a missing optional dependency, install its named extra in the same environment
+and retry. Development groups are not installed as part of a downstream package.
+
+`--regime-name`, experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
 
 ### Build and verify
+
+Before publishing a release PR, update both Python project versions, all three
+Rust crate versions and the exact `managym` dependency together. Refresh
+`uv.lock` with `uv lock` and `managym/Cargo.lock` with
+`cargo metadata --manifest-path managym/Cargo.toml --format-version 1`, then run
+the release metadata check and `tests/infra/test_release.py` command below.
+These checks apply even when the release changes only versions and notes.
 
 From a clean checkout, with a fresh staging path and empty output directory:
 
 ```bash
 uv run --no-project python scripts/release/check.py
 uv run --no-project python scripts/release/prepare.py .runs/release/staging
+uv build --no-sources .runs/release/staging/managym --out-dir dist
 uv build --no-sources .runs/release/staging --out-dir dist
 uv run --no-project python scripts/release/validate.py dist
 uv run --no-project --with twine twine check --strict dist/*
 uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q
 ```
 
-Staging copies tracked files, refuses to overwrite a prior build, excludes
-experiment drivers and build products, and adds the runtime requirement from
-`[tool.manabot.release]`; published artifacts must use it. Wheels are built from
-the sdist, so checkout files cannot hide missing content. Clean-install proof:
+Staging copies tracked files, refuses to overwrite a prior build and excludes
+experiment drivers and build products; published artifacts must use it. The
+engine staging project places its crate and shared content beneath one root,
+so the source archive preserves Rust asset paths without the checkout. Staged
+metadata must preserve the source project's public minimum requirements rather
+than replacing them with development pins. CI builds each distribution's wheels
+from its source archive, so checkout files cannot hide missing content. The
+complete release inventory is seven files at one version: four `managym` wheels
+(3.12 and 3.13 on each supported platform), one pure-Python `manabot` wheel and
+two source archives. Validate both inventories and the exact `manabot`
+dependency before either upload.
+
+Clean-install proof, replacing the filename placeholders with built artifacts:
 
 ```bash
-uv venv --python 3.12 /tmp/manabot-release-venv
+uv venv --python 3.13 /tmp/manabot-release-venv
 uv pip install --python /tmp/manabot-release-venv/bin/python --only-binary :all: \
-  --torch-backend cpu "$PWD"/dist/manabot-*.whl
+  "$PWD/dist/managym-<version>-cp313-cp313-<platform>.whl"
+```
+
+From outside the checkout, run the [engine example](engine-python.md) with
+that environment and confirm Torch, Gymnasium and Etude were not installed.
+CI additionally completes a game in the engine-only environment, without a
+Rust toolchain. Then, from the build directory, add training with both wheel
+paths so resolution uses the candidate engine rather than PyPI:
+
+```bash
+uv pip install --python /tmp/manabot-release-venv/bin/python --only-binary :all: \
+  --torch-backend cpu "$PWD/dist/managym-<version>-cp313-cp313-<platform>.whl" \
+  "$PWD/dist/manabot-<version>-py3-none-any.whl"
 cp scripts/release/smoke.py /tmp/manabot-release-smoke.py
 cd /tmp
 export PATH="/tmp/manabot-release-venv/bin:$PATH"
@@ -462,41 +669,93 @@ unset PYTHONPATH
 uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-release-smoke.py
 ```
 
-The smoke checks one shared engine behind both import paths, catalog binding,
-gradients and a tiny CPU training update. `release.yml` repeats it on Linux and
-macOS, then installs and imports the optional extras.
+The training smoke checks one shared engine behind both import paths, catalog
+binding, gradients and a tiny CPU training update. Repeat in a separate environment with
+3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
+then installs and imports the optional extras. Consumer checks run outside the
+checkout with default dependency groups disabled, including the minimum
+Torch/Etude versions and available newer versions where practical. Record exact
+versions tested; successful resolution alone is not a runtime compatibility
+check.
 
 ### Publish
 
 `release.yml` builds and validates relevant PRs, manual runs and `v*` tags; only
-tags publish. Tag builds reject inconsistent versions, commits not on main and
-already-published versions. Only the publish job gets OIDC `id-token: write`;
-no PyPI token is stored, and uploads carry attestations. The trusted publisher
-is project `manabot`, owner `loopflowstudio`, repository `manabot`, workflow
-`release.yml`, environment `pypi`. The pending publisher
-was used successfully on 2026-10-22; the GitHub `pypi` environment restricts
-deployment to `v*` tags and requires review. Verify these settings before
-tagging.
+tags publish. Tag builds reject inconsistent versions and commits not on main.
+A release is complete only when both packages' full PyPI inventories and the
+matching GitHub Release exist. The GitHub entry uses the same `vX.Y.Z` tag and
+that version's checked-in `release/vX.Y.Z/NOTES.md`, with links to both packages
+at that version on PyPI.
+Only the PyPI job gets OIDC `id-token: write`; only the GitHub Release job gets
+`contents: write`. No PyPI token is stored, and uploads carry attestations.
+Before the first paired release, the PyPI account owner configures two
+publishers with these exact fields:
 
-Per release: update `pyproject.toml`, Cargo.toml/Cargo.lock, `uv.lock`, examples
-and notes; merge the reviewed release PR; confirm the workflow is green; push
-`vX.Y.Z` at that main commit; review the `pypi` job's artifacts and approve it.
-A PR alone does not authorize a tag or upload. `skip-existing` is disabled: after
-an interrupted upload, inspect what reached PyPI and prepare a new patch version
-if needed; never retry blindly, delete a release or move a used tag. Afterwards,
-install from PyPI on both targets and confirm version and attestations.
+| Field | Engine | Training |
+|---|---|---|
+| PyPI project | `managym` | `manabot` |
+| Repository owner | `loopflowstudio` | `loopflowstudio` |
+| Repository name | `manabot` | `manabot` |
+| Workflow filename | `release.yml` | `release.yml` |
+| Environment | `pypi` | `pypi` |
+
+For `managym`, use account **Publishing** to add a pending publisher if the
+project does not exist. This does not reserve the name; the first successful
+upload creates the project. See [PyPI's pending publisher instructions](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
+For the existing `manabot` project, verify its publisher under **Manage →
+Publishing**, following [PyPI's existing-project instructions](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+The GitHub `pypi` environment restricts tags to `v*`; verify its required
+reviewers and both publisher identities before tagging. Configuring a publisher
+does not authorize a release.
+
+Per release:
+
+1. Align both Python project versions, the Rust crate versions and lockfiles,
+   and the exact `manabot` requirement on `managym`. Write one
+   `release/vX.Y.Z/NOTES.md` covering both packages and update install examples
+   that pin versions. Merge the reviewed release PR and confirm its checks.
+2. With explicit publication authorization, tag that main commit `vX.Y.Z`.
+   Review the retained seven-file inventory and the engine-only and combined
+   consumer checks before approving the `pypi` deployment.
+3. Publish `managym` first and confirm its full inventory, then publish
+   `manabot` from the same run. Both builds, version checks and validations
+   must pass before either upload begins. If either package cannot pass those
+   checks, publish neither.
+4. Verify both PyPI inventories, attestations and the GitHub Release. Install
+   from PyPI in clean environments on both platforms and interpreters: first
+   the engine alone, then the training package at the same version.
+
+A PR alone does not authorize a tag or upload. Uploads to two projects are not
+one atomic operation: a failure after the engine upload can leave an incomplete
+paired release. Do not report success or advance one package to another version
+to hide that partial state.
+
+If PyPI succeeds but GitHub completion fails, retry the failed completion job
+for the same tag. It creates or verifies the matching entry without uploading
+again. An entry with matching tag and notes makes the retry a no-op. Retrying
+the PyPI job checks each project's inventory and SHA-256 digests against retained
+build artifacts and skips an already complete package only when they match.
+If `managym` completed and `manabot` has no files yet, verify the engine's
+digests, then resume the missing training upload with the original artifacts.
+Partial files within either package, or different bytes, stop for inspection.
+Rebuilding can change archive bytes; retry failed jobs with the original artifacts instead of rebuilding
+a published version.
+Never overwrite PyPI files, delete a release or move a used tag to repair it.
 
 0.2.0 was published on 2026-10-22 from `v0.2.0` at
 `29ab4fa0ddcc759ddb2b699ce3d08ccfe51ad757`
-([PR #351](https://github.com/loopflowstudio/manabot/pull/351)); attestations
+([successful workflow run](https://github.com/loopflowstudio/manabot/actions/runs/39790120844)).
+Its installed-wheel smoke and optional API/report dependency checks passed on
+Linux and macOS with CPython 3.12. The PyPI trusted-publisher identity was
 verified against the repository; PyPI holds two wheels and the sdist. The full
 record, with SHA-256 digests, is in the
 [pinned release notes](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/releases.md#020-publication-record).
+That workflow published only to PyPI and did not create a GitHub Release.
 
 ## Clean-machine play proof
 
 From a fresh checkout, `./scripts/play` syncs the locked play runtime, builds the
-CPython 3.12 extension, runs `npm ci`, starts FastAPI and Vite, validates the
+CPython 3.13 extension, runs `npm ci`, starts FastAPI and Vite, validates the
 installed curated pack and prints an `ACADEMY_PLAY_READY` JSON record and the
 URL. `./scripts/verify-clean-machine` proves this once: it runs the launcher,
 runs `academy/ui/e2e/clean-machine.spec.ts` against it, writes
@@ -504,10 +763,12 @@ runs `academy/ui/e2e/clean-machine.spec.ts` against it, writes
 
 ### Reference profile
 
-GitHub-hosted `ubuntu-24.04` x86_64 with uv 0.9.22 and CPython 3.12, Node 22,
-stable Rust and native build tools, and Playwright 1.61.1's Chromium. The receipt
-records the observed OS, CPU, memory and tool versions. Before timing, the
-checkout must not contain `.venv`, `.cache`, `academy/ui/node_modules`, generated
+The current reference profile is GitHub-hosted `ubuntu-24.04` x86_64 with
+uv 0.9.22 and CPython 3.13, Node 22, stable Rust and native build tools, and
+Playwright 1.61.1's Chromium. Historical receipts retain CPython 3.12; they do
+not certify the updated profile. Each receipt records the observed OS, CPU,
+memory and tool versions. Before timing, the checkout must not contain `.venv`,
+`.cache`, `academy/ui/node_modules`, generated
 Svelte/Vite/build/test output, `managym/target`, a built `_managym*.so`, GUI trace
 JSON or a prior proof browser profile; no uv, npm or Cargo cache is restored.
 
@@ -630,56 +891,3 @@ adds inclusive, overlapping board/dependency/clone timers; never sum them or
 compare a counting run with an ordinary timing run, and measure allocation
 traffic in the separate `--allocations` run. Engines that fail the asserted
 dependency are not correctness-equivalent timing comparators.
-
-**Policy input cost.** `scripts/bench_layer_input.py` runs the baseline recipe's
-width-64, depth-2 model on CPU float32 (one thread, batch 16, two warmups, eight
-measured calls), without optimizer updates. Run each case sequentially, in a
-fresh process, on an otherwise idle runner:
-
-```bash
-for state in ordinary shared; do for version in 6 7 8; do
-  PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version $version --state $state
-done; done
-PYTHONPATH=. uv run --no-sync python scripts/bench_layer_input.py --version 8 --state program
-```
-
-`shared` is a resolved Drill activation representable by all three inputs;
-`program` adds Kellan's live grant and captured combat trigger. Receipts include
-each sample, model/input configuration, native/Python encoding parity, live
-detail/fact counts, observation, batch and parameter bytes, and process peak RSS
-(including imports and warmups). They establish neither accelerator performance
-nor learning efficacy. `--inventory` reports parity, occupancy and storage
-without policy execution or timings, for busy hosts.
-
-**Matched comparison.** `layer-risk.yml` runs `scripts/measure_layer_risk.py`
-on PRs touching its inputs (or via `gh workflow run layer-risk.yml --ref
-<branch>`) and uploads a `layer-risk` artifact, including partial evidence from
-failed runs. One GitHub-hosted VM builds and measures sequentially: the original
-TLA workloads at the Engine Budget reference, pre-mitigation `fb3555ffb` and the
-candidate; dependency workloads, payments and the seven policy cases at the
-latter two. The historical engine receives only the
-`managym/perf/layers-attribution.patch` counters/fixture access, current
-benchmark fixtures and the candidate's card definitions (so state digests compare
-engines over identical content), never a cache or model mitigation. Receipts
-record exact revisions, harness hashes, dirty source diff, CPU/dependency
-metadata, raw samples, full digests/counts and memory. A resource, action or
-digest mismatch between pre-mitigation and candidate fails the comparison; a
-reference-world mismatch is recorded, never labeled a speedup. Each policy case
-must retain eight finite positive samples per operation with matching settings;
-missing, mislabeled or inventory-only receipts cannot satisfy timing comparison.
-The workflow never updates a baseline or accepts a regression; the 10% Engine
-Budget still governs.
-
-For payment attribution on a busy host, omit timing workloads and use a fresh
-output directory:
-
-```bash
-uv run --no-sync python scripts/measure_layer_risk.py prepare --out .cache/layer-payment
-uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg before --payment-only
-uv run --no-sync python scripts/measure_layer_risk.py native --out .cache/layer-payment --leg after --payment-only
-uv run --no-sync python scripts/measure_layer_risk.py compare --out .cache/layer-payment --payment-only
-```
-
-Allocation traffic and operation counts stay interpretable under contention;
-elapsed values do not. `model --inventory` builds each revision's wheel and checks
-all seven cases without inference.

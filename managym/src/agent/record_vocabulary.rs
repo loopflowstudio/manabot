@@ -19,7 +19,7 @@
 use crate::{
     agent::{
         ability_description::predicate_description, effect_execution::EXECUTION_TEXT,
-        observation::MODIFICATION_NAMES,
+        observation::MODIFICATION_NAMES, observation_encoder::POOLED_MANA,
     },
     cards::{
         content_pack::default_content_pack,
@@ -111,6 +111,7 @@ pub fn record_names() -> Vec<RecordName> {
         out.push(record(Token, subtype, Some((TokenKind::Text, subtype))));
     }
     out.push(record(Token, "CopyEffect", None));
+    out.push(record(Token, POOLED_MANA, None));
     let pack = default_content_pack();
     for (_, definition) in pack.definition_entries() {
         out.push(record(Name, &definition.name, None));
@@ -155,6 +156,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "CounterProvenance",
         "CastChoices",
         "EffectiveTrigger",
+        "ManaSpent",
     ] {
         add(TokenKind::Structure, name);
         add(TokenKind::Structure, &format!("/{name}"));
@@ -165,6 +167,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &["Scried", "Surveilled", "LibrarySearched"][..],
         ),
         ("LibraryEnd", &["Top", "Bottom"][..]),
+        // Retained execution can refer to a spell already on the stack;
+        // printed card programs do not supply this zone's token.
+        ("ZoneType", &["Stack"][..]),
         (
             "ReplacementEffect",
             &["PreventDamageToController", "DoubleDamageToController"][..],
@@ -218,6 +223,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "resolving",
         "ability",
         "program",
+        "amounts",
+        "entry_counters",
+        "combat",
     ] {
         add(TokenKind::Field, field);
     }
@@ -268,7 +276,7 @@ mod tests {
     #[test]
     fn runtime_only_programs_have_catalog_tokens() {
         use crate::{
-            cards::tokens::{learning_catalog, rules_tokens},
+            cards::tokens::{catalog_tokens, rules_tokens},
             flow::{
                 event::GameEvent,
                 game::CastChoices,
@@ -281,7 +289,7 @@ mod tests {
             },
         };
         let pack = default_content_pack();
-        let catalog = learning_catalog(pack).unwrap();
+        let catalog = catalog_tokens(pack).unwrap();
         let known: std::collections::HashSet<_> = catalog
             .token_kind
             .into_iter()

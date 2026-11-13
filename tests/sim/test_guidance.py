@@ -4,8 +4,22 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.sim import guidance as guidance_module
 from manabot.sim.guidance import PolicyPriorRandomLeafEvaluator
 from manabot.sim.search.puct import LeafEvaluation
+
+
+@pytest.fixture(autouse=True)
+def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The policy-only agent reads a synthetic batch, not a policy input."""
+    admit = guidance_module.admit_observation
+
+    def fake_admission(
+        agent: object, tensors: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        return tensors if isinstance(agent, _PolicyOnlyAgent) else admit(agent, tensors)
+
+    monkeypatch.setattr(guidance_module, "admit_observation", fake_admission)
 
 
 class _PolicyOnlyAgent(torch.nn.Module):

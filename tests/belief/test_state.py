@@ -2,14 +2,6 @@
 
 from dataclasses import replace
 
-from managym.decision import (
-    SEMANTIC_DECISION_VERSION,
-    Observation,
-    PublicCommitment,
-    SemanticContractError,
-    TransitionReceipt,
-)
-from managym.possible_worlds import WorldQuery
 import numpy as np
 import pytest
 
@@ -28,6 +20,14 @@ from manabot.belief import (
     encode_belief,
     query_mass,
 )
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Observation,
+    PublicCommitment,
+    SemanticContractError,
+    TransitionReceipt,
+)
+from managym.possible_worlds import WorldQuery
 from tests.belief.support import fixture_history, fixture_schema, fixture_space
 
 
@@ -170,9 +170,8 @@ def test_repeated_card_identity_projects_distinct_hand_and_library_rows() -> Non
 def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     """Pin float accumulation across a large support, including zero mass."""
 
-    from managym.possible_worlds import PossibleWorldSpace
-
     from manabot.belief.demo import _runtime_env, _schema_and_agent
+    from managym.possible_worlds import PossibleWorldSpace
 
     env, _ = _runtime_env()
     viewer = int(env.last_raw_obs.agent.player_index)
@@ -233,18 +232,32 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
     # Possible-world space v3 (foretold slots) changes the schema identity hash;
     # the schema also binds the open w17 content digest, so these receipts move
     # whenever w17 content does.
+    prior_v3_receipts = (
+        "252b45487a8552a39fbb7472736de3bb2ae1e70a53e16c3301d515e5094c384e",
+        "7c02d8d0dda790d5257da840c5526e951bcf2f130cba1422b5f672c26b592b77",
+        "e73afe04643845d1d0aa28ac82e560c47a2d062e9fec2babe1b714e0b32ad4d5",
+        "3da731e0fb463aa1f4bb368bbcf254d7e5a5ebf0d9062ce65e95b573876ea08d",
+    )
     current_v3_receipts = (
-        "415998680ea63281cc6b4509f4e0b7086314ec702c53af1c22f8edde40bf453e",
-        "66ae3b6e4e0c66f7ca86472590a3b9d59033fb2b2889fa1126da65392ac86520",
-        "61d1c617e208eeec8360d1256fdcf08bc118fff5ec8467de2480bed5ae784520",
-        "462b1b0d9bdf984fa4088d8ea3da8050cccb139d52249bbc052926ea207bac9f",
+        "109a98f5b1319e660effe14927be91cc43c550c88294dc87455a57f287ee73bd",
+        "530443cb77ce407e0217f27b103a52510414b6fd52fc1f42939cb7deb05e16e7",
+        "85803b003af71d0864225ac273e03bcf12cefd4b7ed2fa75b619d281924a4c02",
+        "b9e59352701f705dde890e117f8244e6ab5d958c97cf2e190e2dbe2557b15869",
     )
     for (
         (belief, prior_catalog_receipt, historical_receipt),
         w4_receipt,
         w7_receipt,
+        prior_v3_receipt,
         receipt,
-    ) in zip(cases, current_w4_receipts, w7_receipts, current_v3_receipts, strict=True):
+    ) in zip(
+        cases,
+        current_w4_receipts,
+        w7_receipts,
+        prior_v3_receipts,
+        current_v3_receipts,
+        strict=True,
+    ):
         assert isinstance(belief, BeliefState)
         encoded = encode_belief(belief, schema)
         assert encoded.encoding_receipt == receipt
@@ -253,6 +266,7 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
             historical_receipt,
             w4_receipt,
             w7_receipt,
+            prior_v3_receipt,
         )
         with pytest.raises(BeliefError, match="world schema"):
             encode_belief(belief, old_schema)

@@ -14,8 +14,8 @@ use crate::{
         ability::PaymentCost,
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
-        game_object::{CardId, ObjectId, PlayerId, Target},
-        mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
+        game_object::{ObjectId, PlayerId, PublicId, Target},
+        mana::{Mana, ManaCost, ManaRestriction, SpendPredicate},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -57,6 +57,11 @@ pub struct PlayerData {
     /// Restricted mana by restriction class, in class order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<RestrictedManaData>,
+    /// Pooled mana with a spend effect or combat expiry, by class and expiry.
+    /// Its amounts are also counted in `mana` when
+    /// unrestricted and in `restricted_mana` when restricted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pooled_mana_classes: Vec<PooledManaClassData>,
     /// While set, this player can cast spells only from their hand until the
     /// named player's next turn begins (Avatar's Wrath). It overrides every
     /// card's `cast_permission`.
@@ -92,6 +97,9 @@ pub struct PlayerData {
     /// What this player has done this turn (public: every event in it was).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: PlayerTurnHistory,
+    /// Spells this player cast this turn (`TurnState::spells_cast`).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spells_cast: u32,
     /// Extra turns this player will take after this one (CR 500.7).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,
@@ -106,7 +114,8 @@ pub struct PlayerData {
 
 /// Mana that may be spent only on the named purposes (CR 106.6): spells with
 /// one of `spells`' subtypes, or abilities of sources with one of
-/// `abilities`' subtypes. Amounts are W/U/B/R/G/C.
+/// `abilities`' subtypes; or, with `except_nonartifact_spells`, on anything
+/// but casting a nonartifact spell (Powerstone). Amounts are W/U/B/R/G/C.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RestrictedManaData {
@@ -114,24 +123,51 @@ pub struct RestrictedManaData {
     pub spells: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub abilities: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub except_nonartifact_spells: bool,
     pub mana: [i32; 6],
 }
 
+/// Pooled mana of one class with a spend effect or combat expiry. `program` is the
+/// class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary, the
+/// same serialization the producing card's definition uses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PooledManaClassData {
+    #[serde(default)]
+    pub combat: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restriction: Option<String>,
+    /// "a +1/+1 counter on a non-Human creature spell it casts".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
+    pub mana: [i32; 6],
+    pub program: Vec<(u16, i32)>,
+}
+
 impl RestrictedManaData {
-    fn new(restriction: ManaUse, amounts: [u8; 6]) -> Self {
-        let names = |mask: u8| {
-            SPEND_SUBTYPES
-                .iter()
-                .enumerate()
-                .filter(|(bit, _)| mask & 1 << bit != 0)
-                .map(|(_, name)| name.to_string())
-                .collect()
-        };
+    /// The complete restriction: every subtype it names, of any vocabulary.
+    fn new(restriction: &ManaRestriction, amounts: [u8; 6]) -> Self {
         Self {
-            spells: names(restriction.spells),
-            abilities: names(restriction.abilities),
+            spells: restriction.spell_subtypes().map(String::from).collect(),
+            abilities: restriction.source_subtypes().map(String::from).collect(),
+            except_nonartifact_spells: *restriction == ManaRestriction::ExceptNonartifactSpells,
             mana: amounts.map(i32::from),
         }
+    }
+
+    /// The restriction this projects. Subtype order and repeats do not matter.
+    pub fn restriction(&self) -> ManaRestriction {
+        if self.except_nonartifact_spells {
+            return ManaRestriction::ExceptNonartifactSpells;
+        }
+        let spells = self.spells.iter().cloned().map(SpendPredicate::CastSubtype);
+        let sources = self
+            .abilities
+            .iter()
+            .cloned()
+            .map(SpendPredicate::ActivateSubtype);
+        ManaRestriction::Only(spells.chain(sources).collect())
     }
 
     /// Whether this mana may pay for a spell or an ability source with `subtype`.
@@ -245,7 +281,8 @@ impl CardTypeData {
     }
 }
 
-/// A card in any zone. Every field that states a characteristic (name,
+/// An object in any zone, under the published `CardData` name. Every field
+/// that states a characteristic (name,
 /// power/toughness, types, supertypes, subtypes, keywords, ward) reads
 /// `Game::characteristics` while the card is on the battlefield and the
 /// printed card elsewhere; identity, token status and the costs paid when
@@ -263,6 +300,7 @@ pub struct CardData {
     pub text_box: String,
     pub power: i32,
     pub toughness: i32,
+    /// Set for an object that is no card: a token or a copy of a spell.
     pub is_token: bool,
     pub is_legendary: bool,
     /// Subtype tags the current pool cares about.
@@ -286,6 +324,10 @@ pub struct CardData {
     /// when its mana cost has X.
     #[serde(default)]
     pub x: Option<i32>,
+    /// A graveyard card that was put there from the battlefield this turn
+    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    #[serde(default)]
+    pub from_battlefield_this_turn: bool,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -465,7 +507,7 @@ pub struct ContinuousEffectData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`,
-    /// `WhileYouControlSource`).
+    /// `WhileYouControlSource`, `UntilYourNextTurn`).
     pub duration: String,
     /// Definition of the spell or ability's source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -527,7 +569,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 28] = [
+pub const MODIFICATION_NAMES: [&str; 36] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -549,10 +591,18 @@ pub const MODIFICATION_NAMES: [&str; 28] = [
     "CantBeBlocked",
     "CantBlock",
     "DoesntUntap",
+    "CantActivateAbilities",
+    "MustBeBlockedByAllAble",
     "LoseKeywords",
     "ExileIfWouldDie",
+    "ExileIfWouldLeave",
     "KeepUnspentMana",
     "NoMaximumHandSize",
+    "NextCreatureCastFlash",
+    "SkipsCombatPhasesNextTurn",
+    "LifeTotalCantChange",
+    "ProtectionFromEverything",
+    "PhasedOut",
     "ControlChanged",
     "ModeChosen",
     "HasAbilitiesOfSource",
@@ -645,16 +695,24 @@ impl ContinuousEffectData {
             Modification::CantBeBlocked => "CantBeBlocked",
             Modification::CantBlock => "CantBlock",
             Modification::DoesntUntap => "DoesntUntap",
+            Modification::CantActivateAbilities => "CantActivateAbilities",
+            Modification::MustBeBlockedByAllAble => "MustBeBlockedByAllAble",
             Modification::LoseKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
                 "LoseKeywords"
             }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::ExileIfWouldLeave => "ExileIfWouldLeave",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
                 "KeepUnspentMana"
             }
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
+            Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
+            Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
+            Modification::LifeTotalCantChange => "LifeTotalCantChange",
+            Modification::ProtectionFromEverything => "ProtectionFromEverything",
+            Modification::PhasedOut => "PhasedOut",
             Modification::ControlChanged { previous } => {
                 data.amount = Some(previous.0 as i32);
                 "ControlChanged"
@@ -1056,25 +1114,26 @@ impl Observation {
         obs
     }
 
-    /// Copies of each definition id among `cards`.
+    /// Copies of each definition id among `objects`.
     fn definition_counts(
         game: &Game,
-        cards: impl IntoIterator<Item = CardId>,
+        objects: impl IntoIterator<Item = impl Into<ObjectId>>,
     ) -> BTreeMap<u32, u32> {
         let mut counts = BTreeMap::new();
-        for card in cards {
+        for object in objects {
+            let object: ObjectId = object.into();
             *counts
-                .entry(game.state.cards[card].definition_id.0)
+                .entry(game.state.objects[object].definition_id.0)
                 .or_default() += 1;
         }
         counts
     }
 
-    /// `Game::unseen_cards` less the copies the viewer has seen revealed in
+    /// `Game::unseen_objects` less the copies the viewer has seen revealed in
     /// an opponent's hand. The possible-world pool keeps those copies, since
     /// a sampled world must still place them in the hand.
     fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
-        let mut counts = Self::definition_counts(game, game.unseen_cards(player, viewer));
+        let mut counts = Self::definition_counts(game, game.unseen_objects(player, viewer));
         if player != viewer {
             for (definition, known) in &game.state.players[player.0].known_hand {
                 if let Some(count) = counts.get_mut(&definition.0) {
@@ -1105,7 +1164,7 @@ impl Observation {
                     .sideboard
                     .iter()
                     .copied()
-                    .filter(|card| game.state.zones.zone_of(*card).is_none());
+                    .filter(|object| game.state.zones.zone_of(*object).is_none());
                 (
                     Some(Self::definition_counts(game, p.deck.iter().copied())),
                     Some(Self::unseen_counts(game, player, viewer)),
@@ -1118,7 +1177,21 @@ impl Observation {
 
         // Regular and combat mana together, as the player may spend it.
         let mut pool = p.mana_pool.clone();
-        pool.add(&p.combat_mana_pool);
+        pool.add_combat(&p.combat_mana_pool);
+        // Individual class counts are u8; public totals may exceed one class's
+        // capacity when regular and combat mana have the same color.
+        let mut mana = pool.mana.map(i32::from);
+        let mut lesson_mana = [0_i32; 6];
+        for (class, amounts) in pool.classes() {
+            let total = if class.restriction.is_some() {
+                &mut lesson_mana
+            } else {
+                &mut mana
+            };
+            for (sum, amount) in total.iter_mut().zip(amounts) {
+                *sum += i32::from(*amount);
+            }
+        }
         PlayerData {
             main_counts,
             unseen_counts,
@@ -1135,12 +1208,35 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
-            mana: pool.mana.map(i32::from),
-            lesson_mana: pool.restricted_colors().map(i32::from),
+            mana,
+            lesson_mana,
             restricted_mana: pool
-                .restricted()
+                .classes()
                 .iter()
-                .map(|(restriction, amounts)| RestrictedManaData::new(*restriction, *amounts))
+                .filter_map(|(class, amounts)| {
+                    let restriction = class.restriction.as_ref()?;
+                    Some(RestrictedManaData::new(restriction, *amounts))
+                })
+                .collect(),
+            pooled_mana_classes: pool
+                .classes()
+                .iter()
+                .filter_map(|(class, amounts)| {
+                    if class.effect.is_none() && !class.combat {
+                        return None;
+                    }
+                    Some(PooledManaClassData {
+                        combat: class.combat,
+                        restriction: class.restriction.as_ref().map(|r| r.describe()),
+                        effect: class.effect.as_ref().map(|e| e.describe()),
+                        mana: amounts.map(i32::from),
+                        program: crate::cards::tokens::rules_tokens(
+                            &Mana::of_class(class.clone(), *amounts),
+                            default_content_pack(),
+                        )
+                        .expect("registered rules payload"),
+                    })
+                })
                 .collect(),
             hand_only_until: game
                 .hand_only_until(player)
@@ -1153,6 +1249,7 @@ impl Observation {
                 .collect(),
             keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
             turn_history: game.state.turn.history[player.0],
+            spells_cast: game.state.turn.spells_cast[player.0].len() as u32,
             extra_turns: game
                 .state
                 .turn
@@ -1172,25 +1269,25 @@ impl Observation {
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
             if game.state.zones.zone_of(*card).is_none() {
-                let card = &game.state.cards[*card];
+                let record = &game.state.objects[*card];
                 self.agent_sideboard.push(SideboardCardData {
-                    candidate_id: card.id.0 as i32,
+                    candidate_id: record.id.0 as i32,
                     owner_id: self.agent.id,
-                    registry_key: card.definition_id.0 as i32,
-                    name: card.name.clone(),
-                    text_box: card.text_box.clone(),
+                    registry_key: record.definition_id.0 as i32,
+                    name: record.name.clone(),
+                    text_box: record.text_box.clone(),
                 });
             }
         }
 
         // Inspection paths can overlap (hand, library top and a pending
-        // search). Emit each card once, retaining first-visible order.
+        // search). Emit each object once, retaining first-visible order.
         let mut seen = HashSet::new();
-        let mut add_card = |card: CardId, zone: ZoneType| {
-            if seen.insert(card) {
+        let mut add_object = |object_id: ObjectId, zone: ZoneType| {
+            if seen.insert(object_id) {
                 self.push_card(
-                    Self::card_data(game, card, zone),
-                    game.state.cards[card].owner,
+                    Self::card_data(game, object_id, zone),
+                    game.state.objects[object_id].owner,
                 );
             }
         };
@@ -1198,9 +1295,9 @@ impl Observation {
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
         for object in game.pending_public_entries() {
-            let card = CardId::from(object.entity);
-            if let Some(zone) = game.state.zones.zone_of(card) {
-                add_card(card, zone);
+            let object_id = ObjectId::from(object.entity);
+            if let Some(zone) = game.state.zones.zone_of(object_id) {
+                add_object(object_id, zone);
             }
         }
 
@@ -1208,78 +1305,99 @@ impl Observation {
             if !game.shares_information(agent_player, perspective) {
                 continue;
             }
-            for card in game.state.zones.zone_cards(ZoneType::Hand, perspective) {
-                add_card(*card, ZoneType::Hand);
+            for object_id in game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, perspective)
+                .iter()
+            {
+                add_object(*object_id, ZoneType::Hand);
             }
 
             // A library top the viewer or controlled player may inspect (CR 401.2).
-            if let Some(card) = game
-                .library_top_card(perspective)
+            if let Some(object_id) = game
+                .state
+                .zones
+                .top(ZoneType::Library, perspective)
                 .filter(|_| game.looks_at_library_top(perspective))
             {
-                add_card(card, ZoneType::Library);
+                add_object(object_id, ZoneType::Library);
             }
 
-            // Library cards revealed to the agent by a pending mid-resolution
+            // Library objects revealed to the agent by a pending mid-resolution
             // decision. Search candidates are derived from the current library;
-            // scry/look choices retain their exact cards. Native information
+            // scry/look choices retain their exact objects. Native information
             // sharing admits the deciding player and their controller.
             let Some(suspended) = game.state.suspended_decision.as_ref() else {
                 continue;
             };
             for decision in suspended.decisions().filter(|d| d.player() == perspective) {
-                let cards = match decision {
+                let objects = match decision {
                     Decision::SearchNamed { owner, .. } => game
-                        .named_search_cards(*owner)
-                        .filter(|card| {
-                            game.state.zones.zone_of(*card) == Some(ZoneType::Library)
-                                || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
-                                    && game.state.cards[*card].owner != perspective)
+                        .named_search_objects(*owner)
+                        .filter(|object_id| {
+                            game.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
+                                || (game.state.zones.zone_of(*object_id) == Some(ZoneType::Hand)
+                                    && game.state.objects[*object_id].owner != perspective)
                         })
                         .collect(),
                     Decision::SelectCards {
                         from: Some(source), ..
-                    } => game.selection_zone_cards(source.owner, source.zone),
+                    } => game.selection_zone_objects(source.owner, source.zone),
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
-                        game.revealed_hand_candidates(decision)
+                        game.revealed_hand_objects(decision)
                     }
-                    decision @ Decision::SearchDistinctLands { selected, .. } => {
-                        let mut cards = selected.clone();
-                        cards.extend(game.distinct_land_search_candidates(decision));
-                        cards
+                    decision @ Decision::SearchDistinctNames { selected, .. } => {
+                        let mut objects = selected.clone();
+                        objects.extend(game.distinct_name_search_objects(decision));
+                        objects
                     }
-                    decision => decision.revealed_cards().to_vec(),
+                    decision => decision.revealed_objects().to_vec(),
                 };
-                for card in cards {
-                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
-                    add_card(card, zone);
+                for object_id in objects {
+                    let zone = game
+                        .state
+                        .zones
+                        .zone_of(object_id)
+                        .unwrap_or(ZoneType::Library);
+                    add_object(object_id, zone);
                 }
             }
         }
 
         for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
-            for card in game.state.zones.zone_cards(ZoneType::Graveyard, player) {
-                add_card(*card, ZoneType::Graveyard);
+            for object_id in game
+                .state
+                .zones
+                .zone_objects(ZoneType::Graveyard, player)
+                .iter()
+            {
+                add_object(*object_id, ZoneType::Graveyard);
             }
-            for card in game.state.zones.zone_cards(ZoneType::Exile, player) {
+            for object_id in game
+                .state
+                .zones
+                .zone_objects(ZoneType::Exile, player)
+                .iter()
+            {
                 // A foretold card is face down; inspection follows native control.
-                if game.shares_information(agent_player, player) || !game.is_foretold(*card) {
-                    add_card(*card, ZoneType::Exile);
+                if game.shares_information(agent_player, player) || !game.is_foretold(*object_id) {
+                    add_object(*object_id, ZoneType::Exile);
                 }
             }
         }
 
         for stack_object in game.state.stack_objects.iter().rev() {
             if let StackObject::Spell(spell) = stack_object {
-                let mut card = Self::card_data(game, spell.card, ZoneType::Stack);
-                if game.state.cards[spell.card]
-                    .mana_cost
-                    .as_ref()
-                    .is_some_and(|cost| cost.x > 0)
+                let mut card = Self::card_data(game, spell.object, ZoneType::Stack);
+                let definition = &game.state.objects[spell.object];
+                // A replicated spell's announced count is its X.
+                if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
+                    || definition.replicate().is_some()
                 {
                     card.x = Some(i32::from(spell.x));
                 }
-                self.push_card(card, game.state.cards[spell.card].owner);
+                self.push_card(card, game.state.objects[spell.object].owner);
             }
         }
     }
@@ -1287,7 +1405,7 @@ impl Observation {
     fn populate_permanents(&mut self, game: &Game, agent_player: PlayerId) {
         let ids = [agent_player, PlayerId((agent_player.0 + 1) % 2)]
             .into_iter()
-            .flat_map(|player| game.iter_battlefield_permanents(player));
+            .flat_map(|player| game.iter_battlefield_including_phased_out(player));
         for (perm_id, characteristics) in game.characteristics_many(ids) {
             let permanent = game.state.permanents[perm_id].as_ref().unwrap();
             self.add_permanent(game, perm_id, permanent, &characteristics);
@@ -1319,7 +1437,7 @@ impl Observation {
         characteristics: &Characteristics,
     ) {
         let pdat = PermanentData {
-            colors: (characteristics.colors != game.state.cards[permanent.card].colors()).then(
+            colors: (characteristics.colors != game.state.objects[permanent.object].colors()).then(
                 || {
                     characteristics
                         .colors
@@ -1335,7 +1453,7 @@ impl Observation {
                 .collect(),
             transforms: permanent.transforms,
             id: permanent.id.0 as i32,
-            registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
+            registry_key: game.state.objects[permanent.object].registry_key.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,
@@ -1392,7 +1510,7 @@ impl Observation {
                     .collect()
             }),
             is_granted_land: characteristics.is_land()
-                && !game.state.cards[permanent.card].types.is_land(),
+                && !game.state.objects[permanent.object].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
                     .attacker_to_blockers
@@ -1413,7 +1531,7 @@ impl Observation {
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
-            copy: game.state.cards[permanent.card]
+            copy: game.state.objects[permanent.object]
                 .copy
                 .as_ref()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
@@ -1426,16 +1544,16 @@ impl Observation {
         }
 
         self.push_card(
-            Self::card_data(game, permanent.card, ZoneType::Battlefield),
+            Self::card_data(game, permanent.object, ZoneType::Battlefield),
             permanent.controller,
         );
     }
 
     /// A card's row. On the battlefield every characteristic reads the
     /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
-    fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
-        let printed = Self::printed_card_data(game, card_id, zone);
-        match game.state.card_to_permanent[card_id] {
+    fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
+        let printed = Self::printed_card_data(game, object_id, zone);
+        match game.state.object_to_permanent[object_id] {
             Some(permanent) if zone == ZoneType::Battlefield => {
                 let view = game.characteristics(permanent);
                 CardData {
@@ -1452,41 +1570,41 @@ impl Observation {
                 }
             }
             _ => CardData {
-                power: game.card_power(card_id),
+                power: game.object_power(object_id),
                 ..printed
             },
         }
     }
 
-    fn printed_card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
-        let card = &game.state.cards[card_id];
+    fn printed_card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
+        let object = &game.state.objects[object_id];
         CardData {
             zone,
-            owner_id: game.state.players[card.owner.0].id.0 as i32,
-            id: card.id.0 as i32,
-            registry_key: card.registry_key.0 as i32,
-            name: card.name.clone(),
-            text_box: card.text_box.clone(),
-            power: card.power.unwrap_or(0),
-            toughness: card.toughness.unwrap_or(0),
-            is_token: card.is_token,
-            is_legendary: card.is_legendary(),
-            is_ally: card.has_subtype("Ally"),
-            is_lesson: card.has_subtype("Lesson"),
-            ward_cost: ward_value(card.ward()),
-            kicker_cost: card
+            owner_id: game.state.players[object.owner.0].id.0 as i32,
+            id: object.id.0 as i32,
+            registry_key: object.registry_key.0 as i32,
+            name: object.name.clone(),
+            text_box: object.text_box.clone(),
+            power: object.power.unwrap_or(0),
+            toughness: object.toughness.unwrap_or(0),
+            is_token: !object.is_card(),
+            is_legendary: object.is_legendary(),
+            is_ally: object.has_subtype("Ally"),
+            is_lesson: object.has_subtype("Lesson"),
+            ward_cost: ward_value(object.ward()),
+            kicker_cost: object
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
-            card_types: CardTypeData::from_types(&card.types),
-            keywords: KeywordData::from_keywords(&card.keywords),
-            mana_cost: card.mana_cost.clone().unwrap_or_default(),
-            face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
+            card_types: CardTypeData::from_types(&object.types),
+            keywords: KeywordData::from_keywords(&object.keywords),
+            mana_cost: object.mana_cost.clone().unwrap_or_default(),
+            face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
             cast_permission: game
-                .exile_grant_on(card_id)
+                .exile_grant_on(object_id)
                 .map(|grant| CastPermissionData {
                     player_id: game.state.players[grant.player.0].id.0 as i32,
-                    cost: game.grant_cast_cost(grant, card_id),
+                    cost: game.grant_cast_cost(grant, object_id),
                     this_turn: grant.this_turn,
                     through_next_turn: grant.through_next_turn.is_some(),
                     own_turn_only: grant.own_turn_only,
@@ -1502,6 +1620,10 @@ impl Observation {
                     foretold: grant.foretold,
                 }),
             x: None,
+            from_battlefield_this_turn: zone == ZoneType::Graveyard
+                && game.current_object_ref(object_id).is_some_and(|object| {
+                    game.state.turn.graveyard_from_battlefield.contains(&object)
+                }),
         }
     }
 
@@ -1513,7 +1635,7 @@ impl Observation {
                 }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(
-                        &game.state.cards[a.source_card],
+                        &game.state.objects[a.source_object],
                         a.ability_index,
                         a.inline_effects.as_deref(),
                     ))
@@ -1546,7 +1668,7 @@ impl Observation {
             },
             granted_keywords: match stack_object {
                 StackObject::Spell(spell) => {
-                    let keywords = game.spell_keywords(spell.card, spell.controller);
+                    let keywords = game.spell_keywords(spell.object, spell.controller);
                     (!crate::state::is_zero(&keywords))
                         .then(|| KeywordData::from_keywords(&keywords))
                 }
@@ -1584,10 +1706,10 @@ impl Observation {
                 player_id: None,
                 permanent_id: None,
                 stack_object_id: None,
-                card_id: Some(game.state.cards[CardId::from(object.entity)].id.0 as i32),
+                card_id: Some(game.state.objects[ObjectId::from(object.entity)].id.0 as i32),
             }),
-            Target::StackSpell(card_id) => {
-                let stack_object_id = Self::stack_spell_object_id(game, card_id)?.0 as i32;
+            Target::StackSpell(object_id) => {
+                let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;
                 Some(StackTargetData {
                     kind: StackTargetKindData::StackObject,
                     player_id: None,
@@ -1609,12 +1731,12 @@ impl Observation {
         }
     }
 
-    fn stack_spell_object_id(game: &Game, card_id: CardId) -> Option<ObjectId> {
+    fn stack_spell_object_id(game: &Game, object_id: ObjectId) -> Option<PublicId> {
         game.state
             .stack_objects
             .iter()
             .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.card == card_id => Some(spell.id),
+                StackObject::Spell(spell) if spell.object == object_id => Some(spell.id),
                 _ => None,
             })
     }
@@ -1644,13 +1766,13 @@ impl Observation {
                 vec![data]
             }
             GameEvent::CardMoved {
-                card,
+                object_id,
                 from,
                 to,
                 controller,
                 face_down,
             } => {
-                let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
+                let mut data = Self::card_event_data(EventType::CardMoved, *object_id, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
                 // Outside cards and face-down arrivals name no public object.
@@ -1685,37 +1807,37 @@ impl Observation {
                 new - old,
                 None,
             )],
-            GameEvent::SpellCast { card, .. } => vec![Self::card_event_data(
+            GameEvent::SpellCast { object_id, .. } => vec![Self::card_event_data(
                 EventType::SpellCast,
-                *card,
+                *object_id,
                 PlayerId(0),
             )],
-            GameEvent::SpellResolved { card } => vec![Self::card_event_data(
+            GameEvent::SpellResolved { object_id } => vec![Self::card_event_data(
                 EventType::SpellResolved,
-                *card,
+                *object_id,
                 PlayerId(0),
             )],
-            GameEvent::SpellCountered { card, .. } => vec![Self::card_event_data(
+            GameEvent::SpellCountered { object_id, .. } => vec![Self::card_event_data(
                 EventType::SpellCountered,
-                *card,
+                *object_id,
                 PlayerId(0),
             )],
             GameEvent::AbilityCountered {
-                source_card,
+                source_object,
                 controller,
                 ..
             } => vec![Self::card_event_data(
                 EventType::AbilityCountered,
-                *source_card,
+                *source_object,
                 *controller,
             )],
             GameEvent::AbilityTriggered {
-                source_card,
+                source_object,
                 controller,
                 ..
             } => vec![Self::card_event_data(
                 EventType::AbilityTriggered,
-                *source_card,
+                *source_object,
                 *controller,
             )],
             GameEvent::CombatAttackersDeclared {
@@ -1836,10 +1958,10 @@ impl Observation {
         data
     }
 
-    fn card_event_data(event_type: EventType, card: CardId, controller: PlayerId) -> EventData {
+    fn card_event_data(event_type: EventType, object: ObjectId, controller: PlayerId) -> EventData {
         Self::build_event_data(
             event_type,
-            Some(EventEntity::Card(card)),
+            Some(EventEntity::Card(object)),
             None,
             0,
             Some(controller),
@@ -1873,7 +1995,7 @@ impl Observation {
 
     fn event_entity(entity: Option<EventEntity>) -> (i32, i32) {
         match entity {
-            Some(EventEntity::Card(card)) => (EventEntityKind::Card as i32, card.0 as i32),
+            Some(EventEntity::Card(object)) => (EventEntityKind::Card as i32, object.0 as i32),
             Some(EventEntity::Permanent(permanent)) => {
                 (EventEntityKind::Permanent as i32, permanent.0 as i32)
             }
@@ -1882,7 +2004,7 @@ impl Observation {
         }
     }
 
-    pub(crate) fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
+    pub(crate) fn action_focus(game: &Game, action: &Action) -> Vec<PublicId> {
         match action {
             Action::ChooseTrigger { trigger_id, player } => game
                 .state
@@ -1891,23 +2013,23 @@ impl Observation {
                 .and_then(|p| p.remaining.iter().find(|t| t.id == *trigger_id))
                 .and_then(|t| t.source_ref)
                 .and_then(|r| game.visible_reference(r, *player).object)
-                .map(|id| vec![ObjectId(id as u32)])
+                .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
-            Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
-                vec![game.state.cards[card].id]
-            }
-            Action::ActivateCardAbility { card, .. } | Action::Foretell { card, .. } => {
-                vec![game.state.cards[card].id]
-            }
-            Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
+            Action::PlayLand { object, .. }
+            | Action::CastSpell { object, .. }
+            | Action::ActivateCardAbility { object, .. }
+            | Action::Foretell { object, .. }
+            | Action::ScryCard { object, .. }
+            | Action::SelectCard { object, .. }
+            | Action::LearnDiscard { object, .. }
+            | Action::LearnTakeLesson { object, .. } => vec![game.state.objects[object].id],
+            Action::ActivateAbility { permanent, .. }
+            | Action::DeclareAttacker { permanent, .. }
+            | Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
                 .unwrap_or_default(),
             Action::PassPriority { .. } => vec![],
-            Action::DeclareAttacker { permanent, .. } => game.state.permanents[permanent]
-                .as_ref()
-                .map(|perm| vec![perm.id])
-                .unwrap_or_default(),
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => {
@@ -1932,23 +2054,13 @@ impl Observation {
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
                 crate::state::target::Target::GraveyardCard(object) => {
-                    vec![game.state.cards[CardId::from(object.entity)].id]
+                    vec![game.state.objects[ObjectId::from(object.entity)].id]
                 }
-                crate::state::target::Target::StackSpell(card_id) => {
-                    vec![game.state.cards[card_id].id]
+                crate::state::target::Target::StackSpell(object_id) => {
+                    vec![game.state.objects[object_id].id]
                 }
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
-            Action::ScryCard { card, .. }
-            | Action::SelectCard { card, .. }
-            | Action::LearnDiscard { card, .. }
-            | Action::LearnTakeLesson { card, .. } => {
-                vec![game.state.cards[card].id]
-            }
-            Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
-                .as_ref()
-                .map(|perm| vec![perm.id])
-                .unwrap_or_default(),
             Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
                 if let (
                     Action::ChooseMode { mode, .. },
@@ -1960,24 +2072,34 @@ impl Observation {
                     return candidates
                         .get(*mode)
                         .map(|candidate| {
-                            game.state.cards[CardId::from(candidate.source().entity)].id
+                            game.state.objects[ObjectId::from(candidate.source().entity)].id
                         })
                         .into_iter()
                         .collect();
                 }
                 // Other decisions focus the resolving or cast object's card.
-                let card = game
+                let object_id = game
                     .state
                     .suspended_decision
                     .as_ref()
                     .and_then(|suspended| suspended.frame.source)
                     .or(match &game.pending_choice {
-                        Some(crate::flow::game::PendingChoice::SpellMode { card, .. })
-                        | Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
-                        | Some(crate::flow::game::PendingChoice::AnnounceX { card, .. })
-                        | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
-                            Some(*card)
-                        }
+                        Some(crate::flow::game::PendingChoice::SpellMode {
+                            object: object_id,
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::KickerChoice {
+                            object: object_id,
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::AnnounceX {
+                            object: object_id,
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::ChooseTargets {
+                            object: object_id,
+                            ..
+                        }) => Some(*object_id),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
@@ -1989,7 +2111,7 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::TapPayment {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
-                        }) => Some(*card),
+                        }) => Some((*card).into()),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
@@ -2008,18 +2130,23 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::Crew { permanent, .. }) => {
                             game.state.permanents[*permanent]
                                 .as_ref()
-                                .map(|perm| perm.card)
+                                .map(|perm| perm.object)
                         }
                         Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
-                            game.payment_source_card(payment)
+                            game.payment_source_object(payment)
                         }
+                        Some(crate::flow::game::PendingChoice::ExileFromHandPayment {
+                            payment,
+                            ..
+                        }) => game.payment_source_object(payment),
                         Some(
                             crate::flow::game::PendingChoice::SacrificePayment { .. }
                             | crate::flow::game::PendingChoice::ManaPayment { .. },
                         ) => None,
                         None => None,
                     });
-                card.map(|card| vec![game.state.cards[card].id])
+                object_id
+                    .map(|object_id| vec![game.state.objects[object_id].id])
                     .unwrap_or_default()
             }
         }
@@ -2032,19 +2159,19 @@ impl Observation {
         if self.agent.is_agent == self.opponent.is_agent {
             return false;
         }
-        for card in &self.agent_sideboard {
-            if card.owner_id != self.agent.id {
+        for object in &self.agent_sideboard {
+            if object.owner_id != self.agent.id {
                 return false;
             }
         }
         // A battlefield card sits with its controller, who may not own it.
-        for (cards, side) in [
+        for (objects, side) in [
             (&self.agent_cards, self.agent.id),
             (&self.opponent_cards, self.opponent.id),
         ] {
-            if cards
+            if objects
                 .iter()
-                .any(|card| card.zone != ZoneType::Battlefield && card.owner_id != side)
+                .any(|object| object.zone != ZoneType::Battlefield && object.owner_id != side)
             {
                 return false;
             }

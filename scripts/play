@@ -61,7 +61,7 @@ trap 'rm -f "$marker"' 0
 export ACADEMY_PLAY_ERROR_MARKER=$marker
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
-uv run --python 3.12 --locked --only-group play-runtime scripts/play.py "$@" &
+uv run --python 3.13 --locked --only-group play-runtime scripts/play.py "$@" &
 uv_pid=$!
 forwarded_signal=0
 forward_signal() {

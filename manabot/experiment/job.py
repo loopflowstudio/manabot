@@ -158,7 +158,7 @@ def machine_setup(extras: str) -> str:
         f"{TOOLCHAIN_ENV}\n"
         f"rustup toolchain install {RUST_TOOLCHAIN} --profile minimal\n"
         '} 9>"$HOME/.manabot-rust-setup.lock"\n'
-        f"uv sync --locked --python 3.12{extras}\n"
+        f"uv sync --locked --python 3.13{extras}\n"
     )
 
 

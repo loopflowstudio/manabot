@@ -8,11 +8,11 @@ from naming_reference import packed_definitions
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.model.world import checkpoint_world
 from manabot.semantic.learning import ContentPackBindingError
@@ -122,7 +122,7 @@ def test_research_checkpoint_binds_common_catalog(
     payload = {
         "model_state_dict": agent.state_dict(),
         "hypers": {
-            "agent_hypers": agent.config.model_dump(),
+            "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(Match(roster.match()).to_rust(), space),
@@ -134,4 +134,4 @@ def test_research_checkpoint_binds_common_catalog(
     for name, tensor in agent.state_dict().items():
         assert torch.equal(tensor, loaded.state_dict()[name])
     catalog = bind_policy_catalog(key).catalog
-    assert managym.learning_token_value("Giant") in set(catalog.token_value.tolist())
+    assert managym.catalog_token_value("Giant") in set(catalog.token_value.tolist())

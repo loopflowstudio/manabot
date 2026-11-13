@@ -3,19 +3,20 @@
 use managym_state::effect::{EffectDuration, Modification};
 use managym_state::{
     ability::{
-        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayWindow,
-        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
+        DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser, LinkedExile,
+        LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector, Scope,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
         CardDefinition, CardType, CardTypes, Keyword, Keywords, ManaAbility, PowerCda,
-        ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction,
-        StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff, StaticRestriction,
-        StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
-        TriggeredManaAbility,
+        PrintedCharacteristics, ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics,
+        SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
+        StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant, TapCost,
+        TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
     },
-    mana::{Color, Colors, Mana, ManaCost, ManaUse},
+    mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -311,50 +312,53 @@ fn aang_at_the_crossroads() -> CardDefinition {
     CardDefinition {
         key: "tla.aang_at_the_crossroads",
         scryfall_id: "fea89ca0-8070-4f28-9851-994314f9d248",
-        name: "Aang, at the Crossroads".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}{W}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::LookAndSelect {
-                    random_order: true,
-                    reveal: false,
-                    to_battlefield: true,
-                    look: EffectValue::Fixed(5),
-                    min_select: 0,
-                    max_select: 1,
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        max_mana_value: Some(4),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Aang, at the Crossroads".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{W}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::LeavesTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+                    effects: vec![Effect::LookAndSelect {
+                        random_order: true,
+                        reveal: false,
+                        to_battlefield: true,
+                        look: EffectValue::Fixed(5),
+                        min_select: 0,
+                        max_select: 1,
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            max_mana_value: Some(4),
+                            ..Default::default()
+                        },
+                    }],
                 },
-                effects: vec![Effect::CreateDelayedTrigger {
-                    remember: None,
-                    event: DelayedEvent::Upkeep,
-                    frequency: DelayedFrequency::Once,
-                    expiry: DelayedExpiry::Never,
-                    effects: vec![Effect::TransformSource],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::LeavesTheBattlefield {
+                        subject: TriggerSubject::another_you_control(CardPredicate::creature()),
+                    },
+                    effects: vec![Effect::CreateDelayedTrigger {
+                        remember: None,
+                        event: DelayedEvent::Upkeep,
+                        frequency: DelayedFrequency::Once,
+                        expiry: DelayedExpiry::Never,
+                        effects: vec![Effect::TransformSource],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
             name: "Aang, Destined Savior".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -373,7 +377,7 @@ fn aang_at_the_crossroads() -> CardDefinition {
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::BeginningOfYourCombat,
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
                 effects: vec![Effect::Earthbend {
                     count: EffectValue::Fixed(2),
                     what: ObjectSelector::Target(TargetSpec::LandYouControl),
@@ -382,7 +386,6 @@ fn aang_at_the_crossroads() -> CardDefinition {
             text_box: back_text.into(),
             ..Default::default()
         })),
-        ..Default::default()
     }
 }
 
@@ -392,177 +395,12 @@ fn aang_s_iceberg() -> CardDefinition {
     CardDefinition {
         key: "tla.aang_s_iceberg",
         scryfall_id: "720fbd87-b1c1-4b3b-97a1-46b943b115e3",
-        name: "Aang's Iceberg".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        keywords: Keywords::of(&[Keyword::Flash]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    another: true,
-                    ..TargetRequirement::one(TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            not_card_types: vec![CardType::Land],
-                            ..Default::default()
-                        },
-                    })
-                },
-                effects: vec![Effect::exile_linked(
-                    ObjectSelector::Target(TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            not_card_types: vec![CardType::Land],
-                            ..Default::default()
-                        },
-                    }),
-                    LinkedExile::UntilSourceLeaves,
-                )],
-            }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{3}"),
-            waterbend: true,
-            effects: vec![
-                Effect::sacrifice_this(),
-                Effect::if_you_do(vec![Effect::Scry { count: 2 }]),
-            ],
-            ..Default::default()
-        }],
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn aang_s_journey() -> CardDefinition {
-    let text_box = "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.";
-
-    CardDefinition {
-        key: "tla.aang_s_journey",
-        scryfall_id: "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15",
-        name: "Aang's Journey".into(),
-        mana_cost: Some(ManaCost::parse("{2}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::If {
-                condition: Condition::Kicked,
-                then: vec![
-                    Effect::search_library(
-                        CardPredicate::basic_land(),
-                        EffectValue::Fixed(1),
-                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                    ),
-                    Effect::search_library(
-                        CardPredicate {
-                            subtype: Some("Shrine".into()),
-                            ..Default::default()
-                        },
-                        EffectValue::Fixed(1),
-                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                    ),
-                ],
-                otherwise: vec![Effect::search_library(
-                    CardPredicate::basic_land(),
-                    EffectValue::Fixed(1),
-                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                )],
-            },
-            Effect::gain_life(2),
-        ],
-        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}"))],
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn aang_swift_savior() -> CardDefinition {
-    let text_box = "Flash\nFlying\nWhen Aang enters, airbend up to one other target creature or spell. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWaterbend {8}: Transform Aang.";
-    let back_text = "Reach, trample\nWhenever Aang and La attack, put a +1/+1 counter on each tapped creature you control.";
-
-    CardDefinition {
-        key: "tla.aang_swift_savior",
-        scryfall_id: "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4",
-        name: "Aang, Swift Savior".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    another: true,
-                    ..TargetRequirement::one(TargetSpec::CreatureOrSpell)
-                },
-                effects: vec![Effect::Airbend {
-                    what: ObjectSelector::Target(TargetSpec::CreatureOrSpell),
-                }],
-            }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            waterbend: true,
-            mana_cost: ManaCost::parse("{8}"),
-            effects: vec![Effect::TransformSource],
-            ..Default::default()
-        }],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
-            name: "Aang and La, Ocean's Fury".into(),
-            types: CardTypes::new([CardType::Creature]),
-            supertypes: vec!["Legendary".into()],
-            subtypes: vec!["Avatar".into(), "Spirit".into(), "Ally".into()],
-            power: Some(5),
-            toughness: Some(5),
-            keywords: Keywords::of(&[Keyword::Reach, Keyword::Trample]),
+        printed: PrintedCharacteristics {
+            name: "Aang's Iceberg".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            keywords: Keywords::of(&[Keyword::Flash]),
             abilities: vec![Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::each_you_control(CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        tapped: true,
-                        ..Default::default()
-                    }),
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            }],
-            text_box: back_text.into(),
-            ..Default::default()
-        })),
-        ..Default::default()
-    }
-}
-
-fn aang_the_last_airbender() -> CardDefinition {
-    let text_box = "Flying\nWhen Aang enters, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWhenever you cast a Lesson spell, Aang gains lifelink until end of turn.";
-
-    CardDefinition {
-        key: "tla.aang_the_last_airbender",
-        scryfall_id: "245e008c-e073-443f-9592-6f628c0026ec",
-        name: "Aang, the Last Airbender".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
@@ -578,31 +416,206 @@ fn aang_the_last_airbender() -> CardDefinition {
                             },
                         })
                     },
-                    effects: vec![Effect::Airbend {
-                        what: ObjectSelector::Target(TargetSpec::Permanent {
+                    effects: vec![Effect::exile_linked(
+                        ObjectSelector::Target(TargetSpec::Permanent {
                             predicate: CardPredicate {
                                 not_card_types: vec![CardType::Land],
                                 ..Default::default()
                             },
                         }),
+                        LinkedExile::UntilSourceLeaves,
+                    )],
+                }],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}"),
+                waterbend: true,
+                effects: vec![
+                    Effect::sacrifice_this(),
+                    Effect::if_you_do(vec![Effect::Scry { count: 2 }]),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn aang_s_journey() -> CardDefinition {
+    let text_box = "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.";
+
+    CardDefinition {
+        key: "tla.aang_s_journey",
+        scryfall_id: "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15",
+        printed: PrintedCharacteristics {
+            name: "Aang's Journey".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::If {
+                    condition: Condition::Kicked,
+                    then: vec![
+                        Effect::search_library(
+                            CardPredicate::basic_land(),
+                            EffectValue::Fixed(1),
+                            vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                        ),
+                        Effect::search_library(
+                            CardPredicate {
+                                subtype: Some("Shrine".into()),
+                                ..Default::default()
+                            },
+                            EffectValue::Fixed(1),
+                            vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                        ),
+                    ],
+                    otherwise: vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::Fixed(1),
+                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    )],
+                },
+                Effect::gain_life(2),
+            ],
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn aang_swift_savior() -> CardDefinition {
+    let text_box = "Flash\nFlying\nWhen Aang enters, airbend up to one other target creature or spell. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWaterbend {8}: Transform Aang.";
+    let back_text = "Reach, trample\nWhenever Aang and La attack, put a +1/+1 counter on each tapped creature you control.";
+
+    CardDefinition {
+        key: "tla.aang_swift_savior",
+        scryfall_id: "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4",
+        printed: PrintedCharacteristics {
+            name: "Aang, Swift Savior".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        another: true,
+                        ..TargetRequirement::one(TargetSpec::CreatureOrSpell)
+                    },
+                    effects: vec![Effect::Airbend {
+                        what: ObjectSelector::Target(TargetSpec::CreatureOrSpell),
                     }],
                 }],
-            },
-            Ability::Triggered {
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                waterbend: true,
+                mana_cost: ManaCost::parse("{8}"),
+                effects: vec![Effect::TransformSource],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
+            name: "Aang and La, Ocean's Fury".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into(), "Spirit".into(), "Ally".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Reach, Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate {
-                        subtype: Some("Lesson".into()),
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        tapped: true,
                         ..Default::default()
-                    },
-                },
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
+                    }),
+                    CounterKind::PlusOnePlusOne,
+                    1,
                 )],
-            },
-        ],
-        text_box: text_box.into(),
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
+    }
+}
+
+fn aang_the_last_airbender() -> CardDefinition {
+    let text_box = "Flying\nWhen Aang enters, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWhenever you cast a Lesson spell, Aang gains lifelink until end of turn.";
+
+    CardDefinition {
+        key: "tla.aang_the_last_airbender",
+        scryfall_id: "245e008c-e073-443f-9592-6f628c0026ec",
+        printed: PrintedCharacteristics {
+            name: "Aang, the Last Airbender".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            min: 0,
+                            another: true,
+                            ..TargetRequirement::one(TargetSpec::Permanent {
+                                predicate: CardPredicate {
+                                    not_card_types: vec![CardType::Land],
+                                    ..Default::default()
+                                },
+                            })
+                        },
+                        effects: vec![Effect::Airbend {
+                            what: ObjectSelector::Target(TargetSpec::Permanent {
+                                predicate: CardPredicate {
+                                    not_card_types: vec![CardType::Land],
+                                    ..Default::default()
+                                },
+                            }),
+                        }],
+                    }],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate {
+                            subtype: Some("Lesson".into()),
+                            ..Default::default()
+                        },
+                    ),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
+                    )],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -613,12 +626,15 @@ fn abandon_attachments() -> CardDefinition {
     CardDefinition {
         key: "tla.abandon_attachments",
         scryfall_id: "74ca45a4-97ab-4255-9129-884e8b42b984",
-        name: "Abandon Attachments".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U/R}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::discard_draw(1, 2)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Abandon Attachments".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U/R}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::discard_draw(1, 2)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -629,32 +645,35 @@ fn abandoned_air_temple() -> CardDefinition {
     CardDefinition {
         key: "tla.abandoned_air_temple",
         scryfall_id: "9c0433f9-8f1e-4a19-a83f-a41925f1b1a9",
-        name: "Abandoned Air Temple".into(),
-        types: CardTypes::new([CardType::Land]),
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("W"),
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{3}{W}"),
-            effects: vec![Effect::put_counters(
-                ObjectSelector::each_you_control(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                }),
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-            ..Default::default()
-        }],
-        replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
-            predicate: CardPredicate {
-                supertype: Some("basic".into()),
-                card_type: Some(CardType::Land),
+        printed: PrintedCharacteristics {
+            name: "Abandoned Air Temple".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("W"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{3}{W}"),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
                 ..Default::default()
-            },
-        }],
-        text_box: text_box.into(),
+            }],
+            replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
+                predicate: CardPredicate {
+                    supertype: Some("basic".into()),
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                },
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -665,30 +684,33 @@ fn accumulate_wisdom() -> CardDefinition {
     CardDefinition {
         key: "tla.accumulate_wisdom",
         scryfall_id: "a6335319-6c92-40d4-ab2d-c06c79049c30",
-        name: "Accumulate Wisdom".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::If {
-            condition: Condition::GraveyardAtLeast {
-                count: 3,
-                predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Accumulate Wisdom".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::If {
+                condition: Condition::GraveyardAtLeast {
+                    count: 3,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
                 },
-            },
-            then: vec![Effect::PutTopCardsInHand { count: 3 }],
-            otherwise: vec![Effect::LookAndSelect {
-                to_battlefield: false,
-                random_order: false,
-                reveal: false,
-                look: EffectValue::Fixed(3),
-                min_select: 1,
-                max_select: 1,
-                predicate: CardPredicate::default(),
+                then: vec![Effect::PutTopCardsInHand { count: 3 }],
+                otherwise: vec![Effect::LookAndSelect {
+                    to_battlefield: false,
+                    random_order: false,
+                    reveal: false,
+                    look: EffectValue::Fixed(3),
+                    min_select: 1,
+                    max_select: 1,
+                    predicate: CardPredicate::default(),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -699,30 +721,33 @@ fn agna_qel_a() -> CardDefinition {
     CardDefinition {
         key: "tla.agna_qel_a",
         scryfall_id: "6b885829-a323-4f7d-87c9-aa4615dcbe5c",
-        name: "Agna Qel'a".into(),
-        types: CardTypes::new([CardType::Land]),
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("U"),
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{2}{U}"),
-            effects: vec![
-                Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                },
-                Effect::discard(),
-            ],
-            ..Default::default()
-        }],
-        replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
-            predicate: CardPredicate {
-                supertype: Some("basic".into()),
-                card_type: Some(CardType::Land),
+        printed: PrintedCharacteristics {
+            name: "Agna Qel'a".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("U"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{2}{U}"),
+                effects: vec![
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    },
+                    Effect::discard(),
+                ],
                 ..Default::default()
-            },
-        }],
-        text_box: text_box.into(),
+            }],
+            replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
+                predicate: CardPredicate {
+                    supertype: Some("basic".into()),
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                },
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -733,30 +758,33 @@ fn air_nomad_legacy() -> CardDefinition {
     CardDefinition {
         key: "tla.air_nomad_legacy",
         scryfall_id: "10874416-fa4c-4aa3-b885-4351d011d208",
-        name: "Air Nomad Legacy".into(),
-        mana_cost: Some(ManaCost::parse("{W}{U}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Clue", 1)],
-        }],
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::YouControl(CardPredicate {
-                flying: true,
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            }),
-            condition: None,
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Air Nomad Legacy".into(),
+            mana_cost: Some(ManaCost::parse("{W}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.clue", 1)],
+            }],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::YouControl(CardPredicate {
+                    flying: true,
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                }),
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -767,58 +795,61 @@ fn airbender_ascension() -> CardDefinition {
     CardDefinition {
         key: "tla.airbender_ascension",
         scryfall_id: "99a90d13-891c-45cc-b1d5-6080ebae5862",
-        name: "Airbender Ascension".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
-                    effects: vec![Effect::Airbend {
-                        what: ObjectSelector::Target(TargetSpec::Creature),
+        printed: PrintedCharacteristics {
+            name: "Airbender Ascension".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+                        effects: vec![Effect::Airbend {
+                            what: ObjectSelector::Target(TargetSpec::Creature),
+                        }],
                     }],
-                }],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
                 },
-                intervening_if: None,
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::Quest,
-                    1,
-                )],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::BeginningOfYourEndStep,
-                intervening_if: Some(Condition::SourceCountersAtLeast {
-                    kind: CounterKind::Quest,
-                    count: 4,
-                }),
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),
-                    effects: vec![
-                        Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
-                        Effect::Move {
-                            library_end: None,
-                            what: ObjectSelector::Moved,
-                            to: ZoneType::Battlefield,
-                            tapped: false,
-                            transformed: false,
-                            under: Some(PlayerSelector::Owner),
-                            with_counter: None,
-                            linked: None,
-                        },
-                    ],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::Quest,
+                        1,
+                    )],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                    intervening_if: Some(Condition::SourceCountersAtLeast {
+                        kind: CounterKind::Quest,
+                        count: 4,
+                    }),
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),
+                        effects: vec![
+                            Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
+                            Effect::Move {
+                                library_end: None,
+                                what: ObjectSelector::Moved,
+                                to: ZoneType::Battlefield,
+                                tapped: false,
+                                transformed: false,
+                                under: Some(PlayerSelector::Owner),
+                                with_counter: None,
+                                linked: None,
+                            },
+                        ],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -829,27 +860,30 @@ fn airbender_s_reversal() -> CardDefinition {
     CardDefinition {
         key: "tla.airbender_s_reversal",
         scryfall_id: "6b7078e4-2892-4b5f-83ab-90369e0d6dba",
-        name: "Airbender's Reversal".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::destroy(ObjectSelector::Target(
-                    TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            attacking: true,
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Airbender's Reversal".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                attacking: true,
+                                card_type: Some(CardType::Creature),
+                                ..Default::default()
+                            },
                         },
-                    },
-                ))],
-                vec![Effect::Airbend {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-            ],
-        }],
-        text_box: text_box.into(),
+                    ))],
+                    vec![Effect::Airbend {
+                        what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    }],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -860,24 +894,27 @@ fn airbending_lesson() -> CardDefinition {
     CardDefinition {
         key: "tla.airbending_lesson",
         scryfall_id: "e2bcd0a6-e94d-4a21-a334-a57459c1b8cc",
-        name: "Airbending Lesson".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::Airbend {
-                what: ObjectSelector::Target(TargetSpec::Permanent {
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Land],
-                        ..Default::default()
-                    },
-                }),
-            },
-            Effect::DrawCards {
-                count: EffectValue::Fixed(1),
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Airbending Lesson".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::Airbend {
+                    what: ObjectSelector::Target(TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            ..Default::default()
+                        },
+                    }),
+                },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -888,26 +925,29 @@ fn airship_engine_room() -> CardDefinition {
     CardDefinition {
         key: "tla.airship_engine_room",
         scryfall_id: "0b98ba34-f251-4bd0-9d75-1d4445be5cfd",
-        name: "Airship Engine Room".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["U", "R"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Airship Engine Room".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["U", "R"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -918,23 +958,26 @@ fn allies_at_last() -> CardDefinition {
     CardDefinition {
         key: "tla.allies_at_last",
         scryfall_id: "11a77897-2aba-4a9b-bbe6-1768ca9f12cb",
-        name: "Allies at Last".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::TargetCreaturesDealPowerDamageToLastTarget],
-        targeting: vec![
-            TargetRequirement {
-                min: 0,
-                max: 2,
-                ..TargetRequirement::one(TargetSpec::CreatureYouControl)
-            },
-            TargetRequirement::one(TargetSpec::CreatureOpponentControls),
-        ],
-        statics: vec![StaticAbility::CostsLessPerPermanent(CardPredicate {
-            subtype: Some("Ally".into()),
+        printed: PrintedCharacteristics {
+            name: "Allies at Last".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::TargetCreaturesDealPowerDamageToLastTarget],
+            targeting: vec![
+                TargetRequirement {
+                    min: 0,
+                    max: 2,
+                    ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                },
+                TargetRequirement::one(TargetSpec::CreatureOpponentControls),
+            ],
+            statics: vec![StaticAbility::CostsLessPerPermanent(CardPredicate {
+                subtype: Some("Ally".into()),
+                ..Default::default()
+            })],
+            text_box: text_box.into(),
             ..Default::default()
-        })],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -974,31 +1017,32 @@ fn appa_loyal_sky_bison() -> CardDefinition {
     CardDefinition {
         key: "tla.appa_loyal_sky_bison",
         scryfall_id: "a9b2a843-c6fe-4d19-801e-1538e4381ab0",
-        name: "Appa, Loyal Sky Bison".into(),
-        mana_cost: Some(ManaCost::parse("{4}{W}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Bison".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Appa, Loyal Sky Bison".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Bison".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![modes()],
                 },
-                intervening_if: None,
-                effects: vec![modes()],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: vec![modes()],
                 },
-                intervening_if: None,
-                effects: vec![modes()],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1015,46 +1059,50 @@ fn appa_steadfast_guardian() -> CardDefinition {
     CardDefinition {
         key: "tla.appa_steadfast_guardian",
         scryfall_id: "829d91e9-4878-4e55-a262-ac0d55b65d4e",
-        name: "Appa, Steadfast Guardian".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Bison".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        min: 0,
-                        max: TargetRequirement::ANY_NUMBER,
-                        another: true,
-                        ..TargetRequirement::one(nonland_you_control.clone())
+        printed: PrintedCharacteristics {
+            name: "Appa, Steadfast Guardian".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Bison".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    effects: vec![Effect::ForEachTarget {
-                        effects: vec![Effect::Airbend {
-                            what: ObjectSelector::Target(nonland_you_control),
+                    intervening_if: None,
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            min: 0,
+                            max: TargetRequirement::ANY_NUMBER,
+                            another: true,
+                            ..TargetRequirement::one(nonland_you_control.clone())
+                        },
+                        effects: vec![Effect::ForEachTarget {
+                            effects: vec![Effect::Airbend {
+                                what: ObjectSelector::Target(nonland_you_control),
+                            }],
                         }],
                     }],
-                }],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::FromZone {
-                    zone: ZoneType::Exile,
-                    condition: Box::new(TriggerCondition::YouCastSpell {
-                        predicate: CardPredicate::default(),
-                    }),
                 },
-                intervening_if: None,
-                effects: vec![Effect::create_tokens("Ally", 1)],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    condition: TriggerCondition::FromZone {
+                        zone: ZoneType::Exile,
+                        condition: Box::new(TriggerCondition::casts(
+                            Actor::You,
+                            CardPredicate::default(),
+                        )),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::create_tokens("token.ally", 1)],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1066,43 +1114,47 @@ fn avatar_aang() -> CardDefinition {
     CardDefinition {
         key: "tla.avatar_aang",
         scryfall_id: "fe29e909-50e9-4f04-b1a3-2cc5d7e3efe8",
-        name: "Avatar Aang".into(),
-        mana_cost: Some(ManaCost::parse("{R}{G}{W}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Avatar Aang".into(),
+            mana_cost: Some(ManaCost::parse("{R}{G}{W}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("RR"),
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("RR"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouBend,
-                effects: vec![
-                    Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Performs {
+                        who: Actor::You,
+                        any_of: KeywordAction::BENDING.to_vec(),
                     },
-                    Effect::If {
-                        condition: Condition::BentAllFourThisTurn,
-                        then: vec![Effect::TransformSource],
-                        otherwise: vec![],
-                    },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
+                    effects: vec![
+                        Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        },
+                        Effect::If {
+                            condition: Condition::BentAllFourThisTurn,
+                            then: vec![Effect::TransformSource],
+                            otherwise: vec![],
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
             name: "Aang, Master of Elements".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -1115,7 +1167,7 @@ fn avatar_aang() -> CardDefinition {
             ))],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::BeginningOfEachUpkeep,
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::AnyPlayer),
                 effects: vec![Effect::Modal {
                     modes: vec![
                         vec![
@@ -1141,7 +1193,6 @@ fn avatar_aang() -> CardDefinition {
             text_box: back_text.into(),
             ..Default::default()
         })),
-        ..Default::default()
     }
 }
 
@@ -1151,62 +1202,65 @@ fn avatar_destiny() -> CardDefinition {
     CardDefinition {
         key: "tla.avatar_destiny",
         scryfall_id: "4d74da72-8443-4fce-9d64-d2041f6a3292",
-        name: "Avatar Destiny".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Aura".into()],
-        statics: vec![
-            StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: Some(CardPredicate::creature()),
-            }),
-            StaticAbility::TypeGrant(StaticTypeGrant {
-                scope: StaticScope::Attached,
-                types: Vec::new(),
-                subtypes: vec!["Avatar".into()],
-                condition: None,
-            }),
-        ],
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::EnchantedCreature,
-            },
-            intervening_if: None,
-            effects: vec![
-                Effect::MillCards {
-                    count: EffectValue::TriggeringPower,
-                    target: None,
-                },
-                Effect::move_to(ObjectSelector::This, ZoneType::Hand),
-                Effect::SelectCards {
-                    from: ObjectSelector::CardsThisWay,
-                    predicate: CardPredicate::creature(),
-                    min: 0,
-                    max: EffectValue::Fixed(1),
-                    effects: vec![Effect::Move {
-                        library_end: None,
-                        what: ObjectSelector::Selected,
-                        to: ZoneType::Battlefield,
-                        tapped: false,
-                        transformed: false,
-                        under: Some(PlayerSelector::You),
-                        with_counter: None,
-                        linked: None,
-                    }],
-                    if_declined: vec![],
-                },
+        printed: PrintedCharacteristics {
+            name: "Avatar Destiny".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            statics: vec![
+                StaticAbility::PtBuff(StaticPtBuff {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    power: 1,
+                    toughness: 1,
+                    per_creature_type_max: None,
+                    per_color_among: None,
+                    per_graveyard_matching: Some(CardPredicate::creature()),
+                }),
+                StaticAbility::TypeGrant(StaticTypeGrant {
+                    scope: StaticScope::Attached,
+                    types: Vec::new(),
+                    subtypes: vec!["Avatar".into()],
+                    condition: None,
+                }),
             ],
-        }],
-        spell_effects: vec![Effect::AttachSourceTo {
-            what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
-        text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::EnchantedCreature,
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::MillCards {
+                        count: EffectValue::TriggeringPower,
+                        target: None,
+                    },
+                    Effect::move_to(ObjectSelector::This, ZoneType::Hand),
+                    Effect::SelectCards {
+                        from: ObjectSelector::CardsThisWay,
+                        predicate: CardPredicate::creature(),
+                        min: 0,
+                        max: EffectValue::Fixed(1),
+                        effects: vec![Effect::Move {
+                            library_end: None,
+                            what: ObjectSelector::Selected,
+                            to: ZoneType::Battlefield,
+                            tapped: false,
+                            transformed: false,
+                            under: Some(PlayerSelector::You),
+                            with_counter: None,
+                            linked: None,
+                        }],
+                        if_declined: vec![],
+                    },
+                ],
+            }],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1218,27 +1272,30 @@ fn avatar_enthusiasts() -> CardDefinition {
     CardDefinition {
         key: "tla.avatar_enthusiasts",
         scryfall_id: "7292e5f2-d5a1-4e39-8f75-eba471819f04",
-        name: "Avatar Enthusiasts".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                    subtype: Some("Ally".into()),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Avatar Enthusiasts".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1249,35 +1306,38 @@ fn avatar_s_wrath() -> CardDefinition {
     CardDefinition {
         key: "tla.avatar_s_wrath",
         scryfall_id: "4811072d-fac0-40dd-a5cf-9694d51b12cf",
-        name: "Avatar's Wrath".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    ..TargetRequirement::one(TargetSpec::Creature)
-                },
-                effects: vec![Effect::Airbend {
-                    what: ObjectSelector::Each {
-                        of: Scope::Battlefield,
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
-                        },
-                        except: Some(Except::Target),
-                        max_mana_value: None,
+        printed: PrintedCharacteristics {
+            name: "Avatar's Wrath".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        ..TargetRequirement::one(TargetSpec::Creature)
                     },
-                }],
-            },
-            Effect::OpponentsCastOnlyFromHand,
-            Effect::exile(ObjectSelector::This),
-        ],
-        targeting: vec![TargetRequirement {
-            min: 0,
-            ..TargetRequirement::one(TargetSpec::Creature)
-        }],
-        text_box: text_box.into(),
+                    effects: vec![Effect::Airbend {
+                        what: ObjectSelector::Each {
+                            of: Scope::Battlefield,
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Creature),
+                                ..Default::default()
+                            },
+                            except: Some(Except::Target),
+                            max_mana_value: None,
+                        },
+                    }],
+                },
+                Effect::OpponentsCastOnlyFromHand,
+                Effect::exile(ObjectSelector::This),
+            ],
+            targeting: vec![TargetRequirement {
+                min: 0,
+                ..TargetRequirement::one(TargetSpec::Creature)
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1288,47 +1348,50 @@ fn azula_always_lies() -> CardDefinition {
     CardDefinition {
         key: "tla.azula_always_lies",
         scryfall_id: "416b9207-a2af-44d1-9b87-4943f6e46d42",
-        name: "Azula Always Lies".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(TargetSpec::Creature),
-                    effects: vec![Effect::until_end_of_turn(
-                        ObjectSelector::Target(TargetSpec::Creature),
-                        Modification::pump(-1, -1),
-                    )],
-                }],
-                vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(TargetSpec::Creature),
-                    effects: vec![Effect::put_counters(
-                        ObjectSelector::Target(TargetSpec::Creature),
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    )],
-                }],
-                vec![
-                    Effect::TargetClause {
+        printed: PrintedCharacteristics {
+            name: "Azula Always Lies".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::TargetClause {
                         requirement: TargetRequirement::one(TargetSpec::Creature),
                         effects: vec![Effect::until_end_of_turn(
                             ObjectSelector::Target(TargetSpec::Creature),
                             Modification::pump(-1, -1),
                         )],
-                    },
-                    Effect::TargetClause {
+                    }],
+                    vec![Effect::TargetClause {
                         requirement: TargetRequirement::one(TargetSpec::Creature),
                         effects: vec![Effect::put_counters(
                             ObjectSelector::Target(TargetSpec::Creature),
                             CounterKind::PlusOnePlusOne,
                             1,
                         )],
-                    },
+                    }],
+                    vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::Creature),
+                            effects: vec![Effect::until_end_of_turn(
+                                ObjectSelector::Target(TargetSpec::Creature),
+                                Modification::pump(-1, -1),
+                            )],
+                        },
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::Creature),
+                            effects: vec![Effect::put_counters(
+                                ObjectSelector::Target(TargetSpec::Creature),
+                                CounterKind::PlusOnePlusOne,
+                                1,
+                            )],
+                        },
+                    ],
                 ],
-            ],
-        }],
-        text_box: text_box.into(),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1339,57 +1402,58 @@ fn azula_cunning_usurper() -> CardDefinition {
     CardDefinition {
         key: "tla.azula_cunning_usurper",
         scryfall_id: "daf30e1c-436d-4f23-b1d2-570619a4b7f5",
-        name: "Azula, Cunning Usurper".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}{B}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Rogue".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Azula, Cunning Usurper".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Rogue".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("RR"),
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("RR"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![
+                        Effect::ExileLinked {
+                            chooser: LinkedChooser::TargetPlayer,
+                            zone: ZoneType::Battlefield,
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Creature),
+                                ..Default::default()
+                            },
+                            up_to: false,
+                            grant: LinkedGrant::FlashAnyMana,
+                            target: TargetSpec::Opponent,
+                        },
+                        Effect::ExileLinked {
+                            chooser: LinkedChooser::TargetPlayer,
+                            zone: ZoneType::Graveyard,
+                            predicate: CardPredicate {
+                                not_card_types: vec![CardType::Land],
+                                ..Default::default()
+                            },
+                            up_to: false,
+                            grant: LinkedGrant::FlashAnyMana,
+                            target: TargetSpec::Opponent,
+                        },
+                    ],
                 },
-                effects: vec![
-                    Effect::ExileLinked {
-                        chooser: LinkedChooser::TargetPlayer,
-                        zone: ZoneType::Battlefield,
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
-                        },
-                        up_to: false,
-                        grant: LinkedGrant::FlashAnyMana,
-                        target: TargetSpec::Opponent,
-                    },
-                    Effect::ExileLinked {
-                        chooser: LinkedChooser::TargetPlayer,
-                        zone: ZoneType::Graveyard,
-                        predicate: CardPredicate {
-                            not_card_types: vec![CardType::Land],
-                            ..Default::default()
-                        },
-                        up_to: false,
-                        grant: LinkedGrant::FlashAnyMana,
-                        target: TargetSpec::Opponent,
-                    },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1400,40 +1464,39 @@ fn azula_on_the_hunt() -> CardDefinition {
     CardDefinition {
         key: "tla.azula_on_the_hunt",
         scryfall_id: "1335a145-248a-4f1e-8760-9a5d531e14e3",
-        name: "Azula, On the Hunt".into(),
-        mana_cost: Some(ManaCost::parse("{3}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into()],
-        power: Some(4),
-        toughness: Some(3),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("RR"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![
-                    Effect::LoseLife {
-                        player: PlayerSelector::You,
+        printed: PrintedCharacteristics {
+            name: "Azula, On the Hunt".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(4),
+            toughness: Some(3),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("RR"),
                         amount: EffectValue::Fixed(1),
-                    },
-                    Effect::create_tokens("Clue", 1),
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+                        until_end_of_combat: true,
+                    }],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![
+                        Effect::LoseLife {
+                            player: PlayerSelector::You,
+                            amount: EffectValue::Fixed(1),
+                        },
+                        Effect::create_tokens("token.clue", 1),
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1444,29 +1507,32 @@ fn ba_sing_se() -> CardDefinition {
     CardDefinition {
         key: "tla.ba_sing_se",
         scryfall_id: "bdf3b2be-d0cd-4a3c-a10e-82d32c12d3bd",
-        name: "Ba Sing Se".into(),
-        types: CardTypes::new([CardType::Land]),
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("G"),
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sorcery_timing: true,
-            tap_source: true,
-            mana_cost: ManaCost::parse("{2}{G}"),
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(2),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Ba Sing Se".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("G"),
             }],
-            ..Default::default()
-        }],
-        replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
-            predicate: CardPredicate {
-                supertype: Some("basic".into()),
-                card_type: Some(CardType::Land),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                tap_source: true,
+                mana_cost: ManaCost::parse("{2}{G}"),
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
                 ..Default::default()
-            },
-        }],
-        text_box: text_box.into(),
+            }],
+            replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
+                predicate: CardPredicate {
+                    supertype: Some("basic".into()),
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                },
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1477,32 +1543,35 @@ fn badgermole() -> CardDefinition {
     CardDefinition {
         key: "tla.badgermole",
         scryfall_id: "aabbd420-b7fc-496f-9168-bad823d51d9e",
-        name: "Badgermole".into(),
-        mana_cost: Some(ManaCost::parse("{4}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Badger".into(), "Mole".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(2),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Badgermole".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Badger".into(), "Mole".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-            scope: StaticScope::YouControl(CardPredicate {
-                with_counter: true,
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            }),
-            condition: None,
-            keywords: Keywords::of(&[Keyword::Trample]),
-        })],
-        text_box: text_box.into(),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::YouControl(CardPredicate {
+                    with_counter: true,
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                }),
+                condition: None,
+                keywords: Keywords::of(&[Keyword::Trample]),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1513,30 +1582,34 @@ fn badgermole_cub() -> CardDefinition {
     CardDefinition {
         key: "tla.badgermole_cub",
         scryfall_id: "340c5799-4964-44dd-8c48-8f3f3aba5211",
-        name: "Badgermole Cub".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Badger".into(), "Mole".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(1),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Badgermole Cub".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Badger".into(), "Mole".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(1),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        triggered_mana_abilities: vec![TriggeredManaAbility {
-            predicate: CardPredicate {
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            },
-            mana: Mana::parse("G"),
-        }],
-        text_box: text_box.into(),
+            triggered_mana_abilities: vec![TriggeredManaAbility {
+                who: Actor::You,
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                },
+                output: TriggeredManaOutput::Fixed(Mana::parse("G")),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1547,28 +1620,31 @@ fn barrels_of_blasting_jelly() -> CardDefinition {
     CardDefinition {
         key: "tla.barrels_of_blasting_jelly",
         scryfall_id: "4fd83083-3779-41f0-90a0-a00e3270e4e6",
-        name: "Barrels of Blasting Jelly".into(),
-        mana_cost: Some(ManaCost::parse("{1}")),
-        types: CardTypes::new([CardType::Artifact]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                once_each_turn: true,
-                mana_cost: ManaCost::parse("{1}"),
-                effects: vec![one_mana_of_any_color(None)],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{5}"),
-                sacrifice_source: true,
-                effects: vec![Effect::deal_damage(
-                    5,
-                    ObjectSelector::Target(TargetSpec::Creature),
-                )],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Barrels of Blasting Jelly".into(),
+            mana_cost: Some(ManaCost::parse("{1}")),
+            types: CardTypes::new([CardType::Artifact]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    once_each_turn: true,
+                    mana_cost: ManaCost::parse("{1}"),
+                    effects: vec![one_mana_of_any_color(None)],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{5}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::deal_damage(
+                        5,
+                        ObjectSelector::Target(TargetSpec::Creature),
+                    )],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1579,34 +1655,35 @@ fn beetle_headed_merchants() -> CardDefinition {
     CardDefinition {
         key: "tla.beetle_headed_merchants",
         scryfall_id: "c2eed79f-38c1-4aac-9525-d54cb114f17f",
-        name: "Beetle-Headed Merchants".into(),
-        mana_cost: Some(ManaCost::parse("{4}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Citizen".into()],
-        power: Some(5),
-        toughness: Some(4),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: None,
-            effects: vec![
-                Effect::may_sacrifice(
-                    CardPredicate {
-                        card_types_any: vec![CardType::Creature, CardType::Artifact],
-                        ..Default::default()
-                    },
-                    true,
-                ),
-                Effect::if_you_do(vec![
-                    Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
-                    },
-                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
-                ]),
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Beetle-Headed Merchants".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Citizen".into()],
+            power: Some(5),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![
+                    Effect::may_sacrifice(
+                        CardPredicate {
+                            card_types_any: vec![CardType::Creature, CardType::Artifact],
+                            ..Default::default()
+                        },
+                        true,
+                    ),
+                    Effect::if_you_do(vec![
+                        Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        },
+                        Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                    ]),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1617,27 +1694,30 @@ fn beifong_s_bounty_hunters() -> CardDefinition {
     CardDefinition {
         key: "tla.beifong_s_bounty_hunters",
         scryfall_id: "4f88ec3a-44a7-4ae5-a68c-24294dabaeed",
-        name: "Beifong's Bounty Hunters".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Mercenary".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    not_card_types: vec![CardType::Land],
-                    ..Default::default()
-                }),
-            },
-            intervening_if: None,
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::TriggeringPower,
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Beifong's Bounty Hunters".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Mercenary".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        not_card_types: vec![CardType::Land],
+                        ..Default::default()
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::TriggeringPower,
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1648,16 +1728,19 @@ fn bender_s_waterskin() -> CardDefinition {
     CardDefinition {
         key: "tla.bender_s_waterskin",
         scryfall_id: "6d4a1712-d19e-4475-9614-a0b1af4da610",
-        name: "Bender's Waterskin".into(),
-        mana_cost: Some(ManaCost::parse("{3}")),
-        types: CardTypes::new([CardType::Artifact]),
-        statics: vec![StaticAbility::UntapsDuringOtherUntapSteps],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            effects: vec![one_mana_of_any_color(None)],
+        printed: PrintedCharacteristics {
+            name: "Bender's Waterskin".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact]),
+            statics: vec![StaticAbility::UntapsDuringOtherUntapSteps],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![one_mana_of_any_color(None)],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -1668,25 +1751,28 @@ fn benevolent_river_spirit() -> CardDefinition {
     CardDefinition {
         key: "tla.benevolent_river_spirit",
         scryfall_id: "7ffb79cd-d170-4047-89c8-6e85188f30da",
-        name: "Benevolent River Spirit".into(),
-        mana_cost: Some(ManaCost::parse("{U}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Spirit".into()],
-        power: Some(4),
-        toughness: Some(5),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Scry { count: 2 }],
-        }],
-        statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
-            "{2}",
-        )))],
-        additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{5}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Benevolent River Spirit".into(),
+            mana_cost: Some(ManaCost::parse("{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Spirit".into()],
+            power: Some(4),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Scry { count: 2 }],
+            }],
+            statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
+                "{2}",
+            )))],
+            additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{5}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1697,33 +1783,37 @@ fn bitter_work() -> CardDefinition {
     CardDefinition {
         key: "tla.bitter_work",
         scryfall_id: "3e8de6a9-9859-4ed2-8ece-ef80a7209be9",
-        name: "Bitter Work".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    min_power: Some(4),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![Effect::DrawCards {
-                count: EffectValue::Fixed(1),
+        printed: PrintedCharacteristics {
+            name: "Bitter Work".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        min_power: Some(4),
+                        ..Default::default()
+                    }),
+                    Per::Batch,
+                ),
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            exhaust: true,
-            own_turn_only: true,
-            mana_cost: ManaCost::parse("{4}"),
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(4),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                own_turn_only: true,
+                mana_cost: ManaCost::parse("{4}"),
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(4),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -1734,27 +1824,31 @@ fn boar_q_pine() -> CardDefinition {
     CardDefinition {
         key: "tla.boar_q_pine",
         scryfall_id: "087a445c-5f63-45d6-83e8-20d22650db20",
-        name: "Boar-q-pine".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Boar".into(), "Porcupine".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::YouCastSpell {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
-            },
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Boar-q-pine".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Boar".into(), "Porcupine".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                ),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1765,26 +1859,29 @@ fn boiling_rock_prison() -> CardDefinition {
     CardDefinition {
         key: "tla.boiling_rock_prison",
         scryfall_id: "1c2e2220-54d1-4180-93a0-964e3b0ba8b8",
-        name: "Boiling Rock Prison".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["B", "R"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Boiling Rock Prison".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["B", "R"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1795,45 +1892,47 @@ fn boiling_rock_rioter() -> CardDefinition {
     CardDefinition {
         key: "tla.boiling_rock_rioter",
         scryfall_id: "739653cc-35c8-4a66-95d8-3e80fa6114f0",
-        name: "Boiling Rock Rioter".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Rogue".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Boiling Rock Rioter".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Rogue".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("R"),
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("R"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::CastExiledWithSource {
+                        predicate: CardPredicate::subtype("Ally"),
+                    }],
                 },
-                effects: vec![Effect::CastExiledWithSource {
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_cost: Some(TapCost {
                     predicate: CardPredicate::subtype("Ally"),
-                }],
-            },
-        ],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_cost: Some(CardPredicate::subtype("Ally")),
-            effects: vec![Effect::exile_linked(
-                ObjectSelector::Target(TargetSpec::GraveyardCard {
-                    predicate: CardPredicate::default(),
+                    count: 1,
                 }),
-                LinkedExile::WithSource,
-            )],
+                effects: vec![Effect::exile_linked(
+                    ObjectSelector::Target(TargetSpec::GraveyardCard {
+                        predicate: CardPredicate::default(),
+                    }),
+                    LinkedExile::WithSource,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -1844,26 +1943,29 @@ fn boomerang_basics() -> CardDefinition {
     CardDefinition {
         key: "tla.boomerang_basics",
         scryfall_id: "17ab958a-abc6-472e-ad6a-97c731d89c74",
-        name: "Boomerang Basics".into(),
-        mana_cost: Some(ManaCost::parse("{U}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::return_to_hand(ObjectSelector::Target(TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Land],
-                    ..Default::default()
-                },
-            })),
-            Effect::if_you_do(vec![Effect::If {
-                condition: Condition::TargetControlledByYou,
-                then: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                otherwise: vec![],
-            }]),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Boomerang Basics".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::return_to_hand(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Land],
+                        ..Default::default()
+                    },
+                })),
+                Effect::if_you_do(vec![Effect::If {
+                    condition: Condition::TargetControlledByYou,
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![],
+                }]),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1874,41 +1976,44 @@ fn bumi_bash() -> CardDefinition {
     CardDefinition {
         key: "tla.bumi_bash",
         scryfall_id: "e8895479-26cb-4ee8-98ca-6d46c43f0dbd",
-        name: "Bumi Bash".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::DealDamage {
-                    amount: EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Land),
-                            ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Bumi Bash".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::deal_damage(
+                        EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Land),
+                                ..Default::default()
+                            },
                         },
-                    },
-                    what: ObjectSelector::Target(TargetSpec::Creature),
-                }],
-                vec![Effect::destroy(ObjectSelector::Target(
-                    TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Land),
-                            any_of: vec![
-                                CardPredicate {
-                                    card_type: Some(CardType::Creature),
-                                    ..Default::default()
-                                },
-                                CardPredicate {
-                                    nonbasic: true,
-                                    ..Default::default()
-                                },
-                            ],
-                            ..Default::default()
+                        ObjectSelector::Target(TargetSpec::Creature),
+                    )],
+                    vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Land),
+                                any_of: vec![
+                                    CardPredicate {
+                                        card_type: Some(CardType::Creature),
+                                        ..Default::default()
+                                    },
+                                    CardPredicate {
+                                        nonbasic: true,
+                                        ..Default::default()
+                                    },
+                                ],
+                                ..Default::default()
+                            },
                         },
-                    },
-                ))],
-            ],
-        }],
-        text_box: text_box.into(),
+                    ))],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1919,48 +2024,51 @@ fn bumi_king_of_three_trials() -> CardDefinition {
     CardDefinition {
         key: "tla.bumi_king_of_three_trials",
         scryfall_id: "a268697b-22b0-4e1b-a5b6-d9be95025e57",
-        name: "Bumi, King of Three Trials".into(),
-        mana_cost: Some(ManaCost::parse("{5}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: None,
-            effects: vec![Effect::TriggerModes {
-                up_to: Some(EffectValue::GraveyardMatching {
-                    base: 0,
-                    predicate: CardPredicate::subtype("Lesson"),
-                }),
-                unchosen: false,
-                modes: vec![
-                    vec![Effect::put_counters(
-                        ObjectSelector::This,
-                        CounterKind::PlusOnePlusOne,
-                        3,
-                    )],
-                    vec![Effect::TargetClause {
-                        requirement: TargetRequirement::one(TargetSpec::Player),
-                        effects: vec![Effect::ForPlayer {
-                            player: PlayerSelector::Target(Box::new(TargetSpec::Player)),
-                            effects: vec![Effect::Scry { count: 3 }],
+        printed: PrintedCharacteristics {
+            name: "Bumi, King of Three Trials".into(),
+            mana_cost: Some(ManaCost::parse("{5}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    up_to: Some(EffectValue::GraveyardMatching {
+                        base: 0,
+                        predicate: CardPredicate::subtype("Lesson"),
+                    }),
+                    unchosen: false,
+                    modes: vec![
+                        vec![Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            3,
+                        )],
+                        vec![Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::Player),
+                            effects: vec![Effect::ForPlayer {
+                                player: PlayerSelector::Target(Box::new(TargetSpec::Player)),
+                                effects: vec![Effect::Scry { count: 3 }],
+                            }],
                         }],
-                    }],
-                    vec![Effect::TargetClause {
-                        requirement: TargetRequirement::one(TargetSpec::LandYouControl),
-                        effects: vec![Effect::Earthbend {
-                            count: EffectValue::Fixed(3),
-                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                        vec![Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::LandYouControl),
+                            effects: vec![Effect::Earthbend {
+                                count: EffectValue::Fixed(3),
+                                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                            }],
                         }],
-                    }],
-                ],
+                    ],
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -1975,41 +2083,46 @@ fn bumi_unleashed() -> CardDefinition {
     CardDefinition {
         key: "tla.bumi_unleashed",
         scryfall_id: "b20a5185-7e31-4fc9-be11-9423bfc389bf",
-        name: "Bumi, Unleashed".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
-        power: Some(5),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Trample]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::Earthbend {
-                    count: EffectValue::Fixed(4),
-                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::CreatureDealsCombatDamageToPlayer {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![
-                    Effect::Untap {
-                        what: ObjectSelector::each_you_control(lands()),
+        printed: PrintedCharacteristics {
+            name: "Bumi, Unleashed".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+            power: Some(5),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    Effect::AdditionalCombatPhase {
-                        attackers: Some(lands()),
+                    effects: vec![Effect::Earthbend {
+                        count: EffectValue::Fixed(4),
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                    }],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::DealsCombatDamage {
+                        subject: TriggerSubject::This,
+                        to: Actor::AnyPlayer,
+                        per: Per::Object,
                     },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+                    effects: vec![
+                        Effect::Untap {
+                            what: ObjectSelector::each_you_control(lands()),
+                        },
+                        Effect::AdditionalCombatPhase {
+                            attackers: Some(lands()),
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2020,44 +2133,47 @@ fn buzzard_wasp_colony() -> CardDefinition {
     CardDefinition {
         key: "tla.buzzard_wasp_colony",
         scryfall_id: "42d83229-0555-4361-8964-4b525c825843",
-        name: "Buzzard-Wasp Colony".into(),
-        mana_cost: Some(ManaCost::parse("{3}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Bird".into(), "Insect".into()],
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Buzzard-Wasp Colony".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Insect".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::may_sacrifice(
+                            CardPredicate {
+                                card_types_any: vec![CardType::Artifact, CardType::Creature],
+                                ..Default::default()
+                            },
+                            false,
+                        ),
+                        Effect::if_you_do(vec![Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        }]),
+                    ],
                 },
-                intervening_if: None,
-                effects: vec![
-                    Effect::may_sacrifice(
-                        CardPredicate {
-                            card_types_any: vec![CardType::Artifact, CardType::Creature],
-                            ..Default::default()
-                        },
-                        false,
-                    ),
-                    Effect::if_you_do(vec![Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
-                    }]),
-                ],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+                Ability::Triggered {
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::another_you_control(CardPredicate::creature()),
+                    },
+                    intervening_if: Some(Condition::TriggeringHadCounters),
+                    effects: vec![Effect::PutCountersFrom {
+                        from: ObjectSelector::Triggering,
+                        on: ObjectSelector::This,
+                    }],
                 },
-                intervening_if: Some(Condition::TriggeringHadCounters),
-                effects: vec![Effect::PutCountersFrom {
-                    from: ObjectSelector::Triggering,
-                    on: ObjectSelector::This,
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2068,27 +2184,30 @@ fn callous_inspector() -> CardDefinition {
     CardDefinition {
         key: "tla.callous_inspector",
         scryfall_id: "f22610e9-6b14-4914-bb67-bd6723bec9aa",
-        name: "Callous Inspector".into(),
-        mana_cost: Some(ManaCost::parse("{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Menace]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::DealDamageToPlayer {
-                    player: PlayerSelector::You,
-                    amount: EffectValue::Fixed(1),
+        printed: PrintedCharacteristics {
+            name: "Callous Inspector".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
                 },
-                Effect::create_tokens("Clue", 1),
-            ],
-        }],
-        text_box: text_box.into(),
+                effects: vec![
+                    Effect::DealDamageToPlayer {
+                        player: PlayerSelector::You,
+                        amount: EffectValue::Fixed(1),
+                    },
+                    Effect::create_tokens("token.clue", 1),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2099,35 +2218,38 @@ fn canyon_crawler() -> CardDefinition {
     CardDefinition {
         key: "tla.canyon_crawler",
         scryfall_id: "30a30bfb-f0f3-425b-b37d-20079ee27046",
-        name: "Canyon Crawler".into(),
-        mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Spider".into(), "Beast".into()],
-        power: Some(6),
-        toughness: Some(6),
-        keywords: Keywords::of(&[Keyword::Deathtouch]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Food", 1)],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            zone: ActivationZone::Hand,
-            discard_source: true,
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::search_library(
-                CardPredicate {
-                    subtype: Some("Swamp".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Canyon Crawler".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Spider".into(), "Beast".into()],
+            power: Some(6),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                EffectValue::Fixed(1),
-                vec![Effect::return_to_hand(ObjectSelector::Selected)],
-            )],
+                effects: vec![Effect::create_tokens("token.food", 1)],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Hand,
+                discard_source: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        subtype: Some("Swamp".into()),
+                        ..Default::default()
+                    },
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -2138,29 +2260,32 @@ fn cat_gator() -> CardDefinition {
     CardDefinition {
         key: "tla.cat_gator",
         scryfall_id: "ec83a825-79e6-42a4-919c-3bc498ff4433",
-        name: "Cat-Gator".into(),
-        mana_cost: Some(ManaCost::parse("{6}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Fish".into(), "Crocodile".into()],
-        power: Some(3),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Lifelink]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::DealDamage {
-                amount: EffectValue::BattlefieldMatching {
-                    predicate: CardPredicate {
-                        subtype: Some("Swamp".into()),
-                        ..Default::default()
-                    },
+        printed: PrintedCharacteristics {
+            name: "Cat-Gator".into(),
+            mana_cost: Some(ManaCost::parse("{6}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Fish".into(), "Crocodile".into()],
+            power: Some(3),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                what: ObjectSelector::Target(TargetSpec::AnyTarget),
+                effects: vec![Effect::deal_damage(
+                    EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            subtype: Some("Swamp".into()),
+                            ..Default::default()
+                        },
+                    },
+                    ObjectSelector::Target(TargetSpec::AnyTarget),
+                )],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2171,28 +2296,29 @@ fn cat_owl() -> CardDefinition {
     CardDefinition {
         key: "tla.cat_owl",
         scryfall_id: "d7df3391-dbe5-4eb4-85c1-037c5f3ea971",
-        name: "Cat-Owl".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W/U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Cat".into(), "Bird".into()],
-        power: Some(3),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::untap(ObjectSelector::Target(
-                TargetSpec::Permanent {
-                    predicate: CardPredicate {
-                        card_types_any: vec![CardType::Artifact, CardType::Creature],
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Cat-Owl".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W/U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Bird".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::untap(ObjectSelector::Target(
+                    TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Artifact, CardType::Creature],
+                            ..Default::default()
+                        },
                     },
-                },
-            ))],
-        }],
-        text_box: text_box.into(),
+                ))],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2206,34 +2332,35 @@ fn combustion_man() -> CardDefinition {
     CardDefinition {
         key: "tla.combustion_man",
         scryfall_id: "86f7399d-6876-4e85-ba34-ff1f97dc144a",
-        name: "Combustion Man".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Assassin".into()],
-        power: Some(4),
-        toughness: Some(6),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: None,
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement::one(permanent()),
-                effects: vec![Effect::ForPlayer {
-                    player: PlayerSelector::TargetController,
-                    effects: vec![Effect::OptionalPayment {
-                        cost: PaymentCost::Mana(ManaCost::default()),
-                        if_paid: vec![Effect::DealDamageToPlayer {
-                            player: PlayerSelector::You,
-                            amount: EffectValue::SourcePower,
+        printed: PrintedCharacteristics {
+            name: "Combustion Man".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Assassin".into()],
+            power: Some(4),
+            toughness: Some(6),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(permanent()),
+                    effects: vec![Effect::ForPlayer {
+                        player: PlayerSelector::TargetController,
+                        effects: vec![Effect::OptionalPayment {
+                            cost: PaymentCost::Mana(ManaCost::default()),
+                            if_paid: vec![Effect::DealDamageToPlayer {
+                                player: PlayerSelector::You,
+                                amount: EffectValue::SourcePower,
+                            }],
+                            if_declined: vec![Effect::destroy(ObjectSelector::Target(permanent()))],
                         }],
-                        if_declined: vec![Effect::destroy(ObjectSelector::Target(permanent()))],
                     }],
                 }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2244,28 +2371,31 @@ fn combustion_technique() -> CardDefinition {
     CardDefinition {
         key: "tla.combustion_technique",
         scryfall_id: "fdcca576-2ef2-44cc-9944-a92bd146444a",
-        name: "Combustion Technique".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::DealDamage {
-                amount: EffectValue::GraveyardMatching {
-                    base: 2,
-                    predicate: CardPredicate {
-                        subtype: Some("Lesson".into()),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Combustion Technique".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::deal_damage(
+                    EffectValue::GraveyardMatching {
+                        base: 2,
+                        predicate: CardPredicate {
+                            subtype: Some("Lesson".into()),
+                            ..Default::default()
+                        },
                     },
-                },
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            },
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::ExileIfWouldDie,
-            ),
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        text_box: text_box.into(),
+                    ObjectSelector::Target(TargetSpec::Creature),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::ExileIfWouldDie,
+                ),
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2276,20 +2406,23 @@ fn compassionate_healer() -> CardDefinition {
     CardDefinition {
         key: "tla.compassionate_healer",
         scryfall_id: "88d5f8fd-d4de-4e64-9b74-e53719ffbcdc",
-        name: "Compassionate Healer".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Cleric".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::BecomesTapped {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::gain_life(1), Effect::Scry { count: 1 }],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Compassionate Healer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Cleric".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::BecomesTapped {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::gain_life(1), Effect::Scry { count: 1 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2300,26 +2433,29 @@ fn crashing_wave() -> CardDefinition {
     CardDefinition {
         key: "tla.crashing_wave",
         scryfall_id: "9fd02eb4-1ef5-4a14-89a8-b25e720e8016",
-        name: "Crashing Wave".into(),
-        mana_cost: Some(ManaCost::parse("{U}{U}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::ForEachTarget {
-                effects: vec![Effect::tap(ObjectSelector::Target(TargetSpec::Creature))],
-            },
-            Effect::DistributeCountersToTappedOpponentCreatures {
-                kind: CounterKind::Stun,
-                count: 3,
-            },
-        ],
-        targeting: vec![TargetRequirement {
-            min: 0,
-            max: 0,
-            max_x: true,
-            ..TargetRequirement::one(TargetSpec::Creature)
-        }],
-        additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Crashing Wave".into(),
+            mana_cost: Some(ManaCost::parse("{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::ForEachTarget {
+                    effects: vec![Effect::tap(ObjectSelector::Target(TargetSpec::Creature))],
+                },
+                Effect::DistributeCountersToTappedOpponentCreatures {
+                    kind: CounterKind::Stun,
+                    count: 3,
+                },
+            ],
+            targeting: vec![TargetRequirement {
+                min: 0,
+                max: 0,
+                max_x: true,
+                ..TargetRequirement::one(TargetSpec::Creature)
+            }],
+            additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2330,39 +2466,42 @@ fn crescent_island_temple() -> CardDefinition {
     CardDefinition {
         key: "tla.crescent_island_temple",
         scryfall_id: "04c85150-269e-4158-a1b9-bd11bc6b7d79",
-        name: "Crescent Island Temple".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Shrine".into()],
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Crescent Island Temple".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Shrine".into()],
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::create_tokens(
+                        "token.monk",
+                        EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                subtype: Some("Shrine".into()),
+                                ..Default::default()
+                            },
+                        },
+                    )],
                 },
-                effects: vec![Effect::create_tokens(
-                    "Monk",
-                    EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::another_you_control(CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
-                        },
+                        }),
                     },
-                )],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                        subtype: Some("Shrine".into()),
-                        ..Default::default()
-                    }),
+                    effects: vec![Effect::create_tokens("token.monk", 1)],
                 },
-                effects: vec![Effect::create_tokens("Monk", 1)],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2373,24 +2512,25 @@ fn cruel_administrator() -> CardDefinition {
     CardDefinition {
         key: "tla.cruel_administrator",
         scryfall_id: "9d70707b-2e25-40b1-80a8-9a5492bca7e2",
-        name: "Cruel Administrator".into(),
-        mana_cost: Some(ManaCost::parse("{3}{B}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(5),
-        toughness: Some(4),
-        replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
-            count: 1,
-            condition: Some(Condition::AttackedThisTurn),
-        }],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Soldier", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Cruel Administrator".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(5),
+            toughness: Some(4),
+            replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
+                count: 1,
+                condition: Some(Condition::AttackedThisTurn),
+            }],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::create_tokens("token.soldier", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2401,18 +2541,21 @@ fn cunning_maneuver() -> CardDefinition {
     CardDefinition {
         key: "tla.cunning_maneuver",
         scryfall_id: "0ff7c993-ba29-43b0-9639-7c4bc0292fa2",
-        name: "Cunning Maneuver".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::pump(3, 1),
-            ),
-            Effect::create_tokens("Clue", 1),
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Cunning Maneuver".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(3, 1),
+                ),
+                Effect::create_tokens("token.clue", 1),
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2423,44 +2566,47 @@ fn curious_farm_animals() -> CardDefinition {
     CardDefinition {
         key: "tla.curious_farm_animals",
         scryfall_id: "2402d759-84b6-41d2-ad78-9333974e9222",
-        name: "Curious Farm Animals".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Boar".into(), "Elk".into(), "Bird".into(), "Ox".into()],
-        power: Some(1),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::gain_life(3)],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{2}"),
-            sacrifice_source: true,
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    ..TargetRequirement::one(TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            card_types_any: vec![CardType::Artifact, CardType::Enchantment],
-                            ..Default::default()
-                        },
-                    })
+        printed: PrintedCharacteristics {
+            name: "Curious Farm Animals".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Boar".into(), "Elk".into(), "Bird".into(), "Ox".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::destroy(ObjectSelector::Target(
-                    TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            card_types_any: vec![CardType::Artifact, CardType::Enchantment],
-                            ..Default::default()
-                        },
-                    },
-                ))],
+                effects: vec![Effect::gain_life(3)],
             }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}"),
+                sacrifice_source: true,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        ..TargetRequirement::one(TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                                ..Default::default()
+                            },
+                        })
+                    },
+                    effects: vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                                ..Default::default()
+                            },
+                        },
+                    ))],
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -2471,25 +2617,28 @@ fn cycle_of_renewal() -> CardDefinition {
     CardDefinition {
         key: "tla.cycle_of_renewal",
         scryfall_id: "233f4a05-057b-48f4-8f56-8d4a060a40e4",
-        name: "Cycle of Renewal".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::sacrifice(CardPredicate {
-                card_type: Some(CardType::Land),
-                ..Default::default()
-            }),
-            Effect::search_library(
-                CardPredicate::basic_land(),
-                EffectValue::Fixed(2),
-                vec![Effect::return_to_battlefield(
-                    ObjectSelector::Selected,
-                    true,
-                )],
-            ),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Cycle of Renewal".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::sacrifice(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                Effect::search_library(
+                    CardPredicate::basic_land(),
+                    EffectValue::Fixed(2),
+                    vec![Effect::return_to_battlefield(
+                        ObjectSelector::Selected,
+                        true,
+                    )],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2500,46 +2649,47 @@ fn dai_li_agents() -> CardDefinition {
     CardDefinition {
         key: "tla.dai_li_agents",
         scryfall_id: "9ddb8715-341b-400a-b6eb-f3f90518157c",
-        name: "Dai Li Agents".into(),
-        mana_cost: Some(ManaCost::parse("{3}{B}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(3),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![
-                    Effect::TargetClause {
-                        requirement: TargetRequirement::one(TargetSpec::LandYouControl),
-                        effects: vec![Effect::Earthbend {
-                            count: EffectValue::Fixed(1),
-                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                        }],
+        printed: PrintedCharacteristics {
+            name: "Dai Li Agents".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    Effect::TargetClause {
-                        requirement: TargetRequirement::one(TargetSpec::LandYouControl),
-                        effects: vec![Effect::Earthbend {
-                            count: EffectValue::Fixed(1),
-                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                        }],
-                    },
-                ],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+                    effects: vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::LandYouControl),
+                            effects: vec![Effect::Earthbend {
+                                count: EffectValue::Fixed(1),
+                                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                            }],
+                        },
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::LandYouControl),
+                            effects: vec![Effect::Earthbend {
+                                count: EffectValue::Fixed(1),
+                                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                            }],
+                        },
+                    ],
                 },
-                effects: vec![Effect::DrainLife {
-                    amount: EffectValue::CreaturesWithCounters,
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::DrainLife {
+                        amount: EffectValue::CreaturesWithCounters,
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2550,26 +2700,33 @@ fn dai_li_indoctrination() -> CardDefinition {
     CardDefinition {
         key: "tla.dai_li_indoctrination",
         scryfall_id: "eca652b8-44f1-4bd9-b4bf-036eeead13aa",
-        name: "Dai Li Indoctrination".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::RevealHandDiscardChosen {
-                    target: TargetSpec::Opponent,
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Land, CardType::Instant, CardType::Sorcery],
-                        ..Default::default()
-                    },
-                }],
-                vec![Effect::Earthbend {
-                    count: EffectValue::Fixed(2),
-                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                }],
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Dai Li Indoctrination".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::RevealHandDiscardChosen {
+                        target: TargetSpec::Opponent,
+                        predicate: CardPredicate {
+                            not_card_types: vec![
+                                CardType::Land,
+                                CardType::Instant,
+                                CardType::Sorcery,
+                            ],
+                            ..Default::default()
+                        },
+                    }],
+                    vec![Effect::Earthbend {
+                        count: EffectValue::Fixed(2),
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                    }],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2580,24 +2737,27 @@ fn day_of_black_sun() -> CardDefinition {
     CardDefinition {
         key: "tla.day_of_black_sun",
         scryfall_id: "d0e24797-3e45-4c2b-b4b0-1ef44d42eaee",
-        name: "Day of Black Sun".into(),
-        mana_cost: Some(ManaCost::parse("{X}{B}{B}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: {
-            // "Those creatures": the same set, fixed as each instruction
-            // resolves; nothing resolves between the two.
-            let creatures = ObjectSelector::Each {
-                of: Scope::Battlefield,
-                predicate: CardPredicate::creature(),
-                except: None,
-                max_mana_value: Some(Box::new(EffectValue::X)),
-            };
-            vec![
-                Effect::until_end_of_turn(creatures.clone(), Modification::LoseAllAbilities),
-                Effect::destroy(creatures),
-            ]
+        printed: PrintedCharacteristics {
+            name: "Day of Black Sun".into(),
+            mana_cost: Some(ManaCost::parse("{X}{B}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: {
+                // "Those creatures": the same set, fixed as each instruction
+                // resolves; nothing resolves between the two.
+                let creatures = ObjectSelector::Each {
+                    of: Scope::Battlefield,
+                    predicate: CardPredicate::creature(),
+                    except: None,
+                    max_mana_value: Some(Box::new(EffectValue::X)),
+                };
+                vec![
+                    Effect::until_end_of_turn(creatures.clone(), Modification::LoseAllAbilities),
+                    Effect::destroy(creatures),
+                ]
+            },
+            text_box: text_box.into(),
+            ..Default::default()
         },
-        text_box: text_box.into(),
         ..Default::default()
     }
 }
@@ -2608,21 +2768,24 @@ fn deadly_precision() -> CardDefinition {
     CardDefinition {
         key: "tla.deadly_precision",
         scryfall_id: "4661daf6-d960-4278-8946-70948efaf99d",
-        name: "Deadly Precision".into(),
-        mana_cost: Some(ManaCost::parse("{B}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        additional_costs: vec![AdditionalCost::Sacrifice(Box::new(SacrificeCost {
-            predicate: CardPredicate {
-                card_types_any: vec![CardType::Artifact, CardType::Creature],
-                ..Default::default()
-            },
-            another: false,
-            or_mana: Some(ManaCost::parse("{4}")),
-        }))],
-        spell_effects: vec![Effect::destroy(ObjectSelector::Target(
-            TargetSpec::Creature,
-        ))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Deadly Precision".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::Sacrifice(Box::new(SacrificeCost {
+                predicate: CardPredicate {
+                    card_types_any: vec![CardType::Artifact, CardType::Creature],
+                    ..Default::default()
+                },
+                another: false,
+                or_mana: Some(ManaCost::parse("{4}")),
+            }))],
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Creature,
+            ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2634,27 +2797,30 @@ fn deserter_s_disciple() -> CardDefinition {
     CardDefinition {
         key: "tla.deserter_s_disciple",
         scryfall_id: "14f2ed5a-042b-4cce-82ad-cfb4bd511d98",
-        name: "Deserter's Disciple".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        max_power: Some(2),
-                        ..Default::default()
-                    },
-                }),
-                Modification::CantBeBlocked,
-            )],
+        printed: PrintedCharacteristics {
+            name: "Deserter's Disciple".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            max_power: Some(2),
+                            ..Default::default()
+                        },
+                    }),
+                    Modification::CantBeBlocked,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -2665,11 +2831,14 @@ fn destined_confrontation() -> CardDefinition {
     CardDefinition {
         key: "tla.destined_confrontation",
         scryfall_id: "d4605cf7-03bc-4a7f-b50a-49b83b09b54d",
-        name: "Destined Confrontation".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::EachPlayerKeepsCreatures { max_total_power: 4 }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Destined Confrontation".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::EachPlayerKeepsCreatures { max_total_power: 4 }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2680,26 +2849,29 @@ fn diligent_zookeeper() -> CardDefinition {
     CardDefinition {
         key: "tla.diligent_zookeeper",
         scryfall_id: "21f52564-9820-42dc-a08d-459d51afc397",
-        name: "Diligent Zookeeper".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(4),
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::YouControl(CardPredicate {
-                not_subtypes: vec!["Human".into()],
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            }),
-            condition: None,
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: Some(10),
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Diligent Zookeeper".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(4),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::YouControl(CardPredicate {
+                    not_subtypes: vec!["Human".into()],
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                }),
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: Some(10),
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2710,35 +2882,40 @@ fn dragonfly_swarm() -> CardDefinition {
     CardDefinition {
         key: "tla.dragonfly_swarm",
         scryfall_id: "16be5cc4-b15a-4c5e-8a6e-05c87b519127",
-        name: "Dragonfly Swarm".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Dragon".into(), "Insect".into()],
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: Some(Condition::GraveyardAtLeast {
-                count: 1,
-                predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Dragonfly Swarm".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dragon".into(), "Insect".into()],
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
                 },
-            }),
-            effects: vec![Effect::DrawCards {
-                count: EffectValue::Fixed(1),
+                intervening_if: Some(Condition::GraveyardAtLeast {
+                    count: 1,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
+                }),
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             }],
-        }],
-        statics: vec![
-            StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{1}"))),
-            StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(CardPredicate {
-                not_card_types: vec![CardType::Creature, CardType::Land],
-                ..Default::default()
-            })),
-        ],
-        text_box: text_box.into(),
+            statics: vec![
+                StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{1}"))),
+                StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(Box::new(
+                    CardPredicate {
+                        not_card_types: vec![CardType::Creature, CardType::Land],
+                        ..Default::default()
+                    },
+                ))),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2749,36 +2926,41 @@ fn earth_kingdom_general() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_kingdom_general",
         scryfall_id: "8688fce5-74b1-41e1-a59a-05a3878a75cb",
-        name: "Earth Kingdom General".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::Earthbend {
-                    count: EffectValue::Fixed(2),
-                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                }],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::YouPutCountersOnCreature {
-                    kind: CounterKind::PlusOnePlusOne,
-                },
-                intervening_if: None,
-                effects: vec![Effect::MayOnceEachTurn {
-                    effects: vec![Effect::GainLife {
-                        amount: EffectValue::X,
+        printed: PrintedCharacteristics {
+            name: "Earth Kingdom General".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::Earthbend {
+                        count: EffectValue::Fixed(2),
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
                     }],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::PutsCounters {
+                        who: Actor::You,
+                        kind: CounterKind::PlusOnePlusOne,
+                        on: CardPredicate::creature(),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::MayOnceEachTurn {
+                        effects: vec![Effect::GainLife {
+                            amount: EffectValue::X,
+                        }],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2789,33 +2971,36 @@ fn earth_kingdom_jailer() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_kingdom_jailer",
         scryfall_id: "9207362c-3605-4794-803f-ad1d0175fcca",
-        name: "Earth Kingdom Jailer".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::exile_linked(
-                ObjectSelector::Target(TargetSpec::PermanentOpponentControls {
-                    predicate: CardPredicate {
-                        card_types_any: vec![
-                            CardType::Artifact,
-                            CardType::Creature,
-                            CardType::Enchantment,
-                        ],
-                        min_mana_value: Some(3),
-                        ..Default::default()
-                    },
-                }),
-                LinkedExile::UntilSourceLeaves,
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Earth Kingdom Jailer".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::exile_linked(
+                    ObjectSelector::Target(TargetSpec::PermanentOpponentControls {
+                        predicate: CardPredicate {
+                            card_types_any: vec![
+                                CardType::Artifact,
+                                CardType::Creature,
+                                CardType::Enchantment,
+                            ],
+                            min_mana_value: Some(3),
+                            ..Default::default()
+                        },
+                    }),
+                    LinkedExile::UntilSourceLeaves,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2826,27 +3011,30 @@ fn earth_kingdom_protectors() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_kingdom_protectors",
         scryfall_id: "d263472e-1d75-4cb9-8f7b-986fa22bc841",
-        name: "Earth Kingdom Protectors".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sacrifice_source: true,
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                    predicate: CardPredicate {
-                        subtype: Some("Ally".into()),
-                        ..Default::default()
-                    },
-                }),
-                Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-            )],
+        printed: PrintedCharacteristics {
+            name: "Earth Kingdom Protectors".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sacrifice_source: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate {
+                            subtype: Some("Ally".into()),
+                            ..Default::default()
+                        },
+                    }),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -2857,34 +3045,37 @@ fn earth_kingdom_soldier() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_kingdom_soldier",
         scryfall_id: "2d543d35-945a-4ffa-beb7-7c5d4f894f79",
-        name: "Earth Kingdom Soldier".into(),
-        mana_cost: Some(ManaCost::parse("{4}{G/W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(3),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    max: 2,
-                    ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+        printed: PrintedCharacteristics {
+            name: "Earth Kingdom Soldier".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G/W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::ForEachTarget {
-                    effects: vec![Effect::put_counters(
-                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    )],
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        max: 2,
+                        ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                    },
+                    effects: vec![Effect::ForEachTarget {
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
+                    }],
                 }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2895,45 +3086,48 @@ fn earth_kings_lieutenant() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_kings_lieutenant",
         scryfall_id: "4533d155-5c56-41a5-9d76-2d1414ac47c9",
-        name: "Earth King's Lieutenant".into(),
-        mana_cost: Some(ManaCost::parse("{W}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Trample]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                        subtype: Some("Ally".into()),
-                        ..Default::default()
-                    }),
+        printed: PrintedCharacteristics {
+            name: "Earth King's Lieutenant".into(),
+            mana_cost: Some(ManaCost::parse("{W}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::another_you_control(CardPredicate {
+                            subtype: Some("Ally".into()),
+                            ..Default::default()
+                        }),
+                    },
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::each_other_you_control(CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            subtype: Some("Ally".into()),
+                            ..Default::default()
+                        }),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::each_other_you_control(CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        subtype: Some("Ally".into()),
-                        ..Default::default()
-                    }),
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2944,28 +3138,36 @@ fn earth_rumble() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_rumble",
         scryfall_id: "62730505-56f1-4043-a8b9-4fb7bc508b47",
-        name: "Earth Rumble".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::Earthbend {
-                count: EffectValue::Fixed(2),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
-            },
-            Effect::WhenYouDo {
-                effects: vec![
-                    Effect::TargetClause {
-                        requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),
-                        effects: vec![],
-                    },
-                    Effect::TargetClause {
-                        requirement: TargetRequirement::one(TargetSpec::CreatureOpponentControls),
-                        effects: vec![Effect::FightLastTarget],
-                    },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Earth Rumble".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                },
+                Effect::WhenYouDo {
+                    effects: vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::up_to(
+                                1,
+                                TargetSpec::CreatureYouControl,
+                            ),
+                            effects: vec![],
+                        },
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(
+                                TargetSpec::CreatureOpponentControls,
+                            ),
+                            effects: vec![Effect::FightLastTarget],
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -2989,30 +3191,33 @@ fn earth_rumble_wrestlers() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_rumble_wrestlers",
         scryfall_id: "74fca0b8-12e1-405f-b999-160d65fe0ade",
-        name: "Earth Rumble Wrestlers".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R/G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Warrior".into(), "Performer".into()],
-        power: Some(3),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Reach]),
-        statics: vec![
-            StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: condition(),
-                power: 1,
-                toughness: 0,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            }),
-            StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: StaticScope::This,
-                condition: condition(),
-                keywords: Keywords::of(&[Keyword::Trample]),
-            }),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Earth Rumble Wrestlers".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R/G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into(), "Performer".into()],
+            power: Some(3),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            statics: vec![
+                StaticAbility::PtBuff(StaticPtBuff {
+                    scope: StaticScope::This,
+                    condition: condition(),
+                    power: 1,
+                    toughness: 0,
+                    per_creature_type_max: None,
+                    per_color_among: None,
+                    per_graveyard_matching: None,
+                }),
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::This,
+                    condition: condition(),
+                    keywords: Keywords::of(&[Keyword::Trample]),
+                }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3023,23 +3228,26 @@ fn earth_village_ruffians() -> CardDefinition {
     CardDefinition {
         key: "tla.earth_village_ruffians",
         scryfall_id: "56d4e0b7-232f-4953-84a3-e6f17781aa45",
-        name: "Earth Village Ruffians".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B/G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Rogue".into()],
-        power: Some(3),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(2),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Earth Village Ruffians".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B/G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Rogue".into()],
+            power: Some(3),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3050,65 +3258,70 @@ fn earthbender_ascension() -> CardDefinition {
     CardDefinition {
         key: "tla.earthbender_ascension",
         scryfall_id: "590a58ab-5e98-4031-8aa6-ce396dc1429f",
-        name: "Earthbender Ascension".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![
-                    Effect::Earthbend {
-                        count: EffectValue::Fixed(2),
-                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Earthbender Ascension".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    Effect::search_library(
-                        CardPredicate::basic_land(),
-                        EffectValue::Fixed(1),
-                        vec![Effect::return_to_battlefield(
-                            ObjectSelector::Selected,
-                            true,
-                        )],
-                    ),
-                ],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
-                        card_type: Some(CardType::Land),
-                        ..Default::default()
-                    }),
-                },
-                intervening_if: None,
-                // The reflexive trigger's "if" is asked as it would trigger.
-                effects: vec![
-                    Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
-                    Effect::If {
-                        condition: Condition::SourceCountersAtLeast {
-                            kind: CounterKind::Quest,
-                            count: 4,
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::Earthbend {
+                            count: EffectValue::Fixed(2),
+                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
                         },
-                        then: vec![Effect::WhenYouDo {
-                            effects: vec![
-                                Effect::put_counters(
-                                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                                    CounterKind::PlusOnePlusOne,
-                                    1,
-                                ),
-                                Effect::until_end_of_turn(
-                                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
-                                ),
-                            ],
-                        }],
-                        otherwise: vec![],
+                        Effect::search_library(
+                            CardPredicate::basic_land(),
+                            EffectValue::Fixed(1),
+                            vec![Effect::return_to_battlefield(
+                                ObjectSelector::Selected,
+                                true,
+                            )],
+                        ),
+                    ],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::you_control(CardPredicate {
+                            card_type: Some(CardType::Land),
+                            ..Default::default()
+                        }),
                     },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+                    intervening_if: None,
+                    // The reflexive trigger's "if" is asked as it would trigger.
+                    effects: vec![
+                        Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
+                        Effect::If {
+                            condition: Condition::SourceCountersAtLeast {
+                                kind: CounterKind::Quest,
+                                count: 4,
+                            },
+                            then: vec![Effect::WhenYouDo {
+                                effects: vec![
+                                    Effect::put_counters(
+                                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                                        CounterKind::PlusOnePlusOne,
+                                        1,
+                                    ),
+                                    Effect::until_end_of_turn(
+                                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                                        Modification::AddKeywords(Keywords::of(&[
+                                            Keyword::Trample,
+                                        ])),
+                                    ),
+                                ],
+                            }],
+                            otherwise: vec![],
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3119,15 +3332,18 @@ fn earthbending_lesson() -> CardDefinition {
     CardDefinition {
         key: "tla.earthbending_lesson",
         scryfall_id: "eccd63b3-3a3a-4661-9d6e-fb8152429bdb",
-        name: "Earthbending Lesson".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::Earthbend {
-            count: EffectValue::Fixed(4),
-            what: ObjectSelector::Target(TargetSpec::LandYouControl),
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Earthbending Lesson".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::Earthbend {
+                count: EffectValue::Fixed(4),
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3138,33 +3354,36 @@ fn earthen_ally() -> CardDefinition {
     CardDefinition {
         key: "tla.earthen_ally",
         scryfall_id: "d7a0f2d9-efa4-4a53-a24b-36694457bd1c",
-        name: "Earthen Ally".into(),
-        mana_cost: Some(ManaCost::parse("{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(0),
-        toughness: Some(2),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{2}{W}{U}{B}{R}{G}"),
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(5),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
-            }],
-            ..Default::default()
-        }],
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::This,
-            condition: None,
-            power: 1,
-            toughness: 0,
-            per_creature_type_max: None,
-            per_color_among: Some(CardPredicate {
-                subtype: Some("Ally".into()),
+        printed: PrintedCharacteristics {
+            name: "Earthen Ally".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(0),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}{W}{U}{B}{R}{G}"),
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(5),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
                 ..Default::default()
-            }),
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+            }],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::This,
+                condition: None,
+                power: 1,
+                toughness: 0,
+                per_creature_type_max: None,
+                per_color_among: Some(CardPredicate {
+                    subtype: Some("Ally".into()),
+                    ..Default::default()
+                }),
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3175,15 +3394,22 @@ fn elemental_teachings() -> CardDefinition {
     CardDefinition {
         key: "tla.elemental_teachings",
         scryfall_id: "cac8ac35-6860-4839-ab85-93d409206c08",
-        name: "Elemental Teachings".into(),
-        mana_cost: Some(ManaCost::parse("{4}{G}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::SearchLandsOpponentSplits {
-            count: 4,
-            opponent_picks: 2,
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Elemental Teachings".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::SearchDistinctNames {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                },
+                count: 4,
+                end: DistinctSearchEnd::OpponentSplits { picks: 2 },
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3192,7 +3418,7 @@ fn ember_island_production() -> CardDefinition {
     let text_box = "Choose one —\n• Create a token that's a copy of target creature you control, except it's not legendary and it's a 4/4 Hero in addition to its other types.\n• Create a token that's a copy of target creature an opponent controls, except it's not legendary and it's a 2/2 Coward in addition to its other types.";
     let production = |target: TargetSpec, size: i32, subtype: &str| {
         vec![Effect::CreateTokenCopy {
-            of: Some(target),
+            of: ObjectSelector::Target(target),
             exceptions: vec![
                 Modification::Nonlegendary,
                 Modification::base_pt(Some(size), Some(size)),
@@ -3204,16 +3430,19 @@ fn ember_island_production() -> CardDefinition {
     CardDefinition {
         key: "tla.ember_island_production",
         scryfall_id: "0f79a7fc-36b1-4397-8e67-6638379d3a38",
-        name: "Ember Island Production".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                production(TargetSpec::CreatureYouControl, 4, "Hero"),
-                production(TargetSpec::CreatureOpponentControls, 2, "Coward"),
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Ember Island Production".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    production(TargetSpec::CreatureYouControl, 4, "Hero"),
+                    production(TargetSpec::CreatureOpponentControls, 2, "Coward"),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3224,29 +3453,32 @@ fn energybending() -> CardDefinition {
     CardDefinition {
         key: "tla.energybending",
         scryfall_id: "6c085441-e023-4032-89a0-d24ce5060ac3",
-        name: "Energybending".into(),
-        mana_cost: Some(ManaCost::parse("{2}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::each_you_control(CardPredicate {
-                    card_type: Some(CardType::Land),
-                    ..Default::default()
-                }),
-                Modification::AddSubtypes(vec![
-                    "Plains".into(),
-                    "Island".into(),
-                    "Swamp".into(),
-                    "Mountain".into(),
-                    "Forest".into(),
-                ]),
-            ),
-            Effect::DrawCards {
-                count: EffectValue::Fixed(1),
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Energybending".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    }),
+                    Modification::AddSubtypes(vec![
+                        "Plains".into(),
+                        "Island".into(),
+                        "Swamp".into(),
+                        "Mountain".into(),
+                        "Forest".into(),
+                    ]),
+                ),
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3257,27 +3489,30 @@ fn enter_the_avatar_state() -> CardDefinition {
     CardDefinition {
         key: "tla.enter_the_avatar_state",
         scryfall_id: "a8f3d2cb-d073-4df8-8769-49612628a377",
-        name: "Enter the Avatar State".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                Modification::AddSubtypes(vec!["Avatar".into()]),
-            ),
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                Modification::AddKeywords(Keywords::of(&[
-                    Keyword::Flying,
-                    Keyword::FirstStrike,
-                    Keyword::Lifelink,
-                    Keyword::Hexproof,
-                ])),
-            ),
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Enter the Avatar State".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddSubtypes(vec!["Avatar".into()]),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords::of(&[
+                        Keyword::Flying,
+                        Keyword::FirstStrike,
+                        Keyword::Lifelink,
+                        Keyword::Hexproof,
+                    ])),
+                ),
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3288,24 +3523,27 @@ fn fancy_footwork() -> CardDefinition {
     CardDefinition {
         key: "tla.fancy_footwork",
         scryfall_id: "9c59f8c5-4063-4e5a-b684-fde175c4a981",
-        name: "Fancy Footwork".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::ForEachTarget {
-            effects: vec![
-                Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::pump(2, 2),
-                ),
-            ],
-        }],
-        targeting: vec![TargetRequirement {
-            max: 2,
-            ..TargetRequirement::one(TargetSpec::Creature)
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Fancy Footwork".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::ForEachTarget {
+                effects: vec![
+                    Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        Modification::pump(2, 2),
+                    ),
+                ],
+            }],
+            targeting: vec![TargetRequirement {
+                max: 2,
+                ..TargetRequirement::one(TargetSpec::Creature)
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3316,21 +3554,24 @@ fn fatal_fissure() -> CardDefinition {
     CardDefinition {
         key: "tla.fatal_fissure",
         scryfall_id: "3343933d-4425-4ede-8d92-876bd0c6df60",
-        name: "Fatal Fissure".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        spell_effects: vec![Effect::CreateDelayedTrigger {
-            remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
-            event: DelayedEvent::Dies,
-            frequency: DelayedFrequency::Once,
-            expiry: DelayedExpiry::ThisTurn,
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(4),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Fatal Fissure".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::CreateDelayedTrigger {
+                remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
+                event: DelayedEvent::Dies,
+                frequency: DelayedFrequency::Once,
+                expiry: DelayedExpiry::ThisTurn,
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(4),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3341,19 +3582,22 @@ fn fated_firepower() -> CardDefinition {
     CardDefinition {
         key: "tla.fated_firepower",
         scryfall_id: "51352127-1f86-42e9-b4ca-2fd58b14e86b",
-        name: "Fated Firepower".into(),
-        mana_cost: Some(ManaCost::parse("{X}{R}{R}{R}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        keywords: Keywords::of(&[Keyword::Flash]),
-        replacement_effects: vec![
-            ReplacementEffect::EntersWithXCounters {
-                kind: CounterKind::Fire,
-            },
-            ReplacementEffect::OpponentDamagePlusCounters {
-                kind: CounterKind::Fire,
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Fated Firepower".into(),
+            mana_cost: Some(ManaCost::parse("{X}{R}{R}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            replacement_effects: vec![
+                ReplacementEffect::EntersWithXCounters {
+                    kind: CounterKind::Fire,
+                },
+                ReplacementEffect::OpponentDamagePlusCounters {
+                    kind: CounterKind::Fire,
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3364,36 +3608,38 @@ fn fire_lord_azula() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_lord_azula",
         scryfall_id: "bc6146bf-f0c6-4557-af6a-74c643d5fc01",
-        name: "Fire Lord Azula".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}{B}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Fire Lord Azula".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{B}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("RR"),
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("RR"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::WhileSourceAttacking {
-                    condition: Box::new(TriggerCondition::YouCastSpell {
-                        predicate: CardPredicate::default(),
-                    }),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::WhileSourceAttacking {
+                        condition: Box::new(TriggerCondition::casts(
+                            Actor::You,
+                            CardPredicate::default(),
+                        )),
+                    },
+                    effects: vec![Effect::CopyTriggeringObject],
                 },
-                effects: vec![Effect::CopyTriggeringObject],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3411,50 +3657,52 @@ fn fire_lord_zuko() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_lord_zuko",
         scryfall_id: "e62d3bcc-7bb4-42be-90a9-caf3c1caa29d",
-        name: "Fire Lord Zuko".into(),
-        mana_cost: Some(ManaCost::parse("{R}{W}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Fire Lord Zuko".into(),
+            mana_cost: Some(ManaCost::parse("{R}{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("R"),
+                        amount: EffectValue::SourcePower,
+                        until_end_of_combat: true,
+                    }],
                 },
-                intervening_if: None,
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("R"),
-                    amount: EffectValue::SourcePower,
-                    until_end_of_combat: true,
-                }],
-            },
-            // One printed ability with two trigger events (CR 603.2): no
-            // single event is both a cast and an entry from exile, so two
-            // triggered abilities fire exactly when it does.
-            Ability::Triggered {
-                condition: TriggerCondition::FromZone {
-                    zone: ZoneType::Exile,
-                    condition: Box::new(TriggerCondition::YouCastSpell {
-                        predicate: CardPredicate::default(),
-                    }),
+                // One printed ability with two trigger events (CR 603.2): no
+                // single event is both a cast and an entry from exile, so two
+                // triggered abilities fire exactly when it does.
+                Ability::Triggered {
+                    condition: TriggerCondition::FromZone {
+                        zone: ZoneType::Exile,
+                        condition: Box::new(TriggerCondition::casts(
+                            Actor::You,
+                            CardPredicate::default(),
+                        )),
+                    },
+                    intervening_if: None,
+                    effects: counter_each_creature(),
                 },
-                intervening_if: None,
-                effects: counter_each_creature(),
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::FromZone {
-                    zone: ZoneType::Exile,
-                    condition: Box::new(TriggerCondition::EntersTheBattlefield {
-                        subject: TriggerSubject::AnyYouControl(CardPredicate::default()),
-                    }),
+                Ability::Triggered {
+                    condition: TriggerCondition::FromZone {
+                        zone: ZoneType::Exile,
+                        condition: Box::new(TriggerCondition::EntersTheBattlefield {
+                            subject: TriggerSubject::you_control(CardPredicate::default()),
+                        }),
+                    },
+                    intervening_if: None,
+                    effects: counter_each_creature(),
                 },
-                intervening_if: None,
-                effects: counter_each_creature(),
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3465,12 +3713,15 @@ fn fire_nation_attacks() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_nation_attacks",
         scryfall_id: "9cc10845-8989-46ca-a57a-fd728fca0729",
-        name: "Fire Nation Attacks".into(),
-        mana_cost: Some(ManaCost::parse("{4}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::create_tokens("Soldier", 2)],
-        statics: vec![StaticAbility::Flashback(ManaCost::parse("{8}{R}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Fire Nation Attacks".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::create_tokens("token.soldier", 2)],
+            statics: vec![StaticAbility::Flashback(ManaCost::parse("{8}{R}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3481,41 +3732,45 @@ fn fire_nation_cadets() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_nation_cadets",
         scryfall_id: "1a3a862c-9c9a-41cd-94d1-2d0cff22a6cd",
-        name: "Fire Nation Cadets".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(1),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::ActiveIf {
-                active_if: Condition::GraveyardAtLeast {
-                    count: 1,
-                    predicate: CardPredicate {
-                        subtype: Some("Lesson".into()),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Fire Nation Cadets".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(1),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::GraveyardAtLeast {
+                        count: 1,
+                        predicate: CardPredicate {
+                            subtype: Some("Lesson".into()),
+                            ..Default::default()
+                        },
                     },
+                    condition: Box::new(TriggerCondition::attacks(
+                        TriggerSubject::This,
+                        Per::Object,
+                    )),
                 },
-                condition: Box::new(TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                }),
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("RR"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RR"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::pump(1, 0),
-            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(1, 0),
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -3530,34 +3785,37 @@ fn fire_nation_engineer() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_nation_engineer",
         scryfall_id: "5daba108-277d-46c8-ac35-7610f4786813",
-        name: "Fire Nation Engineer".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Artificer".into()],
-        power: Some(2),
-        toughness: Some(3),
-        // Attacking this turn cannot be undone, so the intervening-if
-        // condition still holds as the ability resolves (CR 603.4).
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
-            intervening_if: Some(Condition::AttackedThisTurn),
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    another: true,
-                    ..TargetRequirement::one(TargetSpec::PermanentYouControl {
-                        predicate: creature_or_vehicle.clone(),
-                    })
-                },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: creature_or_vehicle,
-                    }),
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
+        printed: PrintedCharacteristics {
+            name: "Fire Nation Engineer".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Artificer".into()],
+            power: Some(2),
+            toughness: Some(3),
+            // Attacking this turn cannot be undone, so the intervening-if
+            // condition still holds as the ability resolves (CR 603.4).
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        another: true,
+                        ..TargetRequirement::one(TargetSpec::PermanentYouControl {
+                            predicate: creature_or_vehicle.clone(),
+                        })
+                    },
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                            predicate: creature_or_vehicle,
+                        }),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3568,22 +3826,25 @@ fn fire_nation_raider() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_nation_raider",
         scryfall_id: "ede1bbdb-c726-46e3-aaf1-b8cf2be2c341",
-        name: "Fire Nation Raider".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(4),
-        toughness: Some(2),
-        // Attacking this turn cannot be undone, so the intervening-if
-        // condition still holds as the ability resolves (CR 603.4).
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: Some(Condition::AttackedThisTurn),
-            effects: vec![Effect::create_tokens("Clue", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Fire Nation Raider".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(4),
+            toughness: Some(2),
+            // Attacking this turn cannot be undone, so the intervening-if
+            // condition still holds as the ability resolves (CR 603.4).
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: Some(Condition::AttackedThisTurn),
+                effects: vec![Effect::create_tokens("token.clue", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3594,28 +3855,31 @@ fn fire_nation_palace() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_nation_palace",
         scryfall_id: "c91ac3f2-9fcd-4b41-a168-ae7f70b67d3c",
-        name: "Fire Nation Palace".into(),
-        types: CardTypes::new([CardType::Land]),
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("R"),
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{1}{R}"),
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                Modification::Firebending(4),
-            )],
-            ..Default::default()
-        }],
-        replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
-            predicate: CardPredicate {
-                supertype: Some("basic".into()),
-                card_type: Some(CardType::Land),
+        printed: PrintedCharacteristics {
+            name: "Fire Nation Palace".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("R"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{1}{R}"),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::Firebending(4),
+                )],
                 ..Default::default()
-            },
-        }],
-        text_box: text_box.into(),
+            }],
+            replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
+                predicate: CardPredicate {
+                    supertype: Some("basic".into()),
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                },
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3626,29 +3890,32 @@ fn fire_nation_warship() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_nation_warship",
         scryfall_id: "41ecc1de-353e-4131-b735-d2ce18c9c2d5",
-        name: "Fire Nation Warship".into(),
-        mana_cost: Some(ManaCost::parse("{3}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Vehicle".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Reach]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Clue", 1)],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            crew: Some(2),
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::BecomeCreature,
-            )],
+        printed: PrintedCharacteristics {
+            name: "Fire Nation Warship".into(),
+            mana_cost: Some(ManaCost::parse("{3}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Vehicle".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.clue", 1)],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                crew: Some(2),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::BecomeCreature,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -3659,37 +3926,42 @@ fn fire_navy_trebuchet() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_navy_trebuchet",
         scryfall_id: "e58372cc-9a89-47a4-a0db-df5435e26cd3",
-        name: "Fire Navy Trebuchet".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Artifact, CardType::Creature]),
-        subtypes: vec!["Wall".into()],
-        power: Some(0),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Defender, Keyword::Reach]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
-            },
-            intervening_if: None,
-            effects: vec![
-                Effect::CreateToken {
-                    token_name: "Ballistic Boulder".into(),
-                    count: EffectValue::Fixed(1),
-                    tapped_and_attacking: true,
-                },
-                Effect::CreateDelayedTrigger {
-                    remember: Some(ObjectSelector::CreatedThisWay),
-                    event: DelayedEvent::EndStep { your_turn: false },
-                    frequency: DelayedFrequency::Once,
-                    expiry: DelayedExpiry::Never,
-                    effects: vec![Effect::Sacrifice {
-                        what: ObjectSelector::Remembered,
-                        optional: false,
-                    }],
-                },
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Fire Navy Trebuchet".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+            subtypes: vec!["Wall".into()],
+            power: Some(0),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Defender, Keyword::Reach]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::you_control(CardPredicate::creature()),
+                    Per::Batch,
+                ),
+                intervening_if: None,
+                effects: vec![
+                    Effect::CreateToken {
+                        token: "token.ballistic_boulder".into(),
+                        count: EffectValue::Fixed(1),
+                        tapped_and_attacking: true,
+                        tapped: false,
+                    },
+                    Effect::CreateDelayedTrigger {
+                        remember: Some(ObjectSelector::CreatedThisWay),
+                        event: DelayedEvent::EndStep { your_turn: false },
+                        frequency: DelayedFrequency::Once,
+                        expiry: DelayedExpiry::Never,
+                        effects: vec![Effect::Sacrifice {
+                            what: ObjectSelector::Remembered,
+                            optional: false,
+                        }],
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3700,33 +3972,34 @@ fn fire_sages() -> CardDefinition {
     CardDefinition {
         key: "tla.fire_sages",
         scryfall_id: "71a9fa44-306f-417a-a9d9-991aff95025c",
-        name: "Fire Sages".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Cleric".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("R"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Fire Sages".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Cleric".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("R"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{1}{R}{R}"),
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}{R}{R}"),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -3737,38 +4010,41 @@ fn firebender_ascension() -> CardDefinition {
     CardDefinition {
         key: "tla.firebender_ascension",
         scryfall_id: "2929b702-03c6-4cf0-a3f7-61b27f4803be",
-        name: "Firebender Ascension".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::create_tokens("Soldier", 1)],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::YourAttackingCreatureTriggers,
-                intervening_if: None,
-                effects: vec![
-                    Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
-                    Effect::If {
-                        condition: Condition::SourceCountersAtLeast {
-                            kind: CounterKind::Quest,
-                            count: 4,
-                        },
-                        then: vec![Effect::OptionalPayment {
-                            cost: PaymentCost::Mana(ManaCost::default()),
-                            if_paid: vec![Effect::CopyTriggeringObject],
-                            if_declined: vec![],
-                        }],
-                        otherwise: vec![],
+        printed: PrintedCharacteristics {
+            name: "Firebender Ascension".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+                    intervening_if: None,
+                    effects: vec![Effect::create_tokens("token.soldier", 1)],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::YourAttackingCreatureTriggers,
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
+                        Effect::If {
+                            condition: Condition::SourceCountersAtLeast {
+                                kind: CounterKind::Quest,
+                                count: 4,
+                            },
+                            then: vec![Effect::OptionalPayment {
+                                cost: PaymentCost::Mana(ManaCost::default()),
+                                if_paid: vec![Effect::CopyTriggeringObject],
+                                if_declined: vec![],
+                            }],
+                            otherwise: vec![],
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3779,24 +4055,27 @@ fn firebending_lesson() -> CardDefinition {
     CardDefinition {
         key: "tla.firebending_lesson",
         scryfall_id: "fa940e68-010e-4b68-be8a-555d7068f7b4",
-        name: "Firebending Lesson".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::If {
-            condition: Condition::Kicked,
-            then: vec![Effect::deal_damage(
-                5,
-                ObjectSelector::Target(TargetSpec::Creature),
-            )],
-            otherwise: vec![Effect::deal_damage(
-                2,
-                ObjectSelector::Target(TargetSpec::Creature),
-            )],
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Firebending Lesson".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::If {
+                condition: Condition::Kicked,
+                then: vec![Effect::deal_damage(
+                    5,
+                    ObjectSelector::Target(TargetSpec::Creature),
+                )],
+                otherwise: vec![Effect::deal_damage(
+                    2,
+                    ObjectSelector::Target(TargetSpec::Creature),
+                )],
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3807,39 +4086,41 @@ fn firebending_student() -> CardDefinition {
     CardDefinition {
         key: "tla.firebending_student",
         scryfall_id: "3b366f59-16fe-43cb-888d-1f93ef8fd332",
-        name: "Firebending Student".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Monk".into()],
-        power: Some(1),
-        toughness: Some(2),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
+        printed: PrintedCharacteristics {
+            name: "Firebending Student".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Monk".into()],
+            power: Some(1),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate {
+                            not_card_types: vec![CardType::Creature],
+                            ..Default::default()
+                        },
+                    ),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::pump(1, 1),
+                    )],
                 },
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("R"),
+                        amount: EffectValue::SourcePower,
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("R"),
-                    amount: EffectValue::SourcePower,
-                    until_end_of_combat: true,
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3851,29 +4132,32 @@ fn first_time_flyer() -> CardDefinition {
     CardDefinition {
         key: "tla.first_time_flyer",
         scryfall_id: "ea22d29d-3a62-4ae2-91d5-21a678be9b48",
-        name: "First-Time Flyer".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::This,
-            condition: Some(Condition::GraveyardAtLeast {
-                count: 1,
-                predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
-                    ..Default::default()
-                },
-            }),
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "First-Time Flyer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::This,
+                condition: Some(Condition::GraveyardAtLeast {
+                    count: 1,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
+                }),
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3884,26 +4168,29 @@ fn flexible_waterbender() -> CardDefinition {
     CardDefinition {
         key: "tla.flexible_waterbender",
         scryfall_id: "1447ebce-7e48-4b21-a39c-740920538bdd",
-        name: "Flexible Waterbender".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(5),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{3}"),
-            waterbend: true,
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::SetBasePt {
-                    power: Some(EffectValue::Fixed(5)),
-                    toughness: Some(EffectValue::Fixed(2)),
-                },
-            )],
+        printed: PrintedCharacteristics {
+            name: "Flexible Waterbender".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}"),
+                waterbend: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::SetBasePt {
+                        power: Some(EffectValue::Fixed(5)),
+                        toughness: Some(EffectValue::Fixed(2)),
+                    },
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -3914,37 +4201,40 @@ fn flopsie_bumi_s_buddy() -> CardDefinition {
     CardDefinition {
         key: "tla.flopsie_bumi_s_buddy",
         scryfall_id: "082f4abc-c09f-42cf-977f-060875dfd411",
-        name: "Flopsie, Bumi's Buddy".into(),
-        mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Ape".into(), "Goat".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::put_counters(
-                ObjectSelector::each_you_control(CardPredicate {
+        printed: PrintedCharacteristics {
+            name: "Flopsie, Bumi's Buddy".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Ape".into(), "Goat".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::YouControl(CardPredicate {
+                    min_power: Some(4),
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 }),
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-        }],
-        statics: vec![StaticAbility::Restriction(StaticRestriction {
-            scope: StaticScope::YouControl(CardPredicate {
-                min_power: Some(4),
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            }),
-            kind: Restriction::CantBeBlockedByMoreThanOne,
-            unless: None,
-        })],
-        text_box: text_box.into(),
+                kind: Restriction::CantBeBlockedByMoreThanOne,
+                unless: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3955,26 +4245,29 @@ fn foggy_bottom_swamp() -> CardDefinition {
     CardDefinition {
         key: "tla.foggy_bottom_swamp",
         scryfall_id: "226af626-873d-4bd2-b889-000f8316786f",
-        name: "Foggy Bottom Swamp".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["B", "G"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Foggy Bottom Swamp".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["B", "G"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -3985,18 +4278,21 @@ fn foggy_swamp_hunters() -> CardDefinition {
     CardDefinition {
         key: "tla.foggy_swamp_hunters",
         scryfall_id: "3f6e5869-ca25-4b98-a844-8a498cb40aab",
-        name: "Foggy Swamp Hunters".into(),
-        mana_cost: Some(ManaCost::parse("{3}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Ranger".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(4),
-        statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-            scope: StaticScope::This,
-            condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
-            keywords: Keywords::of(&[Keyword::Lifelink, Keyword::Menace]),
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Foggy Swamp Hunters".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Ranger".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(4),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::This,
+                condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
+                keywords: Keywords::of(&[Keyword::Lifelink, Keyword::Menace]),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4007,19 +4303,25 @@ fn foggy_swamp_spirit_keeper() -> CardDefinition {
     CardDefinition {
         key: "tla.foggy_swamp_spirit_keeper",
         scryfall_id: "cd624be9-e960-4485-a8a9-2d5f2dd51777",
-        name: "Foggy Swamp Spirit Keeper".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Druid".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Lifelink]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-            effects: vec![Effect::create_tokens("Spirit", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Foggy Swamp Spirit Keeper".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Druid".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Lifelink]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Draws {
+                    who: Actor::You,
+                    nth: Some(2),
+                },
+                effects: vec![Effect::create_tokens("token.spirit", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4030,30 +4332,33 @@ fn foggy_swamp_vinebender() -> CardDefinition {
     CardDefinition {
         key: "tla.foggy_swamp_vinebender",
         scryfall_id: "78a75317-94f7-47a4-b4da-5a027fa73248",
-        name: "Foggy Swamp Vinebender".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Plant".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(3),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            own_turn_only: true,
-            mana_cost: ManaCost::parse("{5}"),
-            waterbend: true,
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-            ..Default::default()
-        }],
-        statics: vec![StaticAbility::BlockRestriction(
-            BlockRestriction::CantBeBlockedBy(CardPredicate {
-                max_power: Some(2),
+        printed: PrintedCharacteristics {
+            name: "Foggy Swamp Vinebender".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Plant".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(3),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                own_turn_only: true,
+                mana_cost: ManaCost::parse("{5}"),
+                waterbend: true,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
                 ..Default::default()
-            }),
-        )],
-        text_box: text_box.into(),
+            }],
+            statics: vec![StaticAbility::BlockRestriction(
+                BlockRestriction::CantBeBlockedBy(CardPredicate {
+                    max_power: Some(2),
+                    ..Default::default()
+                }),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4067,34 +4372,37 @@ fn foggy_swamp_visions() -> CardDefinition {
     CardDefinition {
         key: "tla.foggy_swamp_visions",
         scryfall_id: "3a46deaa-88f7-4eec-aa99-b85073847918",
-        name: "Foggy Swamp Visions".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
-        targeting: vec![TargetRequirement {
-            max_x: true,
-            ..TargetRequirement::one(creature_card())
-        }],
-        spell_effects: vec![Effect::ForEachTarget {
-            effects: vec![
-                Effect::exile(ObjectSelector::Target(creature_card())),
-                Effect::CreateTokenCopy {
-                    of: Some(creature_card()),
-                    exceptions: vec![],
-                },
-                Effect::CreateDelayedTrigger {
-                    remember: Some(ObjectSelector::CreatedThisWay),
-                    event: DelayedEvent::EndStep { your_turn: true },
-                    frequency: DelayedFrequency::Once,
-                    expiry: DelayedExpiry::Never,
-                    effects: vec![Effect::Sacrifice {
-                        what: ObjectSelector::Remembered,
-                        optional: false,
-                    }],
-                },
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Foggy Swamp Visions".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}"))],
+            targeting: vec![TargetRequirement {
+                max_x: true,
+                ..TargetRequirement::one(creature_card())
+            }],
+            spell_effects: vec![Effect::ForEachTarget {
+                effects: vec![
+                    Effect::exile(ObjectSelector::Target(creature_card())),
+                    Effect::CreateTokenCopy {
+                        of: ObjectSelector::Target(creature_card()),
+                        exceptions: vec![],
+                    },
+                    Effect::CreateDelayedTrigger {
+                        remember: Some(ObjectSelector::CreatedThisWay),
+                        event: DelayedEvent::EndStep { your_turn: true },
+                        frequency: DelayedFrequency::Once,
+                        expiry: DelayedExpiry::Never,
+                        effects: vec![Effect::Sacrifice {
+                            what: ObjectSelector::Remembered,
+                            optional: false,
+                        }],
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4105,20 +4413,23 @@ fn forecasting_fortune_teller() -> CardDefinition {
     CardDefinition {
         key: "tla.forecasting_fortune_teller",
         scryfall_id: "023e7ad4-6af0-4f29-a716-27a313974227",
-        name: "Forecasting Fortune Teller".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Advisor".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Clue", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Forecasting Fortune Teller".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Advisor".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.clue", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4129,22 +4440,25 @@ fn gather_the_white_lotus() -> CardDefinition {
     CardDefinition {
         key: "tla.gather_the_white_lotus",
         scryfall_id: "96e2b3d0-f060-4f3c-9d12-a0444b202008",
-        name: "Gather the White Lotus".into(),
-        mana_cost: Some(ManaCost::parse("{4}{W}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::create_tokens(
-                "Ally",
-                EffectValue::BattlefieldMatching {
-                    predicate: CardPredicate {
-                        subtype: Some("Plains".into()),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Gather the White Lotus".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::create_tokens(
+                    "token.ally",
+                    EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            subtype: Some("Plains".into()),
+                            ..Default::default()
+                        },
                     },
-                },
-            ),
-            Effect::Scry { count: 2 },
-        ],
-        text_box: text_box.into(),
+                ),
+                Effect::Scry { count: 2 },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4155,25 +4469,28 @@ fn geyser_leaper() -> CardDefinition {
     CardDefinition {
         key: "tla.geyser_leaper",
         scryfall_id: "4d25428d-e5a5-43c4-8544-43120ed1c4d5",
-        name: "Geyser Leaper".into(),
-        mana_cost: Some(ManaCost::parse("{4}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{4}"),
-            waterbend: true,
-            effects: vec![
-                Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                },
-                Effect::discard(),
-            ],
+        printed: PrintedCharacteristics {
+            name: "Geyser Leaper".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}"),
+                waterbend: true,
+                effects: vec![
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    },
+                    Effect::discard(),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -4184,38 +4501,41 @@ fn giant_koi() -> CardDefinition {
     CardDefinition {
         key: "tla.giant_koi",
         scryfall_id: "3938ec1f-979c-48e5-bb13-bebace006a8f",
-        name: "Giant Koi".into(),
-        mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Fish".into()],
-        power: Some(5),
-        toughness: Some(7),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                zone: ActivationZone::Hand,
-                discard_source: true,
-                mana_cost: ManaCost::parse("{2}"),
-                effects: vec![Effect::search_library(
-                    CardPredicate {
-                        subtype: Some("Island".into()),
-                        ..Default::default()
-                    },
-                    EffectValue::Fixed(1),
-                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                )],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                mana_cost: ManaCost::parse("{3}"),
-                waterbend: true,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::CantBeBlocked,
-                )],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Giant Koi".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Fish".into()],
+            power: Some(5),
+            toughness: Some(7),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    zone: ActivationZone::Hand,
+                    discard_source: true,
+                    mana_cost: ManaCost::parse("{2}"),
+                    effects: vec![Effect::search_library(
+                        CardPredicate {
+                            subtype: Some("Island".into()),
+                            ..Default::default()
+                        },
+                        EffectValue::Fixed(1),
+                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    )],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    mana_cost: ManaCost::parse("{3}"),
+                    waterbend: true,
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::CantBeBlocked,
+                    )],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4226,21 +4546,24 @@ fn glider_kids() -> CardDefinition {
     CardDefinition {
         key: "tla.glider_kids",
         scryfall_id: "0613afb5-4cee-4132-8adf-404767ed8d07",
-        name: "Glider Kids".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Scry { count: 1 }],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Glider Kids".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Scry { count: 1 }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4251,50 +4574,53 @@ fn glider_staff() -> CardDefinition {
     CardDefinition {
         key: "tla.glider_staff",
         scryfall_id: "7517f2eb-a24d-49f6-82bf-08de55d3789a",
-        name: "Glider Staff".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Equipment".into()],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    ..TargetRequirement::one(TargetSpec::Creature)
+        printed: PrintedCharacteristics {
+            name: "Glider Staff".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::Airbend {
-                    what: ObjectSelector::Target(TargetSpec::Creature),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        ..TargetRequirement::one(TargetSpec::Creature)
+                    },
+                    effects: vec![Effect::Airbend {
+                        what: ObjectSelector::Target(TargetSpec::Creature),
+                    }],
                 }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sorcery_timing: true,
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
             }],
+            statics: vec![
+                StaticAbility::PtBuff(StaticPtBuff {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    power: 1,
+                    toughness: 1,
+                    per_creature_type_max: None,
+                    per_color_among: None,
+                    per_graveyard_matching: None,
+                }),
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::Flying]),
+                }),
+            ],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        statics: vec![
-            StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            }),
-            StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: StaticScope::Attached,
-                condition: None,
-                keywords: Keywords::of(&[Keyword::Flying]),
-            }),
-        ],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -4305,41 +4631,44 @@ fn gran_gran() -> CardDefinition {
     CardDefinition {
         key: "tla.gran_gran",
         scryfall_id: "fa434b41-e5f7-4989-865a-95db67b05cb1",
-        name: "Gran-Gran".into(),
-        mana_cost: Some(ManaCost::parse("{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(2),
-        statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
-            first_on_own_turn: false,
-            predicate: CardPredicate {
-                not_card_types: vec![CardType::Creature],
-                ..Default::default()
-            },
-            condition: Condition::GraveyardAtLeast {
-                count: 3,
+        printed: PrintedCharacteristics {
+            name: "Gran-Gran".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(2),
+            statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
+                first_on_own_turn: false,
                 predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
+                    not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
-            },
-            generic: 1,
-        })],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::BecomesTapped {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
+                condition: Condition::GraveyardAtLeast {
+                    count: 3,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
                 },
-                Effect::discard(),
-            ],
-        }],
-        text_box: text_box.into(),
+                generic: 1,
+            })],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::BecomesTapped {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    },
+                    Effect::discard(),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4350,23 +4679,26 @@ fn great_divide_guide() -> CardDefinition {
     CardDefinition {
         key: "tla.great_divide_guide",
         scryfall_id: "cc3063ec-5ea6-46c1-8331-c740cbaf6c76",
-        name: "Great Divide Guide".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Scout".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        statics: vec![
-            StaticAbility::GrantsAnyColorManaAbility(CardPredicate {
-                card_type: Some(CardType::Land),
-                ..Default::default()
-            }),
-            StaticAbility::GrantsAnyColorManaAbility(CardPredicate {
-                subtype: Some("Ally".into()),
-                ..Default::default()
-            }),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Great Divide Guide".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Scout".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            statics: vec![
+                StaticAbility::GrantsAnyColorManaAbility(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
+                StaticAbility::GrantsAnyColorManaAbility(CardPredicate {
+                    subtype: Some("Ally".into()),
+                    ..Default::default()
+                }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4381,48 +4713,49 @@ fn guru_pathik() -> CardDefinition {
     CardDefinition {
         key: "tla.guru_pathik",
         scryfall_id: "224a2241-0dce-4008-8d9c-86db40ec5f8b",
-        name: "Guru Pathik".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G/U}{G/U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Monk".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::LookAndSelect {
-                    to_battlefield: false,
-                    random_order: true,
-                    reveal: true,
-                    look: EffectValue::Fixed(5),
-                    min_select: 0,
-                    max_select: 1,
-                    predicate: lesson_saga_or_shrine.clone(),
-                }],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: lesson_saga_or_shrine,
-                },
-                intervening_if: None,
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        another: true,
-                        ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+        printed: PrintedCharacteristics {
+            name: "Guru Pathik".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G/U}{G/U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Monk".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    effects: vec![Effect::put_counters(
-                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    )],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                    intervening_if: None,
+                    effects: vec![Effect::LookAndSelect {
+                        to_battlefield: false,
+                        random_order: true,
+                        reveal: true,
+                        look: EffectValue::Fixed(5),
+                        min_select: 0,
+                        max_select: 1,
+                        predicate: lesson_saga_or_shrine.clone(),
+                    }],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::casts(Actor::You, lesson_saga_or_shrine),
+                    intervening_if: None,
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            another: true,
+                            ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                        },
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4433,42 +4766,45 @@ fn hakoda_selfless_commander() -> CardDefinition {
     CardDefinition {
         key: "tla.hakoda_selfless_commander",
         scryfall_id: "9aef3ddb-9bb7-42c8-975b-b1917955a416",
-        name: "Hakoda, Selfless Commander".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(5),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        statics: vec![
-            StaticAbility::LookAtLibraryTop,
-            StaticAbility::CastFromLibraryTop(CardPredicate {
-                subtype: Some("Ally".into()),
-                ..Default::default()
-            }),
-        ],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sacrifice_source: true,
-            effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::each_you_control(CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
-                    }),
-                    Modification::pump(0, 5),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::each_you_control(CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
-                    }),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-                ),
+        printed: PrintedCharacteristics {
+            name: "Hakoda, Selfless Commander".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            statics: vec![
+                StaticAbility::LookAtLibraryTop,
+                StaticAbility::CastFromLibraryTop(CardPredicate {
+                    subtype: Some("Ally".into()),
+                    ..Default::default()
+                }),
             ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sacrifice_source: true,
+                effects: vec![
+                    Effect::until_end_of_turn(
+                        ObjectSelector::each_you_control(CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        }),
+                        Modification::pump(0, 5),
+                    ),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::each_you_control(CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        }),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                    ),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -4479,37 +4815,40 @@ fn hama_the_bloodbender() -> CardDefinition {
     CardDefinition {
         key: "tla.hama_the_bloodbender",
         scryfall_id: "6fa1197d-7b19-4d86-81e2-5c87de87757b",
-        name: "Hama, the Bloodbender".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U/B}{U/B}{U/B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warlock".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::MillCards {
-                    count: EffectValue::Fixed(3),
-                    target: Some(TargetSpec::Opponent),
+        printed: PrintedCharacteristics {
+            name: "Hama, the Bloodbender".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U/B}{U/B}{U/B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warlock".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                Effect::ExileLinked {
-                    chooser: LinkedChooser::Controller,
-                    zone: ZoneType::Graveyard,
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Creature, CardType::Land],
-                        ..Default::default()
+                effects: vec![
+                    Effect::MillCards {
+                        count: EffectValue::Fixed(3),
+                        target: Some(TargetSpec::Opponent),
                     },
-                    up_to: true,
-                    grant: LinkedGrant::WaterbendManaValue,
-                    target: TargetSpec::Opponent,
-                },
-            ],
-        }],
-        text_box: text_box.into(),
+                    Effect::ExileLinked {
+                        chooser: LinkedChooser::Controller,
+                        zone: ZoneType::Graveyard,
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Creature, CardType::Land],
+                            ..Default::default()
+                        },
+                        up_to: true,
+                        grant: LinkedGrant::WaterbendManaValue,
+                        target: TargetSpec::Opponent,
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4520,27 +4859,30 @@ fn haru_hidden_talent() -> CardDefinition {
     CardDefinition {
         key: "tla.haru_hidden_talent",
         scryfall_id: "9657a0c0-2c26-4331-8e62-f032265a01af",
-        name: "Haru, Hidden Talent".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                    subtype: Some("Ally".into()),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(1),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Haru, Hidden Talent".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(1),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4551,40 +4893,43 @@ fn heartless_act() -> CardDefinition {
     CardDefinition {
         key: "tla.heartless_act",
         scryfall_id: "b57c57a8-d72b-4c6c-a2db-a7ef61190f42",
-        name: "Heartless Act".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            no_counters: true,
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
-                        },
-                    }),
-                    effects: vec![Effect::destroy(ObjectSelector::Target(
-                        TargetSpec::Permanent {
+        printed: PrintedCharacteristics {
+            name: "Heartless Act".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::Permanent {
                             predicate: CardPredicate {
                                 no_counters: true,
                                 card_type: Some(CardType::Creature),
                                 ..Default::default()
                             },
-                        },
-                    ))],
-                }],
-                vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(TargetSpec::Creature),
-                    effects: vec![Effect::RemoveCounters {
-                        from: ObjectSelector::Target(TargetSpec::Creature),
-                        up_to: 3,
-                        chosen: None,
+                        }),
+                        effects: vec![Effect::destroy(ObjectSelector::Target(
+                            TargetSpec::Permanent {
+                                predicate: CardPredicate {
+                                    no_counters: true,
+                                    card_type: Some(CardType::Creature),
+                                    ..Default::default()
+                                },
+                            },
+                        ))],
                     }],
-                }],
-            ],
-        }],
-        text_box: text_box.into(),
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::Creature),
+                        effects: vec![Effect::RemoveCounters {
+                            from: ObjectSelector::Target(TargetSpec::Creature),
+                            up_to: 3,
+                            chosen: None,
+                        }],
+                    }],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4611,40 +4956,41 @@ fn hei_bai_spirit_of_balance() -> CardDefinition {
     CardDefinition {
         key: "tla.hei_bai_spirit_of_balance",
         scryfall_id: "060d24e0-1567-41f1-ae8c-2d3b1834df3c",
-        name: "Hei Bai, Spirit of Balance".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W/B}{W/B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Bear".into(), "Spirit".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Hei Bai, Spirit of Balance".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W/B}{W/B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Bear".into(), "Spirit".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: feed(),
                 },
-                intervening_if: None,
-                effects: feed(),
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: feed(),
                 },
-                intervening_if: None,
-                effects: feed(),
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::LeavesTheBattlefield {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    condition: TriggerCondition::LeavesTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::PutCountersFrom {
+                        from: ObjectSelector::This,
+                        on: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    }],
                 },
-                intervening_if: None,
-                effects: vec![Effect::PutCountersFrom {
-                    from: ObjectSelector::This,
-                    on: ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4655,25 +5001,30 @@ fn hermitic_herbalist() -> CardDefinition {
     CardDefinition {
         key: "tla.hermitic_herbalist",
         scryfall_id: "5d0ee441-a057-41b5-abb8-dc86864ac248",
-        name: "Hermitic Herbalist".into(),
-        mana_cost: Some(ManaCost::parse("{U}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Druid".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![one_mana_of_any_color(None)],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![two_mana_in_any_combination(ManaUse::spell(["Lesson"]))],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Hermitic Herbalist".into(),
+            mana_cost: Some(ManaCost::parse("{U}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Druid".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![one_mana_of_any_color(None)],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![two_mana_in_any_combination(ManaRestriction::spell([
+                        "Lesson",
+                    ]))],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4684,37 +5035,40 @@ fn hog_monkey() -> CardDefinition {
     CardDefinition {
         key: "tla.hog_monkey",
         scryfall_id: "4f442970-5355-4abf-8684-17daaa8e469b",
-        name: "Hog-Monkey".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Boar".into(), "Monkey".into()],
-        power: Some(3),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::BeginningOfYourCombat,
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                    predicate: CardPredicate {
-                        with_counter: true,
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
-                    },
-                }),
-                Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
-            )],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            exhaust: true,
-            mana_cost: ManaCost::parse("{5}"),
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::PlusOnePlusOne,
-                2,
-            )],
+        printed: PrintedCharacteristics {
+            name: "Hog-Monkey".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Boar".into(), "Monkey".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate {
+                            with_counter: true,
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                    }),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                )],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                mana_cost: ManaCost::parse("{5}"),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    2,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -4725,40 +5079,43 @@ fn honest_work() -> CardDefinition {
     CardDefinition {
         key: "tla.honest_work",
         scryfall_id: "57e0ccb0-22f0-4e4d-9a47-c4fec2c7f251",
-        name: "Honest Work".into(),
-        mana_cost: Some(ManaCost::parse("{U}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Aura".into()],
-        statics: vec![
-            StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
-                named: "Humble Merchant".into(),
-                creature_types: vec!["Citizen".into()],
-                power: 1,
-                toughness: 1,
-            }),
-            StaticAbility::AttachedHas(ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::add_mana(Mana::parse("1"))],
-                ..Default::default()
-            }),
-        ],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::tap(ObjectSelector::Attached),
-                Effect::RemoveAllCounters {
-                    from: ObjectSelector::Attached,
-                },
+        printed: PrintedCharacteristics {
+            name: "Honest Work".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            statics: vec![
+                StaticAbility::AttachedSetsCharacteristics(SetCharacteristics {
+                    named: "Humble Merchant".into(),
+                    creature_types: vec!["Citizen".into()],
+                    power: 1,
+                    toughness: 1,
+                }),
+                StaticAbility::AttachedHas(ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::add_mana(Mana::parse("1"))],
+                    ..Default::default()
+                }),
             ],
-        }],
-        spell_effects: vec![Effect::AttachSourceTo {
-            what: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::CreatureOpponentControls)],
-        text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![
+                    Effect::tap(ObjectSelector::Attached),
+                    Effect::RemoveAllCounters {
+                        from: ObjectSelector::Attached,
+                    },
+                ],
+            }],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::CreatureOpponentControls)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4769,27 +5126,33 @@ fn how_to_start_a_riot() -> CardDefinition {
     CardDefinition {
         key: "tla.how_to_start_a_riot",
         scryfall_id: "23b3bf1e-ea85-47f5-8473-4d16615f68d7",
-        name: "How to Start a Riot".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::TargetClause {
-                requirement: TargetRequirement::one(TargetSpec::Creature),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::Creature),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
-                )],
-            },
-            Effect::TargetClause {
-                requirement: TargetRequirement::one(TargetSpec::Player),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
-                    Modification::pump(2, 0),
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "How to Start a Riot".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Creature),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::Creature),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Menace])),
+                    )],
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Player),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::each(
+                            Scope::TargetPlayerControls,
+                            CardPredicate::creature(),
+                        ),
+                        Modification::pump(2, 0),
+                    )],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4800,27 +5163,31 @@ fn iguana_parrot() -> CardDefinition {
     CardDefinition {
         key: "tla.iguana_parrot",
         scryfall_id: "7faa3e3d-c08a-4908-85ef-1370d3f90815",
-        name: "Iguana Parrot".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Lizard".into(), "Bird".into(), "Pirate".into()],
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::YouCastSpell {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
-            },
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::pump(1, 1),
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Iguana Parrot".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Lizard".into(), "Bird".into(), "Pirate".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                ),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(1, 1),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4831,21 +5198,24 @@ fn invasion_reinforcements() -> CardDefinition {
     CardDefinition {
         key: "tla.invasion_reinforcements",
         scryfall_id: "b8845bba-d116-43cd-8ae0-e553f3324d66",
-        name: "Invasion Reinforcements".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flash]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Ally", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Invasion Reinforcements".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.ally", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4856,49 +5226,52 @@ fn invasion_submersible() -> CardDefinition {
     CardDefinition {
         key: "tla.invasion_submersible",
         scryfall_id: "af5299f5-1633-4c07-ade5-fd47e29ea4aa",
-        name: "Invasion Submersible".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Vehicle".into()],
-        power: Some(0),
-        toughness: Some(0),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    another: true,
-                    ..TargetRequirement::one(TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            not_card_types: vec![CardType::Land],
-                            ..Default::default()
-                        },
-                    })
+        printed: PrintedCharacteristics {
+            name: "Invasion Submersible".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Vehicle".into()],
+            power: Some(0),
+            toughness: Some(0),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::return_to_hand(ObjectSelector::Target(
-                    TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            not_card_types: vec![CardType::Land],
-                            ..Default::default()
-                        },
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        another: true,
+                        ..TargetRequirement::one(TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                not_card_types: vec![CardType::Land],
+                                ..Default::default()
+                            },
+                        })
                     },
-                ))],
+                    effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                not_card_types: vec![CardType::Land],
+                                ..Default::default()
+                            },
+                        },
+                    ))],
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            exhaust: true,
-            mana_cost: ManaCost::parse("{3}"),
-            waterbend: true,
-            effects: vec![
-                Effect::indefinitely(ObjectSelector::This, Modification::BecomeCreature),
-                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 3),
-            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                mana_cost: ManaCost::parse("{3}"),
+                waterbend: true,
+                effects: vec![
+                    Effect::indefinitely(ObjectSelector::This, Modification::BecomeCreature),
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 3),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -4909,34 +5282,39 @@ fn invasion_tactics() -> CardDefinition {
     CardDefinition {
         key: "tla.invasion_tactics",
         scryfall_id: "27c6330d-49f6-4707-b4d4-d1411fa422eb",
-        name: "Invasion Tactics".into(),
-        mana_cost: Some(ManaCost::parse("{4}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::each_you_control(CardPredicate::creature()),
-                    Modification::pump(2, 2),
-                )],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::OneOrMoreDealCombatDamageToPlayer {
-                    predicate: CardPredicate {
-                        subtype: Some("Ally".into()),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Invasion Tactics".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
+                    intervening_if: None,
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::each_you_control(CardPredicate::creature()),
+                        Modification::pump(2, 2),
+                    )],
                 },
-                intervening_if: None,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    condition: TriggerCondition::DealsCombatDamage {
+                        subject: TriggerSubject::you_control(CardPredicate {
+                            subtype: Some("Ally".into()),
+                            ..Default::default()
+                        }),
+                        to: Actor::AnyPlayer,
+                        per: Per::Batch,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4947,26 +5325,27 @@ fn iroh_grand_lotus() -> CardDefinition {
     CardDefinition {
         key: "tla.iroh_grand_lotus",
         scryfall_id: "879b73d3-4552-4fdc-baee-c4d097ae9a4f",
-        name: "Iroh, Grand Lotus".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}{R}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
-        power: Some(5),
-        toughness: Some(5),
-        statics: vec![StaticAbility::GraveyardSpellsHaveFlashback],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("RR"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Iroh, Grand Lotus".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{R}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+            power: Some(5),
+            toughness: Some(5),
+            statics: vec![StaticAbility::GraveyardSpellsHaveFlashback],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RR"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -4977,23 +5356,26 @@ fn iroh_s_demonstration() -> CardDefinition {
     CardDefinition {
         key: "tla.iroh_s_demonstration",
         scryfall_id: "18d15fed-1f8f-4407-a221-a47ce75001a8",
-        name: "Iroh's Demonstration".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::deal_damage(
-                    1,
-                    ObjectSelector::each(Scope::OpponentsControl, CardPredicate::creature()),
-                )],
-                vec![Effect::deal_damage(
-                    4,
-                    ObjectSelector::Target(TargetSpec::Creature),
-                )],
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Iroh's Demonstration".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::deal_damage(
+                        1,
+                        ObjectSelector::each(Scope::OpponentsControl, CardPredicate::creature()),
+                    )],
+                    vec![Effect::deal_damage(
+                        4,
+                        ObjectSelector::Target(TargetSpec::Creature),
+                    )],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5007,58 +5389,61 @@ fn iroh_tea_master() -> CardDefinition {
     CardDefinition {
         key: "tla.iroh_tea_master",
         scryfall_id: "d1f5e10d-0a89-4129-9717-a921f20d3616",
-        name: "Iroh, Tea Master".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Iroh, Tea Master".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::create_tokens("token.food", 1)],
                 },
-                intervening_if: None,
-                effects: vec![Effect::create_tokens("Food", 1)],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::BeginningOfYourCombat,
-                intervening_if: None,
-                // In a two-player game the target opponent is the opponent.
-                effects: vec![
-                    Effect::TargetClause {
-                        requirement: TargetRequirement::one(TargetSpec::Opponent),
-                        effects: vec![],
-                    },
-                    Effect::TargetClause {
-                        requirement: TargetRequirement::one(yours()),
-                        effects: vec![Effect::OptionalPayment {
-                            cost: PaymentCost::Mana(ManaCost::default()),
-                            if_paid: vec![
-                                Effect::GainControl {
-                                    player: PlayerSelector::EachOpponent,
-                                    what: ObjectSelector::Target(yours()),
-                                    duration: EffectDuration::Indefinite,
-                                },
-                                Effect::WhenYouDo {
-                                    effects: vec![
-                                        Effect::create_tokens("Ally", 1),
-                                        Effect::put_counters(
-                                            ObjectSelector::CreatedThisWay,
-                                            CounterKind::PlusOnePlusOne,
-                                            EffectValue::OwnedPermanentsOpponentsControl,
-                                        ),
-                                    ],
-                                },
-                            ],
-                            if_declined: vec![],
-                        }],
-                    },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
+                    intervening_if: None,
+                    // In a two-player game the target opponent is the opponent.
+                    effects: vec![
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(TargetSpec::Opponent),
+                            effects: vec![],
+                        },
+                        Effect::TargetClause {
+                            requirement: TargetRequirement::one(yours()),
+                            effects: vec![Effect::OptionalPayment {
+                                cost: PaymentCost::Mana(ManaCost::default()),
+                                if_paid: vec![
+                                    Effect::GainControl {
+                                        player: PlayerSelector::EachOpponent,
+                                        what: ObjectSelector::Target(yours()),
+                                        duration: EffectDuration::Indefinite,
+                                    },
+                                    Effect::WhenYouDo {
+                                        effects: vec![
+                                            Effect::create_tokens("token.ally", 1),
+                                            Effect::put_counters(
+                                                ObjectSelector::CreatedThisWay,
+                                                CounterKind::PlusOnePlusOne,
+                                                EffectValue::OwnedPermanentsOpponentsControl,
+                                            ),
+                                        ],
+                                    },
+                                ],
+                                if_declined: vec![],
+                            }],
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5069,15 +5454,18 @@ fn itll_quench_ya() -> CardDefinition {
     CardDefinition {
         key: "tla.itll_quench_ya",
         scryfall_id: "47c25e41-f43c-4447-81b5-b9631448bd29",
-        name: "It'll Quench Ya!".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::CounterUnlessPays {
-            cost: PaymentCost::Mana(ManaCost::parse("{2}")),
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::Spell)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "It'll Quench Ya!".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::CounterUnlessPays {
+                cost: PaymentCost::Mana(ManaCost::parse("{2}")),
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::Spell)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5088,28 +5476,31 @@ fn jasmine_dragon_tea_shop() -> CardDefinition {
     CardDefinition {
         key: "tla.jasmine_dragon_tea_shop",
         scryfall_id: "da2c83d4-a95f-47ff-a08f-694eb78d6b9b",
-        name: "Jasmine Dragon Tea Shop".into(),
-        types: CardTypes::new([CardType::Land]),
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("1"),
-        }],
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![one_mana_of_any_color(Some(ManaUse::new(
-                    ["Ally"],
-                    ["Ally"],
-                )))],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{5}"),
-                effects: vec![Effect::create_tokens("Ally", 1)],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Jasmine Dragon Tea Shop".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("1"),
+            }],
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![one_mana_of_any_color(Some(ManaRestriction::only(
+                        ["Ally"],
+                        ["Ally"],
+                    )))],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{5}"),
+                    effects: vec![Effect::create_tokens("token.ally", 1)],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5120,40 +5511,43 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
     CardDefinition {
         key: "tla.jeong_jeong_the_deserter",
         scryfall_id: "a9f63d3b-bee5-48bc-8b04-d8b24b0bda6e",
-        name: "Jeong Jeong, the Deserter".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("R"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Jeong Jeong, the Deserter".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("R"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            exhaust: true,
-            mana_cost: ManaCost::parse("{3}"),
-            effects: vec![
-                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
-                Effect::CreateDelayedTrigger {
-                    remember: None,
-                    event: DelayedEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
-                    frequency: DelayedFrequency::Once,
-                    expiry: DelayedExpiry::ThisTurn,
-                    effects: vec![Effect::CopyTriggeringObject],
-                },
-            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                    Effect::CreateDelayedTrigger {
+                        remember: None,
+                        event: DelayedEvent::YouCastSpell(Box::new(CardPredicate::subtype(
+                            "Lesson",
+                        ))),
+                        frequency: DelayedFrequency::Once,
+                        expiry: DelayedExpiry::ThisTurn,
+                        effects: vec![Effect::CopyTriggeringObject],
+                    },
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5164,24 +5558,27 @@ fn jeong_jeongs_deserters() -> CardDefinition {
     CardDefinition {
         key: "tla.jeong_jeongs_deserters",
         scryfall_id: "060966f9-5e56-4512-9ef3-2b216daf093c",
-        name: "Jeong Jeong's Deserters".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::put_counters(
-                ObjectSelector::Target(TargetSpec::Creature),
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Jeong Jeong's Deserters".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5192,51 +5589,54 @@ fn jet_freedom_fighter() -> CardDefinition {
     CardDefinition {
         key: "tla.jet_freedom_fighter",
         scryfall_id: "9202c044-15e4-4218-a94d-16287ba19d69",
-        name: "Jet, Freedom Fighter".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R/W}{R/W}{R/W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(1),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::DealDamage {
-                    amount: EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Jet, Freedom Fighter".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R/W}{R/W}{R/W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(1),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::deal_damage(
+                        EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Creature),
+                                ..Default::default()
+                            },
                         },
-                    },
-                    what: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::This,
+                        ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                    )],
                 },
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        min: 0,
-                        max: 2,
-                        ..TargetRequirement::one(TargetSpec::Creature)
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::This,
                     },
-                    effects: vec![Effect::ForEachTarget {
-                        effects: vec![Effect::put_counters(
-                            ObjectSelector::Target(TargetSpec::Creature),
-                            CounterKind::PlusOnePlusOne,
-                            1,
-                        )],
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            min: 0,
+                            max: 2,
+                            ..TargetRequirement::one(TargetSpec::Creature)
+                        },
+                        effects: vec![Effect::ForEachTarget {
+                            effects: vec![Effect::put_counters(
+                                ObjectSelector::Target(TargetSpec::Creature),
+                                CounterKind::PlusOnePlusOne,
+                                1,
+                            )],
+                        }],
                     }],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5247,34 +5647,37 @@ fn jet_s_brainwashing() -> CardDefinition {
     CardDefinition {
         key: "tla.jet_s_brainwashing",
         scryfall_id: "b17e8bdb-4b91-4a9d-bfe1-8a55f0bd040b",
-        name: "Jet's Brainwashing".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::CantBlock,
-            ),
-            Effect::If {
-                condition: Condition::Kicked,
-                then: vec![
-                    Effect::GainControl {
-                        player: PlayerSelector::You,
-                        what: ObjectSelector::Target(TargetSpec::Creature),
-                        duration: EffectDuration::EndOfTurn,
-                    },
-                    Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
-                    Effect::until_end_of_turn(
-                        ObjectSelector::Target(TargetSpec::Creature),
-                        Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
-                    ),
-                ],
-                otherwise: vec![],
-            },
-            Effect::create_tokens("Clue", 1),
-        ],
-        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{3}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Jet's Brainwashing".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::CantBlock,
+                ),
+                Effect::If {
+                    condition: Condition::Kicked,
+                    then: vec![
+                        Effect::GainControl {
+                            player: PlayerSelector::You,
+                            what: ObjectSelector::Target(TargetSpec::Creature),
+                            duration: EffectDuration::EndOfTurn,
+                        },
+                        Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::Creature),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                        ),
+                    ],
+                    otherwise: vec![],
+                },
+                Effect::create_tokens("token.clue", 1),
+            ],
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{3}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5285,33 +5688,36 @@ fn joo_dee_one_of_many() -> CardDefinition {
     CardDefinition {
         key: "tla.joo_dee_one_of_many",
         scryfall_id: "7ae1439f-a0c4-42c2-a4f3-8851defa981e",
-        name: "Joo Dee, One of Many".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Advisor".into()],
-        power: Some(2),
-        toughness: Some(2),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{B}"),
-            tap_source: true,
-            sorcery_timing: true,
-            effects: vec![
-                Effect::Surveil { count: 1 },
-                Effect::CreateTokenCopy {
-                    of: None,
-                    exceptions: vec![],
-                },
-                Effect::Sacrifice {
-                    what: ObjectSelector::chosen(CardPredicate {
-                        card_types_any: vec![CardType::Artifact, CardType::Creature],
-                        ..Default::default()
-                    }),
-                    optional: false,
-                },
-            ],
+        printed: PrintedCharacteristics {
+            name: "Joo Dee, One of Many".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{B}"),
+                tap_source: true,
+                sorcery_timing: true,
+                effects: vec![
+                    Effect::Surveil { count: 1 },
+                    Effect::CreateTokenCopy {
+                        of: ObjectSelector::This,
+                        exceptions: vec![],
+                    },
+                    Effect::Sacrifice {
+                        what: ObjectSelector::chosen(CardPredicate {
+                            card_types_any: vec![CardType::Artifact, CardType::Creature],
+                            ..Default::default()
+                        }),
+                        optional: false,
+                    },
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5322,31 +5728,34 @@ fn june_bounty_hunter() -> CardDefinition {
     CardDefinition {
         key: "tla.june_bounty_hunter",
         scryfall_id: "148bbaab-bc7b-46ab-8e18-ade69d71d847",
-        name: "June, Bounty Hunter".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Mercenary".into()],
-        power: Some(2),
-        toughness: Some(2),
-        statics: vec![StaticAbility::CantBeBlockedIf(
-            Condition::CardsDrawnAtLeast { count: 2 },
-        )],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sacrifice: Some(SacrificeCost {
-                predicate: CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                },
-                another: true,
-                or_mana: None,
-            }),
-            own_turn_only: true,
-            mana_cost: ManaCost::parse("{1}"),
-            effects: vec![Effect::create_tokens("Clue", 1)],
+        printed: PrintedCharacteristics {
+            name: "June, Bounty Hunter".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Mercenary".into()],
+            power: Some(2),
+            toughness: Some(2),
+            statics: vec![StaticAbility::CantBeBlockedIf(
+                Condition::CardsDrawnAtLeast { count: 2 },
+            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sacrifice: Some(SacrificeCost {
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    },
+                    another: true,
+                    or_mana: None,
+                }),
+                own_turn_only: true,
+                mana_cost: ManaCost::parse("{1}"),
+                effects: vec![Effect::create_tokens("token.clue", 1)],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5357,31 +5766,34 @@ fn katara_bending_prodigy() -> CardDefinition {
     CardDefinition {
         key: "tla.katara_bending_prodigy",
         scryfall_id: "e8372167-383f-4302-a8ea-b6bf495c870c",
-        name: "Katara, Bending Prodigy".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
-            intervening_if: Some(Condition::SourceTapped),
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{6}"),
-            waterbend: true,
-            effects: vec![Effect::DrawCards {
-                count: EffectValue::Fixed(1),
+        printed: PrintedCharacteristics {
+            name: "Katara, Bending Prodigy".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::SourceTapped),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
             }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{6}"),
+                waterbend: true,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5392,17 +5804,20 @@ fn katara_the_fearless() -> CardDefinition {
     CardDefinition {
         key: "tla.katara_the_fearless",
         scryfall_id: "b0a18f8b-7364-4375-b2e1-e2f15978517f",
-        name: "Katara, the Fearless".into(),
-        mana_cost: Some(ManaCost::parse("{G}{W}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        statics: vec![StaticAbility::TriggersAdditionalTime(
-            CardPredicate::subtype("Ally"),
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Katara, the Fearless".into(),
+            mana_cost: Some(ManaCost::parse("{G}{W}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            statics: vec![StaticAbility::TriggersAdditionalTime(
+                CardPredicate::subtype("Ally"),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5413,39 +5828,42 @@ fn katara_water_tribe_s_hope() -> CardDefinition {
     CardDefinition {
         key: "tla.katara_water_tribe_s_hope",
         scryfall_id: "9ec03308-59a2-417a-938f-bdda75080e43",
-        name: "Katara, Water Tribe's Hope".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}{U}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Ally", 1)],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            own_turn_only: true,
-            mana_cost: ManaCost::parse("{X}"),
-            waterbend: true,
-            x_min: 1,
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::each_you_control(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                }),
-                Modification::SetBasePt {
-                    power: Some(EffectValue::X),
-                    toughness: Some(EffectValue::X),
+        printed: PrintedCharacteristics {
+            name: "Katara, Water Tribe's Hope".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-            )],
+                effects: vec![Effect::create_tokens("token.ally", 1)],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                own_turn_only: true,
+                mana_cost: ManaCost::parse("{X}"),
+                waterbend: true,
+                x_min: 1,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                    Modification::SetBasePt {
+                        power: Some(EffectValue::X),
+                        toughness: Some(EffectValue::X),
+                    },
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5456,32 +5874,38 @@ fn knowledge_seeker() -> CardDefinition {
     CardDefinition {
         key: "tla.knowledge_seeker",
         scryfall_id: "8554e862-f78a-42f5-b876-076aac6c9504",
-        name: "Knowledge Seeker".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Fox".into(), "Spirit".into()],
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Knowledge Seeker".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Fox".into(), "Spirit".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Draws {
+                        who: Actor::You,
+                        nth: Some(2),
+                    },
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 },
-                effects: vec![Effect::create_tokens("Clue", 1)],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::create_tokens("token.clue", 1)],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5492,51 +5916,54 @@ fn koh_the_face_stealer() -> CardDefinition {
     CardDefinition {
         key: "tla.koh_the_face_stealer",
         scryfall_id: "28f6fa32-5058-4c29-9ba8-9d8f2057eb6d",
-        name: "Koh, the Face Stealer".into(),
-        mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Shapeshifter".into(), "Spirit".into()],
-        power: Some(6),
-        toughness: Some(6),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        min: 0,
-                        another: true,
-                        ..TargetRequirement::one(TargetSpec::Creature)
+        printed: PrintedCharacteristics {
+            name: "Koh, the Face Stealer".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Shapeshifter".into(), "Spirit".into()],
+            power: Some(6),
+            toughness: Some(6),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    effects: vec![Effect::exile_linked(
-                        ObjectSelector::Target(TargetSpec::Creature),
-                        LinkedExile::WithSource,
-                    )],
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::Another(CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        token: Some(false),
-                        ..Default::default()
-                    }),
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            min: 0,
+                            another: true,
+                            ..TargetRequirement::one(TargetSpec::Creature)
+                        },
+                        effects: vec![Effect::exile_linked(
+                            ObjectSelector::Target(TargetSpec::Creature),
+                            LinkedExile::WithSource,
+                        )],
+                    }],
                 },
-                effects: vec![Effect::MayExileTriggeringWithSource],
-            },
-        ],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            life_cost: 1,
-            effects: vec![Effect::ChooseExiledWithSource {
-                predicate: CardPredicate::creature(),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::another(CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            token: Some(false),
+                            ..Default::default()
+                        }),
+                    },
+                    effects: vec![Effect::MayExileTriggeringWithSource],
+                },
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                life_cost: 1,
+                effects: vec![Effect::ChooseExiledWithSource {
+                    predicate: CardPredicate::creature(),
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5547,47 +5974,50 @@ fn kyoshi_battle_fan() -> CardDefinition {
     CardDefinition {
         key: "tla.kyoshi_battle_fan",
         scryfall_id: "257e6862-96fe-4312-aff2-509d0696843a",
-        name: "Kyoshi Battle Fan".into(),
-        mana_cost: Some(ManaCost::parse("{2}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Equipment".into()],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::create_tokens("Ally", 1),
-                Effect::SelectCards {
-                    from: ObjectSelector::CreatedThisWay,
-                    predicate: CardPredicate::creature(),
-                    min: 1,
-                    max: EffectValue::Fixed(1),
-                    effects: vec![Effect::AttachSourceTo {
-                        what: ObjectSelector::Selected,
-                    }],
-                    if_declined: vec![],
+        printed: PrintedCharacteristics {
+            name: "Kyoshi Battle Fan".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-            ],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sorcery_timing: true,
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                effects: vec![
+                    Effect::create_tokens("token.ally", 1),
+                    Effect::SelectCards {
+                        from: ObjectSelector::CreatedThisWay,
+                        predicate: CardPredicate::creature(),
+                        min: 1,
+                        max: EffectValue::Fixed(1),
+                        effects: vec![Effect::AttachSourceTo {
+                            what: ObjectSelector::Selected,
+                        }],
+                        if_declined: vec![],
+                    },
+                ],
             }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::Attached,
+                condition: None,
+                power: 1,
+                toughness: 0,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::Attached,
-            condition: None,
-            power: 1,
-            toughness: 0,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5598,50 +6028,53 @@ fn kyoshi_island_plaza() -> CardDefinition {
     CardDefinition {
         key: "tla.kyoshi_island_plaza",
         scryfall_id: "9c25ea98-9823-4487-bf6b-ee29ce5a4ed8",
-        name: "Kyoshi Island Plaza".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Shrine".into()],
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Kyoshi Island Plaza".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Shrine".into()],
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                subtype: Some("Shrine".into()),
+                                ..Default::default()
+                            },
+                        },
+                        vec![Effect::return_to_battlefield(
+                            ObjectSelector::Selected,
+                            true,
+                        )],
+                    )],
                 },
-                effects: vec![Effect::search_library(
-                    CardPredicate::basic_land(),
-                    EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::another_you_control(CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
-                        },
+                        }),
                     },
-                    vec![Effect::return_to_battlefield(
-                        ObjectSelector::Selected,
-                        true,
+                    effects: vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::Fixed(1),
+                        vec![Effect::return_to_battlefield(
+                            ObjectSelector::Selected,
+                            true,
+                        )],
                     )],
-                )],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                        subtype: Some("Shrine".into()),
-                        ..Default::default()
-                    }),
                 },
-                effects: vec![Effect::search_library(
-                    CardPredicate::basic_land(),
-                    EffectValue::Fixed(1),
-                    vec![Effect::return_to_battlefield(
-                        ObjectSelector::Selected,
-                        true,
-                    )],
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5652,26 +6085,29 @@ fn kyoshi_village() -> CardDefinition {
     CardDefinition {
         key: "tla.kyoshi_village",
         scryfall_id: "8d5f3008-2af8-4e81-8847-1c91f524e747",
-        name: "Kyoshi Village".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["G", "W"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Kyoshi Village".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["G", "W"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5682,20 +6118,23 @@ fn kyoshi_warriors() -> CardDefinition {
     CardDefinition {
         key: "tla.kyoshi_warriors",
         scryfall_id: "211045e1-85c7-4088-b830-a2afa0fe520b",
-        name: "Kyoshi Warriors".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Ally", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Kyoshi Warriors".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.ally", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5706,57 +6145,60 @@ fn leaves_from_the_vine() -> CardDefinition {
     CardDefinition {
         key: "tla.leaves_from_the_vine",
         scryfall_id: "b18995c2-efe3-46ca-8204-e2dc0e42f6e3",
-        name: "Leaves from the Vine".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Saga".into()],
-        abilities: vec![
-            chapter(
-                1,
-                vec![
-                    Effect::MillCards {
-                        count: EffectValue::Fixed(3),
-                        target: None,
-                    },
-                    Effect::create_tokens("Food", 1),
-                ],
-            ),
-            chapter(
-                2,
-                vec![Effect::TargetClause {
-                    requirement: TargetRequirement {
-                        min: 0,
-                        max: 2,
-                        ..TargetRequirement::one(TargetSpec::CreatureYouControl)
-                    },
-                    effects: vec![Effect::put_counters(
-                        ObjectSelector::Targets(TargetSpec::CreatureYouControl),
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    )],
-                }],
-            ),
-            chapter(
-                3,
-                vec![Effect::If {
-                    condition: Condition::GraveyardAtLeast {
-                        count: 1,
-                        predicate: CardPredicate {
-                            any_of: vec![
-                                CardPredicate::creature(),
-                                CardPredicate::subtype("Lesson"),
-                            ],
-                            ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Leaves from the Vine".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Saga".into()],
+            abilities: vec![
+                chapter(
+                    1,
+                    vec![
+                        Effect::MillCards {
+                            count: EffectValue::Fixed(3),
+                            target: None,
                         },
-                    },
-                    then: vec![Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
+                        Effect::create_tokens("token.food", 1),
+                    ],
+                ),
+                chapter(
+                    2,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement {
+                            min: 0,
+                            max: 2,
+                            ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                        },
+                        effects: vec![Effect::put_counters(
+                            ObjectSelector::Targets(TargetSpec::CreatureYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
                     }],
-                    otherwise: vec![],
-                }],
-            ),
-        ],
-        text_box: text_box.into(),
+                ),
+                chapter(
+                    3,
+                    vec![Effect::If {
+                        condition: Condition::GraveyardAtLeast {
+                            count: 1,
+                            predicate: CardPredicate {
+                                any_of: vec![
+                                    CardPredicate::creature(),
+                                    CardPredicate::subtype("Lesson"),
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                        then: vec![Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        }],
+                        otherwise: vec![],
+                    }],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5767,47 +6209,50 @@ fn lo_and_li_twin_tutors() -> CardDefinition {
     CardDefinition {
         key: "tla.lo_and_li_twin_tutors",
         scryfall_id: "cba9260d-ef07-4429-99f9-6004cc1fea0f",
-        name: "Lo and Li, Twin Tutors".into(),
-        mana_cost: Some(ManaCost::parse("{4}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Advisor".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::search_library(
-                CardPredicate {
-                    subtypes_any: vec!["Lesson".into(), "Noble".into()],
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Lo and Li, Twin Tutors".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                1.into(),
-                vec![Effect::return_to_hand(ObjectSelector::Selected)],
-            )],
-        }],
-        statics: vec![
-            StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: StaticScope::SpellsYouControl(CardPredicate {
-                    subtype: Some("Lesson".into()),
-                    ..Default::default()
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        subtypes_any: vec!["Lesson".into(), "Noble".into()],
+                        ..Default::default()
+                    },
+                    1.into(),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+            }],
+            statics: vec![
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::SpellsYouControl(CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    }),
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::Lifelink]),
                 }),
-                condition: None,
-                keywords: Keywords::of(&[Keyword::Lifelink]),
-            }),
-            StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: StaticScope::YouControl(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    subtype: Some("Noble".into()),
-                    ..Default::default()
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: StaticScope::YouControl(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        subtype: Some("Noble".into()),
+                        ..Default::default()
+                    }),
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::Lifelink]),
                 }),
-                condition: None,
-                keywords: Keywords::of(&[Keyword::Lifelink]),
-            }),
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5818,30 +6263,33 @@ fn long_feng_grand_secretariat() -> CardDefinition {
     CardDefinition {
         key: "tla.long_feng_grand_secretariat",
         scryfall_id: "a3eb92fe-bc59-4472-9028-f368bd015609",
-        name: "Long Feng, Grand Secretariat".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B/G}{B/G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Advisor".into()],
-        power: Some(2),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            // Long Feng is no land, so "another" only ever excludes it as a
-            // creature; a land creature matches once.
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                    card_types_any: vec![CardType::Creature, CardType::Land],
-                    ..Default::default()
-                }),
-            },
-            intervening_if: None,
-            effects: vec![Effect::put_counters(
-                ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Long Feng, Grand Secretariat".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B/G}{B/G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                // Long Feng is no land, so "another" only ever excludes it as a
+                // creature; a land creature matches once.
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        card_types_any: vec![CardType::Creature, CardType::Land],
+                        ..Default::default()
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5852,28 +6300,31 @@ fn lost_days() -> CardDefinition {
     CardDefinition {
         key: "tla.lost_days",
         scryfall_id: "db8e88e3-0931-403f-90e7-3c22c0b61dac",
-        name: "Lost Days".into(),
-        mana_cost: Some(ManaCost::parse("{4}{U}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::OwnerPutsIntoLibrary {
-                target: TargetSpec::Permanent {
-                    predicate: CardPredicate {
-                        card_types_any: vec![CardType::Creature, CardType::Enchantment],
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Lost Days".into(),
+            mana_cost: Some(ManaCost::parse("{4}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::OwnerPutsIntoLibrary {
+                    target: TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            card_types_any: vec![CardType::Creature, CardType::Enchantment],
+                            ..Default::default()
+                        },
                     },
                 },
-            },
-            Effect::create_tokens("Clue", 1),
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::Permanent {
-            predicate: CardPredicate {
-                card_types_any: vec![CardType::Creature, CardType::Enchantment],
-                ..Default::default()
-            },
-        })],
-        text_box: text_box.into(),
+                Effect::create_tokens("token.clue", 1),
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::Permanent {
+                predicate: CardPredicate {
+                    card_types_any: vec![CardType::Creature, CardType::Enchantment],
+                    ..Default::default()
+                },
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5884,37 +6335,41 @@ fn mai_jaded_edge() -> CardDefinition {
     CardDefinition {
         key: "tla.mai_jaded_edge",
         scryfall_id: "732e6bc9-0798-4c00-aea0-5ef4298b45f5",
-        name: "Mai, Jaded Edge".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into()],
-        power: Some(1),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::YouCastSpell {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
-            },
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::pump(1, 1),
-            )],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            exhaust: true,
-            mana_cost: ManaCost::parse("{3}"),
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::DoubleStrike,
-                1,
-            )],
+        printed: PrintedCharacteristics {
+            name: "Mai, Jaded Edge".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(1),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                ),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(1, 1),
+                )],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::DoubleStrike,
+                    1,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -5925,28 +6380,32 @@ fn mai_scornful_striker() -> CardDefinition {
     CardDefinition {
         key: "tla.mai_scornful_striker",
         scryfall_id: "74dd4c0e-27b8-4c47-b7a6-a281413cd6b4",
-        name: "Mai, Scornful Striker".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::FirstStrike]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::PlayerCastsSpell {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
-            },
-            effects: vec![Effect::LoseLife {
-                player: PlayerSelector::TriggeringPlayer,
-                amount: EffectValue::Fixed(2),
+        printed: PrintedCharacteristics {
+            name: "Mai, Scornful Striker".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::casts(
+                    Actor::AnyPlayer,
+                    CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                ),
+                effects: vec![Effect::LoseLife {
+                    player: PlayerSelector::TriggeringPlayer,
+                    amount: EffectValue::Fixed(2),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -5957,45 +6416,49 @@ fn master_pakku() -> CardDefinition {
     CardDefinition {
         key: "tla.master_pakku",
         scryfall_id: "91e30df5-63f7-4281-8d64-8d522d663652",
-        name: "Master Pakku".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Advisor".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(3),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                },
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::BecomesTapped {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::MillCards {
-                    count: EffectValue::GraveyardMatching {
-                        base: 0,
-                        predicate: CardPredicate {
-                            subtype: Some("Lesson".into()),
+        printed: PrintedCharacteristics {
+            name: "Master Pakku".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Advisor".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(3),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate {
+                            not_card_types: vec![CardType::Creature],
                             ..Default::default()
                         },
+                    ),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::pump(1, 1),
+                    )],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::BecomesTapped {
+                        subject: TriggerSubject::This,
                     },
-                    target: Some(TargetSpec::Player),
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                    effects: vec![Effect::MillCards {
+                        count: EffectValue::GraveyardMatching {
+                            base: 0,
+                            predicate: CardPredicate {
+                                subtype: Some("Lesson".into()),
+                                ..Default::default()
+                            },
+                        },
+                        target: Some(TargetSpec::Player),
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6006,33 +6469,34 @@ fn master_piandao() -> CardDefinition {
     CardDefinition {
         key: "tla.master_piandao",
         scryfall_id: "3e4a042c-f2a6-45e7-9444-acd1ca838b87",
-        name: "Master Piandao".into(),
-        mana_cost: Some(ManaCost::parse("{4}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::FirstStrike]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::LookAndSelect {
-                to_battlefield: false,
-                random_order: true,
-                reveal: true,
-                look: EffectValue::Fixed(4),
-                min_select: 0,
-                max_select: 1,
-                predicate: CardPredicate {
-                    subtypes_any: vec!["Ally".into(), "Equipment".into(), "Lesson".into()],
-                    ..Default::default()
-                },
+        printed: PrintedCharacteristics {
+            name: "Master Piandao".into(),
+            mana_cost: Some(ManaCost::parse("{4}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::LookAndSelect {
+                    to_battlefield: false,
+                    random_order: true,
+                    reveal: true,
+                    look: EffectValue::Fixed(4),
+                    min_select: 0,
+                    max_select: 1,
+                    predicate: CardPredicate {
+                        subtypes_any: vec!["Ally".into(), "Equipment".into(), "Lesson".into()],
+                        ..Default::default()
+                    },
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6043,26 +6507,29 @@ fn meditation_pools() -> CardDefinition {
     CardDefinition {
         key: "tla.meditation_pools",
         scryfall_id: "cc078fc6-4470-473f-9e24-d2c470e09141",
-        name: "Meditation Pools".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["G", "U"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Meditation Pools".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["G", "U"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6073,19 +6540,22 @@ fn merchant_of_many_hats() -> CardDefinition {
     CardDefinition {
         key: "tla.merchant_of_many_hats",
         scryfall_id: "752ffa24-93b6-4b33-bf10-7222357ac472",
-        name: "Merchant of Many Hats".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            zone: ActivationZone::Graveyard,
-            mana_cost: ManaCost::parse("{2}{B}"),
-            effects: vec![Effect::return_to_hand(ObjectSelector::This)],
+        printed: PrintedCharacteristics {
+            name: "Merchant of Many Hats".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Graveyard,
+                mana_cost: ManaCost::parse("{2}{B}"),
+                effects: vec![Effect::return_to_hand(ObjectSelector::This)],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -6096,30 +6566,33 @@ fn messenger_hawk() -> CardDefinition {
     CardDefinition {
         key: "tla.messenger_hawk",
         scryfall_id: "6a2946c0-0a40-4cdb-92c8-af2bafecca09",
-        name: "Messenger Hawk".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U/B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Bird".into(), "Scout".into()],
-        power: Some(1),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Clue", 1)],
-        }],
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::This,
-            condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
-            power: 2,
-            toughness: 0,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Messenger Hawk".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U/B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Scout".into()],
+            power: Some(1),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.clue", 1)],
+            }],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::This,
+                condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
+                power: 2,
+                toughness: 0,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6130,39 +6603,42 @@ fn meteor_sword() -> CardDefinition {
     CardDefinition {
         key: "tla.meteor_sword",
         scryfall_id: "68b1c746-a4b8-4a45-9f0e-3962f0ae40e3",
-        name: "Meteor Sword".into(),
-        mana_cost: Some(ManaCost::parse("{7}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Equipment".into()],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::destroy(ObjectSelector::Target(
-                TargetSpec::Permanent {
-                    predicate: CardPredicate::default(),
+        printed: PrintedCharacteristics {
+            name: "Meteor Sword".into(),
+            mana_cost: Some(ManaCost::parse("{7}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-            ))],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sorcery_timing: true,
-            mana_cost: ManaCost::parse("{3}"),
-            effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                effects: vec![Effect::destroy(ObjectSelector::Target(
+                    TargetSpec::Permanent {
+                        predicate: CardPredicate::default(),
+                    },
+                ))],
             }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::Attached,
+                condition: None,
+                power: 3,
+                toughness: 3,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::Attached,
-            condition: None,
-            power: 3,
-            toughness: 3,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -6173,26 +6649,29 @@ fn misty_palms_oasis() -> CardDefinition {
     CardDefinition {
         key: "tla.misty_palms_oasis",
         scryfall_id: "7cc29ddb-8f44-4493-985d-2fac35f9f34d",
-        name: "Misty Palms Oasis".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["W", "B"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Misty Palms Oasis".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["W", "B"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6203,40 +6682,43 @@ fn momo_friendly_flier() -> CardDefinition {
     CardDefinition {
         key: "tla.momo_friendly_flier",
         scryfall_id: "c472ef84-a632-4ad7-853c-60588a7a4b12",
-        name: "Momo, Friendly Flier".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Lemur".into(), "Bat".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
-            first_on_own_turn: true,
-            predicate: CardPredicate {
-                flying: true,
-                not_subtypes: vec!["Lemur".into()],
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            },
-            condition: Condition::Always,
-            generic: 1,
-        })],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+        printed: PrintedCharacteristics {
+            name: "Momo, Friendly Flier".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Lemur".into(), "Bat".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
+                first_on_own_turn: true,
+                predicate: CardPredicate {
                     flying: true,
+                    not_subtypes: vec!["Lemur".into()],
                     card_type: Some(CardType::Creature),
                     ..Default::default()
-                }),
-            },
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::pump(1, 1),
-            )],
-        }],
-        text_box: text_box.into(),
+                },
+                condition: Condition::Always,
+                generic: 1,
+            })],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        flying: true,
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::pump(1, 1),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6247,34 +6729,37 @@ fn momo_playful_pet() -> CardDefinition {
     CardDefinition {
         key: "tla.momo_playful_pet",
         scryfall_id: "9350bf4a-fa12-4867-b31f-1f1394d99571",
-        name: "Momo, Playful Pet".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Lemur".into(), "Bat".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::LeavesTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: None,
-            effects: vec![Effect::TriggerModes {
-                up_to: None,
-                unchosen: false,
-                modes: vec![
-                    vec![Effect::create_tokens("Food", 1)],
-                    vec![Effect::put_counters(
-                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    )],
-                    vec![Effect::Scry { count: 2 }],
-                ],
+        printed: PrintedCharacteristics {
+            name: "Momo, Playful Pet".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Lemur".into(), "Bat".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::LeavesTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    up_to: None,
+                    unchosen: false,
+                    modes: vec![
+                        vec![Effect::create_tokens("token.food", 1)],
+                        vec![Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
+                        vec![Effect::Scry { count: 2 }],
+                    ],
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6285,38 +6770,41 @@ fn mongoose_lizard() -> CardDefinition {
     CardDefinition {
         key: "tla.mongoose_lizard",
         scryfall_id: "7d40b9cb-82ef-44c5-8d3c-c8bb4ce9891c",
-        name: "Mongoose Lizard".into(),
-        mana_cost: Some(ManaCost::parse("{4}{R}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Mongoose".into(), "Lizard".into()],
-        power: Some(5),
-        toughness: Some(6),
-        keywords: Keywords::of(&[Keyword::Menace]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::deal_damage(
-                1,
-                ObjectSelector::Target(TargetSpec::AnyTarget),
-            )],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            zone: ActivationZone::Hand,
-            discard_source: true,
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::search_library(
-                CardPredicate {
-                    subtype: Some("Mountain".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Mongoose Lizard".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Mongoose".into(), "Lizard".into()],
+            power: Some(5),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                EffectValue::Fixed(1),
-                vec![Effect::return_to_hand(ObjectSelector::Selected)],
-            )],
+                effects: vec![Effect::deal_damage(
+                    1,
+                    ObjectSelector::Target(TargetSpec::AnyTarget),
+                )],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Hand,
+                discard_source: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        subtype: Some("Mountain".into()),
+                        ..Default::default()
+                    },
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -6327,26 +6815,29 @@ fn north_pole_gates() -> CardDefinition {
     CardDefinition {
         key: "tla.north_pole_gates",
         scryfall_id: "bcf7b9da-d35d-4338-b4d9-83e47dc058ee",
-        name: "North Pole Gates".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["W", "U"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "North Pole Gates".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["W", "U"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6357,33 +6848,36 @@ fn north_pole_patrol() -> CardDefinition {
     CardDefinition {
         key: "tla.north_pole_patrol",
         scryfall_id: "c2c0c138-5b61-4949-8431-4a6d458ead6a",
-        name: "North Pole Patrol".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{3}"),
-                waterbend: true,
-                effects: vec![Effect::tap(ObjectSelector::Target(
-                    TargetSpec::CreatureOpponentControls,
-                ))],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::untap(ObjectSelector::Target(
-                    TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate::default(),
-                    },
-                ))],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "North Pole Patrol".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{3}"),
+                    waterbend: true,
+                    effects: vec![Effect::tap(ObjectSelector::Target(
+                        TargetSpec::CreatureOpponentControls,
+                    ))],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::untap(ObjectSelector::Target(
+                        TargetSpec::PermanentYouControl {
+                            predicate: CardPredicate::default(),
+                        },
+                    ))],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6394,40 +6888,43 @@ fn northern_air_temple() -> CardDefinition {
     CardDefinition {
         key: "tla.northern_air_temple",
         scryfall_id: "06b7675e-e665-49cb-a8d9-7092a654d464",
-        name: "Northern Air Temple".into(),
-        mana_cost: Some(ManaCost::parse("{B}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Shrine".into()],
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Northern Air Temple".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Shrine".into()],
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::DrainLife {
+                        amount: EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                subtype: Some("Shrine".into()),
+                                ..Default::default()
+                            },
+                        },
+                    }],
                 },
-                effects: vec![Effect::DrainLife {
-                    amount: EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::another_you_control(CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
-                        },
+                        }),
                     },
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                        subtype: Some("Shrine".into()),
-                        ..Default::default()
-                    }),
+                    effects: vec![Effect::DrainLife {
+                        amount: EffectValue::Fixed(1),
+                    }],
                 },
-                effects: vec![Effect::DrainLife {
-                    amount: EffectValue::Fixed(1),
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6440,7 +6937,7 @@ fn obsessive_pursuit() -> CardDefinition {
                 player: PlayerSelector::You,
                 amount: EffectValue::Fixed(1),
             },
-            Effect::create_tokens("Clue", 1),
+            Effect::create_tokens("token.clue", 1),
         ]
     };
     let attacking_creature = || TargetSpec::Permanent {
@@ -6454,48 +6951,52 @@ fn obsessive_pursuit() -> CardDefinition {
     CardDefinition {
         key: "tla.obsessive_pursuit",
         scryfall_id: "e837e29c-d241-43c8-8f45-05056e082b60",
-        name: "Obsessive Pursuit".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Obsessive Pursuit".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: clue(),
                 },
-                effects: clue(),
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::BeginningOfYourUpkeep,
-                effects: clue(),
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                    effects: clue(),
                 },
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(attacking_creature()),
-                    effects: vec![
-                        Effect::put_counters(
-                            ObjectSelector::Target(attacking_creature()),
-                            CounterKind::PlusOnePlusOne,
-                            EffectValue::PermanentsSacrificedThisTurn,
-                        ),
-                        Effect::If {
-                            condition: Condition::SacrificedThisTurnAtLeast { count: 3 },
-                            then: vec![Effect::until_end_of_turn(
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(
+                        TriggerSubject::you_control(CardPredicate::creature()),
+                        Per::Batch,
+                    ),
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(attacking_creature()),
+                        effects: vec![
+                            Effect::put_counters(
                                 ObjectSelector::Target(attacking_creature()),
-                                Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
-                            )],
-                            otherwise: vec![],
-                        },
-                    ],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                                CounterKind::PlusOnePlusOne,
+                                EffectValue::PermanentsSacrificedThisTurn,
+                            ),
+                            Effect::If {
+                                condition: Condition::SacrificedThisTurnAtLeast { count: 3 },
+                                then: vec![Effect::until_end_of_turn(
+                                    ObjectSelector::Target(attacking_creature()),
+                                    Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
+                                )],
+                                otherwise: vec![],
+                            },
+                        ],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6506,22 +7007,25 @@ fn octopus_form() -> CardDefinition {
     CardDefinition {
         key: "tla.octopus_form",
         scryfall_id: "ce96a826-53a0-4029-bf34-46779d133b13",
-        name: "Octopus Form".into(),
-        mana_cost: Some(ManaCost::parse("{U}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                Modification::pump(1, 1),
-            ),
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
-            ),
-            Effect::untap(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Octopus Form".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::pump(1, 1),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
+                ),
+                Effect::untap(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6532,26 +7036,29 @@ fn omashu_city() -> CardDefinition {
     CardDefinition {
         key: "tla.omashu_city",
         scryfall_id: "c21e413b-96ed-4ded-b567-f1647074ce5f",
-        name: "Omashu City".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["R", "G"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Omashu City".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["R", "G"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6562,34 +7069,37 @@ fn origin_of_metalbending() -> CardDefinition {
     CardDefinition {
         key: "tla.origin_of_metalbending",
         scryfall_id: "25749f9a-260d-4bdc-bd28-429c12faa4a5",
-        name: "Origin of Metalbending".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::destroy(ObjectSelector::Target(
-                    TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            card_types_any: vec![CardType::Artifact, CardType::Enchantment],
-                            ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Origin of Metalbending".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                card_types_any: vec![CardType::Artifact, CardType::Enchantment],
+                                ..Default::default()
+                            },
                         },
-                    },
-                ))],
-                vec![
-                    Effect::put_counters(
-                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    ),
-                    Effect::until_end_of_turn(
-                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                        Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-                    ),
+                    ))],
+                    vec![
+                        Effect::put_counters(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        ),
+                        Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                        ),
+                    ],
                 ],
-            ],
-        }],
-        text_box: text_box.into(),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6600,40 +7110,43 @@ fn ostrich_horse() -> CardDefinition {
     CardDefinition {
         key: "tla.ostrich_horse",
         scryfall_id: "5ca3fd45-9301-44ef-afc0-4d7999d66d36",
-        name: "Ostrich-Horse".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Bird".into(), "Horse".into()],
-        power: Some(3),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::MillCards {
-                    count: EffectValue::Fixed(3),
-                    target: None,
+        printed: PrintedCharacteristics {
+            name: "Ostrich-Horse".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Horse".into()],
+            power: Some(3),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                Effect::SelectCards {
-                    from: ObjectSelector::CardsThisWay,
-                    min: 0,
-                    max: EffectValue::Fixed(1),
-                    effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Land),
-                        ..Default::default()
+                effects: vec![
+                    Effect::MillCards {
+                        count: EffectValue::Fixed(3),
+                        target: None,
                     },
-                    if_declined: vec![Effect::put_counters(
-                        ObjectSelector::This,
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    )],
-                },
-            ],
-        }],
-        text_box: text_box.into(),
+                    Effect::SelectCards {
+                        from: ObjectSelector::CardsThisWay,
+                        min: 0,
+                        max: EffectValue::Fixed(1),
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Land),
+                            ..Default::default()
+                        },
+                        if_declined: vec![Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )],
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6644,21 +7157,27 @@ fn otter_penguin() -> CardDefinition {
     CardDefinition {
         key: "tla.otter_penguin",
         scryfall_id: "480b6279-bb34-4b3f-a639-868b52af92b9",
-        name: "Otter-Penguin".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Otter".into(), "Bird".into()],
-        power: Some(2),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-            effects: vec![
-                Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 2)),
-                Effect::until_end_of_turn(ObjectSelector::This, Modification::CantBeBlocked),
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Otter-Penguin".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Otter".into(), "Bird".into()],
+            power: Some(2),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Draws {
+                    who: Actor::You,
+                    nth: Some(2),
+                },
+                effects: vec![
+                    Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 2)),
+                    Effect::until_end_of_turn(ObjectSelector::This, Modification::CantBeBlocked),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6670,18 +7189,21 @@ fn ozai_s_cruelty() -> CardDefinition {
     CardDefinition {
         key: "tla.ozai_s_cruelty",
         scryfall_id: "22cad680-d46a-4589-a633-b6ee9a78d61e",
-        name: "Ozai's Cruelty".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::deal_damage(2, ObjectSelector::Target(TargetSpec::Player)),
-            Effect::Discard {
-                what: ObjectSelector::Target(TargetSpec::Player),
-                count: 2,
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Ozai's Cruelty".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::deal_damage(2, ObjectSelector::Target(TargetSpec::Player)),
+                Effect::Discard {
+                    what: ObjectSelector::Target(TargetSpec::Player),
+                    count: 2,
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6692,32 +7214,33 @@ fn ozai_the_phoenix_king() -> CardDefinition {
     CardDefinition {
         key: "tla.ozai_the_phoenix_king",
         scryfall_id: "a98b1550-4609-4a2f-9371-4afe1cdc613e",
-        name: "Ozai, the Phoenix King".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}{B}{R}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into()],
-        power: Some(7),
-        toughness: Some(7),
-        keywords: Keywords::of(&[Keyword::Haste, Keyword::Trample]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("RRRR"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Ozai, the Phoenix King".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(7),
+            toughness: Some(7),
+            keywords: Keywords::of(&[Keyword::Haste, Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RRRR"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-            scope: StaticScope::This,
-            condition: Some(Condition::UnspentManaAtLeast { count: 6 }),
-            keywords: Keywords::of(&[Keyword::Flying, Keyword::Indestructible]),
-        })],
-        replacement_effects: vec![ReplacementEffect::UnspentManaBecomesRed],
-        text_box: text_box.into(),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::This,
+                condition: Some(Condition::UnspentManaAtLeast { count: 6 }),
+                keywords: Keywords::of(&[Keyword::Flying, Keyword::Indestructible]),
+            })],
+            replacement_effects: vec![ReplacementEffect::UnspentManaBecomesRed],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6728,30 +7251,33 @@ fn path_to_redemption() -> CardDefinition {
     CardDefinition {
         key: "tla.path_to_redemption",
         scryfall_id: "f936d64a-0db4-49c1-8a57-6d99e012a555",
-        name: "Path to Redemption".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Aura".into()],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            own_turn_only: true,
-            mana_cost: ManaCost::parse("{5}"),
-            sacrifice_source: true,
-            effects: vec![
-                Effect::exile(ObjectSelector::Attached),
-                Effect::create_tokens("Ally", 1),
-            ],
+        printed: PrintedCharacteristics {
+            name: "Path to Redemption".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                own_turn_only: true,
+                mana_cost: ManaCost::parse("{5}"),
+                sacrifice_source: true,
+                effects: vec![
+                    Effect::exile(ObjectSelector::Attached),
+                    Effect::create_tokens("token.ally", 1),
+                ],
+                ..Default::default()
+            }],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::Attached,
+                kind: Restriction::CantAttackOrBlock,
+                unless: None,
+            })],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        spell_effects: vec![Effect::AttachSourceTo {
-            what: ObjectSelector::Target(TargetSpec::Creature),
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        statics: vec![StaticAbility::Restriction(StaticRestriction {
-            scope: StaticScope::Attached,
-            kind: Restriction::CantAttackOrBlock,
-            unless: None,
-        })],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -6762,42 +7288,45 @@ fn phoenix_fleet_airship() -> CardDefinition {
     CardDefinition {
         key: "tla.phoenix_fleet_airship",
         scryfall_id: "b51d3259-c41c-4f64-9666-0a9e676c812f",
-        name: "Phoenix Fleet Airship".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Vehicle".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
-            intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
-            effects: vec![Effect::CreateTokenCopy {
-                of: None,
-                exceptions: vec![],
+        printed: PrintedCharacteristics {
+            name: "Phoenix Fleet Airship".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Vehicle".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
+                effects: vec![Effect::CreateTokenCopy {
+                    of: ObjectSelector::This,
+                    exceptions: vec![],
+                }],
             }],
-        }],
-        statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
-            scope: StaticScope::This,
-            types: vec![CardType::Creature],
-            subtypes: Vec::new(),
-            condition: Some(Condition::ControlsAtLeast {
-                count: 8,
-                predicate: CardPredicate {
-                    namesake: true,
-                    ..Default::default()
-                },
-            }),
-        })],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            crew: Some(1),
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::BecomeCreature,
-            )],
+            statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
+                scope: StaticScope::This,
+                types: vec![CardType::Creature],
+                subtypes: Vec::new(),
+                condition: Some(Condition::ControlsAtLeast {
+                    count: 8,
+                    predicate: CardPredicate {
+                        namesake: true,
+                        ..Default::default()
+                    },
+                }),
+            })],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                crew: Some(1),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::BecomeCreature,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -6808,22 +7337,25 @@ fn pillar_launch() -> CardDefinition {
     CardDefinition {
         key: "tla.pillar_launch",
         scryfall_id: "f177e9cc-0c41-417d-9215-5ff23a1a0657",
-        name: "Pillar Launch".into(),
-        mana_cost: Some(ManaCost::parse("{G}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::pump(2, 2),
-            ),
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::AddKeywords(Keywords::of(&[Keyword::Reach])),
-            ),
-            Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Pillar Launch".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(2, 2),
+                ),
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::AddKeywords(Keywords::of(&[Keyword::Reach])),
+                ),
+                Effect::untap(ObjectSelector::Target(TargetSpec::Creature)),
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6834,27 +7366,28 @@ fn pirate_peddlers() -> CardDefinition {
     CardDefinition {
         key: "tla.pirate_peddlers",
         scryfall_id: "5c998994-6c3b-4f34-9b31-babba2b17266",
-        name: "Pirate Peddlers".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Pirate".into()],
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Deathtouch]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Sacrificed {
-                predicate: CardPredicate::default(),
-                controller_only: true,
-                another: true,
-            },
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::PlusOnePlusOne,
-                1,
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Pirate Peddlers".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Pirate".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Deathtouch]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Sacrificed {
+                    subject: TriggerSubject::another_you_control(CardPredicate::default()),
+                },
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6865,24 +7398,30 @@ fn planetarium_of_wan_shi_tong() -> CardDefinition {
     CardDefinition {
         key: "tla.planetarium_of_wan_shi_tong",
         scryfall_id: "0ebaf0bf-7aa2-469d-bdbb-0fbf6741eede",
-        name: "Planetarium of Wan Shi Tong".into(),
-        mana_cost: Some(ManaCost::parse("{6}")),
-        types: CardTypes::new([CardType::Artifact]),
-        supertypes: vec!["Legendary".into()],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{1}"),
-            tap_source: true,
-            effects: vec![Effect::Scry { count: 2 }],
-            ..Default::default()
-        }],
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::YouScryOrSurveil,
-            intervening_if: None,
-            effects: vec![Effect::MayOnceEachTurn {
-                effects: vec![Effect::CastLibraryTopFree],
+        printed: PrintedCharacteristics {
+            name: "Planetarium of Wan Shi Tong".into(),
+            mana_cost: Some(ManaCost::parse("{6}")),
+            types: CardTypes::new([CardType::Artifact]),
+            supertypes: vec!["Legendary".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                tap_source: true,
+                effects: vec![Effect::Scry { count: 2 }],
+                ..Default::default()
             }],
-        }],
-        text_box: text_box.into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Performs {
+                    who: Actor::You,
+                    any_of: vec![KeywordAction::Scry, KeywordAction::Surveil],
+                },
+                intervening_if: None,
+                effects: vec![Effect::MayOnceEachTurn {
+                    effects: vec![Effect::CastLibraryTopFree],
+                }],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6893,33 +7432,36 @@ fn platypus_bear() -> CardDefinition {
     CardDefinition {
         key: "tla.platypus_bear",
         scryfall_id: "7ebf742a-3995-4b22-9dc7-b05f57889683",
-        name: "Platypus-Bear".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G/U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Platypus".into(), "Bear".into()],
-        power: Some(2),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Defender]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::MillCards {
-                count: EffectValue::Fixed(2),
-                target: None,
-            }],
-        }],
-        statics: vec![StaticAbility::AttacksDespiteDefender(
-            Condition::GraveyardAtLeast {
-                count: 1,
-                predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Platypus-Bear".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G/U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Platypus".into(), "Bear".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Defender]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-            },
-        )],
-        text_box: text_box.into(),
+                effects: vec![Effect::MillCards {
+                    count: EffectValue::Fixed(2),
+                    target: None,
+                }],
+            }],
+            statics: vec![StaticAbility::AttacksDespiteDefender(
+                Condition::GraveyardAtLeast {
+                    count: 1,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
+                },
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6930,20 +7472,23 @@ fn pretending_poxbearers() -> CardDefinition {
     CardDefinition {
         key: "tla.pretending_poxbearers",
         scryfall_id: "d1af91a5-8681-4a05-910d-96f7a819bfaa",
-        name: "Pretending Poxbearers".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W/B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Ally", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Pretending Poxbearers".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W/B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.ally", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6960,32 +7505,35 @@ fn price_of_freedom() -> CardDefinition {
     CardDefinition {
         key: "tla.price_of_freedom",
         scryfall_id: "9fbe94e9-a71d-4a31-9210-c599abe08e3f",
-        name: "Price of Freedom".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::destroy(ObjectSelector::Target(artifact_or_land())),
-            Effect::ForPlayer {
-                player: PlayerSelector::TargetController,
-                effects: vec![Effect::OptionalPayment {
-                    cost: PaymentCost::Mana(ManaCost::default()),
-                    if_paid: vec![Effect::search_library(
-                        CardPredicate::basic_land(),
-                        EffectValue::Fixed(1),
-                        vec![Effect::return_to_battlefield(
-                            ObjectSelector::Selected,
-                            true,
+        printed: PrintedCharacteristics {
+            name: "Price of Freedom".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::destroy(ObjectSelector::Target(artifact_or_land())),
+                Effect::ForPlayer {
+                    player: PlayerSelector::TargetController,
+                    effects: vec![Effect::OptionalPayment {
+                        cost: PaymentCost::Mana(ManaCost::default()),
+                        if_paid: vec![Effect::search_library(
+                            CardPredicate::basic_land(),
+                            EffectValue::Fixed(1),
+                            vec![Effect::return_to_battlefield(
+                                ObjectSelector::Selected,
+                                true,
+                            )],
                         )],
-                    )],
-                    if_declined: vec![],
-                }],
-            },
-            Effect::DrawCards {
-                count: EffectValue::Fixed(1),
-            },
-        ],
-        text_box: text_box.into(),
+                        if_declined: vec![],
+                    }],
+                },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -6996,39 +7544,42 @@ fn professor_zei_anthropologist() -> CardDefinition {
     CardDefinition {
         key: "tla.professor_zei_anthropologist",
         scryfall_id: "27baccc0-7e25-4f39-be0d-31cd98ca0dc5",
-        name: "Professor Zei, Anthropologist".into(),
-        mana_cost: Some(ManaCost::parse("{U/R}{U/R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Advisor".into(), "Ally".into()],
-        power: Some(0),
-        toughness: Some(3),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                discard_card: true,
-                tap_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                own_turn_only: true,
-                tap_source: true,
-                mana_cost: ManaCost::parse("{1}"),
-                sacrifice_source: true,
-                effects: vec![Effect::return_to_hand(ObjectSelector::Target(
-                    TargetSpec::GraveyardCardYouOwn {
-                        predicate: CardPredicate {
-                            card_types_any: vec![CardType::Instant, CardType::Sorcery],
-                            ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Professor Zei, Anthropologist".into(),
+            mana_cost: Some(ManaCost::parse("{U/R}{U/R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Advisor".into(), "Ally".into()],
+            power: Some(0),
+            toughness: Some(3),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    discard_card: true,
+                    tap_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    own_turn_only: true,
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{1}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                        TargetSpec::GraveyardCardYouOwn {
+                            predicate: CardPredicate {
+                                card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                                ..Default::default()
+                            },
                         },
-                    },
-                ))],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+                    ))],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7039,43 +7590,46 @@ fn rabaroo_troop() -> CardDefinition {
     CardDefinition {
         key: "tla.rabaroo_troop",
         scryfall_id: "62a983b4-ac73-4949-9317-05a75a8ce164",
-        name: "Rabaroo Troop".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Rabbit".into(), "Kangaroo".into()],
-        power: Some(3),
-        toughness: Some(5),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
-                    card_type: Some(CardType::Land),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
-                ),
-                Effect::gain_life(1),
-            ],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            zone: ActivationZone::Hand,
-            discard_source: true,
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::search_library(
-                CardPredicate {
-                    subtype: Some("Plains".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Rabaroo Troop".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Rabbit".into(), "Kangaroo".into()],
+            power: Some(3),
+            toughness: Some(5),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::you_control(CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    }),
                 },
-                EffectValue::Fixed(1),
-                vec![Effect::return_to_hand(ObjectSelector::Selected)],
-            )],
+                effects: vec![
+                    Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                    ),
+                    Effect::gain_life(1),
+                ],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Hand,
+                discard_source: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        subtype: Some("Plains".into()),
+                        ..Default::default()
+                    },
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7086,57 +7640,58 @@ fn ran_and_shaw() -> CardDefinition {
     CardDefinition {
         key: "tla.ran_and_shaw",
         scryfall_id: "6436e2d0-989f-47e3-90bc-9cde82a2ddb4",
-        name: "Ran and Shaw".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Dragon".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Ran and Shaw".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Dragon".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("RR"),
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("RR"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::WasCast {
-                    condition: Box::new(TriggerCondition::EntersTheBattlefield {
-                        subject: TriggerSubject::This,
-                    }),
-                },
-                intervening_if: Some(Condition::GraveyardAtLeast {
-                    count: 3,
-                    predicate: CardPredicate {
-                        subtypes_any: vec!["Dragon".into(), "Lesson".into()],
-                        ..Default::default()
+                Ability::Triggered {
+                    condition: TriggerCondition::WasCast {
+                        condition: Box::new(TriggerCondition::EntersTheBattlefield {
+                            subject: TriggerSubject::This,
+                        }),
                     },
-                }),
-                effects: vec![Effect::CreateTokenCopy {
-                    of: None,
-                    exceptions: vec![Modification::Nonlegendary],
-                }],
-            },
-        ],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{3}{R}"),
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::each_you_control(CardPredicate {
-                    subtype: Some("Dragon".into()),
-                    ..Default::default()
-                }),
-                Modification::pump(2, 0),
-            )],
+                    intervening_if: Some(Condition::GraveyardAtLeast {
+                        count: 3,
+                        predicate: CardPredicate {
+                            subtypes_any: vec!["Dragon".into(), "Lesson".into()],
+                            ..Default::default()
+                        },
+                    }),
+                    effects: vec![Effect::CreateTokenCopy {
+                        of: ObjectSelector::This,
+                        exceptions: vec![Modification::Nonlegendary],
+                    }],
+                },
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}{R}"),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        subtype: Some("Dragon".into()),
+                        ..Default::default()
+                    }),
+                    Modification::pump(2, 0),
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7148,29 +7703,32 @@ fn raucous_audience() -> CardDefinition {
     CardDefinition {
         key: "tla.raucous_audience",
         scryfall_id: "ccd03ec3-0fae-48b2-9f04-9c57d2f94267",
-        name: "Raucous Audience".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Citizen".into()],
-        power: Some(2),
-        toughness: Some(1),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            effects: vec![Effect::If {
-                condition: Condition::ControlsAtLeast {
-                    count: 1,
-                    predicate: CardPredicate {
-                        min_power: Some(4),
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Raucous Audience".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Citizen".into()],
+            power: Some(2),
+            toughness: Some(1),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::If {
+                    condition: Condition::ControlsAtLeast {
+                        count: 1,
+                        predicate: CardPredicate {
+                            min_power: Some(4),
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
                     },
-                },
-                then: vec![Effect::add_mana(Mana::parse("GG"))],
-                otherwise: vec![Effect::add_mana(Mana::parse("G"))],
+                    then: vec![Effect::add_mana(Mana::parse("GG"))],
+                    otherwise: vec![Effect::add_mana(Mana::parse("G"))],
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7187,7 +7745,7 @@ fn raven_eagle() -> CardDefinition {
                 Effect::exile(ObjectSelector::Target(graveyard_card())),
                 Effect::If {
                     condition: Condition::TargetCardExiled(CardPredicate::creature()),
-                    then: vec![Effect::create_tokens("Clue", 1)],
+                    then: vec![Effect::create_tokens("token.clue", 1)],
                     otherwise: vec![],
                 },
             ],
@@ -7197,37 +7755,41 @@ fn raven_eagle() -> CardDefinition {
     CardDefinition {
         key: "tla.raven_eagle",
         scryfall_id: "2262f24b-db6b-4f86-96d0-47a20fc015ab",
-        name: "Raven Eagle".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Bird".into(), "Assassin".into()],
-        power: Some(2),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Raven Eagle".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Bird".into(), "Assassin".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: exile(),
                 },
-                intervening_if: None,
-                effects: exile(),
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: exile(),
                 },
-                intervening_if: None,
-                effects: exile(),
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-                intervening_if: None,
-                effects: vec![Effect::DrainLife {
-                    amount: EffectValue::Fixed(1),
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    condition: TriggerCondition::Draws {
+                        who: Actor::You,
+                        nth: Some(2),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::DrainLife {
+                        amount: EffectValue::Fixed(1),
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7238,32 +7800,35 @@ fn razor_rings() -> CardDefinition {
     CardDefinition {
         key: "tla.razor_rings",
         scryfall_id: "b05cfee5-ee59-4df6-a5f6-d9ef0fa7f98a",
-        name: "Razor Rings".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::deal_damage(
-                4,
-                ObjectSelector::Target(TargetSpec::Permanent {
-                    predicate: CardPredicate {
-                        in_combat: true,
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
-                    },
-                }),
-            ),
-            Effect::GainLife {
-                amount: EffectValue::ExcessDamage,
-            },
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::Permanent {
-            predicate: CardPredicate {
-                in_combat: true,
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            },
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Razor Rings".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::deal_damage(
+                    4,
+                    ObjectSelector::Target(TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            in_combat: true,
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                    }),
+                ),
+                Effect::GainLife {
+                    amount: EffectValue::ExcessDamage,
+                },
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::Permanent {
+                predicate: CardPredicate {
+                    in_combat: true,
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                },
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7274,25 +7839,28 @@ fn realm_of_koh() -> CardDefinition {
     CardDefinition {
         key: "tla.realm_of_koh",
         scryfall_id: "061ac694-610c-479f-b038-a4ef5270d5d7",
-        name: "Realm of Koh".into(),
-        types: CardTypes::new([CardType::Land]),
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("B"),
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{3}{B}"),
-            effects: vec![Effect::create_tokens("Spirit", 1)],
-            ..Default::default()
-        }],
-        replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
-            predicate: CardPredicate {
-                supertype: Some("basic".into()),
-                card_type: Some(CardType::Land),
+        printed: PrintedCharacteristics {
+            name: "Realm of Koh".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("B"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{3}{B}"),
+                effects: vec![Effect::create_tokens("token.spirit", 1)],
                 ..Default::default()
-            },
-        }],
-        text_box: text_box.into(),
+            }],
+            replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
+                predicate: CardPredicate {
+                    supertype: Some("basic".into()),
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                },
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7303,25 +7871,28 @@ fn rebellious_captives() -> CardDefinition {
     CardDefinition {
         key: "tla.rebellious_captives",
         scryfall_id: "e64a4a8b-323c-4c8b-92af-1a3295799e65",
-        name: "Rebellious Captives".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            exhaust: true,
-            mana_cost: ManaCost::parse("{6}"),
-            effects: vec![
-                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 2),
-                Effect::Earthbend {
-                    count: EffectValue::Fixed(2),
-                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                },
-            ],
+        printed: PrintedCharacteristics {
+            name: "Rebellious Captives".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                mana_cost: ManaCost::parse("{6}"),
+                effects: vec![
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 2),
+                    Effect::Earthbend {
+                        count: EffectValue::Fixed(2),
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                    },
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7332,18 +7903,21 @@ fn redirect_lightning() -> CardDefinition {
     CardDefinition {
         key: "tla.redirect_lightning",
         scryfall_id: "2b5b14a7-1fdd-4efc-b197-cadfa7f7c860",
-        name: "Redirect Lightning".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::ChangeTarget {
-            target: TargetSpec::SpellOrAbilityWithSingleTarget,
-        }],
-        additional_costs: vec![AdditionalCost::PayLifeOrMana {
-            life: 5,
-            mana: ManaCost::parse("{2}"),
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Redirect Lightning".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::ChangeTarget {
+                target: TargetSpec::SpellOrAbilityWithSingleTarget,
+            }],
+            additional_costs: vec![AdditionalCost::PayLifeOrMana {
+                life: 5,
+                mana: ManaCost::parse("{2}"),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7354,21 +7928,24 @@ fn rockalanche() -> CardDefinition {
     CardDefinition {
         key: "tla.rockalanche",
         scryfall_id: "52b213d3-6f68-43e6-91e9-435d8fe1f34c",
-        name: "Rockalanche".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::Earthbend {
-            count: EffectValue::BattlefieldMatching {
-                predicate: CardPredicate {
-                    subtype: Some("Forest".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Rockalanche".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::Earthbend {
+                count: EffectValue::BattlefieldMatching {
+                    predicate: CardPredicate {
+                        subtype: Some("Forest".into()),
+                        ..Default::default()
+                    },
                 },
-            },
-            what: ObjectSelector::Target(TargetSpec::LandYouControl),
-        }],
-        statics: vec![StaticAbility::Flashback(ManaCost::parse("{5}{G}"))],
-        text_box: text_box.into(),
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+            }],
+            statics: vec![StaticAbility::Flashback(ManaCost::parse("{5}{G}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7379,15 +7956,18 @@ fn rocky_rebuke() -> CardDefinition {
     CardDefinition {
         key: "tla.rocky_rebuke",
         scryfall_id: "52fd910f-6d42-41f5-a4be-f375aa254ea2",
-        name: "Rocky Rebuke".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::TargetCreaturesDealPowerDamageToLastTarget],
-        targeting: vec![
-            TargetRequirement::one(TargetSpec::CreatureYouControl),
-            TargetRequirement::one(TargetSpec::CreatureOpponentControls),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Rocky Rebuke".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::TargetCreaturesDealPowerDamageToLastTarget],
+            targeting: vec![
+                TargetRequirement::one(TargetSpec::CreatureYouControl),
+                TargetRequirement::one(TargetSpec::CreatureOpponentControls),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7398,36 +7978,37 @@ fn rough_rhino_cavalry() -> CardDefinition {
     CardDefinition {
         key: "tla.rough_rhino_cavalry",
         scryfall_id: "a8bc29cf-f6f8-4bb8-b722-f016b58b6d2d",
-        name: "Rough Rhino Cavalry".into(),
-        mana_cost: Some(ManaCost::parse("{4}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Mercenary".into()],
-        power: Some(5),
-        toughness: Some(5),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("RR"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Rough Rhino Cavalry".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Mercenary".into()],
+            power: Some(5),
+            toughness: Some(5),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RR"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            exhaust: true,
-            mana_cost: ManaCost::parse("{8}"),
-            effects: vec![
-                Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 2),
-                Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
-                ),
-            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                exhaust: true,
+                mana_cost: ManaCost::parse("{8}"),
+                effects: vec![
+                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 2),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                    ),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7438,27 +8019,30 @@ fn rowdy_snowballers() -> CardDefinition {
     CardDefinition {
         key: "tla.rowdy_snowballers",
         scryfall_id: "17d71522-b133-4003-b787-0c742a2fd70e",
-        name: "Rowdy Snowballers".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::tap(ObjectSelector::Target(TargetSpec::CreatureOpponentControls)),
-                Effect::put_counters(
-                    ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
-                    CounterKind::Stun,
-                    1,
-                ),
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Rowdy Snowballers".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![
+                    Effect::tap(ObjectSelector::Target(TargetSpec::CreatureOpponentControls)),
+                    Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                        CounterKind::Stun,
+                        1,
+                    ),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7469,29 +8053,32 @@ fn ruinous_waterbending() -> CardDefinition {
     CardDefinition {
         key: "tla.ruinous_waterbending",
         scryfall_id: "53161747-c82b-41e8-90ea-7791ea262a85",
-        name: "Ruinous Waterbending".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
-                Modification::pump(-2, -2),
-            ),
-            Effect::If {
-                condition: Condition::Kicked,
-                then: vec![Effect::CreateDelayedTrigger {
-                    remember: None,
-                    event: DelayedEvent::CreatureDies,
-                    frequency: DelayedFrequency::EachMatch,
-                    expiry: DelayedExpiry::ThisTurn,
-                    effects: vec![Effect::gain_life(1)],
-                }],
-                otherwise: vec![],
-            },
-        ],
-        additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{4}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Ruinous Waterbending".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
+                    Modification::pump(-2, -2),
+                ),
+                Effect::If {
+                    condition: Condition::Kicked,
+                    then: vec![Effect::CreateDelayedTrigger {
+                        remember: None,
+                        event: DelayedEvent::CreatureDies,
+                        frequency: DelayedFrequency::EachMatch,
+                        expiry: DelayedExpiry::ThisTurn,
+                        effects: vec![Effect::gain_life(1)],
+                    }],
+                    otherwise: vec![],
+                },
+            ],
+            additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{4}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7502,26 +8089,29 @@ fn rumble_arena() -> CardDefinition {
     CardDefinition {
         key: "tla.rumble_arena",
         scryfall_id: "3f5d2c38-663c-4f64-8cfc-c102462e82ef",
-        name: "Rumble Arena".into(),
-        types: CardTypes::new([CardType::Land]),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Scry { count: 1 }],
-        }],
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("1"),
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{1}"),
-            effects: vec![one_mana_of_any_color(None)],
+        printed: PrintedCharacteristics {
+            name: "Rumble Arena".into(),
+            types: CardTypes::new([CardType::Land]),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Scry { count: 1 }],
+            }],
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("1"),
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{1}"),
+                effects: vec![one_mana_of_any_color(None)],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7532,28 +8122,31 @@ fn saber_tooth_moose_lion() -> CardDefinition {
     CardDefinition {
         key: "tla.saber_tooth_moose_lion",
         scryfall_id: "b15f302d-c451-4e79-a5af-75ee3ba4cadf",
-        name: "Saber-Tooth Moose-Lion".into(),
-        mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Elk".into(), "Cat".into()],
-        power: Some(7),
-        toughness: Some(7),
-        keywords: Keywords::of(&[Keyword::Reach]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            zone: ActivationZone::Hand,
-            discard_source: true,
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::search_library(
-                CardPredicate {
-                    subtype: Some("Forest".into()),
-                    ..Default::default()
-                },
-                EffectValue::Fixed(1),
-                vec![Effect::return_to_hand(ObjectSelector::Selected)],
-            )],
+        printed: PrintedCharacteristics {
+            name: "Saber-Tooth Moose-Lion".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elk".into(), "Cat".into()],
+            power: Some(7),
+            toughness: Some(7),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Hand,
+                discard_source: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::search_library(
+                    CardPredicate {
+                        subtype: Some("Forest".into()),
+                        ..Default::default()
+                    },
+                    EffectValue::Fixed(1),
+                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7567,47 +8160,48 @@ fn sandbender_scavengers() -> CardDefinition {
     CardDefinition {
         key: "tla.sandbender_scavengers",
         scryfall_id: "9bfe0f7c-6dac-41d4-a013-109445158a5e",
-        name: "Sandbender Scavengers".into(),
-        mana_cost: Some(ManaCost::parse("{W}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Rogue".into()],
-        power: Some(1),
-        toughness: Some(1),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate::default(),
-                    controller_only: true,
-                    another: true,
+        printed: PrintedCharacteristics {
+            name: "Sandbender Scavengers".into(),
+            mana_cost: Some(ManaCost::parse("{W}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Rogue".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::Sacrificed {
+                        subject: TriggerSubject::another_you_control(CardPredicate::default()),
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 },
-                intervening_if: None,
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::OptionalPayment {
+                        cost: PaymentCost::Mana(ManaCost::default()),
+                        if_paid: vec![
+                            Effect::move_to(ObjectSelector::This, ZoneType::Exile),
+                            Effect::if_you_do(vec![Effect::WhenYouDo {
+                                effects: vec![Effect::return_to_battlefield(
+                                    ObjectSelector::Target(within_power()),
+                                    false,
+                                )],
+                            }]),
+                        ],
+                        if_declined: vec![],
+                    }],
                 },
-                intervening_if: None,
-                effects: vec![Effect::OptionalPayment {
-                    cost: PaymentCost::Mana(ManaCost::default()),
-                    if_paid: vec![
-                        Effect::move_to(ObjectSelector::This, ZoneType::Exile),
-                        Effect::if_you_do(vec![Effect::WhenYouDo {
-                            effects: vec![Effect::return_to_battlefield(
-                                ObjectSelector::Target(within_power()),
-                                false,
-                            )],
-                        }]),
-                    ],
-                    if_declined: vec![],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7618,27 +8212,30 @@ fn sandbenders_storm() -> CardDefinition {
     CardDefinition {
         key: "tla.sandbenders_storm",
         scryfall_id: "b3bf4a25-4329-4318-870a-2b06aa620dc4",
-        name: "Sandbenders' Storm".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::Modal {
-            modes: vec![
-                vec![Effect::destroy(ObjectSelector::Target(
-                    TargetSpec::Permanent {
-                        predicate: CardPredicate {
-                            min_power: Some(4),
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Sandbenders' Storm".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::destroy(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                min_power: Some(4),
+                                card_type: Some(CardType::Creature),
+                                ..Default::default()
+                            },
                         },
-                    },
-                ))],
-                vec![Effect::Earthbend {
-                    count: EffectValue::Fixed(3),
-                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                }],
-            ],
-        }],
-        text_box: text_box.into(),
+                    ))],
+                    vec![Effect::Earthbend {
+                        count: EffectValue::Fixed(3),
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                    }],
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7649,26 +8246,29 @@ fn secret_of_bloodbending() -> CardDefinition {
     CardDefinition {
         key: "tla.secret_of_bloodbending",
         scryfall_id: "9bb928ae-f636-4aee-9146-a7885e6a8976",
-        name: "Secret of Bloodbending".into(),
-        mana_cost: Some(ManaCost::parse("{U}{U}{U}{U}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{10}"))],
-        spell_effects: vec![
-            Effect::If {
-                condition: Condition::Kicked,
-                then: vec![Effect::ControlPlayer {
-                    what: ObjectSelector::Target(TargetSpec::Opponent),
-                    duration: PlayerControlDuration::NextTurn,
-                }],
-                otherwise: vec![Effect::ControlPlayer {
-                    what: ObjectSelector::Target(TargetSpec::Opponent),
-                    duration: PlayerControlDuration::NextCombat,
-                }],
-            },
-            Effect::exile(ObjectSelector::This),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Secret of Bloodbending".into(),
+            mana_cost: Some(ManaCost::parse("{U}{U}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{10}"))],
+            spell_effects: vec![
+                Effect::If {
+                    condition: Condition::Kicked,
+                    then: vec![Effect::ControlPlayer {
+                        what: ObjectSelector::Target(TargetSpec::Opponent),
+                        duration: PlayerControlDuration::NextTurn,
+                    }],
+                    otherwise: vec![Effect::ControlPlayer {
+                        what: ObjectSelector::Target(TargetSpec::Opponent),
+                        duration: PlayerControlDuration::NextCombat,
+                    }],
+                },
+                Effect::exile(ObjectSelector::This),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7679,33 +8279,36 @@ fn secret_tunnel() -> CardDefinition {
     CardDefinition {
         key: "tla.secret_tunnel",
         scryfall_id: "2d39a0e1-6484-409c-ab05-5b276925a949",
-        name: "Secret Tunnel".into(),
-        types: CardTypes::new([CardType::Land]),
-        subtypes: vec!["Cave".into()],
-        statics: vec![StaticAbility::CantBeBlockedIf(Condition::Always)],
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("1"),
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{4}"),
-            effects: vec![Effect::TargetClause {
-                requirement: TargetRequirement {
-                    shares_creature_type: true,
-                    min: 2,
-                    max: 2,
-                    ..TargetRequirement::one(TargetSpec::CreatureYouControl)
-                },
-                effects: vec![Effect::ForEachTarget {
-                    effects: vec![Effect::until_end_of_turn(
-                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                        Modification::CantBeBlocked,
-                    )],
-                }],
+        printed: PrintedCharacteristics {
+            name: "Secret Tunnel".into(),
+            types: CardTypes::new([CardType::Land]),
+            subtypes: vec!["Cave".into()],
+            statics: vec![StaticAbility::CantBeBlockedIf(Condition::Always)],
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("1"),
             }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{4}"),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        shares_creature_type: true,
+                        min: 2,
+                        max: 2,
+                        ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                    },
+                    effects: vec![Effect::ForEachTarget {
+                        effects: vec![Effect::until_end_of_turn(
+                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                            Modification::CantBeBlocked,
+                        )],
+                    }],
+                }],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -7716,28 +8319,31 @@ fn seismic_sense() -> CardDefinition {
     CardDefinition {
         key: "tla.seismic_sense",
         scryfall_id: "a7b93c2a-c478-4734-8aca-03f3e9c11b20",
-        name: "Seismic Sense".into(),
-        mana_cost: Some(ManaCost::parse("{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::LookAndSelect {
-            to_battlefield: false,
-            random_order: true,
-            reveal: true,
-            look: EffectValue::BattlefieldMatching {
+        printed: PrintedCharacteristics {
+            name: "Seismic Sense".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::LookAndSelect {
+                to_battlefield: false,
+                random_order: true,
+                reveal: true,
+                look: EffectValue::BattlefieldMatching {
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    },
+                },
+                min_select: 0,
+                max_select: 1,
                 predicate: CardPredicate {
-                    card_type: Some(CardType::Land),
+                    card_types_any: vec![CardType::Creature, CardType::Land],
                     ..Default::default()
                 },
-            },
-            min_select: 0,
-            max_select: 1,
-            predicate: CardPredicate {
-                card_types_any: vec![CardType::Creature, CardType::Land],
-                ..Default::default()
-            },
-        }],
-        text_box: text_box.into(),
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7748,26 +8354,29 @@ fn serpent_of_the_pass() -> CardDefinition {
     CardDefinition {
         key: "tla.serpent_of_the_pass",
         scryfall_id: "87595843-15bc-48bb-8a81-3e6ad924ed44",
-        name: "Serpent of the Pass".into(),
-        mana_cost: Some(ManaCost::parse("{5}{U}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Serpent".into()],
-        power: Some(6),
-        toughness: Some(5),
-        statics: vec![
-            StaticAbility::FlashIf(Condition::GraveyardAtLeast {
-                count: 3,
-                predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
+        printed: PrintedCharacteristics {
+            name: "Serpent of the Pass".into(),
+            mana_cost: Some(ManaCost::parse("{5}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Serpent".into()],
+            power: Some(6),
+            toughness: Some(5),
+            statics: vec![
+                StaticAbility::FlashIf(Condition::GraveyardAtLeast {
+                    count: 3,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
+                }),
+                StaticAbility::CostsLessPerGraveyardCard(CardPredicate {
+                    not_card_types: vec![CardType::Creature, CardType::Land],
                     ..Default::default()
-                },
-            }),
-            StaticAbility::CostsLessPerGraveyardCard(CardPredicate {
-                not_card_types: vec![CardType::Creature, CardType::Land],
-                ..Default::default()
-            }),
-        ],
-        text_box: text_box.into(),
+                }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7778,26 +8387,29 @@ fn serpents_pass() -> CardDefinition {
     CardDefinition {
         key: "tla.serpents_pass",
         scryfall_id: "ad87bff5-9b8c-44e4-a6d3-8cc71be9640a",
-        name: "Serpent's Pass".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["U", "B"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Serpent's Pass".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["U", "B"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7808,19 +8420,22 @@ fn shared_roots() -> CardDefinition {
     CardDefinition {
         key: "tla.shared_roots",
         scryfall_id: "e7847ba5-e85e-417f-96c0-aef2e6f83994",
-        name: "Shared Roots".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::search_library(
-            CardPredicate::basic_land(),
-            EffectValue::Fixed(1),
-            vec![Effect::return_to_battlefield(
-                ObjectSelector::Selected,
-                true,
+        printed: PrintedCharacteristics {
+            name: "Shared Roots".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::search_library(
+                CardPredicate::basic_land(),
+                EffectValue::Fixed(1),
+                vec![Effect::return_to_battlefield(
+                    ObjectSelector::Selected,
+                    true,
+                )],
             )],
-        )],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7833,9 +8448,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
     };
     let prowess = || Ability::Triggered {
         intervening_if: None,
-        condition: TriggerCondition::YouCastSpell {
-            predicate: noncreature(),
-        },
+        condition: TriggerCondition::casts(Actor::You, noncreature()),
         effects: vec![Effect::until_end_of_turn(
             ObjectSelector::This,
             Modification::pump(1, 1),
@@ -7846,36 +8459,37 @@ fn sokka_tenacious_tactician() -> CardDefinition {
     CardDefinition {
         key: "tla.sokka_tenacious_tactician",
         scryfall_id: "f0fa5897-1da7-488f-bb19-1632e969c050",
-        name: "Sokka, Tenacious Tactician".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}{R}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Menace]),
-        abilities: vec![
-            prowess(),
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: noncreature(),
+        printed: PrintedCharacteristics {
+            name: "Sokka, Tenacious Tactician".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{R}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            abilities: vec![
+                prowess(),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(Actor::You, noncreature()),
+                    effects: vec![Effect::create_tokens("token.ally", 1)],
                 },
-                effects: vec![Effect::create_tokens("Ally", 1)],
-            },
-        ],
-        statics: vec![
-            StaticAbility::KeywordGrant(StaticKeywordGrant {
-                scope: other_allies(),
-                condition: None,
-                keywords: Keywords::of(&[Keyword::Menace]),
-            }),
-            StaticAbility::TriggeredGrant(StaticTriggeredGrant {
-                scope: other_allies(),
-                ability: Box::new(prowess()),
-            }),
-        ],
-        text_box: text_box.into(),
+            ],
+            statics: vec![
+                StaticAbility::KeywordGrant(StaticKeywordGrant {
+                    scope: other_allies(),
+                    condition: None,
+                    keywords: Keywords::of(&[Keyword::Menace]),
+                }),
+                StaticAbility::TriggeredGrant(StaticTriggeredGrant {
+                    scope: other_allies(),
+                    ability: Box::new(prowess()),
+                }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7886,18 +8500,21 @@ fn sold_out() -> CardDefinition {
     CardDefinition {
         key: "tla.sold_out",
         scryfall_id: "1affba6d-2cca-4cdf-8690-1e23ffbe8462",
-        name: "Sold Out".into(),
-        mana_cost: Some(ManaCost::parse("{3}{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::exile(ObjectSelector::Target(TargetSpec::Creature)),
-            Effect::If {
-                condition: Condition::TargetDealtDamageThisTurn,
-                then: vec![Effect::create_tokens("Clue", 1)],
-                otherwise: vec![],
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Sold Out".into(),
+            mana_cost: Some(ManaCost::parse("{3}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::exile(ObjectSelector::Target(TargetSpec::Creature)),
+                Effect::If {
+                    condition: Condition::TargetDealtDamageThisTurn,
+                    then: vec![Effect::create_tokens("token.clue", 1)],
+                    otherwise: vec![],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7908,46 +8525,50 @@ fn sokka_bold_boomeranger() -> CardDefinition {
     CardDefinition {
         key: "tla.sokka_bold_boomeranger",
         scryfall_id: "4a1f1472-55b4-450d-8e4d-7297130a0cf3",
-        name: "Sokka, Bold Boomeranger".into(),
-        mana_cost: Some(ManaCost::parse("{U}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::discard_draw(2, 1)],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate {
-                        any_of: vec![
-                            CardPredicate {
-                                card_type: Some(CardType::Artifact),
-                                ..Default::default()
-                            },
-                            CardPredicate {
-                                subtype: Some("Lesson".into()),
-                                ..Default::default()
-                            },
-                        ],
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Sokka, Bold Boomeranger".into(),
+            mana_cost: Some(ManaCost::parse("{U}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
+                    effects: vec![Effect::discard_draw(2, 1)],
                 },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate {
+                            any_of: vec![
+                                CardPredicate {
+                                    card_type: Some(CardType::Artifact),
+                                    ..Default::default()
+                                },
+                                CardPredicate {
+                                    subtype: Some("Lesson".into()),
+                                    ..Default::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    ),
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7958,22 +8579,29 @@ fn sokka_lateral_strategist() -> CardDefinition {
     CardDefinition {
         key: "tla.sokka_lateral_strategist",
         scryfall_id: "1326c5db-4615-495f-8e30-376243d91352",
-        name: "Sokka, Lateral Strategist".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W/U}{W/U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::AttacksWithAnother,
-            effects: vec![Effect::DrawCards {
-                count: EffectValue::Fixed(1),
+        printed: PrintedCharacteristics {
+            name: "Sokka, Lateral Strategist".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W/U}{W/U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                    per: Per::Object,
+                    attackers: AttackSize::WithAnother,
+                },
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -7984,42 +8612,46 @@ fn sokka_s_haiku() -> CardDefinition {
     CardDefinition {
         key: "tla.sokka_s_haiku",
         scryfall_id: "004be4bc-ac3c-4026-8d36-f4687ab18c70",
-        name: "Sokka's Haiku".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::TargetClause {
-                requirement: TargetRequirement::one(TargetSpec::Spell),
-                effects: vec![Effect::CounterSpell {
-                    what: ObjectSelector::Target(TargetSpec::Spell),
-                }],
-            },
-            Effect::DrawCards {
-                count: EffectValue::Fixed(1),
-            },
-            Effect::MillCards {
-                count: EffectValue::Fixed(3),
-                target: None,
-            },
-            Effect::TargetClause {
-                requirement: TargetRequirement::one(TargetSpec::Permanent {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Land),
-                        ..Default::default()
-                    },
-                }),
-                effects: vec![Effect::untap(ObjectSelector::Target(
-                    TargetSpec::Permanent {
+        printed: PrintedCharacteristics {
+            name: "Sokka's Haiku".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Spell),
+                    effects: vec![Effect::CounterSpell {
+                        what: ObjectSelector::Target(TargetSpec::Spell),
+                        exile: false,
+                    }],
+                },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+                Effect::MillCards {
+                    count: EffectValue::Fixed(3),
+                    target: None,
+                },
+                Effect::TargetClause {
+                    requirement: TargetRequirement::one(TargetSpec::Permanent {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Land),
                             ..Default::default()
                         },
-                    },
-                ))],
-            },
-        ],
-        text_box: text_box.into(),
+                    }),
+                    effects: vec![Effect::untap(ObjectSelector::Target(
+                        TargetSpec::Permanent {
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Land),
+                                ..Default::default()
+                            },
+                        },
+                    ))],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8030,20 +8662,23 @@ fn solstice_revelations() -> CardDefinition {
     CardDefinition {
         key: "tla.solstice_revelations",
         scryfall_id: "f22ac19f-66fb-4d54-9f09-495a20a29577",
-        name: "Solstice Revelations".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::ExileUntilNonlandCastFree {
-            below: EffectValue::BattlefieldMatching {
-                predicate: CardPredicate {
-                    subtype: Some("Mountain".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Solstice Revelations".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![Effect::ExileUntilNonlandCastFree {
+                below: EffectValue::BattlefieldMatching {
+                    predicate: CardPredicate {
+                        subtype: Some("Mountain".into()),
+                        ..Default::default()
+                    },
                 },
-            },
-        }],
-        statics: vec![StaticAbility::Flashback(ManaCost::parse("{6}{R}"))],
-        text_box: text_box.into(),
+            }],
+            statics: vec![StaticAbility::Flashback(ManaCost::parse("{6}{R}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8054,31 +8689,34 @@ fn south_pole_voyager() -> CardDefinition {
     CardDefinition {
         key: "tla.south_pole_voyager",
         scryfall_id: "4b5ad895-be8d-476b-91ca-22fad7a3cc58",
-        name: "South Pole Voyager".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Scout".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
-                    subtype: Some("Ally".into()),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![
-                Effect::gain_life(1),
-                Effect::OnNthResolutionThisTurn {
-                    n: 2,
-                    effect: Box::new(Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
+        printed: PrintedCharacteristics {
+            name: "South Pole Voyager".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Scout".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::you_control(CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
                     }),
                 },
-            ],
-        }],
-        text_box: text_box.into(),
+                effects: vec![
+                    Effect::gain_life(1),
+                    Effect::OnNthResolutionThisTurn {
+                        n: 2,
+                        effect: Box::new(Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        }),
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8089,44 +8727,47 @@ fn southern_air_temple() -> CardDefinition {
     CardDefinition {
         key: "tla.southern_air_temple",
         scryfall_id: "5c172f9b-2184-4736-9f90-74ce08596292",
-        name: "Southern Air Temple".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Shrine".into()],
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Southern Air Temple".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Shrine".into()],
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::each_you_control(CardPredicate::creature()),
+                        CounterKind::PlusOnePlusOne,
+                        EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                subtype: Some("Shrine".into()),
+                                ..Default::default()
+                            },
+                        },
+                    )],
                 },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::each_you_control(CardPredicate::creature()),
-                    CounterKind::PlusOnePlusOne,
-                    EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::another_you_control(CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
-                        },
+                        }),
                     },
-                )],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                        subtype: Some("Shrine".into()),
-                        ..Default::default()
-                    }),
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::each_you_control(CardPredicate::creature()),
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    )],
                 },
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::each_you_control(CardPredicate::creature()),
-                    CounterKind::PlusOnePlusOne,
-                    1,
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8137,15 +8778,18 @@ fn sozins_comet() -> CardDefinition {
     CardDefinition {
         key: "tla.sozins_comet",
         scryfall_id: "649e50e5-299b-4191-87a8-36e9378795be",
-        name: "Sozin's Comet".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::until_end_of_turn(
-            ObjectSelector::each_you_control(CardPredicate::creature()),
-            Modification::Firebending(5),
-        )],
-        statics: vec![StaticAbility::Foretell(ManaCost::parse("{2}{R}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Sozin's Comet".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::each_you_control(CardPredicate::creature()),
+                Modification::Firebending(5),
+            )],
+            statics: vec![StaticAbility::Foretell(ManaCost::parse("{2}{R}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8156,40 +8800,43 @@ fn sparring_dummy() -> CardDefinition {
     CardDefinition {
         key: "tla.sparring_dummy",
         scryfall_id: "520f5a03-ff5a-43ed-8f15-cf24596d60cd",
-        name: "Sparring Dummy".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Creature, CardType::Artifact]),
-        subtypes: vec!["Scarecrow".into()],
-        power: Some(1),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Defender]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            effects: vec![
-                Effect::MillCards {
-                    count: EffectValue::Fixed(1),
-                    target: None,
-                },
-                Effect::SelectCards {
-                    from: ObjectSelector::CardsThisWay,
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Land),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Sparring Dummy".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature, CardType::Artifact]),
+            subtypes: vec!["Scarecrow".into()],
+            power: Some(1),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Defender]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![
+                    Effect::MillCards {
+                        count: EffectValue::Fixed(1),
+                        target: None,
                     },
-                    min: 0,
-                    max: EffectValue::Fixed(1),
-                    effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                    if_declined: vec![],
-                },
-                Effect::If {
-                    condition: Condition::CardsThisWayMatch(CardPredicate::subtype("Lesson")),
-                    then: vec![Effect::gain_life(2)],
-                    otherwise: vec![],
-                },
-            ],
+                    Effect::SelectCards {
+                        from: ObjectSelector::CardsThisWay,
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Land),
+                            ..Default::default()
+                        },
+                        min: 0,
+                        max: EffectValue::Fixed(1),
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                        if_declined: vec![],
+                    },
+                    Effect::If {
+                        condition: Condition::CardsThisWayMatch(CardPredicate::subtype("Lesson")),
+                        then: vec![Effect::gain_life(2)],
+                        otherwise: vec![],
+                    },
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -8200,27 +8847,30 @@ fn spirit_water_revival() -> CardDefinition {
     CardDefinition {
         key: "tla.spirit_water_revival",
         scryfall_id: "0c019e76-c88e-4d1b-a546-0f4e462ef44a",
-        name: "Spirit Water Revival".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::If {
-                condition: Condition::Kicked,
-                then: vec![
-                    Effect::ShuffleGraveyardIntoLibrary,
-                    Effect::DrawCards {
-                        count: EffectValue::Fixed(7),
-                    },
-                    Effect::indefinitely(ObjectSelector::You, Modification::NoMaximumHandSize),
-                ],
-                otherwise: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(2),
-                }],
-            },
-            Effect::exile(ObjectSelector::This),
-        ],
-        additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{6}"))],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Spirit Water Revival".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::If {
+                    condition: Condition::Kicked,
+                    then: vec![
+                        Effect::ShuffleGraveyardIntoLibrary,
+                        Effect::DrawCards {
+                            count: EffectValue::Fixed(7),
+                        },
+                        Effect::indefinitely(ObjectSelector::You, Modification::NoMaximumHandSize),
+                    ],
+                    otherwise: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(2),
+                    }],
+                },
+                Effect::exile(ObjectSelector::This),
+            ],
+            additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{6}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8231,35 +8881,38 @@ fn suki_courageous_rescuer() -> CardDefinition {
     CardDefinition {
         key: "tla.suki_courageous_rescuer",
         scryfall_id: "33b97433-e16c-422e-a0ca-f6b1e98d8681",
-        name: "Suki, Courageous Rescuer".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(4),
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::OtherYouControl(CardPredicate::creature()),
-            condition: None,
-            power: 1,
-            toughness: 0,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::OnceEachTurn {
-                condition: Box::new(TriggerCondition::ActiveIf {
-                    active_if: Condition::YourTurn,
-                    condition: Box::new(TriggerCondition::LeavesTheBattlefield {
-                        subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+        printed: PrintedCharacteristics {
+            name: "Suki, Courageous Rescuer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(4),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::OtherYouControl(CardPredicate::creature()),
+                condition: None,
+                power: 1,
+                toughness: 0,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::OnceEachTurn {
+                    condition: Box::new(TriggerCondition::ActiveIf {
+                        active_if: Condition::YourTurn,
+                        condition: Box::new(TriggerCondition::LeavesTheBattlefield {
+                            subject: TriggerSubject::another_you_control(CardPredicate::default()),
+                        }),
                     }),
-                }),
-            },
-            intervening_if: None,
-            effects: vec![Effect::create_tokens("Ally", 1)],
-        }],
-        text_box: text_box.into(),
+                },
+                intervening_if: None,
+                effects: vec![Effect::create_tokens("token.ally", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8270,27 +8923,29 @@ fn suki_kyoshi_warrior() -> CardDefinition {
     CardDefinition {
         key: "tla.suki_kyoshi_warrior",
         scryfall_id: "3e311480-04f8-4b8f-938e-1cc6d06b9902",
-        name: "Suki, Kyoshi Warrior".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        toughness: Some(4),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
-                count: EffectValue::Fixed(1),
-                tapped_and_attacking: true,
+        printed: PrintedCharacteristics {
+            name: "Suki, Kyoshi Warrior".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::CreateToken {
+                    token: "token.ally".into(),
+                    count: EffectValue::Fixed(1),
+                    tapped_and_attacking: true,
+                    tapped: false,
+                }],
             }],
-        }],
-        statics: vec![StaticAbility::CharacteristicPower(
-            PowerCda::CreaturesYouControl,
-        )],
-        text_box: text_box.into(),
+            statics: vec![StaticAbility::CharacteristicPower(
+                PowerCda::CreaturesYouControl,
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8301,26 +8956,29 @@ fn sun_blessed_peak() -> CardDefinition {
     CardDefinition {
         key: "tla.sun_blessed_peak",
         scryfall_id: "ae04c862-095f-41d2-8aef-21036d5a0cdc",
-        name: "Sun-Blessed Peak".into(),
-        types: CardTypes::new([CardType::Land]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{4}"),
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![Effect::mana_choice(["R", "W"].map(Mana::parse))],
-                ..Default::default()
-            },
-        ],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Sun-Blessed Peak".into(),
+            types: CardTypes::new([CardType::Land]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{4}"),
+                    sacrifice_source: true,
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::mana_choice(["R", "W"].map(Mana::parse))],
+                    ..Default::default()
+                },
+            ],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8331,31 +8989,32 @@ fn sun_warriors() -> CardDefinition {
     CardDefinition {
         key: "tla.sun_warriors",
         scryfall_id: "e477d750-42d2-48c8-bc1f-8148d15d5f53",
-        name: "Sun Warriors".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(5),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("R"),
-                amount: EffectValue::BattlefieldMatching {
-                    predicate: CardPredicate::creature(),
-                },
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Sun Warriors".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(5),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("R"),
+                    amount: EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate::creature(),
+                    },
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{5}"),
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{5}"),
+                effects: vec![Effect::create_tokens("token.ally", 1)],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -8366,34 +9025,37 @@ fn swampsnare_trap() -> CardDefinition {
     CardDefinition {
         key: "tla.swampsnare_trap",
         scryfall_id: "6348b6bf-08a7-45f0-8b2d-2827ab89f21c",
-        name: "Swampsnare Trap".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Aura".into()],
-        spell_effects: vec![Effect::AttachSourceTo {
-            what: ObjectSelector::Target(TargetSpec::Creature),
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        statics: vec![
-            StaticAbility::CostsLessIfTargets(TargetCostReduction {
-                predicate: CardPredicate {
-                    flying: true,
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                },
-                generic: 1,
-            }),
-            StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::Attached,
-                condition: None,
-                power: -5,
-                toughness: -3,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            }),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Swampsnare Trap".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            statics: vec![
+                StaticAbility::CostsLessIfTargets(TargetCostReduction {
+                    predicate: CardPredicate {
+                        flying: true,
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    },
+                    generic: 1,
+                }),
+                StaticAbility::PtBuff(StaticPtBuff {
+                    scope: StaticScope::Attached,
+                    condition: None,
+                    power: -5,
+                    toughness: -3,
+                    per_creature_type_max: None,
+                    per_color_among: None,
+                    per_graveyard_matching: None,
+                }),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8404,51 +9066,56 @@ fn team_avatar() -> CardDefinition {
     CardDefinition {
         key: "tla.team_avatar",
         scryfall_id: "a9a5f6f7-f04d-477f-b67f-fd01a5dcc0f5",
-        name: "Team Avatar".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::AttacksAlone {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::Triggering,
-                Modification::ModifyPt {
-                    power: EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
-                        },
-                    },
-                    toughness: EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
-                            card_type: Some(CardType::Creature),
-                            ..Default::default()
-                        },
-                    },
-                },
-            )],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            zone: ActivationZone::Hand,
-            discard_source: true,
-            mana_cost: ManaCost::parse("{2}{W}"),
-            effects: vec![Effect::DealDamage {
-                amount: EffectValue::BattlefieldMatching {
-                    predicate: CardPredicate {
+        printed: PrintedCharacteristics {
+            name: "Team Avatar".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
-                    },
+                    }),
+                    per: Per::Object,
+                    attackers: AttackSize::Alone,
                 },
-                what: ObjectSelector::Target(TargetSpec::Creature),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Triggering,
+                    Modification::ModifyPt {
+                        power: EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Creature),
+                                ..Default::default()
+                            },
+                        },
+                        toughness: EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Creature),
+                                ..Default::default()
+                            },
+                        },
+                    },
+                )],
             }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                zone: ActivationZone::Hand,
+                discard_source: true,
+                mana_cost: ManaCost::parse("{2}{W}"),
+                effects: vec![Effect::deal_damage(
+                    EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                    },
+                    ObjectSelector::Target(TargetSpec::Creature),
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -8459,45 +9126,49 @@ fn teo_spirited_glider() -> CardDefinition {
     CardDefinition {
         key: "tla.teo_spirited_glider",
         scryfall_id: "66906ed4-baac-4be0-9359-34f453d1a04a",
-        name: "Teo, Spirited Glider".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    flying: true,
-                    ..Default::default()
-                }),
-            },
-            intervening_if: None,
-            effects: vec![
-                Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                },
-                Effect::discard(),
-                Effect::If {
-                    condition: Condition::CardsThisWayMatch(CardPredicate {
-                        not_card_types: vec![CardType::Land],
+        printed: PrintedCharacteristics {
+            name: "Teo, Spirited Glider".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(
+                    TriggerSubject::you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        flying: true,
                         ..Default::default()
                     }),
-                    then: vec![Effect::WhenYouDo {
-                        effects: vec![Effect::put_counters(
-                            ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                            CounterKind::PlusOnePlusOne,
-                            1,
-                        )],
-                    }],
-                    otherwise: vec![],
-                },
-            ],
-        }],
-        text_box: text_box.into(),
+                    Per::Batch,
+                ),
+                intervening_if: None,
+                effects: vec![
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    },
+                    Effect::discard(),
+                    Effect::If {
+                        condition: Condition::CardsThisWayMatch(CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            ..Default::default()
+                        }),
+                        then: vec![Effect::WhenYouDo {
+                            effects: vec![Effect::put_counters(
+                                ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                                CounterKind::PlusOnePlusOne,
+                                1,
+                            )],
+                        }],
+                        otherwise: vec![],
+                    },
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8508,30 +9179,31 @@ fn the_boulder_ready_to_rumble() -> CardDefinition {
     CardDefinition {
         key: "tla.the_boulder_ready_to_rumble",
         scryfall_id: "ec27a466-5457-44c6-a842-1de7d3788d66",
-        name: "The Boulder, Ready to Rumble".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Performer".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::BattlefieldMatching {
-                    predicate: CardPredicate {
-                        min_power: Some(4),
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "The Boulder, Ready to Rumble".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Performer".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            min_power: Some(4),
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
                     },
-                },
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8542,32 +9214,35 @@ fn the_cave_of_two_lovers() -> CardDefinition {
     CardDefinition {
         key: "tla.the_cave_of_two_lovers",
         scryfall_id: "50bf5c8b-f218-46b7-843c-8d8083f02fd2",
-        name: "The Cave of Two Lovers".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Saga".into()],
-        abilities: vec![
-            chapter(1, vec![Effect::create_tokens("Ally", 2)]),
-            chapter(
-                2,
-                vec![Effect::search_library(
-                    CardPredicate {
-                        subtypes_any: vec!["Mountain".into(), "Cave".into()],
-                        ..Default::default()
-                    },
-                    1.into(),
-                    vec![Effect::return_to_hand(ObjectSelector::Selected)],
-                )],
-            ),
-            chapter(
-                3,
-                vec![Effect::Earthbend {
-                    count: EffectValue::Fixed(3),
-                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                }],
-            ),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "The Cave of Two Lovers".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Saga".into()],
+            abilities: vec![
+                chapter(1, vec![Effect::create_tokens("token.ally", 2)]),
+                chapter(
+                    2,
+                    vec![Effect::search_library(
+                        CardPredicate {
+                            subtypes_any: vec!["Mountain".into(), "Cave".into()],
+                            ..Default::default()
+                        },
+                        1.into(),
+                        vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                    )],
+                ),
+                chapter(
+                    3,
+                    vec![Effect::Earthbend {
+                        count: EffectValue::Fixed(3),
+                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                    }],
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8578,47 +9253,51 @@ fn the_earth_king() -> CardDefinition {
     CardDefinition {
         key: "tla.the_earth_king",
         scryfall_id: "a8d5dca6-381a-4361-b265-27de8d04335c",
-        name: "The Earth King".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "The Earth King".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::create_tokens("token.bear", 1)],
                 },
-                effects: vec![Effect::create_tokens("Bear", 1)],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        min_power: Some(4),
-                        ..Default::default()
-                    }),
-                },
-                effects: vec![Effect::search_library(
-                    CardPredicate::basic_land(),
-                    EffectValue::AttackingMatching {
-                        predicate: CardPredicate {
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(
+                        TriggerSubject::you_control(CardPredicate {
                             card_type: Some(CardType::Creature),
                             min_power: Some(4),
                             ..Default::default()
+                        }),
+                        Per::Batch,
+                    ),
+                    effects: vec![Effect::search_library(
+                        CardPredicate::basic_land(),
+                        EffectValue::AttackingMatching {
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Creature),
+                                min_power: Some(4),
+                                ..Default::default()
+                            },
                         },
-                    },
-                    vec![Effect::return_to_battlefield(
-                        ObjectSelector::Selected,
-                        true,
+                        vec![Effect::return_to_battlefield(
+                            ObjectSelector::Selected,
+                            true,
+                        )],
                     )],
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8629,60 +9308,63 @@ fn the_fire_nation_drill() -> CardDefinition {
     CardDefinition {
         key: "tla.the_fire_nation_drill",
         scryfall_id: "54d762f6-e131-480f-b294-10f5a63d9c98",
-        name: "The Fire Nation Drill".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
-        types: CardTypes::new([CardType::Artifact]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Vehicle".into()],
-        power: Some(6),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Trample]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: None,
-            effects: vec![Effect::OptionalPayment {
-                cost: PaymentCost::Mana(ManaCost::default()),
-                if_paid: vec![
-                    Effect::tap(ObjectSelector::This),
-                    Effect::WhenYouDo {
-                        effects: vec![Effect::destroy(ObjectSelector::Target(
-                            TargetSpec::Permanent {
-                                predicate: CardPredicate {
-                                    card_type: Some(CardType::Creature),
-                                    max_power: Some(4),
-                                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "The Fire Nation Drill".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+            types: CardTypes::new([CardType::Artifact]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Vehicle".into()],
+            power: Some(6),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::default()),
+                    if_paid: vec![
+                        Effect::tap(ObjectSelector::This),
+                        Effect::WhenYouDo {
+                            effects: vec![Effect::destroy(ObjectSelector::Target(
+                                TargetSpec::Permanent {
+                                    predicate: CardPredicate {
+                                        card_type: Some(CardType::Creature),
+                                        max_power: Some(4),
+                                        ..Default::default()
+                                    },
                                 },
-                            },
-                        ))],
-                    },
-                ],
-                if_declined: vec![],
+                            ))],
+                        },
+                    ],
+                    if_declined: vec![],
+                }],
             }],
-        }],
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::each(Scope::OpponentsControl, CardPredicate::default()),
-                    Modification::LoseKeywords(Keywords::of(&[
-                        Keyword::Hexproof,
-                        Keyword::Indestructible,
-                    ])),
-                )],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                crew: Some(2),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::BecomeCreature,
-                )],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    mana_cost: ManaCost::parse("{1}"),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::each(Scope::OpponentsControl, CardPredicate::default()),
+                        Modification::LoseKeywords(Keywords::of(&[
+                            Keyword::Hexproof,
+                            Keyword::Indestructible,
+                        ])),
+                    )],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    crew: Some(2),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::BecomeCreature,
+                    )],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8693,26 +9375,29 @@ fn the_last_agni_kai() -> CardDefinition {
     CardDefinition {
         key: "tla.the_last_agni_kai",
         scryfall_id: "61eaebc6-7575-48ed-b212-ff8b0c7ae694",
-        name: "The Last Agni Kai".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::FightLastTarget,
-            Effect::AddMana {
-                mana: Mana::parse("R"),
-                amount: EffectValue::ExcessDamage,
-                until_end_of_combat: false,
-            },
-            Effect::until_end_of_turn(
-                ObjectSelector::You,
-                Modification::KeepUnspentMana(Color::Red),
-            ),
-        ],
-        targeting: vec![
-            TargetRequirement::one(TargetSpec::CreatureYouControl),
-            TargetRequirement::one(TargetSpec::CreatureOpponentControls),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "The Last Agni Kai".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::FightLastTarget,
+                Effect::AddMana {
+                    mana: Mana::parse("R"),
+                    amount: EffectValue::ExcessDamage,
+                    until_end_of_combat: false,
+                },
+                Effect::until_end_of_turn(
+                    ObjectSelector::You,
+                    Modification::KeepUnspentMana(Color::Red),
+                ),
+            ],
+            targeting: vec![
+                TargetRequirement::one(TargetSpec::CreatureYouControl),
+                TargetRequirement::one(TargetSpec::CreatureOpponentControls),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -8732,17 +9417,20 @@ fn the_legend_of_kuruk() -> CardDefinition {
     CardDefinition {
         key: "tla.the_legend_of_kuruk",
         scryfall_id: "5e9a53d3-7f2f-4a9c-9516-0713da740478",
-        name: "The Legend of Kuruk".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Saga".into()],
-        abilities: vec![
-            chapter(1, scry_then_draw()),
-            chapter(2, scry_then_draw()),
-            chapter(3, return_transformed()),
-        ],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
+        printed: PrintedCharacteristics {
+            name: "The Legend of Kuruk".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Saga".into()],
+            abilities: vec![
+                chapter(1, scry_then_draw()),
+                chapter(2, scry_then_draw()),
+                chapter(3, return_transformed()),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
             name: "Avatar Kuruk".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -8751,10 +9439,8 @@ fn the_legend_of_kuruk() -> CardDefinition {
             toughness: Some(3),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate::default(),
-                },
-                effects: vec![Effect::create_tokens("Spirit", 1)],
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
+                effects: vec![Effect::create_tokens("token.spirit", 1)],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 exhaust: true,
@@ -8766,7 +9452,6 @@ fn the_legend_of_kuruk() -> CardDefinition {
             text_box: back_text.into(),
             ..Default::default()
         })),
-        ..Default::default()
     }
 }
 
@@ -8777,35 +9462,40 @@ fn the_legend_of_kyoshi() -> CardDefinition {
     CardDefinition {
         key: "tla.the_legend_of_kyoshi",
         scryfall_id: "4887ce64-7c98-4bd7-95db-0c43ab71cc6e",
-        name: "The Legend of Kyoshi".into(),
-        mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Saga".into()],
-        abilities: vec![
-            chapter(
-                1,
-                vec![Effect::DrawCards {
-                    count: EffectValue::GreatestPowerYouControl,
-                }],
-            ),
-            chapter(
-                2,
-                vec![
-                    Effect::Earthbend {
-                        count: EffectValue::CardsInHand,
-                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
-                    },
-                    Effect::ApplyContinuous {
-                        affected: ObjectSelector::Target(TargetSpec::LandYouControl),
-                        modification: Modification::AddSubtypes(vec!["Island".into()]),
-                        duration: EffectDuration::Indefinite,
-                    },
-                ],
-            ),
-            chapter(3, return_transformed()),
-        ],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
+        printed: PrintedCharacteristics {
+            name: "The Legend of Kyoshi".into(),
+            mana_cost: Some(ManaCost::parse("{4}{G}{G}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Saga".into()],
+            abilities: vec![
+                chapter(
+                    1,
+                    vec![Effect::DrawCards {
+                        count: EffectValue::GreatestPowerYouControl {
+                            predicate: CardPredicate::default(),
+                        },
+                    }],
+                ),
+                chapter(
+                    2,
+                    vec![
+                        Effect::Earthbend {
+                            count: EffectValue::CardsInHand,
+                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                        },
+                        Effect::ApplyContinuous {
+                            affected: ObjectSelector::Target(TargetSpec::LandYouControl),
+                            modification: Modification::AddSubtypes(vec!["Island".into()]),
+                            duration: EffectDuration::Indefinite,
+                        },
+                    ],
+                ),
+                chapter(3, return_transformed()),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
             name: "Avatar Kyoshi".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -8823,14 +9513,15 @@ fn the_legend_of_kyoshi() -> CardDefinition {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 effects: vec![Effect::AddOneColorManaValue {
-                    amount: EffectValue::GreatestPowerYouControl,
+                    amount: EffectValue::GreatestPowerYouControl {
+                        predicate: CardPredicate::default(),
+                    },
                 }],
                 ..Default::default()
             }],
             text_box: back_text.into(),
             ..Default::default()
         })),
-        ..Default::default()
     }
 }
 
@@ -8841,23 +9532,26 @@ fn the_legend_of_roku() -> CardDefinition {
     CardDefinition {
         key: "tla.the_legend_of_roku",
         scryfall_id: "95f2f5af-d405-4534-8683-5a9001f997b4",
-        name: "The Legend of Roku".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Saga".into()],
-        abilities: vec![
-            chapter(
-                1,
-                vec![Effect::ExileTopCardsToPlay {
-                    count: 3,
-                    until: PlayWindow::ThroughYourNextTurn,
-                }],
-            ),
-            chapter(2, vec![one_mana_of_any_color(None)]),
-            chapter(3, return_transformed()),
-        ],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
+        printed: PrintedCharacteristics {
+            name: "The Legend of Roku".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Saga".into()],
+            abilities: vec![
+                chapter(
+                    1,
+                    vec![Effect::ExileTopCardsToPlay {
+                        count: 3,
+                        until: PlayWindow::ThroughYourNextTurn,
+                    }],
+                ),
+                chapter(2, vec![one_mana_of_any_color(None)]),
+                chapter(3, return_transformed()),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
             name: "Avatar Roku".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -8866,9 +9560,7 @@ fn the_legend_of_roku() -> CardDefinition {
             toughness: Some(4),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: vec![Effect::AddMana {
                     mana: Mana::parse("RRRR"),
                     amount: EffectValue::Fixed(1),
@@ -8877,13 +9569,12 @@ fn the_legend_of_roku() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{8}"),
-                effects: vec![Effect::create_tokens("Dragon", 1)],
+                effects: vec![Effect::create_tokens("token.dragon", 1)],
                 ..Default::default()
             }],
             text_box: back_text.into(),
             ..Default::default()
         })),
-        ..Default::default()
     }
 }
 
@@ -8903,42 +9594,47 @@ fn the_legend_of_yangchen() -> CardDefinition {
     CardDefinition {
         key: "tla.the_legend_of_yangchen",
         scryfall_id: "a60e8f23-90b2-4bc6-bd54-a95055556389",
-        name: "The Legend of Yangchen".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Saga".into()],
-        abilities: vec![
-            chapter(
-                1,
-                vec![Effect::EachPlayerChoosesToExile {
-                    predicate: CardPredicate {
-                        min_mana_value: Some(3),
-                        ..Default::default()
-                    },
-                }],
-            ),
-            chapter(
-                2,
-                vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(TargetSpec::Opponent),
-                    effects: vec![Effect::Modal {
-                        modes: vec![
-                            vec![
-                                Effect::ForPlayer {
-                                    player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
-                                    effects: vec![draw_three()],
-                                },
-                                draw_three(),
-                            ],
-                            vec![],
-                        ],
+        printed: PrintedCharacteristics {
+            name: "The Legend of Yangchen".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}{W}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Saga".into()],
+            abilities: vec![
+                chapter(
+                    1,
+                    vec![Effect::EachPlayerChoosesToExile {
+                        predicate: CardPredicate {
+                            min_mana_value: Some(3),
+                            ..Default::default()
+                        },
                     }],
-                }],
-            ),
-            chapter(3, return_transformed()),
-        ],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
+                ),
+                chapter(
+                    2,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::Opponent),
+                        effects: vec![Effect::Modal {
+                            modes: vec![
+                                vec![
+                                    Effect::ForPlayer {
+                                        player: PlayerSelector::Target(Box::new(
+                                            TargetSpec::Opponent,
+                                        )),
+                                        effects: vec![draw_three()],
+                                    },
+                                    draw_three(),
+                                ],
+                                vec![],
+                            ],
+                        }],
+                    }],
+                ),
+                chapter(3, return_transformed()),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
             name: "Avatar Yangchen".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -8948,7 +9644,11 @@ fn the_legend_of_yangchen() -> CardDefinition {
             keywords: Keywords::of(&[Keyword::Flying]),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
+                condition: TriggerCondition::Casts {
+                    who: Actor::You,
+                    predicate: CardPredicate::default(),
+                    nth: Some(2),
+                },
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement {
                         min: 0,
@@ -8963,7 +9663,6 @@ fn the_legend_of_yangchen() -> CardDefinition {
             text_box: back_text.into(),
             ..Default::default()
         })),
-        ..Default::default()
     }
 }
 
@@ -8973,40 +9672,43 @@ fn the_lion_turtle() -> CardDefinition {
     CardDefinition {
         key: "tla.the_lion_turtle",
         scryfall_id: "8491585c-81d0-48be-8ed0-832e42fad9c6",
-        name: "The Lion-Turtle".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Elder".into(), "Cat".into(), "Turtle".into()],
-        power: Some(3),
-        toughness: Some(6),
-        keywords: Keywords::of(&[Keyword::Reach, Keyword::Vigilance]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::gain_life(3)],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            effects: vec![Effect::mana_choice(
-                ["W", "U", "B", "R", "G"].map(Mana::parse),
-            )],
-            ..Default::default()
-        }],
-        statics: vec![StaticAbility::Restriction(StaticRestriction {
-            scope: StaticScope::This,
-            kind: Restriction::CantAttackOrBlock,
-            unless: Some(Condition::GraveyardAtLeast {
-                count: 3,
-                predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "The Lion-Turtle".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Elder".into(), "Cat".into(), "Turtle".into()],
+            power: Some(3),
+            toughness: Some(6),
+            keywords: Keywords::of(&[Keyword::Reach, Keyword::Vigilance]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-            }),
-        })],
-        text_box: text_box.into(),
+                effects: vec![Effect::gain_life(3)],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::mana_choice(
+                    ["W", "U", "B", "R", "G"].map(Mana::parse),
+                )],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::This,
+                kind: Restriction::CantAttackOrBlock,
+                unless: Some(Condition::GraveyardAtLeast {
+                    count: 3,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
+                }),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9017,73 +9719,77 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
     CardDefinition {
         key: "tla.the_mechanist_aerial_artisan",
         scryfall_id: "b910851e-9332-4c83-a790-d379667cabfc",
-        name: "The Mechanist, Aerial Artisan".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Artificer".into(), "Ally".into()],
-        power: Some(1),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::YouCastSpell {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
-            },
-            effects: vec![Effect::create_tokens("Clue", 1)],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            token: Some(true),
-                            card_type: Some(CardType::Artifact),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::BecomeCreature,
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            token: Some(true),
-                            card_type: Some(CardType::Artifact),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::SetBasePt {
-                        power: Some(EffectValue::Fixed(3)),
-                        toughness: Some(EffectValue::Fixed(1)),
+        printed: PrintedCharacteristics {
+            name: "The Mechanist, Aerial Artisan".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Artificer".into(), "Ally".into()],
+            power: Some(1),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
                     },
                 ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            token: Some(true),
-                            card_type: Some(CardType::Artifact),
-                            ..Default::default()
+                effects: vec![Effect::create_tokens("token.clue", 1)],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                            predicate: CardPredicate {
+                                token: Some(true),
+                                card_type: Some(CardType::Artifact),
+                                ..Default::default()
+                            },
+                        }),
+                        Modification::BecomeCreature,
+                    ),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                            predicate: CardPredicate {
+                                token: Some(true),
+                                card_type: Some(CardType::Artifact),
+                                ..Default::default()
+                            },
+                        }),
+                        Modification::SetBasePt {
+                            power: Some(EffectValue::Fixed(3)),
+                            toughness: Some(EffectValue::Fixed(1)),
                         },
-                    }),
-                    Modification::AddSubtypes(vec!["Construct".into()]),
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            token: Some(true),
-                            card_type: Some(CardType::Artifact),
-                            ..Default::default()
-                        },
-                    }),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
-                ),
-            ],
+                    ),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                            predicate: CardPredicate {
+                                token: Some(true),
+                                card_type: Some(CardType::Artifact),
+                                ..Default::default()
+                            },
+                        }),
+                        Modification::AddSubtypes(vec!["Construct".into()]),
+                    ),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::PermanentYouControl {
+                            predicate: CardPredicate {
+                                token: Some(true),
+                                card_type: Some(CardType::Artifact),
+                                ..Default::default()
+                            },
+                        }),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                    ),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -9098,31 +9804,34 @@ fn the_rise_of_sozin() -> CardDefinition {
     CardDefinition {
         key: "tla.the_rise_of_sozin",
         scryfall_id: "14eadf46-90c2-4376-8183-6a922a60174d",
-        name: "The Rise of Sozin".into(),
-        mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Saga".into()],
-        abilities: vec![
-            chapter(
-                1,
-                vec![Effect::destroy(ObjectSelector::Each {
-                    of: Scope::Battlefield,
-                    predicate: CardPredicate::creature(),
-                    except: None,
-                    max_mana_value: None,
-                })],
-            ),
-            chapter(
-                2,
-                vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(TargetSpec::Opponent),
-                    effects: vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],
-                }],
-            ),
-            chapter(3, return_transformed()),
-        ],
-        text_box: text_box.into(),
-        back_face: Some(Box::new(CardDefinition {
+        printed: PrintedCharacteristics {
+            name: "The Rise of Sozin".into(),
+            mana_cost: Some(ManaCost::parse("{4}{B}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Saga".into()],
+            abilities: vec![
+                chapter(
+                    1,
+                    vec![Effect::destroy(ObjectSelector::Each {
+                        of: Scope::Battlefield,
+                        predicate: CardPredicate::creature(),
+                        except: None,
+                        max_mana_value: None,
+                    })],
+                ),
+                chapter(
+                    2,
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::Opponent),
+                        effects: vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],
+                    }],
+                ),
+                chapter(3, return_transformed()),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        back_face: Some(Box::new(PrintedCharacteristics {
             name: "Fire Lord Sozin".into(),
             types: CardTypes::new([CardType::Creature]),
             supertypes: vec!["Legendary".into()],
@@ -9134,9 +9843,7 @@ fn the_rise_of_sozin() -> CardDefinition {
             abilities: vec![
                 Ability::Triggered {
                     intervening_if: None,
-                    condition: TriggerCondition::Attacks {
-                        subject: TriggerSubject::This,
-                    },
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                     effects: vec![Effect::AddMana {
                         mana: Mana::parse("RRR"),
                         amount: EffectValue::Fixed(1),
@@ -9145,8 +9852,10 @@ fn the_rise_of_sozin() -> CardDefinition {
                 },
                 Ability::Triggered {
                     intervening_if: None,
-                    condition: TriggerCondition::CreatureDealsCombatDamageToPlayer {
+                    condition: TriggerCondition::DealsCombatDamage {
                         subject: TriggerSubject::This,
+                        to: Actor::AnyPlayer,
+                        per: Per::Object,
                     },
                     effects: vec![Effect::OptionalManaPaymentX {
                         if_paid: vec![Effect::WhenYouDo {
@@ -9171,7 +9880,6 @@ fn the_rise_of_sozin() -> CardDefinition {
             text_box: back_text.into(),
             ..Default::default()
         })),
-        ..Default::default()
     }
 }
 
@@ -9181,40 +9889,43 @@ fn the_spirit_oasis() -> CardDefinition {
     CardDefinition {
         key: "tla.the_spirit_oasis",
         scryfall_id: "3a1b1329-531c-47ed-9802-c505501f8fd9",
-        name: "The Spirit Oasis".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Shrine".into()],
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "The Spirit Oasis".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Shrine".into()],
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::BattlefieldMatching {
+                            predicate: CardPredicate {
+                                subtype: Some("Shrine".into()),
+                                ..Default::default()
+                            },
+                        },
+                    }],
                 },
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::BattlefieldMatching {
-                        predicate: CardPredicate {
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::another_you_control(CardPredicate {
                             subtype: Some("Shrine".into()),
                             ..Default::default()
-                        },
+                        }),
                     },
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                        subtype: Some("Shrine".into()),
-                        ..Default::default()
-                    }),
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
                 },
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9225,23 +9936,29 @@ fn the_unagi_of_kyoshi_island() -> CardDefinition {
     CardDefinition {
         key: "tla.the_unagi_of_kyoshi_island",
         scryfall_id: "0ecd8b38-9ee5-41a5-9b93-21c33fc1a6ff",
-        name: "The Unagi of Kyoshi Island".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Serpent".into()],
-        power: Some(5),
-        toughness: Some(5),
-        keywords: Keywords::of(&[Keyword::Flash]),
-        statics: vec![StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 })],
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::OpponentDrawsNthCardThisTurn { n: 2 },
-            intervening_if: None,
-            effects: vec![Effect::DrawCards {
-                count: EffectValue::Fixed(2),
+        printed: PrintedCharacteristics {
+            name: "The Unagi of Kyoshi Island".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Serpent".into()],
+            power: Some(5),
+            toughness: Some(5),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            statics: vec![StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 })],
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Draws {
+                    who: Actor::Opponent,
+                    nth: Some(2),
+                },
+                intervening_if: None,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9252,20 +9969,23 @@ fn the_walls_of_ba_sing_se() -> CardDefinition {
     CardDefinition {
         key: "tla.the_walls_of_ba_sing_se",
         scryfall_id: "24a14ac5-0b7e-4441-9963-782a7cda3f4a",
-        name: "The Walls of Ba Sing Se".into(),
-        mana_cost: Some(ManaCost::parse("{8}")),
-        types: CardTypes::new([CardType::Creature, CardType::Artifact]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Wall".into()],
-        power: Some(0),
-        toughness: Some(30),
-        keywords: Keywords::of(&[Keyword::Defender]),
-        statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-            scope: StaticScope::OtherYouControl(CardPredicate::default()),
-            condition: None,
-            keywords: Keywords::of(&[Keyword::Indestructible]),
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "The Walls of Ba Sing Se".into(),
+            mana_cost: Some(ManaCost::parse("{8}")),
+            types: CardTypes::new([CardType::Creature, CardType::Artifact]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Wall".into()],
+            power: Some(0),
+            toughness: Some(30),
+            keywords: Keywords::of(&[Keyword::Defender]),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::OtherYouControl(CardPredicate::default()),
+                condition: None,
+                keywords: Keywords::of(&[Keyword::Indestructible]),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9276,20 +9996,23 @@ fn tiger_dillo() -> CardDefinition {
     CardDefinition {
         key: "tla.tiger_dillo",
         scryfall_id: "067bd117-04e6-410e-89c4-6d431d627751",
-        name: "Tiger-Dillo".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Cat".into(), "Armadillo".into()],
-        power: Some(4),
-        toughness: Some(3),
-        statics: vec![StaticAbility::CantAttackOrBlockUnlessYouControlAnother(
-            CardPredicate {
-                min_power: Some(4),
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            },
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Tiger-Dillo".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Armadillo".into()],
+            power: Some(4),
+            toughness: Some(3),
+            statics: vec![StaticAbility::CantAttackOrBlockUnlessYouControlAnother(
+                CardPredicate {
+                    min_power: Some(4),
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                },
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9300,26 +10023,32 @@ fn tiger_seal() -> CardDefinition {
     CardDefinition {
         key: "tla.tiger_seal",
         scryfall_id: "7aef2891-1269-4a1a-acea-0aa37ef544c4",
-        name: "Tiger-Seal".into(),
-        mana_cost: Some(ManaCost::parse("{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Cat".into(), "Seal".into()],
-        power: Some(3),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-                effects: vec![Effect::untap(ObjectSelector::This)],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::BeginningOfYourUpkeep,
-                effects: vec![Effect::tap(ObjectSelector::This)],
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Tiger-Seal".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Cat".into(), "Seal".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Draws {
+                        who: Actor::You,
+                        nth: Some(2),
+                    },
+                    effects: vec![Effect::untap(ObjectSelector::This)],
+                },
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+                    effects: vec![Effect::tap(ObjectSelector::This)],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9330,33 +10059,34 @@ fn tolls_of_war() -> CardDefinition {
     CardDefinition {
         key: "tla.tolls_of_war",
         scryfall_id: "d822b9ad-a787-4355-88c2-07ae2bd3a78e",
-        name: "Tolls of War".into(),
-        mana_cost: Some(ManaCost::parse("{W}{B}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Tolls of War".into(),
+            mana_cost: Some(ManaCost::parse("{W}{B}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::create_tokens("token.clue", 1)],
                 },
-                effects: vec![Effect::create_tokens("Clue", 1)],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::OnceEachTurn {
-                    condition: Box::new(TriggerCondition::ActiveIf {
-                        active_if: Condition::YourTurn,
-                        condition: Box::new(TriggerCondition::Sacrificed {
-                            predicate: CardPredicate::default(),
-                            controller_only: true,
-                            another: false,
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::OnceEachTurn {
+                        condition: Box::new(TriggerCondition::ActiveIf {
+                            active_if: Condition::YourTurn,
+                            condition: Box::new(TriggerCondition::Sacrificed {
+                                subject: TriggerSubject::you_control(CardPredicate::default()),
+                            }),
                         }),
-                    }),
+                    },
+                    effects: vec![Effect::create_tokens("token.ally", 1)],
                 },
-                effects: vec![Effect::create_tokens("Ally", 1)],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9373,54 +10103,55 @@ fn toph_hardheaded_teacher() -> CardDefinition {
     CardDefinition {
         key: "tla.toph_hardheaded_teacher",
         scryfall_id: "e3ba3395-39db-4330-9801-53def924f253",
-        name: "Toph, Hardheaded Teacher".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement::one(instant_or_sorcery()),
-                    effects: vec![Effect::may_discard(
-                        1,
-                        vec![Effect::return_to_hand(ObjectSelector::Target(
-                            instant_or_sorcery(),
-                        ))],
-                    )],
-                }],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate::default(),
-                },
-                intervening_if: None,
-                effects: vec![
-                    Effect::Earthbend {
-                        count: EffectValue::Fixed(1),
-                        what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Toph, Hardheaded Teacher".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    Effect::If {
-                        condition: Condition::TriggeringSpellMatches(CardPredicate::subtype(
-                            "Lesson",
-                        )),
-                        then: vec![Effect::put_counters(
-                            ObjectSelector::Target(TargetSpec::LandYouControl),
-                            CounterKind::PlusOnePlusOne,
+                    intervening_if: None,
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(instant_or_sorcery()),
+                        effects: vec![Effect::may_discard(
                             1,
+                            vec![Effect::return_to_hand(ObjectSelector::Target(
+                                instant_or_sorcery(),
+                            ))],
                         )],
-                        otherwise: vec![],
-                    },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+                    }],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::Earthbend {
+                            count: EffectValue::Fixed(1),
+                            what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                        },
+                        Effect::If {
+                            condition: Condition::TriggeringSpellMatches(CardPredicate::subtype(
+                                "Lesson",
+                            )),
+                            then: vec![Effect::put_counters(
+                                ObjectSelector::Target(TargetSpec::LandYouControl),
+                                CounterKind::PlusOnePlusOne,
+                                1,
+                            )],
+                            otherwise: vec![],
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9431,27 +10162,30 @@ fn toph_the_blind_bandit() -> CardDefinition {
     CardDefinition {
         key: "tla.toph_the_blind_bandit",
         scryfall_id: "ff68fa7b-8065-407b-a8b4-bfbb14f1c99c",
-        name: "Toph, the Blind Bandit".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(0),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(2),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Toph, the Blind Bandit".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(0),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        statics: vec![StaticAbility::CharacteristicPower(
-            PowerCda::CountersOnLandsYouControl,
-        )],
-        text_box: text_box.into(),
+            statics: vec![StaticAbility::CharacteristicPower(
+                PowerCda::CountersOnLandsYouControl,
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9462,32 +10196,35 @@ fn toph_the_first_metalbender() -> CardDefinition {
     CardDefinition {
         key: "tla.toph_the_first_metalbender",
         scryfall_id: "70b6670f-a9fa-4d75-b0a7-c01b5071a514",
-        name: "Toph, the First Metalbender".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}{R}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::BeginningOfYourEndStep,
-            effects: vec![Effect::Earthbend {
-                count: EffectValue::Fixed(2),
-                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+        printed: PrintedCharacteristics {
+            name: "Toph, the First Metalbender".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{R}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    what: ObjectSelector::Target(TargetSpec::LandYouControl),
+                }],
             }],
-        }],
-        statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
-            scope: StaticScope::YouControl(CardPredicate {
-                token: Some(false),
-                card_type: Some(CardType::Artifact),
-                ..Default::default()
-            }),
-            types: vec![CardType::Land],
-            subtypes: Vec::new(),
-            condition: None,
-        })],
-        text_box: text_box.into(),
+            statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
+                scope: StaticScope::YouControl(CardPredicate {
+                    token: Some(false),
+                    card_type: Some(CardType::Artifact),
+                    ..Default::default()
+                }),
+                types: vec![CardType::Land],
+                subtypes: Vec::new(),
+                condition: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9498,21 +10235,24 @@ fn treetop_freedom_fighters() -> CardDefinition {
     CardDefinition {
         key: "tla.treetop_freedom_fighters",
         scryfall_id: "a9394200-7ffc-440f-8b5f-c08b7930133c",
-        name: "Treetop Freedom Fighters".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Haste]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::create_tokens("Ally", 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Treetop Freedom Fighters".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::create_tokens("token.ally", 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9523,47 +10263,50 @@ fn true_ancestry() -> CardDefinition {
     CardDefinition {
         key: "tla.true_ancestry",
         scryfall_id: "8c55b333-dc8b-4332-895b-eec5eb45543f",
-        name: "True Ancestry".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::TargetClause {
-                requirement: TargetRequirement {
-                    min: 0,
-                    ..TargetRequirement::one(TargetSpec::GraveyardCardYouOwn {
-                        predicate: CardPredicate {
-                            card_types_any: vec![
-                                CardType::Artifact,
-                                CardType::Creature,
-                                CardType::Enchantment,
-                                CardType::Land,
-                                CardType::Planeswalker,
-                                CardType::Battle,
-                            ],
-                            ..Default::default()
-                        },
-                    })
-                },
-                effects: vec![Effect::return_to_hand(ObjectSelector::Target(
-                    TargetSpec::GraveyardCardYouOwn {
-                        predicate: CardPredicate {
-                            card_types_any: vec![
-                                CardType::Artifact,
-                                CardType::Creature,
-                                CardType::Enchantment,
-                                CardType::Land,
-                                CardType::Planeswalker,
-                                CardType::Battle,
-                            ],
-                            ..Default::default()
-                        },
+        printed: PrintedCharacteristics {
+            name: "True Ancestry".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        min: 0,
+                        ..TargetRequirement::one(TargetSpec::GraveyardCardYouOwn {
+                            predicate: CardPredicate {
+                                card_types_any: vec![
+                                    CardType::Artifact,
+                                    CardType::Creature,
+                                    CardType::Enchantment,
+                                    CardType::Land,
+                                    CardType::Planeswalker,
+                                    CardType::Battle,
+                                ],
+                                ..Default::default()
+                            },
+                        })
                     },
-                ))],
-            },
-            Effect::create_tokens("Clue", 1),
-        ],
-        text_box: text_box.into(),
+                    effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                        TargetSpec::GraveyardCardYouOwn {
+                            predicate: CardPredicate {
+                                card_types_any: vec![
+                                    CardType::Artifact,
+                                    CardType::Creature,
+                                    CardType::Enchantment,
+                                    CardType::Land,
+                                    CardType::Planeswalker,
+                                    CardType::Battle,
+                                ],
+                                ..Default::default()
+                            },
+                        },
+                    ))],
+                },
+                Effect::create_tokens("token.clue", 1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9574,28 +10317,31 @@ fn trusty_boomerang() -> CardDefinition {
     CardDefinition {
         key: "tla.trusty_boomerang",
         scryfall_id: "df99a166-6d58-4d92-9037-2fdfbaf65629",
-        name: "Trusty Boomerang".into(),
-        mana_cost: Some(ManaCost::parse("{1}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Equipment".into()],
-        statics: vec![StaticAbility::AttachedHas(ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{1}"),
-            effects: vec![
-                Effect::tap(ObjectSelector::Target(TargetSpec::Creature)),
-                Effect::return_to_hand(ObjectSelector::Grantor),
-            ],
-            ..Default::default()
-        })],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sorcery_timing: true,
-            mana_cost: ManaCost::parse("{1}"),
-            effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+        printed: PrintedCharacteristics {
+            name: "Trusty Boomerang".into(),
+            mana_cost: Some(ManaCost::parse("{1}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            statics: vec![StaticAbility::AttachedHas(ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{1}"),
+                effects: vec![
+                    Effect::tap(ObjectSelector::Target(TargetSpec::Creature)),
+                    Effect::return_to_hand(ObjectSelector::Grantor),
+                ],
+                ..Default::default()
+            })],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{1}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -9606,44 +10352,45 @@ fn tundra_tank() -> CardDefinition {
     CardDefinition {
         key: "tla.tundra_tank",
         scryfall_id: "13c66fce-8f8e-4a98-8413-9f05aebf6e13",
-        name: "Tundra Tank".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Vehicle".into()],
-        power: Some(4),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Tundra Tank".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Vehicle".into()],
+            power: Some(4),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("R"),
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("R"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                    )],
                 },
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                crew: Some(1),
                 effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                    ObjectSelector::This,
+                    Modification::BecomeCreature,
                 )],
-            },
-        ],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            crew: Some(1),
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::This,
-                Modification::BecomeCreature,
-            )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -9654,30 +10401,33 @@ fn turtle_duck() -> CardDefinition {
     CardDefinition {
         key: "tla.turtle_duck",
         scryfall_id: "aefcd734-3916-4c77-9d98-3ea2c2795658",
-        name: "Turtle-Duck".into(),
-        mana_cost: Some(ManaCost::parse("{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Turtle".into(), "Bird".into()],
-        power: Some(0),
-        toughness: Some(4),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{3}"),
-            effects: vec![
-                Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::SetBasePt {
-                        power: Some(EffectValue::Fixed(4)),
-                        toughness: None,
-                    },
-                ),
-                Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
-                ),
-            ],
+        printed: PrintedCharacteristics {
+            name: "Turtle-Duck".into(),
+            mana_cost: Some(ManaCost::parse("{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Turtle".into(), "Bird".into()],
+            power: Some(0),
+            toughness: Some(4),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![
+                    Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::SetBasePt {
+                            power: Some(EffectValue::Fixed(4)),
+                            toughness: None,
+                        },
+                    ),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Trample])),
+                    ),
+                ],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -9688,44 +10438,47 @@ fn twin_blades() -> CardDefinition {
     CardDefinition {
         key: "tla.twin_blades",
         scryfall_id: "dc399ae0-36b5-4c92-9fe2-138caf8d7a86",
-        name: "Twin Blades".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Equipment".into()],
-        keywords: Keywords::of(&[Keyword::Flash]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![
-                Effect::AttachSourceTo {
-                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+        printed: PrintedCharacteristics {
+            name: "Twin Blades".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Equipment".into()],
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                Effect::until_end_of_turn(
-                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike])),
-                ),
-            ],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            sorcery_timing: true,
-            mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::AttachSourceTo {
-                what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                effects: vec![
+                    Effect::AttachSourceTo {
+                        what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                    },
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike])),
+                    ),
+                ],
             }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                sorcery_timing: true,
+                mana_cost: ManaCost::parse("{2}"),
+                effects: vec![Effect::AttachSourceTo {
+                    what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                }],
+                ..Default::default()
+            }],
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::Attached,
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::Attached,
-            condition: None,
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -9736,45 +10489,47 @@ fn ty_lee_artful_acrobat() -> CardDefinition {
     CardDefinition {
         key: "tla.ty_lee_artful_acrobat",
         scryfall_id: "dcd9df24-272b-4aa1-b05f-6ee6b3d3dfe7",
-        name: "Ty Lee, Artful Acrobat".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Performer".into()],
-        power: Some(3),
-        toughness: Some(2),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
+        printed: PrintedCharacteristics {
+            name: "Ty Lee, Artful Acrobat".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Performer".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate {
+                            not_card_types: vec![CardType::Creature],
+                            ..Default::default()
+                        },
+                    ),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::pump(1, 1),
+                    )],
                 },
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::OptionalPayment {
-                    cost: PaymentCost::Mana(ManaCost::parse("{1}")),
-                    if_paid: vec![Effect::WhenYouDo {
-                        effects: vec![Effect::until_end_of_turn(
-                            ObjectSelector::Target(TargetSpec::Creature),
-                            Modification::CantBlock,
-                        )],
+                Ability::Triggered {
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    intervening_if: None,
+                    effects: vec![Effect::OptionalPayment {
+                        cost: PaymentCost::Mana(ManaCost::parse("{1}")),
+                        if_paid: vec![Effect::WhenYouDo {
+                            effects: vec![Effect::until_end_of_turn(
+                                ObjectSelector::Target(TargetSpec::Creature),
+                                Modification::CantBlock,
+                            )],
+                        }],
+                        if_declined: vec![],
                     }],
-                    if_declined: vec![],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9785,47 +10540,51 @@ fn ty_lee_chi_blocker() -> CardDefinition {
     CardDefinition {
         key: "tla.ty_lee_chi_blocker",
         scryfall_id: "308cc687-9cb2-4e3a-98db-c5ba2a7da115",
-        name: "Ty Lee, Chi Blocker".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Performer".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flash]),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::YouCastSpell {
-                    predicate: CardPredicate {
-                        not_card_types: vec![CardType::Creature],
-                        ..Default::default()
-                    },
-                },
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::pump(1, 1),
-                )],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                intervening_if: None,
-                effects: vec![Effect::TargetClause {
-                    requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
-                    effects: vec![
-                        Effect::tap(ObjectSelector::Target(TargetSpec::Creature)),
-                        Effect::ApplyContinuous {
-                            affected: ObjectSelector::Target(TargetSpec::Creature),
-                            modification: Modification::DoesntUntap,
-                            duration: EffectDuration::WhileYouControlSource,
+        printed: PrintedCharacteristics {
+            name: "Ty Lee, Chi Blocker".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Performer".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash]),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate {
+                            not_card_types: vec![CardType::Creature],
+                            ..Default::default()
                         },
-                    ],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                    ),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::pump(1, 1),
+                    )],
+                },
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+                        effects: vec![
+                            Effect::tap(ObjectSelector::Target(TargetSpec::Creature)),
+                            Effect::ApplyContinuous {
+                                affected: ObjectSelector::Target(TargetSpec::Creature),
+                                modification: Modification::DoesntUntap,
+                                duration: EffectDuration::WhileYouControlSource,
+                            },
+                        ],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9836,34 +10595,35 @@ fn uncle_iroh() -> CardDefinition {
     CardDefinition {
         key: "tla.uncle_iroh",
         scryfall_id: "5c88672c-0eba-4e93-a0ec-30bbb1bb7661",
-        name: "Uncle Iroh".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R/G}{R/G}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(2),
-        statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
-            first_on_own_turn: false,
-            predicate: CardPredicate {
-                subtype: Some("Lesson".into()),
-                ..Default::default()
-            },
-            condition: Condition::Always,
-            generic: 1,
-        })],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("R"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Uncle Iroh".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R/G}{R/G}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(2),
+            statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
+                first_on_own_turn: false,
+                predicate: CardPredicate {
+                    subtype: Some("Lesson".into()),
+                    ..Default::default()
+                },
+                condition: Condition::Always,
+                generic: 1,
+            })],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("R"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9874,21 +10634,24 @@ fn united_front() -> CardDefinition {
     CardDefinition {
         key: "tla.united_front",
         scryfall_id: "d347caf8-0c12-401f-9e33-9978cb347f89",
-        name: "United Front".into(),
-        mana_cost: Some(ManaCost::parse("{X}{W}{W}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::create_tokens("Ally", EffectValue::X),
-            Effect::put_counters(
-                ObjectSelector::each_you_control(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                }),
-                CounterKind::PlusOnePlusOne,
-                1,
-            ),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "United Front".into(),
+            mana_cost: Some(ManaCost::parse("{X}{W}{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::create_tokens("token.ally", EffectValue::X),
+                Effect::put_counters(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                    CounterKind::PlusOnePlusOne,
+                    1,
+                ),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9899,59 +10662,60 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
     CardDefinition {
         key: "tla.unlucky_cabbage_merchant",
         scryfall_id: "0a838009-b115-4497-b35d-682e41ead7db",
-        name: "Unlucky Cabbage Merchant".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Citizen".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                },
-                effects: vec![Effect::create_tokens("Food", 1)],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate {
-                        subtype: Some("Food".into()),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Unlucky Cabbage Merchant".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Citizen".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     },
-                    controller_only: true,
-                    another: false,
+                    effects: vec![Effect::create_tokens("token.food", 1)],
                 },
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::SelectCards {
-                            from: ObjectSelector::Zone(ZoneType::Library),
-                            predicate: CardPredicate::basic_land(),
-                            min: 0,
-                            max: EffectValue::Fixed(1),
-                            effects: vec![
-                                Effect::return_to_battlefield(ObjectSelector::Selected, true),
-                                Effect::put_in_library(
-                                    ObjectSelector::This,
-                                    managym_state::ability::LibraryEnd::Bottom,
-                                ),
-                                Effect::ShuffleLibrary,
-                            ],
-                            if_declined: vec![
-                                Effect::put_in_library(
-                                    ObjectSelector::This,
-                                    managym_state::ability::LibraryEnd::Bottom,
-                                ),
-                                Effect::ShuffleLibrary,
-                            ],
-                        }],
-                        vec![],
-                    ],
-                }],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Sacrificed {
+                        subject: TriggerSubject::you_control(CardPredicate {
+                            subtype: Some("Food".into()),
+                            ..Default::default()
+                        }),
+                    },
+                    effects: vec![Effect::Modal {
+                        modes: vec![
+                            vec![Effect::SelectCards {
+                                from: ObjectSelector::Zone(ZoneType::Library),
+                                predicate: CardPredicate::basic_land(),
+                                min: 0,
+                                max: EffectValue::Fixed(1),
+                                effects: vec![
+                                    Effect::return_to_battlefield(ObjectSelector::Selected, true),
+                                    Effect::put_in_library(
+                                        ObjectSelector::This,
+                                        managym_state::ability::LibraryEnd::Bottom,
+                                    ),
+                                    Effect::ShuffleLibrary,
+                                ],
+                                if_declined: vec![
+                                    Effect::put_in_library(
+                                        ObjectSelector::This,
+                                        managym_state::ability::LibraryEnd::Bottom,
+                                    ),
+                                    Effect::ShuffleLibrary,
+                                ],
+                            }],
+                            vec![],
+                        ],
+                    }],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -9962,34 +10726,35 @@ fn vengeful_villagers() -> CardDefinition {
     CardDefinition {
         key: "tla.vengeful_villagers",
         scryfall_id: "8cabb6ed-5c80-4dab-b96c-9d4d9fe72db7",
-        name: "Vengeful Villagers".into(),
-        mana_cost: Some(ManaCost::parse("{3}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Citizen".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: None,
-            effects: vec![
-                Effect::tap(ObjectSelector::Target(TargetSpec::CreatureOpponentControls)),
-                Effect::may_sacrifice(
-                    CardPredicate {
-                        card_types_any: vec![CardType::Artifact, CardType::Creature],
-                        ..Default::default()
-                    },
-                    false,
-                ),
-                Effect::if_you_do(vec![Effect::put_counters(
-                    ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
-                    CounterKind::Stun,
-                    1,
-                )]),
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Vengeful Villagers".into(),
+            mana_cost: Some(ManaCost::parse("{3}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Citizen".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                intervening_if: None,
+                effects: vec![
+                    Effect::tap(ObjectSelector::Target(TargetSpec::CreatureOpponentControls)),
+                    Effect::may_sacrifice(
+                        CardPredicate {
+                            card_types_any: vec![CardType::Artifact, CardType::Creature],
+                            ..Default::default()
+                        },
+                        false,
+                    ),
+                    Effect::if_you_do(vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                        CounterKind::Stun,
+                        1,
+                    )]),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10000,33 +10765,34 @@ fn vindictive_warden() -> CardDefinition {
     CardDefinition {
         key: "tla.vindictive_warden",
         scryfall_id: "0f34de05-39a9-425f-a3b4-3a9d46c917ac",
-        name: "Vindictive Warden".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B/R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(2),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Menace]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("R"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Vindictive Warden".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B/R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("R"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{3}"),
-            effects: vec![Effect::DealDamageToPlayer {
-                player: PlayerSelector::EachOpponent,
-                amount: EffectValue::Fixed(1),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::EachOpponent,
+                    amount: EffectValue::Fixed(1),
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10037,27 +10803,30 @@ fn walltop_sentries() -> CardDefinition {
     CardDefinition {
         key: "tla.walltop_sentries",
         scryfall_id: "e55f1c63-58f6-4e2b-aaeb-f2d5faca47a2",
-        name: "Walltop Sentries".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Reach, Keyword::Deathtouch]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Dies {
-                subject: TriggerSubject::This,
-            },
-            intervening_if: Some(Condition::GraveyardAtLeast {
-                count: 1,
-                predicate: CardPredicate {
-                    subtype: Some("Lesson".into()),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Walltop Sentries".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Reach, Keyword::Deathtouch]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
                 },
-            }),
-            effects: vec![Effect::gain_life(2)],
-        }],
-        text_box: text_box.into(),
+                intervening_if: Some(Condition::GraveyardAtLeast {
+                    count: 1,
+                    predicate: CardPredicate {
+                        subtype: Some("Lesson".into()),
+                        ..Default::default()
+                    },
+                }),
+                effects: vec![Effect::gain_life(2)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10068,43 +10837,49 @@ fn wan_shi_tong_librarian() -> CardDefinition {
     CardDefinition {
         key: "tla.wan_shi_tong_librarian",
         scryfall_id: "e20da6b5-1057-4a28-9e85-07de714e262f",
-        name: "Wan Shi Tong, Librarian".into(),
-        mana_cost: Some(ManaCost::parse("{X}{U}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Bird".into(), "Spirit".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying, Keyword::Vigilance]),
-        abilities: vec![
-            Ability::Triggered {
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Wan Shi Tong, Librarian".into(),
+            mana_cost: Some(ManaCost::parse("{X}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Bird".into(), "Spirit".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Flash, Keyword::Flying, Keyword::Vigilance]),
+            abilities: vec![
+                Ability::Triggered {
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            EffectValue::X,
+                        ),
+                        Effect::DrawCards {
+                            count: EffectValue::Half(Box::new(EffectValue::X)),
+                        },
+                    ],
                 },
-                intervening_if: None,
-                effects: vec![
-                    Effect::put_counters(
-                        ObjectSelector::This,
-                        CounterKind::PlusOnePlusOne,
-                        EffectValue::X,
-                    ),
-                    Effect::DrawCards {
-                        count: EffectValue::Half(Box::new(EffectValue::X)),
+                Ability::Triggered {
+                    condition: TriggerCondition::Performs {
+                        who: Actor::Opponent,
+                        any_of: vec![KeywordAction::Search],
                     },
-                ],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::OpponentSearchesLibrary,
-                intervening_if: None,
-                effects: vec![
-                    Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
-                    Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
-                    },
-                ],
-            },
-        ],
-        text_box: text_box.into(),
+                    intervening_if: None,
+                    effects: vec![
+                        Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
+                        Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        },
+                    ],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10116,26 +10891,27 @@ fn wandering_musicians() -> CardDefinition {
     CardDefinition {
         key: "tla.wandering_musicians",
         scryfall_id: "3da81dbd-dc80-47ff-a33b-270d23a24e0a",
-        name: "Wandering Musicians".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R/W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Bard".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(5),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::each_you_control(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                }),
-                Modification::pump(1, 0),
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Wandering Musicians".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R/W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Bard".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(5),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                    Modification::pump(1, 0),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10146,42 +10922,45 @@ fn war_balloon() -> CardDefinition {
     CardDefinition {
         key: "tla.war_balloon",
         scryfall_id: "6829b20d-c2fa-41a6-89ca-f21c522d8866",
-        name: "War Balloon".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Vehicle".into()],
-        power: Some(4),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                crew: Some(3),
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::This,
-                    Modification::BecomeCreature,
-                )],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::This,
-                    CounterKind::Fire,
-                    1,
-                )],
-                ..Default::default()
-            },
-        ],
-        statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
-            scope: StaticScope::This,
-            types: vec![CardType::Creature],
-            subtypes: Vec::new(),
-            condition: Some(Condition::SourceCountersAtLeast {
-                kind: CounterKind::Fire,
-                count: 3,
-            }),
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "War Balloon".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Artifact]),
+            subtypes: vec!["Vehicle".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    crew: Some(3),
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::This,
+                        Modification::BecomeCreature,
+                    )],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    mana_cost: ManaCost::parse("{1}"),
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::This,
+                        CounterKind::Fire,
+                        1,
+                    )],
+                    ..Default::default()
+                },
+            ],
+            statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
+                scope: StaticScope::This,
+                types: vec![CardType::Creature],
+                subtypes: Vec::new(),
+                condition: Some(Condition::SourceCountersAtLeast {
+                    kind: CounterKind::Fire,
+                    count: 3,
+                }),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10192,30 +10971,37 @@ fn wartime_protestors() -> CardDefinition {
     CardDefinition {
         key: "tla.wartime_protestors",
         scryfall_id: "bac81940-d717-49ff-83b2-16a22bb2c988",
-        name: "Wartime Protestors".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords::of(&[Keyword::Haste]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate {
-                    subtype: Some("Ally".into()),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![
-                Effect::put_counters(ObjectSelector::Triggering, CounterKind::PlusOnePlusOne, 1),
-                Effect::until_end_of_turn(
-                    ObjectSelector::Triggering,
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
-                ),
-            ],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Wartime Protestors".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::another_you_control(CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![
+                    Effect::put_counters(
+                        ObjectSelector::Triggering,
+                        CounterKind::PlusOnePlusOne,
+                        1,
+                    ),
+                    Effect::until_end_of_turn(
+                        ObjectSelector::Triggering,
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Haste])),
+                    ),
+                ],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10226,24 +11012,27 @@ fn water_tribe_captain() -> CardDefinition {
     CardDefinition {
         key: "tla.water_tribe_captain",
         scryfall_id: "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
-        name: "Water Tribe Captain".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{5}"),
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::each_you_control(CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
-                }),
-                Modification::pump(1, 1),
-            )],
+        printed: PrintedCharacteristics {
+            name: "Water Tribe Captain".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{5}"),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                    Modification::pump(1, 1),
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10254,31 +11043,34 @@ fn water_tribe_rallier() -> CardDefinition {
     CardDefinition {
         key: "tla.water_tribe_rallier",
         scryfall_id: "4e744b6c-1c2f-451a-818a-5ee7785b5213",
-        name: "Water Tribe Rallier".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(2),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{5}"),
-            waterbend: true,
-            effects: vec![Effect::LookAndSelect {
-                to_battlefield: false,
-                random_order: true,
-                reveal: true,
-                look: EffectValue::Fixed(4),
-                min_select: 0,
-                max_select: 1,
-                predicate: CardPredicate {
-                    card_type: Some(CardType::Creature),
-                    max_power: Some(3),
-                    ..Default::default()
-                },
+        printed: PrintedCharacteristics {
+            name: "Water Tribe Rallier".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(2),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{5}"),
+                waterbend: true,
+                effects: vec![Effect::LookAndSelect {
+                    to_battlefield: false,
+                    random_order: true,
+                    reveal: true,
+                    look: EffectValue::Fixed(4),
+                    min_select: 0,
+                    max_select: 1,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        max_power: Some(3),
+                        ..Default::default()
+                    },
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10289,38 +11081,43 @@ fn waterbender_ascension() -> CardDefinition {
     CardDefinition {
         key: "tla.waterbender_ascension",
         scryfall_id: "3f57e0f9-e232-489c-b991-d0d23f75d8dd",
-        name: "Waterbender Ascension".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::CreatureDealsCombatDamageToPlayer {
-                subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
-            },
-            intervening_if: None,
-            effects: vec![
-                Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
-                Effect::If {
-                    condition: Condition::SourceCountersAtLeast {
-                        kind: CounterKind::Quest,
-                        count: 4,
-                    },
-                    then: vec![Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
-                    }],
-                    otherwise: vec![],
+        printed: PrintedCharacteristics {
+            name: "Waterbender Ascension".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::you_control(CardPredicate::creature()),
+                    to: Actor::AnyPlayer,
+                    per: Per::Object,
                 },
-            ],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{4}"),
-            waterbend: true,
-            effects: vec![Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::CantBeBlocked,
-            )],
+                intervening_if: None,
+                effects: vec![
+                    Effect::put_counters(ObjectSelector::This, CounterKind::Quest, 1),
+                    Effect::If {
+                        condition: Condition::SourceCountersAtLeast {
+                            kind: CounterKind::Quest,
+                            count: 4,
+                        },
+                        then: vec![Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        }],
+                        otherwise: vec![],
+                    },
+                ],
+            }],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{4}"),
+                waterbend: true,
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::CantBeBlocked,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10331,21 +11128,24 @@ fn waterbending_lesson() -> CardDefinition {
     CardDefinition {
         key: "tla.waterbending_lesson",
         scryfall_id: "4f81e3b5-a0a9-4764-8c2d-b499ce1740b4",
-        name: "Waterbending Lesson".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::DrawCards {
-                count: EffectValue::Fixed(3),
-            },
-            Effect::OptionalPayment {
-                cost: PaymentCost::Waterbend { generic: 2 },
-                if_paid: vec![],
-                if_declined: vec![Effect::discard()],
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Waterbending Lesson".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(3),
+                },
+                Effect::OptionalPayment {
+                    cost: PaymentCost::Waterbend { generic: 2 },
+                    if_paid: vec![],
+                    if_declined: vec![Effect::discard()],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10356,22 +11156,25 @@ fn waterbending_scroll() -> CardDefinition {
     CardDefinition {
         key: "tla.waterbending_scroll",
         scryfall_id: "50d0be73-a2c8-44a0-9178-9949f342f6f9",
-        name: "Waterbending Scroll".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Artifact]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            cost_reduction_per: Some(CardPredicate {
-                subtype: Some("Island".into()),
+        printed: PrintedCharacteristics {
+            name: "Waterbending Scroll".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Artifact]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                cost_reduction_per: Some(CardPredicate {
+                    subtype: Some("Island".into()),
+                    ..Default::default()
+                }),
+                tap_source: true,
+                mana_cost: ManaCost::parse("{6}"),
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
-            }),
-            tap_source: true,
-            mana_cost: ManaCost::parse("{6}"),
-            effects: vec![Effect::DrawCards {
-                count: EffectValue::Fixed(1),
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10382,26 +11185,29 @@ fn watery_grasp() -> CardDefinition {
     CardDefinition {
         key: "tla.watery_grasp",
         scryfall_id: "26bcff57-428e-4f30-a153-a778fbfc437d",
-        name: "Watery Grasp".into(),
-        mana_cost: Some(ManaCost::parse("{U}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        subtypes: vec!["Aura".into()],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{5}"),
-            waterbend: true,
-            effects: vec![Effect::move_to(ObjectSelector::Attached, ZoneType::Library)],
+        printed: PrintedCharacteristics {
+            name: "Watery Grasp".into(),
+            mana_cost: Some(ManaCost::parse("{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            subtypes: vec!["Aura".into()],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{5}"),
+                waterbend: true,
+                effects: vec![Effect::move_to(ObjectSelector::Attached, ZoneType::Library)],
+                ..Default::default()
+            }],
+            spell_effects: vec![Effect::AttachSourceTo {
+                what: ObjectSelector::Target(TargetSpec::Creature),
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            statics: vec![StaticAbility::Restriction(StaticRestriction {
+                scope: StaticScope::Attached,
+                kind: Restriction::DoesntUntap,
+                unless: None,
+            })],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        spell_effects: vec![Effect::AttachSourceTo {
-            what: ObjectSelector::Target(TargetSpec::Creature),
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        statics: vec![StaticAbility::Restriction(StaticRestriction {
-            scope: StaticScope::Attached,
-            kind: Restriction::DoesntUntap,
-            unless: None,
-        })],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10412,27 +11218,30 @@ fn white_lotus_hideout() -> CardDefinition {
     CardDefinition {
         key: "tla.white_lotus_hideout",
         scryfall_id: "24d1e22c-0d99-4ed5-94f0-fd055fd8e2be",
-        name: "White Lotus Hideout".into(),
-        types: CardTypes::new([CardType::Land]),
-        mana_abilities: vec![ManaAbility {
-            mana: Mana::parse("1"),
-        }],
-        activated_abilities: vec![
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                effects: vec![one_mana_of_any_color(Some(ManaUse::spell([
-                    "Lesson", "Shrine",
-                ])))],
-                ..Default::default()
-            },
-            ActivatedAbilityDefinition {
-                tap_source: true,
-                mana_cost: ManaCost::parse("{1}"),
-                effects: vec![one_mana_of_any_color(None)],
-                ..Default::default()
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "White Lotus Hideout".into(),
+            types: CardTypes::new([CardType::Land]),
+            mana_abilities: vec![ManaAbility {
+                mana: Mana::parse("1"),
+            }],
+            activated_abilities: vec![
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![one_mana_of_any_color(Some(ManaRestriction::spell([
+                        "Lesson", "Shrine",
+                    ])))],
+                    ..Default::default()
+                },
+                ActivatedAbilityDefinition {
+                    tap_source: true,
+                    mana_cost: ManaCost::parse("{1}"),
+                    effects: vec![one_mana_of_any_color(None)],
+                    ..Default::default()
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10443,26 +11252,29 @@ fn white_lotus_reinforcements() -> CardDefinition {
     CardDefinition {
         key: "tla.white_lotus_reinforcements",
         scryfall_id: "4c7e3e2f-d7ac-4d40-ab84-cb7efe06a316",
-        name: "White Lotus Reinforcements".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
-        power: Some(2),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Vigilance]),
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::OtherYouControl(CardPredicate {
-                subtype: Some("Ally".into()),
-                ..Default::default()
-            }),
-            condition: None,
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "White Lotus Reinforcements".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+            power: Some(2),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Vigilance]),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::OtherYouControl(CardPredicate {
+                    subtype: Some("Ally".into()),
+                    ..Default::default()
+                }),
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10473,18 +11285,21 @@ fn white_lotus_tile() -> CardDefinition {
     CardDefinition {
         key: "tla.white_lotus_tile",
         scryfall_id: "1d70f9ec-fdc1-4219-b89b-c030d712c1fc",
-        name: "White Lotus Tile".into(),
-        mana_cost: Some(ManaCost::parse("{4}")),
-        types: CardTypes::new([CardType::Artifact]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            effects: vec![Effect::AddOneColorManaValue {
-                amount: EffectValue::GreatestSharedCreatureType,
+        printed: PrintedCharacteristics {
+            name: "White Lotus Tile".into(),
+            mana_cost: Some(ManaCost::parse("{4}")),
+            types: CardTypes::new([CardType::Artifact]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                effects: vec![Effect::AddOneColorManaValue {
+                    amount: EffectValue::GreatestSharedCreatureType,
+                }],
+                ..Default::default()
             }],
+            replacement_effects: vec![ReplacementEffect::EntersTapped],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        replacement_effects: vec![ReplacementEffect::EntersTapped],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10495,34 +11310,40 @@ fn wolfbat() -> CardDefinition {
     CardDefinition {
         key: "tla.wolfbat",
         scryfall_id: "2ae83b4e-e5a4-4c98-8d16-eef3c71b8ff2",
-        name: "Wolfbat".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Wolf".into(), "Bat".into()],
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::InGraveyard {
-                condition: Box::new(TriggerCondition::YouDrawNthCardThisTurn { n: 2 }),
-            },
-            intervening_if: None,
-            effects: vec![Effect::OptionalPayment {
-                cost: PaymentCost::Mana(ManaCost::parse("{B}")),
-                if_paid: vec![Effect::Move {
-                    library_end: None,
-                    what: ObjectSelector::This,
-                    to: ZoneType::Battlefield,
-                    tapped: false,
-                    transformed: false,
-                    under: None,
-                    with_counter: Some(CounterKind::Finality),
-                    linked: None,
+        printed: PrintedCharacteristics {
+            name: "Wolfbat".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Wolf".into(), "Bat".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::InGraveyard {
+                    condition: Box::new(TriggerCondition::Draws {
+                        who: Actor::You,
+                        nth: Some(2),
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::parse("{B}")),
+                    if_paid: vec![Effect::Move {
+                        library_end: None,
+                        what: ObjectSelector::This,
+                        to: ZoneType::Battlefield,
+                        tapped: false,
+                        transformed: false,
+                        under: None,
+                        with_counter: Some(CounterKind::Finality),
+                        linked: None,
+                    }],
+                    if_declined: vec![],
                 }],
-                if_declined: vec![],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10533,29 +11354,32 @@ fn yip_yip() -> CardDefinition {
     CardDefinition {
         key: "tla.yip_yip",
         scryfall_id: "43f4b10e-165b-4100-82f3-728e1b0c78ed",
-        name: "Yip Yip!".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                Modification::pump(2, 2),
-            ),
-            Effect::If {
-                condition: Condition::TargetMatches(CardPredicate {
-                    subtype: Some("Ally".into()),
-                    ..Default::default()
-                }),
-                then: vec![Effect::until_end_of_turn(
+        printed: PrintedCharacteristics {
+            name: "Yip Yip!".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::until_end_of_turn(
                     ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
-                )],
-                otherwise: vec![],
-            },
-        ],
-        targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
-        text_box: text_box.into(),
+                    Modification::pump(2, 2),
+                ),
+                Effect::If {
+                    condition: Condition::TargetMatches(CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
+                    }),
+                    then: vec![Effect::until_end_of_turn(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        Modification::AddKeywords(Keywords::of(&[Keyword::Flying])),
+                    )],
+                    otherwise: vec![],
+                },
+            ],
+            targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10566,27 +11390,30 @@ fn yue_the_moon_spirit() -> CardDefinition {
     CardDefinition {
         key: "tla.yue_the_moon_spirit",
         scryfall_id: "ecdac50f-c639-43fc-a03e-d488fac96ae2",
-        name: "Yue, the Moon Spirit".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Spirit".into(), "Ally".into()],
-        power: Some(3),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{5}"),
-            waterbend: true,
-            effects: vec![Effect::CastFromHandFree {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature, CardType::Land],
-                    ..Default::default()
-                },
+        printed: PrintedCharacteristics {
+            name: "Yue, the Moon Spirit".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Spirit".into(), "Ally".into()],
+            power: Some(3),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{5}"),
+                waterbend: true,
+                effects: vec![Effect::CastFromHandFree {
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Creature, CardType::Land],
+                        ..Default::default()
+                    },
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10598,21 +11425,24 @@ fn yuyan_archers() -> CardDefinition {
     CardDefinition {
         key: "tla.yuyan_archers",
         scryfall_id: "99244462-a996-4a5b-91fb-947045647d6d",
-        name: "Yuyan Archers".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Archer".into()],
-        power: Some(3),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Reach]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::discard_draw(1, 1)],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Yuyan Archers".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Archer".into()],
+            power: Some(3),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Reach]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::discard_draw(1, 1)],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10623,39 +11453,38 @@ fn zhao_ruthless_admiral() -> CardDefinition {
     CardDefinition {
         key: "tla.zhao_ruthless_admiral",
         scryfall_id: "3fd48a57-b0bb-4177-a0f3-bd317a179cbe",
-        name: "Zhao, Ruthless Admiral".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B/R}{B/R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(3),
-        toughness: Some(4),
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Zhao, Ruthless Admiral".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B/R}{B/R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(3),
+            toughness: Some(4),
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse("RR"),
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: true,
+                    }],
                 },
-                effects: vec![Effect::AddMana {
-                    mana: Mana::parse("RR"),
-                    amount: EffectValue::Fixed(1),
-                    until_end_of_combat: true,
-                }],
-            },
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate::default(),
-                    controller_only: true,
-                    another: true,
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Sacrificed {
+                        subject: TriggerSubject::another_you_control(CardPredicate::default()),
+                    },
+                    effects: vec![Effect::until_end_of_turn(
+                        ObjectSelector::each_you_control(CardPredicate::creature()),
+                        Modification::pump(1, 0),
+                    )],
                 },
-                effects: vec![Effect::until_end_of_turn(
-                    ObjectSelector::each_you_control(CardPredicate::creature()),
-                    Modification::pump(1, 0),
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10671,35 +11500,38 @@ fn zhao_the_moon_slayer() -> CardDefinition {
     CardDefinition {
         key: "tla.zhao_the_moon_slayer",
         scryfall_id: "f1015bf5-de98-41f3-b6b1-ed95f7465944",
-        name: "Zhao, the Moon Slayer".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Menace]),
-        statics: vec![
-            StaticAbility::EntersTapped(nonbasic_land()),
-            StaticAbility::SetsLandType(StaticLandType {
-                predicate: nonbasic_land(),
-                subtype: "Mountain".into(),
-                condition: Condition::SourceCountersAtLeast {
-                    kind: CounterKind::Conqueror,
-                    count: 1,
-                },
-            }),
-        ],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{7}"),
-            effects: vec![Effect::put_counters(
-                ObjectSelector::This,
-                CounterKind::Conqueror,
-                1,
-            )],
+        printed: PrintedCharacteristics {
+            name: "Zhao, the Moon Slayer".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Menace]),
+            statics: vec![
+                StaticAbility::EntersTapped(nonbasic_land()),
+                StaticAbility::SetsLandType(StaticLandType {
+                    predicate: nonbasic_land(),
+                    subtype: "Mountain".into(),
+                    condition: Condition::SourceCountersAtLeast {
+                        kind: CounterKind::Conqueror,
+                        count: 1,
+                    },
+                }),
+            ],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{7}"),
+                effects: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::Conqueror,
+                    1,
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10718,46 +11550,49 @@ fn zuko_conflicted() -> CardDefinition {
     CardDefinition {
         key: "tla.zuko_conflicted",
         scryfall_id: "9d555cab-ec86-4f27-bca2-7d01f79c3f46",
-        name: "Zuko, Conflicted".into(),
-        mana_cost: Some(ManaCost::parse("{B}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Rogue".into()],
-        power: Some(2),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourFirstMainPhase,
-            intervening_if: None,
-            effects: vec![Effect::TriggerModes {
-                up_to: None,
-                unchosen: true,
-                modes: vec![
-                    mode(vec![Effect::DrawCards {
-                        count: EffectValue::Fixed(1),
-                    }]),
-                    mode(vec![Effect::put_counters(
-                        ObjectSelector::This,
-                        CounterKind::PlusOnePlusOne,
-                        1,
-                    )]),
-                    mode(vec![Effect::add_mana(Mana::parse("R"))]),
-                    mode(vec![
-                        Effect::exile(ObjectSelector::This),
-                        Effect::Move {
-                            library_end: None,
-                            what: ObjectSelector::Moved,
-                            to: ZoneType::Battlefield,
-                            tapped: false,
-                            transformed: false,
-                            under: Some(PlayerSelector::EachOpponent),
-                            with_counter: None,
-                            linked: None,
-                        },
-                    ]),
-                ],
+        printed: PrintedCharacteristics {
+            name: "Zuko, Conflicted".into(),
+            mana_cost: Some(ManaCost::parse("{B}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Rogue".into()],
+            power: Some(2),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::beginning_of(TurnStep::FirstMain, Actor::You),
+                intervening_if: None,
+                effects: vec![Effect::TriggerModes {
+                    up_to: None,
+                    unchosen: true,
+                    modes: vec![
+                        mode(vec![Effect::DrawCards {
+                            count: EffectValue::Fixed(1),
+                        }]),
+                        mode(vec![Effect::put_counters(
+                            ObjectSelector::This,
+                            CounterKind::PlusOnePlusOne,
+                            1,
+                        )]),
+                        mode(vec![Effect::add_mana(Mana::parse("R"))]),
+                        mode(vec![
+                            Effect::exile(ObjectSelector::This),
+                            Effect::Move {
+                                library_end: None,
+                                what: ObjectSelector::Moved,
+                                to: ZoneType::Battlefield,
+                                tapped: false,
+                                transformed: false,
+                                under: Some(PlayerSelector::EachOpponent),
+                                with_counter: None,
+                                linked: None,
+                            },
+                        ]),
+                    ],
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10768,33 +11603,34 @@ fn zuko_exiled_prince() -> CardDefinition {
     CardDefinition {
         key: "tla.zuko_exiled_prince",
         scryfall_id: "6a73b372-9c0e-4a85-89d2-440163330687",
-        name: "Zuko, Exiled Prince".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Noble".into()],
-        power: Some(4),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("RRR"),
-                amount: EffectValue::Fixed(1),
-                until_end_of_combat: true,
+        printed: PrintedCharacteristics {
+            name: "Zuko, Exiled Prince".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Noble".into()],
+            power: Some(4),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("RRR"),
+                    amount: EffectValue::Fixed(1),
+                    until_end_of_combat: true,
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{3}"),
-            effects: vec![Effect::ExileTopCardsToPlay {
-                count: 1,
-                until: PlayWindow::ThisTurn,
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{3}"),
+                effects: vec![Effect::ExileTopCardsToPlay {
+                    count: 1,
+                    until: PlayWindow::ThisTurn,
+                }],
+                ..Default::default()
             }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -10805,37 +11641,40 @@ fn zuko_s_conviction() -> CardDefinition {
     CardDefinition {
         key: "tla.zuko_s_conviction",
         scryfall_id: "ad8933d6-cdc7-4d60-a78e-b43ffecfb136",
-        name: "Zuko's Conviction".into(),
-        mana_cost: Some(ManaCost::parse("{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::If {
-            condition: Condition::Kicked,
-            then: vec![Effect::return_to_battlefield(
-                ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Zuko's Conviction".into(),
+            mana_cost: Some(ManaCost::parse("{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::If {
+                condition: Condition::Kicked,
+                then: vec![Effect::return_to_battlefield(
+                    ObjectSelector::Target(TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                    }),
+                    true,
+                )],
+                otherwise: vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::GraveyardCardYouOwn {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
                     },
-                }),
-                true,
-            )],
-            otherwise: vec![Effect::return_to_hand(ObjectSelector::Target(
-                TargetSpec::GraveyardCardYouOwn {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
-                    },
+                ))],
+            }],
+            targeting: vec![TargetRequirement::one(TargetSpec::GraveyardCardYouOwn {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
                 },
-            ))],
-        }],
-        targeting: vec![TargetRequirement::one(TargetSpec::GraveyardCardYouOwn {
-            predicate: CardPredicate {
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            },
-        })],
-        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
-        text_box: text_box.into(),
+            })],
+            additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10846,27 +11685,30 @@ fn zuko_s_exile() -> CardDefinition {
     CardDefinition {
         key: "tla.zuko_s_exile",
         scryfall_id: "9090b055-3406-4fed-a8c6-3f6353a9600e",
-        name: "Zuko's Exile".into(),
-        mana_cost: Some(ManaCost::parse("{5}")),
-        types: CardTypes::new([CardType::Instant]),
-        subtypes: vec!["Lesson".into()],
-        spell_effects: vec![
-            Effect::exile(ObjectSelector::Target(TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    card_types_any: vec![
-                        CardType::Artifact,
-                        CardType::Creature,
-                        CardType::Enchantment,
-                    ],
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Zuko's Exile".into(),
+            mana_cost: Some(ManaCost::parse("{5}")),
+            types: CardTypes::new([CardType::Instant]),
+            subtypes: vec!["Lesson".into()],
+            spell_effects: vec![
+                Effect::exile(ObjectSelector::Target(TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![
+                            CardType::Artifact,
+                            CardType::Creature,
+                            CardType::Enchantment,
+                        ],
+                        ..Default::default()
+                    },
+                })),
+                Effect::ForPlayer {
+                    player: PlayerSelector::TargetController,
+                    effects: vec![Effect::create_tokens("token.clue", 1)],
                 },
-            })),
-            Effect::ForPlayer {
-                player: PlayerSelector::TargetController,
-                effects: vec![Effect::create_tokens("Clue", 1)],
-            },
-        ],
-        text_box: text_box.into(),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -10904,9 +11746,9 @@ fn return_transformed() -> Vec<Effect> {
 const COLOR_SLOTS: std::ops::Range<usize> = 0..5;
 
 /// Mana of `amounts` by slot, restricted to `spend` when set (CR 106.6).
-fn mana_of(amounts: [u8; 6], spend: Option<ManaUse>) -> Mana {
+fn mana_of(amounts: [u8; 6], spend: Option<&ManaRestriction>) -> Mana {
     match spend {
-        Some(spend) => Mana::restricted_to(spend, amounts),
+        Some(spend) => Mana::restricted_to(spend.clone(), amounts),
         None => Mana {
             mana: amounts,
             ..Mana::default()
@@ -10915,23 +11757,24 @@ fn mana_of(amounts: [u8; 6], spend: Option<ManaUse>) -> Mana {
 }
 
 /// "Add one mana of any color": one mode per color, W through G.
-fn one_mana_of_any_color(spend: Option<ManaUse>) -> Effect {
+fn one_mana_of_any_color(spend: Option<ManaRestriction>) -> Effect {
     Effect::mana_choice(COLOR_SLOTS.map(|slot| {
         let mut amounts = [0; 6];
         amounts[slot] = 1;
-        mana_of(amounts, spend)
+        mana_of(amounts, spend.as_ref())
     }))
 }
 
 /// "Add two mana in any combination of colors": one mode per unordered pair
 /// (WW, WU, ..., GG), each restricted to `spend`.
-fn two_mana_in_any_combination(spend: ManaUse) -> Effect {
+fn two_mana_in_any_combination(spend: ManaRestriction) -> Effect {
     Effect::mana_choice(COLOR_SLOTS.flat_map(|first| {
+        let spend = spend.clone();
         (first..COLOR_SLOTS.end).map(move |second| {
             let mut amounts = [0; 6];
             amounts[first] += 1;
             amounts[second] += 1;
-            mana_of(amounts, Some(spend))
+            mana_of(amounts, Some(&spend))
         })
     }))
 }

@@ -73,15 +73,38 @@ commit with the report. Every worktree on a machine shares one read-only cache,
 when the store is unreachable. Data committed before the manifest remains in git
 history.
 
+## Protocols and regimes
+
+New experiments add nothing under `protocols/` or `regimes/`: an experiment is
+its module at a commit and its one report
+([work boundaries](../docs/workflows.md#experiments)). The files still there are
+read by an experiment module or are the only written record of an earlier
+experiment. Job, identity and superseded protocol files that nothing reads were
+removed from the tree; they remain at
+[revision ac601834d](https://github.com/loopflowstudio/manabot/tree/ac601834d/experiments/protocols),
+where older documents that name them by path can find them.
+
+Main carries one policy input, v9, so the modules of finished experiments bound
+to earlier inputs were removed with their regimes: the TLA trophy pilots, the
+state-representation studies, the growing-pool league, the curriculum cohorts
+and the throughput C1 readings. Their reports and protocols name those modules
+at the source each run pinned; ac601834d is the last revision carrying them.
+
 ## Discipline
 
 1. **Build before diagnosing.** Primary experiments exercise a runnable agent,
    teacher, or training loop in the real engine. Use katas and ablations to
    resolve an observed ambiguity or choose between concrete next builds, not
    as admission tests before integration.
-2. **Predict first, in git.** Question, numeric prediction, kill criteria,
-   and cost cap are committed *before* the run. No pre-run commit → the
-   result is exploratory, not evidence.
+2. **Exploratory by default; a finding asks first and decides after.**
+   Calibration, throughput, capacity and pilot runs are labelled exploratory.
+   A result that will be cited as a finding commits one paragraph *before*
+   its runs: question, what is measured against what, the strongest confound
+   and a cost cap. No threshold set before the data decides the outcome; the
+   report reads the result against the incumbent and recommends, with its
+   reasoning. The freeze is the commit and the run ID; a change that keeps
+   the question is a dated line in the report
+   ([from a result to a decision](../docs/experiments.md#from-a-result-to-a-decision)).
 3. **Name the strongest confound.** Every report says how its result could
    be wrong and what would discriminate.
 4. **Mechanism over aggregates.** "Can/cannot" claims need a behavioral
@@ -98,6 +121,22 @@ history.
    changes that break them are failing changes regardless of green tests.
 
 ## Index
+
+[Live-token attention, MTG-319](live_token_attention.md): **completed
+2026-11-12**, exploratory pilot on one L4 (USD 0.24). Attending over valid objects
+only, on top of bucketed shapes, takes the w384l8 learner step from 386 ms to
+202 ms (1.91×, bar 1.5×). Outputs match the padded path as closely as bucketed
+shapes do. Build-out recommended. Evidence is under
+`experiments/data/live_token_attention/`.
+
+[Mirror search on MTG-183](search-mirror.md): **completed 2026-11-12**,
+exploratory — 3,000 games (six settings × 500 deals) plus an 8,000-game earlier
+sweep on the frozen w13 policy. With playable uniform hand sampling, mirror
+search beats the policy's sampled play by +12.5 to +17.4 points from 4 to 16
+shuffles and beats PUCT-1024 at lower cost; the true hand adds at most +5.2.
+The HTML report and evidence are in the data manifest under
+`experiments/data/search-mirror-v1/` and `search-mirror-v2/`; source is tag
+`mirror-w13-study-frozen`.
 
 [Critic readouts and attention depth, MTG-252](value-readout-252-results.md):
 **completed 2026-11-09** — five arms, three seeds each, 300 updates and 28,200
@@ -120,11 +159,10 @@ replayed evaluation games. GRU minus pooling: −0.98 points [−10.13, +8.18], 
 1.06× training time. Too short a horizon to choose an architecture; the GPU
 study above is the answer.
 
-[Growing card pools, MTG-245](protocols/growing-pool-245-v1.md): **prospective,
-unexecuted** — authored reference league, frozen mixtures and separate retention,
-expansion and generalization panels. Includes a frozen proxy and bounded Task 04
-handoff; its older engine source requires a prospective freeze before execution.
-No training or strength results.
+[Growing card pools, MTG-245](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/growing-pool-245-v1.md): **removed
+unexecuted, 2026-11-11** — authored reference league, frozen mixtures and
+separate retention, expansion and generalization panels. No training or
+strength results; the protocol and modules remain at that revision.
 
 [Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
@@ -206,7 +244,7 @@ The [GPU representation horizon study](protocols/state-representation-5da5f4-gpu
 retains four paired CUDA seeds, initialization and periodic evaluation, a
 sustained-plateau criterion, and separate held-out scoring. Its first cohort
 was cancelled before scoring when measured concurrent GPU throughput invalidated
-the allocation budget. `state_representation_gpu.py` declares one recovery unit
+the allocation budget. `state_representation_gpu.py` declared one recovery unit
 per frozen allocation file; the throughput admission and CUDA operator profiler
 that qualified it ended with the cohort and remain at source `d57c5c9e7`,
 reachable through PR 421's head ref (`refs/pull/421/head`). Wider

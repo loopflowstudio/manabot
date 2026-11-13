@@ -28,12 +28,12 @@ fn doubling_season_doubles_entry_lore_and_tokens_but_not_precombat_lore() {
     // Removing Doubling Season while placing then returning it isolates the
     // actual next precombat turn action from entry replacement.
     let season = s.battlefield_permanents_named(0, "Doubling Season")[0];
-    let season_card = s.game().state.permanents[season].as_ref().unwrap().card;
-    s.game_mut().move_card(season_card, ZoneType::Hand);
+    let season_card = s.game().state.permanents[season].as_ref().unwrap().object;
+    s.game_mut().move_object(season_card, ZoneType::Hand);
     let second = enters_battlefield_with_triggers(&mut s, 0, "Leaves from the Vine");
     s.game_mut().scenario_refresh_priority().unwrap();
     resolve_everything(&mut s);
-    s.game_mut().move_card(season_card, ZoneType::Battlefield);
+    s.game_mut().move_object(season_card, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     let turn = s.game().state.turn.turn_number;
     s.advance_until(

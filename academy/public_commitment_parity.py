@@ -11,14 +11,6 @@ from tempfile import TemporaryDirectory
 from typing import Any, Mapping
 
 from fastapi.testclient import TestClient
-from managym.decision import (
-    SEMANTIC_DECISION_VERSION,
-    Command,
-    DecisionFrame,
-    SemanticTransition,
-    apply_semantic_command,
-)
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.likelihood import (
@@ -29,6 +21,14 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.tracker import BeliefTracker
 import managym
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Command,
+    DecisionFrame,
+    SemanticTransition,
+    apply_semantic_command,
+)
+from managym.possible_worlds import PossibleWorldSpace
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
@@ -37,11 +37,11 @@ from .replay_index import CanonicalReplayV1
 
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
-    ROOT / "conformance/public-commitment-parity-w17-v1/"
+    ROOT / "conformance/public-commitment-parity-w17-v2/"
     "release-live-replay-hypothesis-seed-0.json"
 )
 AUTHORITY_RECEIPT_SHA256 = (
-    "51fea61f8f3958c56c8b2a9d9ba69636aa6688e831cf472c0b8eccfd1bfe286d"
+    "39ec3796e6b09bc4775aa29894274e82e88b96aaed3f440b252ca54d7b34b1dc"
 )
 COMMAND_COUNT = 135
 COMMITMENT_COUNT = 66
@@ -491,16 +491,16 @@ def _materialized_discard_proof(root: managym.Env) -> dict[str, Any]:
 
 def _source_manifest() -> dict[str, Any]:
     paths = (
-        "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
-        "manabot/managym/experience_projection.py",
+        "managym/experience_projection.py",
         "experiments/contracts/int-9-exact-range-v1.json",
         "manabot/belief/likelihood.py",
         "manabot/belief/tracker.py",
-        "manabot/managym/__init__.pyi",
-        "manabot/managym/decision.py",
-        "manabot/managym/possible_worlds.py",
+        "managym/__init__.pyi",
+        "managym/decision.py",
+        "managym/possible_worlds.py",
         "managym/src/agent/env.rs",
         "managym/src/agent/structured_offer.rs",
         "managym/src/decision.rs",

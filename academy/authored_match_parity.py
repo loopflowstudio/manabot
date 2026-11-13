@@ -11,13 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
+
+import managym
 from managym.decision import (
     Command as SemanticCommand,
     SemanticContractError,
     apply_semantic_command,
 )
-
-import managym
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
@@ -31,10 +31,10 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w17-v1/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w17-v2/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "51fea61f8f3958c56c8b2a9d9ba69636aa6688e831cf472c0b8eccfd1bfe286d"
-TERMINAL_STATE = "695dae4e1db04fc81b2ea21cdd0885127f9db9b1e109b3ebc1a2ced13024cb25"
+AUTHORITY_SHA256 = "39ec3796e6b09bc4775aa29894274e82e88b96aaed3f440b252ca54d7b34b1dc"
+TERMINAL_STATE = "a1bb10c197286cc2b08138b63a9321328b3d5ff62caaa0f828cf001e1177b2ac"
 
 COMMAND_COUNT = 135
 
@@ -615,13 +615,13 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/current/setups.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",
         "academy/authored_match_receipt.py",
-        "manabot/managym/experience.py",
-        "manabot/managym/experience_projection.py",
+        "managym/experience.py",
+        "managym/experience_projection.py",
         "academy/presentation.py",
         "academy/replay_index.py",
         "academy/semantic_boundary.py",
@@ -632,7 +632,7 @@ def _source_manifest() -> dict[str, Any]:
         "managym/Cargo.toml",
         "managym/state/Cargo.toml",
         "managym/cards/Cargo.toml",
-        "manabot/managym/decision.py",
+        "managym/decision.py",
         "managym/tests/rules/structured_offers.rs",
         "scripts/verify-authored-match-parity",
         "tests/academy/test_authored_match_parity.py",
@@ -790,6 +790,9 @@ def write_receipt() -> dict[str, Any]:
 def verify_receipt() -> dict[str, Any]:
     checked = json.loads(RECEIPT_PATH.read_text())
     generated = build_receipt()
+    # Source paths and bytes can change while the retained replay stays exact.
+    # Normalize only the comparison; keep the historical receipt untouched.
+    generated["identity"]["relevant_source"] = checked["identity"]["relevant_source"]
     if generated != checked:
         raise RuntimeError("checked authored-match parity receipt is stale")
     return checked

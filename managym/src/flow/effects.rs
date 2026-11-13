@@ -11,15 +11,17 @@
 //
 // Expiry boundaries:
 //   - cleanup ends `EndOfTurn` records (CR 514.2);
-//   - an affected object changing zones ends its records (CR 400.7).
+//   - an affected object changing zones ends its records (CR 400.7);
+//   - a player's turn beginning ends the "until your next turn" records they
+//     control, then their untap step phases their permanents in (CR 702.26a).
 
 use crate::{
     cards::content_pack::default_content_pack,
     flow::game::Game,
     state::{
-        card::{CardDefId, CardDefinition, Keyword, Keywords},
+        card::{CardDefId, Keyword, Keywords, PrintedCharacteristics},
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
-        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
     },
 };
@@ -29,7 +31,7 @@ impl Game {
     /// fixed at resolution (CR 611.2c) shares that timestamp.
     pub fn apply_continuous(
         &mut self,
-        source: Option<CardId>,
+        source: Option<ObjectId>,
         controller: PlayerId,
         affected: impl IntoIterator<Item = Affected>,
         modification: Modification,
@@ -42,7 +44,7 @@ impl Game {
     /// `WhileYouControlSource` duration follows.
     pub(crate) fn record_continuous(
         &mut self,
-        source: Option<CardId>,
+        source: Option<ObjectId>,
         source_object: Option<ObjectRef>,
         controller: PlayerId,
         affected: impl IntoIterator<Item = Affected>,
@@ -51,7 +53,8 @@ impl Game {
     ) {
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
-        let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
+        let source: Option<CardDefId> =
+            source.map(|object| self.state.objects[object].definition_id);
         let timestamp = self.state.id_gen_mut().next_id();
         self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
             timestamp,
@@ -70,14 +73,15 @@ impl Game {
     pub fn animate_permanent(
         &mut self,
         permanent_id: PermanentId,
-        source: Option<CardId>,
+        source: Option<ObjectId>,
         controller: PlayerId,
     ) {
         let Some(object) = self.permanent_object_ref(permanent_id) else {
             return;
         };
         let timestamp = self.state.id_gen_mut().next_id();
-        let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
+        let source: Option<CardDefId> =
+            source.map(|object_id| self.state.objects[object_id].definition_id);
         let modifications = [
             Modification::BecomeCreature,
             Modification::SetBasePt {
@@ -130,8 +134,10 @@ impl Game {
     pub(crate) fn inherited_definition(
         &self,
         permanent_id: PermanentId,
-    ) -> Option<&'static CardDefinition> {
-        default_content_pack().definition(self.inherited_definition_id(permanent_id)?)
+    ) -> Option<&'static PrintedCharacteristics> {
+        default_content_pack()
+            .definition(self.inherited_definition_id(permanent_id)?)
+            .map(|row| &*row.printed)
     }
 
     pub(crate) fn inherited_definition_id(&self, permanent_id: PermanentId) -> Option<CardDefId> {
@@ -170,9 +176,25 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::DoesntUntap)
     }
 
+    /// "Its activated abilities can't be activated this turn", mana
+    /// abilities and fixed mana taps included.
+    pub fn activations_prohibited(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::CantActivateAbilities)
+    }
+
+    /// "All creatures able to block [it] this turn do so."
+    pub fn must_be_blocked_by_all_able(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::MustBeBlockedByAllAble)
+    }
+
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
+    }
+
+    /// "If it would leave the battlefield, exile it instead" (unearth).
+    pub fn exiled_if_it_would_leave(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldLeave)
     }
 
     /// The modes the permanent's "choose one that hasn't been chosen"
@@ -196,6 +218,145 @@ impl Game {
     pub fn has_no_maximum_hand_size_effect(&self, player: PlayerId) -> bool {
         self.player_effects(player)
             .any(|effect| effect.modification == Modification::NoMaximumHandSize)
+    }
+
+    /// Whether `player`'s next creature card may be cast with flash timing.
+    pub(crate) fn has_next_creature_cast_flash(&self, player: PlayerId) -> bool {
+        self.player_effects(player)
+            .any(|effect| effect.modification == Modification::NextCreatureCastFlash)
+    }
+
+    /// The cast creature card was "the next creature card" of every such
+    /// record on its caster, so all of them end (CR 601.2i).
+    pub(crate) fn end_next_creature_cast_flash(&mut self, player: PlayerId) {
+        self.end_effects(|effect| {
+            effect.affects_player(player)
+                && effect.modification == Modification::NextCreatureCastFlash
+        });
+    }
+
+    /// Whether `player` skips the combat phases of this turn of theirs.
+    pub(crate) fn skips_combat_phases(&self, player: PlayerId) -> bool {
+        self.player_effects(player)
+            .any(|effect| effect.modification == Modification::SkipsCombatPhasesNextTurn)
+    }
+
+    /// The turn `player` skipped combat in is over, so its records end.
+    pub(crate) fn end_skipped_combat_phases(&mut self, player: PlayerId) {
+        self.end_effects(|effect| {
+            effect.affects_player(player)
+                && effect.modification == Modification::SkipsCombatPhasesNextTurn
+        });
+    }
+
+    /// Whether `player`'s life total can't change (CR 119.7).
+    pub fn life_total_cant_change(&self, player: PlayerId) -> bool {
+        self.player_effects(player)
+            .any(|effect| effect.modification == Modification::LifeTotalCantChange)
+    }
+
+    /// Whether `player` has protection from everything (CR 702.16j).
+    pub fn has_protection_from_everything(&self, player: PlayerId) -> bool {
+        self.player_effects(player)
+            .any(|effect| effect.modification == Modification::ProtectionFromEverything)
+    }
+
+    /// The most life `player` can pay: none other than 0 while their life
+    /// total can't change (CR 119.8).
+    pub(crate) fn payable_life(&self, player: PlayerId) -> i32 {
+        if self.life_total_cant_change(player) {
+            0
+        } else {
+            self.state.players[player.0].life
+        }
+    }
+
+    /// Whether the permanent is phased out (CR 702.26b): the one authority
+    /// battlefield readers consult. `iter_battlefield_permanents`, the layer
+    /// board's sources, the trigger index, targeting and combat skip it; the
+    /// observation keeps its row, marked by the record.
+    #[inline]
+    pub fn is_phased_out(&self, permanent_id: PermanentId) -> bool {
+        self.state.effects.any_phased_out()
+            && self.permanent_has_modification(permanent_id, &Modification::PhasedOut)
+    }
+
+    /// The objects a phase-out of `affected` covers: each permanent and,
+    /// phasing out indirectly, everything attached to one (CR 702.26g).
+    pub(crate) fn phase_out_set(&self, affected: Vec<Affected>) -> Vec<Affected> {
+        let mut set = affected;
+        let mut index = 0;
+        while index < set.len() {
+            if let Affected::Object(object) = set[index] {
+                for (slot, permanent) in self.state.permanents.iter().enumerate() {
+                    let Some(permanent) = permanent else { continue };
+                    if permanent.attached_to != Some(object) {
+                        continue;
+                    }
+                    let Some(attached) = self.affected_permanent(PermanentId(slot)) else {
+                        continue;
+                    };
+                    if !set.contains(&attached) && !self.is_phased_out(PermanentId(slot)) {
+                        set.push(attached);
+                    }
+                }
+            }
+            index += 1;
+        }
+        set
+    }
+
+    /// CR 702.26a: as `player`'s untap step begins, the permanents they
+    /// control that phased out directly phase in, and with each one
+    /// whatever phased out attached to it. Phasing in is no zone change: no
+    /// trigger sees it, and counters and attachments stay (CR 702.26d).
+    pub(crate) fn phase_in(&mut self, player: PlayerId) {
+        if !self.state.effects.any_phased_out() {
+            return;
+        }
+        let phased: Vec<(ObjectRef, PlayerId, Option<ObjectRef>)> = self
+            .state
+            .effects
+            .iter()
+            .filter(|effect| effect.modification == Modification::PhasedOut)
+            .filter_map(|effect| match effect.affected {
+                Affected::Object(object) => {
+                    let id = self.lookup_current_permanent(object).ok()?;
+                    let permanent = self.state.permanents[id].as_ref()?;
+                    Some((object, permanent.controller, permanent.attached_to))
+                }
+                Affected::Player(_) => None,
+            })
+            .collect();
+        let is_phased = |object: ObjectRef| phased.iter().any(|(other, ..)| *other == object);
+        let mut phasing_in: Vec<ObjectRef> = phased
+            .iter()
+            .filter(|(_, controller, attached)| {
+                *controller == player && !attached.is_some_and(is_phased)
+            })
+            .map(|(object, ..)| *object)
+            .collect();
+        let mut index = 0;
+        while index < phasing_in.len() {
+            let host = phasing_in[index];
+            for (object, _, attached) in &phased {
+                if *attached == Some(host) && !phasing_in.contains(object) {
+                    phasing_in.push(*object);
+                }
+            }
+            index += 1;
+        }
+        self.end_effects(|effect| {
+            effect.modification == Modification::PhasedOut
+                && matches!(effect.affected, Affected::Object(object) if phasing_in.contains(&object))
+        });
+    }
+
+    /// `player`'s turn begins: their "until your next turn" records end.
+    pub(crate) fn end_until_your_next_turn_effects(&mut self, player: PlayerId) {
+        self.end_effects(|effect| {
+            effect.duration == EffectDuration::UntilYourNextTurn && effect.controller == player
+        });
     }
 
     /// CR 514.2: "until end of turn" effects end in the cleanup step.

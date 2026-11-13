@@ -2,8 +2,6 @@
 // Determinized-search primitives on Game: hidden-information resampling and
 // uniformly-random playouts to terminal. Used by flat Monte Carlo search.
 
-use std::collections::BTreeSet;
-
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -11,7 +9,7 @@ use crate::{
     agent::action::{ActionSpace, ActionSpaceKind, AgentError},
     flow::{decision::Decision, game::Game, selection_sampling::HiddenCommitments},
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -90,16 +88,17 @@ impl Game {
             self.decklist_known(opponent, perspective),
             "determinize requires the opponent's open decklist"
         );
-        // Searching an opponent's hand and library reveals their exact
-        // membership to the searcher until this instruction finishes.
-        let searching_opponent = self.searches_private_zones(perspective, opponent);
+        // Searching an opponent's library (with or without their hand) fixes
+        // their exact membership for the searcher until the instruction
+        // finishes.
+        let searching_opponent = self.inspects_library(perspective, opponent);
         if !searching_opponent {
             if self.shares_information(perspective, opponent) {
                 self.shuffle_private_library(opponent, &mut rng);
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
-                residual.extend(self.foretold_cards(opponent));
-                residual.sort_unstable_by_key(|card| card.0);
+                residual.extend(self.foretold_cards(opponent).map(ObjectId::from));
+                residual.sort_unstable_by_key(|object| object.0);
                 residual.shuffle(&mut rng);
                 assert!(
                     self.fill_foretold_slots(opponent, &mut residual),
@@ -107,13 +106,13 @@ impl Game {
                 );
                 let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
                 let mut library = residual.split_off(unknown_slots);
-                let pending = commitments.pinned_library_cards(self, opponent);
+                let pending = commitments.pinned_library_objects(self, opponent);
                 if !pending.is_empty() {
                     library.extend(pending);
                     library.shuffle(&mut rng);
                 }
                 known.extend(residual);
-                self.state.zones.reassign_hidden(opponent, known, library);
+                self.state.reassign_hidden(opponent, known, library);
             }
         }
         self.shuffle_private_library(perspective, &mut rng);
@@ -139,7 +138,7 @@ impl Game {
                                 | Decision::OrderLibrary { .. }
                                 | Decision::Learn { .. }
                                 | Decision::Discard { .. }
-                                | Decision::SearchDistinctLands { .. }
+                                | Decision::SearchDistinctNames { .. }
                                 | Decision::SearchNamed { .. }
                                 | Decision::CastDuringResolution { .. }
                         )
@@ -165,15 +164,17 @@ impl Game {
     /// Shuffle an unknown library order while preserving its permitted top.
     pub(crate) fn shuffle_private_library(&mut self, player: PlayerId, rng: &mut ChaCha8Rng) {
         let known_top = self
-            .library_top_card(player)
+            .state
+            .zones
+            .top(ZoneType::Library, player)
             .filter(|_| self.looks_at_library_top(player));
         self.state
             .zones
             .shuffle_canonical(ZoneType::Library, player, rng);
-        if let Some(card) = known_top {
-            let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
-            library.retain(|other| *other != card);
-            library.push(card);
+        if let Some(object) = known_top {
+            self.state
+                .zones
+                .reposition(ZoneType::Library, player, object, usize::MAX);
         }
     }
 
@@ -203,25 +204,29 @@ impl Game {
         &self,
         player: PlayerId,
         commitments: &HiddenCommitments,
-    ) -> (Vec<CardId>, Vec<CardId>) {
-        let is_fixed = |card: CardId| commitments.pins_card(card);
+    ) -> (Vec<ObjectId>, Vec<ObjectId>) {
+        let is_fixed = |object: ObjectId| commitments.pins_object(object);
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
-            .flat_map(|zone| self.state.zones.zone_cards(zone, player).iter().copied())
-            .filter(|card| {
-                !is_fixed(*card) || !self.state.zones.contains(*card, ZoneType::Library, player)
+            .flat_map(|zone| self.state.zones.zone_objects(zone, player).iter().copied())
+            .filter(|object| {
+                !is_fixed(*object)
+                    || !self
+                        .state
+                        .zones
+                        .contains(*object, ZoneType::Library, player)
             })
             .collect();
-        pool.sort_unstable_by_key(|card| card.0);
+        pool.sort_unstable_by_key(|object| object.0);
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
         let mut residual = Vec::new();
         // Public entrants in a hand pin the physical witness; ordinary reveals
         // still reserve only a definition minimum, as before.
-        pool.retain(|card| {
-            if is_fixed(*card) && self.state.zones.contains(*card, ZoneType::Hand, player) {
-                known.push(*card);
-                if let Some(count) = counts.get_mut(&self.state.cards[*card].definition_id) {
+        pool.retain(|object| {
+            if is_fixed(*object) && self.state.zones.contains(*object, ZoneType::Hand, player) {
+                known.push(*object);
+                if let Some(count) = counts.get_mut(&self.state.objects[*object].definition_id) {
                     *count = count.saturating_sub(1);
                 }
                 false
@@ -229,15 +234,15 @@ impl Game {
                 true
             }
         });
-        for card in pool {
-            if let Some(count) = counts.get_mut(&self.state.cards[card].definition_id) {
+        for object in pool {
+            if let Some(count) = counts.get_mut(&self.state.objects[object].definition_id) {
                 if *count > 0 {
-                    known.push(card);
+                    known.push(object);
                     *count -= 1;
                     continue;
                 }
             }
-            residual.push(card);
+            residual.push(object);
         }
         assert!(
             counts.values().all(|count| *count == 0),
@@ -268,19 +273,15 @@ impl Game {
         };
         let inspections: Vec<_> = suspended
             .decisions()
-            .map(|decision| decision.revealed_cards().to_vec())
-            .filter(|cards| !cards.is_empty())
+            .map(|decision| decision.revealed_objects().to_vec())
+            .filter(|objects| !objects.is_empty())
             .collect();
         for revealed in inspections {
-            let player = self.state.cards[revealed[0]].owner;
-            for card in &revealed {
-                self.state.zones.move_card(*card, player, ZoneType::Library);
+            let player = self.state.objects[revealed[0]].owner;
+            // Placement appends, so put revealed[0] on top (last).
+            for object in revealed.iter().rev() {
+                self.state.place_object(*object, player, ZoneType::Library);
             }
-            let revealed_set = revealed.iter().copied().collect::<BTreeSet<_>>();
-            let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
-            library.retain(|card| !revealed_set.contains(card));
-            // revealed[0] is the top of the library = last element.
-            library.extend(revealed.iter().rev());
         }
     }
 

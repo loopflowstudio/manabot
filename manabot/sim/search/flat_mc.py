@@ -23,9 +23,10 @@ import math
 import time
 from typing import Any, Protocol
 
-from managym.decision import Command, DecisionFrame
 import numpy as np
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -33,12 +34,11 @@ from manabot.infra.config import (
     MatchConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.anchors import RandomMatchupPlayer
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
 from manabot.verify.util import _select_agent_action
+from managym.decision import Command, DecisionFrame
 
 DEFAULT_ROLLOUTS_PER_WORLD = 4
 
@@ -190,6 +190,8 @@ def make_player(
         {"kind": "exact_range", "sims": 64, "checkpoint": "/abs/policy.pt",
          "checkpoint_sha256": "...", "epsilon": 0.05}
         {"kind": "uniform_range", ...same fields...}
+        {"kind": "local_update", "checkpoint": "/abs/policy.pt",
+         "checkpoint_sha256": "...", "config": {...}, "native_encoder": False}
     Returns (player, observation_space_or_None). Checkpoint players carry the
     ObservationSpace their encoder was trained with.
     """
@@ -212,6 +214,7 @@ def make_player(
             sampler=SamplerArtifact.model_validate(spec["sampler"])
             if spec.get("sampler")
             else None,
+            native_encoder=bool(spec.get("native_encoder", True)),
         )
         return LocalUpdatePlayer(teacher, seed=seed), teacher.space
     if kind == "search":
@@ -470,7 +473,6 @@ def play_games(
         obs_space,
         Reward(RewardConfig()),
         seed=seed,
-        auto_reset=False,
         enable_profiler=False,
         enable_behavior_tracking=False,
     )

@@ -4,13 +4,13 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.model.policy_distribution import (
+from manabot.backends.torch.rl import (
     NumericalError,
     clipped_surrogate,
+    damped_policy_loss,
     policy_logs,
     reverse_kl,
 )
-from manabot.training.learning.damped_policy import damped_policy_loss
 from manabot.training.rollout.actions import PackedActions
 
 

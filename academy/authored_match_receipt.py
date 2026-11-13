@@ -10,16 +10,15 @@ from random import Random
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from managym.experience import InteractionOffer
-
 from manabot.semantic.learning import PROGRAM_KINDS
 import managym
+from managym.experience import InteractionOffer
 
 from .server import DecisionContext, GameSession
 
 ROOT = Path(__file__).parents[1]
 DEFAULT_RECEIPT_PATH = (
-    ROOT / "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json"
+    ROOT / "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json"
 )
 FIXED_TIME = "2026-07-17T00:00:00+00:00"
 MATCH_SEED = 0
@@ -86,12 +85,12 @@ def _program_index() -> tuple[
 ]:
     """Name every program of the world's catalog from the engine's own tokens.
 
-    A program is one span of ``managym.learning_catalog``: each triggered,
+    A program is one span of ``managym.catalog_tokens``: each triggered,
     mana, triggered-mana and activated ability, plus the spell. Its key is
     ``<definition key>.<kind>.<ordinal within the definition>``.
     """
     pool = managym.content_pool(managym.WORLD_SETUP)
-    catalog = managym.learning_catalog()
+    catalog = managym.catalog_tokens()
     kind_names = {value: name for name, value in PROGRAM_KINDS.items()}
     definitions = {int(row["card_def_id"]): row for row in pool["definitions"]}
     offsets = catalog["definition_program_offsets"]

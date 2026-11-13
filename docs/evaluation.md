@@ -206,7 +206,8 @@ with all eight legs; Etude owns match records, resume and uncertainty) and
 - `EvalCompute` (`shared-eval-v2`): device and dtype, i.e. how a served
   policy's numbers are computed. This is part of registration identity.
 - `EvalAllocation`: active games, batch rows, batching delay, resident-model
-  bytes, request timeout, catalog cache and residency.
+  bytes, request timeout, catalog cache, residency and forward layout
+  (`bucketed_shapes`, `live_tokens`).
 - `EvalExecution`: absolute Unix deadline plus instrumentation switches.
 
 Allocation and attempt settings live in receipts, not registration hashes:
@@ -217,6 +218,27 @@ creates new identities. `seed_compute_envelope_id` preserves the original seed
 authority across serving changes. `shared-eval-v1` (through PR #389) also
 hashed allocation settings; its records stay readable as `EvalComputeV1` /
 `EvalExecutionV1` but are not reused or continued under v2.
+
+**Forward layout.** An allocation can serve policies with
+[bucketed padding](observation-and-model.md#bucketed-padding) and
+[live-token attention](observation-and-model.md#live-token-attention):
+`EvalAllocation.bucketed_shapes` and `live_tokens`, both off by default.
+
+```python
+from manabot.sim.execution import EvalAllocation
+
+allocation = EvalAllocation(device="cuda", bucketed_shapes=True, live_tokens=True)
+```
+
+`live_tokens=True` requires `device="cuda"` (`live tokens require CUDA`). They
+are off because served batches are small: in one w384l8 pass on an L4, at about
+nine rows per forward, the padded forward took 23.7 ms against 27.3 ms with
+both on, and the pass took 118 s either way
+([measurement](../experiments/eval_forward_layout.md)). The layout changes only
+the order of floating-point sums, as batch composition already does, so it is
+an allocation setting: the values are retained in the attempt receipt and
+leave `EvalCompute`, player, benchmark and match identities unchanged. Search
+players and range likelihoods load their policies padded.
 
 With an execution, flat stateless checkpoints are served; without one,
 `play_cell`, `evaluate` and the monitor play them scalar in the game child
@@ -257,6 +279,17 @@ its own socket (`InferenceClient`); the supervisor keeps lifecycle, deadlines,
 failure classification and the Command journal, retaining each Command before
 native execution. CPU and CUDA share one serial service with one Torch thread;
 CPU-specific engine work waits for a calibration showing it saturated.
+
+**Checkpoint identity.** A checkpoint registration's observation and action
+ABI hashes describe the checkpoint's own `ObservationSpace`, not the fresh
+defaults for its matchup. Build registrations with
+`manabot.eval.admission.register_checkpoint`, which loads the bytes once and
+takes the world and both hashes from that space. Scalar play never compares
+these hashes; the serving child does when it first loads a checkpoint, and
+refuses a disagreeing registration's matches before play with an
+`InferenceFailure` naming `checkpoint observation ABI drift` (or
+`action/world ABI drift`). A passing CPU run therefore does not show a
+registration is right.
 
 Children start through `manabot.sim.child`, never `multiprocessing` spawn.
 Only search players (flat-MC, PUCT, local update) load Torch in a game child;

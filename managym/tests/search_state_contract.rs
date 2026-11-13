@@ -135,11 +135,11 @@ fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
         assert!(projection
             .agent_cards
             .iter()
-            .any(|card| card.zone == ZoneType::Hand));
+            .any(|object| object.zone == ZoneType::Hand));
         assert!(projection
             .opponent_cards
             .iter()
-            .all(|card| { card.zone != ZoneType::Hand && card.zone != ZoneType::Library }));
+            .all(|object| { object.zone != ZoneType::Hand && object.zone != ZoneType::Library }));
     }
 }
 
@@ -191,11 +191,11 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
             .position(Option::is_some)
             .expect("fixture has a live permanent"),
     );
-    let card = root.state.permanents[permanent]
+    let object = root.state.permanents[permanent]
         .as_ref()
         .expect("live permanent")
-        .card;
-    let old_ref = root.current_object_ref(card).expect("current object ref");
+        .object;
+    let old_ref = root.current_object_ref(object).expect("current object ref");
     assert_eq!(root.lookup_current_permanent(old_ref), Ok(permanent));
 
     let root_view = root.characteristics(permanent);
@@ -209,7 +209,7 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
         Arc::ptr_eq(&root_view, &branch.characteristics(permanent)),
         "draining events does not change any layered characteristic"
     );
-    branch.move_card(card, ZoneType::Graveyard);
+    branch.move_object(object, ZoneType::Graveyard);
     assert!(
         !Arc::ptr_eq(&root_view, &branch.characteristics(permanent)),
         "a departed object cannot keep its cached battlefield view"
@@ -226,9 +226,9 @@ fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
         old_ref
     );
 
-    branch.move_card(card, ZoneType::Battlefield);
+    branch.move_object(object, ZoneType::Battlefield);
     let new_ref = branch
-        .current_object_ref(card)
+        .current_object_ref(object)
         .expect("re-entered object ref");
     assert_eq!(new_ref.entity, old_ref.entity);
     assert!(new_ref.incarnation > old_ref.incarnation);
