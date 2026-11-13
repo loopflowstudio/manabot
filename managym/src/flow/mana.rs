@@ -1,10 +1,17 @@
 // mana.rs
 // One payment transition model for offers, automatic production and nested
-// mana activations. PaymentModel searches identity-preserving resource steps;
-// its witness search prunes with optimistic whole-payment and color-set
-// bounds and memoizes feasibility across interchangeable sources
+// mana activations. PaymentModel answers a question two ways with one result:
+// directly, by arithmetic over the pool and the fixed outputs, when every
+// source in play for the question taps itself for one fixed output and the
+// obligations are one mana cost with an optional waterbend split
+// (`PaymentModel::direct`); otherwise by searching identity-preserving
+// resource steps. The witness search prunes with optimistic whole-payment and
+// color-set bounds and memoizes feasibility across interchangeable sources
 // (PaymentSearch), always returning the first concrete path in source order.
-// Game owns their events and explicit Decision continuations. Pool arithmetic
+// The search defines a legal payment; debug builds run it beside every direct
+// answer and assert equal affordability and an equal witness.
+// Game owns their events and explicit Decision continuations, and shares one
+// player's sources across the questions of a `PaymentScan`. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
 use std::sync::Arc;
@@ -43,7 +50,7 @@ enum Obligation {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct ManaSource {
     permanent: PermanentId,
     card: CardId,
@@ -53,7 +60,7 @@ struct ManaSource {
     waterbend: bool,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct ManaActivation {
     tap_source: bool,
     tap_count: usize,
@@ -306,6 +313,72 @@ impl PaymentSearchState {
 struct PaymentModel {
     sources: Vec<ManaSource>,
     life: u32,
+}
+
+/// A question the direct answer covers: `cost` paid with mana, then `split`,
+/// generic that mana or waterbend taps may pay.
+struct DirectPayment<'a> {
+    cost: &'a ManaCost,
+    split: Option<&'a ManaCost>,
+}
+
+impl DirectPayment<'_> {
+    fn split_generic(&self) -> u32 {
+        self.split.map_or(0, |split| u32::from(split.generic()))
+    }
+}
+
+/// What tapping one source offers a direct payment.
+#[derive(Clone, Copy)]
+struct DirectTap<'a> {
+    permanent: PermanentId,
+    /// The fixed output of an untapped source, tapped in source order even
+    /// when the cost can spend none of it.
+    output: Option<&'a Mana>,
+    /// How much of `output` the cost's purpose may spend.
+    mana: u32,
+    /// Whether the tap may instead pay {1} of the split.
+    waterbend: bool,
+}
+
+impl DirectTap<'_> {
+    /// A waterbend tap that gives up no mana. A source worth mana is never
+    /// better tapped for waterbend, which pays exactly {1}.
+    fn spare(self) -> bool {
+        self.waterbend && self.mana == 0
+    }
+
+    /// The most this tap adds towards the split.
+    fn worth(self) -> u32 {
+        self.mana.max(self.waterbend.into())
+    }
+}
+
+/// One player's unreserved sources, kept while a `PaymentScan` is live.
+#[derive(Debug, Default)]
+pub(crate) struct SharedSources {
+    scans: u32,
+    sources: [Option<Vec<ManaSource>>; 2],
+}
+
+/// One legal-action computation. The sources a player could tap are a
+/// function of the game alone, and the guard's shared borrow excludes every
+/// write to it, so the payment questions asked while it lives build those
+/// sources once per player. Reservations of the pending payment, a sacrifice
+/// under consideration and payable life are still applied per question.
+/// Debug builds rebuild the sources on every reuse and assert they match.
+pub(crate) struct PaymentScan<'a> {
+    game: &'a Game,
+}
+
+impl Drop for PaymentScan<'_> {
+    fn drop(&mut self) {
+        let mut shared = self.game.payment_sources.borrow_mut();
+        shared.scans -= 1;
+        if shared.scans == 0 {
+            shared.sources = Default::default();
+        }
+    }
 }
 
 impl PaymentModel {
@@ -843,6 +916,7 @@ impl PaymentModel {
         )
     }
 
+    /// The first witness for `obligations`, or `None` when they cannot be paid.
     fn plan(
         &self,
         pool: Mana,
@@ -851,10 +925,198 @@ impl PaymentModel {
     ) -> Option<Vec<PaymentStep>> {
         #[cfg(feature = "benchmark")]
         crate::benchmark_payments::begin_plan(self.sources.len());
-        let path = self.search(pool, obligations, policy);
+        let path = match self.direct(&obligations, policy) {
+            Some(direct) => {
+                let path = self.direct_witness(pool.clone(), &direct);
+                debug_assert_eq!(
+                    path,
+                    self.search(pool, obligations.clone(), policy),
+                    "direct payment witness differs from the search"
+                );
+                path
+            }
+            None => self.search(pool, obligations, policy),
+        };
         #[cfg(feature = "benchmark")]
         crate::benchmark_payments::end_plan();
         path
+    }
+
+    /// Whether `obligations` can be paid: `plan(..).is_some()` without
+    /// building the witness when the direct answer applies.
+    fn payable(&self, pool: Mana, obligations: Vec<Obligation>, policy: SourcePolicy) -> bool {
+        let Some(direct) = self.direct(&obligations, policy) else {
+            return self.plan(pool, obligations, policy).is_some();
+        };
+        let payable = self.direct_payable(&pool, &direct);
+        debug_assert_eq!(
+            payable,
+            self.search(pool, obligations.clone(), policy).is_some(),
+            "direct payment answer differs from the search"
+        );
+        payable
+    }
+
+    /// The question as the direct answer reads it, or `None` when only the
+    /// search is exact.
+    ///
+    /// Direct class: the obligations are one mana cost, optionally followed
+    /// by the generic-only waterbend split of the same purpose
+    /// (`waterbend_obligations`), and no source offers a searched ability.
+    /// Tapping a fixed source then only adds mana, and mana of one purpose
+    /// only adds ways to pay, so affordability is one sum and the search's
+    /// first witness is a single pass in source order. `FixedOnly` never
+    /// searches abilities, so a lone cost is direct whatever the sources
+    /// offer; it never taps for waterbend, so a split is not. The automatic
+    /// prefix minimizes taps instead of taking them in order and stays with
+    /// the search, as do counted taps, pending outputs and life.
+    fn direct<'a>(
+        &self,
+        obligations: &'a [Obligation],
+        policy: SourcePolicy,
+    ) -> Option<DirectPayment<'a>> {
+        let direct = match obligations {
+            [Obligation::Pay {
+                cost,
+                waterbend: false,
+            }] => DirectPayment { cost, split: None },
+            [Obligation::Pay {
+                cost,
+                waterbend: false,
+            }, Obligation::Pay {
+                cost: split,
+                waterbend: true,
+            }] if policy == SourcePolicy::All
+                && split.purpose == cost.purpose
+                && split.mana_value == split.generic() =>
+            {
+                DirectPayment {
+                    cost,
+                    split: Some(split),
+                }
+            }
+            _ => return None,
+        };
+        let searched = match policy {
+            SourcePolicy::FixedOnly => false,
+            SourcePolicy::All => self
+                .sources
+                .iter()
+                .any(|source| !source.abilities.is_empty()),
+            SourcePolicy::AutomaticPrefix => true,
+        };
+        (!searched).then_some(direct)
+    }
+
+    fn direct_taps<'a>(
+        &'a self,
+        payment: &'a DirectPayment,
+    ) -> impl Iterator<Item = DirectTap<'a>> + Clone {
+        self.sources.iter().map(|source| {
+            let output = source.fixed.as_ref().filter(|_| source.untapped);
+            DirectTap {
+                permanent: source.permanent,
+                output,
+                mana: output.map_or(0, |output| output.usable_total(payment.cost).into()),
+                waterbend: source.untapped && source.waterbend && payment.split.is_some(),
+            }
+        })
+    }
+
+    /// Affordability by arithmetic, as `(slack, spare taps)`: every fixed
+    /// source tapped for mana pays the cost with `slack` usable mana left
+    /// over, and that slack plus the spare taps covers the split. `None` when
+    /// the payment cannot be made.
+    fn direct_margin<'a>(
+        pool: &Mana,
+        taps: impl Iterator<Item = DirectTap<'a>> + Clone,
+        payment: &DirectPayment,
+    ) -> Option<(u32, u32)> {
+        let mut total = pool.clone();
+        for output in taps.clone().filter_map(|tap| tap.output) {
+            total.add(output);
+        }
+        if !total.can_pay(payment.cost) {
+            return None;
+        }
+        let slack = u32::from(total.usable_total(payment.cost))
+            .checked_sub(payment.cost.mana_value.into())?;
+        let spare_taps = taps.filter(|tap| tap.spare()).count() as u32;
+        (slack + spare_taps >= payment.split_generic()).then_some((slack, spare_taps))
+    }
+
+    fn direct_payable(&self, pool: &Mana, payment: &DirectPayment) -> bool {
+        Self::direct_margin(pool, self.direct_taps(payment), payment).is_some()
+    }
+
+    /// The witness the search returns first, built without searching.
+    ///
+    /// The search spends as soon as the pool pays the cost and the split can
+    /// still be covered afterwards, and until then taps the first fixed source
+    /// whose tap leaves the whole payment possible. That skips only a
+    /// worthless mana tap of a waterbend source the split needs. After the
+    /// spend it covers the split the same way, preferring each source's mana
+    /// tap to its waterbend tap. A feasible state stays feasible along this
+    /// path, so the search never backtracks out of it and one pass in source
+    /// order visits every decision it makes.
+    fn direct_witness(&self, mut pool: Mana, payment: &DirectPayment) -> Option<Vec<PaymentStep>> {
+        let cost = payment.cost;
+        let owed = u32::from(cost.mana_value);
+        let mut need = payment.split_generic();
+        let taps = self.direct_taps(payment).collect::<Vec<_>>();
+        // Tapping a source for mana moves its output into the pool and
+        // leaves the slack alone.
+        let (slack, mut spare_taps) = Self::direct_margin(&pool, taps.iter().copied(), payment)?;
+        // What the untapped sources can still add towards the split.
+        let mut ahead = taps.iter().map(|tap| tap.worth()).sum::<u32>();
+        let mut tapped = vec![false; taps.len()];
+        let mut path = Vec::new();
+        let mut index = 0;
+        while !(pool.can_pay(cost) && u32::from(pool.usable_total(cost)) - owed + ahead >= need) {
+            let tap = *taps
+                .get(index)
+                .expect("a payable cost is paid before its fixed sources run out");
+            let needed_for_split = tap.spare() && slack + spare_taps <= need;
+            if let Some(output) = tap.output.filter(|_| !needed_for_split) {
+                pool.add(output);
+                ahead -= tap.worth();
+                spare_taps -= u32::from(tap.spare());
+                tapped[index] = true;
+                path.push(PaymentStep::Fixed(tap.permanent));
+            }
+            index += 1;
+        }
+        pool.pay(cost);
+        path.push(PaymentStep::Spend(pool.clone()));
+        let Some(split) = payment.split else {
+            return Some(path);
+        };
+        let mut have = u32::from(pool.usable_total(split));
+        for (tap, tapped) in taps.iter().zip(tapped) {
+            if have >= need {
+                break;
+            }
+            if tapped {
+                continue;
+            }
+            let rest = ahead - tap.worth();
+            match tap.output {
+                Some(output) if have + tap.mana + rest >= need => {
+                    pool.add(output);
+                    have += tap.mana;
+                    path.push(PaymentStep::Fixed(tap.permanent));
+                }
+                _ if tap.waterbend => {
+                    need -= 1;
+                    path.push(PaymentStep::Waterbend(tap.permanent));
+                }
+                _ => continue,
+            }
+            ahead = rest;
+        }
+        pool.pay(&split.with_generic(need as u8));
+        path.push(PaymentStep::Spend(pool));
+        Some(path)
     }
 
     fn search(
@@ -1019,9 +1281,61 @@ impl Game {
         if let Some(suspended) = &self.state.suspended_decision {
             reserve(&suspended.decision, self, &mut reserved);
         }
+        let sources = self.shared_payment_sources(player);
+        let mut life = self.payable_life(player).max(0) as u32;
+        if let Some(
+            PendingChoice::ManaPayment { payment, .. }
+            | PendingChoice::SacrificePayment { payment, .. },
+        ) = &self.pending_choice
+        {
+            if let Payment::Activation {
+                source,
+                ability_index,
+                ..
+            } = payment.as_ref()
+            {
+                if let Some(ability) = self.activation_ability(*source, *ability_index) {
+                    life = life.saturating_sub(ability.life_cost);
+                }
+            }
+        }
+        let mut model = PaymentModel { sources, life };
+        for reservation in reserved {
+            model.reserve(reservation);
+        }
+        model
+    }
+
+    /// Begin one legal-action computation; see `PaymentScan`.
+    pub(crate) fn payment_scan(&self) -> PaymentScan<'_> {
+        self.payment_sources.borrow_mut().scans += 1;
+        PaymentScan { game: self }
+    }
+
+    /// `player`'s unreserved sources, reused inside a `PaymentScan`.
+    fn shared_payment_sources(&self, player: PlayerId) -> Vec<ManaSource> {
+        if let Some(sources) = &self.payment_sources.borrow().sources[player.0] {
+            debug_assert_eq!(
+                *sources,
+                self.payment_sources(player),
+                "stale shared payment sources"
+            );
+            return sources.clone();
+        }
+        let sources = self.payment_sources(player);
+        let mut shared = self.payment_sources.borrow_mut();
+        if shared.scans > 0 {
+            shared.sources[player.0] = Some(sources.clone());
+        }
+        sources
+    }
+
+    /// Every permanent `player` controls as a mana source, before any
+    /// reservation: a function of the game alone.
+    fn payment_sources(&self, player: PlayerId) -> Vec<ManaSource> {
+        let _scan = self.board_scan();
         let bonus_sources = self.tap_bonus_sources(player);
-        let sources = self
-            .characteristics_many(self.iter_battlefield_permanents(player))
+        self.characteristics_many(self.iter_battlefield_permanents(player))
             .map(|(permanent, characteristics)| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 // A source that lost its abilities offers no zero-mana tap.
@@ -1070,29 +1384,7 @@ impl Game {
                         && (characteristics.types.is_artifact() || characteristics.is_creature()),
                 }
             })
-            .collect();
-        let mut life = self.payable_life(player).max(0) as u32;
-        if let Some(
-            PendingChoice::ManaPayment { payment, .. }
-            | PendingChoice::SacrificePayment { payment, .. },
-        ) = &self.pending_choice
-        {
-            if let Payment::Activation {
-                source,
-                ability_index,
-                ..
-            } = payment.as_ref()
-            {
-                if let Some(ability) = self.activation_ability(*source, *ability_index) {
-                    life = life.saturating_sub(ability.life_cost);
-                }
-            }
-        }
-        let mut model = PaymentModel { sources, life };
-        for reservation in reserved {
-            model.reserve(reservation);
-        }
-        model
+            .collect()
     }
 
     fn payment_reservation(&self, payment: &Payment) -> Option<SourceReservation> {
@@ -1269,16 +1561,14 @@ impl Game {
         cost: &ManaCost,
         sacrifice: Option<PermanentId>,
     ) -> bool {
-        self.payment_model(player, sacrifice)
-            .plan(
-                self.pooled_mana(player),
-                vec![Obligation::Pay {
-                    cost: cost.clone(),
-                    waterbend: false,
-                }],
-                SourcePolicy::All,
-            )
-            .is_some()
+        self.payment_model(player, sacrifice).payable(
+            self.pooled_mana(player),
+            vec![Obligation::Pay {
+                cost: cost.clone(),
+                waterbend: false,
+            }],
+            SourcePolicy::All,
+        )
     }
 
     /// Feasibility of the chosen-object tap cost and its remaining activation
@@ -1322,10 +1612,9 @@ impl Game {
         ];
         let pool = self.pooled_mana(player);
         match selected {
-            Some(permanent) => model.plan_after_tap(pool, obligations, permanent),
-            None => model.plan(pool, obligations, SourcePolicy::All),
+            Some(permanent) => model.plan_after_tap(pool, obligations, permanent).is_some(),
+            None => model.payable(pool, obligations, SourcePolicy::All),
         }
-        .is_some()
     }
 
     pub(crate) fn can_pay_announced_activation(
@@ -1353,16 +1642,14 @@ impl Game {
             };
             model.life = remaining;
         }
-        model
-            .plan(
-                self.pooled_mana(player),
-                vec![Obligation::Pay {
-                    cost: cost.clone(),
-                    waterbend: false,
-                }],
-                SourcePolicy::All,
-            )
-            .is_some()
+        model.payable(
+            self.pooled_mana(player),
+            vec![Obligation::Pay {
+                cost: cost.clone(),
+                waterbend: false,
+            }],
+            SourcePolicy::All,
+        )
     }
 
     /// Can `player` pay `cost`, `waterbend` of its generic with mana or
@@ -1373,56 +1660,71 @@ impl Game {
         cost: &ManaCost,
         waterbend: u8,
     ) -> bool {
-        self.payment_model(player, None)
-            .plan(
-                self.pooled_mana(player),
-                waterbend_obligations(cost, waterbend),
-                SourcePolicy::All,
-            )
-            .is_some()
+        self.payment_model(player, None).payable(
+            self.pooled_mana(player),
+            waterbend_obligations(cost, waterbend),
+            SourcePolicy::All,
+        )
     }
 
-    /// Test a waterbend payment after reserving taps, without copying the game.
-    /// Non-mana taps reserve resources but produce no mana. The debug oracle
-    /// retains the full fork calculation if future rules add a tap dependency.
-    pub(crate) fn waterbend_payment_after_taps(
+    /// The `candidates` whose waterbend tap, beside `also_tapped`, leaves
+    /// `cost` payable, without copying the game. A tap reserves its source
+    /// and produces no mana. One decision's candidates are judged against one
+    /// model, each tap reserved for its own question and then restored. The
+    /// debug oracle retains the full fork calculation if future rules add a
+    /// tap dependency.
+    pub(crate) fn waterbend_taps_keeping_payable(
         &self,
         player: PlayerId,
         cost: &ManaCost,
         waterbend: u8,
-        taps: impl Iterator<Item = PermanentId> + Clone,
-    ) -> bool {
+        candidates: Vec<PermanentId>,
+        also_tapped: Option<PermanentId>,
+    ) -> Vec<PermanentId> {
+        let tap = |permanent| SourceReservation {
+            permanent,
+            tap: true,
+            sacrifice: false,
+        };
         let mut model = self.payment_model(player, None);
-        for permanent in taps.clone() {
-            model.reserve(SourceReservation {
-                permanent,
-                tap: true,
-                sacrifice: false,
-            });
+        if let Some(permanent) = also_tapped {
+            model.reserve(tap(permanent));
         }
-        let possible = model
-            .plan(
-                self.pooled_mana(player),
-                waterbend_obligations(cost, waterbend),
-                SourcePolicy::All,
-            )
-            .is_some();
-        debug_assert_eq!(possible, {
-            let mut probe = self.clone();
-            for permanent in taps {
-                probe.tap_permanent(permanent, false);
-            }
-            probe.waterbend_payment_possible(player, cost, waterbend)
-        });
-        possible
+        let pool = self.pooled_mana(player);
+        let obligations = waterbend_obligations(cost, waterbend);
+        candidates
+            .into_iter()
+            .filter(|&candidate| {
+                let index = model
+                    .sources
+                    .iter()
+                    .position(|source| source.permanent == candidate);
+                let untouched = index.map(|index| model.sources[index].clone());
+                model.reserve(tap(candidate));
+                let possible = model.payable(pool.clone(), obligations.clone(), SourcePolicy::All);
+                if let (Some(index), Some(source)) = (index, untouched) {
+                    model.sources[index] = source;
+                }
+                debug_assert_eq!(possible, {
+                    let mut probe = self.clone();
+                    for permanent in std::iter::once(candidate).chain(also_tapped) {
+                        probe.tap_permanent(permanent, false);
+                    }
+                    probe.waterbend_payment_possible(player, cost, waterbend)
+                });
+                possible
+            })
+            .collect()
     }
 
     pub(crate) fn mana_choice_completes_payment(&self, player: PlayerId, mana: &Mana) -> bool {
         let mut pool = self.pooled_mana(player);
         pool.add(mana);
-        self.payment_model(player, None)
-            .plan(pool, self.payment_obligations(player), SourcePolicy::All)
-            .is_some()
+        self.payment_model(player, None).payable(
+            pool,
+            self.payment_obligations(player),
+            SourcePolicy::All,
+        )
     }
 
     pub(crate) fn activate_mana_ability(
@@ -1632,16 +1934,14 @@ impl Game {
 
     /// The same witness used by automatic production determines PayCost offers.
     pub(crate) fn can_pay_automatic_mana(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.payment_model(player, None)
-            .plan(
-                self.pooled_mana(player),
-                vec![Obligation::Pay {
-                    cost: cost.clone(),
-                    waterbend: false,
-                }],
-                SourcePolicy::FixedOnly,
-            )
-            .is_some()
+        self.payment_model(player, None).payable(
+            self.pooled_mana(player),
+            vec![Obligation::Pay {
+                cost: cost.clone(),
+                waterbend: false,
+            }],
+            SourcePolicy::FixedOnly,
+        )
     }
 
     /// Both pools combined (regular + until-end-of-combat).
@@ -1819,8 +2119,8 @@ fn waterbend_obligations(cost: &ManaCost, waterbend: u8) -> Vec<Obligation> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ManaActivation, ManaSource, Obligation, PaymentModel, PaymentSearch, PaymentSearchState,
-        PaymentStep, SourcePolicy,
+        waterbend_obligations as waterbend, ManaActivation, ManaSource, Obligation, PaymentModel,
+        PaymentSearch, PaymentSearchState, PaymentStep, SourcePolicy,
     };
     use crate::cards::content_pack::ContentPack;
     use crate::state::{
@@ -1909,6 +2209,219 @@ mod tests {
             assert_eq!(path, original);
         }
         path
+    }
+
+    #[test]
+    fn direct_payment_matches_the_search_on_fixed_sources() {
+        use rand::{seq::SliceRandom, Rng, SeedableRng};
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(339);
+        let lesson = || ManaRestriction::spell(["Lesson"]);
+        // Empty and unusable outputs are worth nothing to a non-Lesson cost,
+        // which is where a waterbend tap beats a mana tap.
+        let outputs = [
+            None,
+            Some(Mana::default()),
+            Some(Mana::parse("G")),
+            Some(Mana::parse("U")),
+            Some(Mana::parse("UG")),
+            Some(Mana::parse("C")),
+            Some(Mana::restricted_to(lesson(), [0, 1, 0, 0, 0, 0])),
+            Some(Mana::restricted_to(lesson(), [0, 0, 0, 0, 1, 1])),
+        ];
+        let pools = [
+            Mana::default(),
+            Mana::parse("U"),
+            Mana::parse("GC"),
+            Mana::restricted_to(lesson(), [0, 1, 0, 0, 1, 0]),
+        ];
+        let costs = [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "U",
+            "G",
+            "UU",
+            "1U",
+            "2U",
+            "2G",
+            "3G",
+            "UG",
+            "{U/G}",
+            "1{U/G}{U/G}",
+            "C",
+            "3UG",
+        ];
+        let purposes = [
+            SpendingContext::default(),
+            SpendingContext::cast(["Lesson"], []),
+        ];
+        let (mut direct, mut payable, mut waterbent) = (0, 0, 0);
+        for _ in 0..20_000 {
+            let mut model = PaymentModel {
+                sources: (0..rng.gen_range(0..7))
+                    .map(|index| {
+                        let untapped = rng.gen_bool(0.85);
+                        ManaSource {
+                            permanent: PermanentId(index),
+                            card: CardId(index),
+                            untapped,
+                            fixed: outputs.choose(&mut rng).unwrap().clone(),
+                            abilities: Vec::new(),
+                            waterbend: untapped && rng.gen_bool(0.4),
+                        }
+                    })
+                    .collect(),
+                life: 20,
+            };
+            let cost = ManaCost {
+                purpose: purposes.choose(&mut rng).unwrap().clone(),
+                ..ManaCost::parse(costs.choose(&mut rng).unwrap())
+            };
+            let split = if rng.gen_bool(0.5) {
+                cost.generic().min(3)
+            } else {
+                rng.gen_range(0..=cost.generic().min(3))
+            };
+            let mut policy = SourcePolicy::All;
+            if split == 0 && rng.gen_bool(0.3) {
+                // Automatic production ignores abilities, so they stay direct.
+                policy = SourcePolicy::FixedOnly;
+                if let Some(source) = model.sources.first_mut() {
+                    source.abilities = vec![tapping_ability(vec![Mana::parse("U")])];
+                }
+            }
+            let obligations = waterbend(&cost, split);
+            let pool = pools.choose(&mut rng).unwrap().clone();
+            let question = model
+                .direct(&obligations, policy)
+                .expect("fixed sources and mana costs are direct");
+            let searched = model.search(pool.clone(), obligations.clone(), policy);
+            assert_eq!(model.direct_witness(pool.clone(), &question), searched);
+            assert_eq!(model.direct_payable(&pool, &question), searched.is_some());
+            direct += 1;
+            if let Some(path) = searched {
+                payable += 1;
+                waterbent += usize::from(
+                    path.iter()
+                        .any(|step| matches!(step, PaymentStep::Waterbend(_))),
+                );
+            }
+        }
+        // The comparison is vacuous unless both answers and waterbend taps occur.
+        assert!(payable > direct / 4 && payable < 3 * direct / 4);
+        assert!(
+            waterbent > direct / 50,
+            "{waterbent} of {direct} ({payable} payable)"
+        );
+    }
+
+    #[test]
+    fn direct_payment_leaves_searched_sources_and_obligations_to_the_search() {
+        let cost = ManaCost::parse("1U");
+        let mut model = forests(3);
+        assert!(model
+            .direct(&[pay("1U")], SourcePolicy::AutomaticPrefix)
+            .is_none());
+        assert!(model
+            .direct(&[pay("1"), pay("U")], SourcePolicy::All)
+            .is_none());
+        assert!(model
+            .direct(&waterbend(&cost, 1), SourcePolicy::FixedOnly)
+            .is_none());
+        let counted = Obligation::Tap {
+            candidates: vec![PermanentId(0)],
+            remaining: 1,
+        };
+        assert!(model
+            .direct(&[counted, pay("U")], SourcePolicy::All)
+            .is_none());
+        let output = Obligation::Output {
+            choices: vec![Mana::parse("U")],
+            life_cost: 0,
+        };
+        assert!(model
+            .direct(&[pay("1"), output], SourcePolicy::All)
+            .is_none());
+        // A waterbend split spent for another purpose is not one sum.
+        let mut other = waterbend(&cost, 1);
+        if let Obligation::Pay { cost, .. } = &mut other[1] {
+            cost.purpose = SpendingContext::cast(["Lesson"], []);
+        }
+        assert!(model.direct(&other, SourcePolicy::All).is_none());
+        assert!(model
+            .direct(&waterbend(&cost, 1), SourcePolicy::All)
+            .is_some());
+
+        // A modal land chooses its color and a filter has an upfront cost.
+        let modal = tapping_ability(vec![Mana::parse("U"), Mana::parse("R")]);
+        let mut filter = tapping_ability(vec![Mana::parse("U")]);
+        filter.cost = ManaCost::parse("1");
+        for ability in [modal, filter] {
+            model.sources.push(source(3, None, vec![ability]));
+            assert!(model.direct(&[pay("1U")], SourcePolicy::All).is_none());
+            assert!(model
+                .direct(&[pay("1U")], SourcePolicy::FixedOnly)
+                .is_some());
+            // The search still answers, through `plan` and `payable` alike.
+            assert!(model.payable(Mana::default(), vec![pay("1U")], SourcePolicy::All));
+            let path = model
+                .plan(Mana::default(), vec![pay("1U")], SourcePolicy::All)
+                .unwrap();
+            assert!(path
+                .iter()
+                .any(|step| matches!(step, PaymentStep::Activate(PermanentId(3), 0))));
+            model.sources.pop();
+        }
+    }
+
+    #[test]
+    fn direct_payment_taps_in_source_order_and_keeps_waterbend_taps_it_needs() {
+        // Source order, not usefulness: the Forest ahead of the Islands is tapped.
+        let model = PaymentModel {
+            sources: vec![
+                source(0, Some("G"), Vec::new()),
+                source(1, Some("U"), Vec::new()),
+                source(2, Some("U"), Vec::new()),
+            ],
+            life: 20,
+        };
+        let path = model
+            .plan(Mana::default(), vec![pay("U")], SourcePolicy::All)
+            .unwrap();
+        assert_eq!(
+            path,
+            vec![
+                PaymentStep::Fixed(PermanentId(0)),
+                PaymentStep::Fixed(PermanentId(1)),
+                PaymentStep::Spend(Mana::parse("G")),
+            ]
+        );
+        assert!(!model.payable(Mana::default(), vec![pay("UUU")], SourcePolicy::All));
+
+        // {1}{U} with one generic waterbendable: the creature covers the
+        // split, so the Island pays {U} and nothing is tapped for {1}.
+        let mut creature = source(0, None, Vec::new());
+        creature.waterbend = true;
+        let model = PaymentModel {
+            sources: vec![creature, source(1, Some("U"), Vec::new())],
+            life: 20,
+        };
+        let cost = ManaCost::parse("1U");
+        let path = model
+            .plan(Mana::default(), waterbend(&cost, 1), SourcePolicy::All)
+            .unwrap();
+        assert_eq!(
+            path,
+            vec![
+                PaymentStep::Fixed(PermanentId(1)),
+                PaymentStep::Spend(Mana::default()),
+                PaymentStep::Waterbend(PermanentId(0)),
+                PaymentStep::Spend(Mana::default()),
+            ]
+        );
+        assert!(!model.payable(Mana::default(), waterbend(&cost, 0), SourcePolicy::All));
     }
 
     #[test]

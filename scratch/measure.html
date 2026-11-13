@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Payment affordability: measurements</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#222}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:.35rem .5rem;text-align:left;vertical-align:top}
+th{background:#f3f3f3}code{font-size:.9em}
+</style>
+<h1>Payment affordability: measurements</h1>
+<p><strong>Latest verdict: baseline only, no change compared yet.</strong> Payment code is 27% of
+<code>bench_steps</code> and 35-39% of <code>bench_search</code> CPU at <code>e82a20033</code>; plan search is
+about two thirds of that and model construction one third. All plans in both benchmarks are answerable by
+arithmetic (0 mispredictions in 14.2 M plans), and 59-61% of models repeat an earlier build in the same step.
+Evidence: <code>scratch/payment-baseline/README.md</code>.</p>
+<p>Compare candidates on instructions retired (noise 0.4% / 0.15%) and confirm in user seconds
+(noise 15% / 2.8% on this loaded host), interleaved with <code>scratch/payment-baseline/bin/*.e82a20033</code>.</p>
+<table>
+<tr><th>commit</th><th>value</th><th>verdict</th><th>hypothesis</th><th>limiter</th></tr>
+<tr><td><code>e82a20033</code></td>
+<td>bench_steps 3.565 s user (3.48-4.00, n=10), 62.47 G instructions;<br>bench_search 74.10 s user (73.42-75.47, n=5), 1314.96 G instructions; digests unchanged</td>
+<td>baseline</td>
+<td>Payment checks are a large enough share of ordinary play to optimise.</td>
+<td>Witness search taps one fixed source per recursion with a state clone and hash insert (18-28% of CPU); model rebuilt per question (9-11%). Host load limits user-time resolution.</td></tr>
+</table>

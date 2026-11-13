@@ -1,0 +1,44 @@
+== steps.instrumented.1.out: elapsed 4.23s (timed region), steps 101650
+models 558367 (5.49/step)  plans 522421 (5.14/step)  calls 1287779 (2.47/plan, max 11)  states 791410
+timer share of elapsed: model 0.231s = 5.5% (414 ns each); plan 0.665s = 15.7% (1272 ns each); together 21.2%
+calls_per_plan: n=522421 mean=2.47 p50=1 p90=6 p99=8 max=11 zero=0.0%
+sources_per_model: n=558367 mean=11.08 p50=9 p90=24 p99=31 max=37 zero=1.9%
+plans_per_step: n=101650 mean=5.05 p50=3 p90=12 p99=36 max=>=40 zero=17.1%
+models_per_step: n=101650 mean=5.40 p50=3 p90=13 p99=36 max=>=40 zero=17.1%
+plans per pending_choice_space: n=564794 mean=0.18 p50=0 p90=0 p99=7 max=20 zero=96.7%
+models per pending_choice_space: n=564794 mean=0.21 p50=0 p90=0 p99=8 max=21 zero=96.7%
+plans per priority_actions: n=368826 mean=1.08 p50=1 p90=3 p99=6 max=12 zero=41.3%
+models per priority_actions: n=368826 mean=1.08 p50=1 p90=3 p99=6 max=12 zero=41.3%
+plans per suspended_decision_space: n=1262284 mean=0.00 p50=0 p90=0 p99=0 max=1 zero=100.0%
+models per suspended_decision_space: n=1262284 mean=0.00 p50=0 p90=0 p99=0 max=2 zero=100.0%
+-- plans by arithmetic class (all phases and sites)
+  short_of_mana_value              plans    228472  43.7%  payable   0.0%  calls/plan  1.00  time   3.7% (107 ns)  mispredicted 0
+  waterbend                        plans    168110  32.2%  payable  53.5%  calls/plan  3.64  time  60.4% (2387 ns)  mispredicted 0
+  fixed_sources_pay                plans     87405  16.7%  payable 100.0%  calls/plan  4.56  time  32.8% (2490 ns)  mispredicted 0
+  fixed_sources_cannot             plans     27975   5.4%  payable   0.0%  calls/plan  1.00  time   1.7% (414 ns)  mispredicted 0
+  pool_pays                        plans     10459   2.0%  payable 100.0%  calls/plan  2.00  time   1.5% (922 ns)  mispredicted 0
+-- plans by entry point
+  can_pay_with_mana_abilities      plans    262774  50.3%  payable  16.8%  calls/plan  1.59  time  20.1% (508 ns)  mispredicted 0
+  waterbend_payment_possible       plans     92851  17.8%  payable  15.8%  calls/plan  2.04  time  14.4% (1032 ns)  mispredicted 0
+  waterbend_payment_after_taps     plans     81898  15.7%  payable 100.0%  calls/plan  5.31  time  46.9% (3808 ns)  mispredicted 0
+  can_pay_announced_activation     plans     42897   8.2%  payable  20.6%  calls/plan  1.57  time   3.1% (477 ns)  mispredicted 0
+  produce_mana                     plans     22591   4.3%  payable 100.0%  calls/plan  4.26  time   7.3% (2152 ns)  mispredicted 0
+  can_pay_automatic_mana           plans     19410   3.7%  payable  80.8%  calls/plan  4.24  time   8.2% (2808 ns)  mispredicted 0
+-- plans by phase
+  priority_actions                 plans    396903  76.0%  payable  16.8%  calls/plan  1.68  time  37.2% (622 ns)  mispredicted 0
+  pending_choice_space             plans    100759  19.3%  payable  96.6%  calls/plan  5.12  time  55.0% (3631 ns)  mispredicted 0
+  execution                        plans     24210   4.6%  payable  96.8%  calls/plan  4.20  time   7.7% (2116 ns)  mispredicted 0
+  suspended_decision_space         plans       549   0.1%  payable  50.1%  calls/plan  2.17  time   0.1% (933 ns)  mispredicted 0
+-- models by phase/site
+  priority_actions/can_pay_with_mana_abilities               builds    261155  46.8%  245 ns  sources 5.9  abil 0%  same-model-in-step 77%  same-rev-in-step 60%  same-rev-as-prev 61%  rev-differs 0
+  priority_actions/waterbend_payment_possible                builds     92851  16.6%  549 ns  sources 16.0  abil 0%  same-model-in-step 70%  same-rev-in-step 50%  same-rev-as-prev 51%  rev-differs 0
+  pending_choice_space/waterbend_payment_after_taps          builds     81898  14.7%  704 ns  sources 20.3  abil 0%  same-model-in-step 100%  same-rev-in-step 100%  same-rev-as-prev 100%  rev-differs 0
+  priority_actions/can_pay_announced_activation              builds     42897   7.7%  346 ns  sources 9.3  abil 0%  same-model-in-step 68%  same-rev-in-step 48%  same-rev-as-prev 49%  rev-differs 0
+  execution/produce_mana                                     builds     22591   4.0%  447 ns  sources 11.1  abil 0%  same-model-in-step 81%  same-rev-in-step 81%  same-rev-as-prev 95%  rev-differs 0
+  pending_choice_space/can_pay_automatic_mana                builds     18861   3.4%  618 ns  sources 17.9  abil 0%  same-model-in-step 100%  same-rev-in-step 100%  same-rev-as-prev 100%  rev-differs 0
+  pending_choice_space/mana_ability_actions                  builds     18861   3.4%  716 ns  sources 17.9  abil 0%  same-model-in-step 0%  same-rev-in-step 0%  same-rev-as-prev 31%  rev-differs 0
+  execution/mana_ability_actions                             builds     16536   3.0%  435 ns  sources 8.7  abil 0%  same-model-in-step 2%  same-rev-in-step 2%  same-rev-as-prev 100%  rev-differs 0
+  execution/can_pay_with_mana_abilities                      builds      1619   0.3%  316 ns  sources 7.2  abil 0%  same-model-in-step 26%  same-rev-in-step 26%  same-rev-as-prev 100%  rev-differs 0
+  suspended_decision_space/can_pay_automatic_mana            builds       549   0.1%  319 ns  sources 9.0  abil 0%  same-model-in-step 100%  same-rev-in-step 100%  same-rev-as-prev 100%  rev-differs 0
+  suspended_decision_space/mana_ability_actions              builds       549   0.1%  1144 ns  sources 9.0  abil 0%  same-model-in-step 35%  same-rev-in-step 26%  same-rev-as-prev 32%  rev-differs 0
+  ALL: with abilities 0.0%; same final model already built this step 74.6%; same (player, characteristics, tapped) revisions already built this step 61.4%; same as player's previous build 67.2%; revision matches with different sources 0
