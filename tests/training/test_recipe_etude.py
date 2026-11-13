@@ -40,7 +40,7 @@ def test_cli_lists_recipes_and_refuses_saved_execution() -> None:
     assert "choose --updates or --steps" in conflict.output
     retired = runner.invoke(app, ["train", "--regime", "saved.json"])
     assert retired.exit_code != 0
-    assert "f09f5c2919" in retired.output
+    assert "105e7e2aa2" in retired.output
 
 
 def test_local_cli_stop_resume_and_target_only_continuation(

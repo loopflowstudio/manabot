@@ -8,7 +8,7 @@ Earlier numbered questions and prototype transcripts are retained in git at
 Jack Heart, on the list including collector snapshot/restore: "do em all in
 this diff". Current-game recovery, exact uninterrupted equivalence and in-run
 source repair are gone. Saved regime fields remain readable; execution names
-revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653. Older exact collector
+revision 105e7e2aa269b1af3946827dd6f4ab29af01f312. Older exact collector
 snapshots require revision 439379869. Frozen recovery declarations include
 Elemental long-183, two-seat-181, uniform-174, ur-gw-186 and TLA c5fba4-w64.
 Review still needs to assess that loss; no frozen run was rebound or rerun here.

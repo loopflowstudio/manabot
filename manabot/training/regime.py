@@ -28,7 +28,7 @@ from manabot.training.learning import (
 from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.state.game_errors import GameErrorPolicy
 
-FROZEN_EXECUTION_REVISION = "f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
+FROZEN_EXECUTION_REVISION = "105e7e2aa269b1af3946827dd6f4ab29af01f312"
 
 
 def refuse_frozen_execution() -> NoReturn:

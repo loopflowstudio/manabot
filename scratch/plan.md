@@ -44,7 +44,7 @@ historical report/data readers remain. Removed the unused scheduler methods
 from the surviving record models; their fields and validators stay readable.
 The selection collector’s executor deadline callback and no-op
 `selection_unbounded` adapter are also removed: its surviving callers use the
-per-game step cap. The update benchmark's frozen receipt/stub and the retired throughput driver's exclusive execution tests are also deleted (review 4). No further deletion target is pending.
+per-game step cap. The update benchmark's frozen receipt/stub and the retired throughput driver's exclusive execution tests are also deleted (review 4). Review 5 also removes the unused duplicate experiments/belief_sampler.py; the live belief recipe and historical evidence survive. No further deletion target is pending.
 The obsolete attack executor tests now check refusal without creating a cohort.
 The former recovery CI group only held pretrained loading; it joins training.
 
@@ -175,48 +175,24 @@ implementation direction are at `5ceb2d7dc:scratch/plan.md`.
 The open CLI-config/local-follower questions and all delivery obligations above
 remain. Validation and fresh-run parity results are in implementation.md.
 
-## Concept review 5: next implement direction — 2026-11-13
+## Concept review 5: implemented — 2026-11-13
 
-Proposals drawn from the design, not statements anyone made. Two places where
-a name sends a person somewhere that does not do what it says.
+The previous refusal named branch-only prototype `f09f5c2919b8…`, whose
+executor differed from main; it was unsuitable as a durable execution
+reference. The constant, both guides and refusal tests now name pre-cutover
+main `105e7e2aa269b1af3946827dd6f4ab29af01f312` (verified current merge base
+and ancestor of origin/main). Exact reproductions use each experiment's own
+recorded revision and lock. Older collector snapshot revision `439379869`
+stays. Gate should recheck ancestry after any main sync; move the constant if
+new main commits add frozen entry points.
 
-1. **The frozen-execution revision is not a revision of main.**
-   `FROZEN_EXECUTION_REVISION` (regime.py), docs/training.md "Saved regimes",
-   docs/experiments.md "Retained comparisons" and two tests name
-   `f09f5c2919b8…`. Observed today: that commit is on this branch only
-   (`git merge-base --is-ancestor f09f5c2919b origin/main` fails), is a
-   mid-prototype documentation commit, and its `execution.py`,
-   `state/recovery.py`, `state/game_errors.py` and `cli.py` differ from main's
-   (255 insertions, 114 deletions against its merge base). The guide tells
-   people to check it out "to reproduce a frozen experiment exactly"; no frozen
-   experiment ran on that executor, main CI never ran it, and a squash merge
-   leaves it off main's history. Name the main commit this cutover lands on:
-   `105e7e2aa269b1af3946827dd6f4ab29af01f312` (current origin/main and merge
-   base; the parity reference `6ce618b8a` is its ancestor). Change the
-   constant, both guides, `test_attack_execution.py` and
-   `test_recipe_etude.py`. If a later sync brings main commits that add frozen
-   entry points, move the constant to that merge base. Gate checks the constant
-   is an ancestor of origin/main. `439379869` (older collector snapshots) is
-   on main and stays.
-2. **experiments/README lists recipes the CLI cannot run.** Its table gives
-   `ataraxos_move`, `value_model_baseline`, `direct_self_play` and
-   `belief_sampler` as `--recipe` names run by `manabot train`. Observed:
-   `manabot train --list` prints local, baseline, elemental, belief and
-   batched_baseline only; the four modules hold zero-argument `TrainingRegime`
-   builders and no `train(config)`. Rewrite the table so each row says what
-   the module is now: `batched_baseline` runs (`train(config)`); the regime
-   builders are retained records that execute only from the revision in item
-   1; `ataraxos_ablation`'s `python -m` row says it refuses. The belief row
-   points to `--recipe belief` (`manabot/recipes/belief_sampler.py`), the one
-   live owner. `experiments/belief_sampler.py` then describes the same pilot a
-   second time as a regime nothing reads (no test, saved file or report data
-   names `frozen-policy-belief-pilot`; `ataraxos-transfer.md` imports a
-   function it no longer has): delete it. The other three builders stay; tests
-   and retained fixtures read them.
+The experiment index distinguishes runnable batched-baseline `train(config)`
+and `--recipe belief` from the retained Ataraxos, value-model and direct
+self-play regime builders. It says the ablation module refuses execution.
+Deleted unused `experiments/belief_sampler.py`; the live owner remains
+`manabot/recipes/belief_sampler.py`. Historical report illustrations and
+source manifests retain their original paths; no evidence was rewritten.
 
-Checked and left alone: the loop file (835 lines: settings, state file, one
-update, the loop) reads top to bottom with no driver object; the recovery
-guide's kept/started-again table matches the code; `updates` meaning the
-horizon in baseline/local/belief configs but only the default target in
-`ElementalConfig` is the open CLI-config question already in questions.md.
-No new product choice.
+SDK release/pin, installed-consumer and actual launcher/service proofs remain
+delivery obligations. Open CLI-config/local-follower judgments remain in
+questions.md. Focused validation is recorded in implementation.md.

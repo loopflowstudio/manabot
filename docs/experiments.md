@@ -173,7 +173,7 @@ models and reports still read their original fields. Resolution does not
 launch work, and those declarations no longer have a `runs()` method.
 The local comparison scheduler, checkpoint follower and study executor are
 retired. Frozen entry points and the CLI name revision
-`f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653` when asked to execute them.
+`105e7e2aa269b1af3946827dd6f4ab29af01f312` when asked to execute them.
 Use their recorded revision and lock to reproduce old experiments; do not
 translate their schedules or recovery contracts silently.
 

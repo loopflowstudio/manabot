@@ -27,7 +27,7 @@ old and new report input paths share the same paired calculation, inspection and
 renderer. MLX pilot capture instruments the surviving loop.
 
 Frozen regime launch/continuation functions refuse with revision
-`f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653`. This includes seat comparison,
+`105e7e2aa269b1af3946827dd6f4ab29af01f312`. This includes seat comparison,
 TLA frontier/vocabulary, value-readout segments, old Elemental continuations,
 learning-signal training and the old CUDA/profile capture drivers. Their data,
 evaluation and report functions remain. They were not translated to the new
@@ -201,3 +201,14 @@ frozen throughput refusal, CLI retired-override and attack refusal tests: 22
 passed (48.45s). `python scratch/parity.py`: PPO/damped raw/EMA match all 87
 tensors bitwise against main `6ce618b8a`, native SHA256 `a7de0ce0…`, same
 counts. Ruff check/format and `git diff --check` pass.
+
+## Concept review 5 corrections — 2026-11-13
+
+Frozen execution now names pre-cutover main `105e7e2aa269b1af3946827dd6f4ab29af01f312`,
+verified as HEAD's merge base with and an ancestor of origin/main. Guides
+separate this executor reference from each frozen experiment's own revision.
+The experiment index lists actual callable recipes and retained builders;
+the unused duplicate belief experiment is deleted. Historical illustrations
+and source manifests remain unchanged.
+
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_attack_execution.py tests/training/test_recipe_etude.py tests/training/test_regimes.py tests/eval/test_experiment_files.py -q`: 16 passed (28.53s). Changed Python Ruff check/format and `git diff --check` passed. No learning calculation changed; parity was not rerun. SDK release/pin, installed-consumer checks and actual launcher/service proofs remain delivery obligations. No background service or watcher was started.

@@ -11,14 +11,19 @@ built from [`manabot.recipes.builders`](../manabot/recipes/builders.py), and
 anything only it needs to run and report. `manabot/` keeps the reusable
 instruments.
 
-| module | recipes (`--recipe`) | runs and reports |
+The CLI lists runnable recipes with `uv run manabot train --list`. Retained
+`TrainingRegime` builders are records; execute them from the pre-cutover main
+revision `105e7e2aa269b1af3946827dd6f4ab29af01f312`. Exact reproductions use
+the experiment's recorded revision and lock ([saved regimes](../docs/training.md#saved-regimes)).
+
+| module | current role | execution |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/training.md#remote-training) |
-| [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
-| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | `manabot train` |
-| [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
-| [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
-| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
+| [batched_baseline](batched_baseline.py) | `train(config)`; retained `batched_baseline()` and `scale_ladder()` builders ([scale ladder](scale-ladder.md)) | `uv run manabot train --recipe batched_baseline`; retained builders require pre-cutover source |
+| [value_model_baseline](value_model_baseline.py) | retained regime builder ([value models](value-models.md)) | pre-cutover source |
+| [ataraxos_move](ataraxos_move.py) | retained `ataraxos_move()` and `ataraxos_move_scalar()` builders ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | pre-cutover source |
+| [direct_self_play](direct_self_play.py) | retained regime builder | pre-cutover source |
+| [ataraxos_ablation](ataraxos_ablation.py) | retained RL control and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `uv run python -m experiments.ataraxos_ablation` refuses and names the pre-cutover revision |
+| [belief recipe](../manabot/recipes/belief_sampler.py) | `train(config)` trains a policy, collects histories and fits its sampler ([guide](../docs/training.md#recipes-with-several-steps)) | `uv run manabot train --recipe belief` |
 
 The compound-decision study (`compound_decisions.py`) is no longer runnable;
 reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
