@@ -188,61 +188,19 @@ SDK release/pin, installed-consumer and actual launcher/service proofs remain
 delivery obligations. Open CLI-config/local-follower judgments remain in
 questions.md. Focused validation is recorded in implementation.md.
 
-## Concept review 6: implemented — 2026-11-13
+## Concept reviews 6–7: implemented — 2026-11-13
 
-Proposals drawn from the design, not statements anyone made. Walking the three
-paths a person takes (local train/stop/resume/extend, `etude launch` of an
-experiment file, reading a frozen experiment) found recipes, loop, CLI,
-recovery table and the nightly call agreeing with the guides, except that the
-guides launched a frozen experiment. Now:
+The guides launch current `experiments/elemental.py` with its required budget
+arguments. Every frozen experiment header that shows a launch command now
+marks it historical and names the pre-cutover revision, including indirect
+refusals through learning_signal, l4_step_profile and the retired CLI. Reports,
+evaluation commands and frozen evidence stay unchanged. Nightly budgets remain
+1680 seconds per train/evaluate step under the 1800-second timeout.
 
-- `docs/experiments.md` and `experiments/README.md` launch
-  `experiments/elemental.py` with its required `--updates`, `--hours` and
-  `--usd-per-run`; the README table marks seat_comparison's `runs()` retired,
-  naming the pre-cutover source.
-- The frozen modules with launch commands in their headers (`seat_comparison`,
-  `training_throughput`, `l4_step_profile`, `cuda_precision`,
-  `value_readout_252`, `mtg186`, `ataraxos_ablation`) say those commands record
-  how the experiment ran and refuse at this revision. Commands, report `.md`
-  files, protocols and data are unchanged.
-- `experiments/elemental.py`'s header says `runs()` launches the current loop
-  with `elemental_self_play()` settings, without current-game recovery.
-
-Docs and docstrings only; no test or parity rerun follows. Checked and left
-alone: nightly train and evaluate each get 1680 s under the 1800 s step
-timeout, the shape of main's recipe. Open choices are unchanged (questions.md:
-CLI recipe-config fields, local follower).
-
-Validation: `git diff --check` and Ruff on the touched modules passed; launch
-arguments checked against `experiments.elemental.runs`.
-
-## Concept review 7: implemented — 2026-11-13
-
-Review 6's rule (a frozen module whose header shows a launch command says the
-command records how it ran and refuses here) had covered only modules calling
-`refuse_frozen_execution` themselves. These refuse through
-`learning_signal.training_runs`, `l4_step_profile.runs` or a retired CLI flag,
-and their headers now say so, naming
-`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`):
-`experiments/direct_self_play.py`, `elemental_closure.py`,
-`elemental_closure_calibration.py`, `elemental_lambda.py`,
-`training_throughput_packing.py`, `training_throughput_sizes.py`,
-`live_token_attention.py`, and `learning_signal.py` (`training_runs` refuses;
-scoring and reports remain).
-
-Only opening docstrings changed. The `etude eval` / `etude report` lines in
-those headers were not exercised; nothing claims they run or refuse.
-`batch_closure.py` and `lambda_sweep.py` show only eval/report commands,
-`tla_frontier_vocabulary.py` already says "launched" and
-`collection_tail_graphs.py` shows no command: left alone. The list came from
-checking every `experiments/*.py` that reaches a refusal against launch
-commands in its first 50 lines, so it closes the header pass.
-
-Validation: `uv run --no-sync ruff check` and `ruff format --check` on the
-eight modules and `git diff --check` passed; an AST comparison against HEAD
-found only module docstrings differ. No test or parity rerun for prose-only
-edits. Open choices (questions.md: CLI recipe-config fields, local follower)
-and the delivery obligations above are unchanged.
+The complete module inventory and check results remain at
+`e66568121557afbc094f410e8f3a2a3ba206e3c2:scratch/plan.md`.
+Docstring-only AST checks, Ruff check/format and `git diff --check` passed;
+no test or parity rerun followed. Open choices and delivery obligations remain.
 
 ## Concept review 8: implemented — 2026-11-13
 
@@ -298,29 +256,19 @@ The original counterexample and direction are retained at
 installed-consumer, launcher/service, recovery review and retained replay
 obligations remain unchanged.
 
-## Concept review 11: next implement direction — 2026-11-13
+## Concept review 11: implemented — 2026-11-13
 
-Proposals drawn from the design, not statements anyone made. Loop, recipes,
-CLI and guides were reread against local train/stop/resume/extend, a launched
-retry and a continuation; no reference to a deleted module remains outside
-frozen manifests. One mismatch, in the section that states the recovery loss
-for review (docs/training.md, "What resume does not promise"):
+Recovery guidance now distinguishes each checkpoint's writing revision/run
+from Etude's attempt records and resume coordinates. The fixed-revision rule
+is stated once, for launched runs ("What resume does not promise"); the
+game-error section links to it. Local reruns after a code change can resume
+when world, seed and learner settings match; existing checkpoint bytes remain
+unchanged. The costs/counters provenance sentence names checkpoint revisions
+and attempt records. No revision refusal was added.
 
-1. "checkpoint provenance names every attempt" is false. A checkpoint's
-   `source` holds the commit, dirty flag and the one Etude run that wrote it
-   (`model/world.py::checkpoint_source`); attempts (writer, host, pod,
-   `resumed_at`) are in Etude's run record (EXP-56 `105abdd`,
-   `train/run.py` `Attempt`). Say that: the checkpoint names its revision and
-   run; the run record names the attempts and where each resumed.
-2. Same list, "A run executes one source revision for all its attempts" holds
-   for a launched run only. A local rerun after a code change resumes:
-   `load_state` compares world, seed and learner settings, not revision, and
-   each checkpoint names the revision that wrote it. Scope the sentence to
-   launched runs and state the local behavior. No refusal is added; that keeps
-   "run the same command again" as the one resume rule.
-
-Docs only; no code, test or parity rerun follows. Check the "provenance"
-sentence in "Schedules and clocks" (line ~476) still reads true afterwards.
-Open choices (questions.md: CLI recipe-config fields, local follower) and the
-SDK release/pin, installed-consumer, launcher/service, recovery review and
-retained replay obligations are unchanged.
+The original counterexample and direction remain at
+`e66568121557afbc094f410e8f3a2a3ba206e3c2:scratch/plan.md`.
+Validation: source inspection and `git diff --check` passed; documentation only,
+so no build, test or parity rerun. SDK release/pin, installed-consumer and
+launcher/service proofs, recovery review and retained replay mismatch remain
+later delivery obligations. Open choices remain in questions.md.

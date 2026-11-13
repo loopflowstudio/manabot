@@ -205,3 +205,14 @@ background service was started. Remaining delivery obligations are unchanged.
 
 `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_cli_function_recipes_track_under_the_module_in_distinct_directories -q`: failed before the fix with EtudeError unsafe_run_or_experiment_name; passed after it (0.70s). Two explicit functions record finished runs under the module name in separate default directories. Ruff and git diff --check pass. No training, provider launch or background service ran. Installed-wheel smoke remains gated on SDK release/pin; the other delivery obligations remain.
 Compress: nothing to reduce in this one-line fix, its test or the guide sentence; no edits, no rerun.
+
+## Concept review 11 recovery guidance — 2026-11-13
+
+Both recovery sections now scope fixed source revisions to launched runs and
+describe local resume after a code change. Checkpoint revision/run identity
+and Etude attempt/resume records are distinct in the recovery and counters
+text. Checked against checkpoint_source, load_state and EXP-56's Attempt and
+first-row resumed_at handling. `git diff --check` passed; `lf context` is within
+both limits after consolidating reviews 6–7 with a git reference. Prose only;
+no build, test or parity rerun. Later delivery obligations remain unchanged.
+Compress: the game-error section's repeated source-repair paragraph now links to the one statement, keeping only that a local rerun does not clear a threshold stop. Claims rechecked against `load_state` (world, seed, learner digest; `source_commit` saved, not compared) and `checkpoint_source`. `git diff --check` passed; prose only, no rerun.

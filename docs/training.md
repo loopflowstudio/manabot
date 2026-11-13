@@ -473,9 +473,9 @@ evaluation, with complete games, environment decisions, `learner_transitions`,
 absolute completed update count. An empty-filter iteration is a completed
 update with zero optimizer calls. Hours and dollars are Etude's: they span every
 attempt of a run, including work repeated after an interruption. Reproducibility
-means the config, seed, source revision and checkpoint provenance, not
-byte-identical stochastic training. A fresh run owns fresh costs; no
-pre-existing corpus is free.
+relies on the config, seed, each checkpoint's writing revision and run identity,
+and Etude's attempt records; it does not promise byte-identical stochastic
+training. A fresh run owns fresh costs; no pre-existing corpus is free.
 
 ### Compound decisions (removed)
 
@@ -906,11 +906,16 @@ update boundary first, so a planned stop repeats nothing.
   revision [saved regimes](#saved-regimes) names.
 - **Proof that a resumed run equals an uninterrupted one.** A resumed run
   plays different games after the resume point than an uninterrupted run with
-  the same seed would have. Its updates and checkpoints are as valid, and
-  checkpoint provenance names every attempt, but they are not the same bytes.
-- **Repair of a run's source during the run.** A run executes one source
+  the same seed would have. Each checkpoint names the revision and Etude run
+  that wrote it. Etude's run record names the attempts and their resume
+  coordinates. These records preserve provenance, not identical bytes.
+- **Source repair within a launched run.** A launched run executes one source
   revision for all its attempts; `--source-repair-reason` is gone. Fix the
-  code and start a new run, or continue the old one as a child.
+  code and start a new launched run, or continue the old one as a child
+  (`etude continue`), which records the new revision beside its parent's.
+  A local rerun after a code change resumes when the world, seed and learner
+  settings still match: the revision is not compared, existing checkpoints
+  stay as written and new ones name the revision that wrote them.
 
 ### Portable learner continuation
 
@@ -979,9 +984,9 @@ Never publish the ledger as a replay. Replay a receipt by its one-based line:
 uv run python -m manabot.training.state.game_errors .runs/example/game-attempts/0000.jsonl --attempt 1 --seconds 30
 ```
 
-A run executes one source revision for all its attempts. After a fix, start a
-new run from the fixed revision, or continue the stopped run as a child
-(`etude continue`), which records the new revision beside its parent's.
+After a fix, follow [source repair](#what-resume-does-not-promise): a new
+launched run, a child continuation, or a local rerun. A local rerun resumes
+with its ledgers, so it does not clear a game-error threshold stop.
 
 ### Automatic capture and replay
 
