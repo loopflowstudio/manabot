@@ -1737,6 +1737,12 @@
           "maximum": 255,
           "minimum": 0
         },
+        "pooled_mana_classes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PooledManaView"
+          }
+        },
         "remaining_sideboard_counts": {
           "type": [
             "object",
@@ -1777,12 +1783,6 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
-        },
-        "spend_effect_mana": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/PooledManaView"
-          }
         },
         "stack": {
           "type": "array",
@@ -2063,7 +2063,10 @@
           "type": "boolean"
         },
         "effect": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "mana": {
           "type": "array",
@@ -2075,14 +2078,15 @@
           "minItems": 6
         },
         "restriction": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
         "mana",
-        "effect",
-        "restriction",
         "combat"
       ]
     },

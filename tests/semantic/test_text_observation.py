@@ -584,15 +584,15 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "extra_turns": "extra turn",
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
-        "spend_effect_mana": "Mana that puts",
+        "pooled_mana_classes": "Pooled mana",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
     },
-    managym.SpendEffectMana: {
-        "effect": "Mana that puts",
+    managym.PooledManaClass: {
+        "effect": "puts",
         "mana": "amounts by color",
-        "restriction": "Spend only for",
-        "combat": "Expires at end of combat or at step end",
+        "restriction": "only for",
+        "combat": "expires at end of combat or at step end",
         "program": "the same class stated by rider, restriction and expiry",
     },
     managym.ContinuousEffect: {
@@ -688,6 +688,28 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "their control; drew 1 card; lost 3 life; cast 2 spells." in text
     )
     assert "Restricted mana for anything but nonartifact spells: C 2." in text
+
+
+def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    payload["observation"]["viewer_state"]["agent"]["pooled_mana_classes"] = [
+        {"mana": [0, 0, 0, 2, 0, 0], "combat": True, "program": []},
+        {
+            "mana": [0, 0, 0, 0, 1, 0],
+            "restriction": "creature spells",
+            "effect": "a +1/+1 counter on a non-Human creature spell it casts",
+            "combat": False,
+            "program": [],
+        },
+    ]
+    text = render_decision(_redigest(payload)).text
+    assert "Pooled mana: R 2; expires at end of combat." in text
+    assert (
+        "Pooled mana: G 1; only for creature spells; puts a +1/+1 counter on a "
+        "non-Human creature spell it casts; expires at step end."
+    ) in text
+    assert "Combat mana:" not in text
 
 
 def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:

@@ -163,7 +163,7 @@ impl TriggeredManaOutput {
                 let restricted = produced.restricted_colors();
                 let unrestricted = produced.unrestricted_colors();
                 (0..6)
-                    .filter(|&slot| unrestricted[slot] + restricted[slot] > 0)
+                    .filter(|&slot| unrestricted[slot] != 0 || restricted[slot] != 0)
                     .map(|slot| {
                         let mut mana = Mana::default();
                         mana.mana[slot] = 1;

@@ -33,7 +33,7 @@ use managym::{
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
             ContinuousEffectData, CopyData, EventData, Observation, PermanentData, PlayerData,
-            RestrictedManaData, SideboardCardData, SpendEffectManaData, StackObjectData,
+            PooledManaClassData, RestrictedManaData, SideboardCardData, StackObjectData,
             StackTargetData, TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
@@ -2868,7 +2868,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         mana => [Columns(Player, player::MANA_WHITE, 6)],
         lesson_mana => [Columns(Player, player::LESSON_MANA_WHITE, 6)],
         restricted_mana => [Rows("restricted mana below")],
-        spend_effect_mana => [Rows("spend-effect mana below")],
+        pooled_mana_classes => [Rows("pooled mana classes below")],
         hand_only_until => [column(Player, player::HAND_ONLY)],
         known_hand => [Rows("known_hand")],
         main_counts => [Rows("decklists")],
@@ -2928,7 +2928,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
     }));
-    fields.extend(encoding!(SpendEffectManaData {
+    fields.extend(encoding!(PooledManaClassData {
         combat => [FactOccurrence(FactKind::EffectProgram)],
         restriction => [FactOccurrence(FactKind::EffectProgram)],
         effect => [FactOccurrence(FactKind::EffectProgram)],
@@ -4338,7 +4338,7 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
 /// Animal Attendant's mana counts as ordinary green and states its spend
 /// effect as a program on its player, in catalog tokens, for both viewers.
 #[test]
-fn spend_effect_mana_is_a_program_on_its_player() {
+fn pooled_mana_classes_are_programs_on_their_player() {
     let mut s = five_color_setup(&["Animal Attendant"]);
     let attendant = s.force_permanent_on_battlefield(0, "Animal Attendant");
     clear_summoning_sickness(&mut s, attendant);
@@ -4355,10 +4355,13 @@ fn spend_effect_mana_is_a_program_on_its_player() {
         };
         assert_eq!(owner.mana, [0, 0, 0, 0, 1, 0]);
         assert_eq!(owner.lesson_mana, [0; 6]);
-        let classes = &owner.spend_effect_mana;
+        let classes = &owner.pooled_mana_classes;
         assert_eq!(classes.len(), 1);
         assert_eq!(classes[0].mana, [0, 0, 0, 0, 1, 0]);
-        assert!(classes[0].effect.contains("non-Human creature spell"));
+        assert!(classes[0]
+            .effect
+            .as_ref()
+            .is_some_and(|effect| effect.contains("non-Human creature spell")));
         assert_eq!(
             managym::agent::observation_encoder::unrepresentable_state(&observation),
             None
@@ -4941,9 +4944,20 @@ fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
             &observation.opponent
         };
         assert_eq!(player.mana[5], 256);
-        assert_eq!(player.spend_effect_mana.len(), 1);
-        assert!(player.spend_effect_mana[0].combat);
-        assert_eq!(player.spend_effect_mana[0].mana[5], 1);
+        assert_eq!(player.pooled_mana_classes.len(), 1);
+        assert!(player.pooled_mana_classes[0].combat);
+        assert_eq!(player.pooled_mana_classes[0].mana[5], 1);
+        let class = &player.pooled_mana_classes[0];
+        assert_eq!(class.effect, None);
+        assert_eq!(class.restriction, None);
+        let serialized = serde_json::to_value(class).unwrap();
+        assert!(serialized.get("effect").is_none());
+        assert!(serialized.get("restriction").is_none());
+        assert_eq!(
+            serde_json::from_value::<managym::agent::observation::PooledManaClassData>(serialized)
+                .unwrap(),
+            *class
+        );
         encoded_default(&observation);
     }
 }

@@ -493,8 +493,10 @@ pub struct SideboardCardView {
 #[serde(deny_unknown_fields)]
 pub struct PooledManaView {
     pub mana: [i32; 6],
-    pub effect: String,
-    pub restriction: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restriction: Option<String>,
     pub combat: bool,
 }
 
@@ -502,7 +504,7 @@ pub struct PooledManaView {
 #[serde(deny_unknown_fields)]
 pub struct LegacyPlayerView {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub spend_effect_mana: Vec<PooledManaView>,
+    pub pooled_mana_classes: Vec<PooledManaView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mana: Option<[i32; 6]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

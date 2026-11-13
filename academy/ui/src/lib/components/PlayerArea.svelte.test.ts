@@ -23,6 +23,40 @@ function player(overrides: Partial<PlayerState>): PlayerState {
 
 const names = { '4': 'Island', '9': 'Accumulate Wisdom' };
 
+it('shows pooled amounts before qualifiers without repeating combat expiry', () => {
+  const { body } = render(PlayerArea, {
+    props: {
+      label: 'You',
+      tablePermanents: [],
+      player: player({
+        mana: [0, 0, 0, 2, 1, 0],
+        combat_mana: 2,
+        pooled_mana_classes: [
+          { mana: [0, 0, 0, 2, 0, 0], combat: true },
+          {
+            mana: [0, 0, 0, 0, 1, 0], combat: false,
+            restriction: 'creature spells', effect: 'a +1/+1 counter on a non-Human creature spell it casts',
+          },
+        ],
+      }),
+    },
+  });
+  expect(body).toContain('2 {R}; expires at end of combat');
+  expect(body).toContain('1 {G} only for creature spells puts a +1/+1 counter on a non-Human creature spell it casts; expires at step end');
+  expect(body.match(/expires at end of combat/g)).toHaveLength(1);
+  expect(body).not.toContain('undefined');
+});
+
+it.each([undefined, []])('falls back to aggregate combat expiry without class rows (%s)', (classes) => {
+  const { body } = render(PlayerArea, {
+    props: {
+      label: 'You', tablePermanents: [],
+      player: player({ mana: [0, 0, 0, 2, 0, 0], combat_mana: 2, pooled_mana_classes: classes }),
+    },
+  });
+  expect(body).toContain('2 mana expires at end of combat');
+});
+
 it("shows an open opponent's decklist with unseen counts", () => {
   const { body } = render(PlayerArea, {
     props: {

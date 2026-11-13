@@ -439,13 +439,15 @@ class SideboardCardView(ProtocolModel):
 
 class PooledManaView(ProtocolModel):
     mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32]
-    effect: str
-    restriction: str
+    effect: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    restriction: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     combat: bool
 
 
 class LegacyPlayerView(ProtocolModel):
-    spend_effect_mana: list[PooledManaView] = Field(
+    pooled_mana_classes: list[PooledManaView] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
 

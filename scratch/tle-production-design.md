@@ -76,7 +76,7 @@ model embedding, raw storage identity or hidden information is needed.
 
 - A production choice uses the existing obligation frame: output `source` is
   the mana ability's source; bonus `source` is its trigger, `context` the tap.
-- Public spend-effect pools are kind-11 `EffectProgram`s on the player under
+- Public pooled classes are kind-11 `EffectProgram`s on the player under
   `PooledMana`, one class/expiry program per occurrence. Counts also join the matching
   ordinary/restricted aggregate. Keep exact restrictions, effects and expiry
   understandable to both viewers. Combat classes (including ordinary combat
@@ -112,4 +112,33 @@ Completed with spending choices: `Mana::pay`, `payment_options`,
 one unit transition model and the shared decision surface.
 Compression also removed the unused `Mana::set_class` remainder writer and
 the single-use `ManaClass::effect_applies` forwarding method. No deletion
-target remains open.
+target remains open. The unpublished `spend_effect_mana` /
+`SpendEffectManaData` / `SpendEffectMana` surface is replaced throughout by
+`pooled_mana_classes` / `PooledManaClassData` / `PooledManaClass`; no alias is
+kept. `PooledManaView`, token programs and buffer layouts survive unchanged.
+
+## Pooled-mana presentation decision (concept review, 2026-11-12)
+
+One name is wrong; behavior is unchanged. `PlayerData.spend_effect_mana` /
+`SpendEffectManaData` also carries ordinary combat mana with no spend effect,
+and its own comment says "The field name predates expiry projection". It is
+new in this change, so rename it before it is published (afterwards it needs
+a deprecated alias in six protocol schemas):
+
+- The player's `pooled_mana_classes`: one row per `ManaClass` that the plain
+  totals cannot state (a spend effect or combat expiry). Rust
+  `PooledManaClassData`, PyO3 `PooledManaClass`; `PooledManaView` keeps its
+  name. Rename through the encoders, bindings, `experience*.py`, the text
+  renderer, `types.ts`, `PlayerArea.svelte`, tests and regenerated schemas.
+  Token programs, fact kinds and buffers do not change.
+- No restriction or no effect is absent (`Option<String>` / `str | None`,
+  omitted when serialized), not an empty string.
+- Text observation states each row the same way (amounts, then restriction,
+  effect and expiry when present) instead of titling an effect-less row
+  "Combat mana:".
+- Academy shows the aggregate "N mana expires at end of combat" line only when
+  a frame has no class rows, as `lesson_mana` already falls back; with rows it
+  repeats them.
+- Delete the "predates" comment.
+
+No open product choice.

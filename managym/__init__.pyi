@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, Typed
 import numpy as np
 from typing_extensions import deprecated
 
+from . import format as format
+
 class ObservationValueLayout(TypedDict):
     kind: Literal[
         "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
@@ -37,8 +39,6 @@ def observation_layout(
     v10's `player_turn_state` and `card_turn_state`. Seats are viewer-relative.
     No game or buffer is created.
     """
-
-from . import format as format
 
 class PoolDefinition(TypedDict):
     card_def_id: int
@@ -648,6 +648,7 @@ class Player:
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
     restricted_mana: List[RestrictedMana]
+    pooled_mana_classes: list[PooledManaClass]
     hand_only_until: Optional[int]
     # Continuous effects on this player, in timestamp order.
     effects: list[ContinuousEffect]
@@ -670,6 +671,15 @@ class RestrictedMana:
     # Spendable on anything but casting nonartifact spells (Powerstone).
     except_nonartifact_spells: bool
     mana: tuple[int, int, int, int, int, int]
+
+class PooledManaClass:
+    """One pooled class with a spend effect or combat expiry."""
+
+    combat: bool
+    restriction: str | None
+    effect: str | None
+    mana: tuple[int, int, int, int, int, int]
+    program: list[tuple[int, int]]
 
 class CastPermission:
     player_id: int

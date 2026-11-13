@@ -3116,6 +3116,13 @@
           "title": "Player Index",
           "type": "integer"
         },
+        "pooled_mana_classes": {
+          "items": {
+            "$ref": "#/$defs/PooledManaView"
+          },
+          "title": "Pooled Mana Classes",
+          "type": "array"
+        },
         "remaining_sideboard_counts": {
           "anyOf": [
             {
@@ -3170,13 +3177,6 @@
           "minimum": 0,
           "title": "Spells Cast",
           "type": "integer"
-        },
-        "spend_effect_mana": {
-          "items": {
-            "$ref": "#/$defs/PooledManaView"
-          },
-          "title": "Spend Effect Mana",
-          "type": "array"
         },
         "stack": {
           "items": {
@@ -3783,8 +3783,16 @@
           "type": "boolean"
         },
         "effect": {
-          "title": "Effect",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
         },
         "mana": {
           "maxItems": 6,
@@ -3825,14 +3833,20 @@
           "type": "array"
         },
         "restriction": {
-          "title": "Restriction",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Restriction"
         }
       },
       "required": [
         "mana",
-        "effect",
-        "restriction",
         "combat"
       ],
       "title": "PooledManaView",

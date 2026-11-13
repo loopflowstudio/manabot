@@ -58,10 +58,10 @@ pub struct PlayerData {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<RestrictedManaData>,
     /// Pooled mana with a spend effect or combat expiry, by class and expiry.
-    /// The field name predates expiry projection. Its amounts are also counted in `mana` when
+    /// Its amounts are also counted in `mana` when
     /// unrestricted and in `restricted_mana` when restricted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub spend_effect_mana: Vec<SpendEffectManaData>,
+    pub pooled_mana_classes: Vec<PooledManaClassData>,
     /// While set, this player can cast spells only from their hand until the
     /// named player's next turn begins (Avatar's Wrath). It overrides every
     /// card's `cast_permission`.
@@ -133,13 +133,14 @@ pub struct RestrictedManaData {
 /// same serialization the producing card's definition uses.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct SpendEffectManaData {
+pub struct PooledManaClassData {
     #[serde(default)]
     pub combat: bool,
-    #[serde(default)]
-    pub restriction: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restriction: Option<String>,
     /// "a +1/+1 counter on a non-Human creature spell it casts".
-    pub effect: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
     pub mana: [i32; 6],
     pub program: Vec<(u16, i32)>,
 }
@@ -1214,23 +1215,17 @@ impl Observation {
                     Some(RestrictedManaData::new(restriction, *amounts))
                 })
                 .collect(),
-            spend_effect_mana: pool
+            pooled_mana_classes: pool
                 .classes()
                 .iter()
                 .filter_map(|(class, amounts)| {
                     if class.effect.is_none() && !class.combat {
                         return None;
                     }
-                    Some(SpendEffectManaData {
+                    Some(PooledManaClassData {
                         combat: class.combat,
-                        restriction: class
-                            .restriction
-                            .as_ref()
-                            .map_or_else(String::new, |r| r.describe()),
-                        effect: class
-                            .effect
-                            .as_ref()
-                            .map_or_else(String::new, |e| e.describe()),
+                        restriction: class.restriction.as_ref().map(|r| r.describe()),
+                        effect: class.effect.as_ref().map(|e| e.describe()),
                         mana: amounts.map(i32::from),
                         program: crate::cards::tokens::rules_tokens(
                             &Mana::of_class(class.clone(), *amounts),

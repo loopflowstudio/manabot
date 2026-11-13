@@ -386,7 +386,10 @@ counts that mana (Toph, converge) or a spend effect applied. These programs
 use the same representation in v9 and v10. Combat mana also has a pool
 program, including ordinary combat mana; its class records combat expiry.
 Regular and combat units never merge during payment search. Academy shows each
-rider, restriction and expiry alongside the public amounts.
+rider, restriction and expiry alongside the public amounts in
+`pooled_mana_classes`. A class without a restriction or spend effect omits that
+qualifier. Class rows state amounts first; Academy uses the aggregate combat
+expiry only when no class rows are recorded.
 
 Spending offers select one color and class at a time. The native obligation
 frame (decision code 31) carries the remaining cost; its execution program

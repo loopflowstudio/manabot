@@ -783,7 +783,7 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
             .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]));
         let sheep = cast_owned(&mut s, "Koala-Sheep");
         let obs = Observation::for_player(s.game(), PlayerId(0));
-        let pools = &obs.agent.spend_effect_mana;
+        let pools = &obs.agent.pooled_mana_classes;
         assert_eq!(pools.len(), 2);
         assert_eq!((pools[0].combat, pools[1].combat), (false, true));
         assert_ne!(pools[0].program, pools[1].program);

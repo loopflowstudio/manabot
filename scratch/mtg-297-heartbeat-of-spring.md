@@ -30,17 +30,37 @@ original search-state bounds remain intact.
 receipts from the same pool, additional cast costs and nested filter fees.
 `support/inspect.rs::assert_choice_contract` checks each offer's Command replay,
 stale rejection and fork isolation; TLE spending and ROE expiry cases call it.
-`tests/semantic/test_spend_effect_mana_input.py` covers shared v9/v10 encoding,
+`tests/semantic/test_pooled_mana_classes_input.py` covers shared v9/v10 encoding,
 text and Academy projection.
+
+The unpublished pool projection is now `pooled_mana_classes` with native
+`PooledManaClassData` and PyO3 `PooledManaClass`, including its Python stub.
+Absent restrictions/effects are optional and omitted in JSON. Text states
+amounts before qualifiers; Academy falls back to aggregate combat expiry only
+without class rows. `PooledManaView`, token programs and buffer layouts remain
+unchanged. Focused checks pass below; gate's acceptance remains open.
+
+`state/card.rs::TriggeredManaOutput::alternatives` checks whether either
+restricted or unrestricted mana contains a type, without summing their u8
+amounts. The type is present even when those amounts total 256; the bounded
+CR 106.12a witness covers each type, restricted-only output and empty output.
 
 ## Upstream reconciliation
 
-Main through `7cce98a00` was merged as `08164e6ef`, after the compression
-checks below. It includes #504's source-equivalence memoization and total/color
+Main through `7cce98a00` was merged as `08164e6ef`. It includes #504's
+source-equivalence memoization and total/color
 bounds in `flow/mana.rs::PaymentSearch` / `PaymentModel`, and #506's CI
 sharding. That separate work's note is retained at
 `08164e6ef:scratch/ci-under-8-minutes.md`, outside this Task's active context.
 MTG-242 is incorporated; no dependency wait or Wave remains.
+
+The later merge `0c2a366e6` incorporates main `b53ebf6f4` and the paired
+v0.2.3 release preparation (`e82a20033`). Compared with the repaired checkpoint
+`fffbe7816`, it changes release notes, package/crate versions, locks and release
+validation guidance; mana source, card definitions and focused witnesses are
+unchanged. The recorded repair/compression results below remain evidence for
+that source, not a fresh build of the v0.2.3 packages. Gate's rebuild and
+current-world checks must use the merged checkout.
 
 The new bound's `PaymentSearchState::usable` still called the removed
 restriction-only pool API; the first realign debug build failed there. It now
@@ -51,7 +71,7 @@ bound witness requires rider blue plus combat red to pay {U}{R}. Source
 canonicalization leaves pool classes intact; the bounds relax supply only for
 feasibility and do not choose the live spending unit.
 
-## Remaining acceptance
+## Resolved search regression
 
 The bounded-state regression is diagnosed: the diagnostic run reached 1,001
 visited states, of which 1,000 already lacked enough candidates for a saved
@@ -62,7 +82,11 @@ saved tap lacks present, untapped candidates. These resources only decrease,
 so this removes no successful witness and chooses no spending class.
 The 1,000-state limit and all source, class/expiry and production semantics
 remain unchanged. The focused debug search/card witnesses and rebuilt
-shared-observation parity now pass. No implementation blocker remains.
+shared-observation parity passed in the runs below. The earlier iteration
+feedback's 15/16 result predates this repair; it is not the current unresolved
+state. No known implementation blocker remains.
+
+## Remaining acceptance
 
 Gate still needs the affected suites, current-world authored parity/authority,
 fixture binding and belief receipts, world-admission checks, and the three
@@ -86,6 +110,33 @@ product decision is identified.
 
 The earlier `scripts/refresh_card_fixture.py` run dropped existing double-faced
 entries, so only the four new entries were added to the Scryfall fixture.
+
+## Pooled-class presentation checks (2026-11-12)
+
+- Follow-up compression: `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards --test rules_tests -E 'test(chk::) | test(cr_106_12a_produced_types) | test(observability::pooled_mana) | test(tle::animal_attendant_mana_in_the_combat_pool)'`
+  — **11 passed** (run `455597ca-896b-454a-b6a9-c4a20e7c5eb2`), including
+  the type-presence overflow witness. Changed Python/stub formatting also passes.
+  Follow-up `CARGO_BUILD_JOBS=2 uv run --no-sync --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
+  passed; matching cp313 Darwin extension installed atomically.
+  `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_pooled_mana_classes_input.py tests/academy/test_experience_protocol.py -q`
+  — **18 passed** against that extension. Rust formatting and `git diff --check`
+  passed; gate's broader checks remain open.
+- Focused debug `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards -E 'test(observability::pooled_mana) | test(tle::animal_attendant_mana_in_the_combat_pool)'`
+  — **3 passed** (run `54d1296b-ab60-42c3-b5fe-8be083ac9d53`).
+- Academy `npm run check` — zero errors/warnings; `PlayerArea.svelte.test.ts`
+  — **5 passed**, including qualifier rendering and aggregate expiry fallback.
+  Protocol conformance initially failed on the old schema's field name;
+  after regenerating all six schemas, the focused
+  `npm run test -- src/lib/protocol-conformance.test.ts` retry — **5 passed**.
+- `CARGO_BUILD_JOBS=2 uv run --no-sync --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
+  — passed; the matching cp313 Darwin extension was installed atomically.
+- `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_pooled_mana_classes_input.py tests/academy/test_experience_protocol.py -q`
+  — **18 passed**, covering native/reference v9/v10 scalar/vector parity,
+  omitted qualifiers, text, Academy projection and protocol schema shapes.
+- `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_text_observation.py -q -k 'pooled_mana or every_native_decision_code or every_observed_field'`
+  — **14 passed**. Changed Python/stub Ruff checks, Rust formatting and
+  `git diff --check` passed. All six generated schemas use the new field and
+  optional qualifiers. `lf context` remains under both scratch limits.
 
 ## Compression checks (2026-11-12)
 

@@ -733,30 +733,20 @@ class _Renderer:
                     )
                     + "."
                 )
-            for pooled in player.spend_effect_mana:
+            for pooled in player.pooled_mana_classes:
                 lines.append(
-                    (
-                        f"Mana that puts {pooled.effect}: "
-                        if pooled.effect
-                        else "Combat mana: "
-                    )
+                    "Pooled mana: "
                     + ", ".join(
                         f"{symbol} {count}"
                         for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
                         if count
                     )
-                    + "."
-                )
-                lines.append(
-                    (
-                        f"Spend only for {pooled.restriction}. "
-                        if pooled.restriction
-                        else ""
-                    )
+                    + (f"; only for {pooled.restriction}" if pooled.restriction else "")
+                    + (f"; puts {pooled.effect}" if pooled.effect else "")
                     + (
-                        "Expires at end of combat."
+                        "; expires at end of combat."
                         if pooled.combat
-                        else "Expires at step end."
+                        else "; expires at step end."
                     )
                 )
             if player.hand_only_until is not None:

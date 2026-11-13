@@ -1,4 +1,4 @@
-"""Pooled mana with a spend effect reaches both encoders as the same program rows."""
+"""Pooled mana classes retain qualifiers and shared learning-token programs."""
 
 import json
 
@@ -35,10 +35,9 @@ def _observation(seat: str) -> tuple[managym.Env, managym.Observation]:
         ]
     )
     payload = json.loads(env.observation_for_player(0).toJSON())
-    payload[seat]["spend_effect_mana"] = [
+    payload[seat]["pooled_mana_classes"] = [
         {
             "combat": False,
-            "restriction": "",
             "effect": "a +1/+1 counter on a non-Human creature spell it casts",
             "mana": [0, 0, 0, 0, 1, 0],
             "program": _PROGRAM,
@@ -47,7 +46,7 @@ def _observation(seat: str) -> tuple[managym.Env, managym.Observation]:
     return env, managym.Observation.from_json(json.dumps(payload))
 
 
-def test_spend_effect_mana_encodes_identically_as_a_program_on_its_player() -> None:
+def test_pooled_mana_classes_encode_identically_as_a_program_on_their_player() -> None:
     for seat, object_row in (("agent", 1), ("opponent", 2)):
         env, obs = _observation(seat)
         assert managym.unrepresentable_state(obs) is None
@@ -109,12 +108,12 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
     # The Attendant's green counts as ordinary mana and names its rider.
     obs = env.observation_for_player(owner)
     assert list(obs.agent.mana) == [0, 0, 0, 0, 1, 0]
-    assert [list(pooled.mana) for pooled in obs.agent.spend_effect_mana] == [
+    assert [list(pooled.mana) for pooled in obs.agent.pooled_mana_classes] == [
         [0, 0, 0, 0, 1, 0]
     ]
     _assert_parity(env, obs)
     assert (
-        "Mana that puts a +1/+1 counter on a non-Human creature spell it casts: G 1."
+        "Pooled mana: G 1; puts a +1/+1 counter on a non-Human creature spell it casts; expires at step end."
         in capture_text_decision(env).text
     )
 
@@ -183,8 +182,9 @@ def test_spending_choices_share_native_vector_text_and_academy_observations() ->
     )
     view = serialize_observation(obs, include_details=True)
     LegacyPlayerView.model_validate(view["agent"])
-    pools = view["agent"]["spend_effect_mana"]
+    pools = view["agent"]["pooled_mana_classes"]
     assert pools[0]["effect"]
+    assert "restriction" not in pools[0]
     assert pools[0]["combat"] is False
     # Every selectable unit, not just the aggregate colors, reaches the
     # policy's closed runtime vocabulary through the execution program.
@@ -207,3 +207,27 @@ def test_spending_choices_share_native_vector_text_and_academy_observations() ->
         assert actor is not None
         _assert_parity(env, env.observation_for_player(actor))
     assert env.observation_for_player(owner).stack_objects
+
+
+def test_combat_mana_without_qualifiers_round_trips_and_projects_absence() -> None:
+    env, obs = _observation("agent")
+    payload = json.loads(obs.toJSON())
+    pooled = payload["agent"]["pooled_mana_classes"][0]
+    del pooled["effect"]
+    pooled["combat"] = True
+    obs = managym.Observation.from_json(json.dumps(payload))
+    native_class = obs.agent.pooled_mana_classes[0]
+    assert isinstance(native_class, managym.PooledManaClass)
+    assert native_class.effect is None
+    assert native_class.restriction is None
+    serialized = json.loads(obs.toJSON())["agent"]["pooled_mana_classes"][0]
+    assert "effect" not in serialized and "restriction" not in serialized
+    reference = ObservationEncoder(ObservationConfig()).encode(obs)
+    native = env.encode_observation(obs)
+    for key, value in reference.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)
+    view = serialize_observation(obs, include_details=True)["agent"]
+    expected = {"mana": [0, 0, 0, 0, 1, 0], "combat": True}
+    assert view["pooled_mana_classes"] == [expected]
+    parsed = LegacyPlayerView.model_validate(view)
+    assert parsed.model_dump(mode="json")["pooled_mana_classes"] == [expected]

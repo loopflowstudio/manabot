@@ -277,14 +277,18 @@ def _serialize_player(
                 }
                 for r in player.restricted_mana
             ],
-            "spend_effect_mana": [
+            "pooled_mana_classes": [
                 {
                     "mana": list(p.mana),
-                    "effect": p.effect,
-                    "restriction": p.restriction,
+                    **({"effect": p.effect} if p.effect is not None else {}),
+                    **(
+                        {"restriction": p.restriction}
+                        if p.restriction is not None
+                        else {}
+                    ),
                     "combat": p.combat,
                 }
-                for p in player.spend_effect_mana
+                for p in player.pooled_mana_classes
             ],
             "combat_mana": int(player.combat_mana),
             "inspected": grouped_cards["LIBRARY"],

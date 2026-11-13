@@ -6,6 +6,34 @@ use managym::{
 
 use crate::support::game::*;
 
+/// CR 106.12a: a produced type is present regardless of its amounts or
+/// spending restrictions. Adding class totals here would overflow at 256.
+#[test]
+fn cr_106_12a_produced_types_ignore_amounts_and_restrictions() {
+    use managym::state::{
+        card::TriggeredManaOutput,
+        mana::{Mana, ManaRestriction},
+    };
+
+    let bonus = TriggeredManaOutput::OneProducedType;
+    assert!(bonus.alternatives(&Mana::default()).is_empty());
+    for slot in 0..6 {
+        let mut unit = Mana::default();
+        unit.mana[slot] = 1;
+        for (ordinary, restricted) in [(0, 1), (1, 0), (255, 1)] {
+            let mut produced = Mana::default();
+            produced.mana[slot] = ordinary;
+            let mut amounts = [0; 6];
+            amounts[slot] = restricted;
+            produced.add(&Mana::restricted_to(
+                ManaRestriction::spell(["Lesson"]),
+                amounts,
+            ));
+            assert_eq!(bonus.alternatives(&produced), vec![unit.clone()]);
+        }
+    }
+}
+
 /// CR 106.3 — Mana abilities can be activated to produce mana used for casting.
 #[test]
 fn cr_106_3_casting_uses_mana_abilities() {
