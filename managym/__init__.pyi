@@ -880,7 +880,9 @@ class Observation:
     continuation: list[ContinuationFrame]
 
     @staticmethod
-    def from_json(text: str) -> Observation: ...
+    def from_json(
+        text: str, *, continuation_json: str | None = None
+    ) -> Observation: ...
     def continuation_json(self) -> str: ...
     game_over: bool
     won: bool

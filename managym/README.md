@@ -351,7 +351,10 @@ does it classify the sources and apply both to every state, so ordinary small
 payments pay nothing for them. Distinct
 source behaviors, overlapping tap sets, nested obligations and concrete pool
 remainders can still make exact search combinatorial; there is no general
-large-board work limit or truncation of legal payments.
+large-board work limit or truncation of legal payments. The
+[stress states](../docs/development.md#stress-states) measure payment and every
+other engine layer on large duplicative and large diverse boards; run them when
+changing this search.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
@@ -377,6 +380,12 @@ The opaque native capture binds an Env and reset generation. Use
 `execute_captured_command_json(capture, command_json)` for atomic origin and
 current-digest validation plus ordinary semantic execution. Portable capture JSON
 is evidence, not execution authority; clones need their own live capture.
+
+Frozen viewer JSON omits continuation frames. To reconstruct a complete
+stateless policy observation, use
+`Observation.from_json(viewer_json, continuation_json=frames_json)`; the frames
+pass through the same canonical validator as retained decision captures.
+Neither input creates an executable decision binding.
 
 
 The policy input has configurable fact capacity (512 by default). It keeps
