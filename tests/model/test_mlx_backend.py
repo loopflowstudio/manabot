@@ -247,11 +247,9 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         )
 
 
-@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
-def test_mixed_precision_preserves_master_updates(
-    tmp_path: Path, precision: Precision
-) -> None:
+def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     """Half forwards preserve small updates in float32 masters and Adam state."""
+    precision: Precision = "bfloat16"
     import manabot.backends.mlx as backend
     from manabot.backends.mlx.arrays import precision_dtype
     from manabot.backends.mlx.checkpoint import build
@@ -274,7 +272,6 @@ def test_mixed_precision_preserves_master_updates(
     learner = Learner(policy, precision=precision, minibatch_rows=2)
     dtype = precision_dtype(precision)
     assert learner.precision == policy.precision == precision
-    assert learner.loss_scale == (128 if precision == "float16" else 1)
     batch = policy.prepare(obs)
     settings = Settings(1e-5, 0.2, 0.1, 0.05, 0.01)
     targets = Targets(
@@ -358,19 +355,16 @@ def test_omitted_precision_follows_the_shared_width_rule(
     )
     policy, learner = MLXBackend().load(weights)
     assert policy.precision == learner.precision == expected
-    assert learner.loss_scale == 1
     assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
     assert policy.programs().dtype == precision_dtype(expected)
     # An explicit precision always wins over the width.
-    for explicit in ("float32", "bfloat16", "float16"):
+    for explicit in ("float32", "bfloat16"):
         assert assemble(weights, precision=explicit).precision == explicit
         assert MLXBackend(explicit).load(weights)[0].precision == explicit
 
 
-@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
-def test_half_policy_loading_and_float32_action_logs(
-    tmp_path: Path, precision: Precision
-) -> None:
+def test_half_policy_loading_and_float32_action_logs(tmp_path: Path) -> None:
+    precision: Precision = "bfloat16"
     from manabot.backends.mlx.arrays import precision_dtype
     from manabot.backends.mlx.rl import action_logs, policy_logs
 
@@ -383,7 +377,7 @@ def test_half_policy_loading_and_float32_action_logs(
     assert policy.programs().dtype == mx.float32
     assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
     # Torch regimes spell "bf16"; the refusal names MLX's dtype spellings.
-    with pytest.raises(ValueError, match="expected one of float32, bfloat16, float16"):
+    with pytest.raises(ValueError, match="expected one of float32, bfloat16"):
         policy.set_precision("bf16")  # type: ignore[arg-type]
 
     logits = mx.array(
@@ -406,7 +400,7 @@ def test_half_overflow_refuses_update(tmp_path: Path) -> None:
     from manabot.backends.mlx.rl import NumericalError
 
     _, path, _ = _converted(tmp_path)
-    policy, _ = load_mlx_policy(str(path), precision="float16")
+    policy, _ = load_mlx_policy(str(path), precision="bfloat16")
     learner = Learner(policy, minibatch_rows=1)
     before = learner.parameters()
 

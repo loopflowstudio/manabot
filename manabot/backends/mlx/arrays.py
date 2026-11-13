@@ -20,7 +20,7 @@ FLOAT = mx.float32
 
 def precision_dtype(precision: Precision) -> mx.Dtype:
     """The compute dtype; parameters and optimizer state remain float32."""
-    dtypes = {"float32": mx.float32, "bfloat16": mx.bfloat16, "float16": mx.float16}
+    dtypes = {"float32": mx.float32, "bfloat16": mx.bfloat16}
     try:
         return dtypes[precision]
     except KeyError as error:

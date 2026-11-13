@@ -11,7 +11,7 @@ checked against.
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | experimental policy and damped update; bf16 for wide models, f32 otherwise, f16 explicit | [mlx.md](mlx.md) |
+| `mlx` | experimental policy and damped update; bf16 for wide models, f32 otherwise | [mlx.md](mlx.md) |
 
 ## Which backend on Apple Silicon
 
@@ -285,6 +285,6 @@ cannot be read, the checkpoint is refused or no backend is installed; a
 timing in the ordinary MLX pilot requires passing parity. The MPS retest
 explicitly retains approximate arms and reports their numerical differences.
 
-For explicit MLX half precision, select `--backend mlx --precision bfloat16`
-(or `float16`). See the [compute precision guide](mlx.md#compute-precision) for
+For explicit MLX half precision, select `--backend mlx --precision bfloat16`.
+See the [compute precision guide](mlx.md#compute-precision) for
 the API and dtype-specific numerical gates.

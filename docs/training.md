@@ -596,8 +596,7 @@ The measured speed crossover is width 256. On an L4 with bucketed shapes,
 BF16 is slower than float32 at w160l8, 1.66× faster per learner step at w256l8,
 and 2–2.7× faster at w384l8 ([measurement](../experiments/cuda_precision.md)).
 On an M4 Max at w384l8 with 256 streams, a whole update took 261 s in bfloat16
-against 277 s in float32 on MPS, and 208 s against 263 s on MLX; float16 tied
-bfloat16 on both ([measurement](../experiments/mps_retest.md)).
+against 277 s in float32 on MPS, and 208 s against 263 s on MLX ([measurement](../experiments/mps_retest.md)).
 
 In the earlier [learning A/B](../experiments/precision_ladder.md), BF16 seed
 32401 stopped after 140 completed updates with

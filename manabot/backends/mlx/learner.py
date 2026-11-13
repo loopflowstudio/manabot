@@ -12,7 +12,7 @@ once; `step` clips the global gradient norm, applies Adam and refuses
 nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
 `gradients` returns them without stepping. The learner runs in its policy's
 precision (bfloat16 for wide models, float32 otherwise, or an explicit choice);
-bfloat16/float16 forwards keep float32 master weights, loss, clipping and Adam.
+bfloat16 forwards keep float32 master weights, loss, clipping and Adam.
 Float16 uses fixed loss scaling (128); overflow is refused, never skipped.
 An optional recorder (`manabot.training.updates.health.OptimizerHealth`)
 counts steps and rejections; the sampled gradient and parameter detail it
@@ -99,10 +99,6 @@ class Learner:
         """The policy owns the precision used by both inference and learning."""
         return self.agent.precision
 
-    @property
-    def loss_scale(self) -> float:
-        return 128.0 if self.precision == "float16" else 1.0
-
     def forward_precision(self) -> AbstractContextManager[object]:
         return self.agent.forward_precision()
 
@@ -119,15 +115,13 @@ class Learner:
         self._require_masters("close the inference precision scope before learning")
         # Cached inference programs have no gradient path to the current weights.
         self.agent.clear_cache()
-        scale = self.loss_scale
 
-        def scaled() -> tuple[mx.array, ...]:
+        def float32_loss() -> tuple[mx.array, ...]:
             result = objective()
-            return (result[0].astype(mx.float32) * scale, *result[1:])
+            return (result[0].astype(mx.float32), *result[1:])
 
-        outputs, gradients = nn.value_and_grad(self.agent, scaled)()
-        outputs = (outputs[0] / scale, *outputs[1:])
-        gradients = tree_map(lambda g: g.astype(mx.float32) / scale, gradients)
+        outputs, gradients = nn.value_and_grad(self.agent, float32_loss)()
+        gradients = tree_map(lambda g: g.astype(mx.float32), gradients)
         mx.eval(outputs, gradients)
         self._pending = (outputs[0], gradients)
         return outputs
