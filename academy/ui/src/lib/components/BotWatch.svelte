@@ -37,7 +37,7 @@
   let importedGames = $state<unknown[]>([]);
   let selectedGame = $state(0);
   let choices = $state(['random', 'search']);
-  let extension = $state<string | null>(null);
+  let extension = $state<string | null | undefined>(undefined);
 
   async function api<T>(url: string, body?: unknown): Promise<T> {
     const response = await recordFetch(url, {
@@ -213,7 +213,7 @@
       <DeckSelector {hero} {villain} heroLabel="Seat 1 deck" villainLabel="Seat 2 deck" onHeroChange={v => hero = v} onVillainChange={v => villain = v} />
       <label class="flex flex-col gap-2 type-label">Deal seed<input class="w-32 rounded border border-line bg-field p-2" bind:value={seed} inputmode="numeric" /></label>
       <button class="btn btn-primary" onclick={() => void start()}>Start watching</button>
-      {#if !extension}<p class="type-caption">Trained bots need manabot installed on this server.</p>{/if}
+      {#if extension === null}<p class="type-caption">Trained bots need manabot installed on this server.</p>{/if}
       {#if extension}<label class="flex flex-col gap-2 type-caption">Open arena / Tournament game<input aria-label="Open arena game" type="file" accept=".json,.jsonl,.gz" onchange={e => void importGame(e)} /></label>{/if}
       {#if importedGames.length > 1}
         <label>Recorded game <select bind:value={selectedGame}>{#each importedGames as _, index}<option value={index}>Game {index + 1}</option>{/each}</select></label>

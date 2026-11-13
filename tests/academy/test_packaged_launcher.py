@@ -39,13 +39,19 @@ def test_missing_site_names_checkout_launcher(
     assert "./scripts/play" in record["message"]
 
 
+@pytest.mark.parametrize("held", ["127.0.0.1", "0.0.0.0"])
 def test_busy_port_has_documented_error(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    held: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    # A wildcard listener matters on macOS, where SO_REUSEADDR would otherwise
+    # let Academy bind 127.0.0.1 beside it and take its local traffic.
     (tmp_path / "index.html").write_text("Academy")
     monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(tmp_path))
     with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
+        listener.bind((held, 0))
         listener.listen()
         assert academy(["--no-open", "--port", str(listener.getsockname()[1])]) == 2
     record = json.loads(capsys.readouterr().err.removeprefix("ACADEMY_PLAY_ERROR "))

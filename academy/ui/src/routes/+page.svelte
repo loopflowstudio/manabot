@@ -42,7 +42,8 @@
   let showSetup = $state(false);
 
   let trainedOpponents = $state<TrainedOpponent[]>([]);
-  let botExtension = $state<string | null>(null);
+  // undefined until the catalog answers, so absence is never claimed early.
+  let botExtension = $state<string | null | undefined>(undefined);
   let catalogError = $state<string | null>(null);
   async function loadOpponents(): Promise<void> {
     try {

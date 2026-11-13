@@ -20,9 +20,11 @@ digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
 ## Running Academy
 
-For an unpublished candidate, install the local wheel using
-[Build and verify](development.md#build-and-verify). The PyPI commands below
-apply once a release that includes Academy is published.
+The PyPI commands below apply once a release that includes Academy is
+published. To try an unpublished candidate, build it with
+[Build and verify](development.md#build-and-verify) and install its engine
+wheel with the extra, in a fresh environment:
+`pip install '<path>/managym-<version>-<python>-<platform>.whl[academy]'`.
 
 ```bash
 pip install 'managym[academy]'
@@ -31,7 +33,6 @@ managym academy
 
 ```text
 ACADEMY_PLAY_READY {"traces_dir": "/home/you/academy/traces", "url": "http://127.0.0.1:8000"}
-
   Academy: http://127.0.0.1:8000
   Ctrl-C stops the server
 ```
@@ -49,7 +50,7 @@ wheel ([supported platforms](engine-python.md)). Install into a virtual
 environment, with pip or uv:
 
 ```bash
-uv venv --python 3.13 && source .venv/bin/activate
+uv venv --python 3.13 --seed && source .venv/bin/activate   # --seed adds pip
 pip install 'managym[academy]'
 ```
 

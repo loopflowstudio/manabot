@@ -23,6 +23,21 @@ def _error(code: str, message: str) -> int:
     return 2
 
 
+def _accepting(host: str, port: int) -> bool:
+    """Whether something already answers at the address Academy would print.
+
+    SO_REUSEADDR (kept so a restart can rebind over TIME_WAIT) lets macOS bind
+    127.0.0.1 beside another program's wildcard listener, which would then lose
+    its local traffic to Academy; a connection probe catches that on every
+    platform.
+    """
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
 def academy(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="managym academy",
@@ -47,7 +62,7 @@ def academy(argv: list[str] | None = None) -> int:
         if exc.name and exc.name.split(".")[0] in {"fastapi", "uvicorn", "starlette"}:
             return _error(
                 "extra.missing",
-                "Install managym[academy]: uv pip install 'managym[academy]'",
+                "Install the server dependencies: pip install 'managym[academy]'",
             )
         raise
     directory = frontend_directory()
@@ -81,6 +96,10 @@ def academy(argv: list[str] | None = None) -> int:
                 if not args.no_open:
                     webbrowser.open(url)
 
+    if _accepting(host, args.port):
+        return _error(
+            "port.in_use", f"Port {args.port} is in use; choose --port <free-port>."
+        )
     try:
         # Own the listener so bind failures produce the documented error record.
         family = socket.AF_INET6 if ":" in args.host else socket.AF_INET
