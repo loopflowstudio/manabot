@@ -257,12 +257,13 @@ fn build(recipe: &Recipe) -> Env {
             let card = *game
                 .state
                 .zones
-                .zone_cards(ZoneType::Hand, PlayerId(i))
+                .zone_objects(ZoneType::Hand, PlayerId(i))
                 .last()
                 .unwrap();
-            game.state
+            let state = &mut *game.state;
+            state
                 .zones
-                .move_card(card, PlayerId(i), ZoneType::Graveyard);
+                .move_object(&state.objects, card, PlayerId(i), ZoneType::Graveyard);
         }
         for token in &seat.tokens {
             let game = env.benchmark_game_mut();
@@ -279,10 +280,10 @@ fn build(recipe: &Recipe) -> Env {
                 .iter()
                 .flatten()
                 .filter(|p| {
-                    let card = &game.state.cards[p.card];
+                    let card = &game.state.objects[p.object];
                     card.owner == PlayerId(i) && card.name == "Gray Ogre"
                 })
-                .map(|p| p.card)
+                .map(|p| p.object)
                 .collect();
             let targets: Vec<_> = creatures
                 .iter()
@@ -291,10 +292,10 @@ fn build(recipe: &Recipe) -> Env {
             let mut index = 0;
             let state = &mut *game.state;
             for p in state.permanents.iter_mut().flatten() {
-                if state.cards[p.card].owner == PlayerId(i) {
-                    if state.cards[p.card].name == "Gray Ogre" {
+                if state.objects[p.object].owner == PlayerId(i) {
+                    if state.objects[p.object].name == "Gray Ogre" {
                         p.change_counters(CounterKind::PlusOnePlusOne, 1);
-                    } else if state.cards[p.card].name != "Forest" {
+                    } else if state.objects[p.object].name != "Forest" {
                         p.attached_to = Some(targets[index % targets.len()]);
                         index += 1;
                     }
@@ -311,7 +312,7 @@ fn build(recipe: &Recipe) -> Env {
             .enumerate()
             .find_map(|(i, p)| {
                 p.as_ref()
-                    .filter(|p| game.state.cards[p.card].name == "The Rise of Sozin")
+                    .filter(|p| game.state.objects[p.object].name == "The Rise of Sozin")
                     .map(|_| i)
             })
             .unwrap();
@@ -619,14 +620,14 @@ fn run(
                         .permanents
                         .iter()
                         .flatten()
-                        .find(|p| game.state.cards[p.card].name == "Gray Ogre")
+                        .find(|p| game.state.objects[p.object].name == "Gray Ogre")
                         .or_else(|| game.state.permanents.iter().flatten().next())
-                        .map(|p| p.card);
+                        .map(|p| p.object);
                     if let Some(card) = source {
                         benchmark_layers::triggers(
                             game,
                             GameEvent::CardMoved {
-                                card,
+                                object_id: card,
                                 from: Some(ZoneType::Hand),
                                 to: ZoneType::Battlefield,
                                 controller: PlayerId(actor),
