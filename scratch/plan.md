@@ -275,3 +275,26 @@ Validation: source inspection and `git diff --check` passed; documentation only,
 so no build, test or parity rerun. SDK release/pin, installed-consumer and
 launcher/service proofs, recovery review and retained replay mismatch remain
 later delivery obligations. Open choices remain in questions.md.
+
+## Concept review 12: nothing to change in the design — 2026-11-13
+
+Read `self_play.py`, `cli.py`, the four recipes and docs/training.md against
+this plan on a fresh run, a planned stop, a rerun, a target-only extension and
+the belief recipe's rerun. No concept, name or interaction needs to change.
+Etude PR #103 is still open at `105abdd`.
+
+Checked and left as is: after a finished belief run, `run.latest_checkpoint()`
+and `TrainingRun.final` name the sampler (tag `belief`), not the policy. The
+recipe reads only `.at`, and the latest record always shares the latest
+policy's coordinate (`run.checkpoint` returns the existing record for an
+already recorded policy), so reruns and extensions stay correct. An
+`eval(state)` over a multi-step recipe must select by tag; none exists today.
+
+One wording fix for the next step that edits the guide (not a design change):
+docs/training.md "Checkpoint cadence" says "1000 is the usual grid", but no
+current recipe uses it (Elemental 50, batched baseline 64, baseline
+`updates // 2`). Name Elemental's 50 or drop the sentence; the 26,000/27,000
+continuation example may stay as an example.
+
+Open choices (CLI recipe-config fields, local follower) stay in questions.md
+for demo, additive and non-blocking as before. Delivery obligations unchanged.
