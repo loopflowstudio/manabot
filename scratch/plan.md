@@ -563,3 +563,26 @@ epochs measure once instead of 4 times; the damped update pays ~2 ms more per
 `test_row_needs_regroup_to_the_measured_buckets`; forward 0 differ; updates
 byte-identical to `before.json` (#503) and `after.json` (#501). Pass 3
 (4668724056dc) measures the code before this fix; pass 4 validates it.
+
+## Speed check pass 3 (Etude 4668724056dc, revision f3b7fbaa4; another, faster L4 host)
+
+Three arms x2 (`scratch/speed/run3/compare.txt`; the job's last `compare`
+line failed on a quoting typo, compared locally from the fetched files).
+Same 53,341 rows everywhere. base / #503 tree / #501 head: damped 9.46 / 8.93
+/ 9.16 steps/s; PPO 0.2539 / 0.2448 / 0.2439; inference 1,284 / 2,382 /
+2,373 obs/s; save and load within spread. The gap is all in the learner's
+"Forward and loss" section (damped 8.26 / 9.92 / 9.67 s, PPO 12.2 / 14.6 /
+15.0 s per update; backward and optimizer equal), and #503 already shows it:
+host bucket measurement, not the written-once updates. Launcher cost ~$0.56;
+the machine was terminated by hand.
+
+Fix (#503): collection records each row's needs (admission keeps them on
+`AdmittedObservation.needs`, `_ObservationRows` stores them beside the rows,
+`RecordedObservations.gather_needs` reads them) and `AdmittedRollout`
+regroups them, so a learner update measures only the bootstrap rows (1 of
+6,199 rows in a CPU check). `row_needs` always counts object references, so
+recorded needs serve a learner with or without object trimming. Tests:
+`test_collection_records_each_rows_measured_needs`,
+`test_row_needs_regroup_to_the_measured_buckets`; forward 0 differ; updates
+byte-identical (#503 and #501). Pass 4 (cohort `mtg325-speed-4`, revision
+7820d1e8d, three arms x3) validates it. Spend so far: $0.58 + $0.27 + $0.56.
