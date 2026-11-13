@@ -623,3 +623,12 @@ interleaved processes per arm, then the required measured optimization pass.
 Do not optimize against the CPU smoke timing or claim a speed result before
 the CUDA workload runs. Production code has not changed since the successful
 CPU/update/parity captures except type annotations.
+
+Compress pass (2026-11-13 UTC): one `admission.binding(model, space)` replaces
+three spellings (Torch `_binding`, MLX's `Spec(..., 0).binding`); dead
+`programs is None` guard and duplicate transfer walk in `PolicyInference.prepare`
+removed; the save record no longer builds an unused `model_state_dict`; the
+verify helper's NumPy→Torch→NumPy round trip is one `np.asarray`. Oracle
+`compress.pt`: **3,248 tensors, 0 differing**; `updates-compress.json`
+byte-identical to base; inference/container/prepare/protocol/value tests
+**63 passed**, MLX backend **8 passed**. L4 and optimize remain outstanding.
