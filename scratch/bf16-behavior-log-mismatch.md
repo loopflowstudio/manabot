@@ -241,3 +241,35 @@ updates, probe deltas), publish them, finish the report, and
 --preserve-env=RUNPOD_API_KEY -- uv run --with 'etude-sdk[s3,eval]==0.2.15'
 etude ...` with `SSL_CERT_FILE` set to certifi's bundle. Gate still owns the
 complete acceptance command.
+
+## Added scope: 50-update learning pair (Task comments, 2026-11-13)
+
+Jack Heart, comment `ae2552d3`: "after the USD 5 proof clears update 141, run a
+matched BF16-vs-float32 learning comparison with the fix, capped at USD 10
+total (training + any evaluation; separate from the proof's USD 5). ... Reuse
+the machine already rented if it is free; terminate machines when done. Also
+fold in the free evidence: MTG-324's four existing runs ... compare their
+loss, KL, clip-fraction and value curves alongside the new pair. ... No
+pre-registered verdict ...: float32 is the incumbent; report whether BF16 with
+the fix learns the same per update and how much faster it is per wall-clock
+hour, separate what the data supports from what it does not, then recommend
+whether auto should pick BF16 on CUDA at w>=256. Do not change the auto default
+in this PR unless the result clearly supports it; say so either way."
+
+Jack Heart, comment `d3422d92`: "run each arm (BF16, float32, same seed) for
+about 50 updates, not a time window; the USD 10 cap stays as a ceiling ...
+Compare per-update curves over updates 1-50 (plus MTG-324's existing four runs
+over the same range) and wall-clock per update; strength evaluation at update
+50 only if it fits the cap."
+
+Implemented: `experiments/precision_pair.py` (`runs`: both precision_ladder
+arms, seed 32401, `stage.updates = 50` on the unchanged 300-step damping
+horizon, 3 h window, USD 2.50 per run; `eval`: update-50 head-to-head, USD 1;
+`python -m experiments.precision_pair FLOAT32_RUN,BF16_RUN` writes
+`experiments/data/precision_pair/{updates.csv,curves.png}`). Per-update
+metrics come from `etude.train.read.read(storage_from_uri("r2://manabot/jobs"),
+experiment, run).points(metric, "updates")`; one read takes minutes.
+
+Open: launch after the proof passes 141 (expected ~21:05 UTC; a background
+watcher polls `etude status`), cohort cap USD 5; then curves, eval if it fits,
+report `experiments/precision_pair.md`, publish data, terminate machines.
