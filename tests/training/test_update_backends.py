@@ -26,6 +26,7 @@ from manabot.backends.parity import (
     LOGIT_TOLERANCE,
     LOSS_TOLERANCE,
     STEP_PARAMETER_TOLERANCE,
+    TOLERANCES,
     Report,
     backend_module,
     installed_backends,
@@ -39,6 +40,7 @@ from manabot.policy.checkpoint import (
     canonical_parameters,
     from_torch_state,
 )
+from manabot.policy.protocol import Precision
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import (
@@ -190,6 +192,80 @@ def test_parity_requires_a_matching_optimizer_step() -> None:
     assert report.failures() == []
     report.step_parameter_max_abs = 2 * STEP_PARAMETER_TOLERANCE
     assert "clipped Adam weights" in report.failures()
+
+
+def test_float32_parity_requires_every_tensor_gradient_to_agree() -> None:
+    report = Report(
+        step_checked=True,
+        gradient_cosine=1.0,
+        gradient_min_cosine=0.98,
+        gradient_worst="policy_head.0.bias",
+    )
+    assert report.failures() == ["gradient policy_head.0.bias"]
+    report.gradient_min_cosine = 1.0
+    assert report.failures() == []
+
+
+@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
+def test_half_damped_update_after_cached_inference(
+    precision: Precision, captured: tuple[PolicyCheckpoint, RolloutBatch]
+) -> None:
+    if "mlx" not in installed_backends():
+        pytest.skip("MLX is not installed")
+    module = backend_module("mlx")
+    weights, batch = captured
+    agents = [
+        module.checkpoint.assemble(weights, precision=precision) for _ in range(2)
+    ]
+    learners = [module.learner.Learner(agent, minibatch_rows=2) for agent in agents]
+    before = learners[0].parameters()
+    # A fixed-weight collection cache must not sever catalog gradients in training.
+    agents[0].cache_programs()
+    result = update_damped_iteration(module, learners[0], batch, LEARNING, 1)
+    assert result["numerical"]["optimizer_steps"] > 1
+    assert result["numerical"]["rejected_steps"] == 0
+    assert np.isfinite(result["loss"])
+    after = learners[0].parameters()
+    assert all(value.dtype == np.float32 for value in after.values())
+    assert any(
+        np.any(after[key] != value)
+        for key, value in before.items()
+        if key.startswith("semantic_cards.")
+    )
+    # A precision change must invalidate the old inference catalog.
+    agents[0].cache_programs()
+    agents[0].set_precision("float32")
+    agents[1].update(agents[0].parameters())
+    agents[1].set_precision("float32")
+    obs = batch.observations(np.array([0, 1])).observation
+    for actual, expected in zip(
+        agents[0].evaluate(agents[0].prepare(obs)),
+        agents[1].evaluate(agents[1].prepare(obs)),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
+def test_half_parity_uses_measured_dtype_tolerances(precision: Precision) -> None:
+    tolerance = TOLERANCES[precision]
+    report = Report(
+        precision=precision,
+        step_checked=True,
+        step_parameter_max_abs=0.00017,
+        gradient_min_cosine=-1,
+        gradient_cosine=tolerance.cosine + 0.0001,
+        forward_logits=tolerance.logits / 2,
+        forward_values=tolerance.values / 2,
+        loss_relative=tolerance.loss / 2,
+    )
+    assert report.failures() == []
+    report.forward_logits = tolerance.logits * 2
+    report.loss_relative = tolerance.loss * 2
+    report.gradient_cosine = tolerance.cosine - 0.01
+    assert set(report.failures()) == {"forward logits", "learner loss", "full gradient"}
+    report.step_parameter_max_abs = float("nan")
+    assert "finite clipped Adam step" in report.failures()
 
 
 @pytest.mark.parametrize("name", sorted(BACKENDS))

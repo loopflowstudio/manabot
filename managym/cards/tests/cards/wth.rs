@@ -11,9 +11,9 @@ fn fervor_lets_a_new_creature_attack_at_once() {
     let mut s = five_color_setup(&["Fervor", "Gray Ogre"]);
     cast_owned(&mut s, "Fervor");
     settle(&mut s);
-    let card = cast_owned(&mut s, "Gray Ogre");
+    let object = cast_owned(&mut s, "Gray Ogre");
     settle(&mut s);
-    let ogre = s.game().state.card_to_permanent[card].unwrap();
+    let ogre = s.game().state.object_to_permanent[object].unwrap();
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     attack_with(&mut s, ogre);
     s.advance_to_step(StepKind::EndOfCombat);

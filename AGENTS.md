@@ -373,6 +373,8 @@ admission. Admission-rejection fixtures must mark the config as submitted
 - **CI runs the Rust suite in debug, so validate in debug before landing.**
   The dev profile is opt-level 1 with debug assertions on; CI runs it with
   `cargo nextest run --profile ci`, which terminates any test after 5 minutes.
+  Limit nextest builds with `CARGO_BUILD_JOBS=2`, and tests with
+  `--test-threads 2`; nextest `-j` aliases test threads, not build jobs.
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
   pass green in release and still fail CI. `create_token` is the live example —
@@ -499,7 +501,7 @@ their input order and validating the shared board once per immutable scan.
 `Game::state` is a `TrackedState` with
 `Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
 advances every counter, and its typed accessors (`tap`, `mark_damage`,
-`events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
+`events_mut`, `move_object`, `mana_pool_mut`, ...) advance only the counters
 their field feeds. Tap/untap advances `tapped`; layers retain their board only
 when no discovered scope, condition or value predicate reads tap state. Removing
 a stun counter also advances `characteristics`. Route a hot write through a typed accessor only when no
