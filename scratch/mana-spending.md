@@ -202,7 +202,10 @@ re-deriving rules in Python; a learning claim stated as a finding.
 ## Status
 
 Implementation and experiment work are complete; gate, review and PR delivery
-remain. Tables, receipts, costs and limits are in the report.
+remain (no PR exists yet, so Engine Budget CI has not run on the native
+counters). The shape comparison (separate source and receipt outcomes, cap
+hits) and the learning pilot with its cost, which the last iteration direction
+asked for, are both done; tables, receipts, costs and limits are in the report.
 
 - Frequency (`58e5923c53`, `9f2f1b69b8`, `b63d486f81`): native counters in
   `Env.info()` computed in `produce_mana`, the decision count in
