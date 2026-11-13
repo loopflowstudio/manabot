@@ -118,8 +118,9 @@ checkpoints or experiment evidence.
 - Keep docstrings concise, but include non-obvious contracts, side effects,
   and failure behavior. Do not repeat signatures in `Args:` / `Returns:`
   boilerplate or narrate obvious statements. Update comments with behavior.
-- Put imports at the top; use explicit imports and underscore-prefixed private
-  helpers. Keep one implementation and one owner for each fact; use git for
+- Put imports at the top; use explicit imports. Do not prefix a function with
+  an underscore merely because it is used only within its module.
+  Keep one implementation and one owner for each fact; use git for
   old versions rather than `_new`, `_old`, or `_backup` variants.
 - Import names from their defining modules (`manabot.env.observation`, not
   `manabot.env`); package `__init__` files re-export nothing, so evaluation

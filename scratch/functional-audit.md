@@ -16,7 +16,7 @@ left for later.
 | `ArtifactStore` (our class wrapping boto3 clients to add methods) | `publish_artifact`, `download_artifact`, `fetch_artifact` over a private `_client(scheme, profile)` | `manabot/infra/artifacts.py`, `manabot/data.py` | "do not wrap another library's handle in our own class to add methods" |
 | `CallbackEndpoint` (class whose `__enter__` returned a different object) | `serve_callbacks(runtime)` `@contextmanager` | `manabot/eval/endpoint.py` | a lifetime with no state for callers to hold |
 | `ThreadBudget.account`, `ProcessCensus.take/.record/.enforce` (records that measure the process) | `account_threads`, `take_census`, `record_census`, `enforce_budget`; both records are plain | `manabot/sim/threads.py`, call sites in `sim/native_game.py`, `sim/serving.py`, `sim/supervision.py`, `eval/match.py` | records do not run anything |
-| `Opponent.verify()` (record reading a checkpoint) | private `_verify_checkpoint(opponent)` | `academy/opponent.py` | record does not do I/O |
+| `Opponent.verify()` (record reading a checkpoint) | `verify_checkpoint(opponent)` | `academy/opponent.py` | record does not do I/O |
 
 ## Kept: notable classes and the reason
 
@@ -90,7 +90,7 @@ the module table below. Classes with behaviour that were examined and kept:
 | `academy/bot_decision.py` | 3 config/record |  |
 | `academy/curated_pack.py` | - | `CuratedPack`: record; player_config builds a native config (minor, left) |
 | `academy/deck_import.py` | 2 config/record |  |
-| `academy/opponent.py` | 1 config/record | `Opponent`: record; verify() **moved** to _verify_checkpoint |
+| `academy/opponent.py` | 1 config/record | `Opponent`: record; verify() **moved** to verify_checkpoint |
 | `academy/play_demo.py` | 2 config/record |  |
 | `academy/presentation.py` | 2 config/record | `PresentationProjector`: guarded invariant: sequence numbers and pending spells per match |
 | `academy/public_commitment_parity.py` | 2 config/record |  |

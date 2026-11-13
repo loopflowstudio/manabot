@@ -182,11 +182,11 @@ def catalog_opponent(sha256: str) -> Opponent | None:
         step=summary.step,
         setups=[_setup_record(deck) for deck in summary.setups],
     )
-    _verify_checkpoint(opponent)
+    verify_checkpoint(opponent)
     return opponent
 
 
-def _verify_checkpoint(opponent: Opponent) -> None:
+def verify_checkpoint(opponent: Opponent) -> None:
     """Refuse an opponent whose checkpoint bytes are missing or no longer pinned."""
     try:
         actual = hashlib.sha256(opponent.checkpoint.read_bytes()).hexdigest()
