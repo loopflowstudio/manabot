@@ -138,6 +138,9 @@ def train_command(
             raise typer.BadParameter("choose --updates or --steps, not both")
         typer.echo(
             "Warning: --steps is deprecated; use --updates. "
+            "Both flags now set only the stop target; for local and baseline, "
+            "unlike the old --steps, they leave the recipe's schedule and "
+            "checkpoint grid unchanged. "
             "--steps will be removed in Manabot 0.3.0.",
             err=True,
         )

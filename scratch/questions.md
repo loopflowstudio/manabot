@@ -98,6 +98,6 @@ where to stop under `manabot train --updates`. For local and baseline that
 changed what `--steps N` did on main (plan.md, concept review 3, item 2).
 Also still open for demo, nothing built: a local checkpoint follower.
 
-Reversible, proposed without asking: drop the loop's `final` checkpoint tag
+Implemented the reversible choice: drop the loop's `final` checkpoint tag
 in favor of Etude's `TrainingRun.final`. The alternative, untagging the old
 checkpoint on extension, keeps a second owner of one fact.

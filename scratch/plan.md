@@ -242,3 +242,28 @@ both proposals drawn from the design, not statements anyone made.
 Left alone: the repeated `track`/`run.until` opening; `baseline.evaluate`
 refusing a run that ended anywhere but `config.updates` (the nightly sets
 the config, never the flag).
+
+## Concept review 3 implementation — 2026-11-13
+
+Removed the loop's `final` tag and `record_checkpoint(final=)` argument;
+Etude's `TrainingRun.final` owns endpoint selection. Early-return recording
+remains so reruns can publish a checkpoint missed after saving state.
+The extension proof checks the derived endpoint advances from update 1 to 2
+while retaining the earlier immutable checkpoint. The alias warning and
+training guide explain that the stop target leaves local/baseline recipe
+rates and checkpoint grids unchanged. No CLI config overrides were added.
+
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_local_cli_stop_resume_and_target_only_continuation tests/training/test_self_play_loop.py::test_a_rerun_resumes_and_a_finished_loop_returns_at_once -q`: 2 passed (12.99s).
+Changed Python files pass Ruff; applied its one formatting correction and
+`git diff --check` passes. Scratch remains within both context limits.
+Release/pin, installed consumers, gate, recovery review and launcher/service
+proof remain delivery obligations above.
+
+## Compress after concept review 3 — 2026-11-13
+
+No deletion target remains. docs/training.md's loop excerpt still showed the
+removed `final` tag and an unrecorded early return; it now calls
+`record_checkpoint` as the code does, and the piece table lists it. The
+early return carries a comment on why it records again. The guide's `--updates`
+paragraph gives the baseline example; the CLI test checks the warning once.
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_local_cli_stop_resume_and_target_only_continuation tests/training/test_self_play_loop.py::test_a_rerun_resumes_and_a_finished_loop_returns_at_once -q`: 2 passed (8.98s); Ruff clean.

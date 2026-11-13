@@ -7,6 +7,7 @@ import subprocess
 import sys
 from types import ModuleType
 
+from etude.experiment import observe
 from etude.jobs import training
 from etude.train.read import read
 from etude.train.run import local_launch
@@ -76,6 +77,10 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     assert rerun.exit_code == 0, rerun.output
     assert "--steps is deprecated; use --updates" in rerun.output
     assert "removed in Manabot 0.3.0" in rerun.output
+    assert "leave the recipe's schedule and" in rerun.output
+    before = observe(out / "etude", "local").run("smoke")
+    assert before.final is not None
+    assert before.final.clocks["updates"] == 1
     extended = runner.invoke(app, command[:-1] + ["2"])
     assert extended.exit_code == 0, extended.output
     assert checkpoint.read_bytes() == original
@@ -84,11 +89,12 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     assert data.reached["updates"] == 2
     assert data.file is not None
     assert len(data.attempts) == 4
-    assert all(
-        "final" in checkpoint.tags
-        for checkpoint in data.checkpoints
-        if checkpoint.at["updates"] in {1, 2}
-    )
+    after = observe(out / "etude", "local").run("smoke")
+    assert after.final == after.checkpoints.last
+    assert after.final is not None
+    assert after.final.clocks["updates"] == 2
+    assert before.final in after.checkpoints
+    assert all("final" not in checkpoint.tags for checkpoint in after.checkpoints)
 
 
 def test_belief_extension_has_new_policy_histories_and_sampler(

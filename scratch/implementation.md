@@ -9,7 +9,8 @@ functions over the self-play loop and Etude's real run API. Elemental's existing
 The CLI lists explicit functions without importing experiment evaluation code.
 
 The loop validates SelfPlay directly, saves before publishing immutable
-checkpoints, returns EMA when configured, and records the endpoint as `final`.
+checkpoints and returns EMA when configured. Etude derives the finished run's
+final checkpoint from its last recorded checkpoint.
 State resumes with Adam, EMA and counts; native game/RNG streams restart at the
 saved update. It raises `etude.stopping.Stopped`. CLI deadlines are ISO-8601;
 `--updates` sets Etude's target, preserving the recipe horizon. Belief filenames

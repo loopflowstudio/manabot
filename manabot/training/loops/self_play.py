@@ -722,7 +722,9 @@ def self_play(
                 )
             state = new_state(settings, seed)
         if state.update >= updates:
-            return record_checkpoint(out, state, run, final=True)
+            # Records again in case an earlier attempt saved state but crashed
+            # before recording; the file is written once and Etude derives `final`.
+            return record_checkpoint(out, state, run)
 
         # Only the learner is durable. Each attempt starts fresh random streams
         # and adds its collector's totals to the counts saved before it.
@@ -774,13 +776,11 @@ def self_play(
         save_state(out / "state.pt", state)
         if state.update < updates:
             raise Stopped(f"stopped at update {state.update}; run again to resume")
-        return record_checkpoint(out, state, run, final=True)
+        return record_checkpoint(out, state, run)
 
 
-def record_checkpoint(
-    out: Path, state: LoopState, run: Tracker | None, *, final: bool = False
-) -> Path:
+def record_checkpoint(out: Path, state: LoopState, run: Tracker | None) -> Path:
     path = save_checkpoint(out / "checkpoints", state)
     if run:
-        run.checkpoint(path, updates=state.update, tags=("final",) if final else ())
+        run.checkpoint(path, updates=state.update)
     return path
