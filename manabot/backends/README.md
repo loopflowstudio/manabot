@@ -14,25 +14,15 @@ every backend is checked against.
 
 ## Which backend on Apple Silicon
 
-PyTorch is the incumbent training backend. MLX remains a measurement backend;
-keeping it needs a clear advantage in the whole training update to justify
-maintaining the extra implementation. The [MLX pilot](../../experiments/mlx_pilot.md)
-measured an advantage over CPU8 on its M2 workload, but used padded shapes and
-float32 MPS. The [MPS retest](../../experiments/mps_retest.md) compares the current
-bucketed recipe, both MPS half dtypes, wider/smaller models and larger stream
-counts. Its completed M4 Max w384l8/256-stream comparison measured median
-whole-update times of 703 s on CPU4, 521 s on MPS float32, 478 s on MPS
-bfloat16, 442 s on MPS float16 and 402 s on MLX float32. Float16 MPS narrowed
-the gap to about 10%, but individual gradient tensors differed more than the
-global cosine suggests. At w64l2/256 streams, every MPS precision was slower
-than CPU on both the M2 and M4 Max; MLX was fastest. The broader matrix is incomplete, and the M2's
-five-resident-arm setup was stopped for sustained paging.
-
 Recommendation: keep PyTorch in production and retain MLX as an experimental
-Apple backend while the half-precision numerical differences and wider batch
-comparison remain unresolved. This is one busy host's replay evidence, not
-equivalent learning trajectories or an automatic adoption rule. Defaults and
-off-CUDA precision refusals remain unchanged.
+Apple backend. The [MPS retest](../../experiments/mps_retest.md) found that
+float16 MPS narrowed the whole-update gap to MLX to about 10% at w384l8/256
+on the busy M4 Max, while every MPS precision lost to CPU at w64l2/256 on both
+hosts. Half-precision gradient differences remain unresolved, the wider/batch
+matrix is incomplete, and the M2 w384 comparison stopped for sustained paging.
+The report owns the measurements and limits; neither it nor the earlier
+[MLX pilot](../../experiments/mlx_pilot.md) establishes equivalent learning
+trajectories. Defaults and off-CUDA precision refusals remain unchanged.
 
 ## Layout
 

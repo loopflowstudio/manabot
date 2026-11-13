@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import AbstractContextManager, closing, contextmanager, nullcontext
 from dataclasses import dataclass, replace
 import json
 import os
@@ -751,7 +751,7 @@ def bench(
             load_after=os.getloadavg()[0],
             ended=time.time(),
         )
-        yield row
+    yield row
 
 
 def update(
@@ -824,7 +824,7 @@ def update(
             ended=time.time(),
             load_after=os.getloadavg()[0],
         )
-        yield row
+    yield row
 
 
 def capture(out: Path, streams: int, laptop: bool) -> None:
@@ -909,45 +909,26 @@ def capture(out: Path, streams: int, laptop: bool) -> None:
 
 def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:
     """Correctness runs in isolation before the timed resident comparison."""
-    cmd = [
-        sys.executable,
-        str(Path(__file__).resolve()),
-        "bench",
-        str(args.out),
-        "--capture",
-        str(args.capture),
-        "--width",
-        str(width),
-        "--arm",
-        arm,
-        "--phase",
-        "parity",
-        "--rows",
-        str(size),
-    ]
-    if args.laptop:
-        cmd += ["--laptop"]
-    ledger = args.out / "bench.jsonl"
-    before = len(_rows(ledger))
     try:
-        result = subprocess.run(cmd, timeout=args.timeout, check=False)
-        if result.returncode == 0 or len(_rows(ledger)) > before:
-            return
-        reason = f"worker exit {result.returncode}"
-    except subprocess.TimeoutExpired:
-        reason = f"worker timeout after {args.timeout}s"
-    _emit(
-        ledger,
-        {
+        # Use the same replies and cleanup as timing, but finish this arm
+        # before allocating the next. The timeout covers the whole parity run.
+        deadline = time.monotonic() + args.timeout
+        with closing(CallWorker(args, "parity", width, arm, size, 0)) as worker:
+            worker.timeout = max(0, deadline - time.monotonic())
+            row = worker.receive()
+            while row is None:
+                worker.timeout = max(0, deadline - time.monotonic())
+                row = worker.advance()
+    except Exception as error:
+        row = {
             "event": "parity",
             "width": width,
             "rows": size,
             "arm": arm,
-            "status": "failed",
-            "error": reason,
+            **_failure(error, arm),
             **_provenance(args.capture, args.laptop),
-        },
-    )
+        }
+    _emit(args.out / "bench.jsonl", row)
 
 
 def _unstable(before: float, after: float) -> bool:
@@ -974,10 +955,11 @@ def _failure(error: Exception, arm: Arm) -> dict[str, str]:
 
 
 class CallWorker:
-    """One resident arm, blocked on stdin between synchronized calls.
+    """One isolated arm, blocked on stdin between synchronized calls.
 
     Each arm owns its model, optimizer, inference scope and allocator. Only one
     worker computes at a time; retained models still share physical host memory.
+    Generators close their runner before sending the final receipt.
     """
 
     def __init__(
@@ -1004,14 +986,9 @@ class CallWorker:
             "--worker",
         ]
         if command == "bench":
-            cmd += [
-                "--phase",
-                phase,
-                "--rows",
-                str(size),
-                "--repeats",
-                str(args.repeats),
-            ]
+            cmd += ["--phase", phase, "--rows", str(size)]
+            if phase != "parity":
+                cmd += ["--repeats", str(args.repeats)]
         else:
             cmd += ["--rep", str(rep)]
         if args.laptop:

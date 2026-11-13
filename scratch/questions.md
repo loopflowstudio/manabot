@@ -28,11 +28,14 @@ names, including `full_context.png`; its captions still identify the M4 Max.
 Combined M2/M4 reports keep the M4 hostname suffix. This filename choice does
 not treat the two hosts as comparable.
 
-The small CPU/MLX two-row smoke and synthetic chart checks are controlled
-implementation fixtures, not performance evidence. MPS execution is unverified.
-Actual results, final charts, artifact publication, cost and recommendation
-remain required. Do not represent this implementation step as the completed
-experiment. No optional L4 arm was launched.
+Completed measurements, published artifacts and remaining design work are in
+`scratch/mps-retest.md` and `experiments/mps_retest.md`. Controlled fixtures
+are implementation checks, never performance evidence. No optional L4 arm ran.
+
+Superseded load thresholds, pause requests, preflight observations and the
+earlier laptop-only reporting fallback remain verbatim in
+`adeb2b164:scratch/questions.md` (comments 3329f511, f8b011bd, 17d97d4c and
+56378d1f). The current load and replay direction is quoted below.
 
 Steer from Jack Heart (Task comment d2803d55, 2026-11-12), verbatim: "make sure
 the torch MPS half-precision arm is actually run, not skipped. It is a required
@@ -53,16 +56,6 @@ Jack: add one shareable chart as a named deliverable, a 'full context' counterpa
 
 <!-- loopflow-steer:42df6eb6-2b86-4f21-a757-752af29acd51 -->
 
-## Steer cf2540f2-cbea-44ec-844d-5d3fd756e69c
-
-Comment 3329f511-722a-4261-9a69-28a659205712 by Jack Heart:
-
-Jack: you may run measurements on either this laptop or a rented M2. This laptop is an Apple M4 Max, 16 cores, 128 GiB, but it is Jack's working machine and its load average is often above 100. Plan: (1) run the comparable arms on a fresh rented AWS mac2-m2 (24 GiB), same host class as the MTG-321 pilot, so the chart's main bars match earlier evidence; (2) use this laptop only for the arms the M2 cannot hold, the wider widths (w512l8, w768l8, w1024l8 as memory allows) and the largest minibatches, and only when it is quiet: before every timed block check the 1-minute load average is under 8 and wait otherwise, record the load in the receipt, use at most 8 CPU threads, and never run both hosts' measurements on the laptop at once. Never start a timed block on the laptop without that load check, and stop if Jack's interactive work is affected. If the laptop never gets quiet, report the wide arms as not measured rather than as noisy numbers. Keep the per-host provenance on every chart and table (M4 Max 128 GiB vs M2 24 GiB are different machines; never put their bars side by side as if comparable).
-
-<!-- loopflow-requester:"Jack Heart" -->
-
-<!-- loopflow-steer:3329f511-722a-4261-9a69-28a659205712 -->
-
 ## Steer ea022e5b-b3f8-427a-a111-6b6776c79c8c
 
 Comment 52f4f0fd-a3fc-4508-9c78-f6af18fda27a by Jack Heart:
@@ -82,16 +75,6 @@ Jack: widen the model axis both ways. Smaller: add w64l2 (the batched-baseline a
 <!-- loopflow-requester:"Jack Heart" -->
 
 <!-- loopflow-steer:dbeb9bd7-cbaf-4e49-8197-a3ec6fd4bfa9 -->
-
-## Steer 1f3506a2-09b9-45d1-b5f7-3350fd5601fe
-
-Comment f8b011bd-45ad-4c96-a58e-47d3dcaaedfd by Jack Heart:
-
-Jack: when you reach a timed block that must run on this laptop, do not wait indefinitely for the load to drop. Post a progress note naming the block and its memory need, then pause your own Graph step until the operator quiets the machine, or proceed if the 1-minute load is under 8. The operator (this session) has Jack's authorization to pause other Tasks' Graphs and stray builds for the duration of a timed block and will resume them after; you only need to say when you are ready to time.
-
-<!-- loopflow-requester:"Jack Heart" -->
-
-<!-- loopflow-steer:f8b011bd-45ad-4c96-a58e-47d3dcaaedfd -->
 
 ## Steer ff0a995d-202e-42b6-8335-81cd692bb4cb
 
@@ -118,65 +101,6 @@ venv for laptop runs; the M2 still requires its fresh Python 3.12 venv.
 Use separate per-host capture/ledger directories so the M2 comparison can
 proceed independently. Interpret the 12-hour window from comment creation
 2026-11-13T01:12:38.971Z (deadline 2026-11-13T13:12:38.971Z).
-
-2026-11-13 01:14 UTC preflight: `etude pools` could not read the default
-launcher: `/Users/jack/.etude/launcher.db was written by another version of
-etude`. The existing DB was not changed. An isolated local
-launcher was then prepared with `ETUDE_HOME="$PWD/.runs/mps-etude"`: `etude
-pools` returned `local this computer (default)`. This reversible choice leaves
-the existing launcher untouched; no job was queued and no ETUDE_RUN was
-invented. Laptop load 71.57 independently prohibited capture; access.md names the
-released pilot host, so no SSH measurement was attempted.
-
-## Measurement-window steer, 2026-11-13 01:33 UTC
-
-Comment 17d97d4c-7fc4-48d3-af3b-8151c35dd0e9 by Jack Heart:
-
-Operator: the laptop is being quieted now (the 12-core loopflow test binary that carried the load is paused under Jack's authorization; MTG-325's pytest runs are short). Resume the measurement window on this laptop: re-check the 1-minute load before each timed block as planned, and start the w384l8 256-stream capture as soon as it is under 8. Keep the M2 arms queued; the operator's retry loop still finds no mac2-m2 capacity and will rewrite ~/.manabot-mps-bench/access.md when a host comes up. Post a progress note when the laptop timed blocks are complete so the operator can resume the paused work.
-
-<!-- loopflow-requester:"Jack Heart" -->
-
-<!-- loopflow-steer:17d97d4c-7fc4-48d3-af3b-8151c35dd0e9 -->
-
-2026-11-13 01:36 UTC: the resumed preflight measured one-minute loads
-63.49, 51.66, 41.69, 41.24 and finally 33.41, all above 8. No capture,
-parity or timed arm started. The access file still names the released pilot
-host; no new M2 access was supplied. Executable source is now frozen at
-`849769d6f`. The next block is still the w384l8 256-stream capture, four
-CPU threads, configured 20 GiB budget (actual peak unknown).
-
-2026-11-13 01:42 UTC realign preflight: one-minute load was 43.36. The
-operator's access file still had its 2026-11-12 08:47 local modification time;
-no updated M2 access was present. No capture or timed arm started. Compression
-is now committed in `78c11da39` and the current source revision is `3a7937232`
-after syncing main; the earlier `849769d6f` freeze describes the 01:36
-preflight, not a measurement run. Refreshed Task comments contain no newer
-direction than the measurement-window steer above.
-
-
-## Current laptop method, superseding the load-under-8 direction
-
-Comment 56378d1f-34d4-45ce-a9dc-e5657089acab by Jack Heart:
-
-Operator: the load-under-8 rule cannot be met on this laptop tonight; other sessions keep starting Rust test runs (the one running now is paused again under Jack's authorization, but new ones appear). Relax the rule for the laptop blocks: start a timed block when the 1-minute load is under 16 (one per core), run the arms interleaved call by call and step by step as the MTG-321 method did so shared-host drift lands on every arm alike, record the 1-minute load at the start and end of every block in the receipt, and label every laptop number with that load in the report and chart caption. Use 4 CPU threads for the capture and the CPU reference arm. If a block's start and end loads differ by more than 2x, repeat it once and keep the quieter one, saying so. Do not wait for load 8 again; proceed now with the w384l8 256-stream capture. The M2 arms stay queued for the rental.
-
-<!-- loopflow-requester:"Jack Heart" -->
-
-<!-- loopflow-steer:56378d1f-34d4-45ce-a9dc-e5657089acab -->
-
-Reversible implementation choices: a timed block is all arms at one width and
-per-call size/phase, or one whole-update repetition. “Quieter” means the lower
-arithmetic mean of start/end loads, ties choosing the first attempt. Repeat
-the complete block from initial state, retain both attempts, and select every
-arm from the same attempt. Captures use the same rule. Separate persistent
-processes keep inference/optimizer state isolated while advancing one call or
-step per arm; all models remain resident, so OOM describes this setup rather
-than standalone arm capacity. The CPU arm is named `cpu`; thread count lives
-in provenance and human labels. No real receipts used the previous name.
-
-2026-11-13T02:01:15+00:00: load 64.67 still prohibits starting the capture under the
-new <16 rule. No capture or model timing started; no worker remains running.
-
 
 ## Latest direction: no laptop load threshold
 
@@ -234,11 +158,6 @@ Pairwise interleaving would change the steered all-arm comparison and its
 single CPU baseline, so it is not silently substituted. Captures and parity
 remain evidence; no M2 performance conclusion or full-matrix completion is
 claimed. The explicit instruction to continue laptop replays still applies.
-
-Reporting choice: if only the laptop completes timing, its chart uses the
-canonical `full_context.png` with M4 provenance. Keep the M2 parity and aborted
-series in a separate evidence directory/table and describe the missing timing
-in the report, rather than giving the shareable path an empty M2 chart.
 
 Laptop scheduling choice: the completed three-replay w384/256 series took
 6,870.95 seconds. Do not start another full series that cannot fit the

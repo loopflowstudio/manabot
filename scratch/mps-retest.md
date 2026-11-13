@@ -8,9 +8,9 @@ backend defaults and off-CUDA refusals are unchanged. This is not a completed
 matrix: missing cells remain visible in charts and tables.
 
 Measurements used source `fa23fc364`; original 256-stream captures used
-`99210bf8d`. The only subsequent executable edit labels the plotted cosine
-as global and points readers to tensor minima. It changes no measured math
-or scheduling.
+`99210bf8d`. Subsequent edits label plotted cosine as global and consolidate
+parity subprocess handling through `CallWorker`. They change no model math
+or retained evidence; measurements remain bound to their original source.
 
 Completed three-replay groups, in CPU / MPS f32 / bf16 / f16 / MLX order:
 
@@ -84,6 +84,12 @@ transfer or measurement process remains running.
 Removed the duplicate pilot capture, serial timed-arm path, reference writer's
 disk reread, repeated host/capture probes and worker-side parity admission.
 The coordinator owns admission before allocation and attaches parity metrics.
+Removed the separate parity subprocess launcher and its ledger-length inference:
+`CallWorker` now owns replies and cleanup for parity as well as timing. Parity
+still completes one arm at a time under one deadline; final receipts follow
+runner cleanup. The backend README links to the report instead of repeating
+its measurement table. Superseded scratch directions remain at
+`adeb2b164:scratch/questions.md`.
 Keep isolated parity execution, CPU arrays, original captures and failures;
 no alternate capture or rental implementation. No remaining deletion target.
 
@@ -96,7 +102,7 @@ directional >2× retry on both hosts, whole-attempt selection, and acceptance
 of a 10,000-second three-replay span without an hourly gate. Ruff and diff
 checks passed; no production model math changed in that method update.
 
-Current checks: `uv run --no-sync python experiments/mps_retest.py report
+Report checks before compression: `uv run --no-sync python experiments/mps_retest.py report
 experiments/data/mps_retest --bench experiments/data/mps_retest` passed;
 independent assertions verified 15 selected medians, both half dtypes, no
 pending retry, exact phase sums, explicit gaps, six PNGs and two UTC-labelled
@@ -104,3 +110,11 @@ tables. Ruff format/check and visual inspection passed.
 `uv run --no-sync pytest tests/infra/test_experiment_data_untracked.py -q`
 passed (1 test). The final archive hash/size matched its manifest entry;
 `git diff --check` passed. Scratch is within both context limits.
+
+Compression checks: `uv run --no-sync python .runs/mps-parity-worker-check.py`
+passed controlled reply, failure, timeout, cancellation, deadline and CLI checks;
+all fixture children were reaped and every generator closed its runner before
+the final receipt. `uv run --no-sync pytest
+tests/eval/test_experiment_files.py -q` — 4 passed (7.29 s). No measurements
+were rerun; gate owns the remaining affected suites. Python compilation,
+Ruff check/format and `git diff --check` passed.
