@@ -391,11 +391,15 @@ def test_half_policy_loading_and_float32_action_logs(
     tmp_path: Path, precision: Precision
 ) -> None:
     from manabot.backends.mlx.arrays import precision_dtype
+    from manabot.backends.mlx.checkpoint import MLXBackend
     from manabot.backends.mlx.rl import action_logs, policy_logs
 
     _, path, _ = _converted(tmp_path)
     policy, _ = load_mlx_policy(str(path), precision=precision)
     assert policy.precision == precision
+    served, _ = MLXBackend(precision=precision).load_policy(str(path))
+    assert served.precision == precision
+    assert served.programs().dtype == precision_dtype(precision)
     assert policy.programs().dtype == precision_dtype(precision)
     policy.cache_programs()
     policy.set_precision("float32")

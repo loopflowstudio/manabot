@@ -159,11 +159,20 @@ admission's private `_key`/`_word` and fact-kind tuples (one owner:
 
 ## Remaining slices
 
-6b. **Complete** — `105e7e2aa` merged, rebuilt; fresh CPU oracle and updates exact.
-7. **CUDA equivalence captured** at `296c90f33` on A6000: numeric bar holds,
-   stricter repeat-floor condition unresolved. **Full speed receipt pending**: see
-   "Speed and profile" and "Next actions".
-8. **Optimize pass pending** speed/profile output; no optimization claim yet.
+6b. Complete: current native rebuilt; controlled-input CPU oracle exact.
+7. Complete measurements: three-process A40 comparison and profile, plus the
+   final same-card 5090 check. CUDA <=1e-8 holds; stricter repeat-floor
+   condition remains open. Full tables: `scratch/speed/mtg333-results.txt`.
+8. Complete optimization pass: traversal of scalar-only metadata tuples skipped; measured
+   +5.6% damped throughput on 5090, CPU oracle and updates exact. PPO did not
+   improve. Final original-baseline comparison still shows a 5.2% PPO loss.
+
+**Performance acceptance remains open:** the plan's no-slower-median condition
+is not met for PPO. Keep that contrary result for review; do not describe the
+branch as passing that criterion. The requested speed/profile/optimization
+work is measured, not pending another launch. Further PPO work would need a
+revised preparation strategy; the observed limiter is large-minibatch host
+preparation, not a correctness difference or a reason to restore raw forwards.
 
 ### Slice 6b facts that still bind
 
@@ -388,15 +397,13 @@ The prior conflict inventory is at `9fe9eb1e7:scratch/mtg333-plan.md`.
 
 ### Next actions
 
-1. Finish the live A40 run `2f98203dd0a7` (three alternating processes per
-   arm, then cProfile). Retain its summary and profile; terminate that rental
-   before another. Settle the old cancelled `4b091160edbf` allocation after
-   its 19:15:51 UTC deadline; its provider pod is absent.
-2. #513's Prepared capture port is complete. Current-engine CPU oracle is
-   exact, all five update cases are exact, and fresh Torch/MLX parity passes.
-3. Use the final speed/profile to select and measure the optimization on A40.
-   Then gate reviews the repeat-floor finding, the full-file ordering hang,
-   broader suites, Python 3.12 and installed-wheel smoke.
+1. Review the residual PPO tradeoff (5.2% slower in the final same-card check)
+   and the stronger CUDA repeat-floor criterion. Neither is waived here.
+2. Gate runs the remaining broader suites, installed-wheel/Python 3.12 checks
+   and the previously failing full-file test order. The narrow backlog/order
+   probe passed; it does not close the earlier 300-second failure.
+3. Publication and landing remain the caller's steps. No Task rental or waiter
+   remains active; failed allocation windows were closed after reconciliation.
 
 ### Current pass, 2026-11-13 18:20 UTC
 
@@ -513,10 +520,44 @@ running. Before/after both use this one 5090; the first A40 table stays separate
 
 Optimization `267f945d54a0` succeeded, final launcher cost ~$0.18; its window
 was terminated and provider inventory confirms the Vast instance and every
-Task RunPod request absent. Same-5090 before/after: damped 18.2057→19.225
+Task RunPod request absent. Same-5090 before/after: damped 18.2057→19.2337
 steps/s (+5.6%, beyond the three inner-repeat ranges), inference 9667→10170
 obs/s (+5.2%), collection 31.46→21.86s (-30.5%). PPO 0.33794→0.3379 is
 unchanged; the prediction of a 5–10% PPO wall reduction was not met. Keep the
 measured damped/collection improvement, without claiming PPO improved.
 The initial A40 PPO regression therefore needs a direct optimized-head versus
 original-baseline check; regenerate the speed patch to 105e7e2aa for that pass.
+
+Final direct check `ce884945fab8` completed from `46e3db32d7`: original
+105e7e2aa versus optimized Torch, one process/arm with three inner repeats,
+on one Vast 5090 rental (`mtg333-opt-vast5090-1ea3bc7d1921`, instance
+60541658). $2 job/$10 cohort caps; $0.7481481481481482/hour. A40 admission
+4c4ca07ee2a0 was refused before any machine acquisition.
+
+#513 loader consistency: explicit MLXBackend precision now reaches file-based
+load_policy as well as in-memory load. The two existing half-policy loading
+cases pass (18.03s), including assertions through the backend file-loader API.
+Torch numerics and the frozen final comparison are unaffected.
+
+### Final receipt, 2026-11-13 20:17 UTC
+
+`ce884945fab8` succeeded; final launcher cost ~$0.15. Original baseline versus
+optimized head, on one 5090: damped 17.3248→18.1048 (+4.5%), PPO
+0.360453→0.341814 (-5.2%), inference 9742.44→10725.6 obs/s, save
+0.02085→0.01762s. This last pass has one process/arm with three timed inner
+repeats; the initial A40 comparison has three processes/arm. Full ranges and
+other sections are in `scratch/speed/mtg333-results.txt`, with frozen source
+commits and Etude run IDs. No cross-card ratios are used.
+
+All final CUDA outputs/losses and CPU-trained weights are exact; 55 gradients
+differ ≤2.561137080192566e-9, versus six repeat gradients ≤2.0954757928848267e-9.
+Task numeric tolerance passes; stronger repeat-floor condition stays open.
+Final CPU oracle: 3,410 tensors exact; five update cases exact. Fresh parity
+passes Torch and MLX. Focused checks: 20 current-engine boundary/capture/discovery
+tests, transfer-layout case, mixed/nested/scalar-leaf checks, and two half-loader
+cases pass. Ruff checks and formatting pass on the changed production pieces.
+
+Generated launch patches are removed from the final tree, retained in frozen
+launch commits `cd7afaec86`, `e6cd7f59cc` and `46e3db32d7`. Regenerate and commit
+patches for a new launch. All Task rentals were terminated; provider inventory
+was checked independently. The old cancelled request settled at $0.00.

@@ -162,13 +162,12 @@ class MLXBackend:
 
     name = "mlx"
 
-    @staticmethod
     def load_policy(
-        path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+        self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
     ) -> tuple[MLXActorCritic, ObservationSpace]:
         if bucketed_shapes or live_tokens:
             raise ValueError("MLX does not support bucketed or live-token inference")
-        return load_mlx_policy(path)
+        return load_mlx_policy(path, precision=self.precision)
 
     @staticmethod
     def metadata(path: str) -> dict[str, Any]:
