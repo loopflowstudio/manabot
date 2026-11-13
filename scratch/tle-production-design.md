@@ -67,6 +67,16 @@ classes, including unrestricted riders and combat mana. A feasibility witness
 stops automatic production at `PaymentStep::Spend`; the native decision then
 chooses units, rather than committing the witness's hypothetical remainder.
 
+Upstream `6ce618b8a`, merged at `b274d4c5f`, also answers fixed-source
+affordability directly (`PaymentModel::direct`) and shares sources within an
+immutable `PaymentScan`. The direct path covers one cost and an optional
+same-purpose generic waterbend split; automatic prefixes and more complex
+obligations keep the search. Debug checks compare direct affordability and
+witnesses with the search and rebuild shared sources to check equality. The
+merged witness still yields at `PaymentStep::Spend`; these optimizations must
+not choose units or weaken the saved-caller contract. Post-merge validation and
+performance evidence remain in the implementation plan's remaining work.
+
 ## Shared observation
 
 Review superseded the proposed new v10 block, fact kinds and v1–v9 rejection.
@@ -127,6 +137,13 @@ without a saved caller, no witness consumes its hypothetical remainder. Unit
 search remains for earlier obligations, and execution still offers every
 distinct native spending choice. The foretell witness uses `spend_named`
 instead of its own offer-selection loop.
+
+Upfront completion consumes its saved `SuspendedResolution` directly instead
+of restoring and immediately removing it from game state. It returns no
+fallible result: spending has finished, and the existing child-frame path owns
+any sacrifice/suffix suspension. Spending feasibility uses `PaymentModel::payable`
+when it needs only an answer; production still asks for an executable witness.
+No further deletion target remains.
 
 ## Pooled-mana presentation decision (concept review, 2026-11-12)
 

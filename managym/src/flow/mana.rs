@@ -1951,13 +1951,16 @@ impl Game {
         )
     }
 
-    fn complete_mana_upfront(&mut self) -> Result<(), AgentError> {
+    /// Finish the paid activation using its owned caller. Costs commit once;
+    /// only the output decision is restored after the source's effects run.
+    fn complete_mana_upfront(&mut self, mut caller: SuspendedResolution) {
         let Decision::ManaUpfront {
             player,
             permanent,
             ability_index,
+            resume,
             ..
-        } = self.state.suspended_decision.as_ref().unwrap().decision
+        } = caller.decision
         else {
             unreachable!()
         };
@@ -1977,15 +1980,12 @@ impl Game {
         // Retain the output and original payment frame before any cost
         // effect can suspend. Resumption must not spend mana, tap or pay life
         // again, nor expose this output before sacrifice/zone work finishes.
-        let mut caller = self.state.suspended_decision_mut().take().unwrap();
-        let Decision::ManaUpfront { resume, .. } = caller.decision else {
-            unreachable!()
-        };
+        let source_ref = self.permanent_object_ref(permanent);
         caller.decision = Decision::ManaChoice {
             player,
             choices: ability.mana_choices().unwrap(),
             production: ManaProduction::Output {
-                source: self.permanent_object_ref(permanent),
+                source: source_ref,
                 tapped,
             },
             resume,
@@ -2000,7 +2000,6 @@ impl Game {
         }
         effects.extend_from_slice(ability.mana_suffix());
         if !effects.is_empty() {
-            let source_ref = self.permanent_object_ref(permanent);
             let mut child = EffectFrame::new(player, effects);
             child.source = self.state.permanents[permanent].as_ref().map(|p| p.card);
             child.source_ref = source_ref;
@@ -2008,7 +2007,6 @@ impl Game {
         } else {
             *self.state.suspended_decision_mut() = Some(caller);
         }
-        Ok(())
     }
 
     /// Tap a source of fixed mana for mana and resolve its triggered mana
@@ -2274,9 +2272,7 @@ impl Game {
                     waterbend: false,
                 }];
                 obligations.extend(tail.clone());
-                model
-                    .plan(remaining, obligations, SourcePolicy::All)
-                    .is_some()
+                model.payable(remaining, obligations, SourcePolicy::All)
             })
             .take(limit)
             .collect()
@@ -2353,11 +2349,10 @@ impl Game {
                     self.complete_announced_payment(player, payment, sacrifice, waterbend, spent)?;
                 }
                 SpendCompletion::Upfront(decision) => {
-                    *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                    self.complete_mana_upfront(SuspendedResolution {
                         frame: suspended.frame,
                         decision: *decision,
                     });
-                    self.complete_mana_upfront()?;
                 }
                 SpendCompletion::Resolution(payment) => {
                     if let Some(key) = payment.spends {

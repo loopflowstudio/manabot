@@ -19,8 +19,10 @@ v9/v10. No new input shape, model kind or automatic payment preference was added
 
 The corpus admits 998/1,000 events, including all three Heartbeat events. Only
 the two Lita events fail; `docs/engine.md` matches. Frozen evidence is unchanged.
-Main's MTG-242 pool types, #504 search bounds, #506 sharding, CPU CI selection
-and v0.2.3 preparation are incorporated. The unrelated CI receipts at
+Main's MTG-242 pool types, #504 search bounds, #506 sharding, CPU CI selection,
+v0.2.3 preparation and `6ce618b8a` payment fast paths are incorporated.
+The latest merge is `b274d4c5f`; focused post-merge validation is recorded below.
+The unrelated CI receipts at
 `3cb9cc70a:scratch/ci-under-8-minutes.md` do not certify this mana change.
 The superseded intermediate payment diagnostic is retained at
 `3cb9cc70a:scratch/payment-fixture-investigation.md`. No Wave is selected.
@@ -68,7 +70,7 @@ unknown; those elapsed times are not engine performance measurements. No load
 was added beyond the sequential builds/tests. Both original fixtures, all
 1,000 steps, their assertions and the five-minute watchdog remain unchanged.
 
-## Remaining fixture repairs and debug coverage
+## Completed fixture repairs and debug coverage before the latest merge
 
 The complete debug run at unchanged runtime `39784f2c3` exposed 37 more funded
 card fixtures outside the earlier 643-test selection:
@@ -95,8 +97,9 @@ the prowess witness passed (`175352c5-2bf5-4361-ac41-559790daa727`). Final
 `e1ecb506-8f53-410b-9151-078c5dcbadbc`,
 `/tmp/mtg297-affected-card-sets.log`. This includes every repaired failure.
 Combined with the full run's unchanged passing tests, all 1,219 selected tests
-have passing debug evidence. This is two-run coverage, not a claimed single
-all-green final full-suite run; only test fixtures changed between the runs.
+had passing debug evidence before the subsequent runtime changes. This is
+two-run coverage, not a claimed single all-green final full-suite run; only
+test fixtures changed between the runs.
 
 - Workspace `cargo fmt --all --check` and `git diff --check` passed.
 - `cargo clippy --manifest-path managym/Cargo.toml --jobs 2 --all-targets --all-features -- -D warnings` passed; `/tmp/mtg297-fixture-clippy.log`.
@@ -107,8 +110,8 @@ all-green final full-suite run; only test fixtures changed between the runs.
 Both release builds succeeded, using the candidate's benchmark sources against
 pinned reference `7ef6ce5884782000eb8f14934dd8c2bd48a05387`. Candidate runtime is
 unchanged from `39784f2c3`; the uncommitted delta at measurement was fixtures and
-scratch only. Both binaries ran on the same macOS 26.0.1 / Apple M4 Max host
-(16 logical CPUs), in candidate/reference/reference/candidate order. No own
+scratch only. Both binaries ran on the same host, in
+candidate/reference/reference/candidate order. No own
 build or test ran alongside them. Native cp313 import also passed after rebuild.
 
 ```sh
@@ -161,14 +164,76 @@ has two obligations so it continues exercising that bound. Foretell reuses
 Removed the superseded diagnostic and unrelated inherited CI plan from active
 scratch; their exact history references are above. No human demo occurred.
 
+## Upstream reconciliation at `b274d4c5f`
+
+The merge adds `6ce618b8a`'s direct fixed-source payment calculation and shared
+source scans to the spending redesign. In `managym/src/flow/mana.rs`,
+`PaymentModel::direct` admits one mana cost, optionally followed by a generic
+waterbend split of the same purpose. Searched abilities, counted taps, pending
+outputs and the automatic-production prefix retain the finite-resource search.
+`plan` and `payable` compare direct answers with that search in debug builds;
+`PaymentScan` shares sources only within its immutable game borrow and checks
+reused sources in debug builds. The merged direct witness ends at
+`PaymentStep::Spend`, preserving native unit selection rather than spending a
+hypothetical remainder. The fully pooled final-cost shortcut remains in
+`PaymentModel::witness`.
+
+The same merge incorporates `ef28f3a58`'s training/backend reorganization;
+model and checkpoint checks must use the current tree's paths. It does not
+change either autoreset fixture, the watchdog or the Engine Budget baseline.
+The earlier timeout feedback is superseded by the completed investigation and
+passing original fixtures above; it is not evidence that they still need a
+split. The pre-merge 79-test selection, two autoreset runs and Python parity
+receipt do not validate the newly combined direct/search paths.
+
+## Focused merged-runtime validation (2026-11-12)
+
+Runtime revision `b274d4c5f05fcb696abbe4921b78d2e10bb27590`; only scratch
+notes differed during these checks. No runtime or fixture repair was needed.
+
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 -E 'test(flow::mana::tests::) or test(chk::) or test(tle::) or test(cr_106_mana::) or test(waterbend) or test(nested_mana) or test(combat_mana) or test(badgermole) or test(henge) or test(citadel)'` — **106 passed**, 10.525s; run `457ba04f-b434-4ca6-8aed-ac1ad6ff9e63`, `/tmp/mtg297-merged-debug.log`. Covers direct/search answers and witnesses, shared-source lifetime, nested payments and fees, rider/expiry choices, waterbend and production/suffix behavior.
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 1 --lib -E 'test(=agent::vector_env::tests::masked_mixed_setups_preserve_scalar_autoreset)'` — **passed, 37.746s**; run `9c6741eb-7c61-4795-94a8-f6e90ddf781a`, `/tmp/mtg297-merged-masked.log`.
+- The same command selecting `agent::vector_env::tests::restored_game_seeds_preserve_future_autoreset_stride` — **passed, 15.766s**; run `33d7534e-032d-43eb-8353-432d60c3fd27`, `/tmp/mtg297-merged-restored.log`. Both original fixtures retain 1,000 steps and the unchanged CI watchdog; these durations are correctness receipts, not a paired Engine Budget result.
+- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — **passed**, 1m52s; `/tmp/mtg297-merged-wheel.log`. Installed the matching cp313 arm64 extension atomically, verified its bytes against the wheel (SHA256 `98868c0bcc32a0edb1809985db3228ce5425a72b8771fb00e37650b7d103f756`), and imported the native w17 runtime successfully.
+- `uv run --extra dev pytest tests/semantic/test_pooled_mana_classes_input.py tests/semantic/test_restricted_mana_input.py tests/verify/test_observation_parity.py -q` — **33 passed**, 161.68s; `/tmp/mtg297-merged-parity.log`. Includes v9/v10 scalar/vector/text spending and receipt parity, restriction rejection, supplied capacities and the existing 200-game native/reference encoder comparison.
+- `git diff --check` — passed. `lf context` — scratch remains below both configured limits. No code, fixture, timeout, baseline or frozen evidence changed in this pass.
+
+## Compression of saved-caller ownership (2026-11-12)
+
+On `b274d4c5f`, `managym/src/flow/mana.rs` blob
+`3c3ed8afab464a9e2327fbcab743eb02b7ba6cba`:
+`complete_mana_upfront` consumes the saved caller directly, removing the
+temporary game-state restoration, second decision extraction and infallible
+`Result`. The source reference is captured once for both output and suffix.
+`mana_spend_choices` asks `PaymentModel::payable` when no witness is consumed.
+The production transaction, choices and serialized state retain their contract.
+The surrounding callers, fixtures, projections and docs need no further cut.
+
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 -E 'test(flow::mana::tests::) or test(chk::) or test(tle::) or test(roe::) or test(cr_106_mana::) or test(waterbend) or test(nested_mana) or test(combat_mana) or test(badgermole) or test(henge) or test(citadel) or test(cost_effect_completion_retains_output)'` — **121 passed**, 32.672s; run `86947d90-fc79-4e60-bcf3-8ba61eab26bf`, `/tmp/mtg297-compress-caller-debug.log`.
+- The same command with `--lib --test-threads 1 -E 'test(=agent::vector_env::tests::masked_mixed_setups_preserve_scalar_autoreset) or test(=agent::vector_env::tests::restored_game_seeds_preserve_future_autoreset_stride)'` — **2 passed**, 83.652s / 105.006s; run `51d90605-ff6e-4c7e-acab-8518a7f81627`, `/tmp/mtg297-compress-caller-autoreset.log`. Original 1,000-step fixtures and watchdog intact. During the first fixture, `ps` showed the owned test running with 3.56s CPU at 66s elapsed; these are correctness receipts, not Engine Budget measurements.
+- `cargo clippy --manifest-path managym/Cargo.toml --jobs 2 --all-targets --all-features -- -D warnings` — **passed**; `/tmp/mtg297-compress-caller-clippy.log`.
+- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — **passed**, completed 2026-11-13; `/tmp/mtg297-compress-caller-wheel.log`. Matching cp313 arm64 extension installed atomically, bytes checked against the wheel (SHA256 `7189ed0589ef2bdaf7857655c1900be5a4234190e37861190e695915348dceeb`), native import passed.
+- `uv run --extra dev pytest tests/semantic/test_pooled_mana_classes_input.py -q` — **4 passed**, 16.22s; `/tmp/mtg297-compress-caller-parity.log` (2026-11-13). Covers native/reference/vector/text and Academy spending/receipt projections in v9/v10.
+- Workspace `cargo fmt --all --check` and `git diff --check` — **passed**. `lf context` — scratch below both configured limits. Full debug/conformance and dedicated-runner Engine Budget remain gate obligations.
+
 ## Remaining
 
-Implementation/debug fixture gaps are repaired. The performance gate remains
-unresolved: obtain a dedicated-runner comparison and reconcile deliberate
-decision-digest changes through the documented PR-run reference process before
-shipping. Review and delivery belong to the caller; no publication, landing,
-Task completion or human approval is implied. Do not treat the noisy local
-comparison or unrelated CI receipts as performance acceptance.
-The compression changes search execution, so the older Engine Budget timing is
-not a measurement of this revision. Gate owns the affected suites and dedicated
-performance comparison.
+No known card behavior or fixture repair remains open. Gate still needs evidence
+for the merged runtime:
+
+- Complete the required debug coverage, including semantic conformance, under
+  the unchanged five-minute watchdog. The focused combined-payment and original
+  autoreset checks above pass on the merged runtime.
+- Check affected current-world/model admission paths against the merged tree.
+  The matching extension rebuild and shared-input parity above pass; earlier
+  admission results remain evidence for their recorded revisions.
+- Obtain a dedicated-runner Engine Budget comparison. Investigate any remaining
+  search slowdown; reconcile deliberate decision-digest changes through the
+  documented PR-run reference process (`docs/development.md`). Neither the
+  compression nor upstream's fast paths have a current performance receipt here.
+
+No product decision is needed to do those checks. A measured cost requiring
+acceptance remains open until reviewed; no such acceptance is recorded.
+Review and delivery belong to the caller. No human demo, publication, landing
+or Task completion is implied. The noisy failed comparison remains a failure,
+not performance acceptance.

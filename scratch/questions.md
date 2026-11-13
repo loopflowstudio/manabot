@@ -39,6 +39,7 @@
 
 - Sync onto `285cd49ce` (2026-11-12): retain main's unrelated w17 fixtures,
   parity hashes and belief receipts as directed by sync-conflicts. Neither
-  parent's hashes describe the combined catalog; gate must refresh current-world
-  evidence after rebuilding. Keep mana behavior in main's new printed/card/token
-  structure, including the four new definitions and Badgermole production.
+  parent's hashes described the combined catalog. Subsequent current-world
+  validation is recorded in `39784f2c3:scratch/mtg-297-heartbeat-of-spring.md`;
+  the active plan owns checks still needed after later merges. The four new
+  definitions and Badgermole production use main's printed/card/token structure.
