@@ -369,3 +369,36 @@ truncation as the index guard), and `scenarios._object_name` scans both object
 lists in one loop. No emitted value changes; Python only.
 `uv run --no-sync pytest tests/academy/test_learn_setup.py tests/academy/test_authored_match_parity.py tests/academy/test_authored_match_authority.py tests/verify/test_competency.py tests/verify/test_checkpoint_scenarios.py -q -x -W error::DeprecationWarning`
 -> 45 passed (87.31s). The digest script does not import either file; not rerun.
+
+## Concept review 3 (2026-11-13, HEAD `7410da93bc`): one consumer on a deprecated name
+
+Published surface, aliases, stub, docs and frozen spellings match the rename
+table. Nothing in the model changes and no product choice is open.
+
+Next implement direction:
+
+- `scripts/bench_states.py:97` reads `obs.agent_cards` / `obs.opponent_cards`
+  on a `managym.Observation` (arrived with main's `de39d601fb`; the realign
+  moved the Rust example `managym/examples/bench_states.rs` but not this
+  script). This is the "old names used in repository code" forbidden outcome
+  and warns on every checkpoint. Move to `agent_objects` / `opponent_objects`;
+  `max_cards_per_player` stays (frozen configuration key). The earlier searches
+  covered `manabot managym academy tests`, not `scripts/`; search
+  `scripts experiments/*.py` too when rechecking.
+- Rust closures over the object lists still bind `card`: `managym/src/decision.rs:371`
+  and `managym/src/decision_context.rs:128` (the latter matches any visible
+  object by id) -> `object`. `agent/env.rs:1746,1750` test closures likewise.
+  Binding names only; needs an extension rebuild only if you want the tests
+  rerun, and no bytes move.
+- `tests/env/test_object_record_aliases.py::test_object_list_alias_reads_and_writes_same_rows`
+  takes `rows = obs.agent_objects` for both seats, so the opponent case writes
+  the agent's rows into the opponent list. Use `getattr(obs, new)`.
+
+Left as is: `academy/authored_match_parity.py`, `academy/public_commitment_parity.py`
+read the frozen JSON key `opponent_cards`; `manabot/eval/cards.py` `CardData`
+is `card_query`'s; `heuristic.py`/`competency.py`/`action_cases.py` `c`/`card`
+bindings filter to hand or battlefield zones.
+
+Recheck: `uv run --no-sync python -W error::DeprecationWarning scripts/bench_states.py`
+on its smallest state selection (see its `--help`), the alias test under
+`-W error::DeprecationWarning`, and the digest script.
