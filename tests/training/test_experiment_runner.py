@@ -22,6 +22,7 @@ from manabot.experiment.execution import (
 from manabot.experiment.runner import run_experiment
 from manabot.infra.config import ModelConfig
 from manabot.reports.notebook import write_comparison_notebook
+from manabot.training.records import TrainingRun
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_monitor_evaluation import failure_summary
@@ -40,12 +41,17 @@ def demo_declaration() -> Experiment:
     base.world = managym.WORLD_VERSION
     base.id = f"fixture-{base.world}"
     base.stages = base.stages[:1]
-    # Work stays update-bounded; wall allowances include interpreter startup.
-    base.wall_seconds = 60
+    # Resource allowances are hang guards, including interpreter startup and
+    # parallel CI scheduling; the work is one small update per attempt.
+    base.wall_seconds = 120
     for stage in base.stages:
-        stage.execution.wall_seconds = 30
+        stage.execution.wall_seconds = 120
         stage.streams = 2
         stage.transitions = 8
+        # Exercise experiment orchestration without waiting for full games.
+        # Live monitoring still plays and replays its complete game cohorts.
+        stage.learning_seats = "one"
+        stage.batch_closure = "exact-quota"
     base.agent.hidden_dim = 8
     base.agent.num_attention_heads = 2
     # Four real monitoring cohorts include process startup and exact replay.
@@ -141,6 +147,13 @@ def test_tiny_comparison_evaluates_live_and_notebook_refresh_preserves_edits(
         pytest.fail(_experiment_failures(record, out / "monitoring"), pytrace=False)
     assert len(record.attempts) == 4
     assert all(a.run_id for a in record.attempts)
+    for attempt in record.attempts:
+        training = TrainingRun.model_validate_json(
+            (Path(attempt.path) / "run.json").read_text()
+        )
+        assert len(training.stages) == 1
+        assert training.stages[0].updates == 1
+        assert training.stages[0].learner_transitions == 16
     evaluation_attempts = [
         json.loads(p.read_text())
         for p in (out / "monitoring").glob("attempt-*/attempt.json")
@@ -200,7 +213,6 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
 ) -> None:
     from manabot.experiment import runner as runner
     from manabot.infra.files import atomic_json
-    from manabot.training.records import TrainingRun
     from manabot.training.regime import TrainingRegime
 
     launched: list[str] = []
@@ -287,7 +299,6 @@ def test_budget_exhaustion_retains_pending_work_without_launch(tmp_path: Path) -
 
 def test_live_diagnostics_and_requested_exports_remain_separate(tmp_path: Path) -> None:
     from manabot.experiment.config import Baseline, Experiment
-    from manabot.training.records import TrainingRun
     from tests.training.test_recovery import recipe
 
     value = recipe()
