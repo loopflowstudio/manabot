@@ -71,7 +71,7 @@ def validate(directory: Path, complete: bool) -> None:
         f"managym=={bot.version}",
         "torch>=2.15.0;sys_platform=='linux'",
         "torch>=2.15.0;sys_platform!='linux'",
-        "etude-sdk>=0.2.16",
+        "etude-sdk>=0.3.2",
     }.issubset(requirements):
         raise ValueError(
             "manabot must declare Torch/Etude minimums and its exact managym version"
