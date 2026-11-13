@@ -16,16 +16,17 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob
-from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.infra.config import BF16_MIN_HIDDEN_DIM, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.recipes.baseline import baseline
 from manabot.recipes.builders import with_capacity
 from manabot.training.regime import (
-    BF16_MIN_HIDDEN_DIM,
     DampedPolicyLearning,
+    Device,
     Execution,
     Precision,
     TrainingRegime,
+    ladder_precision,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
@@ -64,14 +65,51 @@ def test_auto_is_bf16_on_cuda_from_the_threshold_width(
     assert _at_width(wide, 128).stages[0].execution.resolved_precision == "float32"
 
 
-@pytest.mark.parametrize("device", ["cpu", "mps"])
-def test_ladder_is_float32_off_cuda(device: str) -> None:
-    data = _at_width(batched_baseline(), BF16_MIN_HIDDEN_DIM).authored_dump()
+def _on_device(regime: TrainingRegime, device: Device) -> TrainingRegime:
+    data = regime.authored_dump()
     stages = data["stages"]
     assert isinstance(stages, list)
     stages[0]["execution"]["device"] = device
-    restored = TrainingRegime.model_validate(data)
-    assert restored.stages[0].execution.resolved_precision == "float32"
+    return TrainingRegime.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    ("device", "width", "expected"),
+    [
+        ("cpu", BF16_MIN_HIDDEN_DIM - 8, "float32"),
+        ("cpu", BF16_MIN_HIDDEN_DIM, "float32"),
+        ("cpu", 384, "float32"),
+        ("mps", BF16_MIN_HIDDEN_DIM - 8, "float32"),
+        ("mps", BF16_MIN_HIDDEN_DIM, "bf16"),
+        ("mps", 384, "bf16"),
+        ("cuda", BF16_MIN_HIDDEN_DIM - 8, "float32"),
+        ("cuda", BF16_MIN_HIDDEN_DIM, "bf16"),
+        ("cuda", 384, "bf16"),
+    ],
+)
+def test_one_width_rule_resolves_auto_on_every_device(
+    device: Device, width: int, expected: Precision
+) -> None:
+    assert ladder_precision(device, width) == expected
+    regime = _on_device(_at_width(batched_baseline(), width), device)
+    execution = regime.stages[0].execution
+    assert execution.device == device
+    assert execution.resolved_precision == expected
+    # The record holds the resolved precision and reads back unchanged.
+    saved = regime.model_dump(mode="json")
+    assert saved["stages"][0]["execution"]["precision"] == expected
+    assert TrainingRegime.model_validate(saved) == regime
+
+
+def test_explicit_float32_wins_on_wide_mps() -> None:
+    wide = _on_device(_at_width(batched_baseline(), 384), "mps")
+    data = wide.authored_dump()
+    stages = data["stages"]
+    assert isinstance(stages, list)
+    stages[0]["execution"]["precision"] = "float32"
+    pinned = TrainingRegime.model_validate(data)
+    assert pinned.stages[0].execution.resolved_precision == "float32"
+    assert _at_width(pinned, 512).stages[0].execution.resolved_precision == "float32"
 
 
 def test_regimes_serialize_the_resolved_precision() -> None:
@@ -125,11 +163,18 @@ def test_precision_and_layout_share_authored_and_saved_resolution() -> None:
     assert "auto" not in str(restored.authored_dump())
 
 
-@pytest.mark.parametrize("declared", ["tf32", "bf16"])
-def test_reduced_precision_requires_cuda(declared: Precision) -> None:
-    with pytest.raises(ValidationError, match="requires CUDA"):
-        Execution(precision=declared)
-    assert Execution(device="cuda", precision=declared).precision == declared
+@pytest.mark.parametrize("device", ["cpu", "mps"])
+def test_tf32_requires_cuda(device: Device) -> None:
+    with pytest.raises(ValidationError, match="precision tf32 requires CUDA"):
+        Execution(device=device, precision="tf32")
+    assert Execution(device="cuda", precision="tf32").precision == "tf32"
+
+
+def test_bf16_requires_a_gpu_device() -> None:
+    with pytest.raises(ValidationError, match="precision bf16 requires CUDA or MPS"):
+        Execution(precision="bf16")
+    for device in ("cuda", "mps"):
+        assert Execution(device=device, precision="bf16").precision == "bf16"
 
 
 def test_tf32_sets_both_switches_and_float32_restores_the_process_defaults() -> None:
@@ -158,10 +203,12 @@ def test_only_bf16_autocasts(declared: Precision) -> None:
 
 
 @pytest.mark.filterwarnings("ignore:CUDA is not available")
-def test_bf16_autocasts_cuda_forwards() -> None:
-    context = torch_learner.forward_precision("bf16", torch.device("cuda"))
+@pytest.mark.filterwarnings("ignore:.*MPS.*:UserWarning")
+@pytest.mark.parametrize("device", ["cuda", "mps"])
+def test_bf16_autocasts_gpu_forwards(device: str) -> None:
+    context = torch_learner.forward_precision("bf16", torch.device(device))
     assert isinstance(context, torch.autocast)
-    assert (context.device, context.fast_dtype) == ("cuda", torch.bfloat16)
+    assert (context.device, context.fast_dtype) == (device, torch.bfloat16)
 
 
 @pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])

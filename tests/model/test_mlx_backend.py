@@ -30,9 +30,14 @@ from manabot.backends.torch.checkpoint import save_checkpoint  # noqa: E402
 from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.env.match import Match  # noqa: E402
 from manabot.env.observation import ObservationSpace  # noqa: E402
-from manabot.infra.config import MatchConfig, ModelConfig  # noqa: E402
+from manabot.infra.config import (  # noqa: E402
+    BF16_MIN_HIDDEN_DIM,
+    MatchConfig,
+    ModelConfig,
+)
 from manabot.policy.checkpoint import (  # noqa: E402
     canonical_parameters,
+    from_torch_state,
     read_safetensors,
     write_safetensors,
 )
@@ -315,6 +320,51 @@ def test_mixed_precision_preserves_master_updates(
         for _, p in tree_flatten(learner.optimizer.state)
         if isinstance(p, mx.array) and mx.issubdtype(p.dtype, mx.floating)
     )
+
+
+@pytest.mark.parametrize(
+    ("width", "expected"),
+    [
+        (BF16_MIN_HIDDEN_DIM - 8, "float32"),
+        (BF16_MIN_HIDDEN_DIM, "bfloat16"),
+        (384, "bfloat16"),
+    ],
+)
+def test_omitted_precision_follows_the_shared_width_rule(
+    width: int, expected: Precision
+) -> None:
+    """A policy, backend and learner built without a precision run bfloat16
+    from the width torch's GPU devices use, with float32 masters and outputs."""
+    from manabot.backends.mlx.arrays import default_precision, precision_dtype
+    from manabot.backends.mlx.checkpoint import MLXBackend, assemble
+    from manabot.training.regime import ladder_precision
+
+    assert default_precision(width) == expected
+    assert (ladder_precision("mps", width) == "bf16") == (expected == "bfloat16")
+    space = ObservationSpace()
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=width,
+            num_attention_heads=8,
+            world="ur-lessons-vs-gw-allies",
+            value_aggregation="masked_mean",
+        ),
+    )
+    weights = from_torch_state(
+        agent.config,
+        space.encoder.config,
+        {k: v.numpy() for k, v in agent.state_dict().items()},
+    )
+    policy, learner = MLXBackend().load(weights)
+    assert policy.precision == learner.precision == expected
+    assert learner.loss_scale == 1
+    assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
+    assert policy.programs().dtype == precision_dtype(expected)
+    # An explicit precision always wins over the width.
+    for explicit in ("float32", "bfloat16", "float16"):
+        assert assemble(weights, precision=explicit).precision == explicit
+        assert MLXBackend(explicit).load(weights)[0].precision == explicit
 
 
 @pytest.mark.parametrize("precision", ["bfloat16", "float16"])

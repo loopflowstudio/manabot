@@ -10,7 +10,8 @@ differentiates as a function (`mlx.nn.value_and_grad`).
 `loss` evaluates the objective and its gradients together, so the forward runs
 once; `step` clips the global gradient norm, applies Adam and refuses
 nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
-`gradients` returns them without stepping. Float32 is the default; explicit
+`gradients` returns them without stepping. The learner runs in its policy's
+precision (bfloat16 for wide models, float32 otherwise, or an explicit choice);
 bfloat16/float16 forwards keep float32 master weights, loss, clipping and Adam.
 Float16 uses fixed loss scaling (128); overflow is refused, never skipped.
 An optional recorder (`manabot.training.updates.health.OptimizerHealth`)

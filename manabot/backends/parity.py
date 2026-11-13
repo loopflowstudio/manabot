@@ -126,13 +126,16 @@ def backend_module(name: str) -> ModuleType:
 
 
 def backend(name: str, *, precision: Precision = "float32") -> Backend:
-    """Select explicit MLX compute precision; Torch remains the float32 reference."""
+    """Select explicit MLX compute precision; Torch remains the float32 reference.
+
+    Parity always names its precision, so MLX's width default never selects
+    the tolerances a report is held to."""
     module = backend_module(name)
-    if precision == "float32":
-        return cast(Backend, module.checkpoint.BACKEND)
-    if name != "mlx":
+    if name == "mlx":
+        return cast(Backend, module.checkpoint.MLXBackend(precision=precision))
+    if precision != "float32":
         raise ValueError("half-precision parity is supported only for the MLX backend")
-    return cast(Backend, module.checkpoint.MLXBackend(precision=precision))
+    return cast(Backend, module.checkpoint.BACKEND)
 
 
 def minibatch_loss(
