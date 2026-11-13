@@ -294,6 +294,24 @@ continuation example may stay as an example.
 Open choices (CLI recipe-config fields, local follower) stay in questions.md
 for demo, additive and non-blocking as before. Delivery obligations unchanged.
 
+## Concept review 13: nothing to change in the design — 2026-11-13
+
+Read the QA follow-through (`82991cf85`, `2d9fcf85c`) against the loop, CLI
+and guide. Three endings of a local command are now distinct and each says
+what to do next: planned stop (75, state saved), Ctrl-C (130, last saved state
+kept), reused `--out` for another run (`StateMismatch`, CLI usage error). No
+name or interaction needs to change. PR #103 still open at `105abdd`; origin/main
+has nothing new.
+
+For the delivery check with the released SDK, not a Manabot change: recipes
+call `self_play` inside `track`, so a refused `--out` is raised after Etude
+opened the attempt. Under `105abdd` that marks a finished run failed (QA
+probe), so `StateMismatch`'s "before anything is trained or written" and the
+guide's "refused before training" hold for `state.pt` and checkpoints only.
+When the Etude fix lands, confirm the refused reuse leaves the run's state,
+seed and config record as they were; do not move the check ahead of `track`
+or add a Manabot status store to compensate.
+
 ## QA follow-through — 2026-11-13
 
 Ctrl-C now exits 130 with the output directory to reuse and guidance to resume
