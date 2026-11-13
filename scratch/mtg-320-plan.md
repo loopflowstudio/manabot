@@ -186,3 +186,34 @@ every entry, with complete commands: `29423d3fdf:scratch/mtg-320-plan.md`
   tap cost` (pool 84736ef2 vs 56f0ddb0) occurs identically on main: an existing
   bug, not this change. Two Academy games reached Game Over with no page
   errors. Receipts: `scratch/qa.html`.
+
+## Widened-local cleanup for steer fedebf6b (2026-11-13)
+
+`docs/engine.md` `#### Names`, third bullet: returning a card as an `ObjectId`
+is an explicit widening, and a function does not widen a card into an
+`ObjectId` local only to call object functions. No other doc binds this.
+
+- Widened locals removed from `priority_card_ability_actions`,
+  `priority_action_for_card`, `can_cast_with` and
+  `prepare_card_activated_ability`; Action, Payment and stack fields widen at
+  assignment. Compression then removed the same pattern from
+  `ZoneManager::contains` and `top` (`state/src/zone.rs`). The remaining
+  `let x: ObjectId = x.into()` lines are `impl Into<ObjectId>` functions that
+  use the id themselves.
+- The steer regex counts 76→43 matching lines from 66e8b7ae5; 17 are card-name
+  strings on both sides, so 59→26 CardId lines (an earlier 18/24 split was
+  wrong). The PR draft lists each retained match and its reason.
+- Compression review of the rest (candidate helpers in `flow/decision.rs`,
+  `chosen_card`, `ZoneStore`): nothing further to cut. The paired
+  `*_objects`/`*_candidates` helpers stay because observations show visitors
+  while choices are card-only.
+- Validation on the final tree: `CARGO_BUILD_JOBS=2 cargo nextest run
+  --manifest-path managym/Cargo.toml --profile ci --test-threads 2 -E
+  'test(card_ids_narrow_kind) or test(card_zone_readers_preserve) or
+  test(typed_card_zones_preserve) or test(landcycl) or
+  test(kyoshi_battle_fan)'`: 6 passed, 1234 skipped (0.034 s). An earlier run
+  of the action/play edits also passed Force of Negation's alternative-cost
+  test and workspace Clippy with warnings denied (run
+  `79f5c7ad-fff8-458b-b116-6fbb792a5b2e`); Clippy was not rerun after the
+  two-line `zone.rs` edit.
+- Gate and delivery own Engine Budget reporting and publication; stop at review.

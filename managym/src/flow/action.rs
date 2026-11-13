@@ -388,7 +388,6 @@ impl Game {
         let mut actions = Vec::new();
         for zone in [ZoneType::Hand, ZoneType::Graveyard] {
             for card in self.state.zone_cards(zone, player) {
-                let object = ObjectId::from(card);
                 for ability_index in 0..self.state.objects[card].activated_abilities.len() {
                     let Some(ability) = self.card_ability_in_zone(player, card, ability_index)
                     else {
@@ -410,7 +409,7 @@ impl Game {
                     {
                         actions.push(Action::ActivateCardAbility {
                             player,
-                            object,
+                            object: card.into(),
                             ability_index,
                         });
                     }
@@ -421,22 +420,21 @@ impl Game {
     }
 
     fn priority_action_for_card(&self, player: PlayerId, card: CardId) -> Option<Action> {
-        let object_id = ObjectId::from(card);
         let object = &self.state.objects[card];
-        if !self.may_play_from_zone(player, object_id) {
+        if !self.may_play_from_zone(player, card) {
             return None;
         }
         if object.types.is_land() {
             return self.can_play_land(player).then_some(Action::PlayLand {
                 player,
-                object: object_id,
+                object: card.into(),
             });
         }
         if !object.types.is_castable() {
             return None;
         }
 
-        let can_cast_now = if self.has_instant_timing(player, object_id) {
+        let can_cast_now = if self.has_instant_timing(player, card) {
             self.can_cast_instants(player)
         } else {
             self.can_cast_sorceries(player)
@@ -447,7 +445,7 @@ impl Game {
         self.can_cast_with(player, card, Default::default())
             .then_some(Action::CastSpell {
                 player,
-                object: object_id,
+                object: card.into(),
             })
     }
 
@@ -455,33 +453,32 @@ impl Game {
     /// `player` can pay its total cost with `cast`'s choices. Timing and zone
     /// permission are the caller's.
     pub(crate) fn can_cast_with(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
-        let object_id = ObjectId::from(card);
         let object = &self.state.objects[card];
-        if object.spell_modes().is_some() && self.legal_spell_modes(player, object_id).is_empty() {
+        if object.spell_modes().is_some() && self.legal_spell_modes(player, card).is_empty() {
             return false;
         }
         // Every mandatory targeting requirement needs a legal target.
         for requirement in object.target_requirements() {
             if requirement.min > 0
                 && self
-                    .legal_targets_for_requirement(player, object_id, &requirement)
+                    .legal_targets_for_requirement(player, card, &requirement)
                     .is_empty()
             {
                 return false;
             }
         }
 
-        let Some(cost) = self.effective_spell_cost(player, object_id, cast, None) else {
+        let Some(cost) = self.effective_spell_cost(player, card, cast, None) else {
             return true;
         };
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = object.sacrifice_cost() else {
-            return self.can_pay_cast(player, object_id, cast)
+            return self.can_pay_cast(player, card, cast)
                 || (object.exile_alternative().is_some()
                     && self.can_pay_cast(
                         player,
-                        object_id,
+                        card,
                         CastChoices {
                             kicked: true,
                             ..cast
@@ -489,7 +486,7 @@ impl Game {
                     ));
         };
         let payment = Payment::Spell {
-            object: object_id,
+            object: card.into(),
             cast,
             mode: None,
             targets: Vec::new(),

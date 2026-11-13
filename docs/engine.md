@@ -693,9 +693,12 @@ pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(),
   trait-object or function-pointer signature, a serialized field, a PyO3
   binding, or a hot path where the generic measurably costs. A caller holding
   a `CardId` writes `card.into()` there. Explicit widening also remains when
-  storing a card in an `ObjectId` field or collection, comparing mixed ids,
+  storing a card in an `ObjectId` field or collection (an `Action` or event
+  field, a mixed list), returning it as an `ObjectId`, comparing mixed ids,
   or implementing the checked indexing traits. Private test command builders
-  can retain their concrete transport signature.
+  can retain their concrete transport signature. A function does not widen a
+  card into an `ObjectId` local only to call object functions with it; it
+  passes the `CardId`.
 
 `Object::is_card()` remains for code that only asks the question.
 

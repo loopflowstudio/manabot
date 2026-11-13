@@ -29,43 +29,51 @@ a wrapper hands the id to the object function it calls without converting
 first. Observation definition counting accepts either id kind.
 Card-only functions retain `CardId` and checked construction is unchanged.
 
-Audited explicit CardId widening expressions: **88 before → 41 after** against
-66e8b7ae5, including inline/integration tests, iterator maps and widened locals.
-This is broader than the steer's approximate call-site count: it also counts
-stored values, comparisons and conversion assertions. EntityId conversions and
-card-name string conversions are excluded. No performance exception is claimed.
+The steer's exact `git grep -nE` expression now reports **76 before → 43
+after** (baseline `66e8b7ae5`, working tree after this cleanup). Both include
+17 card-name string conversions in `possible_worlds.rs`; excluding those gives
+**59 → 26 CardId widening sites**. These are matching source lines, not calls.
+The earlier broader 88→41 audit was historical and used a different scope.
+Removing four widened locals increases the grep count by one because concrete
+transport fields now convert independently. No object API needs a performance
+exception.
 
-Every retained site is below (paths under `managym/`; line numbers are the local
-conversion-cleanup source). These conversions cross a storage, standard-library,
-trait or assertion boundary; they are not skipped object API migrations.
+Every retained match involving CardId is listed below (paths under `managym/`):
 
 | Sites | Reason |
 | --- | --- |
-| `cards/tests/cards/stx.rs:568` | Compare a checked Lesson with the support helper's `Vec<ObjectId>` using standard slice membership. |
-| `src/agent/observation.rs:2055` | Combine card and permanent activation sources into one `Option<ObjectId>` projection. |
-| `src/flow/action.rs:369,381,414,448,599,612` | Construct Action/Payment transport fields; the three widened locals supply concrete mixed-object fields. |
-| `src/flow/cast_permission.rs:215` | Collect foretold cards into a `Vec<ObjectId>` alongside hidden slots. |
-| `src/flow/decision.rs:1798,1808` | Construct discard Action fields. |
-| `src/flow/decision.rs:2413,2468,2516,2897` | Compare typed candidates with object-based command/offer identities. |
-| `src/flow/decision.rs:3224,3260,3273,3553,3630` | Private Learn test helper constructs a concrete object-based Action. |
-| `src/flow/decision.rs:3247,3838` | Compare checked cards with event/Action object fields in assertions. |
-| `src/flow/decision.rs:3269,3303,3307,3315,3319` | Construct object-based Action fixtures, including rejection cases. |
-| `src/flow/play.rs:173` | Compare a checked library-top result with a mixed object's identity. |
+| `src/agent/observation.rs:2114` | Combine card and permanent activation sources as `Option<ObjectId>`. |
+| `src/flow/action.rs:379,412,430,448,489,606,619` | Fill concrete Action or Payment object fields. |
+| `src/flow/decision.rs:1909,1919,3443` | Fill object-based Action fields, including a rejection fixture. |
+| `src/flow/decision.rs:2553,2608,2656,3037` | Compare checked candidates with object-based command identities. |
+| `src/flow/decision.rs:3364,3693,3770` | Private test helper accepts concrete command transport. |
+| `src/flow/decision.rs:3387,3978` | Compare checked cards with event/Action object fields in assertions. |
 | `src/flow/play.rs:999` | Exclude the casting object from checked alternative-cost candidates. |
-| `src/flow/play.rs:2020,2131` | Combine card and permanent payment sources as `Option<ObjectId>`. |
-| `src/flow/play.rs:2361` | Capture a concrete `ActivatedAbilityOnStack.source_object`. |
-| `src/flow/search.rs:100`, `src/flow/selection_sampling.rs:138` | Extend mixed hidden-object collections with foretold cards. |
-| `state/src/game_object.rs:271,284` | Implement `Index<CardId>`/`IndexMut<CardId>` through the ObjectId index while checking kind in debug. |
-| `tests/rules/cr_400_identity.rs:209` | Assert the free widening preserves the original id. |
-| `tests/rules/cr_400_identity.rs:277,308` | Assert typed scans exclude a transient token's object id. |
-| `tests/rules/cr_400_identity.rs:353,392` | Compare typed scan results with independently specified object rows. |
+| `src/flow/play.rs:2043,2154` | Combine card and permanent payment sources as `Option<ObjectId>`. |
+| `src/flow/play.rs:2405` | Fill `ActivatedAbilityOnStack.source_object`. |
+| `state/src/game_object.rs:271,284` | Implement checked indexing through the ObjectId index. |
 
-Conversion cleanup and its compression passed 44 focused debug tests (1.242 s)
+Additional widenings outside that regex remain at standard collection or return
+boundaries: `cards/tests/cards/stx.rs:573` (mixed hand membership),
+`src/flow/play.rs:173` (compare library-top card with object),
+`src/flow/cast_permission.rs:226`, `src/flow/search.rs:100` and
+`src/flow/selection_sampling.rs:141` (collect or extend mixed object lists), and
+`tests/rules/cr_400_identity.rs:209,277,308,353,392` (numeric identity and typed
+scan assertions). None converts a card merely to pass it to an object API.
+
+Earlier conversion cleanup and its compression passed 44 focused debug tests (1.242 s)
 and workspace all-target/all-feature Clippy with warnings denied. Formatting and whitespace
 checks passed. The cp313/arm64 wheel rebuilt, its matching extension was
 installed atomically, and a fresh import passed. Final-head conformance, replay
 bytes and Engine Budget (unchanged
 digests) still belong to gate. Existing seeded QA below predates this pass.
+
+The final four-local cleanup passed six focused debug tests (checked card/zone
+identity, transient occupants, hidden reassignment, landcycling and Force of
+Negation's alternative cost) and all-target/all-feature workspace Clippy with
+warnings denied. The cp313/arm64 release wheel rebuilt, its extension was
+installed atomically, and a fresh import, rustfmt and whitespace checks passed.
+Exact command and run ID are in `scratch/mtg-320-plan.md`.
 
 ## Seeded QA before the conversion cleanup and main merge
 

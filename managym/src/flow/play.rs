@@ -2381,16 +2381,15 @@ impl Game {
         ability_index: usize,
         targets: Vec<Target>,
     ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
-        let object = ObjectId::from(card);
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
             .ok_or_else(|| AgentError("activation source left its zone".into()))?;
         let cost = ability
             .discard_source
-            .then(|| self.zone_move_proposal(object, ZoneType::Graveyard, Default::default()));
+            .then(|| self.zone_move_proposal(card, ZoneType::Graveyard, Default::default()));
         // The completion replaces this identity after the proposed cost commits.
         let source_ref = self
-            .current_object_ref(object)
+            .current_object_ref(card)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let id = self.state.id_gen_mut().next_id();
         Ok((
@@ -2402,8 +2401,8 @@ impl Game {
                 inherited_from: None,
                 id,
                 controller: player,
-                source_definition_id: self.state.objects[object].definition_id,
-                source_object: object,
+                source_definition_id: self.state.objects[card].definition_id,
+                source_object: card.into(),
                 source_ref,
                 ability_index,
                 targets,

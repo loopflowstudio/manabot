@@ -196,12 +196,10 @@ impl ZoneManager {
     }
 
     pub fn top(&self, zone: ZoneType, player: PlayerId) -> Option<ObjectId> {
-        let objects = self.zone_objects(zone, player);
-        objects.last().copied()
+        self.zone_objects(zone, player).last().copied()
     }
 
     pub fn contains(&self, object: impl Into<ObjectId>, zone: ZoneType, player: PlayerId) -> bool {
-        let object: ObjectId = object.into();
         self.zone_objects(zone, player).contains(object)
     }
 
