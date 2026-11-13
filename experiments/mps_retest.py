@@ -42,9 +42,17 @@ if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
     from manabot.policy.protocol import Settings, Targets
 
-Arm = Literal["cpu", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32"]
-ARMS: tuple[Arm, ...] = ("cpu", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32")
-HALF = ("mps-bf16", "mps-f16")
+Arm = Literal["cpu", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32", "mlx-bf16", "mlx-f16"]
+ARMS: tuple[Arm, ...] = (
+    "cpu",
+    "mps-f32",
+    "mlx-f32",
+    "mps-bf16",
+    "mlx-bf16",
+    "mps-f16",
+    "mlx-f16",
+)
+HALF = ("mps-bf16", "mps-f16", "mlx-bf16", "mlx-f16")
 WIDTHS = (64, 96, 160, 384, 512, 768, 1024)
 STREAMS = (256, 512, 1024)
 LAYERS = {64: 2, 96: 4, 160: 8, 384: 8, 512: 8, 768: 8, 1024: 8}
@@ -55,6 +63,8 @@ LABELS = {
     "mps-bf16": "PyTorch MPS · bfloat16",
     "mps-f16": "PyTorch MPS · float16",
     "mlx-f32": "MLX · float32",
+    "mlx-bf16": "MLX · bfloat16",
+    "mlx-f16": "MLX · float16",
 }
 
 
@@ -85,6 +95,7 @@ class Runner(Protocol):
     def step(self, batch: Batch) -> float: ...
     def collection(self) -> AbstractContextManager[Collect]: ...
     def reset(self) -> None: ...
+    def parameters(self) -> dict[str, np.ndarray]: ...
     def sync(self) -> None: ...
     def memory(self) -> dict[str, int]: ...
     def close(self) -> None: ...
@@ -258,6 +269,16 @@ class TorchRunner:
         # is an error receipt, never a deceptively fast learner step.
         self.scaler = torch.amp.GradScaler("mps", init_scale=128, enabled=self.scaled)
 
+    def parameters(self) -> dict[str, np.ndarray]:
+        from manabot.policy.checkpoint import canonical_parameters
+
+        return canonical_parameters(
+            {
+                name: p.detach().cpu().numpy().copy()
+                for name, p in self.agent.named_parameters()
+            }
+        )
+
     def sync(self) -> None:
         import torch
 
@@ -405,11 +426,12 @@ class TorchRunner:
 
 
 class MLXRunner:
-    def __init__(self, agent: ActorCritic) -> None:
+    def __init__(self, agent: ActorCritic, arm: Arm = "mlx-f32") -> None:
         import mlx.core as mx
 
         from manabot.backends.mlx.checkpoint import build
 
+        self.dtype = {"mlx-bf16": mx.bfloat16, "mlx-f16": mx.float16}.get(arm)
         self.encoder = agent.observation_space.encoder
         self.policy, _ = build(
             agent.config,
@@ -425,10 +447,17 @@ class MLXRunner:
         self.policy.clear_cache()
 
     def reset(self) -> None:
-        from manabot.backends.mlx.learner import Learner
+        from manabot.backends.mlx.learner import Learner, MixedPrecisionLearner
 
         self.policy.update(self.initial)
-        self.learner = Learner(self.policy, minibatch_rows=1)
+        self.learner = (
+            Learner(self.policy, minibatch_rows=1)
+            if self.dtype is None
+            else MixedPrecisionLearner(self.policy, dtype=self.dtype, minibatch_rows=1)
+        )
+
+    def parameters(self) -> dict[str, np.ndarray]:
+        return self.learner.parameters()
 
     def sync(self) -> None:
         import mlx.core as mx
@@ -461,7 +490,8 @@ class MLXRunner:
         trimmed = self._trim(batch)
         assert trimmed.targets is not None and trimmed.settings is not None
         prepared = self.policy.prepare_admitted(trimmed.observations)
-        logits, values = self.policy.evaluate(prepared)
+        with self.learner.forward_precision():
+            logits, values = self.policy.evaluate(prepared)
         import manabot.backends.mlx as backend
         from manabot.backends.parity import minibatch_loss
 
@@ -507,22 +537,21 @@ class MLXRunner:
 
     @contextmanager
     def collection(self) -> Iterator[Collect]:
-        try:
-            self.policy.cache_programs()
-            self.sync()
+        with self.learner.forward_precision():
+            try:
+                self.policy.cache_programs()
+                self.sync()
 
-            def collect(batch: Batch) -> np.ndarray:
-                trimmed = self._trim(batch)
-                # GPU arms attend the same bucket shape. CPU additionally
-                # compacts inference columns, as production PolicyInference does.
-                logits, _ = self.policy.evaluate(
-                    self.policy.prepare_admitted(trimmed.observations)
-                )
-                return _pad(logits, batch)
+                def collect(batch: Batch) -> np.ndarray:
+                    trimmed = self._trim(batch)
+                    logits, _ = self.policy.evaluate(
+                        self.policy.prepare_admitted(trimmed.observations)
+                    )
+                    return _pad(logits, batch)
 
-            yield collect
-        finally:
-            self.policy.clear_cache()
+                yield collect
+            finally:
+                self.policy.clear_cache()
 
     def memory(self) -> dict[str, int]:
         import mlx.core as mx
@@ -542,7 +571,9 @@ def _pad(logits: np.ndarray, batch: Batch) -> np.ndarray:
 @contextmanager
 def _runner(capture: Path, width: int, arm: Arm) -> Iterator[Runner]:
     agent = _agent(capture, width)
-    runner = MLXRunner(agent) if arm == "mlx-f32" else TorchRunner(agent, arm)
+    runner = (
+        MLXRunner(agent, arm) if arm.startswith("mlx-") else TorchRunner(agent, arm)
+    )
     # MLX owns its converted weights; do not keep a second Torch model resident.
     del agent
     try:
@@ -555,7 +586,7 @@ def _compare(
     actual: Evaluation, reference: Evaluation, legal: np.ndarray, arm: Arm
 ) -> dict[str, Any]:
     expected = reference.gradients
-    if arm == "mlx-f32":
+    if arm.startswith("mlx-"):
         from manabot.backends.mlx.checkpoint import mlx_gradients
 
         expected = mlx_gradients(expected)
@@ -589,6 +620,8 @@ def _compare(
         "values_max_abs": float(np.abs(actual.values - reference.values).max()),
         "loss": actual.loss,
         "reference_loss": reference.loss,
+        "loss_relative": abs(actual.loss - reference.loss)
+        / max(abs(reference.loss), 1e-12),
         "gradient_cosine": float(cosine),
         "gradient_min_cosine": cosines[worst],
         "gradient_worst": worst,
@@ -701,6 +734,9 @@ def bench(
         yield None  # All workers allocate before the coordinator admits the block.
         if phase == "parity":
             result = runner.evaluate(batch)
+            runner.reset()
+            runner.step(batch)
+            parameters = runner.parameters()
             path = _reference_path(out, metadata, width, size)
             collection = _batch(capture, "collection", size)
             runner.reset()
@@ -715,10 +751,26 @@ def bench(
                     "values": result.values,
                     "loss": np.asarray(result.loss),
                     **{f"grad/{k}": v for k, v in result.gradients.items()},
+                    **{f"step/{k}": v for k, v in parameters.items()},
                 }
                 if arm == "cpu"
                 else None,
             )
+            expected_parameters = {
+                k[5:]: v for k, v in arrays.items() if k.startswith("step/")
+            }
+            if arm.startswith("mlx-"):
+                from manabot.backends.mlx.checkpoint import mlx_parameters
+
+                expected_parameters = mlx_parameters(expected_parameters)
+            if parameters.keys() != expected_parameters.keys():
+                raise ValueError("one-step parameter sets differ")
+            row["step_parameter_max_abs"] = max(
+                float(np.abs(value - expected_parameters[name]).max())
+                for name, value in parameters.items()
+            )
+            row["step_max_grad_norm"] = batch.settings.max_grad_norm
+            row["passes_step"] = row["step_parameter_max_abs"] <= 1e-6
             collection_reference = arrays["collection_logits"]
             legal_collection = collection.observations["actions_valid"] > 0
             row["collection_logits_max_abs"] = float(
@@ -1476,6 +1528,8 @@ def _details(
                                 )
                             ],
                             _number(loss_delta),
+                            _number(r.get("loss_relative")),
+                            _number(r.get("step_parameter_max_abs")),
                             _number(r.get("reference_loss")),
                             _number(r.get("gradient_cosine")),
                             _number(r.get("gradient_min_cosine")),
@@ -1505,6 +1559,8 @@ def _details(
                     "Collection logit Δ",
                     "Value Δ",
                     "Loss abs Δ",
+                    "Loss relative Δ",
+                    "One-step parameter Δ",
                     "CPU loss",
                     "Gradient cosine",
                     "Min tensor cosine",
@@ -1865,6 +1921,8 @@ def _update_chart(out: Path, suffix: str, hosts: list[HostReport]) -> None:
             "mps-bf16": "MPS\nbf16",
             "mps-f16": "MPS\nf16",
             "mlx-f32": "MLX\nf32",
+            "mlx-bf16": "MLX\nbf16",
+            "mlx-f16": "MLX\nf16",
         }
         rate.set_xticks(range(len(arms)), [labels[arm] for arm in arms], fontsize=9)
         rate.set_ylabel("Learner decisions/s", fontsize=9)
@@ -1900,7 +1958,7 @@ def _update_chart(out: Path, suffix: str, hosts: list[HostReport]) -> None:
         if same
         else "Sampled decisions differ; see report."
     )
-    caption += "\nHalf arms: bfloat16 autocast; float16 autocast + scaler. "
+    caption += "\nHalf: MPS autocast; MLX half forwards with f32 masters/Adam. Float16 uses scaling. "
     caption += (
         "Cross-host engine component; see report."
         if cross_host

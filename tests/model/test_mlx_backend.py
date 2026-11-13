@@ -239,3 +239,65 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         np.testing.assert_allclose(
             actual[3][key], expected[3][key], atol=2e-6, err_msg=key
         )
+
+
+@pytest.mark.parametrize("dtype", [mx.bfloat16, mx.float16])
+def test_mixed_precision_preserves_master_updates(
+    tmp_path: Path, dtype: mx.Dtype
+) -> None:
+    """Half forwards preserve small updates in float32 masters and Adam state."""
+    import manabot.backends.mlx as backend
+    from manabot.backends.mlx.checkpoint import build
+    from manabot.backends.mlx.learner import MixedPrecisionLearner
+    from manabot.backends.parity import minibatch_loss
+    from manabot.policy.protocol import Settings, Targets
+
+    _, _, agent = _converted(tmp_path)
+    encoder = agent.observation_space.encoder
+    obs = {k: np.zeros((2, *shape), np.float32) for k, shape in encoder.shapes.items()}
+    obs["agent_player_valid"][:] = obs["opponent_player_valid"][:] = 1
+    obs["actions_valid"][:, :2] = 1
+    obs["action_focus"][:] = -1
+    policy, _ = build(
+        agent.config,
+        encoder.config,
+        {k: v.numpy() for k, v in agent.state_dict().items()},
+    )
+    learner = MixedPrecisionLearner(policy, dtype=dtype, minibatch_rows=2)
+    batch = policy.prepare(obs)
+    settings = Settings(1e-5, 0.2, 0.1, 0.05, 0.01)
+    targets = Targets(
+        np.zeros(2, np.int64),
+        np.array([1, -1], np.float32),
+        np.ones(2, np.float32),
+        np.ones(2, bool),
+        np.where(batch.legal, np.log(0.5), -np.inf).astype(np.float32),
+        np.where(batch.legal, 0.5, 0).astype(np.float32),
+    )
+    with learner.forward_precision():
+        assert policy.programs().dtype == dtype
+        assert all(p.dtype == dtype for _, p in tree_flatten(policy.parameters()))
+    before = learner.parameters()
+    loss = minibatch_loss(backend, policy, learner, batch, targets, settings)
+    assert loss.dtype == mx.float32 and bool(mx.isfinite(loss))
+    gradients = learner.gradients(loss)
+    norm = np.sqrt(
+        sum(np.square(g.astype(np.float64)).sum() for g in gradients.values())
+    )
+    assert norm > settings.max_grad_norm
+    learner.set_learning_rate(settings.learning_rate)
+    learner.step(loss, settings.max_grad_norm)
+    after = learner.parameters()
+    changed = False
+    for name, value in after.items():
+        assert value.dtype == np.float32
+        grad = gradients[name] * min(1, settings.max_grad_norm / norm)
+        expected = before[name] - settings.learning_rate * grad / (np.abs(grad) + 1e-5)
+        np.testing.assert_allclose(value, expected, atol=1e-7, rtol=1e-6)
+        changed |= bool(np.any(value != before[name]))
+    assert changed
+    assert all(
+        p.dtype == mx.float32
+        for _, p in tree_flatten(learner.optimizer.state)
+        if isinstance(p, mx.array) and mx.issubdtype(p.dtype, mx.floating)
+    )

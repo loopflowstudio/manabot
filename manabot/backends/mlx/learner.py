@@ -16,14 +16,14 @@ counts steps and rejections; the sampled gradient and parameter detail it
 reads from torch modules stays absent here.
 """
 
-from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
-from mlx.utils import tree_flatten
+from mlx.utils import tree_flatten, tree_map
 import numpy as np
 
 from manabot.backends.mlx.arrays import flat_numpy
@@ -157,6 +157,52 @@ class Learner:
     def parameters(self) -> dict[str, np.ndarray]:
         """A host copy of the parameters in MLX's layout."""
         return flat_numpy(self.agent.parameters())
+
+
+class MixedPrecisionLearner(Learner):
+    """Measurement-only half forwards with float32 master weights and Adam state.
+
+    Casts are inside the differentiated function, so gradients return to the
+    float32 masters before clipping and Adam. Losses stay float32. Float16 uses
+    a fixed loss scale (128); overflow refuses the step rather than silently
+    skipping work in a timing comparison. This does not change regime precision
+    admission or the ordinary float32 learner.
+    """
+
+    def __init__(
+        self, agent: "MLXActorCritic", *, dtype: mx.Dtype, minibatch_rows: int
+    ) -> None:
+        if dtype not in (mx.bfloat16, mx.float16):
+            raise ValueError("mixed precision requires bfloat16 or float16")
+        super().__init__(agent, minibatch_rows=minibatch_rows)
+        self.dtype = dtype
+        self.loss_scale = 128.0 if dtype == mx.float16 else 1.0
+
+    @contextmanager
+    def forward_precision(self) -> Iterator[None]:
+        masters = self.agent.parameters()
+        self.agent.update(tree_map(lambda p: p.astype(self.dtype), masters))
+        try:
+            yield
+        finally:
+            self.agent.update(masters)
+
+    def loss(
+        self, objective: Callable[[], tuple[mx.array, ...]]
+    ) -> tuple[mx.array, ...]:
+        def scaled() -> tuple[mx.array, ...]:
+            with self.forward_precision():
+                result = objective()
+            return (result[0].astype(mx.float32) * self.loss_scale, *result[1:])
+
+        result = super().loss(scaled)
+        assert self._pending is not None
+        loss = result[0] / self.loss_scale
+        gradients = tree_map(
+            lambda g: g.astype(mx.float32) / self.loss_scale, self._pending[1]
+        )
+        self._pending = (loss, gradients)
+        return (loss, *result[1:])
 
 
 def _untracked(section: str) -> AbstractContextManager[object]:
