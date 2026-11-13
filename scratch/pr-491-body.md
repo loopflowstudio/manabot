@@ -1,5 +1,3 @@
-<!-- Draft body for PR #491. Keep the loopflow task-pr-context block the PR already has. -->
-
 The engine marked tokens and copies of spells with one `is_token` flag stored on the object's definition, and called every runtime object a `Card`. Each game object now has a kind taken from the Comprehensive Rules (`ObjectKind::Card`, `Token` or `SpellCopy`), and the runtime record is named for what it is: `Object`, named by `ObjectId`. Card-only consumers narrow through `GameState::card_id` and carry `CardId`, so a token or a copy of a spell cannot enter those operations.
 
 This builds on [MTG-298 · Give tokens their own `TokenDefinition` type](https://github.com/loopflowstudio/manabot/pull/476), which split token definitions from card definitions and has merged into main.
@@ -17,7 +15,7 @@ This builds on [MTG-298 · Give tokens their own `TokenDefinition` type](https:/
 
 - **Library and hand store checked cards plus explicit visitors.** One ordered `CardZoneEntry` sequence stores `Card(CardId)` or `Transient(ObjectId)`. Tokens and spell copies retain their position until state-based actions; there is no parallel membership or ordering list. Borrowed reads and serialization project the original numeric ids, while card-only reads use stored checked ids. Reordering preserves entry kinds, and shuffling the full sequence preserves RNG consumption. This replaces the earlier all-ObjectId fallback.
 - **Graveyard and exile still store `ObjectId`.** They hold the same contents as library and hand (cards plus transient non-cards), but only library and hand record the kind per entry; card-only readers of graveyard and exile narrow through `GameState::zone_cards` on each read. Typing them the same way would give the four card zones one shape, at twice the entry width in state that search clones. Not done here.
-- **Byte compatibility remains an acceptance requirement.** Serde keeps the old field names (`#[serde(rename = "card")]`). Observation `is_token` is `!is_card()`, and the match-state hash records a non-card object with `is_token: true`, as before. The earlier rename reproduced `semantic-kernel-w17-v2`; Semantic Kernel Conformance passed on 8e5e8e62b; final seeded QA remains. `Debug` output of the renamed types does change.
+- **Byte compatibility remains an acceptance requirement.** Serde keeps the old field names (`#[serde(rename = "card")]`). Observation `is_token` is `!is_card()`, and the match-state hash records a non-card object with `is_token: true`, as before. Current-head Semantic Kernel Conformance passed; the final seeded comparison below also matches observations and state hashes. `Debug` output of the renamed types does change.
 - **Card-only choices.** Transient tokens stay visible in their zones but are excluded from card-only play, activation, discard and search choices. `SelectCards` narrows to cards only when it reads a zone or milled cards; `CreatedThisWay` still selects the new token (Kyoshi Battle Fan). Direct card-only commands reject them too. Generic movement, inspection and draw ordering still include them. Predicate `token` filters match only `ObjectKind::Token`; spell copies used to match, though no defined card filters spells by token status.
 - **No emblem or copy-of-a-card kind.** No defined card creates either; the docs say "none yet".
 
@@ -61,101 +59,27 @@ boundaries: `cards/tests/cards/stx.rs:573` (mixed hand membership),
 `tests/rules/cr_400_identity.rs:209,277,308,353,392` (numeric identity and typed
 scan assertions). None converts a card merely to pass it to an object API.
 
-Earlier conversion cleanup and its compression passed 44 focused debug tests (1.242 s)
-and workspace all-target/all-feature Clippy with warnings denied. Formatting and whitespace
-checks passed. The cp313/arm64 wheel rebuilt, its matching extension was
-installed atomically, and a fresh import passed. Final-head conformance, replay
-bytes and Engine Budget (unchanged
-digests) still belong to gate. Existing seeded QA below predates this pass.
+## Validation
 
-The final four-local cleanup passed six focused debug tests (checked card/zone
-identity, transient occupants, hidden reassignment, landcycling and Force of
-Negation's alternative cost) and all-target/all-feature workspace Clippy with
-warnings denied. The cp313/arm64 release wheel rebuilt, its extension was
-installed atomically, and a fresh import, rustfmt and whitespace checks passed.
-Exact command and run ID are in `scratch/mtg-320-plan.md`.
+- [Current-head CI](https://github.com/loopflowstudio/manabot/actions/runs/43493623873) at `349d643e52`: Rust Tests, Python Unit Tests, all six Integration groups, Academy Integration, both conformance jobs, Academy UI and Clean-machine Play passed. Engine Budget also passed; its measurements are below. [Package checks](https://github.com/loopflowstudio/manabot/actions/runs/43493623564) passed for CPython 3.12/3.13 on Linux x86_64 and macOS arm64, including installs and artifacts.
+- Local gate at the same head: 22 focused debug tests passed (checked ids, numeric serialization, transient-zone ordering/RNG, hidden reassignment, stale references, SBA, card-only choices, landcycling, Force of Negation and Kyoshi Battle Fan). Workspace all-target/all-feature Clippy with warnings denied, workspace rustfmt and whitespace checks passed. Full Rust coverage is the current-head CI result above.
+- Final seeded QA at `6b28b642d6`: 568 games and 137,518 decisions matched main's observations for both seats and full state hashes byte for byte. The engine tree is unchanged between that QA and `349d643e52`. Three Academy games reached Game Over without page or console errors. No frozen evidence was regenerated.
 
-## Seeded QA before the conversion cleanup and main merge
+### Engine Budget
 
-538 seeded random games (authored setups, Fire Lord Azula copies, 400 TLA pool human builds; 118,781 decisions) produce byte-identical observations for both seats and identical state digests on this branch and main 6ce618b8a, including four matching `PyAgentError` endings. That comparison first caught a regression in Kyoshi Battle Fan's token attach, fixed here. Two Academy games played to Game Over. Details: `scratch/qa.html` (not published).
+[Current-head run 43493623873](https://github.com/loopflowstudio/manabot/actions/runs/43493623873) measured `349d643e52` against reference `d53220d36`, both rebuilt on the same GitHub-hosted Ubuntu AMD EPYC 9V74 runner (4 vCPU), in release. The paired candidate/reference/reference/candidate order uses median durations; the downloaded artifact also passed the local comparison command.
+| Measurement | Reference | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Search total | 90.484 s | 98.364 s | +8.71% |
+| Worst search reply | 2.598 s | 2.818 s | +8.48% |
+| Steps per second | 19,542.0 | 18,495.2 | -5.36% |
 
-## Remaining before review
+**The 10% budget passes.** All three search digests, the step digest, 512-game count and 102,209-step count match. These figures compare with the recorded reference, not main; they do not isolate this refactor's cost from intervening main changes. The artifact retains load/CPU/scheduling measurements. Search timings are close to the limit; this passes the existing budget rather than establishing a speedup.
 
-Main is merged through 1d7b5fde9 (its engine tree equals 22ed4a733 and
-2c47f59ae), with main's explicit mana-spending fixtures adapted to runtime
-object ids (91ba66c3a4). At 9c9124627, 568 seeded games (108 authored, 30
-Azula, 30 Heartbeat/Lita/Release to Memory mirrors, 400 TLA pools; 137,518
-decisions) matched main 22ed4a733 byte for byte in observations and state
-hashes; the one `PyAgentError: source cannot pay tap cost` occurs identically
-on main. Two Academy games reached Game Over. CI passed on c52d81b16. The
-widened-local cleanup (4ef4a0829: `flow/action.rs`, `flow/play.rs`,
-`state/src/zone.rs`) came after that QA; its CI run, Engine Budget numbers
-and authored reviews remain.
+## Limits and review handoff
 
-## Left for later
-
-Not in this PR:
-
-- a separate physical `Card` store beside the object store (`CardId` now exists as a checked reference to an object row);
-- a new object per zone change (today `ObjectId` is the row that survives a zone change, and `ObjectRef` is the appearance that goes stale);
-- the CR 400.7 carry-over record (cast, kicked, linked effects);
-- measuring what a new id per zone change costs in layer-view and `TriggerIndex` invalidation;
-- whether the later physical-card split changes the storage of library and hand.
-
-## Checks
-
-Compression passed 31 focused debug tests, all-target/all-feature workspace
-Clippy with warnings denied, rustfmt and whitespace checks. The cp313/arm64
-release wheel rebuilt, its extension was installed atomically, and a fresh
-import passed. It removes the custom zone iterator and conditional card-scan
-chains, reuses scry ordering, and restores inspected libraries in one placement
-pass. Storage and serialized fields stay unchanged. Exact commands and receipts
-are in `scratch/mtg-320-plan.md`.
-
-Before compression, the typed-zone/projection pass passed 17 focused debug tests
-covering numeric bytes, checked scans, transient tokens/spell copies, shuffle
-RNG, hidden reassignment, draws, ordering and projection. Workspace Clippy passed;
-the cp313 release wheel rebuilt, was installed atomically, and passed a fresh
-import. Rustfmt and whitespace checks passed. Four merged payment fixtures were
-also repaired and all 15 focused payment tests passed. These checks predate
-the subsequent merge of main's payment fast paths (6ce618b8a).
-
-The implementation and compression were checkpointed in c76f01f02 and published
-with merge head 96d3aa14e. Realignment found one more newly merged payment fixture
-using the removed `card: CardId(index)` field; it is corrected locally to
-`object: ObjectId(index)`. All 19 focused debug payment tests and workspace
-Clippy passed; the current cp313/arm64 extension rebuilt, was installed
-atomically, and passed a fresh import. Current-head
-[CI](https://github.com/loopflowstudio/manabot/actions/runs/43375879983) confirms
-that fixture caused its Rust compile failure; semantic conformance, Python
-unit tests, Academy integration and Clean-machine Play passed. Other jobs and
-[package checks](https://github.com/loopflowstudio/manabot/actions/runs/43375879939)
-were still running at readback and do not include this repair.
-
-[CI run 43369147820](https://github.com/loopflowstudio/manabot/actions/runs/43369147820)
-on 8e5e8e62b passed Semantic Kernel Conformance, Python Unit Tests, Academy
-Integration and Clean-machine Play; Rust Tests failed to compile the four
-fixtures since repaired. Engine Budget and all Integration groups passed;
-[package run 43369147921](https://github.com/loopflowstudio/manabot/actions/runs/43369147921)
-completed successfully. These results cover 8e5e8e62b only.
-
-Earlier evidence, **not validation of typed ids or compression**:
-
-- [CI run 43325427802](https://github.com/loopflowstudio/manabot/actions/runs/43325427802)
-  on 2a3eae3b0 passed all 13 jobs, including debug Rust, conformance, Engine
-  Budget, Clean-machine Play, Python and Academy.
-- Its Engine Budget compared 2a3eae3b0 with rebuilt 7ef6ce588 on the same
-  runner: search total 173.303 vs 173.206 s, worst reply 5.102 vs 5.123 s;
-  steps 12,174.4/s vs 12,398.8/s. All digests matched and the 10% budget passed.
-- QA at a45df9d4b compared 190 seeded games with MTG-298 parent 4bc48211e:
-  both viewers' observations and full state digests matched for 25,732
-  decisions, including spell copies and permanent-spell-copy tokens.
-  Another 60 random games finished. Treasures remained in graveyards during
-  mana choices until SBAs, as required. See `scratch/qa.html`.
-- Four Academy games finished on 79aa9881e. A later table run stalled at
-  a45df9d4b; its cause is unknown. It coincided with high host load, which is
-  not evidence of causation. A clean final-head Academy run remains for QA.
-
-Not reached in Academy: a permanent-spell copy (no matchup has Azula) or a spell
-copy bounced to hand (no defined card does it). Older test receipts and superseded
-CI status are in `df58f2bff:scratch/pr-491-body.md`.
+- Graveyard/exile retain mixed object lists as described above. Physical-card storage, new objects per zone change, CR 400.7 carry-over records and their cache-invalidation measurements belong to the separate follow-up.
+- One seeded TLA pool game ends with `PyAgentError: source cannot pay tap cost` on both main and this branch. An earlier Academy table stall did not recur in the final three games; its cause remains unknown.
+- Academy did not exercise a permanent-spell copy (no matchup has Azula) or a spell copy bounced to hand (no defined card does it). Emblems are unimplemented.
+- Earlier local `test_capture_replays_both_seat_update` exhausted its configured 120-second training wall deadline (141 seconds overall). Current-head CI ran the same test in 28.83 seconds; the operator steer explicitly left this check to CI. The earlier timeout's cause remains unknown; no deadline was relaxed.
+- No human demo or new authored review was collected in the headless gate. Stop at review; auto-merge stays disabled.

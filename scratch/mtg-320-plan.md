@@ -108,19 +108,14 @@ keep card names rather than acquiring runtime-object terminology.
 
 ## Remaining work
 
-No implementation or deletion target remains in the accepted slice. Main is
-merged through 1d7b5fde9 (#513 only; its `managym/` tree equals 22ed4a733 and
-2c47f59ae), so the post-merge QA at 9c9124627 compared against the current
-engine. CI run 43482226694 on merge c52d81b16 passed. The widened-local
-cleanup in 4ef4a0829 (`flow/action.rs`, `flow/play.rs`, `state/src/zone.rs`)
-followed that QA; CI run 43489082846 on it was in progress at the 2026-11-13
-realign, and covers Clippy, which was not rerun locally after the `zone.rs`
-edit. Gate owns, on the final head: that CI result, Engine Budget numbers with
-unchanged digests in the PR body, and the selected reviews; a fresh seeded
-comparison is needed only if the final head changes behavior beyond 4ef4a0829's
-local-binding edits. Delivery refreshes the PR body from
-`scratch/pr-491-body.md`, keeping its Task context block, and stops at review
-with auto-merge disabled. No Wave is bound. No evidence was regenerated.
+No implementation or deletion target remains in the accepted slice. Gate at
+`349d643e52` passed focused local debug tests, Clippy and formatting; all
+current-head CI jobs, including Engine Budget, passed. The final QA at
+`6b28b642d6` has the same engine tree. Gate found no further code change.
+The current PR copy is prepared in `scratch/pr-body.md` / `pr-title.txt`,
+with `.pr-copy-ref` pinned to the reviewed HEAD; `pr-491-body.md` retains the
+substantive draft. Delivery must preserve the Task context block and stop at
+review with auto-merge disabled. No Wave is bound and no evidence regenerated.
 
 Open: the historical Academy table stall's cause is unknown; the payment-search
 merge is not proof of a fix. The earlier Python failure attribution and
@@ -227,3 +222,45 @@ is an explicit widening, and a function does not widen a card into an
   `79f5c7ad-fff8-458b-b116-6fbb792a5b2e`); Clippy was not rerun after the
   two-line `zone.rs` edit.
 - Gate and delivery own Engine Budget reporting and publication; stop at review.
+
+## Gate receipts — 2026-11-13, HEAD 349d643e52
+
+Plan from the diff: runtime kinds/checked ids, typed library/hand storage,
+selection/play/cost consumers, hidden reassignment, projections and canonical
+hashing need focused debug identity/zone/SBA/card tests. Broad native,
+Python projection, conformance, browser and packaging checks reuse current-head
+CI rather than duplicating the matrix. No Python, UI, world, vocabulary or
+observation-shape change was added by gate. No native rebuild was needed:
+`git diff 6b28b642d HEAD -- managym` is empty.
+
+- `git diff --no-renames --name-only -z origin/main...HEAD | bash .github/ci/select-tests.sh`: selects all nine CI areas; each passed on current-head run 43493623873.
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --test-threads 2 -E 'test(cr_400_identity) or test(cr_704_sba) or test(spell_copy) or test(card_only) or test(transient) or test(kyoshi_battle_fan) or test(landcycl) or test(force_of_negation)'`: 22 passed, 1218 skipped in 0.989 s, run 77e314ef-542b-4697-9c97-2c9585c8455f; no timeout. The filter's spell_copy/card_only terms matched no additional tests; copies also have current CI and seeded QA coverage.
+- `CARGO_BUILD_JOBS=2 cargo clippy --manifest-path managym/Cargo.toml --workspace --all-targets --all-features -- -D warnings`: passed, 2m50s including build.
+- `cargo fmt --manifest-path managym/Cargo.toml --all` and `cargo fmt --manifest-path managym/Cargo.toml --all -- --check`: passed; no source changed.
+- `git diff --check`: passed.
+- `gh run view 43493623873 --json headSha,status,conclusion,jobs`: all CI jobs passed for 349d643e52, including Rust, model/training/recovery/experiment/evaluation/evaluation-long, Academy, both conformance jobs, UI, Clean-machine Play and Engine Budget.
+- `gh run view 43493623564 --json headSha,status,conclusion`: package/install/artifact checks passed for CPython 3.12/3.13 on Linux x86_64 and macOS arm64; publication jobs intentionally skipped.
+- `gh run download 43493623873 -n engine-budget -D /tmp/mtg320-gate-engine-budget-head`: retained current-head measurement artifact locally.
+- `uv run --no-project --python 3.13 python scripts/engine_budget.py compare --artifact /tmp/mtg320-gate-engine-budget-head --reference /tmp/mtg320-gate-engine-budget-head/reference`: PASS, all digests/counts match; same-runner reference→candidate: total search 90.484→98.364 s (+8.71%), worst reply 2.597697→2.817898 s (+8.48%), throughput 19541.96→18495.21/s (-5.36%). Reference d53220d36, AMD EPYC 9V74/4 vCPU; no baseline adoption.
+- Earlier identical-engine run 43489082846 also passed; its downloaded artifact comparison passed before current-head measurement finished. Final PR copy uses the current-head numbers above.
+
+Timeout investigation: the earlier local backend-capture failure was
+`tests/model/test_backend_capture.py::test_capture_replays_both_seat_update`.
+Its stage and regime both cap training at 120 seconds; `execution.py` raises
+`training resource wall deadline exceeded` when either clock expires. The
+reported 141 seconds includes the entire test, not a 300-second pytest timeout.
+No reproduced cause establishes why that run exhausted the budget. Steer
+3813630d says, "Let CI judge it on this head; this machine is heavily loaded."
+Current-head model CI logs show this exact test passed in 28.83 seconds
+(838 passed, 5 skipped overall). Retain the historical failure and uncertainty;
+no deadline changed and no claim that host load caused it.
+
+Review: sampled runtime naming and conversion boundaries, kind transitions,
+card-only command rejection, transient occupants, hidden reassignment,
+canonical serialization and definition/projection readers agree with the scoped
+design. No new code defect found; no extra feature or compatibility shim added.
+PR draft now leads with current validation and includes the complete retained
+conversion list and current Engine Budget numbers. Existing docs describe the
+built boundary and excluded physical-card split. No new authored review or
+human demo is claimed. Auto-merge was null at readback; publication/merge were
+not performed by gate. No server, watcher or background local process remains.
