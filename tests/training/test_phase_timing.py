@@ -14,11 +14,7 @@ import torch
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.infra.profiler import Profiler
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Learning,
-    Schedule,
-)
+from manabot.training.learning import DampedPolicyLearning, Learning, Schedule
 from manabot.training.rollout.collection import collect
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration

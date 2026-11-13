@@ -7,10 +7,10 @@ finished loop returns its final policy at once. Nothing else drives it: there
 is no executor, attempt record or lease here. A tracker (`Tracker`, which
 Etude's run satisfies) receives rows, checkpoints and the stop signal.
 
-The module is data and functions. `SelfPlay` is the validated settings; `LoopState` is the learner a
-loop carries. `step` makes one update and returns the next state; the loop
-body is `state = step(...)` plus saving, logging and checkpoints, each one
-call. `new_state`, `load_state`, `save_state`, `save_checkpoint` implement the state file and the published policies.
+`SelfPlay` holds validated settings; `LoopState` carries the learner.
+`step` collects and learns, returning the next state and its metric row.
+`new_state`, `load_state`, `save_state` and `save_checkpoint` own the state
+file and published policies.
 
 Seeds. With run seed `s` and starting update `u` (0 for a fresh loop): model
 initialization uses `s`; native streams `s + 10000 + u`; Torch, NumPy and
@@ -33,7 +33,14 @@ from uuid import uuid4
 
 from etude.stopping import Stopped
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    model_validator,
+)
 import torch
 
 import manabot.backends.torch as torch_backend
@@ -61,13 +68,13 @@ from manabot.model.world import (
     validate_agent_setup,
 )
 from manabot.training.decks import UniformDecks
-from manabot.training.mps import mps_torch_error
-from manabot.training.regime import (
+from manabot.training.learning import (
     BatchClosure,
     DampedPolicyLearning,
     Learning,
     Precision,
 )
+from manabot.training.mps import mps_torch_error
 from manabot.training.rollout.collection import (
     Collector,
     CollectorStats,
@@ -97,8 +104,6 @@ import managym
 # Offsets that separate a run seed's random streams (see the module docstring).
 COLLECTION_SEED = 10_000
 MINIBATCH_SEED = 20_000
-# Settings that describe the machine, not the learner; a resumed loop may change them.
-_MACHINE_FIELDS = frozenset({"device", "workers", "threads"})
 
 
 # ---------------------------------------------------------------------------
@@ -217,11 +222,14 @@ def root_match(settings: SelfPlay) -> MatchConfig:
     return settings.match
 
 
+def learner_settings(settings: SelfPlay) -> dict[str, JsonValue]:
+    """Resume identity fields; device, workers and threads may change between attempts."""
+    return settings.model_dump(mode="json", exclude={"device", "workers", "threads"})
+
+
 def learner_digest(settings: SelfPlay) -> str:
     """Identity of the learner `settings` train; machine fields excluded."""
-    return canonical_sha256(
-        settings.model_dump(mode="json", exclude=set(_MACHINE_FIELDS))
-    )
+    return canonical_sha256(learner_settings(settings))
 
 
 def is_checkpoint(settings: SelfPlay, update: int) -> bool:
@@ -325,7 +333,7 @@ def behavior(state: LoopState) -> ActorCritic:
     return state.learner.agent
 
 
-def _model(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
+def create_model(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
     return ActorCritic(
         space,
         settings.model,
@@ -334,7 +342,7 @@ def _model(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
     ).to(settings.device)
 
 
-def _learner(settings: SelfPlay, agent: ActorCritic) -> Learner:
+def create_learner(settings: SelfPlay, agent: ActorCritic) -> Learner:
     return Learner(
         agent,
         settings.device,
@@ -343,7 +351,9 @@ def _learner(settings: SelfPlay, agent: ActorCritic) -> Learner:
     )
 
 
-def _pretrained(settings: SelfPlay, space: ObservationSpace) -> dict[str, torch.Tensor]:
+def pretrained_weights(
+    settings: SelfPlay, space: ObservationSpace
+) -> dict[str, torch.Tensor]:
     """The published weights to start from, admitted against these settings."""
     assert settings.pretrained is not None
     with torch.random.fork_rng(devices=[]):
@@ -367,12 +377,36 @@ def new_state(settings: SelfPlay, seed: int) -> LoopState:
     """Fresh weights from `seed` (or the pretrained policy), EMA a copy, fresh Adam."""
     space = ObservationSpace(settings.observation)
     torch.manual_seed(seed)
-    agent = _model(settings, space)
+    agent = create_model(settings, space)
     if settings.pretrained is not None:
-        agent.load_state_dict(_pretrained(settings, space))
-    learner = _learner(settings, agent)
+        agent.load_state_dict(pretrained_weights(settings, space))
+    learner = create_learner(settings, agent)
     ema = deepcopy(agent) if settings.learning.ema is not None else None
     return LoopState(settings, seed, space, learner, ema)
+
+
+def setting_differences(
+    saved: dict[str, JsonValue], current: dict[str, JsonValue], prefix: str = ""
+) -> list[str]:
+    """Describe changed learner fields, including nested learning/model settings."""
+    differences: list[str] = []
+    for key in sorted(saved.keys() | current.keys()):
+        name = f"{prefix}.{key}" if prefix else key
+        if key not in saved:
+            differences.append(
+                f"{name}: missing in saved state, requested {current[key]!r}"
+            )
+        elif key not in current:
+            differences.append(
+                f"{name}: saved {saved[key]!r}, missing in requested settings"
+            )
+        elif isinstance(saved[key], dict) and isinstance(current[key], dict):
+            differences.extend(setting_differences(saved[key], current[key], name))
+        elif saved[key] != current[key]:
+            differences.append(
+                f"{name}: saved {saved[key]!r}, requested {current[key]!r}"
+            )
+    return differences
 
 
 def load_state(path: Path, settings: SelfPlay, seed: int) -> LoopState | None:
@@ -387,16 +421,24 @@ def load_state(path: Path, settings: SelfPlay, seed: int) -> LoopState | None:
     for name, expected in (
         ("world", settings.world),
         ("seed", seed),
-        ("settings", learner_digest(settings)),
     ):
         if saved[name] != expected:
             raise ValueError(
                 f"{path} was written for another {name}: {saved[name]!r}, not {expected!r}"
             )
+    if saved["settings"] != learner_digest(settings):
+        stored = TypeAdapter(dict[str, JsonValue]).validate_python(
+            saved["learner_settings"]
+        )
+        current = learner_settings(settings)
+        differences = setting_differences(stored, current)
+        raise ValueError(
+            f"{path} has different learner settings: " + "; ".join(differences)
+        )
     space = ObservationSpace(settings.observation)
-    agent = _model(settings, space)
+    agent = create_model(settings, space)
     agent.load_state_dict(saved["raw"])
-    learner = _learner(settings, agent)
+    learner = create_learner(settings, agent)
     learner.optimizer.load_state_dict(saved["optimizer"])
     ema = None
     if saved["ema"] is not None:
@@ -423,6 +465,7 @@ def save_state(path: Path, state: LoopState) -> None:
             "world": state.settings.world,
             "seed": state.seed,
             "settings": learner_digest(state.settings),
+            "learner_settings": learner_settings(state.settings),
             "source_commit": checkpoint_source()["commit"],
             "update": state.update,
             "counts": asdict(state.counts),
@@ -435,7 +478,7 @@ def save_state(path: Path, state: LoopState) -> None:
     os.replace(temporary, path)
 
 
-def _save_policy(
+def write_policy(
     model: ActorCritic, state: LoopState, path: Path, weights: Literal["raw", "ema"]
 ) -> Path:
     if path.exists():
@@ -480,9 +523,9 @@ def save_checkpoint(directory: Path, state: LoopState) -> Path:
     """Write immutable raw/EMA policies; return EMA when kept, otherwise raw."""
     directory.mkdir(parents=True, exist_ok=True)
     name = f"{state.update:08d}"
-    raw = _save_policy(state.learner.agent, state, directory / f"{name}-raw.pt", "raw")
+    raw = write_policy(state.learner.agent, state, directory / f"{name}-raw.pt", "raw")
     if state.ema is not None:
-        return _save_policy(state.ema, state, directory / f"{name}-ema.pt", "ema")
+        return write_policy(state.ema, state, directory / f"{name}-ema.pt", "ema")
     return raw
 
 
@@ -561,10 +604,10 @@ def step(
     batch: RolloutBatch | None = None
     try:
         batch = collect(collector, behavior(state), state.settings.transitions)
-        _synchronize(device)
+        synchronize(device)
         collected = time.perf_counter()
         metrics = learn(state, batch, rng, updates=updates)
-        _synchronize(device)
+        synchronize(device)
     except NumericalError as error:
         if out is not None:
             try:
@@ -597,7 +640,7 @@ def step(
     return state, row
 
 
-def _synchronize(device: str) -> None:
+def synchronize(device: str) -> None:
     if device == "cuda":
         torch.cuda.synchronize()
     elif device == "mps":
@@ -609,7 +652,7 @@ def _synchronize(device: str) -> None:
 
 
 @contextmanager
-def _device(settings: SelfPlay) -> Iterator[None]:
+def device_settings(settings: SelfPlay) -> Iterator[None]:
     """Threads and matmul precision for the loop, restored afterwards."""
     if settings.device == "cuda" and not torch.cuda.is_available():
         raise ValueError("CUDA requested but unavailable; CPU fallback is forbidden")
@@ -625,7 +668,7 @@ def _device(settings: SelfPlay) -> Iterator[None]:
         torch.set_num_threads(threads)
 
 
-def _ledger(
+def game_ledger(
     out: Path, policy: GameErrorPolicy
 ) -> tuple[GameErrorLedger, GameErrorState]:
     """This attempt's append-only ledger and the state earlier attempts settled.
@@ -668,7 +711,7 @@ def self_play(
         raise ValueError("updates must be positive")
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    with _device(settings):
+    with device_settings(settings):
         state = load_state(out / "state.pt", settings, seed)
         if state is None:
             if any((out / "checkpoints").glob("*.pt")):
@@ -691,7 +734,7 @@ def self_play(
         record_attempt: RecordAttempt | None = None
         errors = GameErrorState()
         if settings.game_errors is not None:
-            ledger, errors = _ledger(out, settings.game_errors)
+            ledger, errors = game_ledger(out, settings.game_errors)
 
             def record_attempt(
                 errors: GameErrorState, attempt: GameAttempt

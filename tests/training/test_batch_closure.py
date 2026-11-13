@@ -18,12 +18,8 @@ from manabot.env.match import Match, Reward
 from manabot.experiment.attacks import AttackPlan, AttackTarget
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.training.regime import (
-    BatchClosure,
-    FrozenOpponent,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import BatchClosure
+from manabot.training.regime import FrozenOpponent, TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import Collector, collect, open_collector
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym

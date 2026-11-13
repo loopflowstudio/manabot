@@ -28,7 +28,7 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim import match as simulation
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
-from manabot.training.regime import BatchClosure, Learning
+from manabot.training.learning import BatchClosure, Learning
 from manabot.training.rollout.collection import (
     Collector,
     close_collector,

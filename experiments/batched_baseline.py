@@ -9,14 +9,9 @@ from pydantic import BaseModel, Field
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
 from manabot.sim.matchup import selected_match
+from manabot.training.learning import BatchClosure, IterationSchedule
 from manabot.training.loops.self_play import SelfPlay, self_play
-from manabot.training.regime import (
-    BatchClosure,
-    Execution,
-    IterationSchedule,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 import managym
 
 # Rows per stream per update. Past the opening updates, a floor of 76 realized 106
@@ -178,7 +173,7 @@ def train(config: BatchedConfig) -> None:
         checkpoint_every=64,
     )
     with track(
-        clocks=[Step("updates", "optimizer updates")],
+        clocks=[Step("updates", "collection/update iterations")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:

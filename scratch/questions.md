@@ -28,7 +28,7 @@ wanted remains a product question; the old monitor worker is deleted.
   recipe entry points are `train(config)`, with a required Pydantic config.
   Jack Heart: "i liekd it better when there were explicit eval(), train() and launch() functions".
 - `--recipe` selects explicit experiment functions, including `file:function`.
-  CLI configs need seed and updates. The launch owns the experiment name.
+  CLI configs need seed and device, the fields passed by the CLI. The launch owns the experiment name.
 - Default out is `.runs/<recipe>-<seed>`; local alone uses a fresh timestamp
   so a second default smoke actually trains. Same out resumes deliberately.
 - Planned stops exit 75, matching Etude. Target extension uses run.until and
@@ -64,3 +64,7 @@ fields are unreachable, so `manabot train --recipe elemental` on a laptop runs
 the CLI should accept any field of the recipe's Pydantic config is not settled
 by the recorded direction and was not built. It matters because the README
 advertises that command as the way to run the current recipe locally.
+
+## Implement choices — 2026-11-13
+
+The hidden CLI alias `--steps` warns that removal is in Manabot 0.3.0 (the next minor release after current 0.2.3); no release bump is part of this pass. Both target flags together refuse, avoiding ambiguous precedence.

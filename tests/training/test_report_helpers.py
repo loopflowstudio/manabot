@@ -5,12 +5,8 @@ from pathlib import Path
 from etude.report import Matches, Report, Score
 import pytest
 
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Learning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,

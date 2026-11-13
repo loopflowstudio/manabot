@@ -16,7 +16,7 @@ import math
 from pathlib import Path
 import re
 
-from manabot.experiment.execution import ExperimentRun
+from manabot.experiment.records import ExperimentRun
 from manabot.reports.records import ReportRun
 from manabot.reports.time_profile import (
     TimeSlice,

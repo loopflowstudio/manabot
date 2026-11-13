@@ -13,8 +13,9 @@ import torch
 from experiments.direct_self_play import direct_self_play
 from manabot.backends.torch.rl import selected_rows
 from manabot.policy.prepare import reference_distribution
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.records import StageRecord, TrainingRun
-from manabot.training.regime import DampedPolicyLearning, TrainingRegime
+from manabot.training.regime import TrainingRegime
 from manabot.training.validation import validate_regime
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION

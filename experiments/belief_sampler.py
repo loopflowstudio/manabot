@@ -6,10 +6,10 @@ and fits the belief sampler.
 
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import gray_ogre_match
+from manabot.training.learning import Learning
 from manabot.training.regime import (
     CollectBelief,
     Execution,
-    Learning,
     TrainBelief,
     TrainingRegime,
     TrainSelfPlay,

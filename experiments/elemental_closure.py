@@ -23,7 +23,7 @@ from experiments.learning_signal import (
     learning_report,
     training_runs,
 )
-from manabot.training.regime import BatchClosure
+from manabot.training.learning import BatchClosure
 
 EXPERIMENT = "elemental_closure"
 SEEDS = "70101,70102,70103"

@@ -22,7 +22,7 @@ from matplotlib.figure import Figure
 from pydantic import ConfigDict, JsonValue, TypeAdapter
 
 from manabot.eval.monitor import MonitorResult
-from manabot.experiment.execution import ExperimentRun
+from manabot.experiment.records import ExperimentRun
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.reports.learning import DASHBOARD_CSS, learning_story
 from manabot.reports.records import ReportRun, RetainedRun

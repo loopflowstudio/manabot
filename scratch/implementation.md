@@ -12,7 +12,7 @@ The loop validates SelfPlay directly, saves before publishing immutable
 checkpoints, returns EMA when configured, and records the endpoint as `final`.
 State resumes with Adam, EMA and counts; native game/RNG streams restart at the
 saved update. It raises `etude.stopping.Stopped`. CLI deadlines are ISO-8601;
-`--steps` sets Etude's target, preserving the recipe horizon. Belief filenames
+`--updates` sets Etude's target, preserving the recipe horizon. Belief filenames
 include the policy checkpoint stem. Selection collection retains and verifies
 replay journals and checks cached policy/population and collection-input identity.
 Numerical failures retain bounded tensors, Adam/EMA and source diagnostics in
@@ -112,3 +112,28 @@ readers. README now describes separate baseline evaluation and the actual update
 clock. Historical stub/audit notes now point to their exact git versions.
 
 `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training --with nbclient --with nbformat --with matplotlib --with ipykernel pytest tests/training/test_experiments.py tests/training/test_experiment_report.py tests/eval/test_experiment_files.py -q`: 34 passed, seven report failures solely for missing nbconvert. Same invocation with `--with nbconvert pytest tests/training/test_experiment_report.py --lf -q`: seven passed (17.25s). Earlier collection attempts lacked nbclient, then matplotlib; temporary uv overlays supplied dependencies without changing the project environment. Ruff, compileall and diff whitespace checks passed. No learner code changed, so the recorded post-merge parity proof was not rerun.
+
+## Concept-review implementation — 2026-11-13
+
+Moved retained experiment records and live learning types to their defining
+modules, preserving schemas. Resume diagnostics now retain learner settings
+and report nested field differences; machine-only changes remain resumable.
+CLI --updates carries the target, --steps warns with removal 0.3.0, and both
+flags together refuse. Current docs use --updates and learning.py.
+
+With the same real SDK source override, focused self-play refusal, CLI
+stop/resume/extension/alias, regime and package-boundary checks: 25 passed,
+one stale boundary import expectation failed. Updated that expectation.
+Then boundary rerun, config-without-updates, experiment records, CI selection
+and release checks: 114 passed (2.11s). Ruff and diff whitespace checks pass.
+No learner calculation changed; parity was not rerun. Installed-wheel proof,
+SDK release/pin, recovery review and the retained replay mismatch remain gate
+or delivery obligations. No service or background process was started.
+
+## Compress after concept implementation — 2026-11-13
+
+Removed the unused selection deadline callback and no-op adapter; centralized
+learner-setting serialization; clarified loop helper names and recipe clock
+labels. Required resume, selection and failure-capture behavior is unchanged.
+
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_automatic_game_capture.py::test_semantic_training_retains_rejected_command_and_offer_frame -q`: 12 passed (20.72s). Changed production files pass Ruff and compileall; `git diff --check` passes. `lf context` is within both scratch limits. No background service or provider launch was started; delivery obligations above remain.

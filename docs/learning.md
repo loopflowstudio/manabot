@@ -540,5 +540,5 @@ each piece they are made of as a public function.
 | Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
 | Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
 | Magnet | `reference_distribution` in [`policy/prepare.py`](../manabot/policy/prepare.py) |
-| Defaults | `DampedPolicyLearning` in [`training/regime.py`](../manabot/training/regime.py), `SelfPlay` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
+| Defaults | `DampedPolicyLearning` in [`training/learning.py`](../manabot/training/learning.py), `SelfPlay` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

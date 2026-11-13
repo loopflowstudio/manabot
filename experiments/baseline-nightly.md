@@ -3,7 +3,7 @@
 Status: software execution qualified; outcome learning remains inconclusive. Jack Heart requested a
 nightly focused on what ordinary training learns, retaining the existing
 handcrafted capacity checks as sanity tests. Bare `manabot train` remains the
-small smoke run. `manabot train --recipe baseline --steps N` selects the higher
+small smoke run. `manabot train --recipe baseline --updates N` selects the higher
 level recipe shared by the nightly and interactive CLI.
 
 ## Frozen question and prediction
@@ -118,8 +118,8 @@ little of a 30-minute run for final evaluation. Select **128 updates** for the
 first complete nightly qualification and the recipe's bounded default. Keep
 all learning parameters, horizon mapping, paired deals and acceptance thresholds
 unchanged. This is a cost-driven prospective horizon choice, not selection on
-outcomes. Nightly omits `--steps` unless manually overridden, so it inherits the
-single public recipe default. Longer runs use the same `--steps N` function.
+outcomes. Nightly omits `--updates` unless manually overridden, so it inherits the
+single public recipe default. Longer runs use the same `--updates N` function.
 
 Also reuse the existing all-offer input collision audit in the frozen-policy
 suite. All 96 prospective corpus states had zero clean input collisions in a

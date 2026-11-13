@@ -17,7 +17,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
-from manabot.training.regime import DampedPolicyLearning, Learning
+from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import (
     RolloutBatch,
     collect,

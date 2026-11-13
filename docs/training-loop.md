@@ -39,7 +39,7 @@ Both are written once and take the backend as their first argument: the
 module `manabot.backends.torch`, not an object to configure. Then come a
 `Learner` (`manabot.backends.torch.learner`), which holds the model, its Adam
 optimizer, the precision and a profiler, and a learning record
-(`manabot.training.regime`). Call them directly to reproduce a recipe's
+(`manabot.training.learning`). Call them directly to reproduce a recipe's
 update exactly:
 
 ```python
@@ -182,7 +182,7 @@ plus reverse KL to the generating policy. Against that design:
 
 A new method is the pieces in a different arrangement. Write it as a loop of
 your own to try it quickly. When it needs checkpoints, tracking and Etude
-launches, add a learning record for it in `manabot.training.regime` and an
+launches, add a learning record for it in `manabot.training.learning` and an
 update in `manabot/training/updates/` beside the two above; our recipes then
 run it as they run those. Write that update as they are written: take the
 backend first, do array math only through `backend.rl`, `backend.learner`

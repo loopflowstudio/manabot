@@ -19,11 +19,8 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.admission import admit_observation
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import (
     Collector,
     RolloutBatch,

@@ -13,12 +13,12 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.training.learning import Learning
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
     CollectBelief,
     ImportPolicy,
-    Learning,
     TrainingRegime,
     TrainSelfPlay,
 )

@@ -24,7 +24,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.recipes.baseline import BaselineConfig, settings
-from manabot.training.regime import DampedPolicyLearning
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     RolloutBatch,
     close_collector,

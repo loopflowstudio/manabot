@@ -79,8 +79,8 @@ def experiment_recipe(name: str) -> tuple[Callable[[Any], None], type[BaseModel]
     config = get_type_hints(train).get(parameter)
     if not isinstance(config, type) or not issubclass(config, BaseModel):
         raise typer.BadParameter("recipe config must be a Pydantic model")
-    if not {"seed", "updates"} <= config.model_fields.keys():
-        raise typer.BadParameter("CLI recipe configs need seed and updates fields")
+    if not {"seed", "device"} <= config.model_fields.keys():
+        raise typer.BadParameter("CLI recipe configs need seed and device fields")
     return train, config
 
 
@@ -89,7 +89,8 @@ def train_command(
     recipe: str = typer.Option("local", help="Training recipe"),
     list_recipes: bool = typer.Option(False, "--list", help="List runnable recipes"),
     seed: int = typer.Option(197, help="Training seed"),
-    steps: int | None = typer.Option(None, min=1, help="Absolute update target"),
+    updates: int | None = typer.Option(None, min=1, help="Absolute update target"),
+    steps: int | None = typer.Option(None, min=1, hidden=True),
     device: Literal["cpu", "mps", "cuda"] | None = typer.Option(None),
     out: Path | None = typer.Option(None, help="Run directory; rerun to resume"),
     seconds: float | None = typer.Option(
@@ -132,6 +133,15 @@ def train_command(
         raise typer.BadParameter(
             "--learning-seats and --padded-shapes require local or baseline"
         )
+    if steps is not None:
+        if updates is not None:
+            raise typer.BadParameter("choose --updates or --steps, not both")
+        typer.echo(
+            "Warning: --steps is deprecated; use --updates. "
+            "--steps will be removed in Manabot 0.3.0.",
+            err=True,
+        )
+        updates = steps
     chosen = device or accelerator() or "cpu"
     if recipe == "baseline" and chosen == "cpu":
         raise typer.BadParameter(
@@ -157,9 +167,9 @@ def train_command(
     )
     # A target-only continuation keeps the recipe's learning settings unchanged.
     environment = {}
-    if steps is not None:
+    if updates is not None:
         environment["ETUDE_UNTIL_CLOCK"] = "updates"
-        environment["ETUDE_UNTIL_VALUE"] = str(steps)
+        environment["ETUDE_UNTIL_VALUE"] = str(updates)
     allowance = (
         local.LOCAL_SECONDS if seconds is None and recipe == "local" else seconds
     )

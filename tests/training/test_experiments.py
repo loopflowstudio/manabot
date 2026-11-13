@@ -24,13 +24,8 @@ from manabot.experiment.config import (
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.training.regime import (
-    ArtifactReference,
-    DampedPolicyLearning,
-    Execution,
-    ImportPolicy,
-    Learning,
-)
+from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.regime import ArtifactReference, Execution, ImportPolicy
 from tests.training.wdl_baseline import wdl_baseline
 
 

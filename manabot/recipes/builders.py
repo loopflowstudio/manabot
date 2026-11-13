@@ -16,16 +16,9 @@ from manabot.infra.config import (
     ValueAggregation,
 )
 from manabot.training.decks import UniformDecks
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
 from manabot.training.loops.self_play import SelfPlay
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    IterationSchedule,
-    Learning,
-    Operation,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.regime import Execution, Operation, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
 

@@ -26,7 +26,7 @@ from manabot.eval.local import checkpoint_request
 from manabot.eval.monitor import MonitorResult
 from manabot.eval.results import EvaluationRow
 from manabot.experiment.checkpoint_evaluation import checkpoints
-from manabot.experiment.execution import Attempt, ExperimentRun
+from manabot.experiment.records import Attempt, ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.admission import admit_observation

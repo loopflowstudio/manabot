@@ -58,7 +58,10 @@ The policy a run trained is its last checkpoint: `checkpoints/00003200-ema.pt`
 for a recipe that reached update 3200. Run the same command again to resume:
 the training function reads `state.pt` and carries on from the update it
 records. One that already reached its target does nothing and ends finished.
-`--steps N` sets the update to train to; run a finished recipe again with a
+`--steps` is a deprecated, hidden alias for `--updates` and will be removed in
+Manabot 0.3.0.
+
+`--updates N` sets the update to train to; run a finished recipe again with a
 larger `N` and it trains on from where it ended and writes a later checkpoint
 beside the earlier ones, which stay as they were. Choose a new `--out` for a
 new run; reusing one continues it, and a directory whose `state.pt` was

@@ -9,7 +9,7 @@ import sqlite3
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from manabot.experiment.execution import ExperimentRun
+    from manabot.experiment.records import ExperimentRun
     from manabot.training.records import TrainingRun
 
 
@@ -73,7 +73,7 @@ class VerifyStore:
             )
 
     def experiment_run(self, run_id: str) -> ExperimentRun:
-        from manabot.experiment.execution import ExperimentRun
+        from manabot.experiment.records import ExperimentRun
 
         row = self.con.execute(
             "SELECT payload FROM experiment_runs WHERE id=?", (run_id,)

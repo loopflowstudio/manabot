@@ -16,7 +16,8 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
-from manabot.training.regime import DampedPolicyLearning, Learning, TrainSelfPlay
+from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.regime import TrainSelfPlay
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
     AdaptiveSampler,

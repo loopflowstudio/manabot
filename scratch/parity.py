@@ -22,7 +22,7 @@ def train(root: Path, out: Path, method: str, reference: bool) -> None:
     sys.path.insert(0, str(root))
     from manabot.infra.config import ModelConfig
     from manabot.recipes.builders import gray_ogre_match
-    from manabot.training.regime import DampedPolicyLearning, Learning
+    from manabot.training.learning import DampedPolicyLearning, Learning
 
     learning = (
         Learning(epochs=1, minibatches=1, ema=0.9)

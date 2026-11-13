@@ -42,7 +42,9 @@ CUDA capture hooks and profiler-only state. Public frozen execution refusals and
 historical report/data readers remain. Removed the unused scheduler methods
 `MonitoringBudget.protocols_for`, `Hardware.admit` and `HardwareInventory.select`
 from the surviving record models; their fields and validators stay readable.
-No further deletion target is pending.
+The selection collector’s executor deadline callback and no-op
+`selection_unbounded` adapter are also removed: its surviving callers use the
+per-game step cap. No further deletion target is pending.
 The obsolete attack executor tests now check refusal without creating a cohort.
 The former recovery CI group only held pretrained loading; it joins training.
 
@@ -92,50 +94,36 @@ dependency has not cleared. `origin/main` is still
 and the runtime pin in `pyproject.toml` remain 0.2.16. No training test was
 rerun for this reconciliation; earlier results in implementation.md stand.
 
-## Concept review — 2026-11-13: next implement direction
+## Concept review follow-through — 2026-11-13
 
-Reviewed the recipe/loop/CLI experience against the code at `4bf7ac1e5`. The
-model holds: a recipe is `train(config)`, the loop is `self_play`, Etude owns
-the run. No recipe or loop restructuring follows. What remains are names and
-one recovery message that still teach the retired model. These are proposals
-implied by the Task vocabulary ("Recipe" replaces "regime"; an update learns
-from one batch), not statements anyone made about these files.
+Implemented the four independent items: retained experiment records moved to
+experiment/records.py; live learning types moved to training/learning.py;
+state.pt includes learner settings and refusal names differing fields with
+saved/requested values; CLI exposes --updates with a hidden warning --steps
+alias (removal 0.3.0). Recipe config discovery requires seed/device, which the
+CLI actually passes. Serialized learning fields are unchanged; imports use the
+new defining modules without compatibility aliases.
 
-1. `manabot/experiment/execution.py` executes nothing: it holds retained
-   schedule, hardware and run records for offline reports. Rename it for what
-   it holds (`manabot/experiment/records.py`), with its seven importers; no
-   alias. A reader of this Task otherwise finds an `execution.py` surviving.
-2. Live learning records sit in the retired concept's module. A recipe author
-   imports `DampedPolicyLearning`, `IterationSchedule`, `Learning` from
-   `manabot.training.regime`, and training-loop.md tells them to add a new
-   learning record there. Move `Schedule`, `Learning`, `IterationSchedule`,
-   `DampedPolicyLearning`, `Precision` and `BatchClosure` to
-   `manabot/training/learning.py` (about 30 importers; class names, fields and
-   serialized keys unchanged). `regime.py` then holds only retained
-   regime/stage records and imports those types for its fields. Check the
-   Torch-free child boundary still passes. `manabot/training/learning/` is an
-   empty untracked leftover directory; remove it first.
-3. A refused resume says only `state.pt was written for another settings:
-   '<digest>', not '<digest>'`; docs claim it names what differs. Save the
-   learner settings (machine fields excluded) in `state.pt` beside the digest
-   and name the differing fields with both values. The state format is
-   unreleased, so no compatibility path is needed.
-4. CLI vocabulary: the target flag is `--steps` while the config field, clock,
-   checkpoint names and messages all say update, and README has to explain
-   that steps are not optimizer calls. Make `--updates` the flag; keep
-   `--steps` as a hidden alias that warns with its removal release
-   (`experiments/baseline-nightly.md` and both READMEs name it). The CLI
-   requires an experiment config to have an `updates` field it never sets;
-   require only what it passes.
-5. With the SDK release (remaining work 1): the CLI hand-writes Etude's
-   `ETUDE_UNTIL_*` and `ETUDE_DEADLINE` variables with its own save/restore
-   around `local_launch`, which already does the same for its four. Target
-   and deadline are launch facts; ask EXP-56 for
-   `local_launch(out=, experiment=, until=, deadline=)` and drop the block.
-   If the release lands without it, keep the current code. Also remove the
-   "This cutover requires Etude PR #103" paragraph from docs/training.md when
-   the pin lands.
+Deletion inventory addition: experiment/execution.py and the six live learning
+definitions in regime.py were replaced by those modules. Retained stage/regime
+records still use the learning types; offline records and schemas survive.
 
-Left alone on purpose: the repeated three-line `track(...)` /
-`run.until("updates", default=config.updates)` opening in each recipe is the
-explicit shape asked for; `runs()`/`eval()`/`report()` keep Etude's names.
+Still tied to SDK release: local_launch currently owns neither target nor
+deadline arguments, so the CLI retains its environment save/restore. Seek
+local_launch(out=, experiment=, until=, deadline=) in EXP-56; if unavailable,
+keep the current code. Remove the PR #103 notice only when the real pin lands.
+The repeated track/run.until opening and experiment runs/eval/report names stay.
+
+Focused validation: 139 checks passed across resume/CLI, retained regime and
+experiment records, package boundaries, CI selection and release checks; one
+stale boundary expectation was corrected and its failed check rerun successfully.
+Full gate and installed-consumer checks remain in Remaining work above.
+
+## Compress follow-through after concept implementation — 2026-11-13
+
+`self_play.learner_settings` now owns the machine-field exclusion for state
+serialization, digests and refusal diagnostics, so those views cannot drift.
+Loop helpers have descriptive function names without private prefixes, matching
+the recorded naming direction. Recipe clock labels say collection/update
+iterations; optimizer-step counts remain separate metrics. No serialized keys,
+learner calculations or frozen evidence changed.

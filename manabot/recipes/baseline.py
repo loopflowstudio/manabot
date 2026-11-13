@@ -14,8 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK
 from manabot.sim.matchup import selected_match
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.loops.self_play import SelfPlay, self_play
-from manabot.training.regime import DampedPolicyLearning, IterationSchedule
 from manabot.verify.learning_regression import BaselineReport, report_recipe
 
 BASELINE_STEPS = 128
@@ -61,7 +61,7 @@ def settings(config: BaselineConfig) -> SelfPlay:
 
 def train(config: BaselineConfig) -> None:
     with track(
-        clocks=[Step("updates", "optimizer updates")],
+        clocks=[Step("updates", "collection/update iterations")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:

@@ -39,7 +39,7 @@ from manabot.policy.checkpoint import (
     canonical_parameters,
     from_torch_state,
 )
-from manabot.training.regime import DampedPolicyLearning
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import (
     RolloutBatch,

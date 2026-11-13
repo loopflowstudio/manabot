@@ -80,13 +80,9 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    IterationSchedule,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,

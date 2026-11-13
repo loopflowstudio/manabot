@@ -20,14 +20,8 @@ from manabot.recipes.builders import (
     with_capacity,
     with_value_aggregation,
 )
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    IterationSchedule,
-    Learning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
+from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
 

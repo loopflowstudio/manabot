@@ -11,7 +11,8 @@ Protocol: experiments/protocols/closure-lambda-elemental-v1.md.
 """
 
 from experiments.elemental_long import REGIME
-from manabot.training.regime import BatchClosure, TrainingRegime, TrainSelfPlay
+from manabot.training.learning import BatchClosure
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 
 # Rows per stream per update under one learning seat. The complete arm keeps the

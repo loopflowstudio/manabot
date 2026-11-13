@@ -5,9 +5,9 @@ import json
 import pytest
 
 from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.training.learning import Learning
 from manabot.training.regime import (
     CollectBelief,
-    Learning,
     TrainBelief,
     TrainingRegime,
     TrainSelfPlay,

@@ -48,7 +48,7 @@ def train(config: ElementalConfig) -> None:
         update={"device": config.device, "streams": config.streams}
     )
     with track(
-        clocks=[Step("updates", "optimizer updates")],
+        clocks=[Step("updates", "collection/update iterations")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:

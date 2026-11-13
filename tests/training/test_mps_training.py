@@ -40,13 +40,8 @@ from manabot.model.semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.model.shared_effects import SharedEffectEncoder
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    Learning,
-    Precision,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning, Learning, Precision
+from manabot.training.regime import Execution, TrainSelfPlay
 from manabot.training.rollout.collection import (
     close_collector,
     collect,

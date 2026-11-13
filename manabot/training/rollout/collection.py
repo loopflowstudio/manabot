@@ -52,7 +52,7 @@ from manabot.sim.rollout import (
     _allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.regime import BatchClosure, Precision
+from manabot.training.learning import BatchClosure, Precision
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,

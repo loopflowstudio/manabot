@@ -26,7 +26,7 @@ The default `local` recipe runs two collection/update iterations
 through the ordinary self-play loop: two streams, 16 decisions per stream as
 a floor, both seats and complete games, with a 120-second failure deadline.
 It uses the baseline model and horizon-scaled damped policy objective, records
-actual counts through Etude and exports admitted checkpoints. `--steps`,
+actual counts through Etude and exports admitted checkpoints. `--updates`,
 `--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
 explicit. This is a software smoke, not playing-strength evidence.
 
@@ -52,7 +52,7 @@ Simulation retains its presets and `--set` overrides.
 `--recipe baseline` selects a complete ordinary training run: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
 and checkpoint exports. Paired outcome evaluation is a separate call to
 `manabot.recipes.baseline.evaluate(config, directory)`; the nightly check runs
-both operations. `--steps N` counts completed
+both operations. `--updates N` counts completed
 collection/update iterations (four streams, at least 64 combined seat decisions
 each, finishing current games before updating), not optimizer
 calls. Its CPU test variant drives the [nightly learning check](../.github/workflows/baseline.yml).

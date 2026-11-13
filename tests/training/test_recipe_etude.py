@@ -5,15 +5,17 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from types import ModuleType
 
 from etude.jobs import training
 from etude.train.read import read
 from etude.train.run import local_launch
+from pydantic import BaseModel
 import pytest
 from typer.testing import CliRunner
 
 from manabot.belief.sampling_data import read_dataset
-from manabot.cli import app
+from manabot.cli import app, experiment_recipe
 from manabot.recipes.belief_sampler import BeliefConfig, train
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.recipes.local import LocalConfig, train as train_local
@@ -29,6 +31,12 @@ def test_cli_lists_recipes_and_refuses_saved_execution() -> None:
     assert {"local", "baseline", "elemental", "belief", "batched_baseline"} <= set(
         listed.output.splitlines()
     )
+    help_text = runner.invoke(app, ["train", "--help"]).output
+    assert "--updates" in help_text
+    assert "--steps" not in help_text
+    conflict = runner.invoke(app, ["train", "--updates", "1", "--steps", "2"])
+    assert conflict.exit_code != 0
+    assert "choose --updates or --steps" in conflict.output
     retired = runner.invoke(app, ["train", "--regime", "saved.json"])
     assert retired.exit_code != 0
     assert "f09f5c2919" in retired.output
@@ -51,7 +59,7 @@ def test_local_cli_stop_resume_and_target_only_continuation(
         "cpu",
         "--out",
         str(out),
-        "--steps",
+        "--updates",
         "1",
     ]
     stopped = runner.invoke(app, command)
@@ -62,8 +70,12 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     assert finished.exit_code == 0, finished.output
     checkpoint = out / "checkpoints/00000001-ema.pt"
     original = checkpoint.read_bytes()
-    rerun = runner.invoke(app, command)
+    rerun = runner.invoke(
+        app, [arg if arg != "--updates" else "--steps" for arg in command]
+    )
     assert rerun.exit_code == 0, rerun.output
+    assert "--steps is deprecated; use --updates" in rerun.output
+    assert "removed in Manabot 0.3.0" in rerun.output
     extended = runner.invoke(app, command[:-1] + ["2"])
     assert extended.exit_code == 0, extended.output
     assert checkpoint.read_bytes() == original
@@ -178,3 +190,22 @@ def test_selection_step_keeps_replayed_population_and_refuses_stale_output(
     other = save_checkpoint(tmp_path / "other", new_state(settings, 198))
     with pytest.raises(ValueError, match="another policy"):
         collect_selection(other, target, population, match=root_match(settings))
+
+
+def test_cli_recipe_config_needs_only_the_fields_it_receives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Config(BaseModel):
+        seed: int
+        device: str
+
+    def train(config: Config) -> None:
+        pass
+
+    module = ModuleType("experiments.cli_config_fixture")
+    module.train = train
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    function, config_type = experiment_recipe("cli_config_fixture")
+    config = config_type.model_validate({"seed": 197, "device": "cpu"})
+    assert config.model_dump() == {"seed": 197, "device": "cpu"}
+    assert function is train

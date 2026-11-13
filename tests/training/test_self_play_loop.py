@@ -12,9 +12,9 @@ import torch
 from manabot.backends.torch.rl import NumericalError
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import gray_ogre_match
+from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import LoopState, SelfPlay, load_state, self_play
-from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.selection import UpdateDiagnostics
 
@@ -62,7 +62,14 @@ def test_a_state_for_other_settings_or_seed_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="another seed"):
         load_state(tmp_path / "state.pt", settings, SEED + 1)
     changed = settings.model_copy(update={"transitions": 32})
-    with pytest.raises(ValueError, match="another settings"):
+    with pytest.raises(ValueError, match="transitions: saved 16, requested 32"):
+        load_state(tmp_path / "state.pt", changed, SEED)
+    changed = settings.model_copy(
+        update={"learning": settings.learning.model_copy(update={"policy_lambda": 0.8})}
+    )
+    with pytest.raises(
+        ValueError, match=r"learning.policy_lambda: saved 0.95, requested 0.8"
+    ):
         load_state(tmp_path / "state.pt", changed, SEED)
     moved = settings.model_copy(update={"threads": 2})
     assert load_state(tmp_path / "state.pt", moved, SEED) is not None

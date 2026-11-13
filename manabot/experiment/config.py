@@ -14,17 +14,11 @@ from typing import Literal
 
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
-from manabot.experiment.execution import ExperimentSchedule, PlannedRun
+from manabot.experiment.records import ExperimentSchedule, PlannedRun
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_json, canonical_sha256
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    Learning,
-    Operation,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.regime import Execution, Operation, TrainingRegime, TrainSelfPlay
 from manabot.training.validation import validate_regime
 
 ComponentName = Literal[

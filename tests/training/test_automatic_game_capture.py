@@ -271,7 +271,6 @@ def test_semantic_training_retains_rejected_command_and_offer_frame(
             tmp_path / "complete.jsonl",
             reference="uniform",
             max_steps=100,
-            check=lambda: None,
         )
     evidence = read_failure(scope.paths[0])
     assert evidence.games[0].frame

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     # Annotations only: the update step and EMA serve any model, so importing
     # them loads neither the player's network nor the training configuration.
     from manabot.backends.torch.policy import ActorCritic
-    from manabot.training.regime import Precision
+    from manabot.training.learning import Precision
 
 # -- Update step ---------------------------------------------------------------
 

@@ -8,7 +8,8 @@ from it.
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, ppo_checkpoints
 from manabot.sim.matchup import selected_match
-from manabot.training.regime import Learning, TrainingRegime
+from manabot.training.learning import Learning
+from manabot.training.regime import TrainingRegime
 import managym
 
 

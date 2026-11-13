@@ -457,7 +457,7 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
     # only (under TYPE_CHECKING); the runtime probe below holds it to that.
     assert violations == [
         "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
-        "manabot/backends/torch/learner.py: manabot.training.regime",
+        "manabot/backends/torch/learner.py: manabot.training.learning",
     ]
 
 

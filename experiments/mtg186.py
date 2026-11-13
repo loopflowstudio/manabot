@@ -38,7 +38,7 @@ from experiments.elemental_grid import (
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.config import Baseline, Case, Experiment
-from manabot.experiment.execution import PlannedRun
+from manabot.experiment.records import PlannedRun
 from manabot.infra.identity import canonical_json, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.world import checkpoint_world

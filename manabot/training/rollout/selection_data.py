@@ -6,7 +6,6 @@ outcomes enter only after the game ends. No gradients or policy updates occur.
 Rows are ordered by game, seat, then decision for same-viewer estimators.
 """
 
-from collections.abc import Callable
 import json
 import os
 from pathlib import Path
@@ -95,7 +94,6 @@ def collect_selection_game(
     *,
     reference: Literal["uniform", "action_type_uniform"],
     max_steps: int,
-    check: Callable[[], None],
 ) -> SelectionGame:
     """Retain a replayable journal, including partial evidence on cap/failure.
 
@@ -131,7 +129,6 @@ def collect_selection_game(
             + "\n"
         )
         while not env.is_game_over():
-            check()
             if len(rows) >= max_steps:
                 raise RuntimeError(
                     "selection game exceeded step cap; no terminal label"
@@ -308,7 +305,6 @@ def collect_selection(
             journal,
             reference=reference,
             max_steps=max_steps,
-            check=selection_unbounded,
         )
         if replay_selection_game(journal) != len(game.rows):
             raise ValueError("selection replay decision count mismatch")
@@ -327,7 +323,3 @@ def collect_selection(
     )
     atomic_json(out, dataset.model_dump(mode="json"))
     return out
-
-
-def selection_unbounded() -> None:
-    """No outer deadline; each game's max_steps still bounds its replay."""

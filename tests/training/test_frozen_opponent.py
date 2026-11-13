@@ -6,12 +6,8 @@ import pytest
 
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
-from manabot.training.regime import (
-    FrozenOpponent,
-    Learning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import Learning
+from manabot.training.regime import FrozenOpponent, TrainingRegime, TrainSelfPlay
 import managym
 
 

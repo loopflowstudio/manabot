@@ -11,7 +11,8 @@ runs the five-arm study (smoke by default; see `--help`).
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, ppo_checkpoints
 from manabot.sim.matchup import selected_match
-from manabot.training.regime import Learning, Schedule, TrainingRegime
+from manabot.training.learning import Learning, Schedule
+from manabot.training.regime import TrainingRegime
 import managym
 
 

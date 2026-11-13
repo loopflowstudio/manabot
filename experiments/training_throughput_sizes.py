@@ -40,7 +40,8 @@ from experiments.learning_signal import (
     training_runs,
 )
 from experiments.training_throughput_packing import GPU_SAMPLER, LEG_VARIABLE
-from manabot.training.regime import Precision, TrainingRegime
+from manabot.training.learning import Precision
+from manabot.training.regime import TrainingRegime
 
 EXPERIMENT = "training_throughput_sizes"
 SEEDS = (26301, 26302, 26303, 26304)

@@ -21,7 +21,7 @@ class LocalConfig(BaselineConfig):
 def train(config: LocalConfig) -> None:
     inputs = settings(config).model_copy(update={"streams": 2, "transitions": 16})
     with track(
-        clocks=[Step("updates", "optimizer updates")],
+        clocks=[Step("updates", "collection/update iterations")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:

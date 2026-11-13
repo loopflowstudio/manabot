@@ -14,7 +14,8 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.training.regime import DampedPolicyLearning, Execution, Precision
+from manabot.training.learning import DampedPolicyLearning, Precision
+from manabot.training.regime import Execution
 from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.training.updates.damped_policy import update_damped_iteration
 

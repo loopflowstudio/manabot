@@ -19,7 +19,7 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.training.regime import Learning
+from manabot.training.learning import Learning
 from manabot.training.rollout.collection import (
     RolloutBatch,
     collect,

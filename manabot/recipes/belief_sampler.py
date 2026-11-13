@@ -30,7 +30,7 @@ class BeliefConfig(BaseModel):
 def train(config: BeliefConfig) -> None:
     settings = gray_ogre_self_play().model_copy(update={"device": config.device})
     with track(
-        clocks=[Step("updates", "optimizer updates")],
+        clocks=[Step("updates", "collection/update iterations")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:
