@@ -258,23 +258,11 @@ obligations remain unchanged.
 
 ## Concept review 11: implemented — 2026-11-13
 
-Recovery guidance now distinguishes each checkpoint's writing revision/run
-from Etude's attempt records and resume coordinates. The fixed-revision rule
-is stated once, for launched runs ("What resume does not promise"); the
-game-error section links to it. Local reruns after a code change can resume
-when world, seed and learner settings match; existing checkpoint bytes remain
-unchanged. The costs/counters provenance sentence names checkpoint revisions
-and attempt records. No revision refusal was added. Realign found that only
-launched runs set `ETUDE_RUN`, so a local checkpoint's `source.etude_run` is
-`None` (`manabot/model/world.py::checkpoint_source`); both sentences now name
-the Etude run only under a launch.
-
-The original counterexample and direction remain at
-`e66568121557afbc094f410e8f3a2a3ba206e3c2:scratch/plan.md`.
-Validation: source inspection and `git diff --check` passed; documentation only,
-so no build, test or parity rerun. SDK release/pin, installed-consumer and
-launcher/service proofs, recovery review and retained replay mismatch remain
-later delivery obligations. Open choices remain in questions.md.
+Recovery guidance separates each checkpoint's writing revision (and Etude run,
+set only under a launch) from Etude's attempt records. The fixed-revision rule
+applies to launched runs; a local rerun after a code change resumes when
+world, seed and learner settings match. No revision refusal was added. Prose
+only; full text at `626dab4b48:scratch/plan.md`. Obligations unchanged.
 
 ## Concept review 12: nothing to change in the design — 2026-11-13
 
