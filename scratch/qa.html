@@ -38,7 +38,7 @@ setup-uv cache (<code>setup-uv-1-…-3.13-pruned-239916d6…</code>), so every I
 CUDA Torch build plus nvidia wheels (cudnn 495 MiB, cusolver 217 MiB, nccl 206 MiB, …) from scratch.
 On this runner <code>Downloaded nvidia-cublas</code> arrived 2m36s after Torch;
 <code>Prepared 167 packages in 2m 59s</code>. With a typical 18 s install the job would take about
-386 s. This is the second slow-download runner in eight runs (recovery spent 145 s in dispatch 43334548912).</p>
+386 s. This is the second slow-download runner in eight runs (recovery spent 145 s in dispatch 43332039325).</p>
 
 <h2>B. Local experiment group, as CI runs it</h2>
 <pre>uv run --no-sync pytest -n logical --durations=20 tests/training/test_experiment_runner.py \

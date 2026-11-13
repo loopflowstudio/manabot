@@ -21,3 +21,9 @@ false`. All groups restore; `model` alone saves because every group installs
 the same extras. This is the simpler reversible repair; it avoids redundant
 large uploads. Ubuntu cold/save and warm/restore measurements remain necessary
 before claiming the 480-second target.
+
+# CPU Torch for Integration — 2026-11-12 (concept review)
+
+Assumption: Integration does not need the cu132 Torch build on a hosted CPU
+runner. Supersedes the cache-retention choice above; evidence and direction are
+in `ci-under-8-minutes.md`. Reversible by removing two `uv sync` flags.
