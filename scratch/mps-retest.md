@@ -49,7 +49,7 @@ best MPS (bf16, 261 s) is not faster than MLX f32 (263 s) and MLX half is
   host releases 2026-11-14.
 - PR #513 checks were pending at realign; gate/publish own them.
 
-## Concept review 2026-11-13 — implemented
+## Concept review 2026-11-13 — implemented in `76d211074d`
 
 No number, chart, receipt or measured claim changed; no new measurement.
 
@@ -85,6 +85,8 @@ No open product choice. Nothing is left to delete: no files, fixtures, stored
 evidence or public precision options were removed.
 
 Checks: `uv run --extra dev pytest tests/training/test_update_backends.py -k
-parity -q`; Ruff check/format. Result tables and the coverage matrix are
-byte-identical to HEAD `afd3bb2ede`. Gate owns the backend suites and
+parity -q` (4 passed); Ruff check/format clean. Against `afd3bb2ede`, every
+result table and the coverage matrix are byte-identical; the only table
+change drops the planned-axis grid (design, not evidence; the matrix owns the
+unreached cells) and renames "MLX half (new runs)" to "MLX half". Gate owns the backend suites and
 publication checks.
