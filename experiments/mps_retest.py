@@ -10,7 +10,7 @@ to the report's interpretation, never to a hard-coded threshold.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, replace
 import json
@@ -74,12 +74,13 @@ class Evaluation:
     gradients: dict[str, np.ndarray]
 
 
+Collect = Callable[[Batch], np.ndarray]
+
+
 class Runner(Protocol):
     def evaluate(self, batch: Batch) -> Evaluation: ...
     def step(self, batch: Batch) -> float: ...
-    def collect(self, batch: Batch) -> np.ndarray: ...
-    def begin_collection(self) -> None: ...
-    def end_collection(self) -> None: ...
+    def collection(self) -> AbstractContextManager[Collect]: ...
     def reset(self) -> None: ...
     def sync(self) -> None: ...
     def memory(self) -> dict[str, int]: ...
@@ -223,14 +224,13 @@ class TorchRunner:
         self.dtype = {"mps-bf16": torch.bfloat16, "mps-f16": torch.float16}.get(arm)
         self.initial = {k: v.detach().clone() for k, v in agent.state_dict().items()}
         self.scaled = arm == "mps-f16"
-        self.inference = None
         self._peak = 0
         self._stop = threading.Event()
         self._monitor: threading.Thread | None = None
+        self.reset()
         if self.device.type == "mps":
             self._monitor = threading.Thread(target=self._sample_memory, daemon=True)
             self._monitor.start()
-        self.reset()
 
     def _sample_memory(self) -> None:
         import torch
@@ -363,35 +363,35 @@ class TorchRunner:
         self.sync()
         return float(loss.detach())
 
-    def begin_collection(self) -> None:
+    @contextmanager
+    def collection(self) -> Iterator[Collect]:
         import torch
 
         from manabot.model.inference import PolicyInference
 
         self.agent.eval()
-        self.inference = PolicyInference(self.agent).__enter__()
-        with torch.no_grad(), self.precision():
-            self.inference.catalog()
-        self.sync()
+        try:
+            with PolicyInference(self.agent) as inference:
+                with torch.no_grad(), self.precision():
+                    inference.catalog()
+                self.sync()
 
-    def end_collection(self) -> None:
-        assert self.inference is not None
-        self.inference.__exit__(None, None, None)
-        self.inference = None
-        self.agent.train()
+                def collect(batch: Batch) -> np.ndarray:
+                    with torch.no_grad(), self.precision():
+                        obs = inference.prepare(
+                            {
+                                k: torch.from_numpy(v)
+                                for k, v in batch.observations.items()
+                            }
+                        )
+                        logits, _ = self.agent(obs)
+                        result = logits.float().cpu().numpy()
+                    self.sync()
+                    return result
 
-    def collect(self, batch: Batch) -> np.ndarray:
-        import torch
-
-        assert self.inference is not None
-        with torch.no_grad(), self.precision():
-            obs = self.inference.prepare(
-                {k: torch.from_numpy(v) for k, v in batch.observations.items()}
-            )
-            logits, _ = self.agent(obs)
-            result = logits.float().cpu().numpy()
-        self.sync()
-        return result
+                yield collect
+        finally:
+            self.agent.train()
 
     def memory(self) -> dict[str, int]:
         import torch
@@ -484,19 +484,24 @@ class MLXRunner:
             raise ValueError("nonfinite MLX loss, gradient norm or parameters")
         return loss
 
-    def begin_collection(self) -> None:
-        self.policy.cache_programs()
-        self.sync()
+    @contextmanager
+    def collection(self) -> Iterator[Collect]:
+        try:
+            self.policy.cache_programs()
+            self.sync()
 
-    def end_collection(self) -> None:
-        self.policy.clear_cache()
+            def collect(batch: Batch) -> np.ndarray:
+                trimmed = self._trim(batch)
+                # GPU arms attend the same bucket shape. CPU additionally
+                # compacts inference columns, as production PolicyInference does.
+                logits, _ = self.policy.evaluate(
+                    self.policy.prepare(trimmed.observations)
+                )
+                return _pad(logits, batch)
 
-    def collect(self, batch: Batch) -> np.ndarray:
-        trimmed = self._trim(batch)
-        # GPU arms attend the same bucket shape. CPU additionally compacts its
-        # inference columns, as production PolicyInference does.
-        logits, _ = self.policy.evaluate(self.policy.prepare(trimmed.observations))
-        return _pad(logits, batch)
+            yield collect
+        finally:
+            self.policy.clear_cache()
 
     def memory(self) -> dict[str, int]:
         import mlx.core as mx
@@ -570,9 +575,14 @@ def _compare(
     }
 
 
-def _reference_path(out: Path, capture: Path, width: int, rows: int) -> Path:
-    ident = json.loads((capture / "provenance.json").read_text())["capture_id"]
-    return out / "references" / ident / platform.node() / f"w{width}-b{rows}.npz"
+def _reference_path(out: Path, metadata: dict[str, Any], width: int, rows: int) -> Path:
+    return (
+        out
+        / "references"
+        / metadata["capture_id"]
+        / metadata["host"]["hostname"]
+        / f"w{width}-b{rows}.npz"
+    )
 
 
 def _choices(logits: np.ndarray, legal: np.ndarray, seed: int) -> np.ndarray:
@@ -584,46 +594,48 @@ def _choices(logits: np.ndarray, legal: np.ndarray, seed: int) -> np.ndarray:
     return (cdf < np.random.default_rng(seed).random((len(logits), 1))).sum(1)
 
 
-def _load_reference(path: Path) -> Evaluation:
-    arrays = _read(path)
-    return Evaluation(
-        arrays["logits"],
-        arrays["values"],
-        float(arrays["loss"]),
-        {k[5:]: v for k, v in arrays.items() if k.startswith("grad/")},
-    )
+def _reference(
+    path: Path,
+    metadata: dict[str, Any],
+    arrays: dict[str, np.ndarray] | None = None,
+) -> dict[str, np.ndarray]:
+    """Save CPU arrays when supplied, then read only a matching reference."""
+    if arrays is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(path, **arrays)
+        path.with_suffix(".json").write_text(json.dumps(metadata))
+    if json.loads(path.with_suffix(".json").read_text()) != metadata:
+        raise ValueError("CPU reference provenance differs")
+    return _read(path)
 
 
 def _provenance(capture: Path, laptop: bool) -> dict[str, Any]:
+    provenance = json.loads((capture / "provenance.json").read_text())
     return {
         "host": _host(),
         "laptop": laptop,
         "capture": str(capture.resolve()),
-        "capture_id": json.loads((capture / "provenance.json").read_text())[
-            "capture_id"
-        ],
+        "capture_id": provenance["capture_id"],
         "streams": json.loads((capture / "regime.json").read_text())["stages"][0][
             "streams"
         ],
-        "capture_revision": json.loads((capture / "provenance.json").read_text())[
-            "revision"
-        ],
+        "capture_revision": provenance["revision"],
     }
 
 
-def _parity_records(
+def _latest_parity(
     out: Path, metadata: dict[str, Any], width: int, arm: Arm
-) -> list[dict[str, Any]]:
-    return [
-        r
+) -> dict[int, dict[str, Any]]:
+    """Latest attempt per row count; failures supersede earlier successes too."""
+    return {
+        r["rows"]: r
         for r in _rows(out / "bench.jsonl")
         if r["event"] == "parity"
-        and r.get("status") == "ok"
         and r["width"] == width
         and r["arm"] == arm
         and r["host"] == metadata["host"]
         and r["capture_id"] == metadata["capture_id"]
-    ]
+    }
 
 
 def bench(
@@ -652,28 +664,25 @@ def bench(
     with _runner(capture, width, arm) as runner:
         if phase == "parity":
             result = runner.evaluate(batch)
-            path = _reference_path(out, capture, width, size)
+            path = _reference_path(out, metadata, width, size)
             collection = _batch(capture, "collection", size)
             runner.reset()
-            runner.begin_collection()
-            try:
-                collection_logits = runner.collect(collection)
-            finally:
-                runner.end_collection()
-            if arm == "cpu8":
-                path.parent.mkdir(parents=True, exist_ok=True)
-                np.savez(
-                    path,
-                    collection_logits=collection_logits,
-                    logits=result.logits,
-                    values=result.values,
-                    loss=result.loss,
+            with runner.collection() as collect:
+                collection_logits = collect(collection)
+            arrays = _reference(
+                path,
+                metadata,
+                {
+                    "collection_logits": collection_logits,
+                    "logits": result.logits,
+                    "values": result.values,
+                    "loss": np.asarray(result.loss),
                     **{f"grad/{k}": v for k, v in result.gradients.items()},
-                )
-                path.with_suffix(".json").write_text(json.dumps(metadata))
-            if json.loads(path.with_suffix(".json").read_text()) != metadata:
-                raise ValueError("CPU reference provenance differs")
-            collection_reference = _read(path)["collection_logits"]
+                }
+                if arm == "cpu8"
+                else None,
+            )
+            collection_reference = arrays["collection_logits"]
             legal_collection = collection.observations["actions_valid"] > 0
             row["collection_logits_max_abs"] = float(
                 np.abs(
@@ -687,34 +696,24 @@ def bench(
                     != _choices(collection_reference, legal_collection, 21501)
                 )
             )
-            reference = _load_reference(path)
+            reference = Evaluation(
+                arrays["logits"],
+                arrays["values"],
+                float(arrays["loss"]),
+                {k[5:]: v for k, v in arrays.items() if k.startswith("grad/")},
+            )
             row.update(
                 _compare(
                     result, reference, batch.observations["actions_valid"] > 0, arm
                 )
             )
         else:
-            parity = [
-                r
-                for r in _parity_records(out, metadata, width, arm)
-                if r["rows"] == size
-            ]
-            if not parity:
-                refused = [
-                    r
-                    for r in _rows(out / "bench.jsonl")
-                    if r["event"] == "parity"
-                    and r["status"] == "unsupported"
-                    and r["width"] == width
-                    and r["rows"] == size
-                    and r["arm"] == arm
-                    and r["host"] == metadata["host"]
-                    and r["capture_id"] == metadata["capture_id"]
-                ]
-                if refused:
+            parity = _latest_parity(out, metadata, width, arm).get(size)
+            if parity is None or parity["status"] != "ok":
+                if parity is not None and parity["status"] == "unsupported":
                     row.update(
                         status="unsupported",
-                        error=refused[-1]["error"],
+                        error=parity["error"],
                         failure_phase="parity",
                         load_after=os.getloadavg()[0],
                         ended=time.time(),
@@ -725,7 +724,7 @@ def bench(
                     "run parity for this host, revision, capture, width, rows and arm first"
                 )
             row["parity"] = {
-                k: parity[-1][k]
+                k: parity[k]
                 for k in (
                     "gradient_cosine",
                     "gradient_min_cosine",
@@ -734,27 +733,25 @@ def bench(
                 )
             }
             times: list[float] = []
-            if phase == "collection":
-                _quiet(laptop)
-                tick = time.perf_counter()
-                runner.begin_collection()
-                row["catalog_seconds"] = time.perf_counter() - tick
-            try:
+            _quiet(laptop)
+            tick = time.perf_counter()
+            scope = (
+                runner.collection()
+                if phase == "collection"
+                else nullcontext(runner.step)
+            )
+            with scope as call:
+                if phase == "collection":
+                    row["catalog_seconds"] = time.perf_counter() - tick
                 for rep in range(repeats + 1):
                     if phase == "learner":
                         runner.reset()
                     runner.sync()
                     _quiet(laptop)
                     tick = time.perf_counter()
-                    if phase == "learner":
-                        runner.step(batch)
-                    else:
-                        runner.collect(batch)
+                    call(batch)
                     runner.sync()
                     times.append(time.perf_counter() - tick)
-            finally:
-                if phase == "collection":
-                    runner.end_collection()
             row.update(
                 first_seconds=times[0],
                 seconds=times[1:],
@@ -791,15 +788,14 @@ def update(
         }
         _quiet(laptop)
         tick = time.perf_counter()
-        runner.begin_collection()
-        policy_seconds = time.perf_counter() - tick
         calls = decisions = 0
         sampled: list[np.ndarray] = []
-        try:
+        with runner.collection() as collect:
+            policy_seconds = time.perf_counter() - tick
             for batch in _batches(capture, "collection"):
                 _quiet(laptop)
                 tick = time.perf_counter()
-                logits = runner.collect(batch)
+                logits = collect(batch)
                 policy_seconds += time.perf_counter() - tick
                 sampled.append(
                     _choices(
@@ -808,21 +804,11 @@ def update(
                 )
                 calls += 1
                 decisions += batch.rows
-        finally:
-            runner.end_collection()
         actions = np.concatenate(sampled)
-        sample_path = _reference_path(out, capture, width, 0)
-        if arm == "cpu8":
-            sample_path.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(sample_path, actions=actions)
-            sample_path.with_suffix(".json").write_text(
-                json.dumps(_provenance(capture, laptop))
-            )
-        if json.loads(sample_path.with_suffix(".json").read_text()) != _provenance(
-            capture, laptop
-        ):
-            raise ValueError("whole-update CPU sampling reference provenance differs")
-        expected_actions = _read(sample_path)["actions"]
+        sample_path = _reference_path(out, provenance, width, 0)
+        expected_actions = _reference(
+            sample_path, provenance, {"actions": actions} if arm == "cpu8" else None
+        )["actions"]
         if actions.shape != expected_actions.shape:
             raise ValueError("whole-update call rows differ")
         row["sample_disagreements"] = int(np.count_nonzero(actions != expected_actions))
@@ -930,7 +916,7 @@ def _child(
     except subprocess.TimeoutExpired:
         reason = f"worker timeout after {args.timeout}s"
     _emit(
-        args.out / ("bench.jsonl" if command == "bench" else "updates.jsonl"),
+        ledger,
         {
             "event": phase if command == "bench" else "update",
             "width": width,
@@ -960,8 +946,11 @@ def replays(args: argparse.Namespace) -> None:
     # families are required, and both half dtypes are attempted.
     for width in args.widths:
         for arm in ARMS:
-            if not _parity_records(
-                args.out, _provenance(args.capture, args.laptop), width, arm
+            if not any(
+                r["status"] == "ok"
+                for r in _latest_parity(
+                    args.out, _provenance(args.capture, args.laptop), width, arm
+                ).values()
             ):
                 _quiet(args.laptop)
                 _child(args, "bench", width, 64, arm, phase="parity")
@@ -1162,9 +1151,10 @@ def report(bench_dir: Path, out: Path) -> None:
                     )
                     parity = [
                         r
-                        for r in local
+                        for r in latest.values()
                         if r["event"] == "parity"
                         and r["width"] == width
+                        and r["streams"] == streams
                         and r["arm"] == arm
                         and r["status"] == "ok"
                     ]

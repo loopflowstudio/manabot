@@ -157,8 +157,9 @@ CPU references retain capture and source provenance. Captures and their index
 files must be retained alongside these ledgers, `summary.json` and the charts.
 Report input refuses mixed source revisions or multiple captures at one stream
 count on one host. New attempts supersede the corresponding cell in summaries;
-raw receipts remain intact. M2 report artifacts use `full_context.png`; other
-hosts have a hostname suffix.
+raw receipts remain intact. Parity labels use the latest attempts for that
+stream count. M2 report artifacts use `full_context.png`; other hosts have a
+hostname suffix.
 
 **2026-11-12:** The decision threshold was removed before any experiment run.
 The steered matrix adds small/wide models, all three stream counts, both half

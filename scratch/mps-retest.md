@@ -12,6 +12,12 @@ Delete — do not maintain (implemented):
 - Replace half-dtype public logits with float32 logits at the head boundary;
   float16 cannot hold the existing -1e8 illegal-action sentinel. Gradients flow
   through the cast; regime precision refusals and defaults remain unchanged.
+- Remove the retest's manual begin/end collection protocol and mutable inference
+  handle. `Runner.collection` owns setup, cached calls and cleanup, including
+  setup failures. CPU reference read/write checks have one owner, `_reference`.
+- Remove capture's unused learning-start clock and mixed timing/count dictionary.
+  Parity lookup keeps the latest attempt, including failures; chart labels use
+  that stream count's evidence instead of older or other-capture successes.
 
 Remaining:
 1. Resolve the capped AWS M2 launch/release path. Do not allocate uncapped AWS
@@ -32,3 +38,10 @@ Checks: locked Python 3.13 sync succeeded; focused MLX trimming test 1 passed;
 float16 output-boundary test 1 passed; experiment discovery/backend boundaries
 3 passed; controlled two-row CPU/MLX runner and incomplete-report fixture
 passed without collecting timing. Full MPS/remote acceptance has not run.
+
+Compress validation (2026-11-12): `uv run --no-sync pytest
+tests/eval/test_experiment_files.py -q` — 4 passed. Ruff and `py_compile` passed
+for both changed modules. Controlled two-row CPU/MLX collection→learning and
+failure-cleanup checks passed; injected-clock per-call/update receipts and
+synthetic latest-attempt/same-stream report checks passed. No timing evidence
+was collected. Gate still owns the affected suites and remote acceptance.

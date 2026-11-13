@@ -40,7 +40,8 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
 
     calls: list[dict[str, Any]] = []
     minibatches: list[dict[str, Any]] = []
-    clock: dict[str, float] = {}
+    collection_seconds = 0.0
+    learner_decisions = 0
     recording_seconds = 0.0
     in_collection = False
     original_prepare = PolicyInference.prepare
@@ -82,16 +83,15 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
         return result
 
     def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> RolloutBatch:
-        nonlocal in_collection
+        nonlocal in_collection, collection_seconds, learner_decisions
         in_collection = True
         tick = time.perf_counter()
         try:
             batch = original_collect(self, *args, **kwargs)
-            clock["learner_decisions"] = int(batch.actions.size)
+            learner_decisions = int(batch.actions.size)
         finally:
             in_collection = False
-            clock["collection"] = time.perf_counter() - tick
-        clock["learning_start"] = time.perf_counter()
+            collection_seconds = time.perf_counter() - tick
         return batch
 
     def check(self: OptimizerHealth, loss: torch.Tensor) -> None:
@@ -165,11 +165,11 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
     meta.update(
         status=str(result.status),
         wall=time.perf_counter() - started,
-        collection_wall=clock.get("collection"),
+        collection_wall=collection_seconds,
         collection_policy=policy,
-        engine=clock["collection"] - policy - recording_seconds,
+        engine=collection_seconds - policy - recording_seconds,
         recording_seconds=recording_seconds,
-        learner_decisions=int(clock["learner_decisions"]),
+        learner_decisions=learner_decisions,
         calls=len(calls),
         minibatches=len(minibatches),
         host_after=platform.platform(),
