@@ -74,115 +74,15 @@ The initial harness invocation failed before learning because EXP-56 removed tra
 
 Intentional differences remain in persistence and tracking: update-named immutable policies and state.pt replace stage exports/recovery snapshots; checkpoint metadata and container bytes differ, while model tensors match. Native/RNG streams restart on resume; this fresh-run proof does not restore exact interrupted-run equivalence. Frozen staged/adaptive/frozen-opponent execution still refuses. No GPU, provider retry or service continuation claim follows from this CPU fixture.
 
-## Compress follow-through — 2026-11-13
+## Earlier review validation
 
-Removed unused scheduler-only `MonitoringBudget.protocols_for`, `Hardware.admit`
-and `HardwareInventory.select`; retained their schemas/validators and offline
-readers. README now describes separate baseline evaluation and the actual update
-clock. Historical stub/audit notes now point to their exact git versions.
-
-`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training --with nbclient --with nbformat --with matplotlib --with ipykernel pytest tests/training/test_experiments.py tests/training/test_experiment_report.py tests/eval/test_experiment_files.py -q`: 34 passed, seven report failures solely for missing nbconvert. Same invocation with `--with nbconvert pytest tests/training/test_experiment_report.py --lf -q`: seven passed (17.25s). Earlier collection attempts lacked nbclient, then matplotlib; temporary uv overlays supplied dependencies without changing the project environment. Ruff, compileall and diff whitespace checks passed. No learner code changed, so the recorded post-merge parity proof was not rerun.
-
-## Concept-review implementation — 2026-11-13
-
-Moved retained experiment records and live learning types to their defining
-modules, preserving schemas. Resume diagnostics now retain learner settings
-and report nested field differences; machine-only changes remain resumable.
-CLI --updates carries the target, --steps warns with removal 0.3.0, and both
-flags together refuse. Current docs use --updates and learning.py.
-
-With the same real SDK source override, focused self-play refusal, CLI
-stop/resume/extension/alias, regime and package-boundary checks: 25 passed,
-one stale boundary import expectation failed. Updated that expectation.
-Then boundary rerun, config-without-updates, experiment records, CI selection
-and release checks: 114 passed (2.11s). Ruff and diff whitespace checks pass.
-No learner calculation changed; parity was not rerun. Installed-wheel proof,
-SDK release/pin, recovery review and the retained replay mismatch remain gate
-or delivery obligations. No service or background process was started.
-
-## Compress after concept implementation — 2026-11-13
-
-Removed the unused selection deadline callback and no-op adapter; centralized
-learner-setting serialization; clarified loop helper names and recipe clock
-labels. Required resume, selection and failure-capture behavior is unchanged.
-
-`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_automatic_game_capture.py::test_semantic_training_retains_rejected_command_and_offer_frame -q`: 12 passed (20.72s). Changed production files pass Ruff and compileall; `git diff --check` passes. `lf context` is within both scratch limits. No background service or provider launch was started; delivery obligations above remain.
-
-## Fixed PPO horizon — 2026-11-13
-
-PPO now reads a recipe-owned `Learning.horizon`, validated by SelfPlay,
-serialized in learner settings and named in resume refusals. Belief supplies
-its own update count; the builder requires it. Unset horizons remain absent
-from retained learning records. Removed target arguments from step/learn and
-the unusable implicit SelfPlay learning default. Docs already describe this
-contract. The parity harness now imports historical types from their original
-module in the reference archive and supplies horizon=2 only to the candidate.
-
-With `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training`:
-- `pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_pretrained.py -q`: 13 passed (24.65s), including raw/EMA first-update equality across launch targets, horizon refusal, planned stop/resume, immutable checkpoints and belief extension.
-- `python scratch/parity.py`: PPO and damped-policy raw/EMA each match all 87 tensors bitwise against main `6ce618b8a`, in policies and state.pt; same native SHA256 and counts as the earlier proof.
-- `pytest tests/training/test_builders.py::test_current_regime_files_round_trip_to_their_bytes tests/training/test_builders.py::test_checkpoint_builders_chain_stages_with_independent_settings tests/training/test_regimes.py::test_frozen_regimes_read_their_pack_selectors_as_world -q`: 3 passed (1.86s).
-Changed Python files pass Ruff format/check; git diff --check passes. No
-service, watcher, provider launch, dependency pin or publication was started.
-Release/installed-consumer and launcher/service proofs, full gate and the
-retained replay mismatch remain delivery obligations; ready for demo.
-
-## Restored monitoring and benchmark — 2026-11-13
-
-Review 4 is implemented. Collector/learner profiler deltas populate historical
-phase keys; update rows sample RSS/load, CUDA process peaks and current MPS
-allocation. Counts persists active completed-update seconds; all current
-recipes declare the Time clock, including batched baseline. Belief sampler
-checkpoints inherit the policy's complete clock coordinate. The benchmark runs
-SelfPlay builders untracked and writes rows/summary, replacing the retired
-regime/TrainingRun contract. Frozen throughput launch/drive/phase entry points
-refuse; their exclusive execution tests are removed. Frozen refusal has one
-owner in regime.py. Guides, panels and workflow skills describe these contracts.
-
-With `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training`:
-- `pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_phase_timing.py tests/training/test_training_throughput.py::test_frozen_throughput_refuses_before_creating_output tests/training/test_game_errors.py -q`: 49 passed, three previously recorded retained replay binding_mismatch failures (45.68s). A missing belief checkpoint clock warning was fixed afterward.
-- `pytest tests/training/test_recipe_etude.py::test_belief_extension_has_new_policy_histories_and_sampler tests/training/test_attack_execution.py tests/test_package_boundaries.py tests/training/test_report_helpers.py -q`: 22 passed, no warning (22.60s); sampler recording is now asserted.
-- `python scratch/parity.py`: PPO/damped raw/EMA each match all 87 tensors bitwise in checkpoints and state.pt against main `6ce618b8a`. Both processes use the rebuilt native extension SHA256 `a7de0ce098207e8a2a3ac16b59bda44e0ab3abafc729c434b1121aeb6dba56e7`. Counts: four games, 357 decisions/transitions, 23 idle steps; PPO optimizer updates/exposures 2/179, damped 60/90. This supersedes the earlier native-binary proof for this pass.
-- Actual benchmark CLI default Elemental builder, two streams/one update: JSON phase split and retained state/policies verified; temporary outputs removed.
-
-Initial recipe checks hit a stale local extension missing pooled_mana_classes.
-Rebuilt with the root maturin command and atomically installed the matching
-cp313 wheel extension; both recipe failures disappeared. Frozen replay bytes
-were unchanged. Workflow compilation passed; changed Python Ruff checks and
-formatting and git diff whitespace checks pass. No provider launch, release,
-pin, installed-consumer proof or service continuation was performed. No
-background service or watcher was started. Delivery obligations in plan.md
-remain.
-
-## Compress after review 4 — 2026-11-13
-
-`step` reads phase seconds and active time from the profilers only (the
-overriding perf_counter pair and `import time` are gone); `counted` takes the
-update's seconds. The benchmark summary reads `training_seconds`. The CLI
-names `FROZEN_EXECUTION_REVISION` directly instead of catching the refusal;
-the throughput driver's internal `run_phase` refusal is dropped (its callers
-refuse). The clock rule moved to AGENTS.md's Etude training records section;
-workflows no longer promises call counts from phase rows or host facts from
-new runs.
-
-With the same SDK override: self-play loop, phase timing, recipe/Etude,
-frozen throughput refusal, CLI retired-override and attack refusal tests: 22
-passed (48.45s). `python scratch/parity.py`: PPO/damped raw/EMA match all 87
-tensors bitwise against main `6ce618b8a`, native SHA256 `a7de0ce0…`, same
-counts. Ruff check/format and `git diff --check` pass.
-
-## Concept review 5 corrections — 2026-11-13
-
-Frozen execution now names main `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`
-(after the #510 sync; first written as `105e7e2aa`), an ancestor of origin/main. Guides
-separate this executor reference from each frozen experiment's own revision.
-The experiment index lists actual callable recipes and retained builders;
-the unused duplicate belief experiment is deleted. Historical illustrations
-and source manifests remain unchanged.
-
-`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_attack_execution.py tests/training/test_recipe_etude.py tests/training/test_regimes.py tests/eval/test_experiment_files.py -q`: 16 passed (28.53s). Changed Python Ruff check/format and `git diff --check` passed. No learning calculation changed; parity was not rerun. SDK release/pin, installed-consumer checks and actual launcher/service proofs remain delivery obligations. No background service or watcher was started.
-
-After the #510 sync (HEAD `ad1aee421`, origin/main `f4e1822fa`, ancestry exit 0), the same override with `tests/training/test_precision.py` added: 39 passed (23.12s), matching the compress run.
+Full concept-review 1–5 and compress transcripts remain at
+`82991cf850976b388cb05ba80d189c1c7f2560a5:scratch/implementation.md`.
+They include focused checks for typed configs, PPO horizon, monitoring rows,
+benchmark migration, retained records, boundary/CI selection and frozen
+refusals. Their code decisions remain in plan.md. The latest parity and
+milestone-recovery proof follows; release, installed-consumer, launcher/service
+and retained replay obligations remain open.
 
 ## Concept review 9 recovery repair — 2026-11-13
 
@@ -216,3 +116,30 @@ first-row resumed_at handling. `git diff --check` passed; `lf context` is within
 both limits after consolidating reviews 6–7 with a git reference. Prose only;
 no build, test or parity rerun. Later delivery obligations remain unchanged.
 Compress: the game-error section's repeated source-repair paragraph now links to the one statement, keeping only that a local rerun does not clear a threshold stop. Claims rechecked against `load_state` (world, seed, learner digest; `source_commit` saved, not compared) and `checkpoint_source`. `git diff --check` passed; prose only, no rerun.
+
+## QA follow-through — 2026-11-13
+
+CLI interruption guidance and guide corrections are implemented (plan.md).
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_cli_interrupt_names_the_saved_output_and_a_rerun_resumes -q`: 1 passed (8.93s).
+The test injects KeyboardInterrupt during learning, checks exit 130 and the
+resume message, verifies earlier state/policies byte-for-byte, then resumes
+with real Etude tracking to update 2. No learner calculation changed.
+
+The same override's `read_job_file` accepted the guide's Elemental arguments
+(`--revision HEAD --updates 3200 --hours 11.9 --usd-per-run 9`, with HEAD
+resolved first). This constructs jobs only; no smoke environment or launch ran.
+Ruff check/format on both changed Python files and `git diff --check` pass.
+
+Boundary probe: two independent temporary Etude runs log one update and finish;
+a second track block raises ValueError or KeyboardInterrupt without logging.
+Each changes finished to failed, retaining reached updates=1. Source inspection
+at EXP-56 `105abdd` identifies Run.__init__'s eager attempt record and
+Run.__exit__/finish's unconditional failure state write. `Attempt.first_row`
+is initialized True, so it is not evidence that an attempt logged a row;
+the probe made no log calls on either second attempt. No SDK fix is claimed.
+PR #103 remains open, committed requirements/lock remain 0.2.16, and released
+consumer/launcher/retry/service obligations remain pending. No server, watcher
+or paid run was started. Earlier review transcripts were consolidated to their
+git reference.
+Compress: nothing to reduce in the interrupt handler, its test or the guide
+corrections; no code edits, no rerun. `git diff --check` passed.

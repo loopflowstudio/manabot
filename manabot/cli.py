@@ -189,6 +189,13 @@ def train_command(
     except Stopped as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(75) from error
+    except KeyboardInterrupt as error:
+        typer.echo(
+            f"Interrupted. Rerun with --out {directory} "
+            "to resume from the last saved state.",
+            err=True,
+        )
+        raise typer.Exit(130) from error
     except StateMismatch as error:
         raise typer.BadParameter(
             f"--out {directory} belongs to another run: {error}"

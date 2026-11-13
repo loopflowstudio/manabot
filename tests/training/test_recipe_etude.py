@@ -12,6 +12,7 @@ from etude.jobs import training
 from etude.train.read import read
 from etude.train.records import Step, Time
 from etude.train.run import local_launch, track
+import numpy as np
 from pydantic import BaseModel
 import pytest
 from typer.testing import CliRunner
@@ -24,7 +25,9 @@ from manabot.recipes.local import LocalConfig, train as train_local
 from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import new_state, root_match, save_checkpoint
 from manabot.training.regime import SelectionGameSpec
+from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.rollout.selection_data import SelectionDataset, collect_selection
+from manabot.training.updates.selection import UpdateDiagnostics
 
 
 def test_cli_lists_recipes_and_refuses_saved_execution() -> None:
@@ -145,6 +148,42 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     assert "belongs to another run" in other_seed.output
     assert "another seed: 197, not 5" in other_seed.output
     assert "Traceback" not in other_seed.output
+
+
+def test_cli_interrupt_names_the_saved_output_and_a_rerun_resumes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "interrupted"
+    runner = CliRunner()
+    command = ["train", "--device", "cpu", "--out", str(out), "--updates"]
+    finished = runner.invoke(app, command + ["1"])
+    assert finished.exit_code == 0, finished.output
+    retained = {
+        path: path.read_bytes()
+        for path in [out / "state.pt", *(out / "checkpoints").glob("*.pt")]
+    }
+
+    def interrupt(
+        state: loop.LoopState, batch: RolloutBatch, rng: np.random.Generator
+    ) -> UpdateDiagnostics:
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(loop, "learn", interrupt)
+        interrupted = runner.invoke(app, command + ["2"])
+    assert interrupted.exit_code == 130, interrupted.output
+    assert f"Rerun with --out {out}" in interrupted.output
+    assert "resume from the last saved state" in interrupted.output
+    assert "Traceback" not in interrupted.output
+    for path, payload in retained.items():
+        assert path.read_bytes() == payload
+
+    resumed = runner.invoke(app, command + ["2"])
+    assert resumed.exit_code == 0, resumed.output
+    assert (out / "checkpoints/00000002-ema.pt").exists()
+    data = read(out / "etude", "local", out.name)
+    assert data.reached["updates"] == 2
+    assert data.state is not None and data.state.state == "finished"
 
 
 @pytest.mark.parametrize("published", [False, True])

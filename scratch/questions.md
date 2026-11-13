@@ -152,3 +152,11 @@ Reversible, taken without asking: a local resume at a different source
 revision is documented, not refused (plan.md, review 11, item 2). Refusing
 would make a local bug fix start a new run; each checkpoint already names the
 revision that wrote it. Raise with the recovery loss at demo.
+
+## QA implementation choice — 2026-11-13
+
+Keep interruption handling in the CLI: show the last-save resume guidance and
+exit 130. Do not convert KeyboardInterrupt into Stopped, whose contract says
+state was saved, or write Etude's state.json from Manabot. Etude owns the
+admission/interruption status fix (plan.md). The release remains pending;
+continue testing with the real SDK source override without committing a path.

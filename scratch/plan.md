@@ -62,7 +62,9 @@ revision; it is not translated to different learning semantics.
 
 1. Release EXP-56, raise every Etude requirement and the runtime pin together,
    refresh uv.lock and verify isolated/installed consumers. SDK 0.2.16 cannot
-   run this branch. No local dependency path is committed.
+   run this branch. No local dependency path is committed. Etude must also
+   distinguish refused admission and interrupted attempts from real failures;
+   the boundary investigation below identifies the current status overwrite.
 2. Gate the affected suites, including the retained game-error replay issue
    below. Demo/review the explicit loss of in-collection/source-repair recovery.
 3. Prove actual launch output restoration/retry and service continuation once
@@ -285,3 +287,21 @@ continuation example may stay as an example.
 
 Open choices (CLI recipe-config fields, local follower) stay in questions.md
 for demo, additive and non-blocking as before. Delivery obligations unchanged.
+
+## QA follow-through — 2026-11-13
+
+Ctrl-C now exits 130 with the output directory to reuse and guidance to resume
+from the last saved state. It does not save a possibly partial learner update.
+The regression interrupts learning after a saved update, verifies the saved
+state and policy bytes survive, and resumes to the next update. The guide and
+package README name Elemental's 50-update grid; the guide marks conditional
+game-error directories and supplies Elemental's required smoke/launch arguments.
+
+Etude PR #103 remains open at `105abdd`. A bounded real-SDK probe (no games)
+confirmed both a rowless refusal and KeyboardInterrupt overwrite a finished
+run's state with failed while keeping its reached update (mechanism and probe
+in implementation.md). This belongs to Etude; no Manabot status store or
+exception translation was added. A genuine failure before the first row must
+still be reportable, so skipping every rowless exception is not a sufficient
+general fix. SDK release/pin, installed consumers and launcher/service proofs
+remain blocked there. Validation: implementation.md.

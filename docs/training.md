@@ -49,8 +49,8 @@ the output directory:
 .runs/elemental/
   state.pt              raw weights, EMA, Adam and the update count, rewritten atomically
   checkpoints/          world-bound raw and EMA policies, named by update and never rewritten
-  game-attempts/        one append-only game-error ledger per attempt
-  failures/             private evidence of any game failure, for replay
+  game-attempts/        append-only ledgers when game-error handling is configured
+  failures/             private replay evidence, created when a game fails
   etude/                the Etude run record and its logged rows
 ```
 
@@ -76,6 +76,9 @@ each time, because it checks an installation and keeps nothing worth resuming.
 A command stopped by a stop request or at its deadline saves its state, prints
 the update it reached and exits 75, the status Etude gives a planned stop; run
 it again to carry on.
+
+Ctrl-C exits 130 and prints the output directory to reuse. Rerun with that
+`--out` to resume from the last saved state; work since that save is lost.
 
 `--recipe local` is the default: a two-update smoke on CPU with no evaluation,
 for checking an installation. `--device cpu|mps|cuda` overrides the recipe's
@@ -562,10 +565,10 @@ An experiment whose training differs from a maintained recipe defines its own
 that to `training`.
 
 ```sh
-uv run etude smoke experiments/<name>.py --revision COMMIT  # local smoke, spending nothing
-uv run etude launch experiments/<name>.py --revision COMMIT --cohort <name>-1 --rent l4
+uv run etude smoke experiments/elemental.py --step train --revision COMMIT --updates 3200 --hours 11.9 --usd-per-run 9
+uv run etude launch experiments/elemental.py --revision COMMIT --updates 3200 --hours 11.9 --usd-per-run 9 --cohort elemental-1 --rent l4
 uv run etude status
-uv run etude report experiments/<name>.py --source r2://manabot/jobs --open
+uv run etude report experiments/elemental.py --source r2://manabot/jobs --open
 ```
 
 Building a job is pure; nothing is submitted until `etude launch`. On the
@@ -687,8 +690,8 @@ learning quality. Throughput is cumulative work over observed elapsed cost.
 checkpoint at absolute updates 0, n, 2n, … and record it with
 `run.checkpoint`; the loop always writes its last update. Etude derives
 `TrainingRun.final` as the last checkpoint of a finished run, including after
-extension. 1000 is the usual grid,
-an authoring default rather than an hourly estimate. The grid is absolute, and
+extension. Elemental uses a 50-update grid, chosen by the recipe rather than
+estimated from wall time. The grid is absolute, and
 an attempt that starts on it records that update before collecting: a run
 continued from 26,000 with `checkpoint_every=1000` records 26,000, then
 27,000. That also repairs an attempt lost after saving state but before
