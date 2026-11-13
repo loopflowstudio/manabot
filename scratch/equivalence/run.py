@@ -8,6 +8,7 @@ Imports names shared by the integrated baseline 105e7e2aa and MTG-333.
 
 import json
 import os
+from pathlib import Path
 import sys
 import warnings
 
@@ -113,8 +114,22 @@ def pooled_mana_batch(space: ObservationSpace) -> dict[str, torch.Tensor]:
 def belief_batch(
     count: int,
 ) -> tuple[ObservationSpace, ModelConfig, dict[str, torch.Tensor]]:
-    """Real belief rows: the demo match's generated belief and its Bolt
-    conditionings, paired cyclically with that match's own observations."""
+    """Real belief rows, optionally retained once for identical cross-revision input.
+
+    EQUIV_BELIEF_INPUT names the shared corpus file. Upstream schema generation
+    can change independently of a forward, so comparisons must reuse its bytes.
+    """
+    path = Path(os.environ["EQUIV_BELIEF_INPUT"]) if "EQUIV_BELIEF_INPUT" in os.environ else None
+    if path is not None and path.exists():
+        saved = torch.load(path, map_location="cpu", weights_only=True)
+        batch = saved["batch"]
+        if any(value.shape[0] != count for value in batch.values()):
+            raise ValueError("retained belief corpus has a different batch size")
+        return (
+            ObservationSpace(ObservationConfig.model_validate(saved["observation"])),
+            ModelConfig.model_validate(saved["model"]),
+            batch,
+        )
     from manabot.belief import demo
     from manabot.belief.encoding import encode_belief
     from manabot.belief.runtime import ManabotPlayer
@@ -156,6 +171,12 @@ def belief_batch(
         belief_count_buckets=schema.count_buckets,
         belief_card_vocab_size=1 + max(row.card_def_id for row in schema.rows),
     )
+    if path is not None:
+        torch.save({
+            "observation": env.observation_space.encoder.config.model_dump(mode="json"),
+            "model": config.model_dump(mode="json"),
+            "batch": batch,
+        }, path)
     return env.observation_space, config, batch
 
 
@@ -244,4 +265,8 @@ def capture() -> dict[str, torch.Tensor]:
 
 
 if __name__ == "__main__":
-    torch.save(capture(), sys.argv[1])
+    if sys.argv[1] == "--belief-input":
+        os.environ["EQUIV_BELIEF_INPUT"] = sys.argv[2]
+        belief_batch(24)
+    else:
+        torch.save(capture(), sys.argv[1])

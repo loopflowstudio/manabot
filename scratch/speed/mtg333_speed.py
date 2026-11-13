@@ -43,6 +43,8 @@ for arm in $arms; do
   find "$work/$arm/manabot" -type d -empty -delete
 done
 uv run --locked python -c "import torch; print('GPU', torch.cuda.get_device_name(), torch.__version__, torch.version.cuda)"
+export EQUIV_BELIEF_INPUT="$out/belief-input.pt"
+PYTHONPATH="$work/head" uv run --locked python scratch/equivalence/run.py --belief-input "$EQUIV_BELIEF_INPUT"
 for arm in base head head; do
   name=$arm; test -e "$out/$arm.pt" && name=${{arm}}_repeat
   EQUIV_DEVICE=cuda PYTHONPATH="$work/$arm" uv run --locked python scratch/equivalence/run.py "$out/$name.pt"

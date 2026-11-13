@@ -102,3 +102,9 @@ targets. Original uncommitted notes were copied to
 - **Sync, 2026-11-13.** Retain main’s MTG-313 QA report and source facts.
   Combine its local supervised witness (SGD 0.01, no greedy-convergence
   loop) with this branch’s `device_input` route over `Prepared`.
+
+2026-11-13 #513 integration: reuse `Prepared.is_agent` for MLX's signed
+ownership instead of adding a second ownership array. It already follows
+bucket-trimmed coordinates and preserves explicit belief ownership. Port
+shared capture hooks to NumPy inputs and retain raw `ActionRows.observation`
+for cross-backend replay; Prepared evidence is intentionally not raw input.

@@ -71,7 +71,7 @@ index 0ba1c1b6c5..e0dffb071b 100644
  share arena admission, bounded inference, Commands, replay and Perf receipts with
  monitoring and managed comparisons. Pass another local checkpoint as `--opponent`
 diff --git a/manabot/backends/README.md b/manabot/backends/README.md
-index 6f4f7c908e..00ffd1cdba 100644
+index e7fec85f9c..00ffd1cdba 100644
 --- a/manabot/backends/README.md
 +++ b/manabot/backends/README.md
 @@ -1,25 +1,9 @@
@@ -102,7 +102,20 @@ index 6f4f7c908e..00ffd1cdba 100644
  `BackendLearner` and `Backend` protocols. Training, evaluation and the CLI
  run the PyTorch backend, which is also the reference every other backend is
  checked against.
-@@ -33,62 +17,26 @@ checked against.
+@@ -27,74 +11,32 @@ checked against.
+ | Backend | Status | Guide |
+ | --- | --- | --- |
+ | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
+-| `mlx` | experimental policy and damped update; explicit f32/bf16/f16 | [mlx.md](mlx.md) |
+-
+-## Which backend on Apple Silicon
+-
+-Keep PyTorch in production and retain MLX as an experimental Apple backend:
+-MLX half's measured speed advantage still needs learning-quality validation.
+-See the [MPS retest](../../experiments/mps_retest.md) for results and limits.
++| `mlx` | policy and the damped update, parity-checked; measurement only | [mlx.md](mlx.md) |
+ 
+ ## Layout
  
  Every backend is one package, `manabot/backends/<name>/`, with at least these
  files; a backend may add private modules that its `policy.py` uses (torch's
@@ -172,7 +185,7 @@ index 6f4f7c908e..00ffd1cdba 100644
  
  ## Algorithms are written once
  
-@@ -142,9 +90,8 @@ backend against them:
+@@ -148,9 +90,8 @@ backend against them:
    steps (`step`); `forward_precision` is the context a forward runs in,
    `no_grad` the one for constants and `check_objective` the loss's refusal.
  - `backend.rollout`: `AdmittedRollout(agent, batch)` returns a batch's rows as
@@ -184,11 +197,12 @@ index 6f4f7c908e..00ffd1cdba 100644
  
  An update writes its minibatch loss as a closure over the policy forward and
  hands it to the learner, because a functional framework differentiates a
-@@ -200,129 +147,43 @@ documents them. A backend never carries its own copy of an update's loss:
+@@ -206,130 +147,43 @@ documents them. A backend never carries its own copy of an update's loss:
  
  | Module | Names |
  | --- | --- |
 -| `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
+-| `manabot.backends.torch.capture` | bounded real-call and learner-input capture for backend comparisons |
 +| `manabot.backends.torch.policy` | `ActorCritic` |
  | `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
  | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
@@ -336,7 +350,7 @@ index 6f4f7c908e..00ffd1cdba 100644
  
  ```sh
  uv run python -m manabot.backends.convert .runs/example/checkpoint.pt
-@@ -333,15 +194,33 @@ read   .runs/example/checkpoint.pt  (180 tensors)
+@@ -340,15 +194,33 @@ read   .runs/example/checkpoint.pt  (180 tensors)
  wrote  .runs/example/checkpoint.safetensors
  ```
  
@@ -379,6 +393,26 @@ index 6f4f7c908e..00ffd1cdba 100644
  
  ## Parity check
  
+@@ -383,7 +255,7 @@ backend loads the reference's weights through the canonical names and is
+ compared in its own parameter layout. The check compares logits on legal
+ actions and values (absolute difference), the update's loss (relative difference),
+ each parameter's gradient (cosine similarity), and every weight after one
+-Adam step with gradient clipping. Float32 tolerances remain fixed:
++Adam step with gradient clipping. Tolerances are fixed:
+ logits and values within 1e-4, loss within 0.1%, every gradient cosine at
+ least 0.999, post-step weights within 1e-6 absolute. The weight bar includes
+ every parameter; only the gradient-cosine check treats negligible tensors as
+@@ -393,9 +265,4 @@ bias have analytically zero gradients (softmax ignores a shift shared by all
+ its inputs), so both sides hold rounding noise. The check exits 1 naming each
+ failing backend's worst components, and 2 when the checkpoint or capture
+ cannot be read, the checkpoint is refused or no backend is installed; a
+-timing in the ordinary MLX pilot requires passing parity. The MPS retest
+-explicitly retains approximate arms and reports their numerical differences.
+-
+-For explicit MLX half precision, select `--backend mlx --precision bfloat16`
+-(or `float16`). See the [compute precision guide](mlx.md#compute-precision) for
+-the API and dtype-specific numerical gates.
++timing taken from a backend that fails it is not reported.
 diff --git a/manabot/backends/__init__.py b/manabot/backends/__init__.py
 index 3717da36d9..c9d91c6208 100644
 --- a/manabot/backends/__init__.py
@@ -445,17 +479,22 @@ index 058968b5a5..09bbb6d7cf 100644
      target = checkpoint.with_suffix(".safetensors")
      write_container(target, container)
 diff --git a/manabot/backends/mlx.md b/manabot/backends/mlx.md
-index 47f1f9ef9a..1ea8a19dd4 100644
+index 434039b1c2..1ea8a19dd4 100644
 --- a/manabot/backends/mlx.md
 +++ b/manabot/backends/mlx.md
-@@ -3,37 +3,32 @@
+@@ -3,40 +3,32 @@
  `manabot.backends.mlx` runs a saved `ActorCritic` policy, and the damped
  update that trains it, in [MLX](https://ml-explore.github.io/mlx/) on Apple
  Silicon. It loads
 -the policy files training writes ([policy checkpoints](README.md#policy-checkpoints))
+-and uses PyTorch as its numerical reference
+-([parity check](README.md#parity-check)). The ordinary pilot gates timing on
+-those checks. The [MPS retest](../../experiments/mps_retest.md) explicitly
+-measures approximate half-precision arms too; it reports failing tolerances
+-alongside timing and does not treat execution as numerical equivalence. Training, evaluation and the CLI
 +the shared checkpoint container ([backends](README.md#convert-a-pytorch-checkpoint))
- and must agree with PyTorch numerically before it is used for any timing
- ([parity check](README.md#parity-check)). Training, evaluation and the CLI
++and must agree with PyTorch numerically before it is used for any timing
++([parity check](README.md#parity-check)). Training, evaluation and the CLI
  still run the PyTorch model; nothing in the PyTorch path imports MLX.
  
 +```sh
@@ -497,7 +536,7 @@ index 47f1f9ef9a..1ea8a19dd4 100644
  ## Install
  
  The `mlx` extra is optional and installs only on macOS with Apple Silicon:
-@@ -48,14 +43,6 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
+@@ -51,14 +43,6 @@ imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this)
  
  ## What the backend covers
  
@@ -512,11 +551,127 @@ index 47f1f9ef9a..1ea8a19dd4 100644
  The modules of `policy.py` mirror the PyTorch model one to one, so a parameter
  path in MLX names the same component as in the torch state dict:
  
+@@ -110,9 +94,9 @@ diagnostics = update_damped_iteration(
+ )
+ ```
+ 
+-`batch` is a `RolloutBatch` as torch collection writes it. Check diagnostics
+-against the torch backend on the intended batch, weights and precision using
+-the parity command below. Returns and advantage selection run on the host in NumPy
++`batch` is a `RolloutBatch` as torch collection writes it. The same batch and
++weights give the same diagnostics as the torch backend within the parity
++bars. Returns and advantage selection run on the host in NumPy
+ (`manabot.policy.returns`), the surrogate ratio is float32, and the sampled
+ gradient detail of `OptimizerHealth` is absent
+ ([what differs](README.md#algorithms-are-written-once)).
+@@ -124,74 +108,3 @@ continuity stays with the PyTorch learner.
+ 
+ Results, machine and cost are in
+ [the MLX pilot report](../../experiments/mlx_pilot.md).
+-
+-## Compute precision
+-
+-Float32 is the default. Both half dtypes are supported explicitly on the policy
+-and learner; this does not enable an MLX training CLI or change Torch admission.
+-
+-```python
+-from manabot.backends.mlx.checkpoint import load_mlx_policy
+-from manabot.backends.mlx.learner import Learner
+-
+-policy, obs_space = load_mlx_policy(
+-    ".runs/example/checkpoint.safetensors", precision="bfloat16"
+-)
+-learner = Learner(policy, minibatch_rows=64)  # inherits the policy's precision
+-# Alternatively: Learner(policy, minibatch_rows=64, precision="float16")
+-```
+-
+-`MLXActorCritic`, `assemble`, `build` and `MLXBackend` also accept `precision`:
+-`"float32"`, `"bfloat16"` or `"float16"`. It is an execution option, not a change
+-to the checkpoint's stored float32 weights. `policy.set_precision(...)` changes
+-both inference and learning and invalidates cached catalog encodings.
+-
+-Weights and floating activations use the selected compute dtype inside the
+-forward; gradients return through those casts to float32 master weights.
+-Loss arithmetic, global clipping and Adam state remain float32. Float16 uses
+-fixed loss scaling of 128; a nonfinite objective or gradient refuses the step
+-before changing parameters or Adam state. It does not silently skip a step or
+-adapt the scale. Logits, values, log-softmax and sampled action log probabilities
+-are float32 for both behavior and learner evaluation. Both paths use
+-`rl.policy_logs` and `rl.action_logs`, promoting before normalization.
+-
+-Public forwards select precision automatically. A fixed-weight inference loop
+-may hold `with policy.forward_precision():` across calls to reuse cast weights;
+-close it before differentiating or stepping. `Learner.loss` clears inference
+-catalog caches before differentiation, so catalog parameters still learn.
+-
+-Check a checkpoint and real capture with the selected dtype:
+-
+-```sh
+-uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --capture capture --backend mlx --precision bfloat16
+-```
+-
+-| Precision | Legal logits, max absolute | Values, max absolute | Loss, relative | Full-gradient cosine |
+-|---|---:|---:|---:|---:|
+-| bfloat16 | 0.001 | 0.01 | 1% | ≥ 0.99 |
+-| float16 | 0.0001 | 0.002 | 0.2% | ≥ 0.999 |
+-
+-These bounds were calibrated on the retained real-input w384/w768 checks in
+-the [MPS retest](../../experiments/mps_retest.md), source `140eec28d`. They
+-remain numerical gates; passing those cases does not establish general
+-equivalence or equivalent optimization trajectories.
+-Half still requires a finite clipped Adam step and reports the minimum
+-per-tensor cosine and the maximum post-step parameter difference. It does not
+-apply float32's 1e-6 post-step bound: the retained half deltas exceed it.
+-Float32 keeps its existing per-tensor cosine and post-step gates unchanged.
+-
+-Run this preflight on the intended weights and inputs: explicit half support
+-means the API executes that dtype, not that an input passes its gate or trains
+-equivalently. Float32 passed each real-capture check below. Half did not:
+-
+-- Two-row captures: bfloat16 failed once at 1.07% relative loss
+-  difference against 1%, and all three dtypes passed on one later capture.
+-- Four 8-row minibatches at w64l2 and w384l8: three of four half
+-  configurations failed. bfloat16 at w64 reached a full-gradient cosine of
+-  0.9315 against ≥ 0.99; bfloat16 at w384 failed only the relative-loss gate,
+-  on near-zero losses; float16 failed at w64 and passed at w384 (0.197%
+-  against 0.2%).
+-
+-The [report's QA table](../../experiments/mps_retest.md#later-small-capture-qa-2026-11-13)
+-has each measurement. Tolerances are unchanged, and the relative-loss gate has
+-no absolute floor.
+diff --git a/manabot/backends/mlx/arrays.py b/manabot/backends/mlx/arrays.py
+index bfb4948c02..4d055d942f 100644
+--- a/manabot/backends/mlx/arrays.py
++++ b/manabot/backends/mlx/arrays.py
+@@ -12,23 +12,9 @@ import mlx.core as mx
+ from mlx.utils import tree_flatten
+ import numpy as np
+ 
+-from manabot.policy.protocol import Precision
+-
+ FLOAT = mx.float32
+ 
+ 
+-def precision_dtype(precision: Precision) -> mx.Dtype:
+-    """The compute dtype; parameters and optimizer state remain float32."""
+-    dtypes = {"float32": mx.float32, "bfloat16": mx.bfloat16, "float16": mx.float16}
+-    try:
+-        return dtypes[precision]
+-    except KeyError as error:
+-        raise ValueError(
+-            f"unsupported MLX precision: {precision!r}; expected one of "
+-            f"{', '.join(dtypes)}"
+-        ) from error
+-
+-
+ def to_mlx(array: np.ndarray) -> mx.array:
+     return mx.array(array)
+ 
 diff --git a/manabot/backends/mlx/checkpoint.py b/manabot/backends/mlx/checkpoint.py
-index afcbacff78..6816920502 100644
+index 26ac360d4e..6816920502 100644
 --- a/manabot/backends/mlx/checkpoint.py
 +++ b/manabot/backends/mlx/checkpoint.py
-@@ -15,10 +15,9 @@ for gradients. Three layouts differ:
+@@ -15,56 +15,25 @@ for gradients. Three layouts differ:
  Every canonical parameter maps to MLX arrays or loading fails, naming the key.
  """
  
@@ -528,7 +683,13 @@ index afcbacff78..6816920502 100644
  
  import mlx.core as mx
  from mlx.utils import tree_flatten, tree_unflatten
-@@ -31,40 +30,11 @@ from manabot.env.observation import ObservationSpace
+ import numpy as np
+ 
+-from manabot.backends.mlx.arrays import precision_dtype, to_mlx
++from manabot.backends.mlx.arrays import to_mlx
+ from manabot.backends.mlx.learner import Learner
+ from manabot.backends.mlx.policy import MLXActorCritic
+ from manabot.env.observation import ObservationSpace
  from manabot.infra.config import ModelConfig, ObservationConfig
  from manabot.policy.checkpoint import (
      GRUS,
@@ -539,7 +700,8 @@ index afcbacff78..6816920502 100644
      read_container,
 -    read_metadata,
  )
- 
+-from manabot.policy.protocol import Precision
+-
 -
 -def require_supported(model: ModelConfig, observation: ObservationConfig) -> None:
 -    """Refuse configurations the host preparation and backends do not
@@ -566,11 +728,10 @@ index afcbacff78..6816920502 100644
 -            "the framework backends do not support " + "; ".join(reasons)
 -        )
 -
--
+ 
  _SEQUENTIAL = re.compile(r"(^|\.)(projection|policy_head|value_head|mlp)\.(\d+)\.")
  _GRU = {
-     "input_weight": "Wx",
-@@ -74,7 +44,7 @@ _GRU = {
+@@ -75,7 +44,7 @@ _GRU = {
  }
  
  
@@ -579,7 +740,7 @@ index afcbacff78..6816920502 100644
      """Canonical arrays in MLX names; only renames and splits, preserving norms."""
      out: dict[str, np.ndarray] = {}
  
-@@ -106,7 +76,7 @@ def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
+@@ -107,24 +76,17 @@ def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
      return out
  
  
@@ -588,32 +749,39 @@ index afcbacff78..6816920502 100644
      """Gradients of canonical parameters as gradients of MLX's."""
      return mlx_parameters(canonical)
  
-@@ -114,7 +84,6 @@ def mlx_gradients(canonical: ParameterArrays) -> dict[str, np.ndarray]:
- def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
+ 
+-def assemble(
+-    checkpoint: PolicyCheckpoint, *, precision: Precision = "float32"
+-) -> MLXActorCritic:
++def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
      """An MLX policy holding the checkpoint's weights; names and shapes must
      match the MLX model exactly."""
 -    require_supported(checkpoint.model, checkpoint.space.encoder.config)
      parameters = mlx_parameters(checkpoint.parameters)
      policy = MLXActorCritic(
-         checkpoint.dimensions(), checkpoint.tables(), checkpoint.model, checkpoint.space
-@@ -133,19 +102,20 @@ def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
+-        checkpoint.dimensions(),
+-        checkpoint.tables(),
+-        checkpoint.model,
+-        checkpoint.space,
+-        precision=precision,
++        checkpoint.dimensions(), checkpoint.tables(), checkpoint.model, checkpoint.space
+     )
+     expected = dict(tree_flatten(policy.parameters()))
+     unmapped = sorted(set(parameters) ^ set(expected))
+@@ -140,57 +102,40 @@ def assemble(
      return policy
  
  
+-def load_mlx_policy(
+-    path: str | Path, *, precision: Precision = "float32"
 +def build(
 +    model: ModelConfig,
 +    observation: ObservationConfig,
 +    state: Mapping[str, np.ndarray],
-+) -> tuple[MLXActorCritic, ObservationSpace]:
-+    """An MLX policy holding `state` (a PyTorch state dict as NumPy arrays)."""
-+    checkpoint = from_torch_state(model, observation, state)
-+    return assemble(checkpoint), checkpoint.space
-+
-+
- def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]:
-     """Load a checkpoint container, validating its world binding."""
-     checkpoint = read_container(path)
--    policy = assemble(checkpoint)
+ ) -> tuple[MLXActorCritic, ObservationSpace]:
+-    """Load a checkpoint container, validating its world binding."""
+-    checkpoint = read_container(path)
+-    policy = assemble(checkpoint, precision=precision)
 -    # read_container has already validated the world. Keep it on the loaded
 -    # policy so simulation's common deck admission cannot silently bypass it.
 -    policy.world_binding = json.loads(checkpoint.metadata["world_binding"])
@@ -623,13 +791,15 @@ index afcbacff78..6816920502 100644
 -        raise ValueError("unsupported checkpoint value semantic")
 -    policy.value_semantic = semantic
 -    return policy, checkpoint.space
+-
+-
+-class MLXBackend:
+-    """`manabot.policy.protocol.Backend` for MLX."""
++    """An MLX policy holding `state` (a PyTorch state dict as NumPy arrays)."""
++    checkpoint = from_torch_state(model, observation, state)
 +    return assemble(checkpoint), checkpoint.space
  
- 
- class _MLX:
-@@ -153,30 +123,18 @@ class _MLX:
- 
-     name = "mlx"
+-    name = "mlx"
  
 -    @staticmethod
 -    def load_policy(
@@ -638,17 +808,29 @@ index afcbacff78..6816920502 100644
 -        if bucketed_shapes or live_tokens:
 -            raise ValueError("MLX does not support bucketed or live-token inference")
 -        return load_mlx_policy(path)
--
++def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]:
++    """Load a checkpoint container, validating its world binding."""
++    checkpoint = read_container(path)
++    return assemble(checkpoint), checkpoint.space
+ 
 -    @staticmethod
 -    def metadata(path: str) -> dict[str, Any]:
 -        return read_metadata(path)
--
+ 
 -    @staticmethod
 -    def seed(seed: int) -> None:
 -        mx.random.seed(seed)
--
++class _MLX:
++    """`manabot.policy.protocol.Backend` for MLX."""
+ 
+-    def __init__(self, precision: Precision = "float32") -> None:
+-        precision_dtype(precision)
+-        self.precision = precision
++    name = "mlx"
+ 
      def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
-         policy = assemble(checkpoint)
+-        policy = assemble(checkpoint, precision=self.precision)
++        policy = assemble(checkpoint)
          return policy, Learner(policy, minibatch_rows=1)
  
 -    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
@@ -664,24 +846,132 @@ index afcbacff78..6816920502 100644
          return mlx_gradients(canonical)
  
  
+-BACKEND = MLXBackend()
++BACKEND = _MLX()
 diff --git a/manabot/backends/mlx/learner.py b/manabot/backends/mlx/learner.py
-index ff514e6ae1..ba38a69a94 100644
+index 0cb5b0dcae..ba38a69a94 100644
 --- a/manabot/backends/mlx/learner.py
 +++ b/manabot/backends/mlx/learner.py
-@@ -24,11 +24,11 @@ import mlx.core as mx
+@@ -10,9 +10,7 @@ differentiates as a function (`mlx.nn.value_and_grad`).
+ `loss` evaluates the objective and its gradients together, so the forward runs
+ once; `step` clips the global gradient norm, applies Adam and refuses
+ nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
+-`gradients` returns them without stepping. Float32 is the default; explicit
+-bfloat16/float16 forwards keep float32 master weights, loss, clipping and Adam.
+-Float16 uses fixed loss scaling (128); overflow is refused, never skipped.
++`gradients` returns them without stepping. Precision is float32 throughout.
+ An optional recorder (`manabot.training.updates.health.OptimizerHealth`)
+ counts steps and rejections; the sampled gradient and parameter detail it
+ reads from torch modules stays absent here.
+@@ -20,18 +18,17 @@ reads from torch modules stays absent here.
+ 
+ from collections.abc import Callable
+ from contextlib import AbstractContextManager, nullcontext
+-from typing import TYPE_CHECKING, Protocol
++from typing import TYPE_CHECKING, Literal, Protocol
+ 
+ import mlx.core as mx
  import mlx.nn as nn
  import mlx.optimizers as optim
- from mlx.utils import tree_flatten
+-from mlx.utils import tree_flatten, tree_map
++from mlx.utils import tree_flatten
 +import numpy as np
  
  from manabot.backends.mlx.arrays import flat_numpy
  from manabot.backends.mlx.rl import NumericalError, require
  from manabot.infra.profiler import Profiler
 -from manabot.policy.checkpoint import ParameterArrays
+-from manabot.policy.protocol import Precision
  
  if TYPE_CHECKING:
      from manabot.backends.mlx.policy import MLXActorCritic
-@@ -150,11 +150,11 @@ class Learner:
+@@ -68,18 +65,18 @@ class Learner:
+         device: object = "gpu",
+         *,
+         minibatch_rows: int,
+-        precision: Precision | None = None,
++        precision: Literal["float32"] = "float32",
+     ) -> None:
+         if minibatch_rows < 1:
+             raise ValueError("minibatch_rows must be positive")
+-        if precision is not None:
+-            agent.set_precision(precision)
+-        self.agent = agent
+-        self._require_masters("the MLX learner requires float32 master parameters")
++        if precision != "float32":
++            raise ValueError("the MLX backend trains in float32")
+         self.device = device
++        self.agent = agent
+         # Cached programs are constants of the weights they were encoded from.
+         agent.clear_cache()
+         self.minibatch_rows = minibatch_rows
++        self.precision = precision
+         self.optimizer = optim.Adam(
+             learning_rate=2.5e-4, betas=[0.9, 0.999], eps=1e-5, bias_correction=True
+         )
+@@ -87,23 +84,9 @@ class Learner:
+         # The loss `loss` last returned and its parameter gradients.
+         self._pending: tuple[mx.array, dict[str, object]] | None = None
+ 
+-    def _require_masters(self, message: str) -> None:
+-        """Gradients and Adam apply to float32 masters; inside
+-        `forward_precision` the policy holds compute-dtype casts instead."""
+-        if self.agent.compute_dtype != mx.float32:
+-            raise ValueError(message)
+-
+-    @property
+-    def precision(self) -> Precision:
+-        """The policy owns the precision used by both inference and learning."""
+-        return self.agent.precision
+-
+-    @property
+-    def loss_scale(self) -> float:
+-        return 128.0 if self.precision == "float16" else 1.0
+-
+     def forward_precision(self) -> AbstractContextManager[object]:
+-        return self.agent.forward_precision()
++        """The context each policy forward runs in: float32, so nothing."""
++        return nullcontext()
+ 
+     def set_learning_rate(self, rate: float) -> None:
+         """The rate every following optimizer step uses."""
+@@ -115,18 +98,7 @@ class Learner:
+         """Evaluate `objective`, a closure over this policy's forward whose
+         first result is the loss, with the loss's parameter gradients; return
+         its results. `step` and `gradients` take that loss."""
+-        self._require_masters("close the inference precision scope before learning")
+-        # Cached inference programs have no gradient path to the current weights.
+-        self.agent.clear_cache()
+-        scale = self.loss_scale
+-
+-        def scaled() -> tuple[mx.array, ...]:
+-            result = objective()
+-            return (result[0].astype(mx.float32) * scale, *result[1:])
+-
+-        outputs, gradients = nn.value_and_grad(self.agent, scaled)()
+-        outputs = (outputs[0] / scale, *outputs[1:])
+-        gradients = tree_map(lambda g: g.astype(mx.float32) / scale, gradients)
++        outputs, gradients = nn.value_and_grad(self.agent, objective)()
+         mx.eval(outputs, gradients)
+         self._pending = (outputs[0], gradients)
+         return outputs
+@@ -150,7 +122,6 @@ class Learner:
+         and optimizer are then unchanged. Raises after stepping if a parameter
+         became nonfinite.
+         """
+-        self._require_masters("close the inference precision scope before stepping")
+         gradients = self._gradients(loss)
+         self._pending = None
+         track = recorder.track if recorder is not None else _untracked
+@@ -165,7 +136,6 @@ class Learner:
+                     )
+             with track("Optimizer step"):
+                 self.optimizer.update(self.agent, clipped)
+-                self.agent.clear_cache()
+                 parameters = tree_flatten(self.agent.parameters())
+                 finite = mx.all(
+                     mx.isfinite(mx.concatenate([p.flatten() for _, p in parameters]))
+@@ -180,11 +150,11 @@ class Learner:
                      recorder.record_step([], [])
          return norm
  
@@ -696,15 +986,25 @@ index ff514e6ae1..ba38a69a94 100644
          return flat_numpy(self.agent.parameters())
  
 diff --git a/manabot/backends/mlx/policy.py b/manabot/backends/mlx/policy.py
-index 0f682d3040..32456d5f3a 100644
+index a8447fd3b6..32456d5f3a 100644
 --- a/manabot/backends/mlx/policy.py
 +++ b/manabot/backends/mlx/policy.py
-@@ -18,20 +18,16 @@ are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`
+@@ -12,30 +12,22 @@ only the rows a batch references; the others never reach the loss, so their
+ outputs receive no gradient either way. GRU input and recurrent biases remain
+ separate parameters, preserving Adam state and global gradient-norm clipping.
+ 
+-Compute precision is policy-owned and defaults to float32. Optional half
+-forwards cast weights differentiably and restore float32 masters; inference
+-and learning therefore use the same dtype. Outputs remain float32.
+-
+ Parameter paths equal the PyTorch state-dict names except where MLX containers
+ differ: `nn.Sequential` children live under `layers`, attention in-projections
+ are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`, `hidden_bias`
  (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
  """
  
--from collections.abc import Callable, Sequence
--from contextlib import AbstractContextManager, nullcontext
+-from collections.abc import Callable, Iterator, Sequence
+-from contextlib import AbstractContextManager, contextmanager, nullcontext
 +from collections.abc import Mapping, Sequence
  from dataclasses import dataclass, field
 -from types import TracebackType
@@ -712,29 +1012,30 @@ index 0f682d3040..32456d5f3a 100644
  
  import mlx.core as mx
  import mlx.nn as nn
--from mlx.utils import tree_flatten
+-from mlx.utils import tree_flatten, tree_map
  import numpy as np
  
- from manabot.backends.mlx.arrays import to_numpy
+-from manabot.backends.mlx.arrays import precision_dtype, to_numpy
 -from manabot.backends.mlx.rl import NumericalError
 -from manabot.env.observation import ObservationBuffers, ObservationSpace
++from manabot.backends.mlx.arrays import to_numpy
 +from manabot.backends.mlx.rl import legal_mask
 +from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
  from manabot.infra.config import ModelConfig
  from manabot.policy import admission
  from manabot.policy.checkpoint import Dimensions
-@@ -39,9 +35,9 @@ from manabot.policy.prepare import (
+@@ -43,9 +35,9 @@ from manabot.policy.prepare import (
      Packed,
      Prepared,
      Tables,
 +    catalog_schedule,
      prepare,
  )
--from manabot.policy.protocol import InferenceResult
+-from manabot.policy.protocol import InferenceResult, Precision
  
  # -- building blocks -----------------------------------------------------------------
  
-@@ -120,7 +116,7 @@ class PackedGRU(nn.Module):
+@@ -124,7 +116,7 @@ class PackedGRU(nn.Module):
          return mx.concatenate(outputs), mx.concatenate(finished[::-1])
  
  
@@ -743,7 +1044,7 @@ index 0f682d3040..32456d5f3a 100644
      """Split packed-order `rows` into the schedule's steps (`PackedGRU.run`)."""
      return [mx.array(part) for part in np.split(rows, np.cumsum(schedule.sizes)[:-1])]
  
-@@ -235,7 +231,7 @@ class _Static:
+@@ -239,9 +231,10 @@ class _Static:
      """Per-model constants derived from `Tables`, kept off the parameter tree."""
  
      catalog_steps: list[mx.array]  # token ids of each catalog GRU step
@@ -751,8 +1052,21 @@ index 0f682d3040..32456d5f3a 100644
 +    catalog: Packed
      named_rows: mx.array  # program rows of names that have a definition
      named_names: mx.array  # their name rows
-     sign: mx.array  # [1,N,1]
-@@ -257,7 +253,6 @@ class MLXActorCritic(nn.Module):
++    sign: mx.array  # [1,N,1]
+     tables: Tables
+     space: ObservationSpace
+     cache: dict[str, mx.array] = field(default_factory=dict)
+@@ -254,17 +247,12 @@ class MLXActorCritic(nn.Module):
+         tables: Tables,
+         config: ModelConfig,
+         space: ObservationSpace,
+-        *,
+-        precision: Precision = "float32",
+     ) -> None:
+         super().__init__()
+-        precision_dtype(precision)
+-        object.__setattr__(self, "_precision", precision)
+         self.dims = dims
          # The model configuration the weights were trained under, as the
          # torch policy carries it; the updates read its `value_kind`.
          self.config = config
@@ -760,7 +1074,7 @@ index 0f682d3040..32456d5f3a 100644
          hidden = dims.hidden
          self.semantic_cards = SemanticCards(dims)
          self.player_embedding = Projection(dims.player, hidden)
-@@ -289,8 +284,7 @@ class MLXActorCritic(nn.Module):
+@@ -296,9 +284,9 @@ class MLXActorCritic(nn.Module):
          self.shared_effects = SharedEffects(dims)
          self.name_candidates = NameCandidates(dims)
          self.continuation = Continuation(dims)
@@ -768,9 +1082,17 @@ index 0f682d3040..32456d5f3a 100644
 -        tokens, schedule = programs.tokens, programs.schedule
 +        tokens, schedule = catalog_schedule(tables)
          named = np.nonzero(tables.name_definitions != 0)[0]
-         sign = np.where(tables.is_agent, 1.0, -1.0).astype(np.float32)
++        sign = np.where(tables.is_agent, 1.0, -1.0).astype(np.float32)
          # Underscore attributes outside the module tree: never parameters.
-@@ -308,150 +302,71 @@ class MLXActorCritic(nn.Module):
+         object.__setattr__(
+             self,
+@@ -308,208 +296,89 @@ class MLXActorCritic(nn.Module):
+                 schedule,
+                 mx.array(tables.name_program_rows[named]),
+                 mx.array(named),
++                mx.array(sign[None, :, None]),
+                 tables,
+                 space,
              ),
          )
  
@@ -884,6 +1206,44 @@ index 0f682d3040..32456d5f3a 100644
 -            mx.eval(probabilities)
 -        return to_numpy(probabilities)
 -
+-    @property
+-    def precision(self) -> Precision:
+-        return self._precision
+-
+-    @property
+-    def compute_dtype(self) -> mx.Dtype:
+-        """The dtype the weights hold now: float32 masters, or the selected
+-        precision's casts inside `forward_precision`."""
+-        return self.semantic_cards.token_embedding.weight.dtype
+-
+-    def set_precision(self, precision: Precision) -> None:
+-        """Select compute precision without changing stored master weights."""
+-        precision_dtype(precision)
+-        if self.compute_dtype != mx.float32:
+-            raise ValueError("change precision outside the forward precision scope")
+-        if precision != self.precision:
+-            self.clear_cache()
+-            object.__setattr__(self, "_precision", precision)
+-
+-    @contextmanager
+-    def forward_precision(self) -> Iterator[None]:
+-        """Differentiable compute casts, restoring float32 masters on exit.
+-
+-        A fixed-weight inference loop may hold this scope across calls to reuse
+-        cast weights. Close it before differentiating or updating the policy.
+-        Public forwards enter it automatically; nested scopes reuse the casts.
+-        """
+-        dtype = precision_dtype(self.precision)
+-        if self.compute_dtype == dtype:
+-            yield
+-            return
+-        masters = self.parameters()
+-        self.update(tree_map(lambda p: p.astype(dtype), masters))
+-        try:
+-            yield
+-        finally:
+-            self.update(masters)
+-
      def prepare(
 -        self, obs: ObservationBuffers, *, inference: bool = False
 -    ) -> Prepared[np.ndarray]:
@@ -975,7 +1335,29 @@ index 0f682d3040..32456d5f3a 100644
  
      # Programs ----------------------------------------------------------------------
  
-@@ -474,16 +389,13 @@ class MLXActorCritic(nn.Module):
+     def programs(self) -> mx.array:
+         """Encode the catalog into [definitions + 1, D]; row 0 is zero padding."""
+-        with self.forward_precision():
+-            static: _Static = self._static
+-            cards = self.semantic_cards
+-            _, finished = cards.encoder.run(
+-                cards.token_embedding.weight, static.catalog_steps
+-            )
+-            encoded = _take(finished, mx.array(static.catalog.restore))
+-            return mx.concatenate(
+-                [mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded]
+-            )
++        static: _Static = self._static
++        cards = self.semantic_cards
++        _, finished = cards.encoder.run(
++            cards.token_embedding.weight, static.catalog_steps
++        )
++        encoded = _take(finished, mx.array(static.catalog.restore))
++        return mx.concatenate([mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded])
+ 
+     def cache_programs(self) -> None:
+         """Encode the catalog once for inference with fixed weights (collection)."""
+@@ -520,16 +389,13 @@ class MLXActorCritic(nn.Module):
      def clear_cache(self) -> None:
          self._static.cache.clear()
  
@@ -996,13 +1378,21 @@ index 0f682d3040..32456d5f3a 100644
          """The training forward the updates differentiate: `__call__`."""
          return self(batch)
  
-@@ -495,13 +407,9 @@ class MLXActorCritic(nn.Module):
+@@ -541,21 +407,9 @@ class MLXActorCritic(nn.Module):
  
      # Forward -----------------------------------------------------------------------
  
+-    def _floating(self, values: np.ndarray) -> mx.array:
+-        """Features and masks follow compute weights, never promote half activations."""
+-        return mx.array(values).astype(self.compute_dtype)
+-
 -    def __call__(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
 +    def __call__(self, batch: Prepared) -> tuple[mx.array, mx.array]:
          """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
+-        with self.forward_precision():
+-            return self._forward(batch)
+-
+-    def _forward(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
 -        if not isinstance(batch, Prepared):
 -            raise TypeError("policy forward requires a Prepared batch")
          static: _Static = self._static
@@ -1011,29 +1401,187 @@ index 0f682d3040..32456d5f3a 100644
          dims = self.dims
          hidden = dims.hidden
          b = batch.batch
-@@ -519,9 +427,9 @@ class MLXActorCritic(nn.Module):
+@@ -573,29 +427,26 @@ class MLXActorCritic(nn.Module):
  
          # Objects: players, cards and permanents with their programs.
          card_programs = defs(batch.card_rows)
 -        known = (
--            defs(batch.known_rows) * mx.array(batch.known_counts)[..., None] / 60
+-            defs(batch.known_rows) * self._floating(batch.known_counts)[..., None] / 60
 -        ).sum(2)
 +        known = (defs(batch.known_rows) * mx.array(batch.known_counts)[..., None]).sum(
 +            2
 +        )
          pooled = mx.einsum(
-             "bsrh,bsrc->bsch", defs(batch.deck_rows), mx.array(batch.deck_counts)
+-            "bsrh,bsrc->bsch", defs(batch.deck_rows), self._floating(batch.deck_counts)
++            "bsrh,bsrc->bsch", defs(batch.deck_rows), mx.array(batch.deck_counts)
          ).reshape(b, 2, 4 * hidden)
-@@ -670,7 +578,7 @@ class MLXActorCritic(nn.Module):
+         known = known + cards.decklist_projection(pooled)
+         agent_player = (
+-            self.player_embedding(self._floating(batch.agent_player))
+-            + known[:, 0, None]
++            self.player_embedding(mx.array(batch.agent_player)) + known[:, 0, None]
+         )
+         opponent_player = (
+-            self.player_embedding(self._floating(batch.opponent_player))
+-            + known[:, 1, None]
++            self.player_embedding(mx.array(batch.opponent_player)) + known[:, 1, None]
+         )
+         agent_cards = (
+-            self.card_embedding(self._floating(batch.agent_cards)) + card_programs[:, 0]
++            self.card_embedding(mx.array(batch.agent_cards)) + card_programs[:, 0]
+         )
+         opponent_cards = (
+-            self.card_embedding(self._floating(batch.opponent_cards))
+-            + card_programs[:, 1]
++            self.card_embedding(mx.array(batch.opponent_cards)) + card_programs[:, 1]
+         )
+-        permanents = self.perm_embedding(self._floating(batch.permanents)) + defs(
++        permanents = self.perm_embedding(mx.array(batch.permanents)) + defs(
+             batch.permanent_rows
+         )
+         objects = mx.concatenate(
+@@ -618,18 +469,18 @@ class MLXActorCritic(nn.Module):
+         flat = objects.reshape(b * count, hidden)
+         linked = [
+             _take(flat, mx.array(index)).reshape(b, -1, hidden)
+-            * self._floating(mask)[..., None]
++            * mx.array(mask)[..., None]
+             for index, mask in zip(
+                 batch.relation_objects, batch.relation_object_masks, strict=True
+             )
+         ]
+         relation_definitions = defs(batch.relation_rows)
+-        valid = self._floating(batch.relation_valid)
++        valid = mx.array(batch.relation_valid)
+         encoded = (
+             self.continuation.projection(
+                 mx.concatenate(
+                     [
+-                        self._floating(batch.relation_features),
++                        mx.array(batch.relation_features),
+                         *linked,
+                         relation_definitions[:, :, 0],
+                         relation_definitions[:, :, 1],
+@@ -643,19 +494,17 @@ class MLXActorCritic(nn.Module):
+         shared = encoded.sum(1) / mx.maximum(valid.sum(1, keepdims=True), 1)
+         frames = mx.array(batch.frame_indexes)
+         pooled_frames = (
+-            mx.zeros((b * rows, hidden), objects.dtype)
++            mx.zeros((b * rows, hidden))
+             .at[frames]
+             .add(encoded.reshape(b * rows, hidden))
+         )
+-        frame_counts = (
+-            mx.zeros((b * rows,), objects.dtype).at[frames].add(valid.reshape(-1))
+-        )
++        frame_counts = mx.zeros((b * rows,)).at[frames].add(valid.reshape(-1))
+         frame_context = pooled_frames / mx.maximum(frame_counts, 1)[:, None]
+         objects = objects + shared[:, None]
+ 
+         # Attention over the object table.
+-        validity = self._floating(batch.validity)
+-        sign = self._floating(np.where(batch.is_agent, 1, -1))[..., None]
++        validity = mx.array(batch.validity)
++        sign = static.sign
+         attended, attended_validity = objects, validity
+         columns = batch.attention_columns
+         if columns is not None:
+@@ -664,7 +513,7 @@ class MLXActorCritic(nn.Module):
+             attended_validity = mx.take(validity, selected, axis=1)
+             sign = mx.take(sign, selected, axis=1)
+         keep = attended_validity != 0
+-        mask = mx.where(keep, 0.0, -mx.inf).astype(objects.dtype)[:, None, None, :]
++        mask = mx.where(keep, 0.0, -mx.inf)[:, None, None, :]
+         keep = keep[..., None].astype(objects.dtype)
+         encoded_objects = self.attention(attended, sign, mask, keep)
+         for layer in self.extra_attention:
+@@ -677,47 +526,44 @@ class MLXActorCritic(nn.Module):
+             used[columns] = 1
+             encoded_objects = (
+                 mx.take(encoded_objects, mx.array(positions), axis=1)
+-                * self._floating(used)[None, :, None]
++                * mx.array(used)[None, :, None]
+             )
+         keep = (validity != 0)[..., None].astype(objects.dtype)
+ 
+         # Legal actions: joined rows, focus objects, policy head.
+         legal_batches = mx.array(batch.legal_batches)
+-        actions = self.action_embedding(self._floating(batch.action_features))
++        actions = self.action_embedding(mx.array(batch.action_features))
+         actions = (
+             actions
+             + _take(frame_context, mx.array(batch.action_frames))
+-            * self._floating(batch.action_frame_mask)[:, None]
++            * mx.array(batch.action_frame_mask)[:, None]
+         )
+         names = self.name_candidates.embedding.weight
+         actions = (
+             actions
+             + _take(names, mx.array(batch.name_rows))
+-            * self._floating(batch.name_mask)[:, None]
+-        )
+-        prefix = mx.concatenate(
+-            [mx.zeros((1, hidden), names.dtype), mx.cumsum(names[1:], axis=0)]
++            * mx.array(batch.name_mask)[:, None]
+         )
++        prefix = mx.concatenate([mx.zeros((1, hidden)), mx.cumsum(names[1:], axis=0)])
+         totals = _take(prefix, mx.array(batch.group_last)) - _take(
+             prefix, mx.array(batch.group_first)
+         )
+         actions = (
+             actions
+             + totals
+-            / self._floating(batch.group_counts)[:, None]
+-            * self._floating(batch.group_mask)[:, None]
++            / mx.array(batch.group_counts)[:, None]
++            * mx.array(batch.group_mask)[:, None]
+         )
+         actions = actions + _take(programs, mx.array(batch.candidate_rows))
+         actions = actions + _take(shared, legal_batches)
+         post = encoded_objects.reshape(b * count, hidden)
+         focus = batch.focus
+         focused = _take(post, mx.array(focus.reshape(-1))).reshape(*focus.shape, hidden)
+-        focused = (focused * self._floating(batch.focus_mask)[..., None]).reshape(
++        focused = (focused * mx.array(batch.focus_mask)[..., None]).reshape(
+             focus.shape[0], -1
+         )
+         informed = self.action_layer(mx.concatenate([actions, focused], axis=-1))
+-        # Loss arithmetic and the invalid-logit sentinel stay float32.
+-        scores = self.policy_head(informed)[:, 0].astype(mx.float32)
++        scores = self.policy_head(informed)[:, 0]
+         logits = mx.where(
+             mx.array(batch.legal),
+             _take(scores, mx.array(batch.logit_positions.reshape(-1))).reshape(
+@@ -730,9 +576,9 @@ class MLXActorCritic(nn.Module):
+         value = self.value_head.layers
+         projected = value[1](value[0](encoded_objects)) * keep
          pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
-         return logits, value[5](value[4](value[3](pooled_value)))
+-        return logits, value[5](value[4](value[3](pooled_value))).astype(mx.float32)
++        return logits, value[5](value[4](value[3](pooled_value)))
  
 -    def _links(self, batch: Prepared[np.ndarray], objects: mx.array) -> mx.array:
 +    def _links(self, batch: Prepared, objects: mx.array) -> mx.array:
          """`ActorCritic._join_permanent_links`."""
          b, count, hidden = objects.shape
          start = 2 + 2 * batch.agent_cards.shape[1]
-@@ -700,7 +608,7 @@ class MLXActorCritic(nn.Module):
+@@ -747,7 +593,7 @@ class MLXActorCritic(nn.Module):
+             self.link_to_target,
+             strict=True,
+         ):
+-            linked = self._floating(mask)[..., None]
++            linked = mx.array(mask)[..., None]
+             index = mx.array(targets)
+             delta = delta.at[index].add(
+                 (to_target(permanents) * linked).reshape(-1, hidden)
+@@ -757,14 +603,12 @@ class MLXActorCritic(nn.Module):
+                 + from_target(_take(flat, index).reshape(permanents.shape)) * linked
+             )
+         delta = delta.reshape(b, count, hidden)
+-        local = mx.concatenate(
+-            [mx.zeros((b, start, hidden), objects.dtype), local], axis=1
+-        )
++        local = mx.concatenate([mx.zeros((b, start, hidden)), local], axis=1)
+         return objects + delta + local
  
      def _facts(
          self,
@@ -1042,23 +1590,41 @@ index 0f682d3040..32456d5f3a 100644
          objects: mx.array,
          tokens: mx.array,
          definitions: mx.array,
-@@ -725,20 +633,25 @@ class MLXActorCritic(nn.Module):
+@@ -779,43 +623,43 @@ class MLXActorCritic(nn.Module):
+             return _take(table, mx.array(index.reshape(-1))).reshape(*shape, hidden)
+ 
+         ids = (
+-            rows(tokens, routes.id_rows) * self._floating(routes.id_mask)[..., None]
+-            + rows(tokens, routes.detail_rows)
+-            * self._floating(routes.detail_mask)[..., None]
+-            + rows(tokens, routes.token_rows)
+-            * self._floating(routes.token_mask)[..., None]
++            rows(tokens, routes.id_rows) * mx.array(routes.id_mask)[..., None]
++            + rows(tokens, routes.detail_rows) * mx.array(routes.detail_mask)[..., None]
++            + rows(tokens, routes.token_rows) * mx.array(routes.token_mask)[..., None]
+             + rows(definitions, routes.source_rows)
+         )
+         hidden_rows = (
+             facts.kind(mx.array(routes.kinds))
              + ids
-             + facts.numeric(mx.array(routes.columns))
+-            + facts.numeric(self._floating(routes.columns))
++            + facts.numeric(mx.array(routes.columns))
          )
 -        programs = routes.programs
 -        if programs is not None:
 -            schedule = programs.schedule
 -            flat = hidden_rows.reshape(-1, hidden)
 -            program = _take(flat, mx.array(programs.rows)) + facts.program_numeric(
--                _program_number(mx.array(programs.numbers))[:, None]
+-                _program_number(mx.array(programs.numbers)).astype(self.compute_dtype)[
+-                    :, None
+-                ]
 +        if routes.program_schedule is not None:
 +            assert (
 +                routes.program_rows is not None and routes.program_numbers is not None
-             )
++            )
 +            assert (
 +                routes.program_positions is not None and routes.program_mask is not None
-+            )
+             )
 +            schedule = routes.program_schedule
 +            flat = hidden_rows.reshape(-1, hidden)
 +            program = _take(
@@ -1076,7 +1642,18 @@ index 0f682d3040..32456d5f3a 100644
                  flat,
              )
              hidden_rows = flat.reshape(*shape, hidden)
-@@ -754,7 +667,7 @@ class MLXActorCritic(nn.Module):
+         encoded = (
+-            facts.output(mx.tanh(hidden_rows))
+-            * self._floating(routes.linked)[..., None]
++            facts.output(mx.tanh(hidden_rows)) * mx.array(routes.linked)[..., None]
+         )
+         delta = (
+-            mx.zeros((b * count, hidden), objects.dtype)
++            mx.zeros((b * count, hidden))
+             .at[mx.array(routes.targets)]
+             .add(encoded.reshape(-1, hidden))
+         )
+@@ -823,7 +667,7 @@ class MLXActorCritic(nn.Module):
  
      def _effects(
          self,
@@ -1085,18 +1662,41 @@ index 0f682d3040..32456d5f3a 100644
          objects: mx.array,
          tokens: mx.array,
          definitions: mx.array,
-@@ -784,9 +697,7 @@ class MLXActorCritic(nn.Module):
+@@ -837,15 +681,15 @@ class MLXActorCritic(nn.Module):
+         flat = objects.reshape(b * count, hidden)
+         controller = (
+             _take(flat, mx.array(routes.controller))
+-            * self._floating(routes.controller_mask)[:, None]
++            * mx.array(routes.controller_mask)[:, None]
+         )
+         source_object = (
+             _take(flat, mx.array(routes.source_object))
+-            * self._floating(routes.source_object_mask)[:, None]
++            * mx.array(routes.source_object_mask)[:, None]
+         )
+         header = effects.header(
+             mx.concatenate(
+-                [self._floating(routes.numeric), controller, source_object], axis=-1
++                [mx.array(routes.numeric), controller, source_object], axis=-1
+             )
+         )
+         modification = _take(tokens, mx.array(routes.modification_rows))
+@@ -853,12 +697,8 @@ class MLXActorCritic(nn.Module):
          detail = (
              _take(tokens, mx.array(routes.detail_rows))
              + effects.detail_kind(mx.array(routes.detail_kinds))
 -            + effects.detail_number(
--                _program_number(mx.array(routes.detail_numbers))[:, None]
+-                _program_number(mx.array(routes.detail_numbers)).astype(
+-                    self.compute_dtype
+-                )[:, None]
 -            )
+-            * self._floating(routes.detail_is_number)[:, None]
 +            + effects.detail_number(mx.array(routes.detail_numbers)[:, None])
-             * mx.array(routes.detail_is_number)[:, None]
++            * mx.array(routes.detail_is_number)[:, None]
          )
          table = mx.concatenate(
-@@ -810,70 +721,3 @@ class MLXActorCritic(nn.Module):
+             [
+@@ -881,70 +721,3 @@ class MLXActorCritic(nn.Module):
              .add(_take(encoded, mx.array(routes.member_records)))
          )
          return objects + delta.reshape(b, count, hidden)
@@ -1168,7 +1768,7 @@ index 0f682d3040..32456d5f3a 100644
 -        with measure("output_transfer_host"):
 -            return InferenceResult(to_numpy(logits))
 diff --git a/manabot/backends/mlx/rl.py b/manabot/backends/mlx/rl.py
-index 243de675b0..853777b847 100644
+index a9029505ff..853777b847 100644
 --- a/manabot/backends/mlx/rl.py
 +++ b/manabot/backends/mlx/rl.py
 @@ -12,7 +12,7 @@ surrogate ratio is float32 (`clipped_surrogate` states the limit) and
@@ -1180,16 +1780,59 @@ index 243de675b0..853777b847 100644
  """
  
  from collections.abc import Mapping
+@@ -74,12 +74,7 @@ def legal_mask(mask: mx.array) -> mx.array:
+ 
+ 
+ def policy_logs(logits: mx.array, valid: mx.array) -> mx.array:
+-    """Normalize in float32 for both behavior and learning, including half forwards.
+-
+-    Padding is -inf and legal logs must be finite. Promote before normalization,
+-    so recorded behavior logs do not retain half-rounded log-softmax values.
+-    """
+-    logits = logits.astype(mx.float32)
++    """Normalize [*,A] logits; padding is -inf and legal logs must be finite."""
+     if logits.shape != valid.shape or logits.ndim < 2:
+         raise NumericalError("policy_shape", {"logits": logits, "valid": valid})
+     require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
+@@ -103,8 +98,8 @@ def policy_logs(logits: mx.array, valid: mx.array) -> mx.array:
+ 
+ 
+ def action_logs(logs: mx.array, actions: mx.array) -> mx.array:
+-    """Float32 log probability of each sampled action [B]."""
+-    return mx.take_along_axis(logs.astype(mx.float32), actions[:, None], axis=-1)[:, 0]
++    """The entry of each row of `logs` [B,A] at its sampled action [B]: [B]."""
++    return mx.take_along_axis(logs, actions[:, None], axis=-1)[:, 0]
+ 
+ 
+ def reference_logs(reference: mx.array, valid: mx.array) -> mx.array:
 diff --git a/manabot/backends/parity.py b/manabot/backends/parity.py
-index 8698d7aaee..ecf6dc6a5d 100644
+index 3bc9d488e2..ecf6dc6a5d 100644
 --- a/manabot/backends/parity.py
 +++ b/manabot/backends/parity.py
-@@ -41,15 +41,15 @@ import importlib.util
- import json
+@@ -31,16 +31,10 @@ backend, writes
+ `--json` (one report per backend) when given, and exits 1 naming each failing
+ backend's worst components if any check fails; it exits 2 when the checkpoint
+ or capture is missing, the checkpoint is refused or no backend is installed.
+-
+-Use `--backend mlx --precision bfloat16` (or `float16`) for explicit half
+-precision. Half uses its measured logit/value, loss and full-gradient cosine
+-bars in `TOLERANCES`; the minimum per-tensor cosine and one-step difference
+-remain diagnostics. Float32 retains all the stricter checks above. Passing half's
+-numerical gates does not establish equivalent optimization or playing strength.
+ """
+ 
+ import argparse
+-from collections.abc import Iterator, Mapping
++from collections.abc import Iterator
+ from dataclasses import asdict, dataclass, field
+ import importlib
+ import importlib.util
+@@ -48,15 +42,14 @@ import json
  from pathlib import Path
  import sys
-+from types import ModuleType
- from typing import Any, cast
+ from types import ModuleType
+-from typing import Any, Literal, cast
++from typing import Any, cast
  
  import numpy as np
  import torch
@@ -1202,22 +1845,72 @@ index 8698d7aaee..ecf6dc6a5d 100644
  from manabot.policy.checkpoint import (
      canonical_parameters,
      from_torch_state,
-@@ -84,8 +84,13 @@ def installed_backends() -> list[str]:
-     ]
+@@ -66,7 +59,6 @@ from manabot.policy.protocol import (
+     Backend,
+     BackendLearner,
+     BackendPolicy,
+-    Precision,
+     Settings,
+     Targets,
+ )
+@@ -79,35 +71,6 @@ COSINE_TOLERANCE = 0.999
+ STEP_PARAMETER_TOLERANCE = 1e-6
+ ZERO_GRADIENT = 1e-6  # of the global gradient norm
  
+-
+-@dataclass(frozen=True)
+-class Tolerances:
+-    """Numerical acceptance for a compute dtype, not a learning-quality claim."""
+-
+-    logits: float
+-    values: float
+-    loss: float
+-    cosine: float
+-    cosine_scope: Literal["per_tensor", "full_gradient"]
+-    step: float | None
+-
+-
+-# Half bars cover the retained w384/w768 real-input checks at 140eec28d.
+-# Where half has no gate (tensor cosines, Adam deltas) the value is still reported.
+-TOLERANCES: dict[Precision, Tolerances] = {
+-    "float32": Tolerances(
+-        LOGIT_TOLERANCE,
+-        LOGIT_TOLERANCE,
+-        LOSS_TOLERANCE,
+-        COSINE_TOLERANCE,
+-        "per_tensor",
+-        STEP_PARAMETER_TOLERANCE,
+-    ),
+-    "bfloat16": Tolerances(1e-3, 1e-2, 1e-2, 0.99, "full_gradient", None),
+-    "float16": Tolerances(1e-4, 2e-3, 2e-3, 0.999, "full_gradient", None),
+-}
+-
+-
+ # Backend name -> the framework it needs; each provides
+ # `manabot.backends.<name>.checkpoint.BACKEND`.
+ BACKENDS = {"torch": "torch", "mlx": "mlx"}
+@@ -123,17 +86,11 @@ def installed_backends() -> list[str]:
  
-+def backend_module(name: str) -> ModuleType:
-+    """`manabot.backends.<name>`, the module an update takes as its backend."""
+ def backend_module(name: str) -> ModuleType:
+     """`manabot.backends.<name>`, the module an update takes as its backend."""
+-    return resolve(name)
 +    return importlib.import_module(f"manabot.backends.{name}")
-+
-+
- def backend(name: str) -> Backend:
--    return cast(Backend, resolve(name).checkpoint.BACKEND)
+ 
+ 
+-def backend(name: str, *, precision: Precision = "float32") -> Backend:
+-    """Select explicit MLX compute precision; Torch remains the float32 reference."""
+-    module = backend_module(name)
+-    if precision == "float32":
+-        return cast(Backend, module.checkpoint.BACKEND)
+-    if name != "mlx":
+-        raise ValueError("half-precision parity is supported only for the MLX backend")
+-    return cast(Backend, module.checkpoint.MLXBackend(precision=precision))
++def backend(name: str) -> Backend:
 +    return cast(Backend, backend_module(name).checkpoint.BACKEND)
  
  
  def minibatch_loss(
-@@ -114,15 +119,8 @@ def minibatch_loss(
+@@ -162,15 +119,8 @@ def minibatch_loss(
          "actor_mask": to_device(targets.actor_mask.astype(bool), device),
      }
  
@@ -1234,7 +1927,182 @@ index 8698d7aaee..ecf6dc6a5d 100644
          return minibatch_objective(
              rl,
              logits,
-@@ -265,17 +263,12 @@ def check(
+@@ -188,8 +138,6 @@ def minibatch_loss(
+ 
+ @dataclass
+ class Report:
+-    precision: Precision = "float32"
+-    gradient_cosine: float = 1.0
+     forward_logits: float = 0.0
+     forward_logits_relative: float = 0.0
+     forward_values: float = 0.0
+@@ -209,63 +157,46 @@ class Report:
+     minibatches: list[dict[str, Any]] = field(default_factory=list)
+ 
+     def checks(self) -> list[tuple[str, str, bool]]:
+-        """(component, measured against its dtype's bar, passed)."""
+-        tolerance = TOLERANCES[self.precision]
+-        finite_step = self.step_checked and bool(
+-            np.isfinite(
+-                [
+-                    self.step_parameter_max_abs,
+-                    self.step_reference_norm,
+-                    self.step_backend_norm,
+-                ]
+-            ).all()
+-        )
+-        checks = [
++        """(component, measured against its bar, passed) for every gated check."""
++        return [
++            (
++                "clipped Adam weights",
++                f"max |Δ| {self.step_parameter_max_abs:.1e} (tol 1e-6)",
++                self.step_checked
++                and self.step_parameter_max_abs <= STEP_PARAMETER_TOLERANCE,
++            ),
++            (
++                "forward logits",
++                f"max |Δ| {self.forward_logits:.1e} (tol 1e-4)",
++                self.forward_logits <= LOGIT_TOLERANCE,
++            ),
++            (
++                "forward values",
++                f"max |Δ| {self.forward_values:.1e} (tol 1e-4)",
++                self.forward_values <= LOGIT_TOLERANCE,
++            ),
++            (
++                "collection logits",
++                f"max |Δ| {self.collection_logits:.1e} (tol 1e-4)",
++                self.collection_logits <= LOGIT_TOLERANCE,
++            ),
++            (
++                "collection values",
++                f"max |Δ| {self.collection_values:.1e} (tol 1e-4)",
++                self.collection_values <= LOGIT_TOLERANCE,
++            ),
++            (
++                "learner loss",
++                f"rel Δ {100 * self.loss_relative:.4f}% (tol 0.1%)",
++                self.loss_relative <= LOSS_TOLERANCE,
++            ),
+             (
+-                "clipped Adam weights"
+-                if tolerance.step is not None
+-                else "finite clipped Adam step",
+-                f"max |Δ| {self.step_parameter_max_abs:.1e} "
+-                + (
+-                    f"(tol {tolerance.step:g})"
+-                    if tolerance.step is not None
+-                    else "(diagnostic; no float32 step bound)"
+-                ),
+-                finite_step
+-                and (
+-                    tolerance.step is None
+-                    or self.step_parameter_max_abs <= tolerance.step
+-                ),
++                f"gradient {self.gradient_worst}",
++                f"min cosine {self.gradient_min_cosine:.6f} over "
++                f"{self.gradient_tensors} tensors (tol 0.999)",
++                self.gradient_min_cosine >= COSINE_TOLERANCE,
+             ),
+         ]
+-        for name, value, limit in (
+-            ("forward logits", self.forward_logits, tolerance.logits),
+-            ("forward values", self.forward_values, tolerance.values),
+-            ("collection logits", self.collection_logits, tolerance.logits),
+-            ("collection values", self.collection_values, tolerance.values),
+-            ("learner loss", self.loss_relative, tolerance.loss),
+-        ):
+-            checks.append((name, f"Δ {value:.3g} (tol {limit:g})", value <= limit))
+-        if tolerance.cosine_scope == "per_tensor":
+-            checks.append(
+-                (
+-                    f"gradient {self.gradient_worst}",
+-                    f"min cosine {self.gradient_min_cosine:.6f} over "
+-                    f"{self.gradient_tensors} tensors (tol {tolerance.cosine:g})",
+-                    self.gradient_min_cosine >= tolerance.cosine,
+-                )
+-            )
+-        else:
+-            checks.append(
+-                (
+-                    "full gradient",
+-                    f"cosine {self.gradient_cosine:.6f} "
+-                    f"(tol {tolerance.cosine:g}); tensor minimum "
+-                    f"{self.gradient_min_cosine:.6f} ({self.gradient_worst}, diagnostic)",
+-                    self.gradient_cosine >= tolerance.cosine,
+-                )
+-            )
+-        return checks
+ 
+     def failures(self) -> list[str]:
+         return [name for name, _, passed in self.checks() if not passed]
+@@ -312,58 +243,6 @@ def _cosine(a: np.ndarray, b: np.ndarray, floor: float = 0.0) -> float | None:
+     return float(a @ b / (na * nb))
+ 
+ 
+-@dataclass(frozen=True)
+-class GradientAgreement:
+-    """Cosines between a backend's gradients and the reference's."""
+-
+-    cosine: float  # all parameters as one vector
+-    tensors: dict[str, float]  # each tensor above the zero-gradient floor
+-    both_zero: int  # tensors below the floor on both sides, never compared
+-
+-    @property
+-    def worst(self) -> str:
+-        return min(self.tensors, key=self.tensors.__getitem__) if self.tensors else ""
+-
+-    @property
+-    def min_cosine(self) -> float:
+-        return self.tensors.get(self.worst, 1.0)
+-
+-
+-def gradient_agreement(
+-    actual: Mapping[str, np.ndarray], expected: Mapping[str, np.ndarray]
+-) -> GradientAgreement:
+-    """Compare gradients held in one parameter layout.
+-
+-    A tensor whose norm is below `ZERO_GRADIENT` of the reference's global
+-    norm on both sides holds rounding noise and has no per-tensor cosine; the
+-    full-vector cosine still includes it.
+-    """
+-    if actual.keys() != expected.keys():
+-        raise ValueError("backend gradient parameter sets differ")
+-    flat = {
+-        name: (
+-            actual[name].astype(np.float64).ravel(),
+-            wanted.astype(np.float64).ravel(),
+-        )
+-        for name, wanted in expected.items()
+-    }
+-    for name, (a, b) in flat.items():
+-        if a.shape != b.shape or not np.isfinite(a).all() or not np.isfinite(b).all():
+-            raise ValueError(f"invalid gradient: {name}")
+-    dot = sum(float(a @ b) for a, b in flat.values())
+-    actual_square = sum(float(a @ a) for a, _ in flat.values())
+-    expected_square = sum(float(b @ b) for _, b in flat.values())
+-    floor = ZERO_GRADIENT * float(np.sqrt(expected_square))
+-    cosines = {name: _cosine(a, b, floor) for name, (a, b) in flat.items()}
+-    return GradientAgreement(
+-        float(dot / np.sqrt(actual_square * expected_square))
+-        if actual_square * expected_square
+-        else float(actual_square == expected_square == 0),
+-        {name: cosine for name, cosine in cosines.items() if cosine is not None},
+-        sum(cosine is None for cosine in cosines.values()),
+-    )
+-
+-
+ def _legal_difference(
+     logits: np.ndarray, torch_logits: np.ndarray, legal: np.ndarray
+ ) -> tuple[float, float]:
+@@ -379,34 +258,26 @@ def check(
+     collection_count: int = 8,
+     *,
+     backend_name: str,
+-    precision: Precision = "float32",
+ ) -> Report:
+     """Compare one backend against the PyTorch reference."""
      torch.set_num_threads(8)
      agent, space = load_checkpoint(str(checkpoint))
      state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
@@ -1245,17 +2113,20 @@ index 8698d7aaee..ecf6dc6a5d 100644
 -        parameter_names=dict(agent.named_parameters()),
 -    )
 -    module = resolve(backend_name)
+-    port = backend(backend_name, precision=precision)
 +    weights = from_torch_state(agent.config, space.encoder.config, state)
 +    module = backend_module(backend_name)
-     port = backend(backend_name)
++    port = backend(backend_name)
      policy, learner = port.load(weights)
      # The reference: the same loss over the torch backend, on the loaded agent.
 -    reference_policy = agent
 +    reference_policy = torch_backend.checkpoint.TorchPolicy(agent, weights)
      reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
-     report = Report()
+-    report = Report(precision=precision)
++    report = Report()
      for index, (obs, targets, settings, meta) in enumerate(
-@@ -284,9 +277,7 @@ def check(
+         minibatches(capture, minibatch_count)
+     ):
          reference_batch = reference_policy.prepare(obs)
          valid = reference_batch.legal
          with torch.no_grad():
@@ -1266,7 +2137,77 @@ index 8698d7aaee..ecf6dc6a5d 100644
          loss = minibatch_loss(
              torch_backend,
              reference_policy,
-@@ -437,9 +428,8 @@ def _collection(
+@@ -430,7 +301,20 @@ def check(
+         loss_relative = abs(loss_value - reference_loss) / max(
+             abs(reference_loss), 1e-12
+         )
+-        agreement = gradient_agreement(grads, expected)
++        cosines: dict[str, float] = {}
++        both_zero = 0
++        floor = ZERO_GRADIENT * float(
++            np.sqrt(
++                sum(np.square(g.astype(np.float64)).sum() for g in expected.values())
++            )
++        )
++        for name, grad in grads.items():
++            cosine = _cosine(grad, expected[name], floor)
++            if cosine is None:
++                both_zero += 1
++            else:
++                cosines[name] = cosine
++        worst = min(cosines, key=cosines.__getitem__)
+         row = {
+             "index": meta["index"],
+             "B": int(len(targets.actions)),
+@@ -440,21 +324,19 @@ def check(
+             "loss_torch": reference_loss,
+             "loss_backend": loss_value,
+             "loss_relative": loss_relative,
+-            "gradient_cosine": agreement.cosine,
+-            "gradient_min_cosine": agreement.min_cosine,
+-            "gradient_worst": agreement.worst,
++            "gradient_min_cosine": cosines[worst],
++            "gradient_worst": worst,
+         }
+         report.minibatches.append(row)
+         report.forward_logits = max(report.forward_logits, absolute)
+         report.forward_logits_relative = max(report.forward_logits_relative, relative)
+         report.forward_values = max(report.forward_values, value_difference)
+         report.loss_relative = max(report.loss_relative, loss_relative)
+-        report.gradient_tensors = len(grads)
+-        report.gradient_both_zero = max(report.gradient_both_zero, agreement.both_zero)
+-        report.gradient_cosine = min(report.gradient_cosine, agreement.cosine)
+-        if agreement.min_cosine < report.gradient_min_cosine:
+-            report.gradient_min_cosine = agreement.min_cosine
+-            report.gradient_worst = agreement.worst
++        report.gradient_tensors = len(cosines) + both_zero
++        report.gradient_both_zero = max(report.gradient_both_zero, both_zero)
++        if cosines[worst] < report.gradient_min_cosine:
++            report.gradient_min_cosine = cosines[worst]
++            report.gradient_worst = worst
+         if index == 0:
+             reference_loss_again = minibatch_loss(
+                 torch_backend,
+@@ -481,7 +363,7 @@ def check(
+         print(
+             f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
+             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
+-            f"min cosine {agreement.min_cosine:.6f} ({agreement.worst})",
++            f"min cosine {cosines[worst]:.6f} ({worst})",
+             flush=True,
+         )
+     _collection(agent, policy, capture, collection_count, report)
+@@ -500,8 +382,7 @@ def _compare_step(
+     """One clipped Adam step in both frameworks from the same weights.
+ 
+     All parameters count, including tensors with near-zero gradients. Cosine
+-    is diagnostic only; float32 gates the absolute difference, while half
+-    reports it beside its dtype-specific forward, loss and gradient gates.
++    is diagnostic only: the absolute weight difference is the acceptance bar.
+     """
+     before = reference.parameters()
+     reference.set_learning_rate(settings.learning_rate)
+@@ -547,9 +428,8 @@ def _collection(
          obs = read_npz(path)
          with torch.no_grad():
              logits, values = agent(
@@ -1278,6 +2219,52 @@ index 8698d7aaee..ecf6dc6a5d 100644
                  )
              )
          port_logits, port_values = policy.evaluate(policy.prepare(obs, inference=True))
+@@ -559,7 +439,7 @@ def _collection(
+         report.collection_logits = max(report.collection_logits, absolute)
+         report.collection_values = max(
+             report.collection_values,
+-            float(np.abs(port_values.reshape(-1) - values.numpy().reshape(-1)).max()),
++            float(np.abs(port_values - values.numpy()).max()),
+         )
+     policy.clear_cache()
+ 
+@@ -583,14 +463,8 @@ def main(argv: list[str] | None = None) -> int:
+     parser.add_argument("--minibatches", type=int, default=8)
+     parser.add_argument("--collection", type=int, default=8)
+     parser.add_argument("--json", type=Path)
+-    parser.add_argument("--backend", choices=tuple(BACKENDS))
+-    parser.add_argument("--precision", choices=tuple(TOLERANCES), default="float32")
+     args = parser.parse_args(argv)
+-    if args.precision != "float32" and args.backend != "mlx":
+-        parser.error("half precision requires --backend mlx; Torch stays float32")
+-    names = [args.backend] if args.backend else installed_backends()
+-    if any(name not in installed_backends() for name in names):
+-        parser.error("the selected backend's framework is not installed")
++    names = installed_backends()
+     if not names:
+         parser.error("no framework backend is installed (" + ", ".join(BACKENDS) + ")")
+     reports: dict[str, Report] = {}
+@@ -602,7 +476,6 @@ def main(argv: list[str] | None = None) -> int:
+                 args.minibatches,
+                 args.collection,
+                 backend_name=name,
+-                precision=args.precision,
+             )
+     except (FileNotFoundError, ValueError) as error:
+         parser.error(str(error))  # exits 2; 1 means the models disagree
+@@ -613,11 +486,7 @@ def main(argv: list[str] | None = None) -> int:
+         args.json.write_text(
+             json.dumps(
+                 {
+-                    name: asdict(report)
+-                    | {
+-                        "tolerances": asdict(TOLERANCES[report.precision]),
+-                        "failures": failures[name],
+-                    }
++                    name: asdict(report) | {"failures": failures[name]}
+                     for name, report in reports.items()
+                 },
+                 indent=2,
 diff --git a/manabot/backends/torch/_continuation.py b/manabot/backends/torch/_continuation.py
 deleted file mode 100644
 index c3386db417..0000000000
@@ -2052,6 +3039,189 @@ index c3f7acf93f..a304dba1a0 100644
 -    return cast(
 -        "Prepared[Tensor] | CatalogPrograms[Tensor]", _replace_arrays(batch, tensors)
 -    )
+diff --git a/manabot/backends/torch/capture.py b/manabot/backends/torch/capture.py
+deleted file mode 100644
+index af09c0dc30..0000000000
+--- a/manabot/backends/torch/capture.py
++++ /dev/null
+@@ -1,177 +0,0 @@
+-"""Capture real Torch policy calls and learner inputs for backend comparisons.
+-
+-`capture` runs a supplied one-update regime, retaining the initial checkpoint,
+-full-capacity observation arrays, selected targets and per-minibatch settings.
+-The instrumentation observes the production damped update at its checked-loss
+-boundary. Hook frame access is confined here; readers use `backends.parity`.
+-Disk serialization is subtracted from the shared engine time, never counted as
+-engine work. Captures are execution evidence, not resumable training state.
+-"""
+-
+-import inspect
+-import json
+-from pathlib import Path
+-import platform
+-import shutil
+-import time
+-from typing import Any
+-
+-import numpy as np
+-import torch
+-
+-from manabot.backends.torch.policy import ActorCritic, PolicyInference
+-from manabot.env.observation import ObservationBuffers
+-from manabot.policy.prepare import Prepared
+-from manabot.training.execution import execute_regime
+-from manabot.training.regime import TrainingRegime
+-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+-from manabot.training.updates.health import OptimizerHealth
+-from manabot.verify.store import VerifyStore
+-
+-
+-def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) -> None:
+-    """Record one real damped update; restore hooks even when execution fails."""
+-    if len(regime.stages) != 1 or getattr(regime.stages[0], "updates", None) != 1:
+-        raise ValueError("backend capture requires exactly one self-play update")
+-    out.mkdir(parents=True, exist_ok=False)
+-    (out / "collection").mkdir()
+-    (out / "learner").mkdir()
+-    (out / "regime.json").write_text(regime.model_dump_json(indent=2))
+-
+-    calls: list[dict[str, Any]] = []
+-    minibatches: list[dict[str, Any]] = []
+-    collection_seconds = 0.0
+-    learner_decisions = 0
+-    recording_seconds = 0.0
+-    in_collection = False
+-    original_prepare = PolicyInference.prepare
+-    original_forward = ActorCritic.forward
+-    original_collect = SeatRoutedCollector.collect
+-    original_check = OptimizerHealth.check
+-
+-    def prepare(
+-        self: PolicyInference, obs: ObservationBuffers
+-    ) -> Prepared[torch.Tensor]:
+-        nonlocal recording_seconds
+-        if not in_collection:
+-            return original_prepare(self, obs)
+-        tick = time.perf_counter()
+-        prepared = original_prepare(self, obs)
+-        calls.append(
+-            {
+-                "index": len(calls),
+-                "B": int(obs["actions_valid"].shape[0]),
+-                "prepare": time.perf_counter() - tick,
+-                "forward": 0.0,
+-            }
+-        )
+-        recording_start = time.perf_counter()
+-        np.savez(
+-            out / "collection" / f"{len(calls) - 1:05d}.npz",
+-            **obs,
+-        )
+-        recording_seconds += time.perf_counter() - recording_start
+-        return prepared
+-
+-    def forward(
+-        self: ActorCritic, obs: Prepared[torch.Tensor]
+-    ) -> tuple[torch.Tensor, torch.Tensor]:
+-        tick = time.perf_counter()
+-        result = original_forward(self, obs)
+-        if in_collection and calls:
+-            calls[-1]["forward"] += time.perf_counter() - tick
+-        return result
+-
+-    def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> RolloutBatch:
+-        nonlocal in_collection, collection_seconds, learner_decisions
+-        in_collection = True
+-        tick = time.perf_counter()
+-        try:
+-            batch = original_collect(self, *args, **kwargs)
+-            learner_decisions = int(batch.actions.size)
+-        finally:
+-            in_collection = False
+-            collection_seconds = time.perf_counter() - tick
+-        return batch
+-
+-    def check(self: OptimizerHealth, loss: torch.Tensor) -> None:
+-        original_check(self, loss)
+-        frame = inspect.currentframe()
+-        assert frame is not None and frame.f_back is not None
+-        local = frame.f_back.f_locals
+-        assert frame.f_back.f_code.co_name == "update_damped_iteration"
+-        indexes = local["indexes"]
+-        learning = local["learning"]
+-        arrays = {f"obs/{k}": v for k, v in local["rows"].observation.items()}
+-        arrays.update(
+-            actions=local["minibatch_actions"].detach().cpu().numpy(),
+-            advantages=local["advantages"][indexes].detach().cpu().numpy(),
+-            value_targets=local["value_targets"][indexes].detach().cpu().numpy(),
+-            actor_mask=local["actor_mask"].numpy(),
+-            behavior_logs=local["behavior_logs"].numpy(),
+-        )
+-        np.savez(out / "learner" / f"{len(minibatches):03d}.npz", **arrays)
+-        minibatches.append(
+-            {
+-                "index": len(minibatches),
+-                "B": int(len(indexes)),
+-                "loss": float(loss.detach()),
+-                "iteration": int(local["iteration"]),
+-                "learning_rate": float(local["rate"]),
+-                "tau": float(local["tau"]),
+-                "clip": learning.clip,
+-                "collection_kl": learning.collection_kl,
+-                "reference": learning.reference,
+-                "max_grad_norm": learning.max_grad_norm,
+-                "time": time.perf_counter(),
+-            }
+-        )
+-        del local, frame
+-
+-    PolicyInference.prepare = prepare  # type: ignore[method-assign]
+-    ActorCritic.forward = forward  # type: ignore[method-assign]
+-    SeatRoutedCollector.collect = collect  # type: ignore[method-assign]
+-    OptimizerHealth.check = check  # type: ignore[method-assign]
+-    started = time.perf_counter()
+-    meta: dict[str, Any] = {
+-        "host_before": platform.platform(),
+-        "torch": torch.__version__,
+-    }
+-    try:
+-        with VerifyStore(out / "capture.sqlite") as store:
+-            result = execute_regime(
+-                regime,
+-                seed,
+-                out / "execution",
+-                store,
+-                experiment=experiment,
+-                training_exposure=False,
+-            )
+-    finally:
+-        PolicyInference.prepare = original_prepare  # type: ignore[method-assign]
+-        ActorCritic.forward = original_forward  # type: ignore[method-assign]
+-        SeatRoutedCollector.collect = original_collect  # type: ignore[method-assign]
+-        OptimizerHealth.check = original_check  # type: ignore[method-assign]
+-    initial = sorted((out / "execution").rglob("*-initial-raw.safetensors"))
+-    if result.status != "completed" or not calls or not minibatches:
+-        raise RuntimeError(f"capture did not complete one update: {result.status}")
+-    if len(initial) != 1:
+-        raise RuntimeError(f"expected one initial checkpoint, found {initial}")
+-    shutil.copyfile(initial[0], out / "initial.pt")
+-    policy = sum(c["prepare"] + c["forward"] for c in calls)
+-    meta.update(
+-        status=str(result.status),
+-        wall=time.perf_counter() - started,
+-        collection_wall=collection_seconds,
+-        collection_policy=policy,
+-        engine=collection_seconds - policy - recording_seconds,
+-        recording_seconds=recording_seconds,
+-        learner_decisions=learner_decisions,
+-        calls=len(calls),
+-        minibatches=len(minibatches),
+-        host_after=platform.platform(),
+-    )
+-    (out / "calls.json").write_text(json.dumps(calls, indent=1))
+-    (out / "minibatches.json").write_text(json.dumps(minibatches, indent=1))
+-    (out / "capture.json").write_text(json.dumps(meta, indent=2, default=str))
+-    print(json.dumps(meta, indent=2, default=str))
 diff --git a/manabot/backends/torch/checkpoint.py b/manabot/backends/torch/checkpoint.py
 index b549690ff1..65fbb47c20 100644
 --- a/manabot/backends/torch/checkpoint.py
@@ -2411,7 +3581,7 @@ index e9717e9977..8f4e706a77 100644
          """Packed rows [L,...] of `values` [B,S,...]."""
          return values.reshape(self.batch * self.slots, *values.shape[2:]).index_select(
 diff --git a/manabot/backends/torch/policy.py b/manabot/backends/torch/policy.py
-index 4944c7ce0e..b5d35cbc61 100644
+index e04351a947..b5d35cbc61 100644
 --- a/manabot/backends/torch/policy.py
 +++ b/manabot/backends/torch/policy.py
 @@ -3,58 +3,65 @@ Shared viewer-observation encoder, legal-action policy and scalar or WDL critic.
@@ -2871,7 +4041,19 @@ index 4944c7ce0e..b5d35cbc61 100644
          )
          # The optional trailing token is a critic input, never an action focus.
          post_attention_objects = encoded[:, : state.validity.shape[1]]
-@@ -641,6 +406,23 @@ class ActorCritic(nn.Module):
+@@ -620,10 +385,7 @@ class ActorCritic(nn.Module):
+             informed_actions = informed_actions * (
+                 1 + self.policy_film(pooled)[batches]
+             )
+-        # Autocast may compute the head in float16, which cannot represent
+-        # the public illegal-action sentinel. Keep that output boundary in
+-        # float32; the cast preserves gradients into the reduced-precision head.
+-        scores = self.policy_head(informed_actions).squeeze(-1).float()
++        scores = self.policy_head(informed_actions).squeeze(-1)
+         # Public logits retain original coordinates, including interior padding.
+         # Only the legal rows entered the action networks; objects/programs were
+         # encoded once for the batch, independent of each row's support size.
+@@ -644,6 +406,23 @@ class ActorCritic(nn.Module):
              },
          )
  
@@ -2895,7 +4077,7 @@ index 4944c7ce0e..b5d35cbc61 100644
      def object_trimming(self) -> bool:
          """Whether buckets may trim object axes: padding objects must be inert."""
          return (
-@@ -648,25 +430,67 @@ class ActorCritic(nn.Module):
+@@ -651,25 +430,67 @@ class ActorCritic(nn.Module):
              and self.belief_count_buckets == 0
          )
  
@@ -2974,7 +4156,7 @@ index 4944c7ce0e..b5d35cbc61 100644
          key_padding_mask = validity == 0
          if self.value_token is not None:
              objects = torch.cat(
-@@ -696,7 +520,8 @@ class ActorCritic(nn.Module):
+@@ -699,7 +520,8 @@ class ActorCritic(nn.Module):
          self,
          objects: torch.Tensor,
          is_agent: torch.Tensor,
@@ -2984,7 +4166,7 @@ index 4944c7ce0e..b5d35cbc61 100644
      ) -> torch.Tensor:
          """`_attend_objects` over valid objects only, returned at [B,N(+1),D].
  
-@@ -707,12 +532,15 @@ class ActorCritic(nn.Module):
+@@ -710,12 +532,15 @@ class ActorCritic(nn.Module):
          """
          batch = objects.shape[0]
          owner = torch.where(is_agent, 1.0, -1.0).to(objects.dtype)
@@ -3000,7 +4182,7 @@ index 4944c7ce0e..b5d35cbc61 100644
          packed = tokens.gather(objects)
          owners = tokens.gather(owner)
          packed = self.attention.forward_live(packed, owners, tokens)
-@@ -749,7 +577,7 @@ class ActorCritic(nn.Module):
+@@ -752,7 +577,7 @@ class ActorCritic(nn.Module):
  
      def _gather_informed_actions(
          self,
@@ -3009,7 +4191,7 @@ index 4944c7ce0e..b5d35cbc61 100644
          post_attention_objects: torch.Tensor,
          state: EmbeddedObservation,
          batches: torch.Tensor,
-@@ -760,54 +588,96 @@ class ActorCritic(nn.Module):
+@@ -763,54 +588,96 @@ class ActorCritic(nn.Module):
          Coordinates select actions, continuation frames and focus objects from
          the same observation row.
          """
@@ -3133,7 +4315,7 @@ index 4944c7ce0e..b5d35cbc61 100644
              enc_agent_player,
              enc_opp_player,
              enc_agent_cards,
-@@ -815,78 +685,173 @@ class ActorCritic(nn.Module):
+@@ -818,78 +685,173 @@ class ActorCritic(nn.Module):
              enc_agent_perms,
              enc_opp_perms,
          ]
@@ -3350,7 +4532,7 @@ index 4944c7ce0e..b5d35cbc61 100644
          assert (
              self.belief_card_embedding is not None
              and self.belief_owner_embedding is not None
-@@ -895,129 +860,35 @@ class ActorCritic(nn.Module):
+@@ -898,129 +860,35 @@ class ActorCritic(nn.Module):
              and self.belief_global_embedding is not None
          )
          rows = (
@@ -8408,10 +9590,10 @@ index fccd7e600b..b9a26892ee 100644
  
      `"uniform"` spreads mass evenly over the legal offers; `"action_type_uniform"`
 diff --git a/manabot/policy/protocol.py b/manabot/policy/protocol.py
-index fbb0bcc192..2b4fefa6b8 100644
+index 277f3169c3..2b4fefa6b8 100644
 --- a/manabot/policy/protocol.py
 +++ b/manabot/policy/protocol.py
-@@ -10,16 +10,13 @@ once over the backend's own arrays (`manabot.training.updates`). `Targets`
+@@ -10,20 +10,15 @@ once over the backend's own arrays (`manabot.training.updates`). `Targets`
  and `Settings` are one captured minibatch's constants and coefficients.
  """
  
@@ -8430,8 +9612,12 @@ index fbb0bcc192..2b4fefa6b8 100644
 +from manabot.policy.checkpoint import PolicyCheckpoint
  from manabot.policy.prepare import Prepared
  
+-Precision = Literal["float32", "bfloat16", "float16"]
+-
  
-@@ -48,100 +45,15 @@ class Settings:
+ @dataclass(frozen=True)
+ class Targets:
+@@ -50,100 +45,15 @@ class Settings:
      max_grad_norm: float
  
  
@@ -8535,7 +9721,7 @@ index fbb0bcc192..2b4fefa6b8 100644
          """Logits [B,A] (-1e8 off the legal support) and values [B]."""
          ...
  
-@@ -177,12 +89,12 @@ class BackendLearner(Protocol):
+@@ -179,12 +89,12 @@ class BackendLearner(Protocol):
          """One clipped optimizer step on `loss`: the pre-clip gradient norm."""
          ...
  
@@ -8550,7 +9736,7 @@ index fbb0bcc192..2b4fefa6b8 100644
          """A host copy of the parameters in the backend's layout."""
          ...
  
-@@ -190,32 +102,22 @@ class BackendLearner(Protocol):
+@@ -192,32 +102,22 @@ class BackendLearner(Protocol):
  class Backend(Protocol):
      name: str
  

@@ -5,9 +5,8 @@ receipt below: `105e7e2aa` (MTG-297 mana spending), merged as `9db3f1373`.
 `f4e1822fa` (#510, training precision: `manabot/training/{execution,regime}.py`,
 no policy or engine file) is merged at `070da04ed`; `origin/main` had nothing
 further at 2026-11-13 realign. That merge changes no `manabot/` policy code, so
-no capture is repeated for it. `a289fe066` (#513, MLX half precision and shared
-Torch captures, 2026-11-13 18:03 UTC) is on main and **not merged here**; see
-"Upstream #513".
+no capture is repeated for it. `a289fe066` (#513, MLX half precision and shared Torch captures) is merged
+as `6e20654c34`; its recorder and experiment consumers now use Prepared.
 One PR. Earlier full plan with every receipt: `1f634d89b:scratch/mtg333-plan.md`;
 MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
@@ -379,7 +378,7 @@ RunPod pod is `etude-e0f0acfca5a5`, i.e. MTG-324's `mtg324-l4-ab-e0f0acfca5a5`
 in `~/.etude` ($0.69/hour, another Session waiting on it): not this Task's,
 left alone.
 
-### Upstream #513 (`a289fe066`, not merged)
+### Upstream #513 (`a289fe066`, merged as `6e20654c34`)
 
 Trial `git merge-tree HEAD origin/main` conflicts in `manabot/policy/{prepare,protocol}.py`,
 `manabot/policy/README.md`, `manabot/backends/{parity.py,mlx/checkpoint.py,mlx/learner.py,mlx/policy.py}`,
@@ -405,9 +404,46 @@ Breakage beyond conflicts: new `manabot/backends/torch/capture.py` (and
    `4b091160edbf` machine once Etude settles it, then confirm `runpodctl pod list`
    shows no Task pod. The speed question predates #513, so the launch does
    not wait for that merge.
-2. While it runs, merge #513 (above), port `torch/capture.py` and its tests to
-   `Prepared`, then rerun the CPU oracle and update comparison against the
-   `105e7e2aa` base, and run the parity CLI.
+2. #513 is merged and its capture replay/MLX checks pass. Complete the
+   identical-input CPU oracle described below; five update cases are exact
+   and parity passes on a fresh real capture.
 3. Slice 8 runs from the speed/profile output on the merged code, with the
    same card. Then gate: review the repeat-floor finding and run the broader
    suites, Python 3.12 and the wheel smoke.
+
+### Current pass, 2026-11-13 18:20 UTC
+
+Fresh launch source `27daef1ae5`, request `8a4dd0751651`, machine
+`mtg333-speed-a40-7ccc26a44f00`: A40, $0.59/hour, cohort cap $10. Provider
+inventory before launch had no Task pod. A blob-filtered history fetch
+retained origin verification after the ordinary full fetch was interrupted
+before admission. The original cancelled allocation still has no provider pod.
+
+#513 integration: shared capture hooks accept host ObservationBuffers, forward
+Prepared, and retain raw ActionRows.observation for replay. New containers are
+discovered at their safetensors suffix. MLX uses existing Prepared.is_agent
+for trimmed ownership instead of a duplicate signed array. Experiment consumers
+use the surviving prepare/on_device/assemble APIs.
+
+`pytest tests/model/test_backend_capture.py tests/model/test_mlx_backend.py -q`
+→ 15 passed (62.09s); half-head public-logit check passed separately. Fresh
+172-decision capture, 86 minibatches: `parity: pass (torch, mlx)`, MLX clipped
+step max parameter difference 5.96e-8. Five update JSON cases cmp-identical.
+
+Contrary oracle result: fresh baseline versus merged head differs in 136
+belief tensors (max gradient 8.502e-4). Isolated probes show identical model
+weights but different generated inputs: 932 baseline belief rows versus 900
+at head. `2c47f59aea` excludes tokens from belief_schema_from_engine; baseline
+105e7e2aa predates it. This is upstream schema behavior, not #513's no-op
+float32 score cast. Keep the schema correction. The oracle now retains one
+real head-generated corpus via EQUIV_BELIEF_INPUT and loads its exact bytes
+in both arms. The current rental uses the earlier harness, so its generated
+belief comparison is not an identical-input policy-equivalence result; speed
+and profile remain usable. Identical-input CPU captures are in progress.
+
+The first fresh A40 attempt `8a4dd0751651` failed before timing, cost $0.02:
+current native definitions cause baseline's pre-TLE schema builder to reject
+duplicate card/token names. The retained-input harness avoids that obsolete
+generator. The rental was terminated. Local probes additionally reveal the
+loaded native extension predates TLE (it allows baseline schema generation);
+rebuild current native source before final CPU captures.

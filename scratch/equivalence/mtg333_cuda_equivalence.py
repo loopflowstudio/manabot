@@ -35,6 +35,8 @@ done
 if command -v git >/dev/null; then (cd "$work/base" && git apply -R "$src/{_HERE}/base.patch")
 else (cd "$work/base" && patch -R -p1 -s < "$src/{_HERE}/base.patch"); fi
 uv run --locked python -c "import torch; print('GPU', torch.cuda.get_device_name(), torch.__version__, torch.version.cuda)"
+export EQUIV_BELIEF_INPUT="$out/belief-input.pt"
+PYTHONPATH="$work/head" uv run --locked python {_HERE}/run.py --belief-input "$EQUIV_BELIEF_INPUT"
 for arm in base head head; do
   name=$arm; test -e "$out/$arm.pt" && name=${{arm}}_repeat
   EQUIV_DEVICE=cuda PYTHONPATH="$work/$arm" uv run --locked python {_HERE}/run.py "$out/$name.pt"
