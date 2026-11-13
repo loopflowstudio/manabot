@@ -787,6 +787,12 @@ settings:
 settings = settings.model_copy(update={"device": "cuda", "precision": "tf32", "bucketed_shapes": True})
 ```
 
+Retained regime builders resolve `Execution.precision="auto"` alongside
+`bucketed_shapes` and `live_tokens`. It selects float32 everywhere after the
+BF16 learning gate failed. Explicit choices and saved precision are preserved;
+a saved stage predating the field reads as float32. Current `SelfPlay` settings
+use explicit precision, defaulting to float32.
+
 | `precision` | What changes |
 | --- | --- |
 | `float32` (default) | Nothing; the process's own TF32 switches are left as they were. |
@@ -800,17 +806,19 @@ and a reduced-precision run is a declared recipe variant, never an edit of a
 float32 recipe. Precision changes no `ModelConfig` field, checkpoint or world
 binding: a checkpoint trained in any precision loads and runs in any other.
 
-Reduced precision changes learning numerics, not just speed, and finite
-metrics do not show that it learns the same. CUDA training stays float32: the
-L4 measurement for w160l8 and w384l8
-([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)) left TF32
-unresolved and BF16 rejected under its pre-registered rule, though both stayed
-within 0.6% of float32's loss at fixed weights and its 200-step replay could
-not resolve learning differences that small. TF32 is 1.1× faster at w160l8 and
-1.3–1.5× at w384l8; BF16 is slower at w160l8 and 2–2.7× faster at w384l8. A
-reduced precision becomes a recommendation only after a real learning
-comparison: same seeds, bucketed shapes, strength at matched updates. Before
-training in one on another GPU or model size, run the
+The measured speed crossover is width 256 (`BF16_MIN_HIDDEN_DIM` in
+`manabot.training.regime`). On an L4 with bucketed shapes, BF16 is slower than
+float32 at w160l8, 1.66× faster per learner step at w256l8, and 2–2.7× faster
+at w384l8 ([measurement](../experiments/cuda_precision.md)). But in the
+[learning A/B](../experiments/precision_ladder.md), BF16 seed 32401 stopped
+after 140 completed updates with `behavior_log_probability_mismatch`.
+That terminal numerical failure rejects BF16 under the pre-registered rule;
+the speed crossover therefore remains inactive. Playing strength was not
+scored, and the failure does not establish a strength difference. The A/B
+used bucketed shapes without live-token attention; their combination with
+BF16 has no learning admission from this run. TF32 remains explicit too.
+
+Before training a reduced precision on another GPU, run the
 [CUDA numerics validation](#validation), which checks float32, and the bf16
 dtype-join admission on that host:
 

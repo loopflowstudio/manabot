@@ -125,3 +125,15 @@ Tracker, with no Etude run, and requires fresh output so cumulative counters
 cannot be mistaken for this measurement. Retire the frozen throughput driver
 rather than translate its TrainingRun contract; delete its exclusive execution
 tests while preserving machine setup and packing evidence tests.
+
+## Main sync — 2026-11-13
+
+Keep the cutover's executor and exclusive bucketed-execution test deletions.
+Main's automatic precision resolution survives in retained regime records;
+live SelfPlay keeps explicit float32 defaults. Preserve the BF16 rejection
+report and artifact manifest. The newly merged frozen precision-ladder launcher
+refuses with pinned main revision `2f00cbbf6d484b8d5275f65376a52ae0d4376be6`,
+which contains its executor and original builder. Its report/evaluation readers
+remain. This follows the existing frozen-workflow cutover rather than adapting
+the scored experiment to a different loop. Branch scratch plans stay the active
+context; MTG-324's scratch history remains on the pinned main commit.

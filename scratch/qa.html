@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-324 QA — precision auto</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#222}
+pre{background:#f5f2ea;padding:.6rem;overflow:auto;font-size:13px}td,th{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;vertical-align:top}table{border-collapse:collapse}h2{margin-top:2rem}</style></head>
+<body>
+<h1>MTG-324 QA: <code>Execution.precision="auto"</code></h1>
+<p>2026-11-13, HEAD <code>0338b8a90</code> (contains <code>origin/main</code> <code>6ce618b8a</code>). I used the change the way a regime author would: the
+<code>manabot train</code> CLI, regime JSON files and the recipe builders. Outputs went to the ignored <code>.runs/qa324/</code>. I ran nothing on CUDA and
+nothing paid, so CUDA stages were built and validated but not trained.</p>
+
+<h2>1. New user: the default local recipe</h2>
+<pre>$ uv run manabot train --recipe local --device cpu --out .runs/qa324/local
+local: completed; run: b53e70f151e741d2851de76e2d5502d6        (9.9 s)
+run.json regime.stages[0].execution:
+{'device': 'cpu', 'memory_bytes': 34359738368, 'precision': 'float32', 'threads': 1, 'wall_seconds': 120.0, 'workers': 1}</pre>
+<p>The run records the resolved <code>float32</code> and never writes <code>auto</code>, as the docs say.</p>
+
+<h2>2. Regime JSON through the CLI (<code>--regime</code>, CPU, seed 3)</h2>
+<table><tr><th>File</th><th>Result</th></tr>
+<tr><td><code>"precision": "auto"</code></td><td>completed; recorded <code>float32</code></td></tr>
+<tr><td>precision omitted (a regime saved before the field existed)</td><td>completed; recorded <code>float32</code></td></tr>
+<tr><td><code>"bf16"</code> on CPU</td><td>refused: <code>Value error, precision bf16 requires CUDA</code></td></tr>
+<tr><td><code>"tf32"</code> on CPU</td><td>refused: <code>Value error, precision tf32 requires CUDA</code></td></tr></table>
+
+<h2>3. Saved and edited regimes (the TLA frontier regime JSON loaded in Python)</h2>
+<pre>saved_as_is                -> float32 False False | authored: float32
+old_no_precision           -> float32 False False | authored: float32
+auto_cpu                   -> float32 False False | authored: auto
+auto_cuda_w384             -> float32 False False | authored: auto      (layouts explicitly false in file)
+auto_cuda_w384_layout_auto -> float32 True True   | authored: auto
+bf16_cuda                  -> bf16    False False | authored: bf16
+typo "bfloat16"            -> ValidationError: Input should be 'float32', 'tf32' or 'bf16' (plus a second union error for 'auto')</pre>
+<p>Columns: precision, bucketed_shapes, live_tokens. At w384 on CUDA, <code>auto</code> resolves to float32, matching the recorded rejection. Explicit values and saved values stay as written.</p>
+
+<h2>4. Builders (CUDA baseline recipe, built but not trained)</h2>
+<pre>baseline cuda                w64: precision=float32 bucketed=True live=True dump=float32
+with_capacity 384            w384: precision=float32 bucketed=True live=True dump=float32
+explicit bf16                w64: precision=bf16 bucketed=True live=True dump=bf16
+explicit bf16 -> w384        w384: precision=bf16 bucketed=True live=True dump=bf16
+saved roundtrip              w64: precision=float32 bucketed=True live=True dump=float32
+baseline cuda padded         w64: precision=float32 bucketed=False live=False dump=float32</pre>
+<p>A rebuild resolves <code>auto</code> again, and an explicit BF16 choice survives a width change.</p>
+
+<h2>5. Docs and tests</h2>
+<p>The links and anchors in <code>docs/training.md</code> (<code>#validation</code>, <code>experiments/precision_ladder.md</code>, <code>experiments/cuda_precision.md</code>) exist.
+The other guides contain no stale "float32 (default)" wording. A focused check passed: <code>pytest tests/training/test_precision.py tests/training/test_bucketed_execution.py
+tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py</code>, 48 passed.</p>
+
+<h2>Outcome</h2>
+<p><b>Works:</b> fresh authoring, CLI training, saved and pre-field regimes, explicit choices, CPU refusals and builder re-resolution all behave as the docs describe. I fixed nothing; I found no defects.</p>
+<p><b>Not reached:</b> a CUDA training run (no GPU here, and no rental authorized at this step). <code>apply_matmul_precision</code> and the learner and collector
+receiving <code>resolved_precision</code> on CUDA ran only for float32 on CPU.</p>
+<p><b>Worth noting (no change made):</b> explicit <code>bf16</code> with <code>live_tokens</code> on still validates, though the A/B never admitted that combination. The docs state it as unadmitted, which is consistent with keeping explicit choices available.</p>
+</body></html>
