@@ -1,7 +1,8 @@
 # MTG-333 plan: torch forward over `Prepared`, container saves, backend rule
 
 Policy baseline: `ef28f3a58` (PR #501 merged). Upstream `6ce618b8a` is merged
-in (`0c43cc16e`); `origin/main` had nothing newer at 2026-11-13 12:19 UTC.
+in (`0c43cc16e`). `origin/main` moved to `105e7e2aa` (MTG-297 mana spending) at
+2026-11-13 12:21 UTC and is **not merged yet**: slice 6b.
 One PR. Earlier full plan with every receipt: `1f634d89b:scratch/mtg333-plan.md`;
 MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
@@ -38,7 +39,7 @@ orchestrations, and `save_checkpoint` wrote a format only torch reads.
 ```
 uv run python scratch/equivalence/run.py /tmp/mtg333/head.pt
 uv run python scratch/equivalence/compare.py /tmp/mtg333/integrated-base.pt /tmp/mtg333/head.pt
-  -> tensors 3248 ... differing 0
+  -> tensors N ... differing 0   (3,248 before the 105e7e2aa engine)
 ```
 
 ```python
@@ -90,10 +91,11 @@ arms; base `manabot/` extracted to `/tmp/mtg333-integrated-base`):
   and the compress edits they cover. Gate's broader suites, Python 3.12 and
   installed-wheel checks have not been run.
 
+Those receipts are at the pre-`105e7e2aa` engine; slice 6b replaces them.
 Captures in `/tmp/mtg333/` are temporary. If gone, or after any change to
-`manabot/` or the engine: rebuild the extension per `AGENTS.md`, extract
-`git archive ef28f3a58 manabot`, and capture base, base-repeat and head
-together.
+`manabot/` or the engine: rebuild the extension per `AGENTS.md`, extract the
+base `manabot/` (`git archive 105e7e2aa manabot` once merged), and capture
+base, base-repeat and head together.
 
 ## Constraints the remaining work must keep
 
@@ -134,9 +136,52 @@ Deleted predecessors are not restored; the list is in
 
 ## Remaining slices
 
-7. **This slice — CUDA equivalence and speed.** Blocked since 12:12 UTC on L4
-   stock; the route below unblocks it.
+6b. **This slice — merge `105e7e2aa` and re-establish the CPU baseline.**
+7. **CUDA equivalence and speed**, launched from the merged commit. Blocked
+   since 12:12 UTC on L4 stock; the card route below unblocks it.
 8. **Optimize pass**, on the card the speed check used.
+
+### Slice 6b: upstream `105e7e2aa` (read 2026-11-13 12:23–12:27 UTC)
+
+What it changes for this Task:
+- Engine rules: native unit/class mana spending adds decisions (step digest
+  moved, 102,209 steps instead of 101,650 over the budget's 512 games). The
+  oracle's seeded games therefore differ; every capture in `/tmp/mtg333/` and
+  the count 3,248 belong to the old engine.
+- Policy input: a player's pooled mana classes become `FACT_EFFECT_PROGRAM`
+  rows on the player's object row, id `token("PooledMana")`
+  (`manabot/env/observation.py`, native `observation_encoder::POOLED_MANA`,
+  listed in `agent/record_vocabulary.rs`). No model file changed upstream.
+  `prepare._facts`/`_fact_programs` route programs by row, not by object
+  kind, and resolve the id through `Tables.names`, so no code change is
+  expected; this is unproven until the checks below run.
+- Under `manabot/`, `ef28f3a58..105e7e2aa` differs only in
+  `env/observation.py` and `semantic/text_observation.py`; neither upstream
+  file nor its changed tests name anything this branch deleted.
+- `git merge-tree HEAD origin/main` → one conflict, `manabot/env/observation.py`:
+  both sides moved the `managym.enums` import below the local imports. Keep
+  upstream's order plus this branch's `Mapping` import and
+  `ObservationBuffers` alias.
+- `docs/development.md` now requires
+  `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after a
+  rebuild for record-vocabulary changes.
+
+Work: merge, rebuild the extension per `AGENTS.md`, extract the base
+`manabot/` from `105e7e2aa`, and add one case to `scratch/equivalence/run.py`
+built as `tests/semantic/test_pooled_mana_classes_input.py::_observation`
+builds it (a pooled class with a three-token program on each seat), since the
+seeded games may never pool restricted mana. The case must import only names
+present in both arms.
+
+Acceptance:
+- `compare.py integrated-base.pt head.pt` → equal tensor counts in both arms
+  (the new count replaces 3,248 everywhere in this plan), `differing 0`,
+  including the pooled-mana case's logits, values and gradients.
+- `updates.py` output `cmp`-identical between arms.
+- `uv run --extra dev pytest tests/model/test_record_coverage.py tests/semantic/test_pooled_mana_classes_input.py tests/semantic/test_text_observation.py tests/belief/test_state.py tests/model/test_prepare_rows.py tests/model/test_inference.py tests/test_package_boundaries.py -q`
+  → all pass.
+- A difference in the pooled-mana case is a `prepare` defect to fix on the
+  host (row routing or id lookup), never a torch-side special case.
 
 ### Card: L4, else A40 (probed 2026-11-13 12:19–12:20 UTC)
 
@@ -164,9 +209,9 @@ Launch files: `scratch/equivalence/mtg333_cuda_equivalence.py`,
 say L4; make them name the template's card). Frozen comparison source
 `a222dc9df` holds both patches (equivalence applies `base.patch` reversed,
 `git diff BASE HEAD -- manabot`; speed applies `git diff HEAD BASE -- manabot`
-forward). The compress commit `8c65474c6` changed `manabot/` after that
-freeze: regenerate both patches at the launch commit, track them only in that
-commit, and launch from it. `run.py` and `bench.py` run under both arms.
+forward). The compress commit `8c65474c6` and the `105e7e2aa` merge changed
+`manabot/` after that freeze: regenerate both patches at the launch commit
+with BASE = `105e7e2aa`, track them only in that commit, and launch from it. `run.py` and `bench.py` run under both arms.
 
 Control: `ETUDE_HOME=/tmp/mtg333/launcher`, overlay
 `uv run --with 'etude-sdk[s3,eval]==0.2.15' etude …`, nested
@@ -209,8 +254,8 @@ USD 25 without asking.
 
 ## Acceptance at gate
 
-- CPU oracle: `compare.py integrated-base.pt head.pt` → `tensors 3248`,
-  `differing 0`, on the final commit.
+- CPU oracle: `compare.py integrated-base.pt head.pt` → slice 6b's tensor
+  count in both arms, `differing 0`, on the final commit.
 - `uv run python scratch/equivalence/updates.py OUT` → `cmp`-identical to the
   base capture.
 - `uv run --extra dev --extra mlx --extra artifacts pytest tests/test_package_boundaries.py tests/model/test_prepare_rows.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_policy_container.py tests/model/test_inference.py tests/model/test_admission.py tests/model/test_bucketed_shapes.py tests/model/test_live_tokens.py tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/training/test_minimal_loop.py tests/sim/test_puct_compatibility.py tests/sim/test_local_update.py -q`
@@ -231,6 +276,10 @@ USD 25 without asking.
 
 ## Risks
 
+- Main keeps moving under an engine-bound baseline: each engine merge voids
+  the captures. Merge once before the CUDA launch, launch from that commit,
+  and merge again only at gate; a later engine change repeats slice 6b's CPU
+  capture, not the rented runs, unless it touches `manabot/` policy code.
 - A40 stock is "Low" and can vanish at creation as L4 did: queue and wait
   under the cohort cap; A6000 is the next template at the same ceiling.
 - Host preparation on a 6–9 vCPU pod may bound collection: it is measured as

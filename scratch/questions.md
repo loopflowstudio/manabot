@@ -68,3 +68,10 @@ targets. Original uncommitted notes were copied to
   A40 (`mtg333-a40`, $0.59/hour quoted, same ceiling and cohort caps). Base
   and head run on the same machine, so the comparison holds; MTG-325's L4
   figures become a reference. Rerunning on L4 later is one capped launch.
+
+- **Upstream engine change before the CUDA launch (kickoff, 2026-11-13 12:27
+  UTC).** `105e7e2aa` changes seeded games and adds pooled-mana program rows.
+  Merge it first and take the base arm from `105e7e2aa`'s `manabot/` rather
+  than `ef28f3a58`, so both arms share one engine and one observation
+  encoder; the oracle gains a synthetic pooled-mana case. The rented runs are
+  not repeated for later engine-only merges.
