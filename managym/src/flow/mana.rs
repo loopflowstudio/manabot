@@ -76,6 +76,7 @@ struct SourceReservation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "benchmark", derive(serde::Serialize))]
 enum PaymentStep {
     Fixed(PermanentId),
     Activate(PermanentId, usize),
@@ -393,7 +394,7 @@ impl PaymentModel {
         policy: SourcePolicy,
         visited: &mut PaymentSearch,
     ) -> Option<Vec<PaymentStep>> {
-        #[cfg(any(debug_assertions, feature = "benchmark"))]
+        #[cfg(feature = "benchmark")]
         crate::benchmark_payments::call();
         if state.obligations.is_empty() {
             return Some(Vec::new());
@@ -456,7 +457,7 @@ impl PaymentModel {
         {
             return None;
         }
-        #[cfg(any(debug_assertions, feature = "benchmark"))]
+        #[cfg(feature = "benchmark")]
         crate::benchmark_payments::state();
         let first = state.obligations[0].clone();
         let rest = state.obligations[1..].to_vec();
@@ -801,11 +802,11 @@ impl PaymentModel {
         obligations: Vec<Obligation>,
         permanent: PermanentId,
     ) -> Option<Vec<PaymentStep>> {
-        #[cfg(any(debug_assertions, feature = "benchmark"))]
+        #[cfg(feature = "benchmark")]
         crate::benchmark_payments::begin_plan(self.sources.len());
         let path = self.search_after_tap(pool, obligations, permanent);
-        #[cfg(any(debug_assertions, feature = "benchmark"))]
-        crate::benchmark_payments::end_plan();
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::end_plan(&path);
         path
     }
 
@@ -849,11 +850,11 @@ impl PaymentModel {
         obligations: Vec<Obligation>,
         policy: SourcePolicy,
     ) -> Option<Vec<PaymentStep>> {
-        #[cfg(any(debug_assertions, feature = "benchmark"))]
+        #[cfg(feature = "benchmark")]
         crate::benchmark_payments::begin_plan(self.sources.len());
         let path = self.search(pool, obligations, policy);
-        #[cfg(any(debug_assertions, feature = "benchmark"))]
-        crate::benchmark_payments::end_plan();
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_payments::end_plan(&path);
         path
     }
 

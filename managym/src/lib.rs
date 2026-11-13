@@ -3,7 +3,7 @@ pub mod agent;
 pub mod benchmark_allocations;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_layers;
-#[cfg(any(debug_assertions, feature = "benchmark"))]
+#[cfg(feature = "benchmark")]
 pub mod benchmark_payments;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_search;

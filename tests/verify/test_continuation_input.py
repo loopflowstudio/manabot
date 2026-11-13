@@ -4,7 +4,6 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
-from managym.decision_capture import DecisionInput
 import numpy as np
 from pydantic import BaseModel, JsonValue, TypeAdapter
 import pytest
@@ -24,6 +23,7 @@ from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import collision_branches, native_fixtures
 from manabot.verify.trigger_order import ordering_root
 import managym
+from managym.decision_capture import DecisionInput
 
 
 def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None:
@@ -362,3 +362,27 @@ def test_retained_capture_schema_cannot_admit_current_name_references() -> None:
     fresh["capture_version"] = 5
     with pytest.raises(ValueError, match="noncanonical semantic observation"):
         DecisionInput.model_validate_json(json.dumps(fresh))
+
+
+def test_exported_observation_keeps_complete_policy_input_with_continuation() -> None:
+    space = ObservationSpace(ObservationConfig(policy_input_version=10))
+    for env in collision_branches():
+        actor = env.current_agent_index()
+        assert actor is not None
+        observation = env.observation_for_player(actor)
+        assert observation.continuation
+        exported = managym.Observation.from_json(
+            observation.toJSON(), continuation_json=observation.continuation_json()
+        )
+        assert exported.toJSON() == observation.toJSON()
+        assert exported.continuation_json() == observation.continuation_json()
+        expected = space.encode(observation)
+        actual = space.encode(exported)
+        for key in expected:
+            np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+        frames = json.loads(observation.continuation_json())
+        frames[0]["kind"] = 99
+        with pytest.raises(ValueError, match="continuation"):
+            managym.Observation.from_json(
+                observation.toJSON(), continuation_json=json.dumps(frames)
+            )

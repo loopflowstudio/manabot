@@ -7,6 +7,11 @@ use std::{cell::RefCell, time::Instant};
 #[derive(Clone, Default, serde::Serialize)]
 pub struct Metrics {
     pub boards: u64,
+    /// Indexed battlefield sources examined per committed event (inclusive).
+    pub trigger_sources: u64,
+    /// Matched ordinary/granted battlefield occurrences before placement.
+    /// Cast, graveyard and delayed trigger paths are not included.
+    pub triggers_found: u64,
     pub source_plans: u64,
     pub board_ns: u64,
     pub contexts_cloned: u64,
@@ -75,4 +80,37 @@ impl Drop for Timer {
     fn drop(&mut self) {
         record(|m| self.1(m, self.0.elapsed().as_nanos() as u64));
     }
+}
+
+/// Recompute priority actions without observation construction or cache resets.
+pub fn actions(
+    game: &crate::Game,
+    player: crate::state::game_object::PlayerId,
+) -> Vec<crate::agent::action::Action> {
+    game.compute_player_actions(player)
+}
+
+/// Read one object, then the complete board through the shared scan.
+pub fn characteristics(game: &crate::Game) -> usize {
+    use crate::state::game_object::PermanentId;
+    let ids: Vec<_> = game
+        .state
+        .permanents
+        .iter()
+        .enumerate()
+        .filter_map(|(i, p)| p.as_ref().map(|_| PermanentId(i)))
+        .collect();
+    if let Some(&id) = ids.first() {
+        std::hint::black_box(game.characteristics(id));
+    }
+    game.characteristics_many(ids.iter().copied())
+        .map(std::hint::black_box)
+        .count()
+}
+
+/// One controlled event, using the ordinary indexed matcher. The caller forks
+/// first: this intentionally leaves the resulting triggers pending.
+pub fn triggers(game: &mut crate::Game, event: crate::flow::event::GameEvent) {
+    game.state.pending_events.push(event);
+    game.process_game_events();
 }

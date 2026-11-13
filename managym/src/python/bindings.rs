@@ -2652,11 +2652,17 @@ impl From<PyObservation> for Observation {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyObservation {
+    /// Frozen viewer JSON omits continuation. A retained reader may supply
+    /// its separately serialized frames; neither input grants execution authority.
     #[staticmethod]
-    fn from_json(text: &str) -> PyResult<Self> {
-        crate::agent::observation_json::parse(text)
-            .map(Self::from)
-            .map_err(PyValueError::new_err)
+    #[pyo3(signature = (text, *, continuation_json=None))]
+    fn from_json(text: &str, continuation_json: Option<&str>) -> PyResult<Self> {
+        let mut observation =
+            crate::agent::observation_json::parse(text).map_err(PyValueError::new_err)?;
+        if let Some(frames) = continuation_json {
+            observation.continuation = parse_continuation_frames_json(frames)?;
+        }
+        Ok(Self::from(observation))
     }
 
     fn continuation_json(&self) -> String {

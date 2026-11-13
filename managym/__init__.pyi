@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, Typed
 import numpy as np
 from typing_extensions import deprecated
 
+from . import format as format
+
 class ObservationValueLayout(TypedDict):
     kind: Literal[
         "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
@@ -37,8 +39,6 @@ def observation_layout(
     v10's `player_turn_state` and `card_turn_state`. Seats are viewer-relative.
     No game or buffer is created.
     """
-
-from . import format as format
 
 class PoolDefinition(TypedDict):
     card_def_id: int
@@ -870,7 +870,9 @@ class Observation:
     continuation: list[ContinuationFrame]
 
     @staticmethod
-    def from_json(text: str) -> Observation: ...
+    def from_json(
+        text: str, *, continuation_json: str | None = None
+    ) -> Observation: ...
     def continuation_json(self) -> str: ...
     game_over: bool
     won: bool

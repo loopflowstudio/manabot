@@ -905,6 +905,8 @@ impl Game {
     }
 
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_layers::record(|m| m.trigger_sources += sources.len() as u64);
         self.granted_firebending_triggers(event);
         self.graveyard_triggers(event);
         self.cast_triggers(event);
@@ -993,6 +995,8 @@ impl Game {
             }
         }
 
+        #[cfg(feature = "benchmark")]
+        crate::benchmark_layers::record(|m| m.triggers_found += fired.len() as u64);
         for FiredTrigger {
             source,
             ability_index,
