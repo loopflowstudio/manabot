@@ -222,8 +222,6 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
     let checked = objects.card_id(ObjectId(0)).unwrap();
     assert!(objects.card_id(ObjectId(1)).is_none());
     assert!(objects.card_id(ObjectId(2)).is_none());
-    objects[ObjectId(2)].resolve_into_token();
-    assert!(objects.card_id(ObjectId(2)).is_none());
     let token = objects[ObjectId(1)].clone();
     objects[checked].become_copy_of(&token, &[]);
     assert_eq!(objects.card_id(ObjectId(0)), Some(checked));
@@ -430,6 +428,10 @@ fn cr_400_7_physical_card_survives_appearances_and_copy_effects() {
     );
     assert_eq!(physical.public_id, s.game().state.objects[object].id);
     assert_eq!(s.game().state.object_of(card), Some(appearance));
+    assert_eq!(
+        s.game().state.object(appearance).unwrap().id,
+        physical.public_id
+    );
 
     let other = owned_card(&s, 1, "Island");
     let template = s.game().state.objects[other].clone();
@@ -445,6 +447,10 @@ fn cr_400_7_physical_card_survives_appearances_and_copy_effects() {
     let exiled = s.game().state.object_of(card).unwrap();
     assert_ne!(exiled, appearance);
     assert_eq!(s.game().state.card_of(appearance), None);
+    assert_eq!(
+        s.game().state.object(appearance).err(),
+        Some(ObjectLookupError::StaleIncarnation)
+    );
     assert_eq!(s.game().state.card_of(exiled), Some(card));
     assert_eq!(s.game().state.cards[card], physical);
     assert_eq!(
@@ -486,6 +492,163 @@ fn cr_400_7_token_creation_does_not_add_a_physical_card() {
         None
     );
     assert_eq!(s.game().state.cards.len(), roster_size);
+}
+
+/// A copied view is state of one appearance even outside the battlefield.
+/// Rebuilding from the retained printing also preserves fixture edits.
+#[test]
+fn cr_400_7_non_battlefield_move_discards_old_copy_values() {
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
+        deck(&[("Island", 40)]),
+        400_715,
+    );
+    let object = owned_card(&s, 0, "Gray Ogre");
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().state.objects[object].power = Some(5);
+    let appearance = s.game().current_object_ref(object).unwrap();
+    let card = s.game().state.card_of(appearance).unwrap();
+    let template = s.game().state.objects[owned_card(&s, 1, "Island")].clone();
+    s.game_mut().state.objects[object].become_copy_of(&template, &[]);
+    assert_eq!(s.game().state.object(appearance).unwrap().name, "Island");
+
+    s.game_mut().move_object(object, ZoneType::Library);
+    assert_eq!(
+        s.game().state.object(appearance).err(),
+        Some(ObjectLookupError::StaleIncarnation)
+    );
+    let current = s.game().state.object_of(card).unwrap();
+    let new_object = s.game().state.object(current).unwrap();
+    assert_eq!(new_object.name, "Gray Ogre");
+    assert_eq!(new_object.power, Some(5));
+    assert!(new_object.copy.is_none());
+    assert_eq!(
+        new_object.definition_id,
+        s.game().state.cards[card].definition
+    );
+}
+
+#[test]
+fn cr_400_7_checked_object_lookup_rejects_a_token_that_ceased_to_exist() {
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 400_716);
+    let token = s
+        .game_mut()
+        .create_token("token.spirit", PlayerId(0), false)
+        .unwrap();
+    let object = s.game().state.permanents[token].as_ref().unwrap().object;
+    s.game_mut().move_object(object, ZoneType::Graveyard);
+    let appearance = s.game().current_object_ref(object).unwrap();
+    assert!(s.game().state.object(appearance).is_ok());
+    s.advance_to_active_step(0, managym::flow::turn::StepKind::End);
+    assert_eq!(
+        s.game().state.object(appearance).err(),
+        Some(ObjectLookupError::StaleIncarnation)
+    );
+}
+
+/// CR 608.3a, 111.12: a permanent spell and its copy each get a new
+/// appearance on resolution; only the original has a physical card. The
+/// synthetic trigger isolates copying a permanent spell from card authoring.
+#[test]
+fn cr_400_7_permanent_spell_and_copy_mint_distinct_appearances() {
+    use crate::support::play::{cast, resolve_top, settle, spend_colorless};
+    use managym::state::{
+        ability::{Ability, Actor, Effect, TriggerCondition},
+        game_object::ObjectKind,
+        predicate::CardPredicate,
+        stack_object::StackObject,
+    };
+
+    let mut s = five_color_setup(&["Gray Ogre"]);
+    let source = s.force_permanent_on_battlefield(0, "Mountain");
+    let source_object = s.game().state.permanents[source].as_ref().unwrap().object;
+    s.game_mut().state.objects[source_object]
+        .abilities
+        .push(Ability::Triggered {
+            condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
+            intervening_if: None,
+            effects: vec![Effect::CopyTriggeringObject],
+        });
+    let roster_size = s.game().state.cards.len();
+    let original = cast(&mut s, "Gray Ogre");
+    spend_colorless(&mut s);
+    // A synthetic announced X isolates provenance from any one X spell.
+    for stack in &mut s.game_mut().state.stack_objects {
+        if let StackObject::Spell(spell) = stack {
+            if spell.object == original {
+                spell.x = 7;
+            }
+        }
+    }
+    let spell_appearance = s.game().current_object_ref(original).unwrap();
+    let card = s.game().state.card_of(spell_appearance).unwrap();
+    let spent = s
+        .game()
+        .state
+        .stack_objects
+        .iter()
+        .find_map(|stack| match stack {
+            StackObject::Spell(spell) if spell.object == original => Some(spell.spent),
+            _ => None,
+        })
+        .unwrap();
+    resolve_top(&mut s);
+    let copied = s
+        .game()
+        .state
+        .stack_objects
+        .iter()
+        .find_map(|stack| match stack {
+            StackObject::Spell(spell)
+                if s.game().state.objects[spell.object].kind() == ObjectKind::SpellCopy =>
+            {
+                Some(spell.object)
+            }
+            _ => None,
+        })
+        .expect("copy on the stack");
+    let copy_appearance = s.game().current_object_ref(copied).unwrap();
+    assert_eq!(s.game().state.card_of(copy_appearance), None);
+    resolve_top(&mut s);
+    let token_appearance = s.game().current_object_ref(copied).unwrap();
+    assert_ne!(token_appearance, copy_appearance);
+    assert_eq!(
+        s.game().state.object(copy_appearance).err(),
+        Some(ObjectLookupError::StaleIncarnation)
+    );
+    assert_eq!(
+        s.game().state.object(token_appearance).unwrap().kind(),
+        ObjectKind::Token
+    );
+    assert_eq!(s.game().state.card_of(token_appearance), None);
+    assert_eq!(s.game().state.cards.len(), roster_size);
+
+    settle(&mut s);
+    let permanent_appearance = s.game().state.object_of(card).unwrap();
+    assert_ne!(permanent_appearance, spell_appearance);
+    assert_eq!(
+        s.game().state.object(spell_appearance).err(),
+        Some(ObjectLookupError::StaleIncarnation)
+    );
+    let permanent = s
+        .game()
+        .lookup_current_permanent(permanent_appearance)
+        .unwrap();
+    let entered = s.game().state.permanents[permanent].as_ref().unwrap();
+    assert!(entered.was_cast);
+    assert_eq!(entered.cast_x, 7);
+    assert_eq!(entered.cast_spent, spent);
+
+    s.game_mut().move_object(original, ZoneType::Graveyard);
+    s.game_mut().move_object(original, ZoneType::Battlefield);
+    let returned = s
+        .game()
+        .lookup_current_permanent(s.game().state.object_of(card).unwrap())
+        .unwrap();
+    let returned = s.game().state.permanents[returned].as_ref().unwrap();
+    assert!(!returned.was_cast);
+    assert_eq!(returned.cast_x, 0);
+    assert!(returned.cast_spent.is_empty());
 }
 
 #[test]

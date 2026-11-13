@@ -11,7 +11,7 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        game_object::{ObjectId, ObjectKind, PlayerId, Target},
+        game_object::{ObjectKind, PlayerId, Target},
         stack_object::StackObject,
     },
 };
@@ -175,12 +175,7 @@ impl Game {
                     .with_kind(ObjectKind::SpellCopy);
                 copy.id = id;
                 copy.owner = controller;
-                let copied = ObjectId(self.state.objects.len());
-                self.state.objects.push(copy);
-                self.state.object_to_permanent.push(None);
-                self.state
-                    .object_incarnations
-                    .push(crate::state::game_object::Incarnation::INITIAL);
+                let copied = self.add_object(copy);
                 self.state
                     .place_object(copied, controller, crate::state::zone::ZoneType::Stack);
                 spell.id = id;

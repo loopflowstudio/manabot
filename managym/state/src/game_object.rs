@@ -4,7 +4,7 @@
 //! rows. `ObjectRef` binds an appearance. `PublicId` joins observations and
 //! orders timestamps.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, num::NonZeroU32, sync::Arc};
 
 use super::zone::ZoneType;
 use super::{
@@ -19,23 +19,39 @@ pub struct PublicId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ObjectId(pub usize);
 
-/// A checked reference to an object of kind `Card` (CR 108.2).
+/// A physical-card roster index (CR 108.2), independent of appearance ids.
 ///
-/// The index is private: only the object store can certify it. Serialization
-/// retains the underlying row number used in saved decisions and rosters.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
-#[serde(transparent)]
-pub struct CardId(ObjectId);
+/// Internally one-based so an optional card association is also four bytes.
+/// Serialization retains the zero-based number in saved decisions and rosters.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
+pub struct CardId(NonZeroU32);
 
-impl AsRef<ObjectId> for CardId {
-    fn as_ref(&self) -> &ObjectId {
-        &self.0
+impl CardId {
+    fn from_index(index: usize) -> Self {
+        let one_based = u32::try_from(index)
+            .ok()
+            .and_then(|index| index.checked_add(1))
+            .and_then(NonZeroU32::new)
+            .expect("physical-card roster exceeds u32");
+        Self(one_based)
+    }
+
+    /// Zero-based roster position, which is also the card's storage slot.
+    fn index(self) -> usize {
+        (self.0.get() - 1) as usize
+    }
+}
+
+impl serde::Serialize for CardId {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u32(self.0.get() - 1)
     }
 }
 
 impl From<CardId> for ObjectId {
     fn from(card: CardId) -> Self {
-        card.0
+        Self(card.index())
     }
 }
 
@@ -82,7 +98,7 @@ impl std::ops::Index<CardId> for CardVec {
     type Output = Card;
 
     fn index(&self, card: CardId) -> &Card {
-        &self.0[card.0 .0]
+        &self.0[card.index()]
     }
 }
 
@@ -309,7 +325,7 @@ impl ObjectVec<Object> {
     pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
         self.get(object.0)
             .filter(|value| value.is_card())
-            .map(|_| CardId(object))
+            .map(|_| CardId::from_index(object.0))
     }
 }
 
@@ -428,7 +444,7 @@ pub struct Object {
     /// [`Object::turn_back_face_up`], cleared by [`Object::turn_front_face_up`].
     front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
     /// The printed card while it is a copy it entered as (CR 707.5), restored
-    /// by [`Object::restore_printed`] when it leaves the battlefield.
+    /// by [`Object::mint_appearance`] at the next zone change.
     printed: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
 }
 
@@ -462,7 +478,7 @@ impl Object {
     /// Enter as a copy of `source` (CR 707.5): take its copiable values,
     /// face and copy chain, then `exceptions` (CR 707.9b). Token status is
     /// not copiable, so the object stays a card or token as it was; its
-    /// printed row is kept for [`Object::restore_printed`].
+    /// printed row is kept for [`Object::mint_appearance`].
     pub fn become_copy_of(&mut self, source: &Object, exceptions: &[crate::effect::Modification]) {
         let printed = self
             .printed
@@ -484,15 +500,31 @@ impl Object {
         self.printed = Some(printed);
     }
 
-    /// Show the printed card again after an entry copy (CR 400.7): the object
-    /// leaving the battlefield is no longer a copy.
-    pub fn restore_printed(&mut self) {
-        if let Some((id, definition)) = self.printed.take() {
-            self.definition_id = id;
-            self.registry_key = PublicId(id.0);
-            self.definition = definition;
-            self.front = None;
-            self.copy = None;
+    /// Mint the values of a new zone appearance (CR 400.7), consuming the
+    /// retained base in place rather than loading another definition. Only
+    /// the zone-move authority calls this, alongside advancing identity.
+    ///
+    /// `entry_copy` assigns the prospective values already installed by an
+    /// enters-as-copy replacement to the new entry (CR 614.1c, 614.12).
+    /// Otherwise the old appearance's copy/face is discarded. A token or
+    /// spell copy starts with its own copiable base, not a physical printing.
+    pub fn mint_appearance(&mut self, from: Option<ZoneType>, to: ZoneType, entry_copy: bool) {
+        debug_assert!(!entry_copy || (to == ZoneType::Battlefield && self.copy.is_some()));
+        if !entry_copy && (self.is_card() || from == Some(ZoneType::Battlefield)) {
+            if let Some((id, definition)) = self.printed.take() {
+                // An entry copy ends with its appearance (CR 707.5).
+                self.copy = None;
+                self.front = None;
+                self.show(id, definition);
+            } else {
+                // CR 712.8a. A token made as a copy keeps its inherent copy
+                // exceptions on its front face, just as on a transform.
+                self.turn_front_face_up();
+            }
+        }
+        // CR 111.12, 608.3f: the resolving copy's successor is a token.
+        if to == ZoneType::Battlefield && self.kind == ObjectKind::SpellCopy {
+            self.kind = ObjectKind::Token;
         }
     }
 
@@ -510,14 +542,6 @@ impl Object {
     /// that say "card" see only these.
     pub fn is_card(&self) -> bool {
         self.kind == ObjectKind::Card
-    }
-
-    /// A copy of a permanent spell becomes a token as it resolves
-    /// (CR 111.12, 608.3f).
-    pub fn resolve_into_token(&mut self) {
-        if self.kind == ObjectKind::SpellCopy {
-            self.kind = ObjectKind::Token;
-        }
     }
 
     /// Its mana cost for mana value: a transformed permanent's is its front

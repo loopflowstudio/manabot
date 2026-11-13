@@ -1,5 +1,5 @@
-//! Ordered zone membership. Library and hand entries carry checked card ids
-//! or transient non-card occupants; other zones hold object ids. Borrowed views
+//! Ordered zone membership. Library and hand entries carry an appearance and
+//! its optional physical card; other zones hold object ids. Borrowed views
 //! and serialization project the same numeric ids without another stored list.
 
 use rand::seq::SliceRandom;
@@ -20,26 +20,32 @@ pub enum ZoneType {
 
 /// An occupant of a card zone. Non-cards are visitors until state-based actions;
 /// they keep their position but can never be returned by a card-only scan.
-#[derive(Clone, Copy, Debug, serde::Serialize)]
-#[serde(untagged)]
-enum CardZoneEntry {
-    Card(CardId),
-    Transient(ObjectId),
+#[derive(Clone, Copy, Debug)]
+struct CardZoneEntry {
+    object: ObjectId,
+    card: Option<CardId>,
+}
+
+// Keep the previous entry budget while storing both physical-card identity
+// and appearance. `Option<CardId>` uses the nonzero roster index's niche.
+const _: () = assert!(std::mem::size_of::<CardZoneEntry>() <= 16);
+
+impl serde::Serialize for CardZoneEntry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serde::Serialize::serialize(&self.object, serializer)
+    }
 }
 
 impl CardZoneEntry {
     fn new(objects: &ObjectVec<Object>, object: ObjectId) -> Self {
-        match objects.card_id(object) {
-            Some(card) => Self::Card(card),
-            None => Self::Transient(object),
+        Self {
+            object,
+            card: objects.card_id(object),
         }
     }
 
     fn object(&self) -> &ObjectId {
-        match self {
-            Self::Card(card) => card.as_ref(),
-            Self::Transient(object) => object,
-        }
+        &self.object
     }
 }
 
@@ -67,17 +73,11 @@ impl<'a> ZoneObjects<'a> {
 
     /// Read stored checked ids in card zones; narrow mixed zones once here.
     pub fn cards(self, objects: &'a ObjectVec<Object>) -> impl Iterator<Item = CardId> + 'a {
-        self.entries
-            .iter()
-            .filter_map(|entry| match entry {
-                CardZoneEntry::Card(card) => Some(*card),
-                CardZoneEntry::Transient(_) => None,
-            })
-            .chain(
-                self.objects
-                    .iter()
-                    .filter_map(|object| objects.card_id(*object)),
-            )
+        self.entries.iter().filter_map(|entry| entry.card).chain(
+            self.objects
+                .iter()
+                .filter_map(|object| objects.card_id(*object)),
+        )
     }
 
     pub fn len(self) -> usize {

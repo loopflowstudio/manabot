@@ -17,6 +17,7 @@ use crate::{
             CardId, Incarnation, Object, ObjectId, ObjectKind, ObjectLki, ObjectRef, PermanentId,
             PlayerId, PublicId, Target,
         },
+        mana::ManaSpent,
         permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
@@ -24,6 +25,20 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+/// The rules facts a zone-change successor can read. Entry replacements
+/// belong to `ZoneEntry`, separately from facts about the departing object.
+#[derive(Clone, Copy, Debug, Default)]
+struct CarryOver {
+    /// CR 400.7d: a permanent can read how its spell was cast.
+    cast: Option<CastFacts>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct CastFacts {
+    x: u8,
+    spent: ManaSpent,
+}
 
 impl Game {
     pub(crate) fn set_known_hand_count(
@@ -378,8 +393,9 @@ impl Game {
         self.add_object(copy)
     }
 
-    /// Add a card created during play to the game, outside every zone.
-    fn add_object(&mut self, object: Object) -> ObjectId {
+    /// Allocate a newly created token or spell copy outside every zone.
+    /// All companion stores grow here, in the same creation order.
+    pub(crate) fn add_object(&mut self, object: Object) -> ObjectId {
         let object_id = ObjectId(self.state.objects.len());
         self.state.objects.push(object);
         self.state.object_to_permanent.push(None);
@@ -569,9 +585,6 @@ impl Game {
         }
 
         let mut event_controller = owner;
-        if let Some(old_zone) = old_zone {
-            self.state.advance_incarnation(object_id, old_zone);
-        }
 
         if old_zone == Some(ZoneType::Battlefield) {
             if let Some(permanent_id) = self.state.object_to_permanent[object_id].take() {
@@ -580,11 +593,6 @@ impl Game {
                 }
                 self.state.permanents[permanent_id] = None;
             }
-            // A card that entered as a copy is its printed card again, and
-            // CR 712.8a: a double-faced card is front face up outside the
-            // battlefield.
-            self.state.objects[object_id].restore_printed();
-            self.state.objects[object_id].turn_front_face_up();
         }
 
         if let Some(lki) = departing_lki {
@@ -594,11 +602,20 @@ impl Game {
             .then(|| self.find_spell_on_stack_index(object_id))
             .flatten()
             .map(|index| self.state.stack_objects_mut().remove(index));
-        let was_cast = cast_spell.is_some();
-        let (cast_x, cast_spent) = match cast_spell {
-            Some(StackObject::Spell(spell)) => (spell.x, spell.spent),
-            _ => Default::default(),
+        let carry = CarryOver {
+            cast: match cast_spell {
+                Some(StackObject::Spell(spell)) if to_zone == ZoneType::Battlefield => {
+                    Some(CastFacts {
+                        x: spell.x,
+                        spent: spell.spent,
+                    })
+                }
+                _ => None,
+            },
         };
+
+        self.state
+            .mint_appearance(object_id, old_zone, to_zone, entry.entry_copy);
 
         let holder = match (to_zone, entry.controller) {
             (ZoneType::Battlefield, Some(controller)) => controller,
@@ -612,7 +629,6 @@ impl Game {
         }
 
         if to_zone == ZoneType::Battlefield {
-            self.state.objects[object_id].resolve_into_token();
             if entry.transformed {
                 self.show_back_face(object_id);
             }
@@ -623,9 +639,11 @@ impl Game {
                 &self.state.objects[object_id],
             );
             permanent.controller = holder;
-            permanent.was_cast = was_cast;
-            permanent.cast_x = cast_x;
-            permanent.cast_spent = cast_spent;
+            permanent.was_cast = carry.cast.is_some();
+            if let Some(cast) = carry.cast {
+                permanent.cast_x = cast.x;
+                permanent.cast_spent = cast.spent;
+            }
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
             event_controller = permanent.controller;
@@ -817,10 +835,11 @@ impl Game {
             ended
         };
         for link in ended.into_iter().filter(|link| link.returns) {
-            let Some(exiled) = self.state.current_row(link.exiled_object) else {
+            let Ok(exiled_object) = self.state.object(link.exiled_object) else {
                 continue;
             };
-            let owner = self.state.objects[exiled].owner;
+            let owner = exiled_object.owner;
+            let exiled = ObjectId::from(link.exiled_object.entity);
             if self.state.zones.contains(exiled, ZoneType::Exile, owner) {
                 followups.push(self.zone_move_proposal(
                     exiled,

@@ -7,9 +7,7 @@ use crate::{
     flow::{event::ObjectEventRef, game::Game},
     state::{
         card::ObjectDefinition,
-        game_object::{
-            EntityId, ObjectId, ObjectLki, ObjectLookupError, ObjectRef, PermanentId, PlayerId,
-        },
+        game_object::{ObjectId, ObjectLki, ObjectLookupError, ObjectRef, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -18,13 +16,7 @@ impl Game {
     /// Exact identity of `object` in its current zone. An object removed
     /// from every zone has no current rules identity.
     pub fn current_object_ref(&self, object: impl Into<ObjectId>) -> Option<ObjectRef> {
-        let object: ObjectId = object.into();
-        self.state.zones.zone_of(object)?;
-        let incarnation = *self.state.object_incarnations.get(object.0)?;
-        Some(ObjectRef {
-            entity: EntityId::from(object),
-            incarnation,
-        })
+        self.state.current_object_ref(object.into())
     }
 
     /// Exact identity of a live battlefield permanent.
@@ -40,14 +32,8 @@ impl Game {
         &self,
         object_ref: ObjectRef,
     ) -> Result<PermanentId, ObjectLookupError> {
+        self.state.object(object_ref)?;
         let object = ObjectId::from(object_ref.entity);
-        let Some(current_incarnation) = self.state.object_incarnations.get(object.0).copied()
-        else {
-            return Err(ObjectLookupError::MissingEntity);
-        };
-        if current_incarnation != object_ref.incarnation {
-            return Err(ObjectLookupError::StaleIncarnation);
-        }
         if self.state.zones.zone_of(object) != Some(ZoneType::Battlefield) {
             return Err(ObjectLookupError::WrongZone);
         }

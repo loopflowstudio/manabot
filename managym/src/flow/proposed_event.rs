@@ -36,6 +36,12 @@ pub(crate) struct ZoneEntry {
     pub face_down: bool,
     /// Battlefield: enters with its back face up (CR 712.14).
     pub transformed: bool,
+    /// CR 614.1c, 614.12: this entry owns the prospective copy already on
+    /// the row. It is an instruction for the new object, not old copy state
+    /// carried across a zone change. The row already records its values in
+    /// v16, and `PendingEvent::copy_chosen` records the answered choice.
+    #[serde(skip)]
+    pub entry_copy: bool,
 }
 
 impl ZoneEntry {
@@ -756,6 +762,9 @@ impl Game {
         };
         let exceptions = exceptions.to_vec();
         self.state.objects[object].become_copy_of(&source, &exceptions);
+        if let ProposedEvent::ZoneMove { entry, .. } = &mut pending.event {
+            entry.entry_copy = true;
+        }
     }
 
     /// The scope, predicate and copy exceptions of the card's "enter as a

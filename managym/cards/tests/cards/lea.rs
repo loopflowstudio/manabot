@@ -281,3 +281,63 @@ fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
     );
     assert_eq!(s.game().state.objects[second].name, "Clone");
 }
+
+/// CR 614.12: the prospective copy and its entry terms survive another
+/// replacement choice and an exact fork. The original printing remains the
+/// base for the next appearance, including changes made by a rules fixture.
+#[test]
+fn clone_copy_survives_suspended_entry_and_keeps_its_printed_base() {
+    use managym::state::{card::ReplacementEffect, permanent::CounterKind};
+
+    let mut s = five_color_setup(&["Clone", "Wolf Cove Villager"]);
+    let villager = s.force_permanent_on_battlefield(1, "Wolf Cove Villager");
+    let source = s.game().state.permanents[villager].as_ref().unwrap().object;
+    s.game_mut().state.objects[source].replacement_effects = vec![
+        ReplacementEffect::EntersTapped,
+        ReplacementEffect::EntersWithCounters {
+            kind: CounterKind::PlusOnePlusOne,
+            count: 2,
+        },
+    ];
+    let clone = crate::support::game::move_to_hand(&mut s, "Clone");
+    s.game_mut().state.objects[clone].power = Some(3);
+    s.game_mut().state.objects[clone].toughness = Some(3);
+    cast_card(&mut s, clone);
+    spend_colorless(&mut s);
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(villager)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    assert_eq!(s.game().state.objects[clone].name, "Wolf Cove Villager");
+    // Recorded before the mint change: the pending entry's prospective copy
+    // and replacement continuation must retain their v16 bytes.
+    assert_eq!(
+        s.game().state.deterministic_hash().to_string(),
+        "v16:109204c452b21643354cfda10ad17b17ca215c2d10e497496b60cb5de22029a4"
+    );
+    let pending = Observation::for_player(s.game(), PlayerId(0));
+    let fork = s.game().clone();
+    assert_eq!(
+        pending.to_json(),
+        Observation::for_player(&fork, PlayerId(0)).to_json()
+    );
+    assert_eq!(
+        s.game().state.deterministic_hash(),
+        fork.state.deterministic_hash()
+    );
+
+    crate::support::play::command(&mut s, |action| {
+        matches!(action, Action::ChooseMode { mode: 0, .. })
+    });
+    settle(&mut s);
+    let copy = s.game().state.object_to_permanent[clone].expect("entered");
+    let permanent = s.game().state.permanents[copy].as_ref().unwrap();
+    assert!(permanent.tapped);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
+    assert_eq!(s.game().state.objects[clone].name, "Wolf Cove Villager");
+
+    s.game_mut().move_object(clone, ZoneType::Hand);
+    assert_eq!(s.game().state.objects[clone].name, "Clone");
+    assert_eq!(s.game().state.objects[clone].power, Some(3));
+    assert_eq!(s.game().state.objects[clone].toughness, Some(3));
+    assert!(s.game().state.objects[clone].copy.is_none());
+}

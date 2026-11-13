@@ -761,6 +761,15 @@ it, with the rule that allows it:
 | CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |
 | CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
 
+Entry replacements supply instructions for the new object, rather than facts
+carried from the old one. An "enters as a copy" choice (CR 614.1c) supplies
+copiable values before the other entry replacements are considered (CR
+614.12). While those choices are pending, the entering row shows that
+prospective copy to replacements and observations. The pending entry owns it;
+minting consumes those values in place. Without a new copy choice, minting
+uses the retained printing, including any fixture edits, and discards the old
+appearance's copy effect.
+
 CR 400.7a to c (effects and prevention applied to a permanent spell continuing
 on the permanent) carry nothing, because no supported effect applies to a
 spell. Madness and stickers (CR 400.7k, m) are not modeled.
@@ -833,8 +842,8 @@ lists hold `ObjectId`s, and card-only readers narrow them through
 
 | Zone | Rule | Holds | Engine list |
 | --- | --- | --- | --- |
-| Library | CR 401 | cards, transient non-card objects | ordered `CardZoneEntry::Card(CardId)` or `Transient(ObjectId)` |
-| Hand | CR 402 | cards, transient non-card objects | ordered `CardZoneEntry::Card(CardId)` or `Transient(ObjectId)` |
+| Library | CR 401 | cards, transient non-card objects | ordered `CardZoneEntry`: an `ObjectId` and optional checked `CardId` |
+| Hand | CR 402 | cards, transient non-card objects | ordered `CardZoneEntry`: an `ObjectId` and optional checked `CardId` |
 | Graveyard | CR 404 | cards, transient non-card objects | `ObjectId` |
 | Exile | CR 406 | cards, transient non-card objects | `ObjectId` |
 | Battlefield | CR 403 | permanents: cards and tokens | `ObjectId` |
@@ -865,11 +874,11 @@ over `Zone`, `TargetPlayersZone` or `CardsThisWay`) offers cards alone; a
 selection over other objects, such as the token an effect just created
 (`CreatedThisWay`), still offers that token.
 
-Library and hand store each card as a `CardId`, alongside explicit
-`Transient(ObjectId)` entries for non-cards awaiting state-based actions. A
-card entry stays valid however the card got there; `object_of` gives the
-object it is in that zone. The
-single entry sequence owns membership and order; there is no parallel list to
+Library and hand entries hold an appearance and its optional physical card.
+Non-cards awaiting state-based actions have no card association. Keeping both
+ids in the entry lets `zone_objects` borrow an appearance without treating a
+physical card id as one. The single entry sequence owns membership and order;
+there is no parallel list to
 synchronize. `GameState::zone_cards` delegates to the borrowed view's `cards`
 iterator, which reads stored card ids and skips visitors. Other zones keep
 mixed `ObjectId` lists and narrow at that same boundary.
@@ -877,7 +886,7 @@ mixed `ObjectId` lists and narrow at that same boundary.
 `zone_objects` borrows an ordered view of the underlying object ids without
 allocating. Size, top, shuffles, hidden-world reassignment and observations
 include visitors at their original positions. Reordering moves the typed entry;
-it cannot insert an unchecked id. Both entry variants serialize as their slot
+it cannot insert an unchecked id. Every entry serializes as its slot
 number, preserving the old zone bytes and match-state hash. Shuffles operate on the
 whole entry sequence, preserving RNG consumption. This matters even at decisions:
 a Treasure sacrificed for mana remains in the graveyard during its color choice,

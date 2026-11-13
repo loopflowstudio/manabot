@@ -25,8 +25,8 @@ use crate::{
     state::{
         card::ActivatedAbilityDefinition,
         game_object::{
-            CardId, CardVec, IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef,
-            ObjectVec, PermanentId, PermanentVec, PlayerId, Target,
+            CardId, CardVec, IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectLookupError,
+            ObjectRef, ObjectVec, PermanentId, PermanentVec, PlayerId, Target,
         },
         mana::Mana,
         permanent::{CounterKind, Permanent},
@@ -96,9 +96,9 @@ impl GameState {
             .reassign_hidden(&self.objects, player, hand, library);
     }
 
-    /// The current appearance of a physical card; outside-game cards have none.
-    pub fn object_of(&self, card: CardId) -> Option<ObjectRef> {
-        let object = ObjectId::from(card);
+    /// Exact identity of the object in this storage row; a row in no zone
+    /// has no current rules identity.
+    pub fn current_object_ref(&self, object: ObjectId) -> Option<ObjectRef> {
         self.zones.zone_of(object)?;
         Some(ObjectRef {
             entity: object.into(),
@@ -106,18 +106,35 @@ impl GameState {
         })
     }
 
+    /// The current appearance of a physical card; outside-game cards have none.
+    pub fn object_of(&self, card: CardId) -> Option<ObjectRef> {
+        self.current_object_ref(card.into())
+    }
+
     /// The physical card behind an exact appearance; stale objects, tokens
     /// and spell copies have no card.
     pub fn card_of(&self, object: ObjectRef) -> Option<CardId> {
-        self.objects.card_id(self.current_row(object)?)
+        self.object(object).ok()?;
+        self.objects.card_id(ObjectId::from(object.entity))
     }
 
-    /// The row of an exact appearance, while it is still that appearance.
-    pub(crate) fn current_row(&self, object: ObjectRef) -> Option<ObjectId> {
+    /// Read one exact appearance, rejecting departed objects even when their
+    /// physical card still occupies the same storage slot.
+    pub fn object(
+        &self,
+        object: ObjectRef,
+    ) -> Result<&crate::state::game_object::Object, ObjectLookupError> {
         let row = ObjectId::from(object.entity);
-        (self.object_incarnations.get(row.0) == Some(&object.incarnation)
-            && self.zones.zone_of(row).is_some())
-        .then_some(row)
+        let value = self
+            .objects
+            .get(row.0)
+            .ok_or(ObjectLookupError::MissingEntity)?;
+        if self.object_incarnations.get(row.0) != Some(&object.incarnation)
+            || self.zones.zone_of(row).is_none()
+        {
+            return Err(ObjectLookupError::StaleIncarnation);
+        }
+        Ok(value)
     }
 
     /// A card keeps its kind across moves, transformations and copy effects.
@@ -570,22 +587,33 @@ impl TrackedState {
             .move_object(&self.state.objects, object, holder, to_zone);
     }
 
-    /// Advance the object's CR 400.7 incarnation as it leaves `from_zone`.
+    /// Mint one CR 400.7 appearance, advancing its generation and consuming
+    /// its base/entry values together. No raw-object write invalidates caches
+    /// on an ordinary hidden-zone move; membership handles zone dependencies.
     /// Only a battlefield object's exact identity reaches a cached derivation
     /// (through its effect records and static attachments).
-    pub(crate) fn advance_incarnation(&mut self, object: ObjectId, from_zone: ZoneType) {
-        if from_zone == ZoneType::Battlefield {
+    pub(crate) fn mint_appearance(
+        &mut self,
+        object: ObjectId,
+        from_zone: Option<ZoneType>,
+        to_zone: ZoneType,
+        entry_copy: bool,
+    ) {
+        if from_zone == Some(ZoneType::Battlefield) {
             self.revisions.characteristics += 1;
             self.revisions.triggers += 1;
         }
-        let incarnation = self
-            .state
-            .object_incarnations
-            .get_mut(object.0)
-            .expect("card entity must have an incarnation");
-        *incarnation = incarnation
-            .checked_next()
-            .expect("rules object incarnation overflow");
+        if from_zone.is_some() {
+            let incarnation = self
+                .state
+                .object_incarnations
+                .get_mut(object.0)
+                .expect("card entity must have an incarnation");
+            *incarnation = incarnation
+                .checked_next()
+                .expect("rules object incarnation overflow");
+        }
+        self.state.objects[object].mint_appearance(from_zone, to_zone, entry_copy);
     }
 }
 
