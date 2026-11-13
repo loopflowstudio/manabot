@@ -8,7 +8,9 @@ including debugging, benchmarks, demos and failure reproduction.
 
 Test load-dependent behavior with injected measurements, controlled clocks,
 bounded fixtures and synchronization primitives. Measure performance using
-the actual workload. Keep normal test execution focused and bounded; every
+the actual workload; a large constructed board run once through the engine
+([stress states](docs/development.md#stress-states)) is a workload, not induced
+load. Keep normal test execution focused and bounded; every
 test-owned subprocess must be terminated and reaped on success, failure,
 timeout and cancellation.
 
