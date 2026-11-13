@@ -78,7 +78,8 @@ model embedding, raw storage identity or hidden information is needed.
   the mana ability's source; bonus `source` is its trigger, `context` the tap.
 - Public pooled classes are kind-11 `EffectProgram`s on the player under
   `PooledMana`, one class/expiry program per occurrence. Counts also join the matching
-  ordinary/restricted aggregate. Keep exact restrictions, effects and expiry
+  ordinary/restricted aggregate; class rows are subsets, not extra mana. Keep
+  exact restrictions, effects and expiry
   understandable to both viewers. Combat classes (including ordinary combat
   mana) retain their expiry in the program; Academy displays the rider,
   restriction and expiry. A spending obligation uses code 31 in the existing
@@ -149,8 +150,9 @@ compatibility alias; the behavior and learning representation are unchanged.
 The implementation and compression checks are recorded in
 `mtg-297-heartbeat-of-spring.md`. Current-world evidence and corpus admission pass. The 75 broader debug failures
 were repaired with explicit fixture payments; all 643 selected checks now pass,
-as recorded there. No open product choice or implementation blocker remains;
-the caller retains review and delivery.
+as recorded there. No open product choice or implementation blocker was identified. Final-revision
+full debug CI coverage, Engine Budget, review and delivery remain; the selected
+643-test run does not establish those results.
 
 ## Concept review after the pooled-class rename (2026-11-12)
 
@@ -162,3 +164,22 @@ offer both say "expires at step end", where plain totals and "Add" labels
 leave ordinary expiry unstated. The wording is the class's default expiry
 (CR 106.4); retention (`keeps_red_mana`) stays its own line, as it already
 does for combat mana.
+
+## Concept review after explicit fixture payments (2026-11-12)
+
+Reviewed `eca2253e9` and `065e106af` (through merge `ba3b05427`) against this
+contract. Nothing to change; no open product choice.
+
+- Fixtures now act as a player does: `spend_named` requires a pending
+  `Decision::ManaSpend` and picks a native offer; casting, priority, mode and
+  target helpers still refuse to pay. No engine payment preference returned.
+- The forced-payment shortcut (`mana_spend_choices`, `.take(1)` when
+  `usable_total == mana_value`) hides no choice: every ordering spends the
+  same units, so receipt and remaining pool are identical. It stops being
+  true only if a rule ever reads which unit paid which pip; none does.
+- "Including" (Academy) and "Of the mana above" (text) state class rows as
+  subsets of the totals, as the shared-observation section requires.
+- Noted, not directed: `spend_colorless` and seven TLA/TLE sites select offers
+  by the exact label "Spend {X} (expires at step end)", so the wording noted
+  in the previous review is now pinned by tests. Changing it is a label edit
+  plus those strings, not a design change.
