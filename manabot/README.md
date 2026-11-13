@@ -58,7 +58,7 @@ The bare command remains the small `local` smoke run, which writes a fresh
 timestamped directory under `.runs/` each time. Every other recipe defaults to
 `.runs/<recipe>-<seed>` and resumes it when run again; use `--out` for a new run.
 `--seconds` sets a deadline without changing the step schedule: a run that
-reaches it saves its state and exits 1. The baseline is a versioned starting point, not a strength certification.
+reaches it saves its state and exits 75; run it again to carry on. The baseline is a versioned starting point, not a strength certification.
 
 For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
@@ -534,21 +534,23 @@ it is not ordinary training-match admission or evidence of mirror competence.
 
 ### Etude-owned training jobs
 
-A training job is a recipe and its config; `etude.jobs.training` builds it and
-nothing is submitted until `etude launch`:
+A training job is a recipe's `train` function and its config; an experiment
+file's `runs()` builds it with `etude.jobs.training`, and nothing is submitted
+until `etude launch`:
 
 ```python
 from etude.jobs import training
 
-from manabot.recipes.elemental import ElementalConfig, elemental
+from manabot.recipes.elemental import ElementalConfig, train
 
-job = training(elemental, config=ElementalConfig(seed=197), max_hours=12)
+job = training(train, config=ElementalConfig(seed=197), max_hours=12)
 ```
 
-On the machine Etude imports the recipe from the committed source and calls it.
-Etude owns attempts, deadlines, retries, cost and the run record; the recipe
-keeps its learner in `run.out / "state.pt"`, so a retried or stopped job
-carries on from its last saved update with its Adam and EMA
+On the machine Etude imports `train` from the committed source and calls it.
+Etude owns attempts, deadlines, the stop signal, retries, the run directory's
+carriage, cost and the run record; `train` reads `run.out`, `run.until` and
+`run.stopping()` and keeps its learner in `run.out / "state.pt"`, so a retried
+or stopped job carries on from its last saved update with its Adam and EMA
 ([remote training](../docs/training.md#remote-training),
 [recovery](../docs/training.md#recovery)). The
 [game-failures guide](../docs/training.md#game-failures) describes opt-in

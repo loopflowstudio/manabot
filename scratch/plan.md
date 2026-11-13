@@ -119,3 +119,50 @@ Land diff (step 3), **Delete — do not maintain**:
   `code` graph; its brief carries gaps 1-8 of `etude-api.md`. Jack Heart:
   "ready to run an etude task?" / "open its task session in rex so i can
   review its work once its done".
+
+- sync + write-docs, fourth pass (2026-11-13, clarified extraction scope).
+  Main (`b531853a5`, with the torch/MLX backend move) is merged as `344b7d116`.
+  Resolution: main's `backends/torch` `Learner` class is kept (it is the
+  backend protocol MLX also implements), so the branch's `new_learner` /
+  `learner_precision` are gone and callers use `Learner(...)` /
+  `learner.forward_precision()`; updates take `torch_backend` first. The
+  branch's functional collector (`open_collector`/`collect`/`close_collector`)
+  is kept, with main's bucket-needs recording ported into it.
+  `self_play.py` imports from `manabot.backends.torch.*` and is listed in
+  `_TORCH_NOT_YET_MOVED`; `cli.py` uses `recipes.device.accelerator`.
+  Checked after the merge: 173 passed across the merged learner, collector,
+  update-backend, admission, artifact and boundary tests. Failing and not
+  diagnosed to a cause: `tests/training/test_game_errors.py::
+  test_resource_limit_receipt_replays_its_retained_encoding_boundary` (3
+  params) returns `binding_mismatch`: the replayed decision frame has
+  `schema_version` 8 and the fixture `tests/fixtures/tla-pilot-permanent-capacity.jsonl`
+  has 7. `replay_attempt`'s comparison and the fixture are identical on main,
+  where CI is green, so check whether CI runs this test before changing
+  anything. `tests/training/test_self_play_loop.py` (executor parity) was not
+  rerun after the merge. Pre-existing on the branch, untouched:
+  `experiments/l4_step_profile.py`, `collection_tail_graphs.py` and
+  `cuda_precision.py` still patch `SeatRoutedCollector`, which no longer exists.
+  Docs now describe the preserved file structure. Changed doc paths:
+  `docs/training.md`, `manabot/README.md`, `experiments/README.md`,
+  `docs/learning.md`, `docs/training-loop.md` (the last two only for the merge).
+  What the docs now say that the code does not yet do (implement step):
+  - A recipe module exposes `train(config)` (`manabot.recipes.elemental.train`,
+    `manabot.recipes.belief_sampler.train`), not `elemental(config)` /
+    `belief(config)`. Configs hold only varying inputs (`seed`, `updates`,
+    `games`, `validate_numerics`); the `SelfPlay` settings are built in the
+    function body, not held as `ElementalConfig.self_play`.
+  - `updates = int(run.until("updates", default=config.updates))`; imports are
+    Etude's own (`etude.train.run.track`, `local_launch`, `Stopped`;
+    `etude.train.records.Step`); `manabot/recipes/proposed_etude.py` is gone
+    and the loop raises Etude's `Stopped`, not its own.
+  - No `final.pt` and no `save_final`: the loop always writes and records the
+    last update's checkpoint (tag `final`) and returns its path (EMA when
+    kept). `save_checkpoint` never rewrites an existing file.
+  - Belief outputs are named for the policy (`histories-<policy stem>.json`,
+    `belief-<policy stem>.pt`).
+  - A planned stop exits 75 from `manabot train` (was 1).
+  - The local Etude record is under `OUT/etude/`.
+  - `etude continue --run RUN --until updates=N`.
+  - Experiment files: `runs()` returns `training(train, config=..., smoke=...)`.
+  Still describing the executor, unchanged: `docs/experiments.md` "Declaring a
+  comparison" (questions.md 13).

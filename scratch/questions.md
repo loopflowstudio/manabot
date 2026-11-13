@@ -80,3 +80,20 @@
     readable) and still select snapshot cadence, but no longer bound a journal.
     Still open for review: whether the five frozen regimes listed above need
     anything beyond "run from 439379869".
+14. (2026-11-13) Recipe function name. Docs now call a recipe module's entry
+    point `train(config)` (`manabot.recipes.elemental.train`), which experiment
+    files import or define themselves, beside their existing `runs()`,
+    `eval(state)` and `report()`. Basis: "i liekd it better when there were
+    explicit eval(), train() and launch() functions". `runs()` is not renamed
+    to `launch()`: cutover.md says not to rename existing `runs()`
+    declarations, and Etude discovers `runs`. Assumed; the alternative keeps
+    `elemental(config)` / `belief(config)` as the names.
+15. (2026-11-13) Questions 9 and 10 are answered in the docs by making outputs
+    immutable rather than by requiring a new `--out`: there is no `final.pt`;
+    the endpoint is the last update's checkpoint, and a later target writes a
+    later file. Belief outputs carry the policy file's stem, so a policy
+    trained further gets its own histories and sampler. Assumed from
+    cutover.md ("Published checkpoint paths must not be overwritten", "cannot
+    reuse histories or a sampler from the old policy"); not confirmed by a person.
+16. (2026-11-13) `manabot train` exit status after a planned stop is 75 in the
+    docs, matching Etude's training exit; it was 1. Assumed.

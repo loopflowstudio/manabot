@@ -32,9 +32,13 @@ uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort se
 ```
 
 A file defining `report()` or `eval(state)` is an Etude experiment, named for
-its stem. Etude tells each run it launches from the file that stem, and the
-recipe's `track` records the run under it, so `etude eval` and `etude report`
-find them.
+its stem. Its functions are explicit: `train(config)` is what a run does (its
+own, or a maintained recipe's imported from `manabot.recipes`), `runs()`
+declares the jobs to launch with `etude.jobs.training(train, config=...)`,
+`eval(state)` returns the matches its checkpoints should play and `report()`
+draws them. Etude tells each run it launches from the file that stem, and the
+`track` inside `train` records the run under it, so `etude eval` and
+`etude report` find them.
 
 | file | `runs()` | `eval(state)` | `report()` |
 | --- | --- | --- | --- |

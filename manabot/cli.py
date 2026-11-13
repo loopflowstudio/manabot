@@ -7,7 +7,6 @@ from pathlib import Path
 import pkgutil
 from typing import Any, Literal, Optional, Protocol, Self, Sequence
 
-import torch
 import typer
 
 from manabot.config.load import load_sim_config
@@ -15,6 +14,7 @@ from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
 from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.belief_sampler import BeliefConfig, belief
+from manabot.recipes.device import accelerator
 from manabot.recipes.elemental import ElementalConfig, elemental
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.recipes.proposed_etude import local_launch
@@ -96,7 +96,7 @@ def loop_config(
     device: Literal["cpu", "mps", "cuda"] | None,
 ) -> LoopConfig:
     """`default` with the seed, update target and device the command line names."""
-    chosen = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    chosen = device or accelerator() or "cpu"
     return default.model_copy(
         update={
             "seed": default.seed if seed is None else seed,

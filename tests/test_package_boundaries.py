@@ -401,6 +401,7 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/sim/serving.py",
         "manabot/training/execution.py",
         "manabot/training/loops/minimal.py",
+        "manabot/training/loops/self_play.py",
         "manabot/training/mps.py",
         "manabot/training/rollout/actions.py",
         "manabot/training/rollout/collection.py",
