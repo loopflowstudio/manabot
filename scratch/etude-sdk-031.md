@@ -69,7 +69,12 @@ land."
   dropped panels). `against_fixed` and `against_earlier_self` now share a body
   and stay two names: `against_earlier_self` is published, so merging would
   add a deprecated alias.
-- FRONTIER_BUILD
+- Frontier build on pinned 0.3.2, real home, the Demo command: exit 0 in
+  about 12 minutes, `/tmp/mtg348-tla/tla_frontier.html`. Read from the page's
+  embedded data: fixed training time 11 points, fixed updates 10, every point
+  on `5b7d8fa7b38c`, 16 matches / 64 rows each (u925 0.53125; equal-update
+  u600 0.625, u800 0.65625); no failures; the only note is the expected
+  `tournament_conflict`. The page was not opened in a browser.
 
 ## Demo
 
@@ -169,8 +174,8 @@ in `tests/training/test_report_helpers.py`; the docs and the dated line in
 1. Done: pins, lock, launcher check (see State). `RELEASE_NOTES.md` and the
    `==0.2.15` launch lines in `experiments/cuda_precision.py` and
    `precision_ladder.py` stay.
-2. Remaining: the Demo build on the pinned SDK (see State for its result), the
-   docs' hover example checked against that page, then gate acceptance below.
+2. Remaining: gate acceptance below, then land. The Demo build passed (see
+   State).
    The `--with "etude-sdk[s3,eval]==0.2.15" etude status` line in
    `docs/experiments.md` is the form `experiments/cuda_precision.py` uses; it
    was not run here, to stay off the live `launcher.db`.
