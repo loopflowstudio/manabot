@@ -1,54 +1,61 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>MTG-324 QA — precision auto</title>
-<style>body{font:15px/1.5 system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#222}
-pre{background:#f5f2ea;padding:.6rem;overflow:auto;font-size:13px}td,th{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;vertical-align:top}table{border-collapse:collapse}h2{margin-top:2rem}</style></head>
-<body>
-<h1>MTG-324 QA: <code>Execution.precision="auto"</code></h1>
-<p>2026-11-13, HEAD <code>0338b8a90</code> (contains <code>origin/main</code> <code>6ce618b8a</code>). I used the change the way a regime author would: the
-<code>manabot train</code> CLI, regime JSON files and the recipe builders. Outputs went to the ignored <code>.runs/qa324/</code>. I ran nothing on CUDA and
-nothing paid, so CUDA stages were built and validated but not trained.</p>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-313 QA — Release to Memory and Lita</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em;color:#222}img{max-width:100%;border:1px solid #ccc}pre{background:#f5f2ea;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}</style></head><body>
+<h1>MTG-313 QA: Release to Memory and Lita, Mechanical Engineer</h1>
+<p>Revision <code>2831723e4</code> (does not include main's <code>f1b0109ae</code>, the mana-payment change). Installed extension
+<code>managym/_managym.cpython-313-darwin.so</code> is newer than every engine, state and cards source file. The Academy
+ready line named that module path, cp313 and world w17.</p>
 
-<h2>1. New user: the default local recipe</h2>
-<pre>$ uv run manabot train --recipe local --device cpu --out .runs/qa324/local
-local: completed; run: b53e70f151e741d2851de76e2d5502d6        (9.9 s)
-run.json regime.stages[0].execution:
-{'device': 'cpu', 'memory_bytes': 34359738368, 'precision': 'float32', 'threads': 1, 'wall_seconds': 120.0, 'workers': 1}</pre>
-<p>The run records the resolved <code>float32</code> and never writes <code>auto</code>, as the docs say.</p>
+<h2>1. Python engine (<code>managym.Env</code>, as a training consumer uses it)</h2>
+<p>I played scripted full games with <code>PlayerConfig</code> decks (Plains, Lita and Release to Memory against Plains and Savannah Lions).
+Actions were chosen by the labels from <code>managym.experience_projection.describe_actions</code>.</p>
+<ul>
+<li><b>Lita → Zeppelin → crew → attack</b> (seeds 5, 6, 7): <code>Activate ability: Lita</code> creates one <code>Zeppelin</code>, which is not a creature, so it is offered no attack until crewed.
+Crew offers <code>Tap Spirit to crew</code> / <code>Tap Lita, Mechanical Engineer to crew</code>. After crewing it attacks as a creature (<code>is_animated</code>). All three games were won through Zeppelin attacks.</li>
+<li><b>Lita's end-step untap</b> (seed 7): I read the board on the opponent's first decision after each Zeppelin attack. Each time it was
+<code>Spirit(T)×3, Lita(T), Zeppelin</code> (untapped, no longer a creature). The Zeppelin untapped because it was an artifact creature at end step.
+Lita ("other") and the non-artifact Spirits stayed tapped, as the printed text says.</li>
+<li><b>Release to Memory counts only creature cards</b> (villain deck also casts Release to Memory, so noncreature cards reach its graveyard):
+<pre>seed 1: graveyard {Savannah Lions: 3, Release to Memory: 1} → graveyard empty, Spirits 0 → 3
+seed 2: graveyard {Release to Memory: 2, Savannah Lions: 4} → graveyard empty, Spirits 0 → 4
+seed 3: graveyard {Savannah Lions: 3, Release to Memory: 1} → graveyard empty, Spirits 0 → 3</pre></li>
+</ul>
 
-<h2>2. Regime JSON through the CLI (<code>--regime</code>, CPU, seed 3)</h2>
-<table><tr><th>File</th><th>Result</th></tr>
-<tr><td><code>"precision": "auto"</code></td><td>completed; recorded <code>float32</code></td></tr>
-<tr><td>precision omitted (a regime saved before the field existed)</td><td>completed; recorded <code>float32</code></td></tr>
-<tr><td><code>"bf16"</code> on CPU</td><td>refused: <code>Value error, precision bf16 requires CUDA</code></td></tr>
-<tr><td><code>"tf32"</code> on CPU</td><td>refused: <code>Value error, precision tf32 requires CUDA</code></td></tr></table>
+<h2>2. Academy import (<code>/api/decklists/validate</code> and the Import decklist files panel)</h2>
+<p>The hero list <code>16 Plains / 12 Lita, Mechanical Engineer / 12 Release to Memory</code> was admitted: "Ready — development-v1, w17".
+Listing tokens is refused per line: <code>Zeppelin: A token, created by its card; not a deck entry</code> (key <code>token.zeppelin</code>) and the same for
+<code>Spirit</code> (resolved to <code>token.plain_spirit</code>). The lowercase <code>lita, mechanical engineer</code> resolves to the card.</p>
+<img src="qa/import.png" alt="import panel">
 
-<h2>3. Saved and edited regimes (the TLA frontier regime JSON loaded in Python)</h2>
-<pre>saved_as_is                -> float32 False False | authored: float32
-old_no_precision           -> float32 False False | authored: float32
-auto_cpu                   -> float32 False False | authored: auto
-auto_cuda_w384             -> float32 False False | authored: auto      (layouts explicitly false in file)
-auto_cuda_w384_layout_auto -> float32 True True   | authored: auto
-bf16_cuda                  -> bf16    False False | authored: bf16
-typo "bfloat16"            -> ValidationError: Input should be 'float32', 'tf32' or 'bf16' (plus a second union error for 'auto')</pre>
-<p>Columns: precision, bucketed_shapes, live_tokens. At w384 on CUDA, <code>auto</code> resolves to float32, matching the recorded rejection. Explicit values and saved values stay as written.</p>
+<h2>3. Academy table, headless Chromium against Search 64</h2>
+<p>Three games with imported decks. I clicked only enabled <code>[data-testid=action-panel] button</code> offers.</p>
+<ul>
+<li>Game A (villain 23 Lions): <code>Cast Release to Memory</code> with one Lion in the graveyard. Afterwards the opponent's EXILE (1) showed Savannah Lions and our battlefield had one <code>Spirit 1/1</code>. The hero lost to the Lions.</li>
+<li>Game B: Lita activated twice and two Zeppelins appeared under <b>ARTIFACT TOKENS</b> as 5/5. The hero lost before crewing.</li>
+<li>Game C (villain 6 Lions): Zeppelin crewed through <code>Tap Lita, Mechanical Engineer to crew</code> / <code>Tap Spirit to crew</code> and attacked repeatedly. The hero won (opponent at 0).
+Stack while crewed: <code>2 · This becomes a creature in addition to its other types until end of turn · activated ability</code>, with <code>Top · Release to Memory · spell</code> above it.</li>
+</ul>
+<p>Hover previews show the printed text exactly:</p>
+<pre>Lita: "Vigilance\nAt the beginning of your end step, untap each other artifact creature you control.\n{3}{W}, {T}: Create a 5/5 colorless Vehicle artifact token named Zeppelin with flying and crew 3. (It has "Tap any number of creatures …")"
+Release to Memory: "Exile target opponent's graveyard. For each creature card exiled this way, create a 1/1 colorless Spirit creature token."
+Zeppelin: "Flying\nCrew 3"</pre>
+<img src="qa/hover-Zeppelin.png" alt="Zeppelin hover"><img src="qa/stack-release.png" alt="stack with Release and crew">
+<p>No browser console errors in any game.</p>
 
-<h2>4. Builders (CUDA baseline recipe, built but not trained)</h2>
-<pre>baseline cuda                w64: precision=float32 bucketed=True live=True dump=float32
-with_capacity 384            w384: precision=float32 bucketed=True live=True dump=float32
-explicit bf16                w64: precision=bf16 bucketed=True live=True dump=bf16
-explicit bf16 -> w384        w384: precision=bf16 bucketed=True live=True dump=bf16
-saved roundtrip              w64: precision=float32 bucketed=True live=True dump=float32
-baseline cuda padded         w64: precision=float32 bucketed=False live=False dump=float32</pre>
-<p>A rebuild resolves <code>auto</code> again, and an explicit BF16 choice survives a width change.</p>
+<h2>Fixed</h2>
+<p>Nothing in the change needed fixing.</p>
 
-<h2>5. Docs and tests</h2>
-<p>The links and anchors in <code>docs/training.md</code> (<code>#validation</code>, <code>experiments/precision_ladder.md</code>, <code>experiments/cuda_precision.md</code>) exist.
-The other guides contain no stale "float32 (default)" wording. A focused check passed: <code>pytest tests/training/test_precision.py tests/training/test_bucketed_execution.py
-tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py</code>, 48 passed.</p>
+<h2>Not reached</h2>
+<ul>
+<li>The combined revision with main's <code>f1b0109ae</code> (mana-payment search). Lita's paid activation should be rechecked after delivery integrates main and rebuilds the extension.</li>
+<li>Lita's end-step trigger was never visible on the Academy stack. It resolved without a stop under the default stops, so its description text was not read in the browser. The engine effect was verified in Python.</li>
+<li>The MTG-213 corpus re-admission and the full validation list in <code>scratch/mtg-313.md</code> belong to the gate, not this QA.</li>
+</ul>
 
-<h2>Outcome</h2>
-<p><b>Works:</b> fresh authoring, CLI training, saved and pre-field regimes, explicit choices, CPU refusals and builder re-resolution all behave as the docs describe. I fixed nothing; I found no defects.</p>
-<p><b>Not reached:</b> a CUDA training run (no GPU here, and no rental authorized at this step). <code>apply_matmul_precision</code> and the learner and collector
-receiving <code>resolved_precision</code> on CUDA ran only for float32 on CPU.</p>
-<p><b>Worth noting (no change made):</b> explicit <code>bf16</code> with <code>live_tokens</code> on still validates, though the A/B never admitted that combination. The docs state it as unadmitted, which is consistent with keeping explicit choices available.</p>
+<h2>Still wrong, outside this change (no Academy files changed here)</h2>
+<ol>
+<li>The narration popover prints raw ids for the opponent's combat: <code>object 88:2, object 85:2 attack Hero</code>, <code>object 94:2 blocks object 88:2</code>.
+This is the fallback in <code>academy/ui/src/lib/presentation.ts:102</code>, seen with imported decks.</li>
+<li>The hover preview shows the art motif ("STONE") where a reader might expect a type line. Zeppelin's preview never says "Artifact — Vehicle".</li>
+</ol>
 </body></html>
