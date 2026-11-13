@@ -14,6 +14,8 @@
 // player's sources across the questions of a `PaymentScan`. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
+use std::num::NonZeroUsize;
+
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
@@ -439,13 +441,13 @@ impl PaymentModel {
         // Only a counted tap cost reads the board, and only as far as `cap`
         // activations need: a repeatable cost counts every candidate for its
         // optimistic production bound.
-        let uses = if ability.tap_count == 0 {
-            cap
-        } else {
+        let uses = if let Some(tap_count) = NonZeroUsize::new(ability.tap_count) {
             self.tap_candidates(resources, &ability.tap_candidates)
-                .take(cap.saturating_mul(ability.tap_count))
+                .take(cap.saturating_mul(tap_count.get()))
                 .count()
-                / ability.tap_count
+                / tap_count.get()
+        } else {
+            cap
         };
         assert_ne!(
             uses,

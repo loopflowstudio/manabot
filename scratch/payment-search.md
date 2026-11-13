@@ -220,3 +220,41 @@ quoted above.
 
 Earlier narrative (stale-executable discovery, replay CI design):
 `e8eb0ab296:scratch/payment-search.md`, `6691ed956:scratch/payment-search.md`.
+
+## Gate (2026-11-13, final tree after c66aa12ace)
+
+Reviewed the complete diff against the revised outcome and package guides.
+The only code polish was Clippy's `manual_checked_ops` warning in `uses`:
+`NonZeroUsize` now represents the counted-tap divisor, retaining the no-scan
+zero-cost path and the capped scan. No public interaction changed. Existing
+validation guidance already specifies the required formatters and Clippy.
+
+Focused plan: mana unit tests cover the activation bound and first witnesses;
+the example test covers recipes and combat checkpoints; rebuilt Python tests
+cover continuation parsing and complete policy buffers; the release audit
+covers all constructed states/layers. No changed-aware runner exists for this
+combination. Only mana-dependent checks were repeated after the lint fix.
+
+Commands and results (Cargo builds use `CARGO_BUILD_JOBS=2`, tests use two threads):
+
+- `cargo test --manifest-path managym/Cargo.toml -p managym --features benchmark --lib flow::mana::tests -- --test-threads 2` — 21 passed, including after the lint fix.
+- `cargo test --manifest-path managym/Cargo.toml -p managym --features benchmark --example bench_states --example bench_payment -- --test-threads 2` — 1 passed, including after the lint fix.
+- `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — built CPython 3.13 wheel; atomically installed its matching `.so`, including after the lint fix.
+- `uv run --extra dev --extra play pytest tests/verify/test_continuation_input.py -q` — 11 passed on the final rebuilt extension (2.25 s).
+- `cargo build --release --features benchmark --example bench_states --manifest-path managym/Cargo.toml` — passed, including after the lint fix.
+- `managym/target/release/examples/bench_states > .runs/mtg337/gate-final-audit.jsonl` — 1,425 rows; digest `9d110ad53de4758bf15706218ae5a104305ca716dd357a9be1ec185b9c7a1a24`; every non-timing field equals the pre-lint-fix run.
+- `managym/target/release/examples/bench_states --recipes > .runs/mtg337/gate-recipes.jsonl` — exported all 186 checkpoints.
+- `uv run --extra play python scripts/bench_states.py --recipes-file .runs/mtg337/gate-recipes.jsonl > .runs/mtg337/gate-python.jsonl` — 372 encoder/text rows across all 17 states, no errors; reused after the lint fix because the exported inputs and Python consumers did not change.
+- `uv run --extra dev python .runs/mtg337/compare_optimization.py` — retained source-built before/after evidence agrees on all 320 rows, including witnesses and digest; timings remain those in the optimization table above.
+- `uv run python scripts/check_loopflow_workflows.py` — all graphs and review/delivery boundaries valid.
+- `uv run --extra dev ruff check --fix scripts/bench_states.py tests/verify/test_continuation_input.py managym/__init__.pyi` — passed, no edits.
+- `uv run --extra dev ruff format scripts/bench_states.py tests/verify/test_continuation_input.py managym/__init__.pyi` — three files unchanged.
+- `cargo fmt --manifest-path managym/Cargo.toml --all` — clean, including after the lint fix.
+- `PYO3_PYTHON=$PWD/.venv/bin/python cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings` — initially rejected the changed division pattern; passed after the `NonZeroUsize` fix.
+- `shasum -a 256 managym/tests/fixtures/payment_search/manabot_slow_step.py` — matches the frozen hash above.
+- `git diff --check` — passed.
+
+No check timed out. Full integration/Rust suites and the current same-runner
+Engine Budget comparison remain with CI; neither is claimed passed here.
+Academy frames remain unmeasured, and CI does not compile the new example.
+No ship blocker remains from this gate. Publishing/landing is a separate step.
