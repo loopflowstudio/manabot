@@ -256,3 +256,17 @@ and the header's tie-break and fallback claims match `best_card`, `priority`,
 Workspace Rust formatting, adapter Ruff lint/format and `git diff --check`
 passed. Full suites, release smoke and Engine Budget remain for gate; no
 background work remains.
+
+## Realign after concept review (2026-11-13)
+
+The concept-review direction is implemented in `89b732137a`: the native
+`//!` header owns rules, fallback, tie-breaks and approximations; the adapter
+is 43 lines (adapter, frozen-anchor separation, identity files); the
+`Heuristic` doc comment states reset/fresh-player lifecycle. Rechecked without
+rebuilding: the installed cp313 extension equals the newest wheel's, and all 96
+packaged `managym/src/**/*.rs` equal checkout bytes. docs/engine.md agreed with
+the header except its fallback paragraph, which named the separate frozen
+`ScriptedGreedyPlayer` anchor and omitted the all-decline case; corrected
+(docs only, no identity file). Remaining is unchanged: gate's full debug Rust
+suite, clippy, affected Python suites, full release training smoke and normal
+same-runner Engine Budget.

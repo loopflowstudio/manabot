@@ -342,10 +342,12 @@ Its rules are deliberately approximate:
 Choices are deterministic for the same visible state and decision history.
 Equal-value casts use the first legal offer; equal-ranked discard and
 look-and-select choices use the last. Combat rankings use visible permanent
-IDs or observation order to resolve ties. Unhandled prompts use the scripted
-greedy fallback: prefer land, spell, then pass at priority; attack or block
-when offered; otherwise take the first non-decline choice. These rules are a
-baseline, not a claim of optimal play or exact combat search.
+IDs or observation order to resolve ties. Unhandled prompts use a fallback:
+prefer land, spell, then pass at priority; attack or block when offered;
+otherwise take the first non-decline choice, or the last choice when all
+decline. These rules are a baseline, not a claim of optimal play or exact
+combat search.
+
 ### Choosing a Python API
 
 The [scalar/batch API audit](python-api-audit.md) records the capability
