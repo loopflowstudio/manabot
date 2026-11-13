@@ -87,12 +87,12 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
-Rechecked this pass: Etude PR #103 is still OPEN at
-`105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (`mergedAt: null`), so the release
-dependency has not cleared. `origin/main` is still
-`6ce618b8adacee3a4894d05572399853680bb9fe`, already incorporated. Requirements
-and the runtime pin in `pyproject.toml` remain 0.2.16. No training test was
-rerun for this reconciliation; earlier results in implementation.md stand.
+Rechecked at this pass (second realign): Etude PR #103 is still OPEN at
+`105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (`mergedAt: null`); `origin/main`
+is still `6ce618b8a`, already an ancestor of HEAD; `pyproject.toml` stays at
+0.2.16. The concept-review items (records.py, learning.py, resume refusal
+naming differing settings, `--updates` with warning `--steps`) are in commit
+`1fcb8983d`; the code backs each claim below. No tests were rerun for realign.
 
 ## Concept review follow-through — 2026-11-13
 
