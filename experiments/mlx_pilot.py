@@ -39,6 +39,9 @@ from typing import Any
 
 import numpy as np
 
+from manabot.backends.torch.arrays import on_device
+from manabot.backends.torch.policy import PolicyInference
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -74,7 +77,6 @@ def capture(out: Path) -> None:
 
     from experiments.tla_frontier import frozen
     from manabot.backends.torch.policy import ActorCritic
-    from manabot.model.inference import PolicyInference
     from manabot.training.execution import execute_regime
     from manabot.training.regime import TrainingRegime
     from manabot.training.rollout.collection import SeatRoutedCollector
@@ -256,21 +258,15 @@ class TorchLearner:
         from manabot.backends.torch.rl import (
             damped_policy_loss,
             float64_operand,
-            legal_mask,
             selected_mean,
         )
-        from manabot.model.admission import bind_admitted
-        from manabot.model.inference import transfer_admitted
         from manabot.policy.prepare import reference_distribution
 
         device = self.device
-        admitted, _ = transfer_admitted(
-            bind_admitted(self.agent, {k: torch.from_numpy(v) for k, v in obs.items()}),
-            device,
-        )
+        admitted = on_device(self.agent.prepare_admitted(obs), device)
         for group in self.optimizer.param_groups:
             group["lr"] = settings.learning_rate
-        valid = legal_mask(admitted["actions_valid"])
+        valid = admitted.legal
         logits, values = self.agent.forward_distribution(admitted)
         logits, values = logits.float(), values.float()
         reference = torch.from_numpy(
@@ -412,7 +408,14 @@ def _torch_inference(agent: Any, inference: Any, obs: dict[str, np.ndarray]) -> 
     tick = time.perf_counter()
     with torch.no_grad():
         logits, _ = agent(
-            inference.prepare({k: torch.from_numpy(v) for k, v in obs.items()})
+            inference.prepare(
+                {
+                    key: value.detach().cpu().numpy()
+                    for key, value in (
+                        {k: torch.from_numpy(v) for k, v in obs.items()}
+                    ).items()
+                }
+            )
         )
         logits.numpy()
     return time.perf_counter() - tick
@@ -422,12 +425,10 @@ def _torch_scope(agent: Any) -> tuple[Any, float]:
     """Open the collection scope and encode its catalog once, timed."""
     import torch
 
-    from manabot.model.inference import PolicyInference
-
     tick = time.perf_counter()
     inference = PolicyInference(agent).__enter__()
     with torch.no_grad():
-        inference.catalog()
+        inference.cache_programs()
     return inference, time.perf_counter() - tick
 
 

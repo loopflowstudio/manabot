@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.arrays import _array_fields, on_device
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -27,7 +28,6 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.inference import transfer
 from manabot.sim import child, serving
 from manabot.sim.execution import EvalComputeV1, EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
@@ -51,6 +51,8 @@ from manabot.sim.serving_protocol import (
 )
 from managym import WORLD_VERSION
 from tests.eval.arena_fixture import arena_fixture
+from tests.model.prepared_routes import host_inputs
+from tests.model.test_inference import _policy
 
 
 def fixture_policy(
@@ -190,11 +192,13 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
         for k in requests[0].observation
     }
     with torch.no_grad():
-        batched, _ = resident.agent(resident.scope.prepare(tensor))
+        batched, _ = resident.agent(resident.scope.prepare(host_inputs(tensor)))
         scalar = torch.cat(
             [
                 resident.agent(
-                    resident.scope.prepare({k: v[i : i + 1] for k, v in tensor.items()})
+                    resident.scope.prepare(
+                        host_inputs({k: v[i : i + 1] for k, v in tensor.items()})
+                    )
                 )[0]
                 for i in range(2)
             ]
@@ -221,7 +225,7 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
     store.admit(PolicyAdmission(second, str(second_path), (selected_match(),)))
     assert perf.counters["evictions"] == 1
     with pytest.raises(RuntimeError, match="closed"):
-        resident.scope.catalog()
+        resident.scope.cache_programs()
     assert PolicyKey.from_registration(second, execution) != requests[0].policy
     store.close()
 
@@ -386,17 +390,24 @@ def test_service_batches_a_backlog_of_overdue_requests(
 
 
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
-    tensors = {
-        "a": torch.arange(6, dtype=torch.float32).reshape(2, 3),
-        "b": torch.ones(2, 4, 5),
-        "rows": torch.arange(4).reshape(2, 2),
+    case = _policy()
+    host = case.agent.prepare(host_inputs(case.obs))
+    arrays = _array_fields(host, np.ndarray)
+    moved = _array_fields(on_device(host, "meta"), torch.Tensor)
+    assert {
+        key: (value.shape, value.dtype, value.device.type)
+        for key, value in moved.items()
+    } == {
+        key: (torch.Size(value.shape), torch.from_numpy(value).dtype, "meta")
+        for key, value in arrays.items()
     }
-    moved, copies = transfer(tensors, torch.device("meta"))
-    assert copies == 2
-    assert {k: (v.shape, v.dtype, v.device.type) for k, v in moved.items()} == {
-        k: (v.shape, v.dtype, "meta") for k, v in tensors.items()
-    }
-    assert transfer(tensors, torch.device("cpu")) == (tensors, 0)
+    # Every dtype group shares exactly one transferred allocation.
+    assert len({value.untyped_storage()._cdata for value in moved.values()}) == len(
+        {value.dtype for value in moved.values()}
+    )
+    cpu = _array_fields(on_device(host, "cpu"), torch.Tensor)
+    for key, value in cpu.items():
+        np.testing.assert_array_equal(value.numpy(), arrays[key])
 
 
 def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
@@ -809,7 +820,7 @@ def test_served_bucketed_policy_matches_the_padded_path(tmp_path: Path) -> None:
                 k: torch.from_numpy(v).float().unsqueeze(0)
                 for k, v in request.observation.items()
             }
-            logits.append(policy.agent(policy.scope.prepare(inputs))[0])
+            logits.append(policy.agent(policy.scope.prepare(host_inputs(inputs)))[0])
         store.close()
     torch.testing.assert_close(logits[0], logits[1], atol=1e-5, rtol=1e-5)
 
@@ -830,7 +841,9 @@ def test_cuda_retained_input_parity(tmp_path: Path) -> None:
                 k: torch.from_numpy(v).float().unsqueeze(0)
                 for k, v in request.observation.items()
             }
-            logits.append(policy.agent(policy.scope.prepare(inputs))[0].cpu())
+            logits.append(
+                policy.agent(policy.scope.prepare(host_inputs(inputs)))[0].cpu()
+            )
         store.close()
     torch.testing.assert_close(logits[0], logits[1], atol=1e-4, rtol=1e-4)
 

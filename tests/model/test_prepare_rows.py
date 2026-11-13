@@ -21,13 +21,13 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation, measure_buckets
 from manabot.policy.admission import Spec, check
-from manabot.policy.buckets import object_columns, trim_observation
+from manabot.policy.buckets import bucket_sizes, object_columns, trim_observation
 from manabot.policy.checkpoint import layout
 from manabot.policy.prepare import Tables, prepare
 from manabot.verify.representation import shared_effect_root
 import managym
+from tests.model.prepared_routes import device_input
 
 
 @lru_cache(maxsize=3)
@@ -96,8 +96,14 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
         0 if agent.card_definitions is None else agent.card_definitions.num_embeddings,
     )
     check(obs, spec, obs["actions_valid"].astype(bool))
-    admit_observation(agent, tensors)
-    buckets = measure_buckets(agent, tensors)
+    device_input(agent, tensors)
+    buckets = (
+        bucket_sizes(
+            obs, agent.observation_space.encoder, objects=agent.object_trimming()
+        )
+        if bucketed
+        else None
+    )
     trimmed = obs
     if buckets is not None:
         trimmed = trim_observation(obs, buckets)
@@ -310,9 +316,7 @@ def test_v10_object_buckets_keep_turn_rows_aligned() -> None:
         bucketed_shapes=True,
     )
     obs["card_turn_state"][:, :, 31] = 1
-    buckets = measure_buckets(
-        agent, {key: torch.from_numpy(value) for key, value in obs.items()}
-    )
+    buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)
     assert buckets is not None
     trimmed = trim_observation(obs, buckets)
     assert trimmed["card_turn_state"].shape[2] == trimmed["agent_cards"].shape[1]
@@ -348,7 +352,7 @@ def test_v10_masked_mean_forward_and_gradients_survive_object_buckets(
     bucketed.load_state_dict(padded.state_dict())
     outputs: list[tuple[torch.Tensor, torch.Tensor]] = []
     for model in (padded, bucketed):
-        logits, values = model(admit_observation(model, obs))
+        logits, values = model(device_input(model, obs))
         outputs.append((logits, values))
         (
             logits[obs["actions_valid"].bool()].square().mean() + values.square().mean()
@@ -362,8 +366,8 @@ def test_v10_masked_mean_forward_and_gradients_survive_object_buckets(
             torch.testing.assert_close(left.grad, right.grad, atol=1e-6, rtol=1e-4)
     with torch.no_grad():
         for left, right in zip(
-            padded(admit_observation(padded, obs)),
-            bucketed(admit_observation(bucketed, obs)),
+            padded(device_input(padded, obs)),
+            bucketed(device_input(bucketed, obs)),
             strict=True,
         ):
             torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)

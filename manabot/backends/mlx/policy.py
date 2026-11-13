@@ -26,7 +26,7 @@ import mlx.nn as nn
 import numpy as np
 
 from manabot.backends.mlx.arrays import to_numpy
-from manabot.backends.mlx.rl import legal_mask
+from manabot.backends.mlx.rl import NumericalError
 from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
@@ -325,7 +325,16 @@ class MLXActorCritic(nn.Module):
     def check_observation(self, obs: ObservationBuffers) -> None:
         """The shared admission checks on raw rows, before booleans or lookups."""
         tables = self._static.tables
-        legal = to_numpy(legal_mask(mx.array(obs["actions_valid"])))
+        mask = np.asarray(obs["actions_valid"])
+        try:
+            legal = admission.legal_mask(mask)
+        except ValueError as error:
+            # Allocate framework evidence only for a rejected host input.
+            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
+            raise NumericalError(
+                "invalid_action_mask",
+                {"mask": mx.array(mask), "failed": mx.array(failed)},
+            ) from error
         admission.check(
             obs, admission.Spec(self.config, self._static.space, tables, 0), legal
         )

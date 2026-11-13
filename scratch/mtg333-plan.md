@@ -79,21 +79,25 @@ read device `Prepared` rows. Admission uses shared `Spec/check`; host trimming,
 compaction and live-token routes are consumed. `arrays.on_device` batches
 transfers by dtype. The final arithmetic CPU oracle passed at `prepared-forward.pt` (below).
 
-The public entry still takes `AdmittedObservation`, carrying raw dictionaries
-for existing collectors plus the `Prepared` rows. `PolicyInference` retains
-its scoped wrapper. `TorchPolicy/Retained` are deleted: `ActorCritic` now owns
-the NumPy `prepare/evaluate` API and a version-checked catalog cache.
-Removing those carriers and migrating callers is next. Encoders now live in private modules under `backends/torch/`. Catalog program execution still selects stored token
-rows and reads lengths on CPU; finish that static/prepared schedule boundary.
-The learner rollout now returns device `Prepared` directly and retains prepared
-arrays as failure evidence. Bootstrap preparation runs inside its forward's
-`no_grad` boundary, so inference compaction matches the original.
-`save_checkpoint` now writes the general container. The carrier/caller cut,
-backend rule and L4 checks are still incomplete.
+Commit `775e5d823` contains the verified arithmetic, learner-rollout and container
+cut (receipts below). The following caller cut is in progress: `ActorCritic`
+now accepts only device `Prepared`; `model/admission.py` and
+`model/inference.py` are deleted. `PolicyInference` lives in the Torch policy
+module, uses its catalog cache and installs a lifetime guard on the batch.
+Prepared retains bucket needs as host tuples for collection. Direct callers and
+tests are migrated; the fresh carrier-free CPU and update oracles pass (receipt below).
+
+Encoders live in private modules under `backends/torch/`. `RecordEmbeddings`, old record lookup/admission wrappers and their exclusive
+tests are deleted. Catalog program execution still selects token rows and reads
+lengths on CPU; its static/prepared schedule boundary remains.
+
+General container saves and metadata readers, policy fixture mutation and new
+export suffixes are implemented. The docs describe the full PR; backend
+injection, aliases, L4 and optimize work are still incomplete.
 
 The backend-selection rule is written in `AGENTS.md` (`CLAUDE.md` links to
-it) and `backends/README.md`, but its resolver and import guard are not
-implemented. `tests/test_package_boundaries.py` currently guards framework
+it) and `backends/README.md`, and its lazy resolver is implemented. The import guard and sim/eval injection
+remain. `tests/test_package_boundaries.py` currently guards framework
 imports and update injection, not the new composition-root rule.
 `ParameterArrays`, header-only metadata reads and general container support are
 implemented. Parameters come from `named_parameters` with float32 required;
@@ -162,10 +166,10 @@ in `policy/buckets.py`; `prepare` runs on trimmed rows. Torch
 
 **One admission.** `policy/admission.py` gains belief and recent-event checks
 (same messages) and one `check(obs, spec, legal)` both backends call.
-Those checks now exist. Legal-mask validation still belongs to backend
-wrappers: `MLXActorCritic.check_observation` constructs an `mx.array`, calls
-`legal_mask`, then copies it back. Complete the host-only boundary during the
-cutover, preserving binary-mask and nonempty-support refusals in both backends.
+Those checks now exist. Legal-mask validation now runs through host `admission.legal_mask`; backend
+wrappers create device evidence only on rejection, retaining numerical-error
+invariant names and invalid-mask payloads. Empty support keeps the original
+action-sampling and loss refusals.
 This is admission work, separate from the later CUDA optimization pass.
 
 **Device rows.** `Prepared[A]` is generic over its array type (3.12 syntax,
@@ -540,3 +544,31 @@ The action-only estimator fixture now supplies its own rollout protocol instead
 of patching deleted player admission functions; 18 estimator checks passed,
 with its final materialization assertion updated to the fixture's two reads
 and passing separately (1 passed). Changed-file Ruff checks and formatting pass.
+
+
+Caller-cut check status (after `775e5d823`): inference lifetime/cache and agent
+checks passed, **31 tests** before an admission-count spy leaked into the next
+fixture's collection. Resetting that spy fixed both rule cases (2 passed in the
+next run). Bucketed equivalence then reached an obsolete assertion on the raw
+carrier's full-capacity facts; it now checks the trimmed Prepared fact shape.
+The rerun of bucketed/live/host/backend/belief/guidance tests passed: 53 tests.
+Frozen profiling functions that patch removed dictionary internals now raise
+at call time naming `ef28f3a58`; mechanical consumers use Prepared. The oracle
+and speed harnesses contain only API adapters, preserving fixtures and seeds.
+
+
+Carrier-free receipt (2026-11-13 UTC): `/tmp/mtg333/no-carrier.pt` compared with
+`integrated-base.pt`: **3,248 tensors, 0 differences**; `updates-no-carrier.json`
+is byte-identical to `updates-base.json` for all five cases. This includes removal
+of RecordEmbeddings and the old admission wrappers. The first oracle attempt
+found one remaining belief caller indexing Prepared as a dictionary; fixed.
+Record/effect/layer/capacity checks: **53 passed, one existing CUDA skip**;
+empty-record CPU/Adam and shared-effect backward cases: **5 passed**.
+Naming dense-reference checks: **9 passed**. Serving residency found an old
+`scope.catalog()` call; callers now use guarded `scope.cache_programs()`.
+Serving transfer/residency and numerical refusal checks: **6 passed**.
+Resolver, host invalid-mask evidence and update protocol checks: **9 passed**.
+A broader MPS file exposed a stale default-execution assertion omitting the two
+existing layout options; corrected to include their `auto` defaults, focused
+recheck passed (1 test). Static catalog scheduling, sim/eval backend injection/import
+boundary, L4 and optimize are still outstanding.

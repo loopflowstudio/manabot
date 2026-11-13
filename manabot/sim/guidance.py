@@ -12,11 +12,11 @@ from typing import Any, Mapping
 import numpy as np
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import file_sha256
-from manabot.model.admission import admit_observation
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.search import local_update
@@ -54,12 +54,22 @@ class PolicyPriorRandomLeafEvaluator:
             if isinstance(observation, Mapping)
             else self.observation_space.encode(observation)
         )
-        tensor_obs = admit_observation(
-            self.agent,
-            {
-                key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-                for key, value in encoded.items()
-            },
+        tensor_obs = on_device(
+            self.agent.prepare(
+                {
+                    key: to_numpy(value)
+                    for key, value in (
+                        {
+                            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(
+                                0
+                            )
+                            for key, value in encoded.items()
+                        }
+                    ).items()
+                },
+                inference=True,
+            ),
+            device_of(self.agent),
         )
         with torch.inference_mode():
             logits, _discarded_value = self.agent(tensor_obs)

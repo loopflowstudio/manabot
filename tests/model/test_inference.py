@@ -8,13 +8,13 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.admission import AdmittedObservation, admit_observation
-from manabot.model.inference import PolicyInference
+from manabot.policy.prepare import Prepared
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from tests.model.prepared_routes import device_input, host_inputs
 from tests.training.test_recovery import recipe
 
 
@@ -79,16 +79,14 @@ def test_preparation_preserves_forward_and_training_gradients(semantic: bool) ->
     reference = deepcopy(case.agent)
     with PolicyInference(case.agent) as scope, torch.no_grad():
         for _ in range(2):
-            prepared = scope.prepare(case.obs)
+            prepared = scope.prepare(host_inputs(case.obs))
             actual = case.agent.forward_distribution(prepared)
-            expected = reference.forward_distribution(
-                admit_observation(reference, case.obs)
-            )
+            expected = reference.forward_distribution(device_input(reference, case.obs))
             for a, b in zip(actual, expected, strict=True):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
     # Serving must not detach or reuse a catalog during a subsequent update.
     for agent in (case.agent, reference):
-        logits, values = agent.forward_distribution(admit_observation(agent, case.obs))
+        logits, values = agent.forward_distribution(device_input(agent, case.obs))
         loss = (
             logits[case.obs["actions_valid"].bool()].square().mean()
             + values.square().mean()
@@ -138,7 +136,7 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     full.semantic_cards.definitions = lambda rows=None: full_encode()  # type: ignore[method-assign]
     outputs = []
     for agent in (case.agent, full):
-        logits, values = agent.forward_distribution(admit_observation(agent, case.obs))
+        logits, values = agent.forward_distribution(device_input(agent, case.obs))
         outputs.append((logits, values))
         (
             logits[case.obs["actions_valid"].bool()].square().mean()
@@ -180,7 +178,7 @@ def test_cpu_admission_rejects_invalid_definition(bad: float, semantic: bool) ->
     case.obs["semantic_cards"][0, 0, 0] = bad
     with PolicyInference(case.agent) as scope:
         with pytest.raises(ValueError, match="unadmitted"):
-            scope.prepare(case.obs)
+            scope.prepare(host_inputs(case.obs))
 
 
 def test_preparation_preserves_object_validity_and_mode_checks() -> None:
@@ -188,7 +186,7 @@ def test_preparation_preserves_object_validity_and_mode_checks() -> None:
     with PolicyInference(case.agent) as scope:
         case.agent.train()
         with pytest.raises(RuntimeError, match="mode/configuration"):
-            scope.prepare(case.obs)
+            scope.prepare(host_inputs(case.obs))
     for key in (
         "agent_player_valid",
         "opponent_player_valid",
@@ -200,15 +198,15 @@ def test_preparation_preserves_object_validity_and_mode_checks() -> None:
         case.obs[key].zero_()
     with PolicyInference(case.agent) as scope:
         with pytest.raises(ValueError, match="valid object"):
-            scope.prepare(case.obs)
+            scope.prepare(host_inputs(case.obs))
     with pytest.raises(ValueError, match="valid object"):
-        admit_observation(case.agent, case.obs)
+        device_input(case.agent, case.obs)
 
 
 def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
     case = _policy()
     with PolicyInference(case.agent) as scope:
-        prepared = scope.prepare(case.obs)
+        prepared = scope.prepare(host_inputs(case.obs))
         with pytest.raises(RuntimeError, match="autograd"):
             case.agent(prepared)
         with torch.no_grad():
@@ -219,8 +217,8 @@ def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
     with torch.no_grad(), pytest.raises(RuntimeError, match="closed"):
         case.agent(prepared)
     with PolicyInference(case.agent) as fresh, torch.no_grad():
-        expected = case.agent(admit_observation(case.agent, case.obs))
-        actual = case.agent(fresh.prepare(case.obs))
+        expected = case.agent(device_input(case.agent, case.obs))
+        actual = case.agent(fresh.prepare(host_inputs(case.obs)))
         for a, b in zip(actual, expected, strict=True):
             torch.testing.assert_close(a, b, atol=0, rtol=0)
 
@@ -231,9 +229,9 @@ def test_prepared_collection_and_restored_continuation_match_reference() -> None
     @torch.no_grad()
     def plain_inputs(
         scope: PolicyInference, obs: dict[str, torch.Tensor]
-    ) -> AdmittedObservation:
+    ) -> Prepared[torch.Tensor]:
         """Admitted outside the scope: no cached catalog or scope checks."""
-        return admit_observation(scope.agent, obs)
+        return device_input(scope.agent, obs)
 
     actual = optimized.collector.collect(optimized.agent, 8)
     with patch.object(PolicyInference, "prepare", plain_inputs):

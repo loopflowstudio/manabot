@@ -9,17 +9,10 @@ object/catalog encoders and this projection; no memory survives a decision.
 import torch
 from torch import nn
 
-from manabot.backends.torch.arrays import to_numpy
-from manabot.policy import admission
 from manabot.policy.prepare import Prepared
 
 # One-based object joins of a relation row (0: none).
 _OBJECT_COLUMNS = (6, 24)
-
-
-def admit_relations(rows: torch.Tensor, relation_dim: int, object_count: int) -> None:
-    """Reject malformed relation rows [B,64,relation_dim] before any forward."""
-    admission.relations(to_numpy(rows), relation_dim, object_count)
 
 
 class ContinuationEncoder(nn.Module):

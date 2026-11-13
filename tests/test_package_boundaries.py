@@ -17,6 +17,8 @@ import sys
 import textwrap
 from types import ModuleType
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -375,8 +377,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/infra/runtime.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
-        "manabot/model/admission.py",
-        "manabot/model/inference.py",
         "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/reports/selection.py",
@@ -519,3 +519,23 @@ def test_updates_take_the_backend_as_an_argument() -> None:
         if module.split(".")[0] in _FRAMEWORKS or module.startswith("manabot.backends")
     ]
     assert violations == []
+
+
+def test_backend_resolver_selects_known_modules_and_names_missing_extras(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manabot.backends import resolve
+
+    assert resolve("torch").__name__ == "manabot.backends.torch"
+    with pytest.raises(ValueError, match="available backends: torch, mlx"):
+        resolve("unknown")
+    original = importlib.import_module
+
+    def without_framework(name: str, package: str | None = None) -> ModuleType:
+        if name == "mlx.core":
+            raise ImportError("fixture: unavailable framework")
+        return original(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", without_framework)
+    with pytest.raises(ImportError, match="'mlx' extra"):
+        resolve("mlx")

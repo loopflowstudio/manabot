@@ -10,7 +10,7 @@ Details carry ordered program tokens, reduced by a GRU per record.
 each; `catalog` ids read the card encoder's token rows and its row for the
 source definition, as fact rows do.
 
-`admit_shared_effects` checks the buffers once at observation admission. The
+Host admission checks the buffers once. The
 encoder reads `EffectRoutes`; host preparation owns all CSR and recurrent routes.
 """
 
@@ -23,16 +23,9 @@ from manabot.backends.torch._records import (
     RecordReducer,
     program_number,
 )
-from manabot.backends.torch._semantic_cards import (
-    RecordEmbeddings,
-    SemanticCardEncoder,
-    admission_catalog,
-)
-from manabot.backends.torch.arrays import to_numpy
 from manabot.env.shared_effects import (
     DETAIL_ROWS,
 )
-from manabot.policy import admission
 from manabot.policy.prepare import EffectRoutes
 
 
@@ -60,7 +53,8 @@ class SharedEffectEncoder(nn.Module):
         self,
         rows: EffectRoutes[torch.Tensor] | None,
         objects: torch.Tensor,
-        catalog: RecordEmbeddings | None = None,
+        token_embedding: nn.Embedding | None = None,
+        definitions: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Encode each prepared record once; duplicate memberships sum separately."""
         if rows is None:
@@ -77,12 +71,12 @@ class SharedEffectEncoder(nn.Module):
             mod = self.modification(rows.modification_rows)
             sources = self.source(rows.source_rows)
             detail = embedding_rows(self.detail, rows.detail_rows)
-        elif catalog is None:
+        elif token_embedding is None or definitions is None:
             raise ValueError("catalog effect ids require the card encoder")
         else:
-            mod = embedding_rows(catalog.cards.token_embedding, rows.modification_rows)
-            sources = catalog.definitions[rows.source_rows]
-            detail = embedding_rows(catalog.cards.token_embedding, rows.detail_rows)
+            mod = embedding_rows(token_embedding, rows.modification_rows)
+            sources = definitions[rows.source_rows]
+            detail = embedding_rows(token_embedding, rows.detail_rows)
         detail_tokens = detail + embedding_rows(self.detail_kind, rows.detail_kinds)
         detail_tokens = detail_tokens + self.detail_number(
             program_number(rows.detail_numbers.to(objects.dtype)).unsqueeze(-1)
@@ -99,20 +93,3 @@ class SharedEffectEncoder(nn.Module):
             0, rows.routes, repeated.to(table.dtype)
         )
         return objects + delta.reshape_as(objects)
-
-
-def admit_shared_effects(
-    headers: torch.Tensor,
-    details: torch.Tensor,
-    members: torch.Tensor,
-    object_count: int,
-    cards: SemanticCardEncoder | None,
-) -> None:
-    """Validate host effect partitions through the shared policy admission contract."""
-    admission.shared_effects(
-        to_numpy(headers),
-        to_numpy(details),
-        to_numpy(members),
-        object_count,
-        admission_catalog(cards),
-    )

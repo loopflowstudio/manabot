@@ -6,18 +6,22 @@ from typing import Any, cast
 import numpy as np
 import torch
 
-from manabot.backends.torch._semantic_cards import RecordEmbeddings
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
+from manabot.backends.torch.arrays import device_of, on_device
+from manabot.backends.torch.policy import ActorCritic
+from manabot.policy.admission import Catalog
 from manabot.policy.prepare import (
     EffectRoutes,
     FactRoutes,
     Layout,
+    Prepared,
     Tables,
     _effects,
     _facts,
 )
 
 
-def _tables(catalog: RecordEmbeddings | None) -> Tables:
+def _tables(catalog: SemanticCardEncoder | None) -> Tables:
     buffers = {
         "name_candidates.definitions": np.zeros(1, np.int64),
         "_is_agent_template": np.zeros(0, bool),
@@ -26,7 +30,7 @@ def _tables(catalog: RecordEmbeddings | None) -> Tables:
         buffers.update(
             {
                 f"semantic_cards.{name}": value.detach().cpu().numpy()
-                for name, value in catalog.cards.named_buffers()
+                for name, value in catalog.named_buffers()
             }
         )
         buffers["name_candidates.program_rows"] = np.zeros(1, np.int64)
@@ -47,7 +51,9 @@ def _device(value: Any, objects: torch.Tensor) -> Any:
 
 
 def fact_rows(
-    facts: torch.Tensor, objects: torch.Tensor, catalog: RecordEmbeddings | None = None
+    facts: torch.Tensor,
+    objects: torch.Tensor,
+    catalog: SemanticCardEncoder | None = None,
 ) -> FactRoutes[torch.Tensor]:
     values = facts.detach().cpu().numpy()
     if not torch.is_grad_enabled():
@@ -63,7 +69,7 @@ def effect_rows(
     details: torch.Tensor,
     members: torch.Tensor,
     objects: torch.Tensor,
-    catalog: RecordEmbeddings | None = None,
+    catalog: SemanticCardEncoder | None = None,
 ) -> EffectRoutes[torch.Tensor] | None:
     values = {
         name: value.detach().cpu().numpy()
@@ -76,4 +82,31 @@ def effect_rows(
     return cast(
         EffectRoutes[torch.Tensor] | None,
         _device(_effects(values, _tables(catalog), objects.shape[1]), objects),
+    )
+
+
+def host_inputs(obs: dict[str, torch.Tensor | np.ndarray]) -> dict[str, np.ndarray]:
+    """Fixture tensors re-enter the public host boundary before each preparation."""
+    return {
+        key: value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else value
+        for key, value in obs.items()
+    }
+
+
+def device_input(
+    agent: "ActorCritic", obs: dict[str, torch.Tensor | np.ndarray]
+) -> Prepared[torch.Tensor]:
+    return on_device(
+        agent.prepare(host_inputs(obs), inference=not torch.is_grad_enabled()),
+        device_of(agent),
+    )
+
+
+def record_vocabulary(cards: SemanticCardEncoder | None) -> Catalog | None:
+    if cards is None:
+        return None
+    tables = _tables(cards)
+    assert tables.definition_rows is not None
+    return Catalog(
+        tables.definition_rows, tables.record_name_keys, tables.record_token_keys
     )

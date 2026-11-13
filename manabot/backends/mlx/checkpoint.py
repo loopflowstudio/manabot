@@ -15,7 +15,6 @@ for gradients. Three layouts differ:
 Every canonical parameter maps to MLX arrays or loading fails, naming the key.
 """
 
-from collections.abc import Mapping
 from pathlib import Path
 import re
 
@@ -30,6 +29,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import (
     GRUS,
+    ParameterArrays,
     PolicyCheckpoint,
     UnsupportedPolicy,
     read_container,
@@ -71,7 +71,7 @@ _GRU = {
 }
 
 
-def mlx_parameters(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     """Canonical arrays in MLX names; only renames and splits, preserving norms."""
     out: dict[str, np.ndarray] = {}
 
@@ -103,7 +103,7 @@ def mlx_parameters(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]
     return out
 
 
-def mlx_gradients(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+def mlx_gradients(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     """Gradients of canonical parameters as gradients of MLX's."""
     return mlx_parameters(canonical)
 
@@ -145,14 +145,10 @@ class _MLX:
         policy = assemble(checkpoint)
         return policy, Learner(policy, minibatch_rows=1)
 
-    def parameter_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         return mlx_parameters(canonical)
 
-    def gradient_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    def gradient_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         return mlx_gradients(canonical)
 
 

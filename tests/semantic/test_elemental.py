@@ -10,11 +10,11 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.tracker import BeliefTracker
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 import managym
 from managym.decision import Command, DecisionFrame, SemanticTransition
 from managym.experience_projection import describe_actions
+from tests.model.prepared_routes import device_input
 
 PACK = "elemental-combat-v1"
 
@@ -96,7 +96,7 @@ def test_search_reaches_belief_and_public_history_consumers() -> None:
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()
     }
-    policy, value = agent(admit_observation(agent, tensors))
+    policy, value = agent(device_input(agent, tensors))
     assert torch.isfinite(policy[tensors["actions_valid"].bool()]).all()
     assert torch.isfinite(value).all()
     assert agent.recent_events is not None

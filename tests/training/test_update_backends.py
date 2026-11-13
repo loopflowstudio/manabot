@@ -21,13 +21,13 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.parity import (
     BACKENDS,
     LOGIT_TOLERANCE,
     LOSS_TOLERANCE,
     STEP_PARAMETER_TOLERANCE,
     Report,
-    backend_module,
     installed_backends,
 )
 from manabot.backends.torch.policy import ActorCritic
@@ -136,7 +136,7 @@ def test_damped_update_agrees_with_the_torch_backend(
     if name not in installed_backends():
         pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    reference, module = backend_module("torch"), backend_module(name)
+    reference, module = resolve("torch"), resolve(name)
     rows = batch.actions.size
     expected, _, reference_after = _update(reference, weights, batch, rows)
     actual, before, after = _update(module, weights, batch, rows)
@@ -204,7 +204,7 @@ def test_backends_refuse_malformed_rows_before_preparing_them(
     if name not in installed_backends():
         pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    module = backend_module(name)
+    module = resolve(name)
     agent = module.checkpoint.assemble(weights)
     original = RolloutBatch.observations
     # Each corruption is otherwise a real batch. Check the raw action mask

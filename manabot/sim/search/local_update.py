@@ -30,6 +30,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.checkpoint import load_metadata
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
@@ -46,7 +47,6 @@ from manabot.belief.state import (
 from manabot.env.env import Env
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
 from manabot.sim.search.rollout import Rollout
@@ -576,9 +576,8 @@ class LocalUpdateTeacher:
             encodings, counts = self._encode_native(engines)
         else:
             encodings, counts = self._encode_rows(engines)
-        tensors = admit_observation(
-            self.agent,
-            {key: torch.as_tensor(value) for key, value in encodings.items()},
+        tensors = on_device(
+            self.agent.prepare(encodings, inference=True), device_of(self.agent)
         )
         with torch.inference_mode():
             logits, values = self.agent(tensors)

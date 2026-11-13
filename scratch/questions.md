@@ -37,3 +37,8 @@ targets. Original uncommitted notes were copied to
   imports check Adam's positional order. Record `parameter_names` in metadata
   from `named_parameters`; legacy imports retain their state-dictionary order.
   This preserves the existing refusal rather than inferring order from sorted keys.
+
+- **Inference lifetime.** `Prepared` carries an optional ephemeral guard callback
+  set by `PolicyInference`; it preserves closed/changed-policy and autograd
+  refusals without a second batch wrapper. Bucket needs remain host tuples on
+  the prepared batch for the collector, rather than copied device arrays.

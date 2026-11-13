@@ -63,6 +63,7 @@ from experiments.tla_frontier import (
     with_launcher_ends,
 )
 from manabot.backends.torch._facts import FactEncoder
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -88,7 +89,6 @@ from manabot.env.observation import (
 )
 from manabot.infra.artifacts import fetch_etude_checkpoint
 from manabot.infra.identity import StrictModel
-from manabot.model.admission import admit_observation
 from manabot.training.regime import TrainingRegime
 import managym
 
@@ -270,7 +270,15 @@ def read_model(model: ActorCritic, positions: Observation) -> ModelContribution:
                 key: torch.from_numpy(value[start : start + BATCH])
                 for key, value in positions.items()
             }
-            model(admit_observation(model, batch))
+            model(
+                on_device(
+                    model.prepare(
+                        {key: to_numpy(value) for key, value in (batch).items()},
+                        inference=not torch.is_grad_enabled(),
+                    ),
+                    device_of(model),
+                )
+            )
             assert captured.pre is not None and captured.rows is not None
             pre, rows = captured.pre, captured.rows
             facts = batch["facts"]

@@ -25,12 +25,12 @@ from pydantic import Field, model_validator
 import torch
 
 from manabot._process import bounded_call
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.execution import bind_execution
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
-from manabot.model.inference import admit_on_device
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
@@ -201,9 +201,20 @@ def _numerical_worker(
                             for k, v in tensor.items()
                         }
                         prepared = (
-                            resident.scope.prepare(chunk)
+                            resident.scope.prepare(
+                                {key: to_numpy(value) for key, value in chunk.items()}
+                            )
                             if execution.cache_catalog
-                            else admit_on_device(resident.agent, chunk)
+                            else on_device(
+                                resident.agent.prepare(
+                                    {
+                                        key: to_numpy(value)
+                                        for key, value in (chunk).items()
+                                    },
+                                    inference=not torch.is_grad_enabled(),
+                                ),
+                                device_of(resident.agent),
+                            )
                         )
                         output.append(resident.agent(prepared)[0].cpu())
                 logits = torch.cat(output)

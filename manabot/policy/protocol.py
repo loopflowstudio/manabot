@@ -10,13 +10,14 @@ once over the backend's own arrays (`manabot.training.updates`). `Targets`
 and `Settings` are one captured minibatch's constants and coefficients.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 import numpy as np
 
-from manabot.policy.checkpoint import PolicyCheckpoint
+from manabot.env.observation import ObservationBuffers
+from manabot.policy.checkpoint import ParameterArrays, PolicyCheckpoint
 from manabot.policy.prepare import Prepared
 
 
@@ -46,9 +47,7 @@ class Settings:
 
 
 class BackendPolicy(Protocol):
-    def prepare(
-        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
-    ) -> Prepared:
+    def prepare(self, obs: ObservationBuffers, *, inference: bool = False) -> Prepared:
         """Index one admitted observation batch (`inference`: compact as
         PyTorch CPU inference does)."""
         ...
@@ -108,16 +107,12 @@ class Backend(Protocol):
         """A policy holding the checkpoint's weights, and a fresh learner on it."""
         ...
 
-    def parameter_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         """Canonical parameters (or deltas: the map is linear) in the
         backend's names and layout, as `BackendLearner.parameters` returns them."""
         ...
 
-    def gradient_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    def gradient_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         """Gradients of canonical parameters as gradients of the backend's,
         as `BackendLearner.gradients` returns them."""
         ...

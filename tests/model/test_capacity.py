@@ -6,22 +6,22 @@ from typing import Literal
 import pytest
 import torch
 
-from manabot.backends.torch._facts import FactEncoder, admit_facts
+from manabot.backends.torch._facts import FactEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.architecture import (
     architecture_identity,
     architecture_receipt,
     validate_architecture_receipt,
 )
+from manabot.policy import admission
 from manabot.training.rollout.collection import SeatRoutedCollector
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
-from tests.model.prepared_routes import fact_rows
+from tests.model.prepared_routes import device_input, fact_rows, record_vocabulary
 
 
 @pytest.mark.parametrize("width,depth", [(64, 1), (64, 2), (128, 2)])
@@ -57,7 +57,7 @@ def test_capacity_export_and_real_legal_policy(
         batch_closure="exact-quota",
     )
     batch = collector.collect(agent, 2)
-    obs = admit_observation(
+    obs = device_input(
         agent,
         {
             k: torch.from_numpy(v[0])
@@ -65,11 +65,11 @@ def test_capacity_export_and_real_legal_policy(
         },
     )
     policy, value = agent(obs)
-    assert policy.shape == obs["actions_valid"].shape
+    assert policy.shape == obs.legal.shape
     assert value.shape == (2,)
     assert torch.isfinite(value).all()
     probabilities = policy.softmax(-1)
-    assert (probabilities[obs["actions_valid"] == 0] == 0).all()
+    assert (probabilities[obs.legal == 0] == 0).all()
     torch.testing.assert_close(probabilities.sum(-1), torch.ones(2))
     path = tmp_path / "capacity.pt"
     save_checkpoint(
@@ -259,4 +259,9 @@ def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) ->
     assert (prepared.columns.grad[0, 128:140, 4] != 0).all()
     assert prepared.columns.grad[0, 140:].count_nonzero() == 0
     with pytest.raises(ValueError, match="expected"):
-        admit_facts(facts, old.max_facts, objects.shape[1], None)
+        admission.facts(
+            (facts).detach().cpu().numpy(),
+            old.max_facts,
+            objects.shape[1],
+            record_vocabulary(None),
+        )

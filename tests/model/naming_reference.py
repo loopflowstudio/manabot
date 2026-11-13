@@ -11,6 +11,7 @@ import torch
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.policy import ActorCritic, EmbeddedObservation
 from manabot.env.observation import RELATION_VALID_INDEX
+from tests.model.prepared_routes import device_input
 
 
 def packed_definitions(
@@ -47,14 +48,14 @@ class DenseActionReference(ActorCritic):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
-        assert obs.prepared is not None
-        state = self._gather_object_embeddings(obs.prepared)
+        prepared = device_input(self, obs)
+        state = self._gather_object_embeddings(prepared)
 
         encoded = self._attend_objects(
             state.objects,
             state.is_agent,
             state.validity,
-            obs.prepared.attention_columns,
+            prepared.attention_columns,
         )
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
@@ -175,8 +176,9 @@ class DenseActionReference(ActorCritic):
             )
             ids = candidates[..., 1]
             if self.semantic_cards is not None and state.programs is not None:
-                actions = actions + self.semantic_cards.embed_definitions(
-                    ids, state.programs
+                actions = (
+                    actions
+                    + state.programs[self.semantic_cards.definition_rows[ids.long()]]
                 )
         if state.shared_context is not None:
             # Focus-free actions also receive the same context without attention.

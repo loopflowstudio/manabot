@@ -6,10 +6,11 @@ from typing import Dict
 import numpy as np
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.policy import ActorCritic
 
 # Local imports
-from manabot.model.inference import admit_on_device
+
 
 # -----------------------------------------------------------------------------
 # Player Classes
@@ -59,12 +60,20 @@ class ModelPlayer(Player):
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from model."""
         # Convert numpy arrays to tensors with batch dimension
-        tensor_obs = admit_on_device(
-            self.agent,
-            {
-                k: torch.tensor(v, dtype=torch.float32).unsqueeze(0)
-                for k, v in obs.items()
-            },
+        tensor_obs = on_device(
+            self.agent.prepare(
+                {
+                    key: to_numpy(value)
+                    for key, value in (
+                        {
+                            k: torch.tensor(v, dtype=torch.float32).unsqueeze(0)
+                            for k, v in obs.items()
+                        }
+                    ).items()
+                },
+                inference=True,
+            ),
+            device_of(self.agent),
         )
 
         # Get action from model

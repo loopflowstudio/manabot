@@ -11,7 +11,6 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
 from manabot.policy.checkpoint import (
     NotAContainer,
     read_container,
@@ -19,6 +18,7 @@ from manabot.policy.checkpoint import (
 )
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint
+from tests.model.prepared_routes import device_input
 
 
 def _observation(space: ObservationSpace) -> dict[str, torch.Tensor]:
@@ -69,10 +69,10 @@ def test_pt_and_container_load_the_same_policy(tmp_path: Path, optimized: bool) 
 
     observation = _observation(space)
     with torch.no_grad():
-        reference = model(admit_observation(model, observation))
+        reference = model(device_input(model, observation))
         for loaded in (legacy, shared):
             for actual, wanted in zip(
-                loaded(admit_observation(loaded, observation)), reference, strict=True
+                loaded(device_input(loaded, observation)), reference, strict=True
             ):
                 torch.testing.assert_close(
                     actual, wanted, atol=1e-6 if optimized else 0, rtol=0

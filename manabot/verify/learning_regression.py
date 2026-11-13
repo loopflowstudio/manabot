@@ -16,6 +16,7 @@ import numpy as np
 from pydantic import Field
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.observation import ActionEnum
 from manabot.eval.monitor import MonitorResult
@@ -23,7 +24,6 @@ from manabot.experiment.evaluation_queue import Attempt, checkpoints
 from manabot.experiment.execution import ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
@@ -148,9 +148,20 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
         managym.authored_deck_setup(PACK, key) for key in ("ur_lessons", "gw_allies")
     ]
     validate_agent_setup(agent, configs)
-    batch = admit_observation(
-        agent,
-        {key: torch.cat([case.obs[key] for case in cases]) for key in cases[0].obs},
+    batch = on_device(
+        agent.prepare(
+            {
+                key: to_numpy(value)
+                for key, value in (
+                    {
+                        key: torch.cat([case.obs[key] for case in cases])
+                        for key in cases[0].obs
+                    }
+                ).items()
+            },
+            inference=not torch.is_grad_enabled(),
+        ),
+        device_of(agent),
     )
     logits, values = agent(batch)
     probabilities = logits.softmax(-1)
@@ -165,14 +176,42 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
     scores = []
     for row, case in enumerate(cases):
         obs = case.obs
-        single, value = agent(admit_observation(agent, obs))
+        single, value = agent(
+            on_device(
+                agent.prepare(
+                    {key: to_numpy(value) for key, value in (obs).items()},
+                    inference=not torch.is_grad_enabled(),
+                ),
+                device_of(agent),
+            )
+        )
         p = single.softmax(-1)
         count = int(obs["actions_valid"].sum())
         order = torch.arange(count - 1, -1, -1)
         offers, offer_value = agent(
-            admit_observation(agent, reorder_offers(obs, order))
+            on_device(
+                agent.prepare(
+                    {
+                        key: to_numpy(value)
+                        for key, value in (reorder_offers(obs, order)).items()
+                    },
+                    inference=not torch.is_grad_enabled(),
+                ),
+                device_of(agent),
+            )
         )
-        objects, object_value = agent(admit_observation(agent, reorder_objects(obs)))
+        objects, object_value = agent(
+            on_device(
+                agent.prepare(
+                    {
+                        key: to_numpy(value)
+                        for key, value in (reorder_objects(obs)).items()
+                    },
+                    inference=not torch.is_grad_enabled(),
+                ),
+                device_of(agent),
+            )
+        )
         errors.extend(
             [
                 float((p[0] - probabilities[row]).abs().max()),

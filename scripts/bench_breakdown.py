@@ -10,6 +10,7 @@ import json
 from bench_observation_support import identity, matched_breakdown
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -21,7 +22,6 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.profiler import Profiler
-from manabot.model.admission import admit_observation
 
 
 def build_env(num_envs: int, seed: int) -> VectorEnv:
@@ -63,7 +63,16 @@ def run_breakdown(
                     with profiler.track("inference"):
                         with torch.no_grad():
                             action, _, _, _ = agent.get_action_and_value(
-                                admit_observation(agent, obs)
+                                on_device(
+                                    agent.prepare(
+                                        {
+                                            key: to_numpy(value)
+                                            for key, value in (obs).items()
+                                        },
+                                        inference=not torch.is_grad_enabled(),
+                                    ),
+                                    device_of(agent),
+                                )
                             )
                         actions = action
 

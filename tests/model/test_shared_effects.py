@@ -7,15 +7,12 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch._shared_effects import (
-    SharedEffectEncoder,
-    admit_shared_effects,
-)
+from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
+from manabot.policy import admission
 from manabot.recipes.local import local_smoke
 from manabot.sim.rollout import BatchedSampler
 from manabot.sim.search.value import ValueScorer
@@ -25,7 +22,7 @@ from manabot.verify.action_cases import reorder_objects
 from manabot.verify.representation import shared_effect_root
 from manabot.verify.store import VerifyStore
 import managym
-from tests.model.prepared_routes import effect_rows
+from tests.model.prepared_routes import device_input, effect_rows, record_vocabulary
 
 
 def _batch(values: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
@@ -73,7 +70,13 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     )
     headers[0, 0, 16] = 2049
     with pytest.raises(ValueError, match="CSR"):
-        admit_shared_effects(headers, details, members, objects.shape[1], None)
+        admission.shared_effects(
+            (headers).detach().cpu().numpy(),
+            (details).detach().cpu().numpy(),
+            (members).detach().cpu().numpy(),
+            objects.shape[1],
+            record_vocabulary(None),
+        )
 
 
 def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
@@ -90,10 +93,10 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
         ),
     )
     values = _batch(space.encode(obs))
-    logits, value = model(admit_observation(model, values))
+    logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     reordered_logits, reordered_value = model(
-        admit_observation(model, reorder_objects(values))
+        device_input(model, reorder_objects(values))
     )
     torch.testing.assert_close(reordered_logits, logits)
     torch.testing.assert_close(reordered_value, value)
@@ -112,8 +115,8 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
     model.eval()
     with torch.no_grad():
         for expected, actual in zip(
-            model(admit_observation(model, values)),
-            restored(admit_observation(restored, values)),
+            model(device_input(model, values)),
+            restored(device_input(restored, values)),
             strict=True,
         ):
             torch.testing.assert_close(expected, actual)

@@ -18,9 +18,6 @@ from collections.abc import Sequence
 import torch
 from torch import nn
 
-from manabot.backends.torch._numerics import buffer_on
-from manabot.backends.torch.arrays import to_numpy
-from manabot.policy import admission
 from manabot.policy.prepare import Prepared
 import managym
 
@@ -58,14 +55,6 @@ class NameCandidateEncoder(nn.Module):
         self.register_buffer(
             "program_rows",
             definition_rows[self.definitions] if definition_rows is not None else None,
-        )
-
-    def admit(self, candidates: torch.Tensor) -> None:
-        """Reject candidate rows whose names, definitions or spans disagree
-        with the vocabulary (observation admission)."""
-        admission.names(
-            to_numpy(candidates),
-            to_numpy(buffer_on(self, "definitions", torch.device("cpu"))),
         )
 
     def forward(self, batch: Prepared[torch.Tensor]) -> torch.Tensor:

@@ -16,7 +16,8 @@ from typing import Any, get_type_hints
 import pytest
 import torch
 
-from manabot.backends.parity import BACKENDS, backend_module, installed_backends
+from manabot.backends import resolve
+from manabot.backends.parity import BACKENDS, installed_backends
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -153,7 +154,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
 def _installed(name: str) -> ModuleType:
     if name not in installed_backends():
         pytest.skip(f"the {BACKENDS[name]} framework is not installed")
-    return backend_module(name)
+    return resolve(name)
 
 
 @pytest.mark.parametrize("name", sorted(BACKENDS))
@@ -174,7 +175,7 @@ def test_backend_provides_what_the_damped_update_calls(
 def test_torch_provides_what_ppo_calls(
     captured: tuple[PolicyCheckpoint, RolloutBatch],
 ) -> None:
-    module = backend_module("torch")
+    module = resolve("torch")
     learner = module.learner.Learner(
         module.checkpoint.assemble(captured[0]), "cpu", minibatch_rows=4
     )

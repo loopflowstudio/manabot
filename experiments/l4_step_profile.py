@@ -40,7 +40,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
 import gzip
-import inspect
 import json
 import os
 from pathlib import Path
@@ -56,6 +55,8 @@ import warnings
 
 import numpy as np
 import torch
+
+from manabot.backends.torch.policy import PolicyInference
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCH = Path(__file__).with_name("l4_step_profile_option3.patch")
@@ -277,208 +278,9 @@ def _profiler(
 
 
 def insitu(out: Path, captures: Path, smoke: bool = False) -> None:
-    from experiments.tla_frontier import frozen
-    import manabot.model.inference as inference_module
-    import manabot.training.execution as execution_module
-    from manabot.training.regime import TrainingRegime
-    from manabot.training.rollout.collection import SeatRoutedCollector
-    from manabot.training.updates.health import OptimizerHealth
-    from manabot.verify.store import VerifyStore
-
-    out.mkdir(parents=True, exist_ok=True)
-    (captures / "inference").mkdir(parents=True, exist_ok=True)
-    (captures / "learner").mkdir(parents=True, exist_ok=True)
-    regimes, protocol = frozen()
-    data = regimes["w160l8"].model_dump()
-    stage = data["stages"][0]
-    stage["updates"] = 1
-    stage["execution"].update(wall_seconds=3600.0)
-    windows = SMOKE if smoke else Windows()
-    if smoke:
-        stage.update(streams=4, transitions=2)
-        stage["execution"].update(device="cpu", workers=1)
-    data["wall_seconds"] = 3600.0
-    regime = TrainingRegime.model_validate(data)
-    _write(captures / "regime.json", regime.model_dump(mode="json"))
-    receipt: dict[str, Any] = {
-        "host": _host(),
-        "seed": protocol.training_seed,
-        "regime": regime.id,
-        "execution": stage["execution"],
-    }
-    device = stage["execution"]["device"]
-    syncs = SyncCounter(device)
-    calls: list[dict[str, float | int]] = []
-    steps: list[dict[str, float | int]] = []
-    state: dict[str, Any] = {
-        "call": 0,
-        "step": 0,
-        "capture_obs": False,
-        "last_obs": None,
-        "collect_prof": None,
-        "learn_prof": None,
-        "last_step": None,
-    }
-    original_actor = execution_module.ActorCritic
-    original_prepare = inference_module.PolicyInference.prepare
-    original_sample = SeatRoutedCollector._sample_learning_rows
-    original_check = OptimizerHealth.check
-    original_step = OptimizerHealth.step
-    original_update = execution_module.update_iteration
-
-    def make_actor(space: Any, config: Any, **layout: bool) -> Any:
-        agent = original_actor(space, config, **layout)
-        if (captures / "initial.pt").exists():
-            raise RuntimeError("the update constructed a second policy")
-        torch.save(
-            {k: v.detach().cpu().clone() for k, v in agent.state_dict().items()},
-            captures / "initial.pt",
-        )
-        label_modules(agent)
-        return agent
-
-    def prepare(self: Any, obs: dict[str, torch.Tensor]) -> Any:
-        if state["capture_obs"]:
-            state["last_obs"] = {k: v.clone() for k, v in obs.items()}
-        return original_prepare(self, obs)
-
-    def sample(self: Any, agent: Any, rows: np.ndarray, *args: Any) -> Any:
-        index = state["call"]
-        if index == 0:
-            prof = _profiler(windows.collect_profile, out / "collection-trace.json")
-            prof.__enter__()
-            state["collect_prof"] = prof
-        state["capture_obs"] = (
-            index % windows.collect_capture_every == 0
-            and index // windows.collect_capture_every < windows.collect_captures
-        )
-        tick = time.perf_counter()
-        with (
-            syncs.window(f"collect/{index}")
-            if index in windows.collect_sync
-            else _nothing(),
-            torch.profiler.record_function("mtg301/sample_learning_rows"),
-        ):
-            result = original_sample(self, agent, rows, *args)
-        calls.append(
-            {"call": index, "rows": len(rows), "seconds": time.perf_counter() - tick}
-        )
-        if state["capture_obs"] and state["last_obs"] is not None:
-            torch.save(state["last_obs"], captures / "inference" / f"{index:05d}.pt")
-            state["last_obs"] = None
-        state["capture_obs"] = False
-        prof = state["collect_prof"]
-        if prof is not None:
-            prof.step()
-            if index + 1 >= sum(windows.collect_profile):
-                prof.__exit__(None, None, None)
-                state["collect_prof"] = None
-        state["call"] = index + 1
-        return result
-
-    def check(self: OptimizerHealth, loss: torch.Tensor) -> None:
-        original_check(self, loss)
-        if state["step"] not in windows.learn_capture:
-            return
-        frame = inspect.currentframe()
-        assert frame is not None and frame.f_back is not None
-        loc = frame.f_back.f_locals
-        assert frame.f_back.f_code.co_name == "update_damped_iteration"
-        indexes, targets = loc["indexes"], loc["targets"]
-        payload = {
-            "obs": {k: v.detach().cpu().clone() for k, v in loc["obs"].items()},
-            "selected": loc["selected"].detach().cpu().clone(),
-            "actions": loc["actions"][indexes].detach().cpu().clone(),
-            "advantages": targets.advantages[indexes].detach().cpu().clone(),
-            "value_targets": targets.values[indexes].detach().cpu().clone(),
-            "actor_mask": loc["actor_mask"].detach().cpu().clone(),
-            "behavior_logs": loc["behavior_logs"].detach().cpu().clone(),
-            "learning": loc["learning"].model_dump(mode="json"),
-            "tau": loc["tau"],
-            "loss": float(loss.detach()),
-        }
-        del loc, frame
-        torch.save(payload, captures / "learner" / f"{state['step']:03d}.pt")
-
-    def step(self: OptimizerHealth, *args: Any, **kwargs: Any) -> torch.Tensor:
-        index = state["step"]
-        label = f"learn/{index}"
-        with syncs.window(label) if index in windows.learn_sync else _nothing():
-            norm = original_step(self, *args, **kwargs)
-        now = time.perf_counter()
-        if state["last_step"] is not None:
-            steps.append({"step": index, "seconds": now - state["last_step"]})
-        state["last_step"] = now
-        prof = state["learn_prof"]
-        if prof is not None:
-            prof.step()
-            if index + 1 >= sum(windows.learn_profile):
-                prof.__exit__(None, None, None)
-                state["learn_prof"] = None
-        state["step"] = index + 1
-        return norm
-
-    def update(learner: Any, *args: Any, **kwargs: Any) -> Any:
-        prof = _profiler(windows.learn_profile, out / "learner-trace.json")
-        prof.__enter__()
-        state["learn_prof"] = prof
-        state["last_step"] = time.perf_counter()
-        tick = time.perf_counter()
-        _reset_memory(device)
-        diagnostics = original_update(learner, *args, **kwargs)
-        _sync(device)
-        receipt.update(
-            learning_seconds=time.perf_counter() - tick,
-            learner_phases=learner.profiler.get_stats(),
-            optimizer_steps=state["step"],
-            rows=diagnostics.get("rows"),
-            **_peaks(device),
-        )
-        if state["learn_prof"] is not None:
-            state["learn_prof"].__exit__(None, None, None)
-        raise Captured()
-
-    def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> Any:
-        tick = time.perf_counter()
-        batch = original_collect(self, *args, **kwargs)
-        receipt["collection_seconds"] = time.perf_counter() - tick
-        receipt["collection_rows"] = int(batch.actions.size)
-        receipt["collection_phases"] = self.profiler.get_stats()
-        receipt["idle_stream_steps"] = int(self.stats.idle_stream_steps)
-        return batch
-
-    original_collect = SeatRoutedCollector.collect
-    # Etude's unpacked bundle has no .git; the launch names the frozen commit.
-    if revision := os.environ.get("MTG301_REVISION"):
-        execution_module.source_commit = lambda: revision
-        receipt["source_commit"] = revision
-    execution_module.ActorCritic = make_actor
-    inference_module.PolicyInference.prepare = prepare  # type: ignore[method-assign]
-    SeatRoutedCollector._sample_learning_rows = sample  # type: ignore[method-assign]
-    SeatRoutedCollector.collect = collect  # type: ignore[method-assign]
-    OptimizerHealth.check = check  # type: ignore[method-assign]
-    OptimizerHealth.step = step  # type: ignore[method-assign]
-    execution_module.update_iteration = update
-    started = time.perf_counter()
-    try:
-        with VerifyStore(captures / "store.sqlite") as store:
-            result = execution_module.execute_regime(
-                regime,
-                protocol.training_seed,
-                captures / "execution",
-                store,
-                experiment="l4_step_profile",
-                training_exposure=False,
-            )
-        raise RuntimeError(f"update ended unexpectedly: {result.status}")
-    except Captured:
-        receipt["status"] = "captured"
-    finally:
-        receipt["wall_seconds"] = time.perf_counter() - started
-        receipt["inference_calls"] = calls
-        receipt["learner_steps"] = steps
-        _write(out / "receipt.json", receipt)
-        _write(out / "syncs.json", syncs.summary() | {"records": syncs.records})
+    raise RuntimeError(
+        "This frozen profiling path patches retired Torch dictionary inputs; run it from revision ef28f3a58."
+    )
 
 
 @contextmanager
@@ -544,7 +346,9 @@ def infer_once(
     from manabot.backends.torch.rl import legal_mask, policy_logs, require
 
     with torch.profiler.record_function("mtg301/prepare"):
-        obs_t = inference.prepare(obs)
+        obs_t = inference.prepare(
+            {key: value.detach().cpu().numpy() for key, value in (obs).items()}
+        )
     with torch.profiler.record_function("mtg301/inference"), torch.no_grad():
         if agent.config.value_kind == "categorical_wdl":
             logits, value_t = agent.forward_distribution(obs_t)
@@ -571,106 +375,9 @@ def infer_once(
 def learn_once(
     learner: Any, observer: Any, payload: dict[str, Any], *, step: bool = True
 ) -> dict[str, Any]:
-    """`update_damped_iteration`'s minibatch body on one retained minibatch."""
-    from manabot.backends.torch.rl import (
-        damped_policy_loss,
-        float64_operand,
-        legal_mask,
-        policy_logs,
-        reverse_kl,
-        selected_mean,
+    raise RuntimeError(
+        "This frozen profiling path patches retired Torch dictionary inputs; run it from revision ef28f3a58."
     )
-    from manabot.backends.torch.rollout import observation_tensors
-    from manabot.model.admission import admit_observation
-    from manabot.model.inference import transfer_admitted
-    from manabot.policy.prepare import reference_distribution
-    from manabot.training.regime import DampedPolicyLearning
-
-    device = learner.device
-    learning = DampedPolicyLearning.model_validate(payload["learning"])
-    tau = payload["tau"]
-    with torch.profiler.record_function("mtg301/forward_and_loss"):
-        rows = len(payload["actions"])
-        selected_host = payload.get("selected")
-        if selected_host is None:
-            selected_host = torch.ones(rows, dtype=torch.bool)
-        selected = selected_host.to(device)
-        if not selected.any():
-            raise ValueError("retained minibatch has no selected row")
-        indexes = torch.arange(len(selected), device=device)[selected]
-        indexes.cpu().numpy()
-        local = torch.arange(rows, device=device)
-        # The learner admits CPU rows once, then moves them (`AdmittedRollout`).
-        obs = transfer_admitted(
-            admit_observation(
-                learner.agent,
-                observation_tensors({k: v.numpy() for k, v in payload["obs"].items()}),
-            ),
-            torch.device(device),
-        )[0]
-        valid = legal_mask(obs["actions_valid"])
-        behavior_logs = payload["behavior_logs"].to(device)
-        actions = payload["actions"].to(device)[local]
-        advantages = payload["advantages"].to(device)[local]
-        value_targets = payload["value_targets"].to(device)[local]
-        with learner.forward_precision():
-            logits, value_logits = learner.agent.forward_distribution(obs)
-        logits, value_logits = logits.float(), value_logits.float()
-        reference = reference_distribution(obs, learning.reference)
-        policy_loss = damped_policy_loss(
-            logits,
-            actions,
-            advantages,
-            behavior_logs,
-            reference,
-            valid,
-            clip=learning.clip,
-            collection_kl=learning.collection_kl,
-            tau=tau,
-        )
-        actor_mask = payload["actor_mask"].to(device)
-        policy_loss = selected_mean(policy_loss, actor_mask)
-        if learner.agent.config.value_kind == "categorical_wdl":
-            value_loss = -(value_targets * value_logits.log_softmax(-1)).sum(-1).mean()
-        else:
-            value_loss = (value_logits.squeeze(-1) - value_targets).square().mean()
-        loss = policy_loss + float64_operand(value_loss)
-        observer.check(loss)
-    if not step:
-        learner.optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        return {"loss": loss.detach(), "logits": logits.detach()}
-    with torch.profiler.record_function("mtg301/backward_and_step"):
-        norm = observer.step(loss, learning.max_grad_norm, checked=True)
-    with torch.profiler.record_function("mtg301/diagnostics"):
-        out: dict[str, Any] = {
-            "exposures": int(selected.sum()),
-            "actor": int(actor_mask.sum()),
-            "critic": int(selected.sum()),
-        }
-        with torch.no_grad():
-            logs = policy_logs(logits, valid)
-            probabilities = logs.exp()
-            out["entropy"] = float(
-                -(probabilities * logs.masked_fill(~valid, 0)).sum(-1).mean()
-            )
-            out["collection_kl"] = float(reverse_kl(logs, behavior_logs, valid).mean())
-            out["reference_kl"] = float(
-                reverse_kl(logs, reference.masked_fill(~valid, 1).log(), valid).mean()
-            )
-            ratio_logs = (logs - behavior_logs).gather(-1, actions[:, None]).squeeze(-1)
-            out["clip_fraction"] = float(
-                ((float64_operand(ratio_logs).double().exp() - 1).abs() > learning.clip)
-                .float()
-                .mean()
-            )
-        out.update(
-            loss=float(loss.detach()),
-            value_loss=float(value_loss.detach()),
-            policy_loss=float(policy_loss.detach()),
-            gradient_norm=float(norm),
-        )
-    return out
 
 
 def _learner(agent: Any, device: str) -> tuple[Any, Any]:
@@ -712,7 +419,6 @@ def numerics(
     torch.set_num_threads(min(8, os.cpu_count() or 1))
     inputs = _inputs(captures)
     agent = _agent(captures, size, device, arm).eval()
-    from manabot.model.inference import PolicyInference
 
     result: dict[str, Any] = {
         "manabot": manabot.__file__,
@@ -811,7 +517,6 @@ def replay(
     captures: Path, out: Path, arm: str, size: str, device: str = "cuda"
 ) -> None:
     import manabot
-    from manabot.model.inference import PolicyInference
 
     out.mkdir(parents=True, exist_ok=True)
     torch.set_num_threads(1)

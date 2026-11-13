@@ -22,13 +22,13 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.session import InferenceSession
-from manabot.model.inference import admit_on_device
 from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import (
     TextDecision,
@@ -159,12 +159,22 @@ class CheckpointOpponent:
         encoded = self.space.encode(raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
-        tensors = admit_on_device(
-            self.agent,
-            {
-                name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-                for name, value in encoded.items()
-            },
+        tensors = on_device(
+            self.agent.prepare(
+                {
+                    key: to_numpy(value)
+                    for key, value in (
+                        {
+                            name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(
+                                0
+                            )
+                            for name, value in encoded.items()
+                        }
+                    ).items()
+                },
+                inference=not torch.is_grad_enabled(),
+            ),
+            device_of(self.agent),
         )
         with torch.inference_mode():
             action, _, _, _ = self.agent.get_action_and_value(tensors)

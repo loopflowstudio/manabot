@@ -11,7 +11,7 @@ and source, then summed into its object's pre-attention embedding.
 Two id vocabularies exist. `hashed` hashes ids and sources into `buckets`
 learned rows each. `catalog` reads ids
 through the card encoder's token embedding and sources through its row for
-that definition (`RecordEmbeddings`); ordinal ids (an ability index, a
+that definition; ordinal ids (an ability index, a
 continuation frame) are numbers, not vocabulary.
 
 The output layer starts at zero, so a fresh model's objects are unchanged until
@@ -19,7 +19,7 @@ the facts earn weight; gradients reach every fact row that names a valid object.
 
 Captured programs are encoded in row order and preserve signed numeric tokens.
 
-`admit_facts` checks rows once at observation admission. Host preparation
+Host admission checks rows once. Host preparation
 compacts and indexes them; the encoder reads `FactRoutes` and retains Torch
 packing of program sequences to preserve its equal-length sorting order.
 """
@@ -32,16 +32,9 @@ from torch.nn.utils.rnn import pack_sequence, unpack_sequence
 
 from manabot.backends.torch._numerics import embedding_rows
 from manabot.backends.torch._records import program_number
-from manabot.backends.torch._semantic_cards import (
-    RecordEmbeddings,
-    SemanticCardEncoder,
-    admission_catalog,
-)
-from manabot.backends.torch.arrays import to_numpy
 from manabot.env.observation import (
     FACT_KINDS,
 )
-from manabot.policy import admission
 from manabot.policy.prepare import FactRoutes
 
 RecordVocabulary = Literal["hashed", "catalog"]
@@ -81,7 +74,8 @@ class FactEncoder(nn.Module):
         self,
         rows: FactRoutes[torch.Tensor],
         objects: torch.Tensor,
-        catalog: RecordEmbeddings | None = None,
+        token_embedding: nn.Embedding | None = None,
+        definitions: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Embed prepared facts and add them to their objects in row order."""
         if self.vocabulary == "hashed":
@@ -90,14 +84,14 @@ class FactEncoder(nn.Module):
                 + self.detail(rows.detail_rows)
                 + self.source(rows.source_rows)
             )
-        elif catalog is None:
+        elif token_embedding is None or definitions is None:
             raise ValueError("catalog fact ids require the card encoder")
         else:
 
             def masked(index: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
                 return torch.where(
                     mask.bool().unsqueeze(-1),
-                    embedding_rows(catalog.cards.token_embedding, index),
+                    embedding_rows(token_embedding, index),
                     0,
                 )
 
@@ -105,7 +99,7 @@ class FactEncoder(nn.Module):
                 masked(rows.id_rows, rows.id_mask)
                 + masked(rows.detail_rows, rows.detail_mask)
                 + masked(rows.token_rows, rows.token_mask)
-                + catalog.definitions[rows.source_rows]
+                + definitions[rows.source_rows]
             )
         hidden = self.kind(rows.kinds) + ids + self.numeric(rows.columns)
         program = rows.programs
@@ -137,13 +131,3 @@ class FactEncoder(nn.Module):
             encoded.masked_fill((rows.linked == 0).unsqueeze(-1), 0).to(objects.dtype),
         )
         return objects + delta
-
-
-def admit_facts(
-    facts: torch.Tensor,
-    max_facts: int,
-    object_count: int,
-    cards: SemanticCardEncoder | None,
-) -> None:
-    """Validate host fact rows through the shared policy admission contract."""
-    admission.facts(to_numpy(facts), max_facts, object_count, admission_catalog(cards))

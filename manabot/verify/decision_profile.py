@@ -35,11 +35,11 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
-from manabot.model.admission import admit_observation
 from manabot.verify.games import (
     INTERACTIVE_DECK,
     STANDARD_DECK,
@@ -102,12 +102,22 @@ def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
 
 def _agent_policy(agent) -> Callable[[dict[str, np.ndarray]], int]:
     def policy(obs: dict[str, np.ndarray]) -> int:
-        tensor_obs = admit_observation(
-            agent,
-            {
-                key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-                for key, value in obs.items()
-            },
+        tensor_obs = on_device(
+            agent.prepare(
+                {
+                    key: to_numpy(value)
+                    for key, value in (
+                        {
+                            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(
+                                0
+                            )
+                            for key, value in obs.items()
+                        }
+                    ).items()
+                },
+                inference=not torch.is_grad_enabled(),
+            ),
+            device_of(agent),
         )
         with torch.no_grad():
             action, _, _, _ = agent.get_action_and_value(

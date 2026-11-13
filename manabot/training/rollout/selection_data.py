@@ -15,13 +15,13 @@ from typing import Literal
 from pydantic import ConfigDict, Field, model_validator
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import SelectionGameSpec, Strict
@@ -139,8 +139,20 @@ def collect_selection_game(
             encoded = space.encode(raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            tensors = admit_observation(
-                agent, {k: torch.as_tensor(v).unsqueeze(0) for k, v in encoded.items()}
+            tensors = on_device(
+                agent.prepare(
+                    {
+                        key: to_numpy(value)
+                        for key, value in (
+                            {
+                                k: torch.as_tensor(v).unsqueeze(0)
+                                for k, v in encoded.items()
+                            }
+                        ).items()
+                    },
+                    inference=not torch.is_grad_enabled(),
+                ),
+                device_of(agent),
             )
             logits, value = agent(tensors)
             probabilities = logits.softmax(-1)
@@ -157,9 +169,7 @@ def collect_selection_game(
                 actor=actor,
                 observation_identity=observation.viewer_state_hash,
                 action=action,
-                action_type=int(
-                    tensors["actions"][0, action, :ACTION_TYPE_DIM].argmax()
-                ),
+                action_type=int(encoded["actions"][action, :ACTION_TYPE_DIM].argmax()),
                 value=float(value.item()),
                 action_probability=float(probabilities[0, action]),
                 entropy=float(-(probabilities * logs).sum()),

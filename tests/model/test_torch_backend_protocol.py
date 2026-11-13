@@ -12,11 +12,11 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.policy.checkpoint import canonical_parameters, from_torch_state
 from manabot.policy.prepare import reference_distribution
 from manabot.policy.protocol import Settings, Targets
 import managym
+from tests.model.prepared_routes import device_input
 
 
 def _batch(space: ObservationSpace, count: int) -> dict[str, np.ndarray]:
@@ -73,7 +73,7 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
     logits, values = policy.evaluate(policy.prepare(obs, inference=True))
     with torch.no_grad():
         expected_logits, expected_values = model(
-            admit_observation(model, {k: torch.from_numpy(v) for k, v in obs.items()})
+            device_input(model, {k: torch.from_numpy(v) for k, v in obs.items()})
         )
     np.testing.assert_array_equal(logits, expected_logits.numpy())
     np.testing.assert_array_equal(values, expected_values.numpy())
@@ -129,3 +129,18 @@ def test_prepared_policy_boundary_and_cached_program_lifetime() -> None:
     empty = {**obs, "actions_valid": np.zeros_like(obs["actions_valid"])}
     with pytest.raises(ValueError, match="No valid actions"):
         model.get_action_and_value(on_device(model.prepare(empty), "cpu"))
+
+
+@pytest.mark.parametrize("bad", [float("nan"), -1.0, 0.5])
+def test_host_admission_retains_invalid_mask_evidence(bad: float) -> None:
+    model = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=8))
+    obs = _batch(model.observation_space, 1)
+    obs["actions_valid"][0, 0] = bad
+    with pytest.raises(
+        torch_backend.rl.NumericalError, match="invalid_action_mask"
+    ) as error:
+        model.prepare(obs)
+    assert error.value.tensors["failed"][0, 0]
+    np.testing.assert_array_equal(
+        error.value.tensors["mask"].numpy(), obs["actions_valid"]
+    )

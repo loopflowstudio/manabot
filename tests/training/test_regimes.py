@@ -19,7 +19,6 @@ from manabot.backends.torch.rl import selected_rows
 from manabot.cli import named_regime, regime_names
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.policy.prepare import reference_distribution
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import StageRecord, TrainingRun
@@ -31,6 +30,7 @@ from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
+from tests.model.prepared_routes import device_input
 from tests.training.test_monitoring import _recipe
 from tests.training.test_recovery import tracked_updates
 
@@ -135,7 +135,7 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
     obs["actions"][:, 1, 1] = 1
     with torch.no_grad():
         logits, values = agent(
-            admit_observation(agent, {k: torch.as_tensor(v) for k, v in obs.items()})
+            device_input(agent, {k: torch.as_tensor(v) for k, v in obs.items()})
         )
         probs = logits.softmax(-1).numpy()
     batch = RolloutBatch(

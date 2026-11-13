@@ -45,6 +45,7 @@ from manabot.model.world import (
 )
 from manabot.policy.checkpoint import (
     NotAContainer,
+    ParameterArrays,
     PolicyCheckpoint,
     canonical_name,
     checkpoint_metadata,
@@ -314,9 +315,7 @@ class _Torch:
         agent = assemble(checkpoint)
         return agent, Learner(agent, "cpu", minibatch_rows=1)
 
-    def parameter_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         """Torch tensors have the canonical shapes under torch's own names."""
         return {
             torch_name(name): np.asarray(value) for name, value in canonical.items()

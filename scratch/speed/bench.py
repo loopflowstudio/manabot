@@ -15,11 +15,11 @@ legal logs, sampling, host read), and `--checkpoints` save/load round trips.
 """
 
 import argparse
+from copy import deepcopy
+import cProfile
 import importlib
 import importlib.util
 import inspect
-import cProfile
-from copy import deepcopy
 import json
 from pathlib import Path
 import statistics
@@ -33,12 +33,20 @@ from torch.optim.optimizer import register_optimizer_step_post_hook
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.inference import PolicyInference
+
+try:
+    from manabot.backends.torch.policy import PolicyInference
+
+    PREPARED_INPUT = True
+except ImportError:
+    from manabot.model.inference import PolicyInference
+
+    PREPARED_INPUT = False
+import manabot
 from manabot.training.execution import validate_regime
 from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
 import managym
-import manabot
 
 
 def _first(*homes: str) -> object:
@@ -239,7 +247,10 @@ def main() -> None:
             with torch.inference_mode():
                 with forward_precision(precision, device):
                     logits, _ = agent.forward(obs)
-                probs = policy_logs(logits.float(), legal_mask(obs["actions_valid"]))
+                probs = policy_logs(
+                    logits.float(),
+                    obs.legal if PREPARED_INPUT else legal_mask(obs["actions_valid"]),
+                )
                 actions = torch.multinomial(probs.exp(), 1, generator=generator)
             actions.cpu().numpy()
             elapsed = time.perf_counter() - tick

@@ -1,6 +1,6 @@
 """Capture policy outputs, gradients and trained weights for one checkout.
 
-Usage: python run.py OUT.pt  (with PYTHONPATH pointing at the checkout)
+Usage: uv run python run.py OUT.pt  (with PYTHONPATH pointing at the checkout)
 EQUIV_DEVICE=cuda runs the forward/backward configs on CUDA with TF32 matmul
 and cuDNN allowed (`precision="tf32"`'s switches); `minimal.train` stays CPU.
 Imports only names that resolve at both 05c1203e9 and MTG-325 HEAD.
@@ -21,16 +21,36 @@ if DEVICE.type == "cuda":
     torch.backends.cudnn.allow_tf32 = True
 
 import manabot  # noqa: E402
+from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.env.match import Match  # noqa: E402
 from manabot.env.observation import ObservationSpace  # noqa: E402
 from manabot.infra.config import ModelConfig, ObservationConfig  # noqa: E402
-from manabot.backends.torch.policy import ActorCritic  # noqa: E402
-from manabot.model.admission import admit_observation  # noqa: E402
+
+try:
+    from manabot.model.admission import admit_observation
+    from manabot.model.inference import PolicyInference
+
+    PREPARED_INPUT = False
+except ImportError:
+    from manabot.backends.torch.arrays import device_of, on_device
+    from manabot.backends.torch.policy import PolicyInference
+
+    PREPARED_INPUT = True
+
+    def admit_observation(model, batch):
+        return on_device(
+            model.prepare(
+                {key: value.detach().cpu().numpy() for key, value in batch.items()},
+                inference=not torch.is_grad_enabled(),
+            ),
+            device_of(model),
+        )
+
+
 try:  # noqa: E402
     from manabot.backends.torch.rl import legal_mask, policy_logs
 except ImportError:  # before the updates take the backend (PR A)
     from manabot.model.policy_distribution import legal_mask, policy_logs
-from manabot.model.inference import PolicyInference  # noqa: E402
 from manabot.training.loops.minimal import train  # noqa: E402
 import managym  # noqa: E402
 
@@ -38,7 +58,10 @@ print("manabot from", manabot.__file__, file=sys.stderr)
 W = managym.WORLD_SETUP
 CONFIGS = {
     "default": (ModelConfig(hidden_dim=16, world=W), 9),
-    "masked_mean": (ModelConfig(hidden_dim=16, world=W, value_aggregation="masked_mean"), 9),
+    "masked_mean": (
+        ModelConfig(hidden_dim=16, world=W, value_aggregation="masked_mean"),
+        9,
+    ),
     "history": (ModelConfig(hidden_dim=16, world=W, recent_events=True), "history"),
     "wdl": (ModelConfig(hidden_dim=16, world=W, value_kind="categorical_wdl"), 9),
     "film": (ModelConfig(hidden_dim=16, world=W, policy_film=True), 9),
@@ -67,7 +90,9 @@ def observations(space: ObservationSpace, count: int) -> dict[str, torch.Tensor]
     return {k: torch.from_numpy(np.stack([r[k] for r in rows])) for k in rows[0]}
 
 
-def belief_batch(count: int) -> tuple[ObservationSpace, ModelConfig, dict[str, torch.Tensor]]:
+def belief_batch(
+    count: int,
+) -> tuple[ObservationSpace, ModelConfig, dict[str, torch.Tensor]]:
     """Real belief rows: the demo match's generated belief and its Bolt
     conditionings, paired cyclically with that match's own observations."""
     from manabot.belief import demo
@@ -101,7 +126,9 @@ def belief_batch(count: int) -> tuple[ObservationSpace, ModelConfig, dict[str, t
         observation, _, terminated, truncated, _ = env.step(int(rng.integers(actions)))
         if terminated or truncated:
             observation, _ = env.reset(seed=int(rng.integers(1 << 30)))
-    batch = {k: torch.from_numpy(np.stack([np.asarray(r[k]) for r in rows])) for k in rows[0]}
+    batch = {
+        k: torch.from_numpy(np.stack([np.asarray(r[k]) for r in rows])) for k in rows[0]
+    }
     for key in views[0]:
         batch[key] = torch.cat([views[i % 3][key] for i in range(count)]).contiguous()
     config = ModelConfig(
@@ -117,8 +144,9 @@ def forward_backward(out, key, model, batch) -> None:
     batch = {k: v.to(DEVICE) for k, v in batch.items()}
     obs = admit_observation(model, batch)
     logits, values = model(obs)
-    logs = policy_logs(logits, legal_mask(obs["actions_valid"]))
-    chosen = legal_mask(obs["actions_valid"]).float().argmax(-1)
+    valid = obs.legal if PREPARED_INPUT else legal_mask(obs["actions_valid"])
+    logs = policy_logs(logits, valid)
+    chosen = valid.float().argmax(-1)
     loss = -logs.gather(-1, chosen[:, None]).mean() + values.float().square().mean()
     loss.backward()
     out[f"{key}/logits"] = logits.detach().cpu()
@@ -134,7 +162,12 @@ def inference(out, key, model, batch) -> None:
     model.eval()
     for rows in (24, 1):
         with torch.no_grad(), PolicyInference(model) as scope:
-            obs = scope.prepare({k: v[:rows].clone() for k, v in batch.items()})
+            host = {k: v[:rows].clone() for k, v in batch.items()}
+            obs = scope.prepare(
+                {k: v.cpu().numpy() for k, v in host.items()}
+                if PREPARED_INPUT
+                else host
+            )
             logits, values = model(obs)
         out[f"{key}/infer{rows}/logits"] = logits.cpu()
         out[f"{key}/infer{rows}/values"] = values.cpu()
@@ -148,7 +181,9 @@ def capture() -> dict[str, torch.Tensor]:
         torch.manual_seed(0)
         model = ActorCritic(space, config, bucketed_shapes=bucketed)
         model.train()
-        forward_backward(out, f"belief/{'bucketed' if bucketed else 'padded'}", model, batch)
+        forward_backward(
+            out, f"belief/{'bucketed' if bucketed else 'padded'}", model, batch
+        )
         inference(out, f"belief/{'bucketed' if bucketed else 'padded'}", model, batch)
     spaces = {
         9: ObservationConfig(),

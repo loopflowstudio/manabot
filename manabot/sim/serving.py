@@ -27,15 +27,14 @@ import numpy as np
 import psutil
 import torch
 
+from manabot.backends.torch.arrays import _array_fields, device_of, on_device
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.admission import admit_observation
-from manabot.model.inference import PolicyInference, transfer_admitted
 from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
@@ -178,7 +177,7 @@ class PolicyStore:
             )
         if self.execution.cache_catalog and agent.semantic_cards is not None:
             with self.perf.span("catalog_preparation"):
-                resident.scope.catalog()
+                resident.scope.cache_programs()
             self.perf.count("catalog_builds")
         return resident
 
@@ -227,30 +226,36 @@ def _infer(
             raise InferenceFailure("request deadline exhausted")
     policy = store.get(requests[0].policy)
     with perf.span("input_assembly", batch=batch):
-        tensors = {
-            key: torch.from_numpy(
-                np.stack([r.observation[key] for r in requests])
-            ).float()
+        buffers = {
+            key: np.stack([r.observation[key] for r in requests]).astype(np.float32)
             for key in requests[0].observation
         }
         if any(set(r.observation) != set(policy.space.shapes) for r in requests):
             raise ValueError("request observation fields differ from admitted ABI")
         if any(
             tuple(t.shape[1:]) != tuple(policy.space.shapes[k])
-            for k, t in tensors.items()
+            for k, t in buffers.items()
         ):
             raise ValueError("request observation shape differs from admitted ABI")
-        size = sum(t.numel() * t.element_size() for t in tensors.values())
+        size = sum(t.size * t.dtype.itemsize for t in buffers.values())
         perf.count("input_bytes", size)
     with torch.no_grad():
         with perf.span("input_admission_and_transfer_host", batch=batch):
             if store.execution.cache_catalog:
-                prepared = policy.scope.prepare(tensors)
-                transfers = prepared.transfers
+                prepared = policy.scope.prepare(buffers)
+                transfers = policy.scope.transfers
             else:
-                prepared, transfers = transfer_admitted(
-                    admit_observation(policy.agent, tensors),
-                    torch.device(store.execution.device),
+                host = policy.agent.prepare(buffers, inference=True)
+                prepared = on_device(host, device_of(policy.agent))
+                transfers = (
+                    0
+                    if store.execution.device == "cpu"
+                    else len(
+                        {
+                            array.dtype
+                            for array in _array_fields(host, np.ndarray).values()
+                        }
+                    )
                 )
         if store.execution.device == "cuda":
             perf.count("host_to_device_bytes", size)
@@ -266,7 +271,7 @@ def _infer(
         with perf.span("sampling", batch=batch):
             actions = sample_rows(
                 logits,
-                tensors["actions_valid"],
+                torch.from_numpy(buffers["actions_valid"]),
                 [r.seed for r in requests],
                 requests[0].policy.deterministic,
             )
@@ -281,7 +286,7 @@ def _infer(
     ]
     if witness is not None:
         with perf.span("output_witness_write", batch=batch):
-            witness(logits, tensors["actions_valid"], actions)
+            witness(logits, torch.from_numpy(buffers["actions_valid"]), actions)
     if not store.execution.resident:
         store.close()
     return replies

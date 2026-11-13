@@ -74,7 +74,9 @@ def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
     definitions = encoder.definitions()
     assert definitions.shape == (shape.definitions + 1, 8)
     for definition, row in pack.definition_row_by_card_def_id.items():
-        assert int(encoder._rows(torch.tensor([definition + 1.0]))[0]) == row + 1
+        assert (
+            int(encoder.definition_rows[torch.tensor([definition + 1])][0]) == row + 1
+        )
     definitions[1:].square().sum().backward()
     assert encoder.token_embedding.weight.grad is not None
     assert encoder.encoder.weight_ih_l0.grad is not None

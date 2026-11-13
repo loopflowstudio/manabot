@@ -14,9 +14,6 @@ from enum import IntEnum
 import torch
 from torch import nn
 
-from manabot.backends.torch._numerics import buffer_on, embedding_rows
-from manabot.backends.torch.arrays import to_numpy
-from manabot.policy import admission
 from manabot.policy.prepare import Prepared
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
@@ -87,15 +84,6 @@ def _sorted_keys(
     return keys[order], torch.tensor(list(table.values()))[order]
 
 
-def _lookup(
-    keys: torch.Tensor, rows: torch.Tensor, query: torch.Tensor
-) -> torch.Tensor:
-    """Rows of admitted `query` keys; admission rejects keys outside `keys`."""
-    if len(query) == 0:
-        return query.new_zeros(0, dtype=torch.long)
-    return rows[torch.searchsorted(keys, query).clamp_max(len(keys) - 1)]
-
-
 @dataclass(frozen=True)
 class CatalogShape:
     """Separate catalog dimensions; lengths include expanded definition references.
@@ -110,35 +98,6 @@ class CatalogShape:
     expanded_tokens: int
     maximum_program_tokens: int
     padded_tokens: int
-
-
-def definition_rows(
-    ids: torch.Tensor, lookup: torch.Tensor | None = None
-) -> torch.Tensor:
-    """Index rows of admitted transport IDs, optionally resolved to semantic rows."""
-    rows = ids.long()
-    return rows if lookup is None else lookup[rows]
-
-
-def admit_definition_ids(
-    ids: torch.Tensor, size: int, lookup: torch.Tensor | None = None
-) -> torch.Tensor:
-    """Check transport IDs before indexing; optionally resolve semantic rows."""
-    host = None if lookup is None else to_numpy(lookup)
-    rows = admission.definition_ids(to_numpy(ids), size, host)
-    return torch.from_numpy(rows).to(ids.device)
-
-
-def admission_catalog(cards: "SemanticCardEncoder | None") -> admission.Catalog | None:
-    """The shared validator's immutable host lookup tables, without model weights."""
-    if cards is None:
-        return None
-    cpu = torch.device("cpu")
-    return admission.Catalog(
-        to_numpy(buffer_on(cards, "definition_rows", cpu)),
-        to_numpy(buffer_on(cards, "record_name_keys", cpu)),
-        to_numpy(buffer_on(cards, "record_token_keys", cpu)),
-    )
 
 
 class SemanticCardEncoder(nn.Module):
@@ -241,92 +200,6 @@ class SemanticCardEncoder(nn.Module):
                 torch.tensor([tables.numbers.get(kind, 0) for kind in range(6)]),
             )
 
-    def record_names(
-        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
-    ) -> torch.Tensor:
-        """Embed name ids (u32 words) of one namespace, or of one namespace
-        each; [*] -> [*, D]."""
-        rows = _lookup(
-            self.record_name_keys,
-            self.record_name_rows,
-            record_key(torch.as_tensor(namespace), words).reshape(-1),
-        )
-        return embedding_rows(self.token_embedding, rows).reshape(
-            *words.shape, self.token_embedding.embedding_dim
-        )
-
-    def record_tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
-        """Embed program learning tokens: ids read their vocabulary row; numbers
-        read their kind's row (callers add the exact value). [*] -> [*, D]."""
-        kinds, words = kinds.long().reshape(-1), words.reshape(-1)
-        number = (kinds == NUMBER_TOKEN_KINDS[0]) | (kinds == NUMBER_TOKEN_KINDS[1])
-        rows = self.record_number_rows[kinds.clamp(0, 5)].clone()
-        rows[~number] = _lookup(
-            self.record_token_keys,
-            self.record_token_rows,
-            record_key(kinds[~number], words[~number]),
-        )
-        return embedding_rows(self.token_embedding, rows)
-
-    def record_names_masked(
-        self,
-        namespace: RecordNamespace | torch.Tensor,
-        words: torch.Tensor,
-        active: torch.Tensor,
-    ) -> torch.Tensor:
-        """`record_names` at the shape of `words`, zero where not `active`.
-
-        Inactive slots query a vocabulary member instead of being selected
-        away, so the lookup shape never depends on the data. Admission checks
-        only active ids (`require_record_names`).
-        """
-        query = record_key(torch.as_tensor(namespace, device=words.device), words)
-        query = torch.where(active, query, self.record_name_keys[0])
-        rows = _lookup(self.record_name_keys, self.record_name_rows, query.reshape(-1))
-        embedded = embedding_rows(self.token_embedding, rows).reshape(
-            *words.shape, self.token_embedding.embedding_dim
-        )
-        return torch.where(active.unsqueeze(-1), embedded, 0)
-
-    def record_tokens_masked(
-        self, kinds: torch.Tensor, words: torch.Tensor, active: torch.Tensor
-    ) -> torch.Tensor:
-        """`record_tokens` at the shape of `words` ([*] -> [*, D]), zero where
-        not `active`; admission checks only active kinds and ids."""
-        kinds = kinds.long()
-        number = (kinds == NUMBER_TOKEN_KINDS[0]) | (kinds == NUMBER_TOKEN_KINDS[1])
-        query = torch.where(
-            active & ~number, record_key(kinds, words), self.record_token_keys[0]
-        )
-        named = _lookup(
-            self.record_token_keys, self.record_token_rows, query.reshape(-1)
-        ).reshape(kinds.shape)
-        rows = torch.where(number, self.record_number_rows[kinds.clamp(0, 5)], named)
-        embedded = embedding_rows(self.token_embedding, rows)
-        return torch.where(active.unsqueeze(-1), embedded, 0)
-
-    # Admission checks for the record vocabulary (`manabot.model.admission`).
-
-    def require_record_names(
-        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
-    ) -> None:
-        catalog = admission_catalog(self)
-        assert catalog is not None
-        host_namespace = (
-            to_numpy(namespace)
-            if isinstance(namespace, torch.Tensor)
-            else int(namespace)
-        )
-        catalog.require_names(host_namespace, to_numpy(words))
-
-    def require_record_tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> None:
-        catalog = admission_catalog(self)
-        assert catalog is not None
-        catalog.require_tokens(to_numpy(kinds), to_numpy(words))
-
-    def _rows(self, ids: torch.Tensor) -> torch.Tensor:
-        return definition_rows(ids, self.definition_rows)
-
     def definitions(self, rows: torch.Tensor | None = None) -> torch.Tensor:
         """Encode catalog programs into a [definitions + 1, hidden] table; row 0
         is the zero padding row and every consumer indexes by catalog row + 1.
@@ -389,20 +262,6 @@ class SemanticCardEncoder(nn.Module):
         assert packed.unsorted_indices is not None
         return encoded[packed.unsorted_indices]
 
-    def referenced_rows(self, ids: list[torch.Tensor]) -> torch.Tensor:
-        """Unique catalog rows + 1 named by admitted transport IDs in `ids`;
-        padding (row 0) is dropped."""
-        rows = torch.cat(
-            [self.definition_rows[values.reshape(-1).long()] for values in ids]
-        ).unique()
-        return rows[rows > 0]
-
-    def embed_definitions(
-        self, ids: torch.Tensor, definitions: torch.Tensor
-    ) -> torch.Tensor:
-        """Join admitted card or permanent IDs to their card programs."""
-        return definitions[self._rows(ids)]
-
     def forward(
         self, batch: Prepared[torch.Tensor], definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -416,37 +275,3 @@ class SemanticCardEncoder(nn.Module):
             ).flatten(start_dim=2)
             known = known + self.decklist_projection(pooled)
         return cards, known
-
-
-@dataclass(frozen=True)
-class RecordEmbeddings:
-    """The card encoder's record vocabulary bound to one forward pass's
-    definition table: what catalog fact and shared-effect ids read."""
-
-    cards: SemanticCardEncoder
-    definitions: torch.Tensor
-
-    def names(
-        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
-    ) -> torch.Tensor:
-        return self.cards.record_names(namespace, words)
-
-    def tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
-        return self.cards.record_tokens(kinds, words)
-
-    def masked_names(
-        self,
-        namespace: RecordNamespace | torch.Tensor,
-        words: torch.Tensor,
-        active: torch.Tensor,
-    ) -> torch.Tensor:
-        return self.cards.record_names_masked(namespace, words, active)
-
-    def masked_tokens(
-        self, kinds: torch.Tensor, words: torch.Tensor, active: torch.Tensor
-    ) -> torch.Tensor:
-        return self.cards.record_tokens_masked(kinds, words, active)
-
-    def sources(self, ids: torch.Tensor) -> torch.Tensor:
-        """Source definition ids (definition id + 1) to their program rows."""
-        return self.cards.embed_definitions(ids, self.definitions)

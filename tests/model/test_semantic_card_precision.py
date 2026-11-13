@@ -18,13 +18,12 @@ from torch import nn
 from experiments.elemental_variants import elemental_recipe
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.learner import forward_precision
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.admission import admit_observation
-from manabot.model.inference import PolicyInference
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.model.prepared_routes import device_input, host_inputs
 
 
 def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
@@ -118,14 +117,14 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
             torch.no_grad(),
             forward_precision(declared, torch.device("cuda")),
         ):
-            prepared = scope.prepare(host)
+            prepared = scope.prepare(host_inputs(host))
             first = agent.forward_distribution(prepared)
             second = agent.forward_distribution(prepared)
             for a, b in zip(first, second, strict=True):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
         optimizer = torch.optim.Adam(agent.parameters())
         with forward_precision(declared, torch.device("cuda")):
-            logits, values = agent.forward_distribution(admit_observation(agent, obs))
+            logits, values = agent.forward_distribution(device_input(agent, obs))
         loss = (
             logits[obs["actions_valid"].bool()].float().square().mean()
             + values.float().square().mean()
@@ -145,8 +144,8 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         restored.load_state_dict(torch.load(checkpoint, weights_only=True))
         with torch.no_grad(), forward_precision(declared, torch.device("cuda")):
             for a, b in zip(
-                agent.forward_distribution(admit_observation(agent, obs)),
-                restored.forward_distribution(admit_observation(restored, obs)),
+                agent.forward_distribution(device_input(agent, obs)),
+                restored.forward_distribution(device_input(restored, obs)),
                 strict=True,
             ):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)

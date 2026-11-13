@@ -67,6 +67,13 @@ class Spec:
         )
 
 
+def legal_mask(mask: np.ndarray) -> np.ndarray:
+    """Validate a binary host mask before preparation turns it into booleans."""
+    if not (np.isfinite(mask) & ((mask == 0) | (mask == 1))).all():
+        raise ValueError("invalid_action_mask")
+    return mask.astype(bool)
+
+
 def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
     """Admit raw rows before masking or trimming; legal-mask errors belong to the backend."""
     lookup = spec.tables.definition_rows

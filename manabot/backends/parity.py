@@ -41,15 +41,15 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
-from types import ModuleType
 from typing import Any, cast
 
 import numpy as np
 import torch
 
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.model.admission import admit_observation
 from manabot.policy.checkpoint import (
     canonical_parameters,
     from_torch_state,
@@ -84,13 +84,8 @@ def installed_backends() -> list[str]:
     ]
 
 
-def backend_module(name: str) -> ModuleType:
-    """`manabot.backends.<name>`, the module an update takes as its backend."""
-    return importlib.import_module(f"manabot.backends.{name}")
-
-
 def backend(name: str) -> Backend:
-    return cast(Backend, backend_module(name).checkpoint.BACKEND)
+    return cast(Backend, resolve(name).checkpoint.BACKEND)
 
 
 def minibatch_loss(
@@ -276,7 +271,7 @@ def check(
         state,
         parameter_names=dict(agent.named_parameters()),
     )
-    module = backend_module(backend_name)
+    module = resolve(backend_name)
     port = backend(backend_name)
     policy, learner = port.load(weights)
     # The reference: the same loss over the torch backend, on the loaded agent.
@@ -442,8 +437,9 @@ def _collection(
         obs = read_npz(path)
         with torch.no_grad():
             logits, values = agent(
-                admit_observation(
-                    agent, {k: torch.from_numpy(v) for k, v in obs.items()}
+                on_device(
+                    agent.prepare(obs, inference=not torch.is_grad_enabled()),
+                    device_of(agent),
                 )
             )
         port_logits, port_values = policy.evaluate(policy.prepare(obs, inference=True))

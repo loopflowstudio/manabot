@@ -20,7 +20,6 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
-from manabot.model.admission import admit_observation
 from manabot.training.execution import execute_regime
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -32,6 +31,7 @@ from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollecto
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.prepared_routes import device_input
 from tests.training.test_recovery import tracked_updates
 
 
@@ -108,7 +108,7 @@ def _collector(
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     rows = batch.observations()
-    obs = admit_observation(
+    obs = device_input(
         agent,
         observation_tensors(
             {

@@ -44,6 +44,7 @@ from typing import Any, TypedDict
 import torch
 
 from experiments import l4_step_profile as profile
+from manabot.backends.torch.policy import PolicyInference
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 32801
@@ -93,7 +94,6 @@ def cpu(captures: Path, out: Path) -> dict[str, Any]:
     A learner pass is the minibatch's forward, loss and backward without an
     optimizer step, so every layout sees identical weights.
     """
-    from manabot.model.inference import PolicyInference
 
     torch.set_num_threads(CPU_THREADS)
     inputs = profile._inputs(captures)

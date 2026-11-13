@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING, Any, Mapping, Protocol
 import numpy as np
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.env.env import Env
 from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import (
     SELECTED_BRANCH_DRIVER_ID,
@@ -228,7 +228,15 @@ class AgentLeafEvaluator:
         ):
             raise ValueError("PUCT policy cannot represent the complete legal offers")
         with torch.inference_mode():
-            logits, value = self.agent(admit_observation(self.agent, tensor_obs))
+            logits, value = self.agent(
+                on_device(
+                    self.agent.prepare(
+                        {key: to_numpy(value) for key, value in (tensor_obs).items()},
+                        inference=True,
+                    ),
+                    device_of(self.agent),
+                )
+            )
             legal_logits = logits[0, :action_count].double()
             if not torch.isfinite(legal_logits).all():
                 raise ValueError("PUCT policy returned nonfinite legal logits")

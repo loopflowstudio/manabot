@@ -10,16 +10,17 @@ from manabot.sim.search.puct import LeafEvaluation
 
 
 @pytest.fixture(autouse=True)
-def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The policy-only agent reads a synthetic batch, not a policy input."""
-    admit = guidance_module.admit_observation
+def _synthetic_policy_input(monkeypatch: pytest.MonkeyPatch) -> None:
+    move = guidance_module.on_device
 
-    def fake_admission(
-        agent: object, tensors: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        return tensors if isinstance(agent, _PolicyOnlyAgent) else admit(agent, tensors)
+    def on_device(batch: object, device: torch.device) -> object:
+        return (
+            {key: torch.as_tensor(value, device=device) for key, value in batch.items()}
+            if isinstance(batch, dict)
+            else move(batch, device)
+        )
 
-    monkeypatch.setattr(guidance_module, "admit_observation", fake_admission)
+    monkeypatch.setattr(guidance_module, "on_device", on_device)
 
 
 class _PolicyOnlyAgent(torch.nn.Module):
@@ -28,6 +29,11 @@ class _PolicyOnlyAgent(torch.nn.Module):
         self.anchor = torch.nn.Parameter(torch.zeros(()))
         self.logits = torch.tensor(logits, dtype=torch.float32)
         self.value = value
+
+    def prepare(
+        self, obs: dict[str, np.ndarray], *, inference: bool = False
+    ) -> dict[str, np.ndarray]:
+        return obs
 
     def forward(
         self, observation: dict[str, torch.Tensor]

@@ -16,7 +16,7 @@ Inputs must already be admitted (`manabot.policy.admission`): nothing here
 validates ids or partitions, exactly as the PyTorch forward does not.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -397,6 +397,9 @@ class Prepared[A]:
     live_index: A | None = None  # flat valid object slots, including value token
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
     legal_support: bool = True  # every observation has a legal action
+    # A serving scope may bound this batch's lifetime without changing its rows.
+    guard: Callable[[object], None] | None = None
+    bucket_needs: tuple[tuple[int, ...], ...] | None = None
 
 
 def prepare(

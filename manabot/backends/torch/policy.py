@@ -3,8 +3,8 @@ Shared viewer-observation encoder, legal-action policy and scalar or WDL critic.
 
 ActorCritic.forward preserves the serving policy/value interface. Training uses
 forward_distribution when it needs loss/draw/win logits rather than their mean.
-Both read only observations admitted by `manabot.model.admission`, which owns
-every input check; the forward does no validation host reads.
+Both consume device Prepared rows produced by host preparation and admission;
+the forward does no validation host reads.
 
 Object attention runs over the fixed object tables. With `bucketed_shapes=True`
 (`manabot.policy.buckets`), host preparation trims the variable axes to
@@ -14,8 +14,9 @@ over the batch's valid objects packed into one sequence; either setting
 composes with the other and neither changes the model.
 """
 
-from dataclasses import dataclass
-from typing import Dict, Literal, Optional, Tuple
+from dataclasses import dataclass, replace
+from types import TracebackType
+from typing import Literal, Optional, Tuple
 
 import numpy as np
 import torch
@@ -24,17 +25,17 @@ import torch.nn as nn
 from manabot.backends.torch._continuation import ContinuationEncoder
 from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
 from manabot.backends.torch._name_candidates import NameCandidateEncoder
+from manabot.backends.torch._numerics import buffer_on
 from manabot.backends.torch._recent_events import RecentEventEncoder
 from manabot.backends.torch._semantic_cards import (
-    RecordEmbeddings,
     SemanticCardEncoder,
 )
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
 
 # Local imports
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
+from manabot.backends.torch.arrays import _array_fields, device_of, on_device, to_numpy
 from manabot.backends.torch.live_tokens import LiveTokens
-from manabot.backends.torch.rl import legal_mask
+from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
@@ -44,16 +45,11 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
-from manabot.model.admission import (
-    AdmittedObservation,
-    _spec,
-    admission_binding,
-)
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
-from manabot.model.inference import PreparedObservation
 from manabot.policy import admission
 from manabot.policy.buckets import row_needs, sizes_of, trim_observation
-from manabot.policy.prepare import BeliefRows, Prepared, prepare
+from manabot.policy.checkpoint import layout
+from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
 import managym
 
 # Validity of the visible object table, in its concatenation order.
@@ -343,6 +339,28 @@ class ActorCritic(nn.Module):
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
 
+    def _binding(self) -> str:
+        return (
+            self.config.model_dump_json()
+            + "\n"
+            + self.observation_space.encoder.config.model_dump_json()
+        )
+
+    def _admission_spec(self) -> admission.Spec:
+        buffers: dict[str, np.ndarray] = {}
+        for name, _ in self.named_buffers():
+            parent, _, field = name.rpartition(".")
+            module = self.get_submodule(parent) if parent else self
+            buffers[name] = to_numpy(buffer_on(module, field, torch.device("cpu")))
+        return admission.Spec(
+            self.config,
+            self.observation_space,
+            Tables.from_buffers(buffers, layout(self.observation_space)),
+            self.card_definitions.num_embeddings
+            if self.card_definitions is not None
+            else 0,
+        )
+
     def prepare(
         self, obs: ObservationBuffers, *, inference: bool = False
     ) -> Prepared[np.ndarray]:
@@ -351,8 +369,17 @@ class ActorCritic(nn.Module):
         return self.prepare_admitted(obs, inference=inference)
 
     def check_observation(self, obs: ObservationBuffers) -> None:
-        legal = to_numpy(legal_mask(torch.from_numpy(np.asarray(obs["actions_valid"]))))
-        admission.check(obs, _spec(self), legal)
+        mask = np.asarray(obs["actions_valid"])
+        try:
+            legal = admission.legal_mask(mask)
+        except ValueError as error:
+            # Allocate framework evidence only for a rejected host input.
+            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
+            raise NumericalError(
+                "invalid_action_mask",
+                {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
+            ) from error
+        admission.check(obs, self._admission_spec(), legal)
 
     def prepare_admitted(
         self,
@@ -362,7 +389,7 @@ class ActorCritic(nn.Module):
         needs: np.ndarray | None = None,
     ) -> Prepared[np.ndarray]:
         """Prepare unchanged rows of an already admitted source."""
-        spec = _spec(self)
+        spec = self._admission_spec()
         capacity = obs["actions_valid"].shape[1]
         if self.bucketed_shapes:
             if needs is None:
@@ -376,7 +403,7 @@ class ActorCritic(nn.Module):
                         objects=self.object_trimming(),
                     ),
                 )
-        return prepare(
+        batch = prepare(
             obs,
             spec.tables,
             inference=inference and device_of(self).type == "cpu",
@@ -385,6 +412,13 @@ class ActorCritic(nn.Module):
             value_token=self.value_token is not None,
             binding=spec.binding,
             action_capacity=capacity,
+        )
+
+        return replace(
+            batch,
+            bucket_needs=None
+            if needs is None
+            else tuple(tuple(map(int, row)) for row in needs),
         )
 
     @torch.no_grad()
@@ -403,7 +437,6 @@ class ActorCritic(nn.Module):
     @torch.no_grad()
     def cache_programs(self) -> None:
         """Cache the full catalog for an unchanged inference policy."""
-        self.eval()
         self._program_cache = (
             self.semantic_cards.definitions()
             if self.semantic_cards is not None
@@ -415,9 +448,7 @@ class ActorCritic(nn.Module):
         self._program_cache = None
         self._cache_versions = ()
 
-    def forward(
-        self, obs: Prepared[torch.Tensor] | AdmittedObservation
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, obs: Prepared[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits [B,A] and acting-viewer critic [B].
 
         WDL expectations are signed; scalar units follow value_semantic.
@@ -431,7 +462,7 @@ class ActorCritic(nn.Module):
         return logits, value
 
     def forward_distribution(
-        self, obs: Prepared[torch.Tensor] | AdmittedObservation
+        self, obs: Prepared[torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits and raw critic output from one shared encoding.
 
@@ -442,21 +473,13 @@ class ActorCritic(nn.Module):
         A distributional head alone does not select a categorical loss.
         """
         programs = None
-        if isinstance(obs, PreparedObservation):
-            obs.scope.check(self)
-            if torch.is_grad_enabled():
-                raise RuntimeError(
-                    "prepared inference observations cannot enter autograd"
-                )
-            programs = obs.scope.catalog()
-        if isinstance(obs, AdmittedObservation):
-            self._require_admitted(obs)
-            obs = obs.prepared
-        elif not isinstance(obs, Prepared) or not isinstance(obs.legal, torch.Tensor):
+        if not isinstance(obs, Prepared) or not isinstance(obs.legal, torch.Tensor):
             raise TypeError(
-                "policy forward requires device Prepared rows from prepare/on_device or admit_observation"
+                "policy forward requires device Prepared rows from prepare/on_device"
             )
-        if obs.binding != admission_binding(self):
+        if obs.guard is not None:
+            obs.guard(self)
+        if obs.binding != self._binding():
             raise ValueError(
                 "observation was admitted for a different policy configuration"
             )
@@ -522,17 +545,6 @@ class ActorCritic(nn.Module):
             self.config.value_aggregation != "historical_mean"
             and self.belief_count_buckets == 0
         )
-
-    def _require_admitted(self, obs: Dict[str, torch.Tensor]) -> None:
-        if not isinstance(obs, AdmittedObservation):
-            raise TypeError(
-                "policy forward requires an observation from "
-                "manabot.model.admission.admit_observation"
-            )
-        if obs.binding != admission_binding(self):
-            raise ValueError(
-                "observation was admitted for a different policy configuration"
-            )
 
     def _attend_objects(
         self,
@@ -708,12 +720,15 @@ class ActorCritic(nn.Module):
             rows, global_row = self._belief_rows(obs.belief)
             parts.extend((rows, global_row))
         objects = self._join_permanent_links(obs, torch.cat(parts, dim=1))
-        catalog = None
-        if self.semantic_cards is not None and self.semantic_cards.records:
-            assert definitions is not None
-            catalog = RecordEmbeddings(self.semantic_cards, definitions)
-        objects = self.facts(obs.facts, objects, catalog)
-        objects = self.shared_effects(obs.effects, objects, catalog)
+        token_embedding = (
+            self.semantic_cards.token_embedding
+            if self.semantic_cards is not None and self.semantic_cards.records
+            else None
+        )
+        objects = self.facts(obs.facts, objects, token_embedding, definitions)
+        objects = self.shared_effects(
+            obs.effects, objects, token_embedding, definitions
+        )
         relation_definitions = (
             definitions[obs.relation_rows]
             if definitions is not None
@@ -792,27 +807,95 @@ class ActorCritic(nn.Module):
 
     def get_action_and_value(
         self,
-        obs: Prepared[torch.Tensor] | AdmittedObservation,
+        obs: Prepared[torch.Tensor],
         action: Optional[torch.Tensor] = None,
         deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         logits, value = self.forward(obs)
-        supported = (
-            obs.legal if isinstance(obs, AdmittedObservation) else obs.legal_support
-        )
-        if not supported:
+        if not obs.legal_support:
             raise ValueError("No valid actions available")
         dist = torch.distributions.Categorical(logits=logits)
         if action is None:
             action = logits.argmax(dim=-1) if deterministic else dist.sample()
         return action, dist.log_prob(action), dist.entropy(), value
 
-    def get_value(
-        self, obs: Prepared[torch.Tensor] | AdmittedObservation
-    ) -> torch.Tensor:
+    def get_value(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         with torch.no_grad():
             _, value = self.forward(obs)
             return value
+
+
+class PolicyInference:
+    """One unchanged behavior policy; batches expire with the scope.
+
+    Preparation consumes owned NumPy buffers. A guard on the resulting Prepared
+    batch rejects closed scopes, weight/configuration changes and autograd use.
+    The policy owns its lazy catalog cache; neither cache nor guard is serialized.
+    """
+
+    def __init__(self, agent: ActorCritic) -> None:
+        self.agent = agent
+        self.device = device_of(agent)
+        self._closed = False
+        self._versions = agent._parameter_versions()
+        self._modes = tuple(module.training for module in agent.modules())
+        self._binding = agent._binding()
+        self.transfers = 0
+        agent.clear_cache()
+
+    def check(self, agent: object) -> None:
+        if self._closed:
+            raise RuntimeError("inference scope is closed")
+        if (
+            agent is not self.agent
+            or self._versions != self.agent._parameter_versions()
+        ):
+            raise RuntimeError("inference policy changed within its scope")
+        if (
+            self._modes != tuple(module.training for module in self.agent.modules())
+            or self._binding != self.agent._binding()
+        ):
+            raise RuntimeError("inference policy mode/configuration changed")
+
+    def _forward_check(self, agent: object) -> None:
+        self.check(agent)
+        if torch.is_grad_enabled():
+            raise RuntimeError("prepared inference observations cannot enter autograd")
+        self.cache_programs()
+
+    def cache_programs(self) -> None:
+        """Prepare the fixed policy catalog, checking the serving lifetime first."""
+        self.check(self.agent)
+        if not self.agent._cache_versions:
+            self.agent.cache_programs()
+
+    def __enter__(self) -> "PolicyInference":
+        self.check(self.agent)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self._closed = True
+        self.agent.clear_cache()
+
+    @torch.no_grad()
+    def prepare(self, obs: ObservationBuffers) -> Prepared[torch.Tensor]:
+        self.check(self.agent)
+        if any(not isinstance(value, np.ndarray) for value in obs.values()):
+            raise TypeError("inference preparation requires NumPy observation buffers")
+        batch = self.agent.prepare(obs, inference=True)
+        self.transfers = (
+            0
+            if self.device.type == "cpu"
+            else len(
+                {array.dtype for array in _array_fields(batch, np.ndarray).values()}
+            )
+        )
+        return replace(on_device(batch, self.device), guard=self._forward_check)
 
 
 # -----------------------------------------------------------------------------
