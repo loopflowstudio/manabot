@@ -8,7 +8,8 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}pre{background:#f5f3ee;p
 <p>2026-11-12, headless. The people this change is for are contributors whose PRs run the
 <code>experiment</code> Integration group, which failed on merged main
 (<a href="https://github.com/loopflowstudio/manabot/actions/runs/43341403551">run 43341403551</a>).
-The only code change is <code>tests/training/test_experiment_runner.py</code>.</p>
+At this measured revision, the only code change was <code>tests/training/test_experiment_runner.py</code>.
+The later cache repair still needs hosted timing; see <code>ci-under-8-minutes.md</code>.</p>
 
 <h2>A. Hosted CI on the fix-forward head</h2>
 <p><code>gh workflow run ci.yml --ref jack-heart/38ef25-get-ci-under</code> &rarr;
@@ -59,13 +60,10 @@ E  AssertionError: assert 610 == 16
 <ul>
 <li><b>Works:</b> the experiment/notebook fixture that failed merged main now passes on Ubuntu debug CI under
 xdist and locally. It bounds the work by learner rows and fails loudly if that bound regresses. All jobs are green.</li>
-<li><b>Still wrong, worst first:</b> (1) The experiment job took 549 s, over the 480 s target, because one runner's
-CUDA wheel download was slow. Nothing in this PR changed that. Every Integration job downloads about 3 GB of CUDA
-wheels it never uses on CPU runners. One possible fix is to sync Integration with
-<code>--no-default-groups --group play-runtime</code> (CPU Torch, as <code>baseline.yml</code> does), or to cache
-the unpruned wheels. That would change which Torch build CI tests, so it is a decision for whoever owns the Task,
-not a QA repair. It is recorded in <code>questions.md</code>. (2) The experiment job's tests step (284 s) plus the
-66 s build leaves about 130 s for setup, so a slow runner can still exceed the budget.</li>
+<li><b>Still wrong:</b> the experiment job took 549 s because CUDA wheel downloads were slow.
+The subsequent repair retains the unpruned cache, preserving the Torch build;
+switching to CPU Torch was the alternative. Cold/save and warm/restore timing remain
+unmeasured. The 284 s test step plus 66 s build leaves about 130 s for setup.</li>
 <li><b>Not reached:</b> a PR-event run of the fix-forward (no PR is published yet) and the merged push.</li>
 </ul>
 <p>No local process remains. The hosted run completed; nothing was cancelled.</p>

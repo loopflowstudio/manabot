@@ -5,9 +5,8 @@ live complete-game monitoring, but does not require complete-game training.
 Use the existing one-seat exact-quota collector for its eight-transition
 workload; keep all four attempts and every existing assertion. This bounds
 the fixture without changing production defaults or the shared WDL baseline.
-The 120-second training allowance is a hang guard, not a timing claim; gate
-still needs Ubuntu evidence under the unchanged 300-second test limit and
-480-second ordinary-job target.
+Ubuntu debug/xdist run 43345024882 validated the fixture in 151.70 s; its
+549-second job still missed the 480-second target because of installation.
 
 # Integration Torch download — 2026-11-12 (QA)
 

@@ -6,9 +6,12 @@ Measure job start to job end on the target runner, including installation and
 build. `docs/development.md` owns the ordinary Ubuntu PR budget of eight
 minutes; Engine Budget retains its same-runner reference comparison and is
 exempt. The macOS nightly has no such budget. In Task 38ef25, main's slowest
-Integration job was 1443 s; branch dispatch 43327574361 at `45fe9f866` passed
-with every non-exempt job at or below 404 s. That run predates the admission
-fixture simplification and later main merge; it does not certify their timing.
+Integration job was 1443 s. PR #506 run 43337105047 at `1fc4e1b24` passed
+with every ordinary job at or below 349 s. Its exact merged push,
+43341403551 at `60664d149`, kept every ordinary job below 480 s but failed
+the live experiment/notebook fixture's training resource deadline (129 passed,
+one failed). Engine Budget passed in 685 s. Green PR evidence does not erase
+that post-merge failure; the Task remains open for a fix-forward.
 
 - Inspect setup before adding shards: `uv sync` built the engine in release,
   then `maturin develop` built it again in dev. Syncing all needed extras with
@@ -16,7 +19,15 @@ fixture simplification and later main merge; it does not certify their timing.
   removed the duplicate while keeping native debug assertions. Cache paths
   must follow the action's actual directory; `~/.cache/uv` never hit here.
 - Bound complete-game smoke work by streams/games, not just the transition
-  floor. Two streams retained the real-worker one-update size check.
+  floor. Two streams retained the real-worker one-update size check. For an
+  orchestration fixture that does not require complete-game training, the
+  existing one-seat `exact-quota` collector bounds learner rows while live
+  monitoring still completes games. The experiment fixture repair pins one
+  update and asserts all four receipts contain 16 learner transitions, with
+  120-second resource guards. Its full file passed locally with a release
+  extension (10 tests, 151.36 s); Ubuntu debug/parallel timing remains unproved.
+  The failed run does not identify the expired clock or separate collection
+  time from scheduling; a larger allowance alone is no timing evidence.
 - Parallel tests need isolated files/ports and injected time at scheduling
   boundaries. A 30-second future wait failed beside other workers; the final
   admission fixture releases the gate in its injected sleep instead. The

@@ -1,8 +1,11 @@
 # CI post-merge verification — 2026-11-12
 
-Outcome: **Fix forward; iterate to implement.** PR #506 merged, but its exact
+Verification decision: **Fix forward.** PR #506 merged, but its exact
 main push exposed a failing experiment fixture. The Task stays open. This is
 new evidence after the successful PR run, not an absence of progress.
+The fixture repair is now implemented and locally checked; current remaining
+validation and delivery are in `ci-under-8-minutes.md`. The observations below
+record the failed merge, not the repaired revision.
 
 Implementation follow-up: the run subsequently completed with failure. Engine
 Budget passed (00:59:34–01:10:59 UTC, 685 s); the experiment fixture is the
@@ -62,7 +65,7 @@ training/monitoring attempts. `manabot/training/execution.py::check()` raises
 the observed error when its resource budget expires. The log does not identify
 which constituent clock expired; do not claim it does.
 
-Next implementation: make this live experiment/notebook fixture reliable in
+Repair requirements established at verification: make this live experiment/notebook fixture reliable in
 the parallel group by bounding its workload and choosing an adequate fixture
 resource allowance. Preserve four real attempts, live monitoring overlap,
 accounting, notebook edits/outputs and resume assertions. Keep the 300-second
