@@ -8,9 +8,9 @@ another Task. Keep defaults, policy input, Academy behavior, native payment
 execution and the frozen A/B pilot unchanged. No Wave is selected.
 
 All measurement is complete and published: frequencies, the A/B pilot, and the
-paired shape counts with and without redundant taps. What remains is one
-report-text slice (below): the recommendation and its questions still describe
-the design the second concept review replaced. Earlier implementation history
+paired shape counts with and without redundant taps. The report-text slice
+below is complete: the recommendation and its questions now describe the
+single decision from the second concept review. Earlier implementation history
 and launch notes are in git `ce074e9d37` and the experiment report; do not rerun
 the pilot or rewrite its evidence.
 
@@ -71,9 +71,10 @@ the report and `scratch/` changes.
 
 ## Delete — do not maintain
 
-Remove the report's unconditional flat-D capacity conclusion and its misleading
-“grouped D” label. Replace with the paired measurements and an automatic/override
-entry followed by an outcome choice (C then D), whose cost includes the entry.
+Remove the report's unconditional flat-D capacity conclusion, misleading
+“grouped D” label and recommendation of a separate automatic/override entry.
+Replace with the paired measurements and one payment-outcome decision with
+the automatic plan first; keep C's measured entry costs as comparison evidence.
 Do not preserve a second enumeration/payment path. Keep all existing evidence,
 PaymentModel authority, source/action behavior, frozen pilot revision and switch.
 
@@ -142,6 +143,16 @@ engine precedents; findings are inline as *Checked*.
    launch history, cost receipts and warning-log notes to a collapsed appendix.
    Retitle for the design question (file name unchanged).
 
+Docs written (2026-11-13): `experiments/mana_spending.md` is the only changed
+doc and now has this slice's shape: summary, recommended design, three
+questions with option/price tables, evidence, limits, collapsed appendix.
+Evidence tables are byte-for-byte the earlier ones, reordered (frequency
+results before decision shapes). One figure corrected against the frequency
+table: the payer over-taps in 6-15% of ordinary payments (400/2717, 538/4430,
+213/2588, 288/4742), where the old text said 8-15%. Question 3's cast-selection
+bound quotes the surplus-inclusive E column (305.60 / 210.91 / 437.26 / 216.22);
+the 13-offer window maximum is from fully measured windows only, and says so.
+
 Unchanged on purpose: `MANAGYM_EXPERIMENT_AUTOSPEND` and its README note stay as
 written; the report already says the follow-up replaces the switch.
 
@@ -174,13 +185,21 @@ not block this Task, whose outcome is the report that asks them):
   Non-redundant capability E reaches 75 on one complete window.
 - All three artifacts under `current/non-redundant-shapes/` are published.
   Original/current shape evidence and frozen pilot bytes remain unchanged.
-- Report names C followed by D, quotes entry/override costs, makes grouping
-  conditional on reviewed surplus/equivalence choices, states MTG-342's
-  dependency and ends with all three open review questions.
-- Remaining: the report-text slice above, then gate/review and the caller's
-  delivery steps. No PR created here.
+- Report recommends one payment-outcome decision, compares C's entry costs,
+  makes grouping conditional on reviewed surplus/equivalence choices, states
+  MTG-342's dependency and leads with all three open review questions. Its
+  small-menu costs explicitly use equal-output collapse, not the recommended
+  exact-identity default; conditional quantiles do not bound capped casts.
+- Remaining: gate/review and the caller's delivery steps. No PR created here.
 
 ## Checks
+
+Report-text implementation (2026-11-13): `uv run --no-sync python` static
+comparison preserved all 13 numerical evidence tables from HEAD verbatim and
+verified section order, three numbered questions, the collapsed appendix and
+report/scratch-only scope. `git diff --check` passed; `lf context` is within
+both scratch limits. No build or experiment rerun for this prose-only slice;
+the gate commands below remain for the caller's gate step.
 
 - `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana::outcomes::tests -- --test-threads 2`: 5 passed in debug (0.05 s).
 - Release wheel rebuilt for CPython 3.13 and extension replaced atomically.

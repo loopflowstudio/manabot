@@ -1,27 +1,165 @@
-# How often players choose which mana to spend — MTG-347
+# How should players choose which mana to spend? — MTG-347
 
-Exploratory. A cast taps its lands automatically; when the pool then holds more
-usable mana than the cost needs, the player chooses which pooled unit pays each
-pip (`mana_spend` decisions). Three measurements, on the decks people train on:
+Exploratory. Today a cast taps its lands automatically; when the pool then holds
+more usable mana than the cost needs, the player chooses which pooled unit pays
+each pip (`mana_spend` decisions). That prompt is rare, and it hides the choice
+that differs far more often: which sources stay untapped.
 
-- **How often the prompt appears.** 0.11–0.60% of decisions on Elemental and
-  TLA Limited mirrors; 51–95% of those prompts follow a payment that tapped a
-  source it did not need (MTG-342). [Results](#results).
-- **What other decision shapes would offer on the same deals.** The choice the
-  prompt hides, which sources stay untapped, differs in 63–73% of completely
-  enumerated casts when redundant taps are included. The paired analysis below
-  separates those outcomes from non-redundant source sets; capacity also depends
-  on whether equal-output objects retain exact identity. Without redundant taps,
-  capability D has an exact maximum of 22 with no cast certified above 64; exact identity still
-  certifies 493 casts above 64. Incomplete enumerations remain explicit.
+- **Recommendation, for review:** one native payment decision per cast whose
+  outcomes differ, with the automatic plan as its first offer.
+  [Recommended design](#recommended-design).
+- **Today's prompt is rare.** 0.11–0.60% of decisions on Elemental and TLA
+  Limited mirrors; 51–95% of those prompts follow a payment that tapped a source
+  it did not need (MTG-342). [Results](#results).
+- **The hidden choice is common, and small once redundant taps are set aside.**
+  Which sources stay untapped differs in 63–73% of completely enumerated casts
+  when redundant taps are included. Without them, a payment offers a median of 2
+  outcomes, 4–7 at the 95th percentile and an exact maximum of 22 under the
+  optimistic equal-output collapse, and adds 2.5–7.0% to decisions per game.
+  Keeping every land's exact identity instead
+  certifies 493 casts above 64 offers. Incomplete enumerations remain explicit.
   [Matched payment-shape results](#matched-payment-shape-results).
 - **A small learning pilot**, per-unit prompts against automatic pool spending:
   two seeds per arm, about USD1.4 of rental, no resolved difference.
   [Learning comparison](#learning-comparison).
 
-It ends with a [recommended design](#recommended-design) for review. It makes
-no claim about learning; the comparison of compound and sequential decisions
-is MTG-265's.
+Three [questions for review](#questions-for-review) decide the size of the menu
+and where a player opts out of automation. This report makes no claim about
+learning; the comparison of compound and sequential decisions is MTG-265's.
+
+## Recommended design
+
+**One native payment-outcome decision, with the automatic plan first.** This is
+a design for review; implementing it is a separate Task, and nothing here is
+built. The learning pilot does not test it.
+
+An illustration, with Forest, Forest and Mountain untapped and a {1}{G} spell
+whose modes, targets and cost are already announced:
+
+| offer | what it commits |
+| --- | --- |
+| Automatic: tap Forest and Mountain | leaves a Forest; the spell records {G} and {R} spent |
+| Tap Forest and Forest | leaves the Mountain; the spell records {G}{G} spent |
+
+The player picks one offer and the engine pays once. Tapping all three lands is
+not on this menu: it is a redundant tap, the subject of question 1.
+
+- **When it appears.** After the spell's modes, targets, X and cost are known,
+  and only when two or more permitted outcomes differ in what stays untapped,
+  what floats, or what the spell's receipt records (colors spent, spend
+  effects). A uniquely payable cast skips it, as any single-action decision
+  does. It replaces today's per-pip prompts for cast payments.
+- **The automatic plan** is an ordinary bound offer, listed first and identified
+  as automation, describing the sources it taps and the pool it leaves. It
+  presupposes MTG-342's fix: today's payer taps a source it does not need in
+  6–15% of ordinary payments and would present a stray float as the plan.
+- **No separate entry step.** A step that first asks "automatic or override?"
+  costs one more decision on every override and saves none when the player
+  accepts the plan (table below). Where the outcomes fit the action capacity
+  they are offered flat.
+- **When outcomes exceed the action capacity,** the offers after the automatic
+  plan are native balanced groups, and only an outcome commits. Card naming is
+  the precedent (`Decision::NameCard`, `NAME_BRANCHING`). Naming partitions a
+  sorted vocabulary by contiguous span; payment outcomes have no such public
+  order, so how outcomes are ordered into groups is for the implementing Task.
+  Every permitted outcome stays reachable; an enumerator's work cap never
+  truncates the legal action space, and first-legal truncation is not used to
+  fit this chooser. Whether groups are needed at all depends on questions 1
+  and 2.
+
+**What it costs.** All decisions per game on the measured trajectories, without
+redundant taps and treating equal-output sources as one choice:
+
+| decks | policy | per unit (today) | one payment decision | with a separate entry step |
+| --- | --- | ---: | ---: | ---: |
+| elemental | heuristic | 306.18 | 317.39–317.54 | 317.39–321.69 |
+| elemental | random | 211.36 | 226.10–226.24 | 226.10–231.07 |
+| tla | heuristic | 437.75 | 448.86–449.06 | 448.86–454.96 |
+| tla | random | 217.50 | 227.35–227.36 | 227.35–232.46 |
+
+Under that optimistic equal-output collapse, the single decision adds
+2.5–7.0% to decisions per game (its range reflects incomplete enumerations).
+Completely enumerated casts with multiple outcomes offer a median of 2, a
+95th percentile of 4–7 and an exact maximum of 22 outcomes. These menu sizes
+do not bound incomplete enumerations. The entry step's range runs from always
+accepting the plan to always overriding. These are counts on today's
+trajectories, not games played under the design, an acceptance rate or a
+learning cost; learning effects belong to MTG-265's study. Columns D and C of
+the [paired counts](#paired-counts-without-redundant-taps) hold the full
+figures, including the larger menus that questions 1 and 2 can select.
+
+**For the policy,** each outcome and group has native action descriptors for
+what remains available, the floating pool and the relevant receipt. The
+announced spell stays available to observation and action joins throughout the
+pending choice, and pending-choice state reaches the policy input, the learning
+tokens and the LLM text in the change that adds it. Group expansion goes through
+`PaymentModel`, which keeps restrictions, expiry, spend riders and saved
+obligations.
+
+**For Academy,** the browser renders the same offers and bound Commands. Labels
+can say "leave this Forest untapped", "float {R}" or "spend two colors", with
+visible object joins for the distinctions question 2 retains. The automatic plan
+is shown as automation. Keyboard access, stale rejection, reconnect to the
+actual pending decision and replay/fork identity are preserved. The selected
+sources and receipt commit through native payment execution once; group
+navigation offers no cancellation or undo of committed costs or revealed
+information.
+
+**Not recommended.**
+
+- *Keep today's per-unit prompts (A).* The source choice stays hidden.
+- *Automatic only (B).* Removes the pooled-unit prompts and supplies no source
+  control.
+- *Fold outcomes into the cast action (E).* Even without redundant taps a
+  priority window reaches 75 offers, and many costs are not known at that
+  boundary.
+- *A browser-only override.* It would divide the shared policy/Academy
+  contract.
+
+Existing explicit mana-ability decisions stay at their native boundaries.
+`MANAGYM_EXPERIMENT_AUTOSPEND` remains a reproduction control for this
+experiment's frozen A/B revision; the follow-up replaces it with the automatic
+offer above. No Academy code, default training behavior or deployment changes
+here.
+
+## Questions for review
+
+Nobody has answered these. Each lists its options with the measured price.
+
+### 1. Where does deliberate surplus tapping live?
+
+Tapping a land the cost does not need, to float its mana, is rules-legal and
+occasionally matters. It is a different act from paying: a player may tap for
+mana whenever they have priority (CR 605.3a). Without it, the payment menu is
+the set of minimal payments, the same set MTG-342's fixed tapper picks from.
+
+| option | price |
+| --- | --- |
+| Not offered | Under the equal-output collapse: exact maximum 22, no cast certified above 64 offers, so a flat menu suffices on completely enumerated casts. The 420 casts that hit the enumeration cap remain unknown; their lower bounds reach 30. A land's fixed output could then never be floated on purpose, as today. |
+| A tap-for-mana action at priority | The same payment menu. Activated mana abilities are already offered at priority and during payment; a land's fixed output is tapped only by the automatic payer, so this extends an existing action to fixed sources. Its cost in offers per priority window is not measured here. |
+| In the payment chooser | 422 casts certified above 64 offers, an exact maximum of 712 and a 95th percentile of 49–59 on ordinary decks, so groups are required. Decisions per game rise 4–11% over today before any group navigation. |
+
+### 2. Which sources are the same choice?
+
+| option | price |
+| --- | --- |
+| Exact object identity | Without redundant taps, 493 casts certified above 64 offers (291 completely enumerated, 202 capped), with an exact maximum of 252; groups are required. The excess includes combinatorial subsets of identical basic lands. |
+| Equal definition and state | Not measured: the capture holds outputs and resource transitions, not complete object state. It lies between the other two rows and needs a rules argument before implementation. |
+| Equal mana output | The menu above (exact maximum 22). Not a safe rule by itself: it merges a land with a mana creature that could also attack or block. |
+
+The recommendation preserves exact identity until an equivalence rule is
+reviewed, and does not assume that every subset of identical basics needs its
+own visible offer.
+
+### 3. Where does the player opt out of automation?
+
+| option | price |
+| --- | --- |
+| At the payment decision (recommended) | One decision at each cast whose outcomes differ: 2.5–7.0% more decisions per game, without redundant taps and under equal-output collapse. Exact identity has the larger D costs in the paired table. The plan is visible when chosen, because modes, targets, X and the cost are already known. |
+| At cast selection: "cast X" beside "cast X, choosing payment" | No added decision unless used. Decisions per game lie between the [folded column](#matched-payment-shape-results) (305.60, 210.91, 437.26 and 216.22 for the four ordinary-deck rows; never override) and the single-decision column (always override). A priority window gains at most one offer per cast offer; fully measured windows held at most 13 offers, so at most 26. The automatic path commits before modes, targets, X, the cost and therefore the plan are known, so the plan cannot be inspected when it is chosen. |
+
+The second row is arithmetic on published columns, not a measured shape.
+Learning effects of either stay with MTG-265.
 
 ## Run it
 
@@ -34,13 +172,11 @@ plays mirror games locally on CPU and prints one row per deck set and policy
 
 `--games` is games per deck and policy. `--seed` fixes both deals and policy
 sampling; the same revision and arguments reproduce the rows. `--out DIR`
-(default `experiments/data/mana_spending/`) must be empty. It writes one row per
-game as `games.jsonl`, with decisions by stage, spend offer counts, casts,
-payment counters, action indices, terminal state digest and failures. Each
-finished game is replayed without a policy; both its digest and diagnostics must
-agree. `decks.json` records exact lists, source and native hashes,
-revision, world and seeds. The run rents nothing. Incomplete games are retained,
-excluded from the summary and make the command exit nonzero; none is replaced.
+(default `experiments/data/mana_spending/`) must be empty; the
+[appendix](#appendix-run-logistics) lists what it writes. Each finished game is
+replayed without a policy, and both its digest and diagnostics must agree. The
+run rents nothing. Incomplete games are retained, excluded from the summary and
+make the command exit nonzero; none is replaced.
 
 | column | meaning |
 | --- | --- |
@@ -85,6 +221,60 @@ excluded from the summary and make the command exit nonzero; none is replaced.
   measuring MTG-342's fix requires a separate matched run. A redundant tap also
   need not produce a prompt: Mountain, Mountain, Forest for {1}{G} offers only
   one color for each pip and is skipped.
+
+## Results
+
+Frequency run, 2026-11-13, source `58e5923c53eb8914734be46471b58fccff974249`,
+world `w17`, `count --games 8 --seed 0`: **336 completed games, 336 verified
+replays, no failures or replacements**. Local CPU, no launcher run or rental;
+USD0 compute rental. Each policy played eight mirror games on each of ten
+Elemental decks, ten sampled TLA builds, and the Heartbeat deck. Deals were
+matched between policies within each deck. These are exploratory sample counts,
+not a strength or learning result.
+
+| decks | policy | games | decisions/game | spend/game | share | over-tap | non-over-tap-share | no-spend games |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 80 | 306.18 | 0.61 | 0.200% | 75.51% | 0.049% | 88.75% |
+| elemental | random | 80 | 211.36 | 0.54 | 0.254% | 51.16% | 0.124% | 86.25% |
+| tla | heuristic | 80 | 437.75 | 0.50 | 0.114% | 95.00% | 0.006% | 81.25% |
+| tla | random | 80 | 217.50 | 1.30 | 0.598% | 80.77% | 0.115% | 83.75% |
+| heartbeat | heuristic | 8 | 87.62 | 12.12 | 13.837% | 54.64% | 6.277% | 0.00% |
+| heartbeat | random | 8 | 146.25 | 14.25 | 9.744% | 75.44% | 2.393% | 0.00% |
+
+Here `over-tap` is a fraction of spending decisions, while the adjacent share
+columns divide by **all** original decisions. Excluding over-tap-associated
+prompts leaves 0.025–0.263 spending decisions/game on the ordinary decks:
+Elemental heuristic/random 0.15/0.26, TLA heuristic/random 0.025/0.25.
+The non-over-tapped counts are 12, 21, 2 and 20 respectively. These exclusions
+describe the observed trajectories, not trajectories under a fixed tapper.
+
+| decks | policy | spend decisions | attributed to over-tap | payment calls | over-tapped payments | offers median / p95 / max |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 49 | 37 | 2717 | 400 | 2 / 2 / 3 |
+| elemental | random | 43 | 22 | 4430 | 538 | 2 / 3 / 5 |
+| tla | heuristic | 40 | 38 | 2588 | 213 | 2 / 4 / 4 |
+| tla | random | 104 | 84 | 4742 | 288 | 3 / 4 / 4 |
+| heartbeat | heuristic | 97 | 53 | 134 | 38 | 2 / 2 / 2 |
+| heartbeat | random | 114 | 86 | 164 | 56 | 2 / 2 / 2 |
+
+Spending prompts are uncommon in these ordinary-deck mirrors (0.11–0.60% of
+decisions), and most games have none. Many redundant payments produce no
+prompt. Heartbeat changes the frequency substantially: every sampled game has
+spending prompts, even though each prompt still has only two offers. Multiple
+Heartbeat copies can also make some taps redundant, so Heartbeat's prompts
+are not all outside the over-tap category.
+
+The MTG-183 final checkpoint could not supply a trained-policy row: the loader
+refused it with `UnsupportedPolicyInput` because it uses input v1, while this
+revision supports v9/v10. It was not rebound.
+
+Evidence is published under `experiments/data/mana_spending/` in the
+[artifact manifest](data.manifest.json): `games.jsonl`, `decks.json`, and
+`checkpoint-admission.json`. Restore it with:
+
+```sh
+uv run --extra artifacts python -m manabot.data fetch experiments/data/mana_spending
+```
 
 ## Decision shapes
 
@@ -131,174 +321,20 @@ match the frequency run.
 | --- | --- |
 | A, per unit | which pooled unit pays each pip, after automatic tapping (today) |
 | B, automatic | nothing; the first feasible unit pays |
-| C, override | automatic/override entry when outcomes differ, followed by an outcome choice only for a nontrivial override |
-| D, outcome | one choice among distinct outcomes: what stays untapped or floating, and what the spell's receipt records (colors spent, spend effects) |
+| C, entry step | a separate automatic-or-override step when outcomes differ, then an outcome choice only for a nontrivial override; measured as the price of that step |
+| D, outcome | one choice among distinct outcomes: what stays untapped or floating, and what the spell's receipt records (colors spent, spend effects); the recommended decision, whose first offer is the automatic plan |
 | E, folded | the outcome is part of the cast action ("cast X, leaving Forest") |
 
 The comparison reports decisions per game, offers per decision (median, 95th
 percentile, maximum), real choices and cap hits. A and B count all spending
 prompts; C–E replace cast-payment prompts and retain noncast payment behavior.
-C offers automatic payment or override, with a second outcome decision only if
-the override has multiple alternatives. Its decision cost depends on how often
-the player overrides, so it is reported as a range. D offers one joint outcome
-decision when outcomes differ. E folds those cast outcomes into priority offers;
-its decision count assumes the other announcement steps stay as they are.
-These are counterfactual counts on A's trajectories, not games under C–E.
-
-## Learning comparison
-
-This exploratory pilot compares today's per-unit decisions (A) with first-feasible
-automatic pool spending (B), on the existing Elemental recipe: seeds 34701 and
-34702 per arm, 32 matched updates. Training is frozen at `00ee188998cb`.
-`MANAGYM_EXPERIMENT_AUTOSPEND` is explicitly 0 for A and 1 for B; source
-selection stays the same. Each training job allows USD3 and one attempt; the
-serial cohort `mtg347-mana-learning-serial` launched under `--max-usd 17`.
-Four training caps plus two USD4 evaluation caps total USD20, within the USD25
-authorization. These caps are limits, not measured costs.
-
-Evaluation retains each arm's spending mode on the shared 50-pair Elemental
-heuristic panel: 200 replay-checked games per final checkpoint, with native
-seats and decks swapped across four legs per pair. Evaluation sources are
-`4f1fdb2da3c9` (A) and `a29783f42e36` (B); their difference is report/scratch
-text only. Both include the diagnostic constructor cleanup after training; it
-changes neither the frozen training input layout nor payment behavior. Model
-rows join through Etude's participant seat, rather than treating the native game seat as player
-identity. The published summary retains the SQL, query plan and timing.
-
-The pilot asks only whether removing pool-spending decisions visibly changes
-early scores or decisions per game on this recipe. Updates are matched;
-completed games and learner transitions need not be. The training decision/game
-ratio divides all recorded environment decisions by completed games, including
-decisions from unfinished or failed episodes; it is not mean completed-game length.
-Trajectories differ once the policies differ, so their decision ratios cannot isolate saved prompts.
-Two training seeds and a recipe with roughly 0.2% pool prompts do not establish
-an improvement, equivalence or a compound-decision learning result. This pilot
-does not expose fixed-source choice or implement C–E. MTG-265 owns the planned
-learning-effect study.
-
-An initial parallel launch (`518a4948ea80`) failed admission when a second L4
-was unavailable; none of its four job commands started. The acquired machine
-was deleted before the serial retry. The source and question stayed fixed.
-Final run receipts, scores and launcher costs are recorded below.
-
-| arm | seed | training run | updates | completed games | environment decisions | learner transitions | decisions/completed game |
-| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
-| A | 34701 | `8a03411493cd` | 32 | 8,593 | 1,414,495 | 1,413,716 | 164.61 |
-| A | 34702 | `b4dbac29bda4` | 32 | 8,573 | 1,388,371 | 1,388,371 | 161.95 |
-| B | 34701 | `56c051d5616a` | 32 | 8,526 | 1,544,456 | 1,544,320 | 181.15 |
-| B | 34702 | `773f339dd238` | 32 | 8,570 | 1,399,363 | 1,399,363 | 163.29 |
-
-All four jobs completed. A/34701 recovered two resource-limit game failures and
-discarded 779 samples; B/34701 recovered one and discarded 136. Both 34702 runs
-had none. No games were abandoned. These are the native training receipts'
-counts, retained alongside their full error summaries; failed attempts are not
-silently counted as completed games. The higher B decision ratios are an
-observation of different early trajectories, not evidence that skipping prompts
-increases game length or compute cost.
-
-Evaluations `mana-spending-A-303f5f0a6a59` and
-`mana-spending-B-fe362b5c294d` each completed all 100 matches / 400 games.
-**All 800 games were valid and replay-checked; no dropped, incomplete or failed
-matches.** No evaluation game was replaced. Each cell below is 200 games;
-there were no draws.
-
-| training seed | A wins / games | A score | B wins / games | B score | B − A |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 34701 | 52 / 200 | 26.0% | 54 / 200 | 27.0% | +1.0 pp |
-| 34702 | 57 / 200 | 28.5% | 65 / 200 | 32.5% | +4.0 pp |
-
-B scored higher on these two early checkpoints. Two training seeds do not
-resolve a learning effect, especially on a recipe where pool prompts are rare;
-this does not establish that automatic spending improves learning. It supplies
-no comparison of the proposed automatic/override chooser. Retain A's defaults for
-now and take the source-control design to review. The offline aggregation's
-`EXPLAIN` uses scans and hash joins over only this fixed 800-game panel (1,600
-participant rows), taking 0.0029 seconds; it is not a growing application query.
-
-Both evaluation logs include `Invalid focus object ID 81 for action 12`
-(ChooseMode), among similar warnings. The existing Python
-encoder emits this when a focus object has no observation join and encodes -1.
-The cause was not diagnosed in this experiment. Valid replay-checked games do
-not establish that every action feature was informative: the pilot measures the
-existing representation and procedure together. Keep that limitation separate
-from game failures; changing the encoder mid-pilot would change its question.
-
-Launcher cost observations after all acquired rentals ended (2026-11-13):
-
-| use | rental | launcher cost |
-| --- | --- | ---: |
-| failed parallel admission | `mtg347-l4-71b326e7fb82` | USD0.0013 billed |
-| all four training runs | `mtg347-l4-b0805de6f0f4` | USD0.8642 billed |
-| A evaluation | `mtg347-cpu32-499f433305cc` | ~USD0.26 |
-| B evaluation | `mtg347-cpu32-d193458ef8af` | ~USD0.29 |
-
-These are the launcher's retained rental observations, recorded once; `~` is
-its estimate, not a reconstructed bill. The other initial L4 placeholder was
-never acquired. All six successful jobs finished and all four acquired rentals
-were confirmed ended. The authorized USD25 cap was not approached.
-
-Pilot evidence is under `experiments/data/mana_spending/learning/`: four native
-training receipts, the original evaluation blocks and worker receipts, selected
-warning log excerpts, frozen command-mode/source provenance, the training and
-score summaries, and `launcher-costs.txt`. The artifact manifest publishes these
-bytes; the original checkpoints and full replay traces remain in Etude's R2
-records under the run IDs above.
-
-## Results
-
-Frequency run, 2026-11-13, source `58e5923c53eb8914734be46471b58fccff974249`,
-world `w17`, `count --games 8 --seed 0`: **336 completed games, 336 verified
-replays, no failures or replacements**. Local CPU, no launcher run or rental;
-USD0 compute rental. Each policy played eight mirror games on each of ten
-Elemental decks, ten sampled TLA builds, and the Heartbeat deck. Deals were
-matched between policies within each deck. These are exploratory sample counts,
-not a strength or learning result.
-
-| decks | policy | games | decisions/game | spend/game | share | over-tap | non-over-tap-share | no-spend games |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| elemental | heuristic | 80 | 306.18 | 0.61 | 0.200% | 75.51% | 0.049% | 88.75% |
-| elemental | random | 80 | 211.36 | 0.54 | 0.254% | 51.16% | 0.124% | 86.25% |
-| tla | heuristic | 80 | 437.75 | 0.50 | 0.114% | 95.00% | 0.006% | 81.25% |
-| tla | random | 80 | 217.50 | 1.30 | 0.598% | 80.77% | 0.115% | 83.75% |
-| heartbeat | heuristic | 8 | 87.62 | 12.12 | 13.837% | 54.64% | 6.277% | 0.00% |
-| heartbeat | random | 8 | 146.25 | 14.25 | 9.744% | 75.44% | 2.393% | 0.00% |
-
-Here `over-tap` is a fraction of spending decisions, while the adjacent share
-columns divide by **all** original decisions. Excluding over-tap-associated
-prompts leaves 0.025–0.263 spending decisions/game on the ordinary decks:
-Elemental heuristic/random 0.15/0.26, TLA heuristic/random 0.025/0.25.
-The non-over-tapped counts are 12, 21, 2 and 20 respectively. These exclusions
-describe the observed trajectories, not trajectories under a fixed tapper.
-
-| decks | policy | spend decisions | attributed to over-tap | payment calls | over-tapped payments | offers median / p95 / max |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| elemental | heuristic | 49 | 37 | 2717 | 400 | 2 / 2 / 3 |
-| elemental | random | 43 | 22 | 4430 | 538 | 2 / 3 / 5 |
-| tla | heuristic | 40 | 38 | 2588 | 213 | 2 / 4 / 4 |
-| tla | random | 104 | 84 | 4742 | 288 | 3 / 4 / 4 |
-| heartbeat | heuristic | 97 | 53 | 134 | 38 | 2 / 2 / 2 |
-| heartbeat | random | 114 | 86 | 164 | 56 | 2 / 2 / 2 |
-
-Spending prompts are uncommon in these ordinary-deck mirrors (0.11–0.60% of
-decisions), and most games have none. Many redundant payments produce no
-prompt. Heartbeat changes the frequency substantially: every sampled game has
-spending prompts, even though each prompt still has only two offers. Multiple
-Heartbeat copies can also make some taps redundant, so Heartbeat's prompts
-are not all outside the over-tap category.
-
-The MTG-183 final checkpoint was downloaded and checked separately. Its
-SHA256 is `4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4`;
-the loader refused it with `UnsupportedPolicyInput` because it uses input v1,
-while this revision supports v9/v10. No trained-policy frequency row is
-available, and the checkpoint was not rebound.
-
-Evidence is published under `experiments/data/mana_spending/` in the
-[artifact manifest](data.manifest.json): `games.jsonl`, `decks.json`, and
-`checkpoint-admission.json`. Restore it with:
-
-```sh
-uv run --extra artifacts python -m manabot.data fetch experiments/data/mana_spending
-```
+D offers one joint outcome decision when outcomes differ. C puts an
+automatic-or-override step in front of it, with the outcome decision only if
+the override has multiple alternatives; its decision cost depends on how often
+the player overrides, so it is reported as a range whose lower end equals D. E
+folds those cast outcomes into priority offers; its decision count assumes the
+other announcement steps stay as they are. These are counterfactual counts on
+A's trajectories, not games under C–E.
 
 ## Matched payment-shape results
 
@@ -495,6 +531,65 @@ Paired evidence is published separately as
 manifest. Original frequency, `current/` baseline and `current/shapes/` bytes are
 preserved. Restore it with the same artifact fetch command above.
 
+## Learning comparison
+
+This exploratory pilot compares today's per-unit decisions (A) with first-feasible
+automatic pool spending (B), on the existing Elemental recipe: seeds 34701 and
+34702 per arm, 32 matched updates. Training is frozen at `00ee188998cb`.
+`MANAGYM_EXPERIMENT_AUTOSPEND` is explicitly 0 for A and 1 for B; source
+selection stays the same.
+
+Evaluation retains each arm's spending mode on the shared 50-pair Elemental
+heuristic panel: 200 replay-checked games per final checkpoint, with native
+seats and decks swapped across four legs per pair.
+
+The pilot asks only whether removing pool-spending decisions visibly changes
+early scores or decisions per game on this recipe. Updates are matched;
+completed games and learner transitions need not be. The training decision/game
+ratio divides all recorded environment decisions by completed games, including
+decisions from unfinished or failed episodes; it is not mean completed-game length.
+Trajectories differ once the policies differ, so their decision ratios cannot isolate saved prompts.
+Two training seeds and a recipe with roughly 0.2% pool prompts do not establish
+an improvement, equivalence or a compound-decision learning result. This pilot
+does not expose fixed-source choice or implement C–E. MTG-265 owns the planned
+learning-effect study.
+
+| arm | seed | training run | updates | completed games | environment decisions | learner transitions | decisions/completed game |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| A | 34701 | `8a03411493cd` | 32 | 8,593 | 1,414,495 | 1,413,716 | 164.61 |
+| A | 34702 | `b4dbac29bda4` | 32 | 8,573 | 1,388,371 | 1,388,371 | 161.95 |
+| B | 34701 | `56c051d5616a` | 32 | 8,526 | 1,544,456 | 1,544,320 | 181.15 |
+| B | 34702 | `773f339dd238` | 32 | 8,570 | 1,399,363 | 1,399,363 | 163.29 |
+
+All four jobs completed. A/34701 recovered two resource-limit game failures and
+discarded 779 samples; B/34701 recovered one and discarded 136. Both 34702 runs
+had none. No games were abandoned. These are the native training receipts'
+counts, retained alongside their full error summaries; failed attempts are not
+silently counted as completed games. The higher B decision ratios are an
+observation of different early trajectories, not evidence that skipping prompts
+increases game length or compute cost.
+
+Evaluations `mana-spending-A-303f5f0a6a59` and
+`mana-spending-B-fe362b5c294d` each completed all 100 matches / 400 games.
+**All 800 games were valid and replay-checked; no dropped, incomplete or failed
+matches.** No evaluation game was replaced. Each cell below is 200 games;
+there were no draws.
+
+| training seed | A wins / games | A score | B wins / games | B score | B − A |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 34701 | 52 / 200 | 26.0% | 54 / 200 | 27.0% | +1.0 pp |
+| 34702 | 57 / 200 | 28.5% | 65 / 200 | 32.5% | +4.0 pp |
+
+B scored higher on these two early checkpoints. Two training seeds do not
+resolve a learning effect, especially on a recipe where pool prompts are rare;
+this does not establish that automatic spending improves learning. It supplies
+no comparison of the recommended payment decision. Retain A's defaults for now
+and take the source-control design to review.
+
+Rental cost about USD1.4 by the launcher's numbers, under the USD25
+authorization. Launch history, cost receipts and warning-log notes are in the
+[appendix](#appendix-run-logistics).
+
 ## Prior art checked
 
 Reviewed 2026-11-13, through primary documentation and static source:
@@ -518,65 +613,6 @@ all choices to remain reachable by both policy and browser. These references
 provide interaction precedents; the capacity argument comes from this report’s
 measurements.
 
-## Recommended design
-
-**Recommend an explicit automatic/override entry followed by a native payment-outcome
-choice (C followed by D), after the spell's modes, targets, X and cost are known.** This
-is a design for review; implementing it is a separate Task. The learning pilot does not
-test this chooser.
-
-Keep one automatic plan as an explicit, bound native choice, describing the sources and
-pool it leaves. The paired results support a flat outcome choice on the measured
-non-redundant capability subset; they do not require a grouped chooser there. Exact
-identity or deliberate redundant tapping still produces large menus, so the review must
-settle which distinctions belong in the legal surface before choosing groups. The bound
-automatic plan presupposes MTG-342's fix: today's first-feasible witness over-taps in
-8–15% of ordinary payments and could present a stray float. Whether the override needs
-groups depends on the surplus and source-equivalence choices below. Any groups must be
-native, with branching that fits the 64-slot default and every permitted complete
-outcome reachable. A uniquely payable outcome skips as an ordinary trivial decision. An
-enumerator’s work cap must never truncate the real legal action space. Expand any
-required groups lazily through `PaymentModel`; retain restrictions, expiry, spend riders
-and saved obligations. Preserve exact source identity until an equivalence rule is
-reviewed. Equal current mana output alone does not justify merging a land with a mana
-creature; exact object identity alone can unnecessarily multiply identical-land choices.
-Keep existing explicit mana-ability decisions at their real native boundaries; do not
-model their costs or effects as hypothetical UI steps.
-
-For the **policy**, each group and outcome must have native action descriptors for what
-remains available, the floating pool and the relevant receipt. Keep the announced source
-available to observation and action joins throughout the pending choice. Carry pending
-choice state through the same observations, learning tokens and LLM text in the change
-that adds it. Respect the supplied observation capacities; never use first-legal
-truncation to fit this chooser. This recommendation pays C's entry/override cost, not
-flat D's one-decision cost. With surplus included and capability collapse, C is
-324.69–341.57 versus A's 306.18 decisions/game on Elemental heuristic, and 235.06–256.07
-versus 211.36 on random; TLA is 453.84–468.94 versus 437.75 and 233.05–247.65 versus
-217.50. The lower end always accepts automatic; the upper end always selects a
-nontrivial override. Required grouping adds further decisions. These are trajectory
-counts, not a measured acceptance rate or learning cost. Learning effects belong to
-MTG-265's study; the A-vs-B pilot does not test this recommendation.
-
-For **Academy**, render those same groups and bound Commands. Labels can say “leave this
-Forest untapped”, “float {R}”, or “spend two colors”; use visible object joins for
-distinctions retained by the reviewed equivalence rule. Do not infer that every subset
-of identical basics needs a separate visible offer. Show the automatic plan and its
-automation identity explicitly. Preserve keyboard access, stale rejection, reconnect to
-the actual pending decision, and replay/fork identity. Commit the selected sources and
-receipt through native payment execution once. Group navigation supplies no cancellation
-or undo of already committed costs or revealed information.
-
-Do not flatten outcome products into priority (E): even non-redundant capability menus
-reach 75, and many costs are not known at that boundary. Keeping A leaves the requested
-source choice hidden. B only removes pooled-unit prompts; it does not supply source
-control. A browser-only override would divide the shared policy/Academy contract.
-
-The `MANAGYM_EXPERIMENT_AUTOSPEND` switch remains an explicit reproduction
-control for this experiment’s frozen A/B revision. The recommended production
-design drops forced automatic spending: the follow-up should replace that
-switch with the bound automatic-plan choice in the shared chooser. No Academy
-code, default training behavior or production deployment is changed here.
-
 ## Limits
 
 - Mirror games under scripted or early policies show how often the decision
@@ -590,27 +626,62 @@ code, default training behavior or production deployment is changed here.
 - No fixed-tapper run or trained-policy frequency run was performed. Native
   instrumentation attributes redundant output; it does not simulate removing
   a tap's events, other triggers or downstream strategic effects.
+- Both pilot evaluation logs carry undiagnosed missing-focus encoder warnings
+  ([appendix](#appendix-run-logistics)). Valid replay-checked games do not
+  establish that every action feature was informative.
 
-## Open review questions
+## Appendix: run logistics
 
-1. **Does the chooser offer deliberate redundant tapping?** The engine has no
-   explicit action for it today. It is rules-legal and occasionally matters.
-   Surplus-inclusive D certifies 422 casts above 64 capability outcomes; the
-   paired non-redundant capability exact maximum is 22 with no cast certified
-   above 64, but 420 capped casts remain unknown. Grouping is not implied on that
-   measured subset. This choice helps determine whether a flat override can
-   suffice or needs groups.
-2. **Which sources count as the same choice?** Exact object identity, or equal
-   definition and state? The paired capability/identity counts bound the offer
-   cost, but neither proves a strategically safe equivalence. Identity includes
-   interchangeable basics; capability alone can merge a creature with a land.
-   Non-redundant exact identity certifies 493 casts above 64, versus zero for
-   capability; this includes identical basics. Definition/state equivalence
-   needs a rules argument before implementation.
-3. **Is the payment-entry cost acceptable?** With surplus included, source
-   capabilities differ at 63–73% of exact ordinary casts; C adds roughly 4–11%
-   decisions/game even when always answered automatic (policy/deck dependent),
-   and override paths add more. Without redundant taps, the capability-keyed
-   always-automatic lower bounds add about 2.5–7.0% on ordinary decks; caps add
-   uncertainty and exact identity raises the cost (see the paired table). Binding
-   override intent at cast selection is another, uncounted interaction design. Learning effects stay with MTG-265.
+<details>
+<summary>Output files, checkpoint admission, launch history, cost receipts and warning logs</summary>
+
+**Frequency run output.** `count --out DIR` writes one row per game as
+`games.jsonl`, with decisions by stage, spend offer counts, casts, payment
+counters, action indices, terminal state digest and failures. `decks.json`
+records exact lists, source and native hashes, revision, world and seeds.
+
+**Checkpoint admission.** The MTG-183 final checkpoint was downloaded and
+checked separately. Its SHA256 is
+`4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4`; the refusal
+is recorded in `checkpoint-admission.json`.
+
+**Pilot caps.** Each training job allows USD3 and one attempt; the serial cohort
+`mtg347-mana-learning-serial` launched under `--max-usd 17`. Four training caps
+plus two USD4 evaluation caps total USD20, within the USD25 authorization. These
+caps are limits, not measured costs.
+
+**Pilot evaluation sources.** `4f1fdb2da3c9` (A) and `a29783f42e36` (B); their
+difference is report/scratch text only. Both include the diagnostic constructor
+cleanup after training; it changes neither the frozen training input layout nor
+payment behavior. Model rows join through Etude's participant seat, rather than
+treating the native game seat as player identity. The published summary retains
+the SQL, query plan and timing: the offline aggregation's `EXPLAIN` uses scans
+and hash joins over only this fixed 800-game panel (1,600 participant rows),
+taking 0.0029 seconds; it is not a growing application query.
+
+**Launch history.** An initial parallel launch (`518a4948ea80`) failed admission when a second L4 was unavailable; none of its four job commands started. The acquired machine was deleted before the serial retry. The source and question stayed fixed. Final run receipts, scores and launcher costs are recorded below.
+
+**Warning logs.** Both evaluation logs include `Invalid focus object ID 81 for action 12` (ChooseMode), among similar warnings. The existing Python encoder emits this when a focus object has no observation join and encodes -1. The cause was not diagnosed in this experiment. Valid replay-checked games do not establish that every action feature was informative: the pilot measures the existing representation and procedure together. Keep that limitation separate from game failures; changing the encoder mid-pilot would change its question.
+
+**Launcher cost** observations after all acquired rentals ended (2026-11-13):
+
+| use | rental | launcher cost |
+| --- | --- | ---: |
+| failed parallel admission | `mtg347-l4-71b326e7fb82` | USD0.0013 billed |
+| all four training runs | `mtg347-l4-b0805de6f0f4` | USD0.8642 billed |
+| A evaluation | `mtg347-cpu32-499f433305cc` | ~USD0.26 |
+| B evaluation | `mtg347-cpu32-d193458ef8af` | ~USD0.29 |
+
+These are the launcher's retained rental observations, recorded once; `~` is
+its estimate, not a reconstructed bill. The other initial L4 placeholder was
+never acquired. All six successful jobs finished and all four acquired rentals
+were confirmed ended. The authorized USD25 cap was not approached.
+
+Pilot evidence is under `experiments/data/mana_spending/learning/`: four native
+training receipts, the original evaluation blocks and worker receipts, selected
+warning log excerpts, frozen command-mode/source provenance, the training and
+score summaries, and `launcher-costs.txt`. The artifact manifest publishes these
+bytes; the original checkpoints and full replay traces remain in Etude's R2
+records under the run IDs above.
+
+</details>
