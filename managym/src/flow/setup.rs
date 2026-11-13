@@ -125,6 +125,7 @@ impl Game {
 
         let mut game = Self {
             derived: Default::default(),
+            payment_sources: Default::default(),
             state: TrackedState::new(GameState {
                 objects,
                 permanents: PermanentVec::default(),
