@@ -237,7 +237,8 @@ decisions) are byte-identical, including 4 matching `PyAgentError` endings.
 Two Academy games reached Game Over. Debug suite: 1195/1199 passed; the four
 `vector_env` timeouts were load contention and pass alone. Clippy, fmt pass.
 Receipts: `scratch/qa.html`. The fix and release extension are local, not
-committed or published.
+committed or published. `docs/engine.md` (Zones) states the selection rule:
+zone and this-way selections offer cards alone; `CreatedThisWay` keeps tokens.
 
 ## Conversion cleanup (steer ced7607f, 2026-11-13)
 
@@ -338,3 +339,18 @@ The focused nextest command of "Compression validation" plus `test(battle_fan)`:
 warnings denied, rustfmt and `git diff --check` passed.
 Release wheel rebuilt (cp313/arm64 0.2.3, 3m 53s), its `EXT_SUFFIX` member
 installed with `os.replace`; fresh `import managym._managym` loaded it.
+
+### Implementation handoff after zone compression (2026-11-13)
+
+Zone-store compression is committed in `9564d30e41`; the earlier "local" status
+above describes the preceding run. No implementation target remains in the
+accepted slice. The selection clarification in `docs/engine.md` matches
+`flow/resolution.rs`: only `Zone`, `TargetPlayersZone` and `CardsThisWay`
+narrow to cards; `CreatedThisWay` retains tokens. `CardsThisWay` describes
+mill/discard results, not reveal results.
+
+Confirmed retained debug receipt `02f73ae2-48c8-4d17-b836-80783ecce7cd`:
+31 tests, zero failures/errors, 0.831 s, including both Battle Fan tests and
+typed-zone identity/order tests. No Rust changed in this pass, so no passing
+build/test was repeated. `git diff --check`: passed. Gate retains final-head
+conformance, paired observation/state-byte comparison, Engine Budget and reviews.

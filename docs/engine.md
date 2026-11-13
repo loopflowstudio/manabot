@@ -783,7 +783,11 @@ zone until state-based actions are checked: a token in any zone but the
 battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and
 a copy of a card in any zone but the stack or battlefield (CR 704.5e). It keeps
 its kind there; such a token can't return to the battlefield (CR 111.8), exile
-grants and "card" selections skip it, and `flow/sba.rs` removes it by its kind.
+grants skip it, and `flow/sba.rs` removes it by its kind. A selection that
+reads a zone or the cards milled or discarded this way (`Effect::SelectCards`
+over `Zone`, `TargetPlayersZone` or `CardsThisWay`) offers cards alone; a
+selection over other objects, such as the token an effect just created
+(`CreatedThisWay`), still offers that token.
 
 Library and hand store each card as a checked `CardId`, alongside explicit
 `Transient(ObjectId)` entries for non-cards awaiting state-based actions. The
