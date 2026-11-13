@@ -56,23 +56,30 @@ No optimizer step occurs during this probe.
 
 The training phase uses `precision_ladder.arm("bf16")`, seed 32401, w384l8,
 bucketed shapes without live tokens and the original 300-update schedule.
-Only the watchdog is shortened: 7.1 rental hours less 900 seconds for setup
+Only the watchdog is shortened: 6.99 job hours less 900 seconds for setup
 and probe and 300 seconds for finalization. The ordinary wall-bound stop
 retains raw/EMA/optimizer exports. At the failed run's 126 seconds/update,
-this covers about 193 updates; faster training may pass 200. The window is
+this covers about 190 updates; faster training may pass 200. The window is
 the stopping bound, not a new damping horizon.
 
 ```sh
 uv run python -m experiments.bf16_behavior_logs smoke
 uv run --with 'etude-sdk[s3,eval]==0.2.15' etude launch \
   experiments/bf16_behavior_logs.py --rent mtg324-l4-ab \
-  --max-usd 5 --revision COMMIT
+  --cohort mtg345-bf16-proof --max-usd 5 --revision COMMIT
 ```
 
 Dated line, 2026-11-13: CPU smoke completed all eight forward combinations
 and the strided exp probe (2138 inputs). This verifies wiring only, with a
-w16l1 model and eight native rows; it is not CUDA evidence. CUDA launch and
-run results are pending.
+w16l1 model and eight native rows; it is not CUDA evidence. The extended smoke also completed one real CPU learner update through the
+ordinary SDK worker and emitted an admitted policy in `etude-result.json`.
+CUDA launch and run results are pending.
+
+Dated line, 2026-11-13: the initial quote saw no available capacity. Direct
+launch `ebd68228bef4` was refused before recording a run: "job dollars do not
+cover the hours". Etude adds the on-demand's 900-second startup allowance
+to the job window for rental admission. Shortened only the job window from
+7.1 to 6.99 hours, retaining the USD 5 caps and 300-update learning horizon.
 
 ## Decision
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 import os
@@ -36,14 +36,15 @@ from manabot.infra.source import bind_etude_source
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference, transfer_admitted
 from manabot.policy.buckets import BucketSizes
+from manabot.recipes.local import local_smoke
 from manabot.training.panels import ML, PERF
 from manabot.training.regime import Precision
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 32401
-# Setup, probe and final exports fit inside the rental's 7.1 hours. The regime
+# Setup, probe and final exports fit inside the rental's 6.99 hours. The regime
 # retains the 300-update schedule; the ordinary wall-bound stop exports it.
-HOURS = 7.1
+HOURS = 6.99
 TRAIN_SECONDS = HOURS * 3600 - 1200
 
 
@@ -234,19 +235,56 @@ def report() -> Report:
     return Report(perf=PERF, ml=ML)
 
 
-def worker() -> None:
-    bind_etude_source()
+def worker(*, smoke: bool = False) -> None:
+    spec = TrainingJob.model_validate_json(Path(os.environ["ETUDE_CONFIG"]).read_text())
+    if spec.source_bundle is not None:
+        bind_etude_source()
     output = Path(os.environ["ETUDE_OUTPUT_DIR"])
     deadline = datetime.fromisoformat(os.environ["ETUDE_DEADLINE"])
     if deadline.tzinfo is None:
         raise ValueError("launcher deadline must include timezone")
     remaining = (deadline - datetime.now(timezone.utc)).total_seconds()
-    if remaining < TRAIN_SECONDS + 300:
+    if remaining < spec.regime.wall_seconds + spec.finalization_seconds:
         raise ValueError("remaining allocation cannot cover training and finalization")
-    probe(output)
+    probe(output, smoke=smoke)
     # The ordinary worker rechecks the remaining lifetime and owns tracking,
     # cancellation, numerical incidents and final raw/EMA/optimizer exports.
     run_worker()
+
+
+def smoke_worker(output: Path) -> None:
+    """Exercise the probe and real training worker through local SDK inputs."""
+    output.mkdir(parents=True, exist_ok=True)
+    spec = TrainingJob(
+        regime=local_smoke(steps=1, device="cpu"), experiment="bf16_behavior_logs"
+    )
+    config = output / "config.json"
+    config.write_text(spec.model_dump_json())
+    environment = {
+        "ETUDE_RUN": "bf16-logs-smoke",
+        "ETUDE_TRACK_DIR": str(output / "tracking"),
+        "ETUDE_CONFIG": str(config),
+        "ETUDE_OUTPUT_DIR": str(output / "output"),
+        "ETUDE_STOP_FILE": str(output / "stop"),
+        "ETUDE_SEED": str(SEED),
+        "ETUDE_UNTIL_CLOCK": "updates",
+        "ETUDE_UNTIL_VALUE": str(spec.updates),
+        "ETUDE_DEADLINE": (
+            datetime.now(timezone.utc) + timedelta(seconds=180)
+        ).isoformat(),
+    }
+    saved = {
+        key: value for key, value in os.environ.items() if key.startswith("ETUDE_")
+    }
+    for key in saved:
+        del os.environ[key]
+    try:
+        os.environ.update(environment)
+        worker(smoke=True)
+    finally:
+        for key in environment:
+            os.environ.pop(key, None)
+        os.environ.update(saved)
 
 
 def _interrupt(signum: int, frame: FrameType | None) -> None:
@@ -263,7 +301,7 @@ def main() -> None:
         worker()
     else:
         output = args.out or Path(tempfile.mkdtemp(prefix="bf16-logs-smoke-"))
-        probe(output, smoke=True)
+        smoke_worker(output.resolve())
         print(output)
 
 
