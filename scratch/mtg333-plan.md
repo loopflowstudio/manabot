@@ -446,11 +446,11 @@ on batch i (previously after), so overlap can only start earlier; preparation
 order and batch contents are unchanged. An early caller exit leaves at most one
 submitted batch for the executor exit to join.
 
-## Concept review, 2026-11-13 (after PPO prefetch)
+## Concept review, 2026-11-13 (after PPO prefetch; both directions implemented)
 
 The three concepts hold in docs and code: `Prepared` is the one policy input,
 the container is the one policy file, composition roots choose the backend.
-Two leftovers contradicted the first; their implementation is recorded below.
+Two leftovers contradicted the first; both are implemented and their receipts are below.
 No product choice is open.
 
 1. **The collector still builds a tensor dictionary.**
