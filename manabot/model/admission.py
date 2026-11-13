@@ -48,7 +48,7 @@ from manabot.model.semantic_cards import (
     definition_rows,
 )
 from manabot.model.shared_effects import admit_shared_effects
-from manabot.policy.buckets import BucketSizes, bucket_sizes, row_needs, sizes_of
+from manabot.policy.buckets import BucketSizes, row_needs, sizes_of
 
 if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
@@ -90,8 +90,10 @@ class AdmittedObservation(dict[str, torch.Tensor]):
     permanents, public hands and decklists; `legal` is whether every row has a
     legal action; `buckets` holds the bucket sizes measured at admission for a
     policy with bucketed shapes (None otherwise, after trimming, or for a
-    layout bucketing leaves untouched). Construct with `admit_observation`,
-    never by hand.
+    layout bucketing leaves untouched) and `needs` each row's needs they were
+    taken from ([B, len(AXES)], `manabot.policy.buckets.row_needs`), which a
+    collector records so the learner regroups rather than re-measures them.
+    Construct with `admit_observation`, never by hand.
     """
 
     def __init__(
@@ -101,12 +103,14 @@ class AdmittedObservation(dict[str, torch.Tensor]):
         references: CardReferences,
         legal: bool,
         buckets: BucketSizes | None = None,
+        needs: np.ndarray | None = None,
     ) -> None:
         super().__init__(tensors)
         self.binding = binding
         self.references = references
         self.legal = legal
         self.buckets = buckets
+        self.needs = needs
 
 
 def admit_observation(
@@ -120,8 +124,14 @@ def admit_observation(
     A policy with bucketed shapes also has the batch's buckets measured.
     """
     references, legal = _check(agent, obs)
+    needs = measure_row_needs(agent, obs)
     return AdmittedObservation(
-        obs, admission_binding(agent), references, legal, measure_buckets(agent, obs)
+        obs,
+        admission_binding(agent),
+        references,
+        legal,
+        None if needs is None else _sizes(agent, needs),
+        needs,
     )
 
 
@@ -191,34 +201,41 @@ def bind_admitted(
     (`measure_row_needs`); without them the batch is measured here.
     """
     lookup = _semantic_lookup(agent, _device(obs))
-    buckets = (
-        measure_buckets(agent, obs)
-        if needs is None
-        else sizes_of(
-            needs, agent.observation_space.encoder, objects=agent.object_trimming()
-        )
-    )
+    if needs is None:
+        needs = measure_row_needs(agent, obs)
     return AdmittedObservation(
         obs,
         admission_binding(agent),
         _references(agent, obs, lookup, check=False),
         bool(obs["actions_valid"].any(-1).all()),
-        buckets,
+        None if needs is None else _sizes(agent, needs),
+        needs,
+    )
+
+
+def _sizes(agent: "ActorCritic", needs: np.ndarray) -> BucketSizes:
+    return sizes_of(
+        needs, agent.observation_space.encoder, objects=agent.object_trimming()
     )
 
 
 def measure_row_needs(
-    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+    agent: "ActorCritic",
+    obs: Mapping[str, torch.Tensor],
+    *,
+    recorded: np.ndarray | None = None,
 ) -> np.ndarray | None:
-    """Each row's bucket needs [B, len(AXES)] (`manabot.policy.buckets.row_needs`),
+    """Each row's bucket needs [B, len(AXES)] (`manabot.policy.buckets.row_needs`)
     for a policy with bucketed shapes; None otherwise or for a layout bucketing
-    leaves untouched."""
+    leaves untouched. `recorded` are needs a collector already measured for
+    these rows, returned instead of measuring them again."""
     if not agent.bucketed_shapes:
         return None
+    if recorded is not None:
+        return recorded
     return row_needs(
         {key: to_numpy(value) for key, value in obs.items()},
         agent.observation_space.encoder,
-        objects=agent.object_trimming(),
     )
 
 
@@ -230,13 +247,8 @@ def measure_buckets(
     Reads host arrays; CPU tensors are viewed without a copy. A policy without
     bucketed shapes measures nothing.
     """
-    if not agent.bucketed_shapes:
-        return None
-    return bucket_sizes(
-        {key: to_numpy(value) for key, value in obs.items()},
-        agent.observation_space.encoder,
-        objects=agent.object_trimming(),
-    )
+    needs = measure_row_needs(agent, obs)
+    return None if needs is None else _sizes(agent, needs)
 
 
 def _device(obs: Mapping[str, torch.Tensor]) -> torch.device:

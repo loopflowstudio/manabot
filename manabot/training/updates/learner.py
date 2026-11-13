@@ -49,8 +49,9 @@ class AdmittedRollout:
         self.agent = agent
         self.batch = batch
         self._admitted = np.zeros(batch.actions.size, dtype=bool)
-        # Bucket needs of admitted rows, measured once so that every epoch's
-        # minibatches take their maximum instead of measuring again.
+        # Bucket needs of admitted rows, recorded at collection or measured
+        # once, so every epoch's minibatches take their maximum instead of
+        # measuring again.
         self._needs: np.ndarray | None = None
         self._measured = np.zeros(batch.actions.size, dtype=bool)
         self._next = admit_observation(agent, observation_tensors(batch.next_obs))
@@ -64,7 +65,9 @@ class AdmittedRollout:
             obs = observation_tensors(rows.observation)
             check_observation(self.agent, obs)
             self._admitted[chunk] = True
-            needs = measure_row_needs(self.agent, obs)
+            needs = measure_row_needs(
+                self.agent, obs, recorded=self.batch.recorded.gather_needs(chunk)
+            )
             if needs is not None:
                 if self._needs is None:
                     self._needs = np.zeros(

@@ -202,7 +202,7 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
     # A fractional object reference in one row, which only that row needs.
     _set_fact_object(3.7)(obs)
     host = _host(obs)
-    needs = row_needs(host, encoder, objects=objects)
+    needs = row_needs(host, encoder)
     assert needs is not None and len(needs) == len(host["actions_valid"])
     rng = np.random.default_rng(0)
     for _ in range(20):
@@ -211,3 +211,17 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
         assert sizes_of(needs[rows], encoder, objects=objects) == bucket_sizes(
             group, encoder, objects=objects
         )
+
+
+def test_collection_records_each_rows_measured_needs() -> None:
+    """A bucketed collector records the needs it measured for every learner row,
+    equal to measuring the recorded rows again, so learning reuses them."""
+    case = _policy(history=True)
+    agent = _bucketed(case)
+    batch = case.collector.collect(agent, 12)
+    rows = np.arange(batch.actions.size)
+    recorded = batch.recorded.gather_needs(rows)
+    assert recorded is not None
+    host = batch.observations(rows).observation
+    encoder = agent.observation_space.encoder
+    assert np.array_equal(recorded, row_needs(host, encoder))

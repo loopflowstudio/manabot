@@ -38,7 +38,9 @@ def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
     """TinyPolicy tests the learning rule; it reads no policy input to admit."""
     monkeypatch.setattr(learner_module, "admit_observation", lambda agent, obs: obs)
     monkeypatch.setattr(learner_module, "check_observation", lambda agent, obs: None)
-    monkeypatch.setattr(learner_module, "measure_row_needs", lambda agent, obs: None)
+    monkeypatch.setattr(
+        learner_module, "measure_row_needs", lambda agent, obs, **_: None
+    )
     monkeypatch.setattr(learner_module, "bind_admitted", lambda agent, obs, **_: obs)
     monkeypatch.setattr(
         learner_module, "transfer_admitted", lambda admitted, device: (admitted, 0)
