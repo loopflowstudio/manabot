@@ -294,3 +294,42 @@ naming 0.4.0).
 Not a naming gap in this Task: `is_token` is true for copies of spells and the
 text observation prints it as "token yes". The column and JSON key are frozen
 and `docs/engine.md` states the meaning ("not a card").
+
+## Concept review 2 (2026-11-13, HEAD `ce07967654`): next implement direction
+
+Published surface, aliases, stubs, docs and frozen spellings match the rename
+table; nothing in the model changes and no product choice is open.
+
+The first review's local-name pass was incomplete. These non-test bindings
+still call `managym.Object` rows (whole `agent_objects` / `opponent_objects`
+lists, tokens and spell copies included) cards. Rename the bindings only, to
+`row`/`rows`/`objects` (never builtin `object`); emitted keys, messages, text
+and buffers stay byte-identical:
+
+- `manabot/env/observation.py`: `_object_rows` (`card.name for card in objects
+  if card.is_token`), and the `cards`/`card` loop variables in `encode` at
+  ~L386-436 that iterate the object lists. Keep `outside`/`card` at ~L446
+  (sideboard cards), the capacity labels `"agent cards"` / `"opponent cards"`
+  (they name the `agent_cards` buffer capacity `cards_per_player`).
+- `manabot/verify/scenarios.py`: `_card_name` -> `_object_name` (its caller
+  `action_casts` resolves a spell), loop variables there, and
+  `cards` / `battlefield_cards` at ~L69-77.
+- `manabot/verify/choice_corpus.py` ~L74-79, `manabot/semantic/learning.py`
+  ~L560-566, `academy/server.py` ~L387-392 and ~L475-480: `cards`/`card` loop
+  variables over the two object lists.
+- `manabot/sim/heuristic.py` ~L507: `cards()` returns `dict[int, managym.Object]`
+  over all visible rows -> `objects()`; callers that then pick hand cards keep
+  `card` (already recorded above).
+
+Tests: rename only where the bound row is known not to be a card
+(`tests/verify/test_observation_parity.py:731` counts Food tokens;
+`tests/verify/test_native_buffer_capacities.py:519`). Other test
+comprehensions over hand/graveyard rows may keep `card`.
+
+Not changing: Rust `observability.rs` `left.agent_cards`, `owner.agent_cards`
+(encoded buffer fields), `listed_card_row` only if it is used solely for cards.
+
+Python only, so no extension rebuild. Recheck with the 27-test command above
+under `-W error::DeprecationWarning`, `tests/sim/test_heuristic.py`,
+`tests/verify/test_observation_parity.py`, and the digest script (expect 3,512
+decisions, `14c102e4...100a`).
