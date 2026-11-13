@@ -408,7 +408,7 @@ def test_retained_professor_offer_completes_payment_and_replays_exactly() -> Non
         # reaching the resolved Professor's player-visible Learn decision.
         # Directed native regressions exercise each explicit payment step.
         assert any(
-            c.name == "Gnarled Professor" and c.zone == 2 for c in obs.agent_cards
+            c.name == "Gnarled Professor" and c.zone == 2 for c in obs.agent_objects
         )
         decline = next(
             i

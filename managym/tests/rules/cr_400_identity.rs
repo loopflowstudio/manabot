@@ -284,7 +284,7 @@ fn card_zone_readers_preserve_transient_token_occupants() {
         if zone == ZoneType::Hand {
             let observation = Observation::for_player(s.game(), player);
             assert!(observation
-                .agent_cards
+                .agent_objects
                 .iter()
                 .any(|row| row.id == s.game().state.objects[token].id.0 as i32));
         }

@@ -55,8 +55,8 @@ def test_matchup_loops_restore_decks_on_each_seat(probed, game_offset):
 def _first_obs_signature(env: Env) -> tuple[tuple[str, ...], tuple[str, ...]]:
     raw = env.last_raw_obs
     return (
-        tuple(card.name for card in raw.agent_cards),
-        tuple(card.name for card in raw.opponent_cards),
+        tuple(card.name for card in raw.agent_objects),
+        tuple(card.name for card in raw.opponent_objects),
     )
 
 

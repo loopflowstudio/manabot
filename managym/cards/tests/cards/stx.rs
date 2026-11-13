@@ -137,11 +137,11 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
         let owner = Observation::for_player(s.game(), PlayerId(0));
         let other = Observation::for_player(s.game(), PlayerId(1));
         assert!(owner
-            .agent_cards
+            .agent_objects
             .iter()
             .any(|c| c.zone == ZoneType::Library));
         assert!(other
-            .opponent_cards
+            .opponent_objects
             .iter()
             .all(|c| c.zone != ZoneType::Library));
         let selected = s
@@ -247,7 +247,7 @@ fn resampled_private_search_choices_still_name_library_cards() {
             assert_eq!(offered, expected);
             let owner = Observation::for_player(&branch, PlayerId(0));
             let visible = owner
-                .agent_cards
+                .agent_objects
                 .iter()
                 .filter(|object| object.zone == ZoneType::Library)
                 .map(|object| object.id)
@@ -314,7 +314,7 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
             .unwrap();
         let observed = Observation::for_player(&branch, PlayerId(1));
         assert!(observed
-            .opponent_cards
+            .opponent_objects
             .iter()
             .all(|object| object.zone != ZoneType::Library && object.zone != ZoneType::Hand));
         for action in &branch.action_space().unwrap().actions {

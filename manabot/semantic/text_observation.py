@@ -28,7 +28,7 @@ from managym.decision_capture import (
     UnavailableReference,
 )
 
-REPRESENTATION_VERSION = "manabot-text-6"
+REPRESENTATION_VERSION = "manabot-text-7"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -431,7 +431,7 @@ class _Renderer:
             self.names[player.id] = label
             self.seats[player.player_index] = label
         for index, card in enumerate(
-            self.state.agent_cards + self.state.opponent_cards
+            self.state.agent_objects + self.state.opponent_objects
         ):
             label = f"C{index + 1} ({card.name})"
             self.names[card.id] = label
@@ -802,10 +802,10 @@ class _Renderer:
                 )
         return lines
 
-    def _cards_lines(self) -> list[str]:
+    def _objects_lines(self) -> list[str]:
         state = self.state
         lines: list[str] = []
-        for card in state.agent_cards + state.opponent_cards:
+        for card in state.agent_objects + state.opponent_objects:
             flags = ", ".join(
                 key.removeprefix("is_").replace("_", " ")
                 for key in (
@@ -836,9 +836,9 @@ class _Renderer:
             if card.cast_permission is not None:
                 optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(
-                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
+                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; object power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
             )
-        if not state.agent_cards and not state.opponent_cards:
+        if not state.agent_objects and not state.opponent_objects:
             lines.append("Empty.")
         return lines
 
@@ -1072,7 +1072,7 @@ class _Renderer:
             for relation in capture.frames
         )
         if not (searching_opponent or controls_opponent) and any(
-            card.zone == 1 for card in state.opponent_cards
+            card.zone == 1 for card in state.opponent_objects
         ):
             raise TextEncodingError("opponent hand identity in capture")
         lines = [
@@ -1091,9 +1091,9 @@ class _Renderer:
         lines += [
             "Opponent's other hand identities and both library orders are unavailable.",
             "",
-            "Visible cards (separate aliases for separate copies):",
+            "Visible objects (separate aliases for separate copies):",
         ]
-        lines.extend(self._cards_lines())
+        lines.extend(self._objects_lines())
         lines += ["", "Owned outside-game candidates:"]
         for card in state.agent_sideboard:
             lines.append(
@@ -1133,7 +1133,7 @@ class _Renderer:
             if targets:
                 details.append("targets " + ", ".join(targets))
             lines.append(
-                f"S{index + 1}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)} [{self.definition(item.source_card_registry_key)}]; {'; '.join(details)}."
+                f"S{index + 1}: {_enum(('spell', 'activated ability', 'triggered ability'), item.kind)} [{self.definition(item.source_registry_key)}]; {'; '.join(details)}."
             )
         if not state.stack_objects:
             lines.append("Empty.")
@@ -1162,7 +1162,7 @@ class _Renderer:
             )
         if context.mana_cost is not None:
             lines.append(f"Outstanding mana cost: {context.mana_cost}.")
-        lines += ["", "Bound public card definitions:"]
+        lines += ["", "Bound public definitions:"]
         lines.extend(self._definitions_lines())
         lines += [
             "",

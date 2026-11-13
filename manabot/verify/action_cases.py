@@ -123,7 +123,7 @@ def _resolved_outcomes(
             NativeOutcome(
                 owner.agent.life,
                 owner.opponent.life,
-                sorted(c.registry_key for c in owner.agent_cards if int(c.zone) == 1),
+                sorted(c.registry_key for c in owner.agent_objects if int(c.zone) == 1),
                 sorted(p.registry_key for p in owner.agent_permanents),
                 sorted(p.registry_key for p in owner.opponent_permanents),
             )
@@ -205,7 +205,7 @@ def decision_case(
                 current, _, _, _, _ = branch.step(passing)
             owner = branch.observation_for_player(0)
             outcomes.append(
-                (owner.agent.life, sum(int(c.zone) == 1 for c in owner.agent_cards))
+                (owner.agent.life, sum(int(c.zone) == 1 for c in owner.agent_objects))
             )
         assert outcomes == [(life + 3, 0), (life, 1)]
         if kind == "ability":

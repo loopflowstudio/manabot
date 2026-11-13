@@ -20,7 +20,7 @@ sys.modules[f"{__name__}.format"] = format
 
 # ---------------------------------------------------------------------------
 # Deprecated spellings, removed in 0.3.0. Engine names describe what managym
-# produces; these older names described how manabot's policy consumes it.
+# produces; aliases keep earlier consumer and card spellings working.
 # ---------------------------------------------------------------------------
 
 _P = ParamSpec("_P")
@@ -50,3 +50,18 @@ learning_token_value = _deprecated_alias(
 learning_record_names = _deprecated_alias(
     "learning_record_names", _managym.record_vocabulary
 )
+
+
+_DEPRECATED_TYPES = {"Card": "Object"}
+
+
+def __getattr__(name: str) -> object:
+    if replacement := _DEPRECATED_TYPES.get(name):
+        warnings.warn(
+            f"managym.{name} is deprecated and removed in 0.3.0; "
+            f"use managym.{replacement}",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return getattr(_managym, replacement)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

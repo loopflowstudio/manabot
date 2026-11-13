@@ -385,8 +385,8 @@ def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
 
     result: dict[int, int] = {}
     for cards, permanents in (
-        (obs.agent_cards, obs.agent_permanents),
-        (obs.opponent_cards, obs.opponent_permanents),
+        (obs.agent_objects, obs.agent_permanents),
+        (obs.opponent_objects, obs.opponent_permanents),
     ):
         for card in cards:
             result[int(card.id)] = int(card.registry_key)
@@ -398,7 +398,7 @@ def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
                 result[int(permanent.id)] = int(battlefield_cards[index].registry_key)
     for stack_object in obs.stack_objects:
         result[int(stack_object.stack_object_id)] = int(
-            stack_object.source_card_registry_key
+            stack_object.source_registry_key
         )
     return result
 
@@ -465,7 +465,7 @@ def _encountered_definition_ids(
         for definition_id in event["definition_ids"]
     )
     definitions.update(
-        int(stack_object.source_card_registry_key)
+        int(stack_object.source_registry_key)
         for stack_object in [*before.stack_objects, *after.stack_objects]
     )
 
@@ -473,8 +473,8 @@ def _encountered_definition_ids(
     after_taps: dict[int, tuple[int, bool]] = {}
     for observation, target in ((before, before_taps), (after, after_taps)):
         for cards, permanents in (
-            (observation.agent_cards, observation.agent_permanents),
-            (observation.opponent_cards, observation.opponent_permanents),
+            (observation.agent_objects, observation.agent_permanents),
+            (observation.opponent_objects, observation.opponent_permanents),
         ):
             battlefield_cards = [
                 card

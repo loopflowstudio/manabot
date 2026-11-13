@@ -72,8 +72,8 @@ def _signatures(raw: managym.Observation) -> list[str]:
         raw.opponent.id: ["player", "opponent"],
     }
     for role, cards, permanents in (
-        ("self", raw.agent_cards, raw.agent_permanents),
-        ("opponent", raw.opponent_cards, raw.opponent_permanents),
+        ("self", raw.agent_objects, raw.agent_permanents),
+        ("opponent", raw.opponent_objects, raw.opponent_permanents),
     ):
         for card in cards:
             objects[card.id] = [

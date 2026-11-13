@@ -256,7 +256,7 @@ class TestResetSeed:
         obs = env.last_raw_obs
         return [
             (c.registry_key, int(c.zone))
-            for c in list(obs.agent_cards) + list(obs.opponent_cards)
+            for c in list(obs.agent_objects) + list(obs.opponent_objects)
         ]
 
     def test_reset_seed_changes_deal(self, env):

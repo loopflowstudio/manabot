@@ -150,7 +150,7 @@ def test_submitted_tla_decks_play_through_the_training_environment() -> None:
         if any(frame.kind == 14 for frame in raw.continuation):
             assert raw.agent.player_index == 0
             assert env._engine.current_agent_index() == 0
-            assert raw.opponent_cards
+            assert raw.opponent_objects
             break
         actions = raw.action_space.actions
         lands = len(raw.agent_permanents)

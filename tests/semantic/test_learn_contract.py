@@ -282,7 +282,7 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
     assert len(after.agent_sideboard) == 2
     assert all(card.candidate_id != candidate_id for card in after.agent_sideboard)
     assert any(
-        card.id == candidate_id and int(card.zone) == 1 for card in after.agent_cards
+        card.id == candidate_id and int(card.zone) == 1 for card in after.agent_objects
     )
     assert after.agent.sideboard_counts == before.agent.sideboard_counts
     assert after.agent.remaining_sideboard_counts.get(selected.registry_key, 0) == 0
@@ -293,7 +293,7 @@ def test_learn_outside_descriptors_programs_and_native_json_parity(learn_root):
         == after.agent.remaining_sideboard_counts
     )
     assert observer.opponent.known_hand == after.agent.known_hand
-    assert all(int(card.zone) != 1 for card in observer.opponent_cards)
+    assert all(int(card.zone) != 1 for card in observer.opponent_objects)
     assert (
         json.loads(observer.toJSON())
         == Observation.from_json(env.semantic_observation_json(1 - actor)).viewer_state
@@ -324,7 +324,7 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
         row = scalar["agent_cards"][focus - 2]
         if kind == 14:
             retrievals += 1
-            candidate = obs.agent_sideboard[focus - 2 - len(obs.agent_cards)]
+            candidate = obs.agent_sideboard[focus - 2 - len(obs.agent_objects)]
             assert candidate.candidate_id == action.focus[0]
             assert row[:7].sum() == 0  # outside is not an eighth game zone
             assert row[37] == 1  # outside marker precedes indestructible
@@ -335,7 +335,7 @@ def test_learn_bounded_encoders_preserve_kinds_outside_focus_and_overflow(learn_
     assert retrievals == 3
     for config in (
         ObservationConfig(max_actions=2),
-        ObservationConfig(max_cards_per_player=len(obs.agent_cards)),
+        ObservationConfig(max_cards_per_player=len(obs.agent_objects)),
         ObservationConfig(max_focus_objects=0),
     ):
         with pytest.raises(ValueError, match="capacity exceeded"):

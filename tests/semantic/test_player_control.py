@@ -67,7 +67,7 @@ def _controlled_root(
     raw = env.observation_for_player(caster)
     source = next(
         c.id
-        for c in raw.agent_cards
+        for c in raw.agent_objects
         if c.name == "Secret of Bloodbending" and int(c.zone) == 1
     )
     index = next(

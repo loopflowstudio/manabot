@@ -264,7 +264,7 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     )
     assert "foretold" not in opponent.text
     observation = _viewer_observation(opponent)
-    assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
+    assert all(card.name != "Sozin's Comet" for card in observation.opponent_objects)
     assert observation.opponent.zone_counts[5] == 1
     encoded = space.encode(observation)
     for key in ("agent_cards", "opponent_cards"):
@@ -517,15 +517,15 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "colors": "colors",
         "keyword_counter_timestamps": "keyword counter timestamps",
     },
-    managym.Card: {
+    managym.Object: {
         "id": "the card's alias",
         "registry_key": "[definition]",
         "name": "the definition line",
         "text_box": "Rules:",
         "owner_id": "owner",
         "zone": "zone",
-        "power": "card power/toughness",
-        "toughness": "card power/toughness",
+        "power": "object power/toughness",
+        "toughness": "object power/toughness",
         "mana_cost": "cost",
         "card_types": "type flags",
         "keywords": "keywords",
@@ -544,7 +544,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "stack_object_id": "S<n>",
         "kind": "spell/activated ability/triggered ability",
         "controller_id": "controller",
-        "source_card_registry_key": "[definition]",
+        "source_registry_key": "[definition]",
         "source_permanent_id": "source",
         "description": "the ability text",
         "chosen_mode": "mode",
@@ -642,6 +642,9 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
 @pytest.mark.parametrize("kind", list(_TEXT_FIELDS), ids=lambda kind: kind.__name__)
 def test_every_observed_field_has_llm_text(kind: type) -> None:
     observed = {name for name in dir(kind) if not name.startswith("_")}
+    # The compatibility property exposes the same state, covered by the alias test.
+    if kind is managym.StackObject:
+        observed.remove("source_card_registry_key")
     assert observed == set(_TEXT_FIELDS[kind])
 
 
@@ -1203,7 +1206,7 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
     raw = env.observation_for_player(viewer)
     decision = capture_text_decision(env)
     assert "search named cards" in decision.text
-    inspected_ids = {card.id for card in raw.opponent_cards if int(card.zone) in (0, 1)}
+    inspected_ids = {card.id for card in raw.opponent_objects if int(card.zone) in (0, 1)}
     assert inspected_ids
     projection = decision_surface_view(env, viewer)
     assert {card["id"] for card in projection["agent"]["inspected"]} == inspected_ids

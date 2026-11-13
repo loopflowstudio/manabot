@@ -368,7 +368,7 @@ impl Game {
         }
         let agent_obs = AgentObservation::for_player(self, viewer);
         let public_entries = self.pending_public_entries();
-        if !agent_obs.opponent_cards.iter().all(|card| {
+        if !agent_obs.opponent_objects.iter().all(|card| {
             card.zone != ZoneType::Hand
                 || self.shares_information(viewer, PlayerId(1 - viewer.0))
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))

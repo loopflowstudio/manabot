@@ -544,7 +544,7 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     assert_eq!(me.graveyard_lessons, 1);
     assert_eq!(them.graveyard_lessons, 0);
 
-    let all_cards = obs.agent_cards.iter().chain(obs.opponent_cards.iter());
+    let all_cards = obs.agent_objects.iter().chain(obs.opponent_objects.iter());
     let token_card = all_cards
         .clone()
         .find(|object| object.name == "Ally")

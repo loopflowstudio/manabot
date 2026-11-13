@@ -339,7 +339,7 @@ configuration; widths are the layout.
 | Key | Shape | Holds |
 | --- | --- | --- |
 | `agent_player`, `opponent_player` | 1 × 73 | Player state |
-| `agent_cards`, `opponent_cards` | 60 × 56 | Cards outside the battlefield |
+| `agent_cards`, `opponent_cards` | 60 × 56 | Objects in visible zones, including battlefield tokens and copies of spells: the rows of `Observation.agent_objects` / `opponent_objects`. The keys keep `cards` |
 | `agent_permanents`, `opponent_permanents` | 40 × 38 | Permanents |
 | `relations` | 64 × 49 | Stack entries, targets, clauses, modes, costs, suspended payments, waiting triggers |
 | `facts` | 512 × 12 (`max_facts`) | One row per object and detail of an open vocabulary |

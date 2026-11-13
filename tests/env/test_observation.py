@@ -273,7 +273,7 @@ class TestObservationEncoder:
 
         # Check cards validity
         agent_cards_valid = encoded["agent_cards_valid"]
-        actual_cards = len(observation.agent_cards)
+        actual_cards = len(observation.agent_objects)
         expected_valid = actual_cards
         valid_sum = int(agent_cards_valid.sum())  # Convert to Python int for comparison
         assert valid_sum == expected_valid, (
@@ -326,14 +326,14 @@ class TestObservationEncoder:
     ):
         encoded = observation_space.encode(observation)
 
-        for i, card in enumerate(observation.agent_cards):
+        for i, card in enumerate(observation.agent_objects):
             vec = encoded["agent_cards"][i]
             assert vec[7] == pytest.approx(1.0)
             assert vec[8] == pytest.approx(card.power / 10.0)
             assert vec[9] == pytest.approx(card.toughness / 10.0)
             assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
 
-        for i, card in enumerate(observation.opponent_cards):
+        for i, card in enumerate(observation.opponent_objects):
             vec = encoded["opponent_cards"][i]
             assert vec[7] == pytest.approx(0.0)
             assert vec[8] == pytest.approx(card.power / 10.0)
@@ -356,8 +356,8 @@ class TestObservationEncoder:
         mapping = observation_space.encoder.object_to_index
 
         # Find a sample card ID
-        if observation.agent_cards:
-            card_id = observation.agent_cards[0].id
+        if observation.agent_objects:
+            card_id = observation.agent_objects[0].id
             assert card_id in mapping, "Card ID not found in mapping"
             idx = mapping[card_id]
             # Index should be after players but before max objects

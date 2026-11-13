@@ -37,8 +37,8 @@ def add_truncation_flags(
             0, len(raw_obs.action_space.actions) - encoder.max_actions
         )
     info["card_space_truncated"] = (
-        len(raw_obs.agent_cards) > encoder.cards_per_player
-        or len(raw_obs.opponent_cards) > encoder.cards_per_player
+        len(raw_obs.agent_objects) > encoder.cards_per_player
+        or len(raw_obs.opponent_objects) > encoder.cards_per_player
     )
     info["permanent_space_truncated"] = (
         len(raw_obs.agent_permanents) > encoder.perms_per_player

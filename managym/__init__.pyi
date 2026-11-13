@@ -694,8 +694,9 @@ class CastPermission:
     waterbend: bool
     foretold: bool
 
-class Card:
-    """A card in any zone. On the battlefield every characteristic field
+class Object:
+    """An object in any zone, including tokens and copies of spells.
+    On the battlefield every characteristic field
     (name, power/toughness, card types, legendary, Ally, Lesson, ward,
     keywords) reads the engine's layered characteristics; elsewhere the
     printed card. Identity, token status and casting costs are printed."""
@@ -721,6 +722,8 @@ class Card:
     x: Optional[int]
     # A graveyard card put there from the battlefield this turn (input v10).
     from_battlefield_this_turn: bool
+
+Card = Object  # Deprecated spelling, removed in 0.3.0.
 
 class SideboardCard:
     candidate_id: int
@@ -856,7 +859,7 @@ class StackObject:
     stack_object_id: int
     kind: StackObjectKindEnum
     controller_id: int
-    source_card_registry_key: int
+    source_registry_key: int
     source_permanent_id: int | None
     chosen_mode: int | None
     ability_index: int | None
@@ -865,6 +868,13 @@ class StackObject:
     x: int
     # Keywords a static grants this spell on the stack.
     granted_keywords: Keywords | None
+
+    @property
+    @deprecated("use StackObject.source_registry_key; removed in 0.3.0")
+    def source_card_registry_key(self) -> int: ...
+    @source_card_registry_key.setter
+    @deprecated("use StackObject.source_registry_key; removed in 0.3.0")
+    def source_card_registry_key(self, value: int) -> None: ...
 
 class EventData:
     event_type: EventTypeEnum
@@ -887,17 +897,29 @@ class Observation:
     turn: Turn
     action_space: ActionSpace
     agent: Player
-    agent_cards: List[Card]
+    agent_objects: List[Object]
     agent_sideboard: List[SideboardCard]
     agent_permanents: List[Permanent]
     opponent: Player
-    opponent_cards: List[Card]
+    opponent_objects: List[Object]
     opponent_permanents: List[Permanent]
     stack_objects: List[StackObject]
     recent_events: List[EventData]
 
     def validate(self) -> bool: ...
     def toJSON(self) -> str: ...
+    @property
+    @deprecated("use Observation.agent_objects; removed in 0.3.0")
+    def agent_cards(self) -> List[Object]: ...
+    @agent_cards.setter
+    @deprecated("use Observation.agent_objects; removed in 0.3.0")
+    def agent_cards(self, value: List[Object]) -> None: ...
+    @property
+    @deprecated("use Observation.opponent_objects; removed in 0.3.0")
+    def opponent_cards(self) -> List[Object]: ...
+    @opponent_cards.setter
+    @deprecated("use Observation.opponent_objects; removed in 0.3.0")
+    def opponent_cards(self, value: List[Object]) -> None: ...
 
 class AgentError(RuntimeError): ...
 

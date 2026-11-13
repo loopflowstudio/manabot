@@ -70,9 +70,9 @@ def test_native_and_python_v10_encoders_agree() -> None:
     env = priority_root(("Brought Back",), ("Bloodchief Ascension",))
     obs = _lost_life(env.scenario_refresh(), 3)
     # The encoders copy the card flag; game behavior is covered natively.
-    cards = obs.agent_cards
+    cards = obs.agent_objects
     cards[0].from_battlefield_this_turn = True
-    obs.agent_cards = cards
+    obs.agent_objects = cards
     agent = obs.agent
     agent.spells_cast = 2
     obs.agent = agent

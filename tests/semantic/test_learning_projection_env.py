@@ -57,9 +57,9 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
     projection = pack.project_observation(visible, identity_mode="semantic_only")
     assert not projection.opaque_identity_valid.any()
     assert (projection.opaque_identity_ids == -1).all()
-    assert any(card.name == "Invasion Reinforcements" for card in visible.agent_cards)
+    assert any(card.name == "Invasion Reinforcements" for card in visible.agent_objects)
     assert all(
-        card.name != "Invasion Reinforcements" for card in visible.opponent_cards
+        card.name != "Invasion Reinforcements" for card in visible.opponent_objects
     )
 
     rows = {

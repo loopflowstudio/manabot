@@ -98,7 +98,7 @@ def expected_focus_indices(
     object_to_index[obs.opponent.id] = current_object_index
     current_object_index += 1
 
-    for cards in (obs.agent_cards, obs.opponent_cards):
+    for cards in (obs.agent_objects, obs.opponent_objects):
         ordered = cards[: config.max_cards_per_player]
         for card in ordered:
             object_to_index[card.id] = current_object_index
@@ -321,13 +321,13 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     env.reset(make_player_configs())
     env.scenario_force_battlefield(0, "Gray Ogre")
     obs = env.scenario_refresh()
-    cards = obs.agent_cards
+    cards = obs.agent_objects
     card = cards[0]
     keywords = card.keywords
     keywords.indestructible = True
     card.keywords = keywords
     cards[0] = card
-    obs.agent_cards = cards
+    obs.agent_objects = cards
     permanents = obs.agent_permanents
     permanent = permanents[0]
     keywords = permanent.keywords
@@ -728,7 +728,7 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
         for _ in range(16):
             obs = env.observation_for_player(owner)
             if (
-                sum(card.name == "Food" for card in obs.agent_cards) == food_count
+                sum(card.name == "Food" for card in obs.agent_objects) == food_count
                 and not obs.stack_objects
             ):
                 break

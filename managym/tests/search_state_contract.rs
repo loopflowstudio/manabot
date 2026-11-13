@@ -133,11 +133,11 @@ fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
     for viewer in [PlayerId(0), PlayerId(1)] {
         let projection = Observation::for_player(&root, viewer);
         assert!(projection
-            .agent_cards
+            .agent_objects
             .iter()
             .any(|object| object.zone == ZoneType::Hand));
         assert!(projection
-            .opponent_cards
+            .opponent_objects
             .iter()
             .all(|object| { object.zone != ZoneType::Hand && object.zone != ZoneType::Library }));
     }

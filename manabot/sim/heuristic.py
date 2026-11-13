@@ -467,12 +467,12 @@ class _Observation:
         return found
 
     @property
-    def agent_cards(self) -> list[managym.Card]:
-        return self._list("agent_cards")
+    def agent_objects(self) -> list[managym.Object]:
+        return self._list("agent_objects")
 
     @property
-    def opponent_cards(self) -> list[managym.Card]:
-        return self._list("opponent_cards")
+    def opponent_objects(self) -> list[managym.Object]:
+        return self._list("opponent_objects")
 
     @property
     def agent_permanents(self) -> list[managym.Permanent]:
@@ -499,24 +499,24 @@ class _Board:
         self.raw = raw
         self.own_id = int(raw.agent.id)
         # Built on first use: most priority passes never need them.
-        self._cards: dict[int, managym.Card] | None = None
-        self._by_key: dict[int, managym.Card] | None = None
+        self._cards: dict[int, managym.Object] | None = None
+        self._by_key: dict[int, managym.Object] | None = None
         self._permanents: dict[int, managym.Permanent] | None = None
 
     @property
-    def cards(self) -> dict[int, managym.Card]:
+    def cards(self) -> dict[int, managym.Object]:
         if self._cards is None:
             self._cards = {
-                int(c.id): c for c in self.raw.agent_cards + self.raw.opponent_cards
+                int(c.id): c for c in self.raw.agent_objects + self.raw.opponent_objects
             }
         return self._cards
 
     @property
-    def by_key(self) -> dict[int, managym.Card]:
+    def by_key(self) -> dict[int, managym.Object]:
         if self._by_key is None:
             self._by_key = {
                 int(c.registry_key): c
-                for c in self.raw.agent_cards + self.raw.opponent_cards
+                for c in self.raw.agent_objects + self.raw.opponent_objects
             }
         return self._by_key
 
@@ -554,12 +554,12 @@ class _Board:
                 count += 1
         return count
 
-    def can_kick(self, card: managym.Card) -> bool:
+    def can_kick(self, card: managym.Object) -> bool:
         cost = int(card.mana_cost.mana_value) + int(card.kicker_cost)
         return card.kicker_cost > 0 and self.untapped_lands() >= cost
 
-    def hand(self) -> list[managym.Card]:
-        return [c for c in self.raw.agent_cards if int(c.zone) == ZoneEnum.HAND]
+    def hand(self) -> list[managym.Object]:
+        return [c for c in self.raw.agent_objects if int(c.zone) == ZoneEnum.HAND]
 
     def own_turn(self) -> bool:
         return int(self.raw.turn.active_player_id) == self.own_id
@@ -786,7 +786,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
                 return index
         return None
 
-    def _timely(self, board: _Board, card: managym.Card) -> bool:
+    def _timely(self, board: _Board, card: managym.Object) -> bool:
         """Whether this priority window suits an instant; other spells only
         arrive at sorcery timing.
 
@@ -808,7 +808,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             return True
         return not board.own_turn() and step == StepEnum.ENDING_END
 
-    def _worth_casting(self, board: _Board, card: managym.Card) -> bool:
+    def _worth_casting(self, board: _Board, card: managym.Object) -> bool:
         spell = targeted_spells().get(card.name)
         if spell is None or spell.polarity is None:
             return True

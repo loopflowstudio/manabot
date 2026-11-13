@@ -29,7 +29,7 @@ fn bribery_puts_a_creature_from_the_opponents_library_under_your_control() {
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let shown = |zone: ZoneType| {
         observation
-            .opponent_cards
+            .opponent_objects
             .iter()
             .filter(|object| object.zone == zone)
             .count()

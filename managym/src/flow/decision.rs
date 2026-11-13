@@ -3534,7 +3534,7 @@ mod learn_tests {
         );
         assert!(initial.agent_sideboard.iter().all(|outside| {
             initial
-                .agent_cards
+                .agent_objects
                 .iter()
                 .all(|object| object.id != outside.candidate_id)
         }));
@@ -3596,7 +3596,7 @@ mod learn_tests {
             .iter()
             .all(|object| object.candidate_id != last));
         assert!(after
-            .agent_cards
+            .agent_objects
             .iter()
             .any(|object| object.id == last && object.zone == ZoneType::Hand));
         assert_eq!(after.agent.sideboard_counts, initial.agent.sideboard_counts);
@@ -3713,7 +3713,7 @@ mod learn_tests {
         assert_eq!(owner.agent.known_hand, other.opponent.known_hand);
         assert_eq!(other.opponent.known_hand.get(&definition.0), Some(&1));
         assert!(!other
-            .opponent_cards
+            .opponent_objects
             .iter()
             .any(|card| card.zone == ZoneType::Hand));
         assert_ne!(

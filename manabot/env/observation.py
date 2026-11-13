@@ -17,7 +17,7 @@ Additional updates in this version:
 
 from collections import Counter
 from collections.abc import Sequence
-from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
+from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
 import numpy as np
@@ -200,10 +200,10 @@ def _timestamp_ranks(obs: managym.Observation) -> Dict[int, float]:
     return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
 
 
-def _card_rows(cards: Sequence[Any], sideboard: int) -> str:
-    """Where a seat's card rows sit, for a capacity failure's retained text."""
-    zones = Counter(str(card.zone).rsplit(".", 1)[-1].lower() for card in cards)
-    tokens = Counter(card.name for card in cards if card.is_token)
+def _object_rows(objects: Sequence[managym.Object], sideboard: int) -> str:
+    """Where a seat's object rows sit, for a capacity failure's retained text."""
+    zones = Counter(str(card.zone).rsplit(".", 1)[-1].lower() for card in objects)
+    tokens = Counter(card.name for card in objects if card.is_token)
     parts = [f"{zone} {count}" for zone, count in sorted(zones.items())]
     parts.append(f"sideboard {sideboard}")
     parts.append(f"tokens {sum(tokens.values())}")
@@ -332,8 +332,8 @@ class ObservationEncoder:
         )
         actions = obs.action_space.actions[:retained]
         for label, size, capacity in (
-            ("agent cards", len(obs.agent_cards), self.cards_per_player),
-            ("opponent cards", len(obs.opponent_cards), self.cards_per_player),
+            ("agent cards", len(obs.agent_objects), self.cards_per_player),
+            ("opponent cards", len(obs.opponent_objects), self.cards_per_player),
             ("agent permanents", len(obs.agent_permanents), self.perms_per_player),
             (
                 "opponent permanents",
@@ -384,16 +384,16 @@ class ObservationEncoder:
         ):
             out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
         for key, cards, is_mine in (
-            ("agent_cards", obs.agent_cards, 1.0),
-            ("opponent_cards", obs.opponent_cards, 0.0),
+            ("agent_cards", obs.agent_objects, 1.0),
+            ("opponent_cards", obs.opponent_objects, 0.0),
         ):
-            out[key] = self._encode_cards(
+            out[key] = self._encode_object_rows(
                 cards, is_mine=is_mine, viewer=obs.agent.id, turn=obs.turn.turn_number
             )
         # Outside copies occupy explicit rows after visible owner cards. They
         # have no zone bits; the outside marker identifies their location.
         for seat, (cards, player) in enumerate(
-            ((obs.agent_cards, obs.agent), (obs.opponent_cards, obs.opponent))
+            ((obs.agent_objects, obs.agent), (obs.opponent_objects, obs.opponent))
         ):
             if len(player.known_hand) > self.cards_per_player:
                 raise ValueError("known hand exceeds observation capacity")
@@ -421,7 +421,7 @@ class ObservationEncoder:
                 (2, self.cards_per_player), dtype=np.float32
             )
             for seat, (cards, player) in enumerate(
-                ((obs.agent_cards, obs.agent), (obs.opponent_cards, obs.opponent))
+                ((obs.agent_objects, obs.agent), (obs.opponent_objects, obs.opponent))
             ):
                 row = out["player_turn_state"][seat]
                 row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost / 20.0
@@ -436,12 +436,12 @@ class ObservationEncoder:
                         card.from_battlefield_this_turn
                     )
         outside = obs.agent_sideboard
-        start = len(obs.agent_cards)
+        start = len(obs.agent_objects)
         if start + len(outside) > self.cards_per_player:
             raise ValueError(
                 "observation capacity exceeded: agent_cards plus sideboard "
                 f"{start + len(outside)} > {self.cards_per_player} "
-                f"({_card_rows(obs.agent_cards, len(outside))})"
+                f"({_object_rows(obs.agent_objects, len(outside))})"
             )
         for offset, card in enumerate(outside):
             out["semantic_cards"][0, start + offset] = card.registry_key + 1
@@ -843,92 +843,92 @@ class ObservationEncoder:
         return arr
 
     # -------------------------------------------------------------------------
-    # Cards (with validity mask support)
+    # Objects (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_cards(
-        self, cards: List[managym.Card], is_mine: float, viewer: int, turn: int
+    def _encode_object_rows(
+        self, objects: List[managym.Object], is_mine: float, viewer: int, turn: int
     ) -> np.ndarray:
         return self._encode_objects(
-            items=cards,
+            items=objects,
             max_items=self.cards_per_player,
             dim=self.card_dim,
-            label="Card list",
-            encode_item=lambda card: self._encode_card_features(
-                card, is_mine, viewer, turn
+            label="Object list",
+            encode_item=lambda row: self._encode_object_features(
+                row, is_mine, viewer, turn
             ),
         )
 
-    def _encode_card_features(
-        self, card: managym.Card, is_mine: float, viewer: int, turn: int
+    def _encode_object_features(
+        self, row: managym.Object, is_mine: float, viewer: int, turn: int
     ) -> np.ndarray:
         arr = np.zeros(self.card_dim, dtype=np.float32)
         i = 0
-        zone_val = int(card.zone) & 0xFF
+        zone_val = int(row.zone) & 0xFF
         if 0 <= zone_val < self.num_zones:
             arr[i + zone_val] = 1.0
         i += self.num_zones
         arr[i] = is_mine
         i += 1
-        arr[i] = float(card.power) / 10.0
+        arr[i] = float(row.power) / 10.0
         i += 1
-        arr[i] = float(card.toughness) / 10.0
+        arr[i] = float(row.toughness) / 10.0
         i += 1
-        arr[i] = float(card.mana_cost.mana_value) / 10.0
+        arr[i] = float(row.mana_cost.mana_value) / 10.0
         i += 1
-        arr[i] = float(card.card_types.is_land)
+        arr[i] = float(row.card_types.is_land)
         i += 1
-        arr[i] = float(card.card_types.is_creature)
+        arr[i] = float(row.card_types.is_creature)
         i += 1
-        arr[i] = float(card.card_types.is_artifact)
+        arr[i] = float(row.card_types.is_artifact)
         i += 1
-        arr[i] = float(card.card_types.is_enchantment)
+        arr[i] = float(row.card_types.is_enchantment)
         i += 1
-        arr[i] = float(card.card_types.is_planeswalker)
+        arr[i] = float(row.card_types.is_planeswalker)
         i += 1
-        arr[i] = float(card.card_types.is_battle)
+        arr[i] = float(row.card_types.is_battle)
         i += 1
-        arr[i] = float(card.keywords.flying)
+        arr[i] = float(row.keywords.flying)
         i += 1
-        arr[i] = float(card.keywords.reach)
+        arr[i] = float(row.keywords.reach)
         i += 1
-        arr[i] = float(card.keywords.haste)
+        arr[i] = float(row.keywords.haste)
         i += 1
-        arr[i] = float(card.keywords.vigilance)
+        arr[i] = float(row.keywords.vigilance)
         i += 1
-        arr[i] = float(card.keywords.trample)
+        arr[i] = float(row.keywords.trample)
         i += 1
-        arr[i] = float(card.keywords.first_strike)
+        arr[i] = float(row.keywords.first_strike)
         i += 1
-        arr[i] = float(card.keywords.double_strike)
+        arr[i] = float(row.keywords.double_strike)
         i += 1
-        arr[i] = float(card.keywords.deathtouch)
+        arr[i] = float(row.keywords.deathtouch)
         i += 1
-        arr[i] = float(card.keywords.lifelink)
+        arr[i] = float(row.keywords.lifelink)
         i += 1
-        arr[i] = float(card.keywords.defender)
+        arr[i] = float(row.keywords.defender)
         i += 1
-        arr[i] = float(card.keywords.menace)
+        arr[i] = float(row.keywords.menace)
         i += 1
-        arr[i] = float(card.keywords.flash)
+        arr[i] = float(row.keywords.flash)
         i += 1
-        arr[i] = float(card.is_token)
+        arr[i] = float(row.is_token)
         i += 1
-        arr[i] = float(card.is_ally)
+        arr[i] = float(row.is_ally)
         i += 1
-        arr[i] = float(card.is_lesson)
+        arr[i] = float(row.is_lesson)
         i += 1
-        arr[i] = float(card.ward_cost > 0)
+        arr[i] = float(row.ward_cost > 0)
         i += 1
-        arr[i] = float(card.ward_cost) / 10.0
+        arr[i] = float(row.ward_cost) / 10.0
         i += 1
-        arr[i] = float(card.kicker_cost > 0)
+        arr[i] = float(row.kicker_cost > 0)
         i += 1
-        arr[i] = float(card.kicker_cost) / 10.0
+        arr[i] = float(row.kicker_cost) / 10.0
         i += 1
-        arr[i] = float(card.keywords.hexproof)
-        arr[38] = float(card.keywords.indestructible)
-        arr[39] = float(card.is_legendary)
-        permission = card.cast_permission
+        arr[i] = float(row.keywords.hexproof)
+        arr[38] = float(row.keywords.indestructible)
+        arr[39] = float(row.is_legendary)
+        permission = row.cast_permission
         if permission is not None:
             base = CARD_PERMISSION_INDEX
             arr[base] = 1.0
@@ -948,10 +948,10 @@ class ObservationEncoder:
             arr[base + 10] = float(permission.waterbend)
             arr[base + 11] = float(permission.foretold)
             arr[base + 12] = float(permission.through_next_turn)
-        if card.x is not None:
+        if row.x is not None:
             arr[CARD_X_INDEX] = 1.0
-            arr[CARD_X_INDEX + 1] = float(card.x) / 10.0
-        # Set validity flag (card exists)
+            arr[CARD_X_INDEX + 1] = float(row.x) / 10.0
+        # Set validity flag (row exists)
         arr[-1] = 1.0
         return arr
 

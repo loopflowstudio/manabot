@@ -81,7 +81,7 @@ def test_reward_progress_shaping():
     )
     battlefield = 2
     last_obs = SimpleNamespace(
-        agent_cards=[
+        agent_objects=[
             SimpleNamespace(
                 zone=battlefield,
                 card_types=SimpleNamespace(is_land=True, is_creature=False),
@@ -92,7 +92,7 @@ def test_reward_progress_shaping():
         won=False,
     )
     new_obs = SimpleNamespace(
-        agent_cards=[
+        agent_objects=[
             SimpleNamespace(
                 zone=battlefield,
                 card_types=SimpleNamespace(is_land=True, is_creature=False),
@@ -123,13 +123,13 @@ def test_reward_progress_shaping_stacks_with_terminal_reward():
     )
     battlefield = 2
     last_obs = SimpleNamespace(
-        agent_cards=[],
+        agent_objects=[],
         opponent=SimpleNamespace(life=20),
         game_over=False,
         won=False,
     )
     new_obs = SimpleNamespace(
-        agent_cards=[
+        agent_objects=[
             SimpleNamespace(
                 zone=battlefield,
                 card_types=SimpleNamespace(is_land=True, is_creature=False),

@@ -49,31 +49,31 @@ PHASE_POSTCOMBAT = int(managym.PhaseEnum.POSTCOMBAT_MAIN)
 def _card_name(raw: Any, object_id: int) -> str | None:
     """Name of the card with observation ObjectId `object_id`, if visible."""
 
-    for card in raw.agent_cards:
+    for card in raw.agent_objects:
         if int(card.id) == object_id:
             return str(card.name)
-    for card in raw.opponent_cards:
+    for card in raw.opponent_objects:
         if int(card.id) == object_id:
             return str(card.name)
     return None
 
 
 def battlefield_pairs(raw: Any, side: str) -> list[tuple[Any, Any]]:
-    """(CardData, PermanentData) pairs for one side's battlefield.
+    """(ObjectData, PermanentData) pairs for one side's battlefield.
 
     The engine pushes each permanent and its battlefield card in lockstep
     (observation.rs add_permanent), so the k-th battlefield-zone card on a
     side matches the k-th permanent on that side.
     """
 
-    cards = raw.agent_cards if side == "agent" else raw.opponent_cards
+    cards = raw.agent_objects if side == "agent" else raw.opponent_objects
     perms = raw.agent_permanents if side == "agent" else raw.opponent_permanents
     battlefield_cards = [c for c in cards if int(c.zone) == ZONE_BATTLEFIELD]
     return list(zip(battlefield_cards, perms))
 
 
 def zone_names(raw: Any, side: str, zone: int) -> list[str]:
-    cards = raw.agent_cards if side == "agent" else raw.opponent_cards
+    cards = raw.agent_objects if side == "agent" else raw.opponent_objects
     return [str(c.name) for c in cards if int(c.zone) == zone]
 
 
@@ -82,10 +82,10 @@ def stack_names(raw: Any) -> list[str]:
 
     names = [
         (int(c.id), str(c.name))
-        for c in list(raw.agent_cards) + list(raw.opponent_cards)
+        for c in list(raw.agent_objects) + list(raw.opponent_objects)
         if int(c.zone) == ZONE_STACK
     ]
-    # populate_cards pushes stack spells top-first per side; merge is
+    # populate_objects pushes stack spells top-first per side; merge is
     # approximate when both players have spells on the stack. Scenario and
     # micro games essentially always have <= 2, with the opponent's below.
     return [name for _, name in names]
