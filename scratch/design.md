@@ -1,36 +1,51 @@
 # PPO CUDA update throughput — MTG-338
 
-Measurement pass 3 outcome: the unchanged freeze was requested after a positive
-L4 availability read at 2026-11-13 11:16:14 UTC. Admission `797c99576241` failed
-at 11:17:14 UTC for no capacity; no command started or run was recorded. The
-measure keep rule restored all eight candidate/harness paths to `734f2cd5c`.
-The design below remains unmeasured and recoverable at `02c202956`; no rental,
-retry or queued comparison remains. See `experiments/ppo_cuda.md` for the receipt.
+Implementation pass 11 recovered all eight candidate/harness paths byte for byte
+from `02c202956`, preserving the report, measurement table and capacity evidence.
+No availability read, launch or measurement occurred.
 
-## Decision pass 2: iterate on the unmeasured lookup candidate
+Focused check: `uv run --locked --extra dev pytest tests/model/test_semantic_cards.py -k definition_lookup -q`
+→ 8 passed, 8 CUDA skips, 2 deselected (2.44 s). Runtime/tests/launcher and speed
+harness Ruff checks passed; all eight files match and compile, and both generated
+shell commands pass `bash -n`. The frozen equivalence scripts retain their
+previously recorded import-style diagnostics to preserve exact bytes.
 
-The preceding pass intended to recover `02c202956`, establish CPU equivalence,
-bound CUDA rounding and measure a 20% reduction in update time. Recovery
-completed exactly; focused checks passed eight CPU cases and skipped eight CUDA
-cases. Measurement then failed admission `db4502e2006a` before execution, despite
-a positive availability response. The measure keep rule restored runtime and
-candidate tests/harness to `734f2cd5c` again.
+Remaining work: whole-update CPU equivalence, CUDA numerical audits and paired
+L4 timing in measurement; broader acceptance at gate. Recovery establishes no
+speedup or CUDA equivalence. Latest capacity evidence remains measurement pass
+10 at 2026-11-13 11:43:03 UTC; its keep-rule restoration has now been reversed
+for this implementation handoff.
 
-All three rows of `scratch/measure.html` were reviewed: one trusted baseline
-and two unavailable comparisons. Neither comparison supplies a performance or
-numerical rejection. New operational evidence is that “rentable now” does not
-guarantee admission, and capped launches require a named cohort. CPU equivalence,
-CUDA audits and paired timing remain an evidence gap; recovery and local lookup
-tests alone do not meet the target.
+## Decision pass 10: iterate on the unmeasured lookup candidate
 
-Choose **iterate**: recover the same eight frozen paths for implementation,
-then attempt the unchanged comparison only under the execution prerequisite
-below. The source still routes fact-source and continuation definition joins
-through this one method, so the 56.3% profile attribution remains a credible
-reason to test it. No new mechanism, GPU, numerical bound or broader gather
-change is justified by a provider capacity failure. The harness and workload
-have not failed, the baseline remains trustworthy, and no person must resolve
-a design question. This planning pass starts no launch or background work.
+The preceding pass intended to recover the frozen candidate and obtain CPU/CUDA
+numerical checks and paired L4 timings. Implementation recovered all eight files
+exactly, with eight CPU lookup passes and eight CUDA skips. Measurement pass 10
+added one availability observation at 2026-11-13 11:43:03 UTC: “none available”,
+“0 of 1 in use”, “not rentable now”. No launch occurred; the keep rule restored
+the eight paths to the baseline.
+
+All eleven rows of `scratch/measure.html` contain one trusted baseline and ten
+unavailable comparisons: three capacity refusals and seven negative availability
+reads. This is new operational evidence, not a performance rejection or a failed
+workload. Whole-update CPU equivalence, CUDA audits and paired timing remain
+missing. Repeated recovery establishes neither speedup nor CUDA equivalence.
+
+Choose **iterate**: recover the same eight paths from `02c202956` in implement.
+Rereading the current source confirms unconditional indexing in
+`SemanticCardEncoder.embed_definitions`, reached by fact sources through
+`RecordEmbeddings.sources` and by continuation relation definitions in
+`manabot/backends/torch/policy.py` (also used by name-candidate definitions).
+The frozen CUDA-autograd embedding substitution remains the cheapest prepared
+change reaching the 56.3% profile attribution. Its prediction remains at least
+20% lower median update time, with all numerical bounds below unchanged.
+
+No capacity read or launch occurs in planning. Measurement gets one fresh
+availability read and, only if positive, at most one named-cohort L4 launch
+under $4. No queue, polling, alternative GPU or within-step retry. The baseline
+remains trustworthy, a credible optimization remains untested, and no human
+design decision is missing. Neither target attainment nor a blocked verdict
+is supported by this pass.
 
 ## Hypothesis and boundary
 
@@ -86,8 +101,8 @@ requested run `4bacd2187ed1` was never recorded and no command started. The
 measure keep rule restored the candidate/harness to `734f2cd5c` again.
 
 Implementation pass 3 recovered all eight named files verbatim from `02c202956`.
-The current tree contains the candidate and paired harness; the report and both
-failed-admission records are retained. No availability read or launch occurred.
+That implementation tree contained the candidate and paired harness; measurement
+pass 3 subsequently restored the kept runtime. All admission records remain retained. No availability read or launch occurred.
 Focused check: `uv run --locked --extra dev pytest tests/model/test_semantic_cards.py -k definition_lookup -q`
 → 8 passed, 8 CUDA skips, 2 deselected (5.98 s). Ruff, compilation and both
 generated commands' shell syntax checks passed. Remaining acceptance is the
@@ -112,10 +127,10 @@ a useful smaller gain from meeting the 20% prediction.
 
 ## Execution prerequisite and alternatives
 
-The latest availability read, **2026-11-13 11:08:05 UTC**, returned “available”,
-“0 of 1 in use”, “rentable now”; admission nevertheless refused capacity at
-**11:10:12 UTC**. Implementation recovery is reversible; measurement still
-needs successful L4 admission. In the next measurement step, make one fresh
+The latest availability read, **2026-11-13 11:43:03 UTC**, returned “none
+available”, “0 of 1 in use”, “not rentable now”; no launch followed.
+Implementation recovery is reversible; measurement still needs successful L4
+admission. In the next measurement step, make one fresh
 availability read before at most one launch under **`--max-usd 4`** with an
 explicit named cohort, injecting Doppler `manabot/prd` (R2) and `etude/prd`
 (RunPod) together. A positive read permits that single attempt; it does not

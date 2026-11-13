@@ -1,13 +1,13 @@
 # PPO CUDA updates (MTG-338)
 
-**Inconclusive; candidate reverted after measurement pass 3.**
+**Inconclusive; candidate reverted after measurement pass 10.**
 The frozen comparison at `02c202956` could not start. The single L4 availability
-check said “rentable now” at **2026-11-13 11:16:14 UTC**, but admission reported
-no available machines at **11:17:14 UTC**, before recording a run or starting
-the job. There are **no completed paired samples**, no CUDA equivalence result
-and no candidate rate or range. Measurement restored the runtime, candidate
-tests and comparison harness to `734f2cd5c`. No retry, rental or queued work
-remains. This is not a performance rejection.
+check returned “none available”, “0 of 1 in use”, “not rentable now” at
+**2026-11-13 11:43:03 UTC**. No launch was attempted. There are **no completed
+paired samples**, no CUDA equivalence result and no candidate rate or range.
+Measurement restored the runtime, candidate tests and comparison harness to
+`734f2cd5c`. No rental, retry or queued work was created. This is not a
+performance rejection.
 
 The last measured baseline remains **0.26437 optimizer steps/s** on one NVIDIA
 L4 (five repeats, **0.26366–0.26474**), or **60.521 s/update**
@@ -311,3 +311,176 @@ lookup passes and eight CUDA skips do not establish CUDA correctness. A
 successfully admitted L4 allocation followed by the frozen correctness and
 paired timing checks would settle the claim; another recovery without execution
 cannot. No speedup or behavior equivalence is established.
+
+## Measurement pass 4 (2026-11-13 UTC)
+
+All eight recovered candidate/harness files matched `02c202956` byte for byte.
+The expected shipping claim, workload and numerical bounds stayed frozen.
+The single capacity read, using nested Doppler `manabot/prd` and `etude/prd`,
+returned at **11:22:45 UTC**:
+
+> mtg338-l4: NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.69/hour (ceiling $0.75); none available; 0 of 1 in use; not rentable now.
+
+The capacity condition was not met, so no launch, cohort, admission attempt,
+rental or queue was created. No recorded-run launcher cost exists to report.
+CPU equivalence, CUDA audits, five alternating pairs and the candidate profile
+remain unrun; workload error and work counts are unavailable, not zero.
+The control CLI used `etude-sdk[s3,eval]==0.2.15`; an earlier help invocation
+mistakenly requested the nonexistent distribution version `etude==0.2.15`
+and failed dependency resolution without contacting launch admission.
+
+Under the measure keep rule, the three tracked candidate files were restored
+to `734f2cd5c` and the five comparison scripts absent there were removed.
+The frozen candidate remains recoverable at `02c202956`. A successfully
+admitted L4 allocation and completion of the frozen correctness and alternating
+measurements would settle the claim. This pass adds capacity evidence only;
+it establishes no speedup or CUDA behavior equivalence.
+
+## Measurement pass 5 (2026-11-13 UTC)
+
+All eight candidate/harness files matched `02c202956` byte for byte. The claim,
+workload and numerical bounds stayed frozen. The single permitted availability
+read, with nested Doppler `manabot/prd` and `etude/prd`, returned:
+
+> mtg338-l4: NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.69/hour (ceiling $0.75); none available; 0 of 1 in use; not rentable now; asked 2026-11-13 11:26:32 UTC.
+
+No launch was attempted because the capacity condition was not met. No rental,
+queue or background work was created, and there is no recorded-run launcher
+cost to report. CPU equivalence, CUDA audits, five alternating samples per arm
+and the separate candidate profile remain unrun. Candidate rate, range,
+workload error count and work count are unavailable, not zero.
+
+The measure keep rule restored the three tracked candidate files to
+`734f2cd5c` and removed the five comparison scripts absent there. Their bytes
+remain recoverable at `02c202956`. This pass is inconclusive: successful L4
+admission followed by the frozen correctness checks and paired measurements
+would settle the claim. Capacity evidence does not reject the optimization.
+
+
+## Measurement pass 6 (2026-11-13 UTC)
+
+All eight candidate/harness files matched `02c202956` byte for byte. The shipping
+claim, workload and numerical bounds remained frozen. The single permitted
+availability read, with nested Doppler `manabot/prd` and `etude/prd` and
+`etude-sdk[s3,eval]==0.2.15`, returned:
+
+> mtg338-l4: NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.69/hour (ceiling $0.75); none available; 0 of 1 in use; not rentable now; asked 2026-11-13 11:29:45 UTC.
+
+No launch was attempted; no rental, queue or background work was created.
+There is no recorded-run launcher cost. CPU equivalence, CUDA audits, five
+alternating samples per arm and the separate candidate profile remain unrun.
+Candidate rate, range, workload error count and work count are unavailable,
+not zero. This is capacity evidence only, not a performance rejection.
+
+The measure keep rule restored the three tracked candidate files to
+`734f2cd5c` and removed the five comparison scripts absent there. Exact candidate
+bytes remain at `02c202956`. Verdict: **inconclusive**. Successful L4 admission
+followed by the frozen correctness checks and paired measurements would settle
+the claim. No further capacity read, retry or alternate GPU was used.
+
+
+## Measurement pass 7 (2026-11-13 UTC)
+
+All eight candidate/harness paths matched `02c202956` byte for byte. The
+shipping claim, workload and numerical bounds remained frozen. The single
+permitted availability read, using nested Doppler `manabot/prd` and `etude/prd`
+and `etude-sdk[s3,eval]==0.2.15`, returned:
+
+> mtg338-l4: NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.69/hour (ceiling $0.75); none available; 0 of 1 in use; not rentable now; asked 2026-11-13 11:33:45 UTC.
+
+No launch was attempted and no rental, queue or background work was created.
+There is no recorded-run launcher cost. CPU equivalence, CUDA audits, five
+alternating samples per arm and the separate profile remain unrun. Candidate
+rate, range, workload errors and work counts are unavailable, not zero.
+
+Verdict: **inconclusive**. The measure keep rule restored the three tracked
+candidate files to `734f2cd5c` and removed the five comparison scripts absent
+there; exact candidate bytes remain at `02c202956`. Successful L4 admission and
+the frozen correctness and paired timing checks would settle the claim.
+No retry, further capacity read or alternate GPU was used. This capacity
+result establishes neither a speedup nor a performance rejection.
+
+
+## Measurement pass 8 (2026-11-13 UTC)
+
+All eight candidate/harness paths matched `02c202956` byte for byte. The
+expected claim remains “CUDA embedding lookup reduces median PPO update time
+by at least 20% on the Elemental w64l2 L4 workload, with identical CPU behavior
+and bounded CUDA rounding.” The workload and numerical bounds stayed frozen.
+The single permitted availability read, with nested Doppler `manabot/prd` and
+`etude/prd` and `etude-sdk[s3,eval]==0.2.15`, returned:
+
+> mtg338-l4: NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.69/hour (ceiling $0.75); none available; 0 of 1 in use; not rentable now; asked 2026-11-13 11:36:42 UTC.
+
+Verdict: **inconclusive**. No launch was attempted; no rental, queue or
+background work was created. There is no recorded-run launcher cost. CPU
+equivalence, CUDA audits, five alternating samples per arm and the separate
+candidate profile remain unrun. Candidate rate, range, workload errors and
+work counts are unavailable, not zero. The prior baseline remains 0.26437
+optimizer steps/s (five repeats; 0.26366–0.26474); it is not a paired comparison.
+
+The measure keep rule restored the three tracked candidate files to
+`734f2cd5c` and removed the five comparison scripts absent there. Their exact
+bytes remain at `02c202956`. Successful L4 admission followed by the frozen
+correctness checks and alternating measurements would settle the claim.
+No retry, further capacity read or alternate GPU was used. Capacity evidence
+establishes neither a speedup nor a performance rejection.
+
+
+## Measurement pass 9 (2026-11-13 UTC)
+
+All eight candidate/harness paths matched `02c202956` byte for byte. The
+expected claim remains “CUDA embedding lookup reduces median PPO update time
+by at least 20% on the Elemental w64l2 L4 workload, with identical CPU behavior
+and bounded CUDA rounding.” The workload and numerical bounds stayed frozen.
+The single permitted availability read, with nested Doppler `manabot/prd` and
+`etude/prd` and `etude-sdk[s3,eval]==0.2.15`, returned:
+
+> mtg338-l4: NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.69/hour (ceiling $0.75); none available; 0 of 1 in use; not rentable now; asked 2026-11-13 11:39:54 UTC.
+
+Verdict: **inconclusive**. No launch was attempted; no rental, queue or
+background work was created. There is no recorded-run launcher cost. CPU
+equivalence, CUDA audits, five alternating samples per arm and the separate
+candidate profile remain unrun. Candidate rate, range, workload errors and
+work counts are unavailable, not zero. The prior baseline remains 0.26437
+optimizer steps/s (five repeats; 0.26366–0.26474); it is not a paired comparison.
+
+The measure keep rule restored the three tracked candidate files to
+`734f2cd5c` and removed the five comparison scripts absent there. Their exact
+bytes remain at `02c202956`. Successful L4 admission followed by the frozen
+correctness checks and alternating measurements would settle the claim.
+No retry, further capacity read or alternate GPU was used. Capacity evidence
+establishes neither a speedup nor a performance rejection.
+
+
+## Measurement pass 10 (2026-11-13 UTC)
+
+All eight candidate/harness paths matched `02c202956` byte for byte. The
+expected claim remains “CUDA embedding lookup reduces median PPO update time
+by at least 20% on the Elemental w64l2 L4 workload, with identical CPU behavior
+and bounded CUDA rounding.” The workload and numerical bounds stayed frozen.
+The single permitted availability read, with nested Doppler `manabot/prd` and
+`etude/prd` and `etude-sdk[s3,eval]==0.2.15`, returned:
+
+> mtg338-l4: NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.69/hour (ceiling $0.75); none available; 0 of 1 in use; not rentable now; asked 2026-11-13 11:43:03 UTC.
+
+Verdict: **inconclusive**. No launch was attempted; no rental, queue or
+background work was created. There is no recorded-run launcher cost. CPU
+equivalence, CUDA audits, five alternating samples per arm and the separate
+candidate profile remain unrun. Candidate rate, range, workload errors and
+work counts are unavailable, not zero. The prior baseline remains 0.26437
+optimizer steps/s (five repeats; 0.26366–0.26474); it is not a paired comparison.
+
+The measure keep rule restored the three tracked candidate files to
+`734f2cd5c` and removed the five comparison scripts absent there. Their exact
+bytes remain at `02c202956`. Successful L4 admission followed by the frozen
+correctness checks and alternating measurements would settle the claim.
+No retry, further capacity read or alternate GPU was used. Capacity evidence
+establishes neither a speedup nor a performance rejection.
+
+- 2026-11-13: L4 and A40 stock were unavailable; the paired comparison runs on an
+  RTX A6000 (on-demand `mtg338-a6000`), so it supports a relative speedup only.
+  Etude run `bb2863fe318c` (~$0.04) failed before measurement: four
+  `test_active_training.py` cases call `git rev-parse` in Etude's non-git source
+  copy; the other 40 CUDA-required tests passed. The rerun drops that file from
+  the remote test list; candidate, harness and bounds are otherwise `02c202956`.

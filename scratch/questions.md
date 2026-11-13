@@ -45,3 +45,97 @@
   read and made one named-cohort launch under $4. Admission again refused L4
   capacity; restore the kept implementation, retain the missing comparison,
   and stop without a retry, GPU substitution or queue.
+
+- Decision pass 3 retains the frozen hypothesis after reviewing all four table
+  rows and the current lookup callers. Three capacity refusals are no runtime
+  rejection. Recover the same eight files; preserve all numerical bounds and
+  allow one fresh availability read followed, only if positive, by one named-
+  cohort L4 launch under $4 in the measurement step. No launch occurs in planning.
+
+- Implementation pass 4 preserves the explicitly requested frozen equivalence
+  scripts despite six inherited Ruff import-style diagnostics (I001/E402).
+  Runtime, tests, launcher and paired speed harness pass Ruff; changing the
+  comparator merely for style would break the requested byte-for-byte recovery.
+
+- Measurement pass 4 stops on the negative capacity read without attempting
+  admission. Restore the kept implementation; preserve the frozen hypothesis
+  and bounds, with no retry, polling, alternate GPU or queued comparison.
+
+- Decision pass 4 retains the frozen candidate after reading all five measurement
+  rows and its current callers. The latest negative capacity read adds no
+  performance rejection. Recover the same eight paths; preserve numerical
+  bounds and allow one fresh availability read, then only if positive one
+  named-cohort L4 launch under $4 during measurement. No launch in planning.
+
+- Measurement pass 5 stops on the negative availability read. Restore the
+  kept implementation and retain the frozen candidate; no launch, retry,
+  polling, alternate GPU or queue. Missing measurements remain unavailable.
+
+- Decision pass 5 retains the frozen candidate after reviewing all six table
+  rows and rereading the current lookup and its fact/continuation callers. The
+  second negative availability read adds operational evidence, not a runtime
+  rejection. Recover the same eight paths and preserve all numerical bounds.
+  Measurement gets one fresh availability read and, only if positive, one
+  named-cohort L4 launch under $4; no queue, polling or within-step retry.
+  No availability read or launch occurs during this planning step.
+
+- Measurement pass 6 stops on the negative availability read. Restore the kept
+  implementation; preserve the frozen hypothesis and numerical bounds. No
+  launch, retry, polling, alternate GPU or queue; missing measurements remain
+  unavailable.
+
+- Decision pass 6 retains the frozen lookup hypothesis after reading all seven
+  measurement rows and the current fact/continuation callers. The third negative
+  availability read adds operational evidence, not a performance rejection.
+  Recover the same eight paths with unchanged numerical bounds. Measurement
+  gets one fresh availability read and, only if positive, one named-cohort L4
+  launch under $4; no queue, polling or within-step retry. No capacity read or
+  launch occurs in planning.
+
+- Measurement pass 7 stops on the negative availability read. Restore the kept
+  implementation under the keep rule; no retry, queue, polling or alternate
+  GPU. Preserve the frozen hypothesis and numerical bounds.
+
+- Decision pass 7 retains the frozen candidate after reading all eight table
+  rows and rereading the current lookup and fact/continuation callers. The
+  fourth negative availability read adds operational evidence, not a runtime
+  rejection. Recover the same eight paths with unchanged numerical bounds.
+  Measurement gets one fresh availability read and, only if positive, one
+  named-cohort L4 launch under $4; no queue, polling or within-step retry.
+  No capacity read or launch occurs during planning.
+
+- Measurement pass 8 stops on the negative availability read. Restore the kept
+  implementation under the keep rule; no retry, polling, queue or alternate GPU.
+  Preserve the frozen hypothesis and numerical bounds.
+
+- Decision pass 8 retains the frozen candidate after reviewing all nine table
+  rows and the current lookup and fact/continuation callers. The fifth negative
+  availability read adds operational evidence, not a performance rejection.
+  Recover the same eight paths with unchanged numerical bounds. Measurement
+  gets one fresh availability read and, only if positive, one named-cohort L4
+  launch under $4; no queue, polling or within-step retry. No capacity read or
+  launch occurs during planning.
+
+- Measurement pass 9 stops on the negative availability read. Restore the kept
+  implementation under the keep rule; no retry, polling, queue or alternate GPU.
+  Preserve the frozen hypothesis and numerical bounds.
+
+- Decision pass 9 retains the frozen candidate after reviewing all ten table
+  rows and rereading the lookup and its fact/continuation callers. The sixth
+  negative availability read adds operational evidence, not a performance
+  rejection. Recover the same eight paths with unchanged numerical bounds.
+  Measurement gets one fresh availability read and, only if positive, one
+  named-cohort L4 launch under $4; no queue, polling or within-step retry.
+  No capacity read or launch occurs during planning.
+
+- Measurement pass 10 stops on the negative availability read. Restore the kept
+  implementation under the keep rule; no retry, polling, queue or alternate GPU.
+  Preserve the frozen hypothesis and numerical bounds.
+
+- Decision pass 10 retains the frozen candidate after reviewing all eleven table
+  rows and rereading the lookup and its fact/continuation callers. The seventh
+  negative availability read adds operational evidence, not a performance
+  rejection. Recover the same eight paths with unchanged numerical bounds.
+  Measurement gets one fresh availability read and, only if positive, one
+  named-cohort L4 launch under $4; no queue, polling or within-step retry.
+  No capacity read or launch occurs during planning.

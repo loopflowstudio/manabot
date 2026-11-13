@@ -8,8 +8,8 @@ body{font:16px/1.55 system-ui,sans-serif;color:#182536;background:#f6f7f9;max-wi
 </style>
 <h1>PPO on CUDA: comparison unavailable</h1>
 <p class="verdict"><strong>Latest verdict: inconclusive; candidate reverted.</strong>
-L4 availability said “rentable now” at 2026-11-13 11:16:14 UTC, but the third
-authenticated admission failed for no capacity at 11:17:14 UTC.
+The tenth measurement pass's single L4 availability read returned “none available”,
+“0 of 1 in use”, “not rentable now” at 2026-11-13 11:43:03 UTC. No launch was attempted.
 No paired sample or CUDA audit ran; candidate rate and range
 are unavailable. The runtime and candidate-motivated tests/harness are restored
 to the kept baseline. Candidate source remains recoverable at <code>02c202956</code>.</p>
@@ -55,7 +55,57 @@ with CPU bitwise equivalence and bounded CUDA rounding.</td>
 <td>Availability reported rentable at 11:16:14 UTC; admission 797c99576241 failed
 at 11:17:14 UTC for no L4 capacity. Requested run 3ca9e26b83a0 was not recorded;
 no command started, no rental allocated, no queue or retry. CPU/CUDA audits,
-alternating timing and candidate profile remain unrun.</td></tr></tbody>
+alternating timing and candidate profile remain unrun.</td></tr>
+<tr><td><code>02c202956</code><br><small>Recovery pass 4; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Single availability read at 11:22:45 UTC: none available, 0 of 1 in use,
+not rentable now. Capacity condition not met; no launch attempted, rental or
+queue created. CPU/CUDA audits, alternating timing and profile remain unrun.</td></tr><tr><td><code>02c202956</code><br><small>Recovery pass 5; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Single availability read at 2026-11-13 11:26:32 UTC: none available,
+0 of 1 in use, not rentable now. No launch attempted, rental or queue created.
+CPU/CUDA audits, alternating timing and candidate profile remain unrun.</td></tr><tr><td><code>02c202956</code><br><small>Recovery pass 6; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Single availability read at 2026-11-13 11:29:45 UTC: none available,
+0 of 1 in use, not rentable now. No launch attempted, rental or queue created.
+CPU/CUDA audits, alternating timing and candidate profile remain unrun.</td></tr><tr><td><code>02c202956</code><br><small>Recovery pass 7; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Single availability read at 2026-11-13 11:33:45 UTC: none available,
+0 of 1 in use, not rentable now. No launch attempted, rental or queue created.
+CPU/CUDA audits, alternating timing and candidate profile remain unrun.</td></tr><tr><td><code>02c202956</code><br><small>Recovery pass 8; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Single availability read at 2026-11-13 11:36:42 UTC: none available,
+0 of 1 in use, not rentable now. No launch attempted, rental or queue created.
+CPU/CUDA audits, alternating timing and candidate profile remain unrun.</td></tr><tr><td><code>02c202956</code><br><small>Recovery pass 9; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Single availability read at 2026-11-13 11:39:54 UTC: none available,
+0 of 1 in use, not rentable now. No launch attempted, rental or queue created.
+CPU/CUDA audits, alternating timing and candidate profile remain unrun.</td></tr><tr><td><code>02c202956</code><br><small>Recovery pass 10; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Single availability read at 2026-11-13 11:43:03 UTC: none available,
+0 of 1 in use, not rentable now. No launch attempted, rental or queue created.
+CPU/CUDA audits, alternating timing and candidate profile remain unrun.</td></tr></tbody>
 </table></div>
 <p>Collection took 28.257 s once. Collection + median update is 88.777 s.
 Even eliminating all backward and clipping bounds improvement at 4.161× for
