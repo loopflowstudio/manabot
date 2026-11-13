@@ -50,7 +50,7 @@ from manabot.policy.buckets import has_history_events
 
 Array = np.ndarray
 
-# Record namespaces (`manabot.model.semantic_cards.RecordNamespace`).
+# Record namespaces (`manabot.backends.torch._semantic_cards.RecordNamespace`).
 _TOKEN, _NAME, _RESTRICTION = 1, 2, 3
 _NUMBER_KINDS = (4, 5)
 _ORDINAL_ID_KINDS = (
@@ -396,6 +396,7 @@ class Prepared[A]:
     events: EventRows[A] | None = None
     live_index: A | None = None  # flat valid object slots, including value token
     live_offsets: A | None = None  # [B+1] cumulative live-token counts
+    legal_support: bool = True  # every observation has a legal action
 
 
 def prepare(
@@ -516,6 +517,7 @@ def prepare(
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
     return Prepared(
         batch=batch,
+        legal_support=bool(legal.any(-1).all()),
         agent_player=players[0],
         opponent_player=players[1],
         agent_cards=cards[0],
@@ -639,7 +641,8 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         token_rows[program] = tables.tokens(token_kind[program], detail[program])
         sources = tables.rows(facts[..., FACT_SOURCE_INDEX])
     else:
-        columns = columns[..., :5]
+        # Torch linear chooses a different accumulation path for strided inputs.
+        columns = np.ascontiguousarray(columns[..., :5])
         id_rows = ident % tables.record_buckets
         detail_rows = detail % tables.record_buckets
         sources = facts[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets

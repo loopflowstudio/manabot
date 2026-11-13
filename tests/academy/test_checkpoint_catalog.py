@@ -12,6 +12,7 @@ from academy import server, trace as trace_store
 from academy.server import app
 from manabot.model.world import WORLD
 from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 @pytest.fixture()
@@ -24,10 +25,10 @@ def runs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     torch.manual_seed(0)
     current = tmp_path / ".runs" / "self-play" / "step_0.pt"
     _write_tiny_checkpoint(current)
-    checkpoint = torch.load(current, map_location="cpu", weights_only=False)
+    checkpoint = read_checkpoint(current, map_location="cpu", weights_only=False)
     checkpoint["world_binding"]["world"] = "w5"
     (tmp_path / ".runs" / "older").mkdir()
-    torch.save(checkpoint, tmp_path / ".runs" / "older" / "step_0.pt")
+    write_checkpoint(checkpoint, tmp_path / ".runs" / "older" / "step_0.pt")
     return tmp_path / ".runs"
 
 

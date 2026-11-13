@@ -133,7 +133,9 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
 
     semantic.definitions = poisoned  # type: ignore[method-assign]
     # The reference encodes the complete catalog.
-    full._referenced_definitions = lambda obs, ids: None  # type: ignore[method-assign,assignment,return-value]
+    assert full.semantic_cards is not None
+    full_encode = full.semantic_cards.definitions
+    full.semantic_cards.definitions = lambda rows=None: full_encode()  # type: ignore[method-assign]
     outputs = []
     for agent in (case.agent, full):
         logits, values = agent.forward_distribution(admit_observation(agent, case.obs))
@@ -226,6 +228,7 @@ def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
 def test_prepared_collection_and_restored_continuation_match_reference() -> None:
     optimized, reference = _policy(), _policy()
 
+    @torch.no_grad()
     def plain_inputs(
         scope: PolicyInference, obs: dict[str, torch.Tensor]
     ) -> AdmittedObservation:

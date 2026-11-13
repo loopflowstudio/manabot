@@ -62,7 +62,7 @@ passing the corresponding directory instead of `report.md`.
 ## Implementation map
 
 - [ActorCritic](../manabot/backends/torch/policy.py) and
-  [continuation input](../manabot/model/continuation.py): model and versioned context.
+  [continuation input](../manabot/backends/torch/_continuation.py): model and versioned context.
 - [Collection](../manabot/training/rollout/collection.py),
   [returns](../manabot/backends/torch/rl.py) and
   [damped policy learning](../manabot/training/updates/damped_policy.py):

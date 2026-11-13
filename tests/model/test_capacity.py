@@ -6,6 +6,7 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch._facts import FactEncoder, admit_facts
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -18,8 +19,9 @@ from manabot.model.architecture import (
     architecture_receipt,
     validate_architecture_receipt,
 )
-from manabot.model.facts import FactEncoder, admit_facts
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+from tests.model.prepared_routes import fact_rows
 
 
 @pytest.mark.parametrize("width,depth", [(64, 1), (64, 2), (128, 2)])
@@ -78,10 +80,10 @@ def test_capacity_export_and_real_legal_policy(
     actual = loaded(obs)
     for expected, observed in zip((policy, value), actual, strict=True):
         torch.testing.assert_close(expected, observed, rtol=0, atol=0)
-    checkpoint = torch.load(path, weights_only=False)
+    checkpoint = read_checkpoint(path, weights_only=False)
     # Pooling changes critic semantics while retaining every parameter shape.
     checkpoint["hypers"]["agent_hypers"]["value_aggregation"] = "masked_mean"
-    torch.save(checkpoint, path)
+    write_checkpoint(checkpoint, path)
     with pytest.raises(ValueError, match="architecture receipt mismatch"):
         load_checkpoint(str(path))
     checkpoint["hypers"]["agent_hypers"]["value_aggregation"] = "historical_mean"
@@ -89,7 +91,7 @@ def test_capacity_export_and_real_legal_policy(
     if depth == 1:
         del checkpoint["hypers"]["agent_hypers"]["attention_layers"]
         del checkpoint["hypers"]["agent_hypers"]["value_aggregation"]
-    torch.save(checkpoint, path)
+    write_checkpoint(checkpoint, path)
     historical, _ = load_checkpoint(str(path))
     for expected, observed in zip((policy, value), historical(obs), strict=True):
         torch.testing.assert_close(expected, observed, rtol=0, atol=0)
@@ -142,7 +144,7 @@ def test_receipt_saved_in_a_checkpoint_verifies_byte_for_byte(tmp_path: Path) ->
     save_checkpoint(
         agent, agent.observation_space, path, player_configs=Match().to_rust()
     )
-    saved = torch.load(path, weights_only=False)["architecture"]
+    saved = read_checkpoint(path, weights_only=False)["architecture"]
     loaded, _ = load_checkpoint(str(path))
     loaded.policy_head.requires_grad_(False)
     recomputed = loaded.architecture_receipt()
@@ -244,13 +246,17 @@ def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) ->
     objects = torch.zeros(1, 2, 4)
     padded = facts.clone()
     padded[:, 128:] = 0
-    torch.testing.assert_close(old(facts[:, :128], objects), larger(padded, objects))
-    facts.requires_grad_()
-    output = larger(facts, objects)
-    assert not torch.equal(output, larger(padded, objects))
+    torch.testing.assert_close(
+        old(fact_rows(facts[:, :128], objects), objects),
+        larger(fact_rows(padded, objects), objects),
+    )
+    prepared = fact_rows(facts, objects)
+    prepared.columns.requires_grad_()
+    output = larger(prepared, objects)
+    assert not torch.equal(output, larger(fact_rows(padded, objects), objects))
     output.sum().backward()
-    assert facts.grad is not None
-    assert (facts.grad[0, 128:140, 9] != 0).all()
-    assert facts.grad[0, 140:].count_nonzero() == 0
+    assert prepared.columns.grad is not None
+    assert (prepared.columns.grad[0, 128:140, 4] != 0).all()
+    assert prepared.columns.grad[0, 140:].count_nonzero() == 0
     with pytest.raises(ValueError, match="expected"):
         admit_facts(facts, old.max_facts, objects.shape[1], None)

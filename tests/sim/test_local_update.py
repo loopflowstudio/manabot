@@ -91,7 +91,7 @@ def make_teacher(
 @pytest.mark.parametrize(
     "owner",
     [
-        "manabot/model/facts.py",
+        "manabot/backends/torch/_facts.py",
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
     ],

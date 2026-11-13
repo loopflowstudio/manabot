@@ -352,7 +352,6 @@ def test_only_the_mlx_backend_imports_mlx() -> None:
 _TORCH_NOT_YET_MOVED = frozenset(
     (
         # The converter and parity check read the PyTorch reference.
-        "manabot/backends/convert.py",
         "manabot/backends/parity.py",
         "manabot/belief/agent.py",
         "manabot/belief/checkpoint.py",
@@ -377,16 +376,7 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
         "manabot/model/admission.py",
-        "manabot/model/catalog.py",
-        "manabot/model/continuation.py",
-        "manabot/model/facts.py",
         "manabot/model/inference.py",
-        "manabot/model/name_candidates.py",
-        "manabot/model/numerics.py",
-        "manabot/model/recent_events.py",
-        "manabot/model/records.py",
-        "manabot/model/semantic_cards.py",
-        "manabot/model/shared_effects.py",
         "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/reports/selection.py",
@@ -461,11 +451,12 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
         if module.split(".")[0] in {"managym", "academy", "etude"}
         or (module.startswith("manabot") and module not in _GENERIC_ALLOWED)
     ]
-    # The learner names the player's network and its precision in annotations
-    # only (under TYPE_CHECKING); the runtime probe below holds it to that.
+    # Role-specific types appear only in annotations (under TYPE_CHECKING);
+    # the runtime probe below holds both the learner and array transfer to that.
     assert violations == [
         "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
         "manabot/backends/torch/learner.py: manabot.training.regime",
+        "manabot/backends/torch/arrays.py: manabot.policy.prepare",
     ]
 
 

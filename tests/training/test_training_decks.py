@@ -38,6 +38,7 @@ from manabot.training.state.game_errors import (
 from manabot.training.state.recovery import admit_recovery_identities
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 WORLD = managym.WORLD_SETUP
 ROSTER_PACK = "elemental-world-v2"
@@ -285,7 +286,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     target = tmp_path / "policy.pt"
     save_checkpoint(_agent(), ObservationSpace(), target, player_configs=None)
     # Nothing about training travels with the model.
-    raw = torch.load(target, map_location="cpu", weights_only=True)
+    raw = read_checkpoint(target, map_location="cpu", weights_only=True)
     binding = raw["world_binding"]
     assert "setups" not in binding and "content_manifest" not in binding
     assert set(binding) == {
@@ -324,7 +325,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             changed["world_binding"][key] = {**binding[key], **change}
         assert checkpoint_incompatibility(changed) is not None
         path = tmp_path / f"changed-{key}.pt"
-        torch.save(changed, path)
+        write_checkpoint(changed, path)
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
 

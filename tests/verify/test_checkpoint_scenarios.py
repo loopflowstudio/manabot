@@ -18,6 +18,7 @@ from manabot.sim.replay import replay_games
 from manabot.sim.search.flat_mc import make_player
 from manabot.verify.checkpoint_scenarios import main, score_checkpoint
 from manabot.verify.scenarios import SCENARIOS, build_scenario_env
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 def _checkpoint(tmp_path: Path, name: str, *, max_actions: int = 64) -> Path:
@@ -73,9 +74,9 @@ def test_wrong_world_setup_and_capacity_fail_admission(tmp_path: Path) -> None:
     score, _ = score_checkpoint(other, path)
     assert score.status == "failed" and score.correct is None
     assert "setup differs" in (score.error or "")
-    data = torch.load(path, weights_only=False)
+    data = read_checkpoint(path, weights_only=False)
     data["world_binding"]["world"] = "wrong-world"
-    torch.save(data, path)
+    write_checkpoint(data, path)
     score, game = score_checkpoint(name, path)
     assert score.status == "failed" and game is None
     assert "world binding" in (score.error or "")

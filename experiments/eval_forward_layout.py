@@ -219,7 +219,7 @@ def job(smoke: bool = False) -> None:
     """Checkpoint, then each pass in its own process; `smoke` is a toy CPU run."""
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
-    policy = out / "inputs" / "policy.pt"
+    policy = out / "inputs" / "policy.safetensors"
     device, size, deals = ("cpu", "w160l8", 1) if smoke else ("cuda", SIZE, len(DEALS))
     checkpoint(policy, size)
     stages: list[dict[str, Any]] = []

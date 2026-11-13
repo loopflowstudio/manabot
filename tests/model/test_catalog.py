@@ -18,6 +18,7 @@ from manabot.model.catalog import (
 )
 from manabot.model.world import WORLD
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 PACK = "ur-lessons-vs-gw-allies"
 
@@ -39,9 +40,9 @@ def _write_checkpoint(path: Path) -> None:
 
 
 def _rewrite(path: Path, target: Path, **binding: object) -> None:
-    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    checkpoint = read_checkpoint(path, map_location="cpu", weights_only=False)
     checkpoint["world_binding"].update(binding)
-    torch.save(checkpoint, target)
+    write_checkpoint(checkpoint, target)
 
 
 def test_current_checkpoint_is_admissible_with_its_identity(tmp_path: Path) -> None:
@@ -69,9 +70,9 @@ def test_mismatches_are_named(tmp_path: Path) -> None:
         tmp_path / "old-content.pt",
         content_manifest={"content_digest": "0123456789abcdef"},
     )
-    unbound = torch.load(current, map_location="cpu", weights_only=False)
+    unbound = read_checkpoint(current, map_location="cpu", weights_only=False)
     del unbound["world_binding"]
-    torch.save(unbound, tmp_path / "unbound.pt")
+    write_checkpoint(unbound, tmp_path / "unbound.pt")
 
     assert (
         inspect_checkpoint(tmp_path / "old-world.pt").incompatibility

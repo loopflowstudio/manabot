@@ -197,7 +197,7 @@ def capture(out: Path) -> None:
         ActorCritic.forward = original_forward  # type: ignore[method-assign]
         SeatRoutedCollector.collect = original_collect  # type: ignore[method-assign]
         OptimizerHealth.check = original_check  # type: ignore[method-assign]
-    initial = sorted((out / "execution").rglob("*-initial-raw.pt"))
+    initial = sorted((out / "execution").rglob("*-initial-raw.safetensors"))
     if len(initial) != 1:
         raise RuntimeError(f"expected one initial checkpoint, found {initial}")
     shutil.copyfile(initial[0], out / "initial.pt")

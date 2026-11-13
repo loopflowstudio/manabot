@@ -99,7 +99,7 @@ def run_demo() -> dict[str, Any]:
     viewer = int(env.last_raw_obs.agent.player_index)
     schema, policy_value = _schema_and_agent(env._engine, viewer)
     with TemporaryDirectory(prefix="manabot-belief-demo-") as tmp_dir:
-        checkpoint_path = Path(tmp_dir) / "belief.pt"
+        checkpoint_path = Path(tmp_dir) / "belief.safetensors"
         save_checkpoint(
             policy_value,
             policy_value.observation_space,

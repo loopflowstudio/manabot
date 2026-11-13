@@ -13,6 +13,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from manabot.policy.prepare import EventRows
+
 # Each event carries two references: definition, owner, zone, focus, status.
 _REFERENCE_STARTS = (2, 7)
 
@@ -67,50 +69,32 @@ class RecentEventEncoder(nn.Module):
 
     def forward(
         self,
-        obs: dict[str, torch.Tensor],
+        rows: EventRows[torch.Tensor],
         objects: torch.Tensor,
         definitions: torch.Tensor,
-        definition_rows: torch.Tensor,
     ) -> torch.Tensor:
-        """Return [B,D], exactly zero for empty history; gradients reach both
-        the event projection and shared semantic/object encoders. History must
-        be admitted (`admit_recent_events`); padding is zeroed before any
-        lookup, including nonfinite padded payloads.
-        """
-        events, valid = obs["events"], obs["events_valid"]
-        admitted = valid.bool()
-        rows = torch.where(admitted.unsqueeze(-1), events, 0)
+        """Pool history in chronological order; an empty history returns zero."""
 
         def categorical(values: torch.Tensor, size: int) -> torch.Tensor:
-            return F.one_hot(values.long(), size).to(events.dtype)
+            return F.one_hot(values, size).to(rows.amounts.dtype)
 
-        counts = valid.sum(1, keepdim=True)
-        age = (counts - valid.cumsum(1)).clamp_min(0)
         features = [
-            categorical(rows[..., 0], 6),
-            rows[..., 1:2] / 20,
-            age.log1p().unsqueeze(-1),
+            categorical(rows.kinds, 6),
+            rows.amounts,
+            rows.ages.log1p().unsqueeze(-1),
         ]
-        for start in _REFERENCE_STARTS:
-            ids, owner, zone, focus, status = rows[..., start : start + 5].unbind(-1)
-            catalog_rows = definition_rows[ids.long()]
-            context = objects.gather(
-                1,
-                focus.clamp_min(0)
-                .long()
-                .unsqueeze(-1)
-                .expand(-1, -1, objects.shape[-1]),
-            )
-            context = context.masked_fill(((focus < 0) | ~admitted).unsqueeze(-1), 0)
+        for index in range(2):
+            context = objects.flatten(0, 1)[rows.focus[..., index]]
+            context = context.masked_fill(~rows.focus_mask[..., index, None], 0)
             features.extend(
                 (
-                    definitions[catalog_rows],
+                    definitions[rows.definitions[..., index]],
                     context,
-                    categorical(owner, 3),
-                    categorical(zone, 8),
-                    categorical(status, 3),
+                    categorical(rows.owners[..., index], 3),
+                    categorical(rows.zones[..., index], 8),
+                    categorical(rows.status[..., index], 3),
                 )
             )
         encoded = self.projection(torch.cat(features, dim=-1))
-        encoded = encoded.masked_fill(~admitted.unsqueeze(-1), 0)
-        return encoded.sum(1) / counts.clamp_min(1)
+        encoded = encoded.masked_fill(~rows.validity.unsqueeze(-1), 0)
+        return encoded.sum(1) / rows.counts.clamp_min(1)

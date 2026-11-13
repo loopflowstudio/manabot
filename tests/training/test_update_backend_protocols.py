@@ -142,7 +142,12 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         device="cpu",
     )
     batch = collector.collect(agent, 2)
-    return from_torch_state(agent.config, space.encoder.config, state), batch
+    return from_torch_state(
+        agent.config,
+        space.encoder.config,
+        state,
+        parameter_names=dict(agent.named_parameters()),
+    ), batch
 
 
 def _installed(name: str) -> ModuleType:

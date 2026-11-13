@@ -1,9 +1,8 @@
 """Find trained policy checkpoints and check them against the running engine.
 
 The catalog answers "which bots could play here?" without constructing them.
-``inspect_checkpoint`` reads one ``.pt`` file with Torch's ``weights_only``
-unpickler (tensors and plain containers only, so listing never executes code
-from a checkpoint) and returns a ``CheckpointSummary``: exact bytes, world,
+``inspect_checkpoint`` reads container metadata or a legacy ``.pt`` with
+Torch's ``weights_only`` unpickler, and returns a ``CheckpointSummary``: exact bytes, world,
 model shape, training step, producer and — when the checkpoint cannot play in
 this runtime — a sentence naming the mismatch. ``discover_checkpoints`` walks
 run directories, explicit files and Tournament files into summaries.
@@ -19,13 +18,11 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
 import hashlib
-import io
 import json
 from pathlib import Path
 from typing import Any, Literal
 
-import torch
-
+from manabot.backends.torch.checkpoint import load_metadata
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     ModelConfig,
@@ -119,13 +116,11 @@ def _inspect_cached(
     del size, mtime_ns  # cache key only: a rewritten file is re-read
     data = Path(path).read_bytes()
     try:
-        checkpoint = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
-    except Exception:  # torch raises several unpickling types
-        return NotAPolicyCheckpoint(f"{path} is not a weights-only checkpoint")
-    if (
-        not isinstance(checkpoint, dict)
-        or not isinstance(checkpoint.get("model_state_dict"), Mapping)
-        or not isinstance(checkpoint.get("hypers"), Mapping)
+        checkpoint = load_metadata(path)
+    except Exception as error:  # legacy unpickling and malformed container headers
+        return NotAPolicyCheckpoint(f"{path} holds no policy: {error}")
+    if not isinstance(checkpoint, dict) or not isinstance(
+        checkpoint.get("hypers"), Mapping
     ):
         return NotAPolicyCheckpoint(f"{path} holds no policy")
     config = checkpoint["hypers"]
@@ -141,11 +136,9 @@ def _inspect_cached(
         producer=_producer(checkpoint),
         world=world if isinstance(world, str) else None,
         model=_model_shape(config.get("agent_hypers")),
-        parameters=sum(
-            int(tensor.numel())
-            for tensor in checkpoint["model_state_dict"].values()
-            if isinstance(tensor, torch.Tensor)
-        ),
+        parameters=(checkpoint.get("architecture") or {})
+        .get("parameters", {})
+        .get("total", checkpoint.get("parameter_count", 0)),
         step=step if isinstance(step, int) and step > 0 else None,
         setups=_setups(binding),
         incompatibility=checkpoint_incompatibility(checkpoint),
@@ -336,7 +329,7 @@ def discover_checkpoints(
 
 def _scan(directory: Path, source: CheckpointSource) -> list[CheckpointSummary]:
     summaries = []
-    for path in sorted(directory.rglob("*.pt")):
+    for path in sorted([*directory.rglob("*.pt"), *directory.rglob("*.safetensors")]):
         try:
             summaries.append(
                 inspect_checkpoint(

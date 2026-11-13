@@ -30,6 +30,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 import torch
 
+from manabot.backends.torch.checkpoint import load_metadata
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
@@ -481,7 +482,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
         "manabot/backends/torch/policy.py",
-        "manabot/model/facts.py",
+        "manabot/backends/torch/_facts.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
@@ -506,7 +507,7 @@ class LocalUpdateTeacher:
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
-        metadata = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        metadata = load_metadata(checkpoint)
         if (
             self.agent.config.value_kind != "categorical_wdl"
             and metadata.get("bc", {}).get("value_semantic") != "signed_outcome"

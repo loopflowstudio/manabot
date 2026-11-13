@@ -58,8 +58,8 @@ forward reads the result; no forward reads an observation dictionary.
 
 Two type aliases name the NumPy mappings that cross this boundary:
 `ObservationBuffers` (`manabot.env.observation`), an observation batch by
-buffer name, and `ParameterArrays` (`manabot.policy.checkpoint`), parameters
-by canonical name.
+buffer name, and `ParameterArrays` (`manabot.policy.checkpoint`), named
+parameters or gradients in canonical or backend layout.
 
 What stays in a backend's graph is every float operation whose rounding
 differs between NumPy and the framework. `prepare` does integer bookkeeping,

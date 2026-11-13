@@ -14,6 +14,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.source import source_commit
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 def selected_match():
@@ -46,7 +47,7 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
 ) -> None:
     path = tmp_path / "policy.pt"
     payload = checkpoint()
-    torch.save(payload, path)
+    write_checkpoint(payload, path)
     agent, space = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
     for match in (selected_match(), selected_match().swapped()):
@@ -89,7 +90,7 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
             binding["content_manifest"]["content_digest"] = "old"
     payload["model_state_dict"] = {}  # Admission must precede weight loading.
     path = tmp_path / "bad.pt"
-    torch.save(payload, path)
+    write_checkpoint(payload, path)
     with pytest.raises(ValueError, match="binding"):
         load_checkpoint(str(path))
 
@@ -154,7 +155,7 @@ def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
     payload = checkpoint()
     payload["world_binding"] = checkpoint_world(match.to_rust(), space)
     path = tmp_path / "mirror.pt"
-    torch.save(payload, path)
+    write_checkpoint(payload, path)
     agent, _ = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
     validate_checkpoint_world(payload, space, match.to_rust())
@@ -187,6 +188,6 @@ def test_a_saved_checkpoint_records_the_revision_that_wrote_it(
     agent = ActorCritic(space, ModelConfig())
     path = tmp_path / "policy.pt"
     save_checkpoint(agent, space, path, player_configs=Match().to_rust())
-    source = torch.load(path, weights_only=False)["source"]
+    source = read_checkpoint(path, weights_only=False)["source"]
     assert source["commit"] == source_commit()
     assert set(source) == {"commit", "dirty", "etude_run"}

@@ -8,36 +8,24 @@ may cross an update boundary or enter autograd.
 The caller owns the model exclusively for the scope and must not mutate prepared
 observations. No serving state is persisted in the model or its checkpoints.
 
-Device inputs move with one contiguous copy per dtype (`transfer`): serving's
-float32 observation keys and int64 catalog references are two copies per batch
-instead of one per key.
+Device inputs and prepared rows move with one contiguous copy per dtype
+(`transfer`), rather than one copy per field.
 
-With bucketed shapes, admission measures each batch's buckets on the host
-before transfer (`manabot.policy.buckets`); the forward trims the device tensors
-to them without a device read (`trim_admitted`). The prepared dictionary itself
-keeps full-capacity tensors. With live tokens, preparation likewise counts the
-batch's live attention tokens, so the forward packs them without reading the
-count back.
+Admission builds the shared `Prepared` rows on the host, including trimming,
+compaction and live-token coordinates. The dictionary carrier keeps the raw
+inputs at full capacity for existing callers. Preparation runs without gradients
+inside an inference scope, even when the caller enables gradients elsewhere.
 """
 
 from collections.abc import Mapping
 from types import TracebackType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import torch
 
-from manabot.backends.torch.arrays import device_of
+from manabot.backends.torch.arrays import _array_fields, _replace_arrays, device_of
 from manabot.model.admission import AdmittedObservation, admit_observation
-from manabot.model.semantic_cards import CardReferences
-from manabot.policy.buckets import (
-    ONE_BASED_REFERENCES,
-    ROW_KEYS,
-    SEAT_KEYS,
-    ZERO_BASED_REFERENCES,
-    BucketSizes,
-    has_history_events,
-    object_segments,
-)
+from manabot.policy.prepare import Prepared
 
 if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
@@ -79,28 +67,25 @@ def transfer_admitted(
     One copy per dtype covers the observation and its references; the result
     keeps the admission. Returns it with the copy count.
     """
-    references = admitted.references
-    joins = {"cards": references.cards, "permanents": references.permanents}
-    if references.known is not None:
-        joins["known"] = references.known
-    if references.decklists is not None:
-        joins["decklists"] = references.decklists
+    assert admitted.prepared is not None
+    prepared = _array_fields(admitted.prepared, torch.Tensor, "prepared")
     moved, transfers = transfer(
-        {**admitted, **{f"references/{key}": value for key, value in joins.items()}},
+        {
+            **admitted,
+            **prepared,
+        },
         device,
     )
     return AdmittedObservation(
         {key: moved[key] for key in admitted},
         admitted.binding,
-        CardReferences(
-            moved["references/cards"],
-            moved["references/permanents"],
-            moved.get("references/known"),
-            moved.get("references/decklists"),
-        ),
         admitted.legal,
         admitted.buckets,
         admitted.needs,
+        prepared=cast(
+            Prepared[torch.Tensor],
+            _replace_arrays(admitted.prepared, moved, "prepared"),
+        ),
     ), transfers
 
 
@@ -118,9 +103,7 @@ def admit_on_device(
 class PreparedObservation(AdmittedObservation):
     """Device tensors and CPU-admitted joins, valid only in their owning scope.
 
-    `transfers` counts the host-to-device copies that produced them;
-    `live_token_count` is the host-measured number of packed tokens when the
-    policy uses live tokens.
+    `transfers` counts the host-to-device copies that produced them.
     """
 
     def __init__(
@@ -128,93 +111,17 @@ class PreparedObservation(AdmittedObservation):
         admitted: AdmittedObservation,
         scope: "PolicyInference",
         transfers: int,
-        live_token_count: int | None = None,
     ) -> None:
         super().__init__(
             admitted,
             admitted.binding,
-            admitted.references,
             admitted.legal,
             admitted.buckets,
             admitted.needs,
+            prepared=admitted.prepared,
         )
         self.scope = scope
         self.transfers = transfers
-        self.live_token_count = live_token_count
-
-
-def _object_remap(values: torch.Tensor, buckets: BucketSizes) -> torch.Tensor:
-    """Map zero-based full object coordinates to trimmed ones.
-
-    Each value shifts by the rows trimmed from segments ending at or before
-    it. Integer parts, signs and out-of-range values keep their meaning, so
-    reference checks accept and reject exactly what they would at full capacity.
-    """
-    shift = torch.zeros_like(values)
-    for axis, start, rows in object_segments(buckets.capacities):
-        cut = rows - buckets.sizes[axis]
-        shift = shift + (values >= start + rows).to(values.dtype) * cut
-    return values - shift
-
-
-def trim_observation(
-    obs: Mapping[str, torch.Tensor], buckets: BucketSizes
-) -> dict[str, torch.Tensor]:
-    """Slice every variable axis to its bucket; other keys pass through."""
-    trimmed = dict(obs)
-    for axis, keys in ROW_KEYS.items():
-        for key in keys:
-            trimmed[key] = obs[key][:, : buckets.sizes[axis]]
-    for axis, keys in SEAT_KEYS.items():
-        for key in keys:
-            trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
-    if not buckets.trims_objects:
-        return trimmed
-    trimmed["action_focus"] = _object_remap(trimmed["action_focus"], buckets)
-    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
-        for key in dict.fromkeys(key for key, _ in references):
-            if key == "events" and not has_history_events(trimmed):
-                continue
-            columns = [column for name, column in references if name == key]
-            value = trimmed[key].clone()
-            value[..., columns] = (
-                _object_remap(value[..., columns] - base, buckets) + base
-            )
-            trimmed[key] = value
-    return trimmed
-
-
-def trim_admitted(
-    obs: AdmittedObservation, buckets: BucketSizes
-) -> AdmittedObservation:
-    """Trim admitted tensors and their checked joins to `buckets`.
-
-    Trimming removes only rows nothing reads, so the admission still holds. A
-    prepared observation stays prepared, in the same scope. The result carries
-    no buckets: it is already trimmed.
-    """
-    sizes = buckets.sizes
-    references = obs.references
-    trimmed = AdmittedObservation(
-        trim_observation(obs, buckets),
-        obs.binding,
-        CardReferences(
-            references.cards[:, :, : sizes["cards"]],
-            references.permanents[:, :, : sizes["permanents"]],
-            None
-            if references.known is None
-            else references.known[:, :, : sizes["known"]],
-            None
-            if references.decklists is None
-            else references.decklists[:, :, : sizes["decklists"]],
-        ),
-        obs.legal,
-    )
-    if isinstance(obs, PreparedObservation):
-        return PreparedObservation(
-            trimmed, obs.scope, obs.transfers, obs.live_token_count
-        )
-    return trimmed
 
 
 class PolicyInference:
@@ -273,12 +180,12 @@ class PolicyInference:
             self._catalog = self.agent.semantic_cards.definitions()
         return self._catalog
 
+    @torch.no_grad()
     def prepare(self, obs: dict[str, torch.Tensor]) -> PreparedObservation:
         """Admit owned CPU inputs, then transfer them and their checked indexes."""
         self.check(self.agent)
         if any(tensor.device.type != "cpu" for tensor in obs.values()):
             raise ValueError("inference preparation requires CPU observations")
         admitted = admit_observation(self.agent, obs)
-        live = self.agent.live_token_count(admitted)
         moved, transfers = transfer_admitted(admitted, self.device)
-        return PreparedObservation(moved, self, transfers, live)
+        return PreparedObservation(moved, self, transfers)

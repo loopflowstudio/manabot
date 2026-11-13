@@ -32,3 +32,8 @@ Compress, 2026-11-13: simplify the implemented host/MLX slice; the remaining
 Torch cutover is implementation work, not a reason to refactor its deletion
 targets. Original uncommitted notes were copied to
 `/tmp/mtg333-compress-before/` before curation.
+
+- **Container parameter order.** Safetensors sorts tensor names, but learning-state
+  imports check Adam's positional order. Record `parameter_names` in metadata
+  from `named_parameters`; legacy imports retain their state-dictionary order.
+  This preserves the existing refusal rather than inferring order from sorted keys.

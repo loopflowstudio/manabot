@@ -44,7 +44,7 @@ def main() -> None:
         check=True,
         timeout=180,
     )
-    policy, _ = load_checkpoint(str(output / "self-play-raw.pt"))
+    policy, _ = load_checkpoint(str(output / "self-play-raw.safetensors"))
     assert not policy.training
     print(
         f"release smoke passed: Python {sys.version.split()[0]}, manabot {version('manabot')}, "

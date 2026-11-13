@@ -612,6 +612,6 @@ is not evidence for any of them:
 | Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |
-| Recent events | the recent-event encoder in [`manabot/backends/torch/`](../manabot/backends/torch/) |
-| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), the card encoder in [`manabot/backends/torch/`](../manabot/backends/torch/) |
+| Recent events | [`manabot/backends/torch/_recent_events.py`](../manabot/backends/torch/_recent_events.py) |
+| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/backends/torch/_semantic_cards.py`](../manabot/backends/torch/_semantic_cards.py) |
 | Capacity and architecture receipts | [`manabot/model/agent.md`](../manabot/model/agent.md#capacity-identity-and-accounting) |

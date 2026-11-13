@@ -18,9 +18,10 @@ from collections.abc import Sequence
 import torch
 from torch import nn
 
+from manabot.backends.torch._numerics import buffer_on
 from manabot.backends.torch.arrays import to_numpy
-from manabot.model.numerics import buffer_on
 from manabot.policy import admission
+from manabot.policy.prepare import Prepared
 import managym
 
 
@@ -67,25 +68,18 @@ class NameCandidateEncoder(nn.Module):
             to_numpy(buffer_on(self, "definitions", torch.device("cpu"))),
         )
 
-    def forward(self, candidates: torch.Tensor) -> torch.Tensor:
-        """Embed admitted one-based `[..., 4]` candidate rows; a `[..., 2]`
-        prefix has no group span."""
-        embedded = self.embedding(candidates[..., 0].long())
-        if candidates.shape[-1] == 4:
-            embedded = embedded + self._groups(candidates[..., 2], candidates[..., 3])
-        return embedded
-
-    def _groups(self, first: torch.Tensor, last: torch.Tensor) -> torch.Tensor:
-        """Mean member vector of each one-based inclusive span; zero for none."""
-        first, last = first.long(), last.long()
-        present = first > 0
-        # prefix[k] sums name rows 1..k; padding row 0 never enters the sum,
-        # so it receives no gradient.
+    def forward(self, batch: Prepared[torch.Tensor]) -> torch.Tensor:
+        """Embed legal names and the mean member vector of each naming group."""
+        embedded = self.embedding(batch.name_rows)
         names = self.embedding.weight[1:]
         prefix = torch.cat([names.new_zeros((1, names.shape[1])), names.cumsum(0)])
-        totals = prefix[last] - prefix[(first - 1).clamp(min=0)]
-        counts = (last - first + 1).clamp(min=1).unsqueeze(-1)
-        return torch.where(present.unsqueeze(-1), totals / counts, 0.0)
+        totals = prefix[batch.group_last] - prefix[batch.group_first]
+        groups = torch.where(
+            batch.group_mask.bool().unsqueeze(-1),
+            totals / batch.group_counts.unsqueeze(-1),
+            0.0,
+        )
+        return embedded + groups
 
     def public_definitions(self, programs: torch.Tensor) -> torch.Tensor:
         """Join names to public programs before visible-object/knowledge pooling.

@@ -6,6 +6,16 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch._facts import FactEncoder, admit_facts
+from manabot.backends.torch._semantic_cards import (
+    RecordEmbeddings,
+    RecordNamespace,
+    SemanticCardEncoder,
+)
+from manabot.backends.torch._shared_effects import (
+    SharedEffectEncoder,
+    admit_shared_effects,
+)
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
@@ -22,15 +32,10 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig
 from manabot.model.admission import admit_observation
 from manabot.model.architecture import architecture_identity
-from manabot.model.facts import FactEncoder, admit_facts
-from manabot.model.semantic_cards import (
-    RecordEmbeddings,
-    RecordNamespace,
-    SemanticCardEncoder,
-)
-from manabot.model.shared_effects import SharedEffectEncoder, admit_shared_effects
 from manabot.verify.representation import kellan_upgrade_root
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+from tests.model.prepared_routes import effect_rows, fact_rows
 
 WIDTH = 8
 _value = managym.catalog_token_value
@@ -114,7 +119,11 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     cards.zero_grad()
     records = RecordEmbeddings(cards, cards.definitions())
     out = _fact_encoder()(
-        _granted_keyword("flying", source), torch.zeros(1, 2, WIDTH), records
+        fact_rows(
+            _granted_keyword("flying", source), torch.zeros(1, 2, WIDTH), records
+        ),
+        torch.zeros(1, 2, WIDTH),
+        records,
     )
     out.square().sum().backward()
     grad = cards.token_embedding.weight.grad
@@ -135,7 +144,9 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
     records = RecordEmbeddings(cards, cards.definitions())
     effects(
-        headers, details, members, torch.zeros(1, 2, WIDTH), records
+        effect_rows(headers, details, members, torch.zeros(1, 2, WIDTH), records),
+        torch.zeros(1, 2, WIDTH),
+        records,
     ).square().sum().backward()
     grad = cards.token_embedding.weight.grad
     assert grad is not None
@@ -157,9 +168,9 @@ def test_catalog_fact_inference_preserves_sparse_rows(
     if empty:
         facts.zero_()
     objects = torch.randn(2, 2, WIDTH)
-    expected = encoder(facts, objects, records)
+    expected = encoder(fact_rows(facts, objects, records), objects, records)
     with torch.inference_mode():
-        actual = encoder(facts, objects, records)
+        actual = encoder(fact_rows(facts, objects, records), objects, records)
     torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
     if empty:
         torch.testing.assert_close(actual, objects)
@@ -212,14 +223,22 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
         cards.zero_grad(set_to_none=True)
         catalog = RecordEmbeddings(cards, cards.definitions())
         if batched:
-            result = effects(headers, details, members, objects, catalog)
+            result = effects(
+                effect_rows(headers, details, members, objects, catalog),
+                objects,
+                catalog,
+            )
         else:
             result = torch.cat(
                 [
                     effects(
-                        headers[i : i + 1],
-                        details[i : i + 1],
-                        members[i : i + 1],
+                        effect_rows(
+                            headers[i : i + 1],
+                            details[i : i + 1],
+                            members[i : i + 1],
+                            objects[i : i + 1],
+                            catalog,
+                        ),
                         objects[i : i + 1],
                         catalog,
                     )
@@ -268,9 +287,9 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
         save_checkpoint(model, space, path, player_configs=None)
         if vocabulary == "hashed":
             # Frozen checkpoints predate the field; omission means hashed ids.
-            checkpoint = torch.load(path, weights_only=False)
+            checkpoint = read_checkpoint(path, weights_only=False)
             del checkpoint["hypers"]["agent_hypers"]["record_vocabulary"]
-            torch.save(checkpoint, path)
+            write_checkpoint(checkpoint, path)
         restored, _ = load_checkpoint(str(path))
         assert restored.config.record_vocabulary == vocabulary
         assert restored.architecture_receipt() == model.architecture_receipt()

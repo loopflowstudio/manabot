@@ -28,6 +28,7 @@ from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
 from managym import Deck
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.training.test_recovery import tracked_updates
 
 
@@ -108,9 +109,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     admitted_dir.mkdir()
     admitted = admit_learning_state(stage, recipe, admitted_dir)
     for role, agent in (("raw", admitted.raw), ("ema", admitted.ema)):
-        payload = torch.load(
-            producer.stages[0].artifacts[role]["path"], weights_only=False
-        )
+        payload = read_checkpoint(producer.stages[0].artifacts[role]["path"])
         # Use ordinary reader state to avoid coupling to checkpoint wire keys.
         expected, _ = load_checkpoint(producer.stages[0].artifacts[role]["path"])
         for key, value in agent.state_dict().items():
@@ -255,14 +254,18 @@ def test_rejects_incomplete_or_mismatched_learning_state(
     else:
         role = "ema" if fault == "ema" else "optimizer"
         path = Path(getattr(spec, role)["path"])
-        payload = torch.load(path, weights_only=False)
+        payload = (
+            read_checkpoint(path)
+            if role == "ema"
+            else torch.load(path, weights_only=False)
+        )
         if fault == "empty_adam":
             payload["state"] = {}
         elif fault == "nan_adam":
             next(iter(payload["state"].values()))["exp_avg"].fill_(float("nan"))
         else:
             payload["bc"]["averaging"]["iteration"] = 1
-        torch.save(payload, path)
+        write_checkpoint(payload, path) if role == "ema" else torch.save(payload, path)
         setattr(spec, role, reference(path))
         producer.stages[0].artifacts[role] = reference(path)
         execution.atomic_json(
@@ -292,11 +295,11 @@ def test_historical_wire_digest_and_next_iteration(
     payload["stages"][0]["updates"] = 26000
     for role in ("raw", "ema"):
         path = Path(producer.stages[0].artifacts[role]["path"])
-        weights = torch.load(path, weights_only=False)
+        weights = read_checkpoint(path)
         weights["bc"]["regime_digest"] = payload["regime_digest"]
         if role == "ema":
             weights["bc"]["averaging"]["iteration"] = 26000
-        torch.save(weights, path)
+        write_checkpoint(weights, path)
         payload["stages"][0]["artifacts"][role] = reference(path)
     execution.atomic_json(export, payload)
     parent = TrainingRun.model_validate(payload)

@@ -22,9 +22,8 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.admission import admit_observation, measure_buckets
-from manabot.model.inference import trim_admitted
 from manabot.policy.admission import Spec, check
-from manabot.policy.buckets import trim_observation
+from manabot.policy.buckets import object_columns, trim_observation
 from manabot.policy.checkpoint import layout
 from manabot.policy.prepare import Tables, prepare
 from manabot.verify.representation import shared_effect_root
@@ -97,14 +96,11 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
         0 if agent.card_definitions is None else agent.card_definitions.num_embeddings,
     )
     check(obs, spec, obs["actions_valid"].astype(bool))
-    admitted = admit_observation(agent, tensors)
+    admit_observation(agent, tensors)
     buckets = measure_buckets(agent, tensors)
     trimmed = obs
     if buckets is not None:
         trimmed = trim_observation(obs, buckets)
-        admitted = trim_admitted(admitted, buckets)
-        for key, value in trimmed.items():
-            np.testing.assert_array_equal(value, admitted[key].numpy(), err_msg=key)
     prepared = prepare(
         trimmed,
         tables,
@@ -113,29 +109,22 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
         action_capacity=space.encoder.max_actions,
         live_tokens=True,
     )
-    np.testing.assert_array_equal(prepared.card_rows, admitted.references.cards.numpy())
-    np.testing.assert_array_equal(
-        prepared.permanent_rows, admitted.references.permanents.numpy()
+    expected_cards = tables.rows(trimmed["semantic_cards"])
+    expected_permanents = tables.rows(
+        np.stack(
+            [
+                trimmed[key][..., PERMANENT_DEFINITION_INDEX]
+                for key in ("agent_permanents", "opponent_permanents")
+            ],
+            axis=1,
+        )
     )
-    if admitted.references.known is not None:
-        np.testing.assert_array_equal(
-            prepared.known_rows, admitted.references.known.numpy()
-        )
-        np.testing.assert_array_equal(
-            prepared.known_counts, trimmed["known_hand"][..., 1]
-        )
-    if agent.semantic_cards is not None:
-        expected = agent._referenced_definitions(
-            admitted,
-            torch.stack(
-                [
-                    admitted[key][..., PERMANENT_DEFINITION_INDEX]
-                    for key in ("agent_permanents", "opponent_permanents")
-                ],
-                1,
-            ),
-        )
-        np.testing.assert_array_equal(prepared.referenced_definitions, expected.numpy())
+    np.testing.assert_array_equal(prepared.card_rows, expected_cards)
+    np.testing.assert_array_equal(prepared.permanent_rows, expected_permanents)
+    np.testing.assert_array_equal(
+        prepared.known_rows, tables.rows(trimmed["known_hand"][..., 0])
+    )
+    np.testing.assert_array_equal(prepared.known_counts, trimmed["known_hand"][..., 1])
     np.testing.assert_array_equal(prepared.legal, obs["actions_valid"].astype(bool))
     b, a = np.nonzero(prepared.legal)
     np.testing.assert_array_equal(prepared.action_features, obs["actions"][b, a, :-2])
@@ -150,9 +139,12 @@ def test_prepared_joins_match_admitted_rows(kind: str, bucketed: bool) -> None:
     np.testing.assert_array_equal(
         prepared.live_offsets, np.r_[0, (prepared.validity != 0).sum(1).cumsum()]
     )
-    np.testing.assert_array_equal(
-        prepared.is_agent, agent._ownership(buckets).expand(3, -1).numpy()
-    )
+    ownership = agent._is_agent_template
+    if buckets is not None and buckets.trims_objects:
+        ownership = torch.cat(
+            [ownership[:, part] for part in object_columns(buckets)], 1
+        )
+    np.testing.assert_array_equal(prepared.is_agent, ownership.expand(3, -1).numpy())
     compact = prepare(trimmed, tables, inference=True, bucketed=bucketed)
     assert compact.facts.kinds.shape[1] == (
         trimmed["facts"].shape[1]
@@ -332,3 +324,46 @@ def test_v10_object_buckets_keep_turn_rows_aligned() -> None:
     np.testing.assert_array_equal(
         batch.opponent_cards[..., -1], trimmed["card_turn_state"][:, 1]
     )
+
+
+@pytest.mark.parametrize("catalog", [False, True])
+def test_v10_masked_mean_forward_and_gradients_survive_object_buckets(
+    catalog: bool,
+) -> None:
+    """Turn-state rows stay attached to cards when object padding is removed."""
+    torch.set_num_threads(1)
+    space, original = _observations(10, False)
+    obs = {key: torch.from_numpy(value.copy()) for key, value in original.items()}
+    obs["player_turn_state"][:, 0, 0] = 1
+    obs["card_turn_state"][:, 0, 0] = 2
+    config = ModelConfig(
+        hidden_dim=8,
+        num_attention_heads=2,
+        value_aggregation="masked_mean",
+        world=managym.WORLD_SETUP if catalog else None,
+    )
+    torch.manual_seed(76)
+    padded = ActorCritic(space, config).eval()
+    bucketed = ActorCritic(space, config, bucketed_shapes=True).eval()
+    bucketed.load_state_dict(padded.state_dict())
+    outputs: list[tuple[torch.Tensor, torch.Tensor]] = []
+    for model in (padded, bucketed):
+        logits, values = model(admit_observation(model, obs))
+        outputs.append((logits, values))
+        (
+            logits[obs["actions_valid"].bool()].square().mean() + values.square().mean()
+        ).backward()
+    for left, right in zip(outputs[0], outputs[1], strict=True):
+        torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
+    for left, right in zip(padded.parameters(), bucketed.parameters(), strict=True):
+        if left.grad is None or right.grad is None:
+            assert left.grad is right.grad
+        else:
+            torch.testing.assert_close(left.grad, right.grad, atol=1e-6, rtol=1e-4)
+    with torch.no_grad():
+        for left, right in zip(
+            padded(admit_observation(padded, obs)),
+            bucketed(admit_observation(bucketed, obs)),
+            strict=True,
+        ):
+            torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)

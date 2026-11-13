@@ -46,6 +46,7 @@ import torch
 
 from experiments.elemental_variants import elemental_recipe, self_play_stage
 from experiments.learning_signal import training_runs
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.infra.identity import file_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
@@ -189,9 +190,9 @@ _VOLATILE_ATTEMPT = frozenset(
     }
 )
 _POLICY_FILES = (
-    "self-play-initial-raw.pt",
-    "self-play-raw.pt",
-    "self-play-ema.pt",
+    "self-play-initial-raw.safetensors",
+    "self-play-raw.safetensors",
+    "self-play-ema.safetensors",
 )
 _OPTIMIZER_FILE = "self-play-optimizer.pt"
 _ATTEMPTS_FILE = "game-attempts.jsonl"
@@ -220,7 +221,9 @@ def training_digest(training: Path) -> dict[str, Leaf]:
     digest: dict[str, Leaf] = {}
     for name in _POLICY_FILES:
         # These are the run's own exports, whose metadata needs full unpickling.
-        policy = torch.load(training / name, map_location="cpu", weights_only=False)
+        policy = load_metadata(training / name)
+        agent, _ = load_checkpoint(str(training / name))
+        policy["model_state_dict"] = agent.state_dict()
         for path, leaf in _flatten(policy):
             if path not in _VOLATILE_POLICY:
                 digest[f"{name}/{path}"] = leaf

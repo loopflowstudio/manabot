@@ -16,6 +16,14 @@ from experiments import training_throughput_packing as packing
 from experiments.tla_frontier import frozen
 from manabot import cli
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch._facts import FactEncoder
+from manabot.backends.torch._numerics import embedding_rows
+from manabot.backends.torch._semantic_cards import (
+    RecordEmbeddings,
+    RecordNamespace,
+    SemanticCardEncoder,
+)
+from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import clipped_surrogate, float64_operand
@@ -35,15 +43,7 @@ from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model import semantic_cards, shared_effects
-from manabot.model.facts import FactEncoder
-from manabot.model.numerics import embedding_rows
-from manabot.model.semantic_cards import (
-    RecordEmbeddings,
-    RecordNamespace,
-    SemanticCardEncoder,
-)
-from manabot.model.shared_effects import SharedEffectEncoder
+from manabot.model import facts as fact_encoder, semantic_cards, shared_effects
 from manabot.recipes.baseline import baseline
 from manabot.recipes.device import accelerator
 from manabot.recipes.local import local_smoke
@@ -62,6 +62,7 @@ from manabot.training.updates import damped_policy, ppo
 from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.prepared_routes import effect_rows, fact_rows
 
 
 def test_mps_admitted_without_changing_saved_regimes() -> None:
@@ -352,9 +353,14 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
         optimizer.zero_grad(set_to_none=True)
         with monkeypatch.context() as patch:
             if method is not None:
-                patch.setattr(semantic_cards, "embedding_rows", method)
+                patch.setattr(fact_encoder, "embedding_rows", method)
             records = RecordEmbeddings(model[0], torch.zeros(len(cards.tokens) + 1, 4))
-            loss = model[1](facts, torch.ones(1, 2, 4), records).square().mean()
+            objects = torch.ones(1, 2, 4)
+            loss = (
+                model[1](fact_rows(facts, objects, records), objects, records)
+                .square()
+                .mean()
+            )
             loss.backward()
         losses.append(loss.detach())
         gradients.append(
@@ -519,9 +525,12 @@ def test_empty_shared_effect_details_backward(
     before = deepcopy(encoder)
     loss = (
         encoder(
-            values["effects"],
-            values["effect_details"],
-            values["effect_members"],
+            effect_rows(
+                values["effects"],
+                values["effect_details"],
+                values["effect_members"],
+                objects,
+            ),
             objects,
         )
         .square()
@@ -550,9 +559,12 @@ def test_empty_shared_effect_details_backward(
         monkeypatch.setattr(shared_effects, "embedding_rows", empty_slice)
         expected = (
             before(
-                values["effects"],
-                values["effect_details"],
-                values["effect_members"],
+                effect_rows(
+                    values["effects"],
+                    values["effect_details"],
+                    values["effect_members"],
+                    objects,
+                ),
                 objects,
             )
             .square()

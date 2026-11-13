@@ -69,8 +69,8 @@ CADENCE = 50
 # A parent export directory holds the stage's files under these names.
 _PARENT_FILES = {
     "source_run": "run.json",
-    "raw": f"{STAGE}-raw.pt",
-    "ema": f"{STAGE}-ema.pt",
+    "raw": f"{STAGE}-raw.safetensors",
+    "ema": f"{STAGE}-ema.safetensors",
     "optimizer": f"{STAGE}-optimizer.pt",
 }
 

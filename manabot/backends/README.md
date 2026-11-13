@@ -215,9 +215,9 @@ batch = on_device(agent.prepare(obs), "cuda")  # one pinned copy per dtype
 logits, value = agent(batch)                   # tensors: logits [B,A], value [B]
 ```
 
-`agent(batch)` and `forward_distribution(batch)` do no validation and no
-lookups; `prepare` did both. They raise `TypeError` for anything but a
-`Prepared` batch of tensors (an observation dictionary, or the NumPy batch
+`agent(batch)` and `forward_distribution(batch)` do no raw-observation
+validation or index discovery; `prepare` did both. They raise `TypeError` for
+anything but a `Prepared` batch of tensors (an observation dictionary, or the NumPy batch
 before `on_device`) and `ValueError` for a batch prepared by a policy with
 another model or observation configuration. A batch belongs to a
 configuration, not to one instance: a restored, target or averaged copy of
@@ -268,6 +268,7 @@ loads. Training writes its policy files with the `.safetensors` suffix
   record of the revision that wrote it, `global_step`, the `bc` record with
   the critic's `value_semantic`, and for a belief policy
   `belief_schema_identity` and `belief_content_manifest_identity`.
+  `parameter_names` preserves the writer's parameter order for optimizer warm starts.
 
 The container carries every configuration the torch policy runs: belief
 inputs, policy history, FiLM, either critic, hashed or catalog record ids and

@@ -217,7 +217,7 @@ def _short(path: str) -> str:
 def label_modules(agent: torch.nn.Module) -> None:
     """Wrap each top-level child (and ModuleList elements) in a profiler label,
     and SemanticCardEncoder.definitions in its own label."""
-    from manabot.model.semantic_cards import SemanticCardEncoder
+    from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 
     def attach(name: str, module: torch.nn.Module) -> None:
         stack: list[Any] = []

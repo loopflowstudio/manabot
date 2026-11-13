@@ -5,16 +5,14 @@
 Reads the `.pt` file with PyTorch and writes `<stem>.safetensors` beside it
 (`manabot.policy.checkpoint`), which every framework backend loads. Every
 torch tensor becomes one canonical parameter or lookup buffer, or conversion
-fails naming the key; a configuration the backends do not implement is
-refused with every unsupported field named.
+fails naming the key. A backend refuses configurations it does not implement
+when loading the container.
 """
 
 import argparse
 from pathlib import Path
 
-import torch
-
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.policy.checkpoint import (
     UnsupportedPolicy,
     checkpoint_metadata,
@@ -27,13 +25,14 @@ def convert(checkpoint: Path) -> tuple[Path, int]:
     """Write the container for a PyTorch checkpoint; return it and the number
     of torch tensors read."""
     agent, space = load_checkpoint(str(checkpoint))
-    record = torch.load(checkpoint, map_location="cpu", weights_only=False)
+    record = load_metadata(checkpoint)
     state = {k: v.detach().numpy() for k, v in agent.state_dict().items()}
     container = from_torch_state(
         agent.config,
         space.encoder.config,
         state,
         checkpoint_metadata(record, checkpoint),
+        parameter_names=dict(agent.named_parameters()),
     )
     target = checkpoint.with_suffix(".safetensors")
     write_container(target, container)

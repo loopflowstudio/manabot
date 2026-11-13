@@ -10,15 +10,10 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 
+from manabot.backends.torch.arrays import _array_fields, on_device
 from manabot.backends.torch.policy import ActorCritic
-from manabot.model.admission import (
-    AdmittedObservation,
-    admit_observation,
-    bind_admitted,
-    check_observation,
-    measure_row_needs,
-)
-from manabot.model.inference import transfer_admitted
+from manabot.policy.buckets import row_needs
+from manabot.policy.prepare import Prepared
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
 
@@ -54,7 +49,7 @@ class AdmittedRollout:
         # measuring again.
         self._needs: np.ndarray | None = None
         self._measured = np.zeros(batch.actions.size, dtype=bool)
-        self._next = admit_observation(agent, observation_tensors(batch.next_obs))
+        self.agent.check_observation(batch.next_obs)
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
         """Admit flat rollout `indexes` not yet admitted."""
@@ -62,12 +57,16 @@ class AdmittedRollout:
         for start in range(0, len(pending), chunk_rows):
             chunk = pending[start : start + chunk_rows]
             rows = self.batch.observations(chunk)
-            obs = observation_tensors(rows.observation)
-            check_observation(self.agent, obs)
+            obs = rows.observation
+            self.agent.check_observation(obs)
             self._admitted[chunk] = True
-            needs = measure_row_needs(
-                self.agent, obs, recorded=self.batch.recorded.gather_needs(chunk)
+            needs = (
+                self.batch.recorded.gather_needs(chunk)
+                if self.agent.bucketed_shapes
+                else None
             )
+            if needs is None and self.agent.bucketed_shapes:
+                needs = row_needs(obs, self.agent.observation_space.encoder)
             if needs is not None:
                 if self._needs is None:
                     self._needs = np.zeros(
@@ -76,13 +75,18 @@ class AdmittedRollout:
                 self._needs[chunk] = needs
                 self._measured[chunk] = True
 
-    def next_observation(self, device: torch.device) -> AdmittedObservation:
+    def next_observation(self, device: torch.device) -> Prepared[torch.Tensor]:
         """Bootstrap observations [trajectory, ...] on `device`."""
-        return transfer_admitted(self._next, device)[0]
+        return on_device(
+            self.agent.prepare_admitted(
+                self.batch.next_obs, inference=not torch.is_grad_enabled()
+            ),
+            device,
+        )
 
     def rows(
         self, indexes: NDArray[np.int64], device: torch.device
-    ) -> tuple[AdmittedObservation, ActionRows]:
+    ) -> tuple[Prepared[torch.Tensor], ActionRows]:
         """Admitted observations of flat rollout `indexes` on `device`, with
         their behavior distributions."""
         if not self._admitted[indexes].all():
@@ -93,15 +97,15 @@ class AdmittedRollout:
             if self._needs is not None and self._measured[indexes].all()
             else None
         )
-        admitted = bind_admitted(
-            self.agent, observation_tensors(rows.observation), needs=needs
+        prepared = self.agent.prepare_admitted(
+            rows.observation, needs=needs, inference=not torch.is_grad_enabled()
         )
-        return transfer_admitted(admitted, device)[0], rows
+        return on_device(prepared, device), rows
 
-    def legal(self, obs: AdmittedObservation) -> torch.Tensor:
+    def legal(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         """The 0/1 legal-action input [B,A] of rows this rollout returned."""
-        return obs["actions_valid"]
+        return obs.legal
 
-    def evidence(self, obs: AdmittedObservation) -> dict[str, torch.Tensor]:
+    def evidence(self, obs: Prepared[torch.Tensor]) -> dict[str, torch.Tensor]:
         """The arrays a rejected step retains for rows this rollout returned."""
-        return dict(obs)
+        return _array_fields(obs, torch.Tensor)

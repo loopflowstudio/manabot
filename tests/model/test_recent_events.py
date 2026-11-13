@@ -23,6 +23,7 @@ from manabot.model.admission import admit_observation
 from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 from tests.training.wdl_baseline import wdl_baseline
 
 PACK = "ur-lessons-vs-gw-allies"
@@ -110,9 +111,9 @@ def test_real_history_reaches_both_heads_and_reloads(
         (policy, value), loaded(admit_observation(loaded, obs)), strict=True
     ):
         torch.testing.assert_close(expected, actual, rtol=0, atol=0)
-    checkpoint = torch.load(path, weights_only=False)
+    checkpoint = read_checkpoint(path, weights_only=False)
     del checkpoint["hypers"]["agent_hypers"]["recent_events"]
-    torch.save(checkpoint, path)
+    write_checkpoint(checkpoint, path)
     with pytest.raises((ValueError, RuntimeError)):
         load_checkpoint(str(path))
 

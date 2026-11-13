@@ -24,6 +24,7 @@ from manabot.verify.text_observation import collision_branches, native_fixtures
 from manabot.verify.trigger_order import ordering_root
 import managym
 from managym.decision_capture import DecisionInput
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None:
@@ -110,7 +111,7 @@ def test_checkpoint_retains_its_policy_input_version(tmp_path: Path) -> None:
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
     path = tmp_path / "policy.pt"
     save_checkpoint(agent, space, path, player_configs=players)
-    payload = torch.load(path, weights_only=False)
+    payload = read_checkpoint(path, weights_only=False)
     assert payload["world_binding"]["policy_input_version"] == version
     assert payload["hypers"]["observation_hypers"]["policy_input_version"] == version
     restored, restored_space = load_checkpoint(str(path))
@@ -126,7 +127,7 @@ def test_checkpoint_retains_its_policy_input_version(tmp_path: Path) -> None:
             del saved["policy_input_version"]
         else:
             saved["policy_input_version"] = other
-        torch.save(payload, path)
+        write_checkpoint(payload, path)
         with pytest.raises(UnsupportedPolicyInput):
             load_checkpoint(str(path))
 

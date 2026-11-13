@@ -14,9 +14,10 @@ from enum import IntEnum
 import torch
 from torch import nn
 
+from manabot.backends.torch._numerics import buffer_on, embedding_rows
 from manabot.backends.torch.arrays import to_numpy
-from manabot.model.numerics import buffer_on, embedding_rows
 from manabot.policy import admission
+from manabot.policy.prepare import Prepared
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -138,17 +139,6 @@ def admission_catalog(cards: "SemanticCardEncoder | None") -> admission.Catalog 
         to_numpy(buffer_on(cards, "record_name_keys", cpu)),
         to_numpy(buffer_on(cards, "record_token_keys", cpu)),
     )
-
-
-@dataclass(frozen=True)
-class CardReferences:
-    """Admitted catalog indexes for visible cards, permanents, public hands and
-    known decklists."""
-
-    cards: torch.Tensor
-    permanents: torch.Tensor
-    known: torch.Tensor | None
-    decklists: torch.Tensor | None = None
 
 
 class SemanticCardEncoder(nn.Module):
@@ -414,36 +404,15 @@ class SemanticCardEncoder(nn.Module):
         return definitions[self._rows(ids)]
 
     def forward(
-        self,
-        obs: dict[str, torch.Tensor],
-        definitions: torch.Tensor | None = None,
-        references: CardReferences | None = None,
+        self, batch: Prepared[torch.Tensor], definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        if definitions is None:
-            definitions = self.definitions()
-        cards = definitions[
-            self._rows(obs["semantic_cards"])
-            if references is None
-            else references.cards
-        ]
-        knowledge = obs["known_hand"]
-        known_rows = (
-            self._rows(knowledge[..., 0]) if references is None else references.known
-        )
-        assert known_rows is not None
-        known = definitions[known_rows]
-        known = (known * knowledge[..., 1, None] / 60.0).sum(dim=2)
+        cards = definitions[batch.card_rows]
+        known = (
+            definitions[batch.known_rows] * batch.known_counts[..., None] / 60.0
+        ).sum(dim=2)
         if self.decklist_projection is not None:
-            decklists = obs["decklists"]
-            deck_rows = (
-                self._rows(decklists[..., 0])
-                if references is None or references.decklists is None
-                else references.decklists
-            )
-            # [batch, seat, row, hidden] x [batch, seat, row, 4 counts]
-            # -> [batch, seat, 4 * hidden]; a closed decklist pools to zero.
             pooled = torch.einsum(
-                "bsrh,bsrc->bsch", definitions[deck_rows], decklists[..., 1:] / 60.0
+                "bsrh,bsrc->bsch", definitions[batch.deck_rows], batch.deck_counts
             ).flatten(start_dim=2)
             known = known + self.decklist_projection(pooled)
         return cards, known

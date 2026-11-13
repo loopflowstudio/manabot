@@ -1,7 +1,7 @@
 """Task c5fba4 fact-contribution reading: how much fact rows move their objects.
 
 Neither the hashed nor the catalog fact embedding has learning evidence, and
-both output layers start at zero (`manabot.model.facts`), so a trained model
+both output layers start at zero (`manabot.backends.torch._facts`), so a trained model
 whose facts still add nothing to its objects is not using them. This reading
 trains nothing and plays no scored game. On one fixed sample of positions from
 the frontier's 16 frozen pairs it runs each retained checkpoint's encoder and
@@ -62,6 +62,7 @@ from experiments.tla_frontier import (
     size_run,
     with_launcher_ends,
 )
+from manabot.backends.torch._facts import FactEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -88,7 +89,6 @@ from manabot.env.observation import (
 from manabot.infra.artifacts import fetch_etude_checkpoint
 from manabot.infra.identity import StrictModel
 from manabot.model.admission import admit_observation
-from manabot.model.facts import FactEncoder
 from manabot.training.regime import TrainingRegime
 import managym
 

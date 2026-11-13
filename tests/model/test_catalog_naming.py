@@ -26,6 +26,7 @@ from manabot.model.inference import PolicyInference
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 @dataclass(frozen=True)
@@ -231,8 +232,10 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     logits, _ = model(admit_observation(model, tensors))
     assert logits.shape == (1, 512)
     assert (logits.softmax(-1)[0, : len(groups)] > 0).all()
-    embedded = model.name_candidates(tensors["name_candidates"])
-    assert embedded[0, : len(groups)].unique(dim=0).shape[0] == len(groups)
+    prepared = admit_observation(model, tensors).prepared
+    assert prepared is not None
+    embedded = model.name_candidates(prepared)
+    assert embedded.unique(dim=0).shape[0] == len(groups)
     # One group contains names on both sides of 512; its preference trains every
     # member's public identity through the group's mean vector.
     target = next(i for i, (a, b) in enumerate(groups) if a <= 512 <= b)
@@ -444,9 +447,9 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
         assert first.definition is not None
         candidates[0] = managym.NameCandidate(first.name, None)
     else:
-        checkpoint = torch.load(path, weights_only=False)
+        checkpoint = read_checkpoint(path, weights_only=False)
         del checkpoint["world_binding"]["naming_representation"]
-        torch.save(checkpoint, path)
+        write_checkpoint(checkpoint, path)
     monkeypatch.setattr(managym, "naming_catalog", lambda: candidates)
     with patch.object(ActorCritic, "load_state_dict") as load_weights:
         with pytest.raises(ValueError, match="world/setup/input binding differs"):

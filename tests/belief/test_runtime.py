@@ -18,6 +18,7 @@ from manabot.sim.search.flat_mc import make_player
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldSpace
 from tests.belief.support import fixture_torch_observation
+from tests.model.checkpoint_fixture import read_checkpoint
 
 
 class NativeContractEngine:
@@ -151,7 +152,7 @@ def test_serialized_belief_checkpoint_binds_exact_runtime_schema(tmp_path) -> No
         player_configs=Match().to_rust(),
     )
 
-    payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    payload = read_checkpoint(checkpoint_path, map_location="cpu", weights_only=False)
     assert payload["belief_schema_identity"] == schema.identity
     assert (
         payload["belief_content_manifest_identity"] == schema.content_manifest_identity

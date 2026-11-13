@@ -3,7 +3,6 @@
 import pytest
 import torch
 
-from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.policy import OBJECT_VALIDITY_KEYS, ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
@@ -44,7 +43,7 @@ def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
     [("masked_mean", False), ("value_token", False), ("masked_mean", True)],
 )
 def test_outputs_and_gradients_match_padded(
-    value_aggregation: str, bucketed: bool, monkeypatch: pytest.MonkeyPatch
+    value_aggregation: str, bucketed: bool
 ) -> None:
     torch.manual_seed(319)
     case = _policy()
@@ -73,18 +72,13 @@ def test_outputs_and_gradients_match_padded(
         prepared = scope.prepare(obs)
         present = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
         tokens = len(obs["actions_valid"]) if value_aggregation == "value_token" else 0
-        assert prepared.live_token_count == present + tokens
-        totals: list[int | None] = []
-        pack = LiveTokens.pack
-
-        def record(present: torch.Tensor, total: int | None) -> LiveTokens:
-            totals.append(total)
-            return pack(present, total)
-
-        monkeypatch.setattr(LiveTokens, "pack", record)
+        assert prepared.prepared is not None
+        coordinates = prepared.prepared
+        assert coordinates.live_index is not None
+        assert coordinates.live_offsets is not None
+        assert coordinates.live_index.numel() == present + tokens
+        assert coordinates.live_offsets[-1].item() == present + tokens
         served, served_values = live.forward_distribution(prepared)
-    # Collection packs with the host count; it never reads one back.
-    assert totals == [prepared.live_token_count]
     torch.testing.assert_close(served, expected_logits, atol=1e-5, rtol=1e-5)
     torch.testing.assert_close(served_values, expected_values, atol=1e-5, rtol=1e-5)
 
@@ -92,4 +86,5 @@ def test_outputs_and_gradients_match_padded(
 def test_padded_policy_measures_no_live_count() -> None:
     case = _policy()
     with torch.no_grad(), PolicyInference(case.agent) as scope:
-        assert scope.prepare(case.obs).live_token_count is None
+        batch = scope.prepare(case.obs).prepared
+        assert batch is not None and batch.live_index is None

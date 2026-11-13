@@ -106,9 +106,10 @@ def test_staging_binds_published_exports_at_the_parent_update(
     storage = DirectoryStorage(tmp_path / "bucket")
     continuation = stage_parent(parent, storage, "mtg183/w2")
     assert continuation.from_update == 2
-    assert continuation.raw.key == f"mtg183/w2/{STAGE}-raw.pt"
+    assert continuation.raw.key == f"mtg183/w2/{STAGE}-raw.safetensors"
     assert (
-        storage.get(continuation.ema.key) == (parent / f"{STAGE}-ema.pt").read_bytes()
+        storage.get(continuation.ema.key)
+        == (parent / f"{STAGE}-ema.safetensors").read_bytes()
     )
     # Restaging is idempotent; other bytes under a key are refused.
     assert stage_parent(parent, storage, "mtg183/w2") == continuation
@@ -147,10 +148,10 @@ def test_monitoring_staging_binds_an_interrupted_parent_raw_export(
     continuation = stage_monitoring(parent, storage, "mtg183/w3", 1)
     assert continuation.from_monitoring and continuation.from_update == 1
     assert continuation.ema is None and continuation.optimizer is None
-    assert continuation.raw.key == "mtg183/w3/monitor-00000000.pt"
+    assert continuation.raw.key == "mtg183/w3/monitor-00000000.safetensors"
     assert (
         storage.get(continuation.raw.key)
-        == (parent / "monitor-00000000.pt").read_bytes()
+        == (parent / "monitor-00000000.safetensors").read_bytes()
     )
     spec = segment_job(continuation, 120, hours=24)
     assert spec.milestones[0] == CADENCE
@@ -158,7 +159,7 @@ def test_monitoring_staging_binds_an_interrupted_parent_raw_export(
     assert len(job.inputs) == 2
     with pytest.raises(ValueError, match="no monitoring export"):
         stage_monitoring(parent, storage, "mtg183/w3", 2)
-    (parent / "monitor-00000000.pt").write_bytes(b"tampered")
+    (parent / "monitor-00000000.safetensors").write_bytes(b"tampered")
     with pytest.raises(ValueError, match="published monitoring raw"):
         stage_monitoring(parent, storage, "mtg183/w4", 1)
 

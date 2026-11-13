@@ -12,7 +12,7 @@ surrogate ratio is float32 (`clipped_surrogate` states the limit) and
 `float64_operand` is the identity. Returns and advantage selection run on the
 host through `manabot.policy.returns`, whose NumPy functions match torch's
 bit for bit. The categorical critic's functions are absent: the backend
-refuses a categorical checkpoint (`manabot.policy.checkpoint.require_supported`).
+refuses a categorical checkpoint (`manabot.backends.mlx.checkpoint.require_supported`).
 """
 
 from collections.abc import Mapping

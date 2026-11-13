@@ -119,8 +119,15 @@ def minibatch_loss(
         "actor_mask": to_device(targets.actor_mask.astype(bool), device),
     }
 
+    if module is torch_backend:
+        assert isinstance(policy, torch_backend.policy.ActorCritic)
+        policy.train()
+        device_batch = torch_backend.arrays.on_device(batch, device)
+    else:
+        device_batch = batch
+
     def objective() -> tuple[Any, ...]:
-        logits, values = policy.forward_distribution(batch)
+        logits, values = policy.forward_distribution(device_batch)
         return minibatch_objective(
             rl,
             logits,
@@ -263,12 +270,17 @@ def check(
     torch.set_num_threads(8)
     agent, space = load_checkpoint(str(checkpoint))
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    weights = from_torch_state(agent.config, space.encoder.config, state)
+    weights = from_torch_state(
+        agent.config,
+        space.encoder.config,
+        state,
+        parameter_names=dict(agent.named_parameters()),
+    )
     module = backend_module(backend_name)
     port = backend(backend_name)
     policy, learner = port.load(weights)
     # The reference: the same loss over the torch backend, on the loaded agent.
-    reference_policy = torch_backend.checkpoint.TorchPolicy(agent, weights)
+    reference_policy = agent
     reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
     report = Report()
     for index, (obs, targets, settings, meta) in enumerate(
@@ -277,7 +289,9 @@ def check(
         reference_batch = reference_policy.prepare(obs)
         valid = reference_batch.legal
         with torch.no_grad():
-            logits, values = reference_policy.forward_distribution(reference_batch)
+            logits, values = reference_policy.forward_distribution(
+                torch_backend.arrays.on_device(reference_batch, "cpu")
+            )
         loss = minibatch_loss(
             torch_backend,
             reference_policy,

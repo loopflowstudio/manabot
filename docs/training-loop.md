@@ -269,10 +269,9 @@ def train(
             for _epoch in range(2):
                 order = torch.as_tensor(rng.permutation(len(actions)))
                 for rows in order.split(256):
-                    # Host lookups happen here; the forward reads a Prepared batch.
-                    prepared, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
-                    valid = rl.legal_mask(admitted.legal(prepared))
-                    logits, value = agent(prepared)
+                    obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
+                    valid = admitted.legal(obs)
+                    logits, value = agent(obs)
                     logs = rl.policy_logs(logits, valid)
                     chosen = rl.action_logs(logs, actions[rows])
                     loss = (

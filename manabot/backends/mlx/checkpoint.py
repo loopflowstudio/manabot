@@ -31,9 +31,36 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import (
     GRUS,
     PolicyCheckpoint,
-    from_torch_state,
+    UnsupportedPolicy,
     read_container,
 )
+
+
+def require_supported(model: ModelConfig, observation: ObservationConfig) -> None:
+    """Refuse configurations the host preparation and backends do not
+    implement, naming every one, rather than running them partially."""
+    reasons = []
+    if model.world is None or not model.catalog_records():
+        reasons.append("a catalog world with record_vocabulary='catalog' is required")
+    if observation.policy_input_version != 9:
+        reasons.append(f"policy_input_version={observation.policy_input_version}")
+    if model.belief_count_buckets:
+        reasons.append("belief inputs")
+    if model.recent_events:
+        reasons.append("policy history input (recent_events)")
+    if model.value_aggregation != "masked_mean":
+        reasons.append(f"value_aggregation={model.value_aggregation!r}")
+    if model.value_kind != "scalar":
+        reasons.append(f"value_kind={model.value_kind!r}")
+    if model.policy_film:
+        reasons.append("policy_film")
+    if not model.attention_on:
+        reasons.append("attention_on=False")
+    if reasons:
+        raise UnsupportedPolicy(
+            "the framework backends do not support " + "; ".join(reasons)
+        )
+
 
 _SEQUENTIAL = re.compile(r"(^|\.)(projection|policy_head|value_head|mlp)\.(\d+)\.")
 _GRU = {
@@ -84,6 +111,7 @@ def mlx_gradients(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
 def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly."""
+    require_supported(checkpoint.model, checkpoint.space.encoder.config)
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
         checkpoint.dimensions(), checkpoint.tables(), checkpoint.model, checkpoint.space
@@ -100,16 +128,6 @@ def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
     policy.update(tree_unflatten([(k, to_mlx(v)) for k, v in parameters.items()]))
     mx.eval(policy.parameters())
     return policy
-
-
-def build(
-    model: ModelConfig,
-    observation: ObservationConfig,
-    state: Mapping[str, np.ndarray],
-) -> tuple[MLXActorCritic, ObservationSpace]:
-    """An MLX policy holding `state` (a PyTorch state dict as NumPy arrays)."""
-    checkpoint = from_torch_state(model, observation, state)
-    return assemble(checkpoint), checkpoint.space
 
 
 def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]:

@@ -61,7 +61,7 @@ def train(
                 order = torch.as_tensor(rng.permutation(len(actions)))
                 for rows in order.split(256):
                     obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
-                    valid = rl.legal_mask(obs["actions_valid"])
+                    valid = admitted.legal(obs)
                     logits, value = agent(obs)
                     logs = rl.policy_logs(logits, valid)
                     chosen = rl.action_logs(logs, actions[rows])

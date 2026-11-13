@@ -1,12 +1,14 @@
 # MTG-333 plan: torch forward over `Prepared`, container saves, backend rule
 
-Base: main `ef28f3a58` (PR #501 merged). One PR. MTG-325's plan is in git
-(`65fa8c7aa:scratch/plan.md`; "Pass of 21:30Z" sized this Task).
+Policy baseline: `ef28f3a58` (PR #501 merged). Integrated upstream:
+`b531853a5`, merged by `0c43cc16e`; its tree matches main `6ce618b8a`.
+One PR. MTG-325's plan is in git (`65fa8c7aa:scratch/plan.md`;
+"Pass of 21:30Z" sized this Task).
 
 ## Problem
 
-Torch is a matched backend in name only: `ActorCritic` does its integer
-bookkeeping on device tensors read from a tensor dictionary (`nonzero`,
+Torch's matched backend still wraps the old forward: `ActorCritic` does its
+integer bookkeeping on device tensors read from a tensor dictionary (`nonzero`,
 `searchsorted`, `unique`, host round trips for effect routes), while MLX reads
 `manabot.policy.prepare.Prepared`. Two input representations, two admission
 orchestrations, and `save_checkpoint` writes a format only torch reads.
@@ -71,13 +73,49 @@ logits, values = policy.evaluate(batch)  # NumPy out
 
 ## Current implementation and cutover points
 
-Only slice 1 is implemented. `policy/prepare.py` owns host rows and indexes;
-`policy/admission.py::Spec/check` owns shared admission; MLX consumes both.
-Torch still uses `model/admission.py::AdmittedObservation`,
-`model/inference.py::PolicyInference` and the dictionary forward in
-`backends/torch/policy.py`. `backends/torch/checkpoint.py::save_checkpoint`
-still writes `.pt`; `TorchPolicy/Retained` adapts the old forward for parity.
-The docs describe the intended completed PR, not the delivered slice.
+Slice 1 and the arithmetic part of slice 2 are implemented. Torch's action,
+object/card/belief, link, fact, effect, continuation and history encoders now
+read device `Prepared` rows. Admission uses shared `Spec/check`; host trimming,
+compaction and live-token routes are consumed. `arrays.on_device` batches
+transfers by dtype. The final arithmetic CPU oracle passed at `prepared-forward.pt` (below).
+
+The public entry still takes `AdmittedObservation`, carrying raw dictionaries
+for existing collectors plus the `Prepared` rows. `PolicyInference` retains
+its scoped wrapper. `TorchPolicy/Retained` are deleted: `ActorCritic` now owns
+the NumPy `prepare/evaluate` API and a version-checked catalog cache.
+Removing those carriers and migrating callers is next. Encoders now live in private modules under `backends/torch/`. Catalog program execution still selects stored token
+rows and reads lengths on CPU; finish that static/prepared schedule boundary.
+The learner rollout now returns device `Prepared` directly and retains prepared
+arrays as failure evidence. Bootstrap preparation runs inside its forward's
+`no_grad` boundary, so inference compaction matches the original.
+`save_checkpoint` now writes the general container. The carrier/caller cut,
+backend rule and L4 checks are still incomplete.
+
+The backend-selection rule is written in `AGENTS.md` (`CLAUDE.md` links to
+it) and `backends/README.md`, but its resolver and import guard are not
+implemented. `tests/test_package_boundaries.py` currently guards framework
+imports and update injection, not the new composition-root rule.
+`ParameterArrays`, header-only metadata reads and general container support are
+implemented. Parameters come from `named_parameters` with float32 required;
+all other state entries remain buffers. MLX checks support at its own load.
+Metadata readers, policy fixture mutations and new export suffixes are migrated;
+targeted consumer checks are in progress.
+
+### Upstream reconciliation (2026-11-13 UTC)
+
+`lf task status MTG-333 --json` returned no Wave and no new direction beyond
+the quoted backend/alias additions. `git ls-remote origin refs/heads/main`
+returned `6ce618b8a`; that commit is already in this checkout. Since
+`ef28f3a58`, upstream changed native mana-payment handling, its documentation
+and the repository QA skill, with no changes under `manabot/` or the backend
+tests. The policy baseline therefore stays `ef28f3a58`, but the next base/head
+comparison must use one native build from the integrated source in both arms.
+The historical captures and speed numbers below remain evidence of their
+original runs, not measurements of the integrated engine. No new runtime or
+L4 check was run during realign; the local extension's rebuild provenance was
+not established. Rebuild as required by `AGENTS.md` before the next runtime
+comparison and recapture base, base-repeat and head together. Existing frozen
+parity captures remain usable only while their world binding matches.
 
 The base versions at `ef28f3a58` are the authority for old call sites and
 admission messages. Remaining consumers include sim/search/serving, verify,
@@ -124,6 +162,11 @@ in `policy/buckets.py`; `prepare` runs on trimmed rows. Torch
 
 **One admission.** `policy/admission.py` gains belief and recent-event checks
 (same messages) and one `check(obs, spec, legal)` both backends call.
+Those checks now exist. Legal-mask validation still belongs to backend
+wrappers: `MLXActorCritic.check_observation` constructs an `mx.array`, calls
+`legal_mask`, then copies it back. Complete the host-only boundary during the
+cutover, preserving binary-mask and nonempty-support refusals in both backends.
+This is admission work, separate from the later CUDA optimization pass.
 
 **Device rows.** `Prepared[A]` is generic over its array type (3.12 syntax,
 no default): `prepare` returns `Prepared[np.ndarray]`;
@@ -208,14 +251,12 @@ program-boundary and effect-padding tests follow these surviving types.
 Remaining for the Torch cutover (do not polish these predecessors):
 
 `manabot/model/admission.py`, `manabot/model/inference.py` (scope and
-transfer move to the backend), `AdmittedObservation`, `CardReferences`,
-`PreparedObservation`, torch `trim_*`, `transfer_admitted`, `admit_on_device`,
-`ActorCritic._referenced_definitions`/`_bucketed`/`_ownership`/
-`live_token_count`, `SemanticCardEncoder.record_names*`/`record_tokens*`/
+transfer move to the backend), `AdmittedObservation`,
+`PreparedObservation`, `transfer_admitted`, `admit_on_device`, `SemanticCardEncoder.record_names*`/`record_tokens*`/
 `require_record_*`, `RecordEmbeddings`, `records.masked_record_rows`/
 `join_record_rows`/`admit_record_rows`/`record_indexes`, the torch
 `admit_*` wrappers,
-`checkpoint.Retained`/`TorchPolicy`, `parity`'s torch-against-itself
+`parity`'s torch-against-itself
 reference path, `convert`'s refusal of unsupported configurations.
 Survives: every admission message tests assert; `PolicyInference` scope
 semantics (`tests/model/test_inference.py`); legacy `.pt` loading; registered
@@ -224,31 +265,40 @@ lookup buffers and state-dict names.
 ## Slices
 
 Each commit that touches the forward ends with the CPU oracle at 0 differ
-against `/tmp/mtg333/base.pt` (`run.py` gets a two-line shim so one script
-drives base and head).
+against a base capture from the same native build. `run.py` needs an adapter
+for the old admitted dictionary and new host/device `Prepared` APIs, including
+the moved `PolicyInference` import and legal-mask access. The adapter must
+leave fixture generation, seeds, losses and output keys unchanged.
 
 1. **Implemented — `prepare` covers every torch configuration, on the host.**
    `Prepared[A]`, the new fields, `Tables` without catalog / with hashed
    records, NumPy trimming, belief and event admission, shared `check`. MLX
    forward takes raw counts and integers. Torch forward untouched.
-   Test (new, `tests/model/test_prepare_rows.py`): for the ten oracle
-   configurations × padded/bucketed on real observations, each prepared
-   index, mask and row equals what the torch forward computes today
-   (definition rows, record rows, legal coordinates, referenced definitions,
-   trimmed references, compaction columns). Then
-   `uv run --extra dev --extra mlx pytest tests/model/test_prepare_rows.py tests/model/test_policy_container.py tests/model/test_mlx_backend.py tests/model/test_bucketed_shapes.py -q`
-   and MLX parity still `parity: pass (torch, mlx)`.
-2. **Next: Torch forward over `Prepared`**, in the order MTG-325 sized: carrier
-   (`Prepared` rides the admitted object) → legal actions and focus → links →
-   relations and events → facts → shared effects → cards/known/decklists →
-   belief → drop the dictionary; `on_device`; catalog cache on the policy.
+   `tests/model/test_prepare_rows.py` covers ten configurations ×
+   padded/bucketed on three early real observations, plus belief coordinates,
+   effect memberships/padding, program boundaries and v10 trimming. It compares
+   selected joins, action features, live indexes, ownership and fact widths;
+   it does not establish equivalence of every field or a Torch forward.
+   Completed checks and MLX parity are recorded below.
+2. **Arithmetic migrated; finish the input boundary.** The admitted carrier now
+   holds `Prepared`; actions/focus, links, relations/events, facts, shared
+   effects, cards/known/decklists and belief consume it. `on_device` exists.
+   Remaining: drop the dictionary/carriers, move `PolicyInference` to the
+   backend (using the policy cache), and remove catalog length reads from the
+   device forward.
+   Cover nonempty event, relation, naming and fact-program routes as their
+   consumers move, retain malformed-input refusal tests, and compare CPU
+   outputs/gradients rather than treating host row tests as forward evidence.
 3. Callers: backend rollout, collection, sim, verify, belief, eval, academy,
    scripts, experiments, tests; encoders move under `backends/torch/`;
    deletions above; `_TORCH_NOT_YET_MOVED` shrinks.
-4. Container save and readers; suffix sweep; fixtures forged through a
-   container helper instead of `torch.load`/`torch.save`.
-5. Backend rule: resolver, README/CLAUDE.md, boundary test, sim/eval over
-   `BackendPolicy`, follow-up Task.
+4. **Implemented; consumer verification in progress.** General container saves,
+   metadata readers, export suffixes and editable container fixtures. Legacy
+   `.pt` readers remain and MLX support checks belong to its load.
+5. Backend rule: implement the resolver and boundary test for the already
+   documented rule; move sim/eval over `BackendPolicy`; file the explicitly
+   deferred belief/executor/optimizer-persistence/verify imports as a follow-up
+   Task. Verify the rule text against the final allowlist.
 6. Aliases sweep; docs (`policy/README.md`, `backends/README.md`,
    `backends/mlx.md`, `docs/training-loop.md`, `manabot/README.md`,
    `docs/training.md`, `manabot/model/agent.md`).
@@ -286,11 +336,17 @@ this plan's existing historical-mean v10 oracle configuration.
 ## Acceptance at gate
 
 - CPU oracle: `compare.py base.pt head.pt` → `tensors 3248`, `differing 0`.
-  Any named exception is listed with its tensors and max abs difference.
+  A difference is an unresolved failure with tensor names and max absolute
+  differences, not an exception granted by documenting it. Keep the original
+  3,248-key cohort; v10 masked-mean coverage supplements it separately.
 - Updates: `uv run python scratch/equivalence/updates.py` JSON `cmp`-identical
   to a base capture taken the same way.
 - `uv run --extra dev --extra mlx --extra artifacts pytest tests/test_package_boundaries.py tests/model/test_prepare_rows.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_policy_container.py tests/model/test_inference.py tests/model/test_admission.py tests/model/test_bucketed_shapes.py tests/model/test_live_tokens.py tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/training/test_minimal_loop.py tests/sim/test_puct_compatibility.py tests/sim/test_local_update.py -q`
-  → all pass, no new skips; plus the tests of every other file changed.
+  → all pass, no new skips; plus the tests of every other file changed and
+  the package-move/initializer/CLI checks required by
+  `docs/development.md#validation-by-change-area` (including installed-wheel
+  smoke where the CLI changes). Isolated consumer checks cover Python 3.12
+  as well as the development interpreter; local 3.13 receipts alone do not.
 - World/shape suite from CLAUDE.md (elemental world, evaluation models,
   mirror admission, monitor evaluation, choice separability) passes.
 - `uv run --extra mlx python -m manabot.backends.parity CKPT --capture DIR`
@@ -349,8 +405,9 @@ Task stays under USD 25 without asking.
   recorded floor on non-belief paths; the head-vs-head repeat arm separates
   that from a real difference.
 - Sim over `BackendPolicy` could change seeded action streams: move a module
-  only when its existing digest/replay tests pass unchanged; otherwise it
-  stays on the allowlist for the follow-up.
+  only when its existing digest/replay tests pass unchanged. A mismatch is
+  unfinished migration work; it does not authorize silently moving sim/eval
+  into the follow-up reserved for the other named dependencies.
 
 ## Exclusions
 
@@ -414,6 +471,72 @@ calls per backend; post-clipped-Adam max absolute weight differences 7.5e-9 /
 still a diagnostic, not the gate. This tests the changed host/MLX path; it is
 not a completed Torch cutover or a fresh L4 receipt.
 
-Scratch was within budget before and after curation. Original uncommitted
-notes were copied to `/tmp/mtg333-compress-before/` before trimming.
-All checks exited; no server, watcher or remote experiment was started.
+Original uncommitted notes were copied to `/tmp/mtg333-compress-before/`
+before trimming. The curated notes and receipts before realign are committed
+at `b015041bd:scratch/`.
+
+
+## Torch arithmetic receipt (2026-11-13 UTC)
+
+The integrated native release build completed in 2m44s; the cp313 macOS
+extension was extracted from its wheel and replaced atomically. Baseline
+`ef28f3a58`'s `manabot/` was extracted to `/tmp/mtg333-integrated-base`, using
+the checkout's current content and that same rebuilt extension in both arms.
+`lf task status MTG-333 --json` returned no Wave and no new direction.
+
+`run.py` produced `/tmp/mtg333/integrated-base.pt` and
+`integrated-base-repeat.pt`; comparison: **3,248 tensors, 0 differing**.
+`forward-head5.pt` also compares **3,248 tensors, 0 differing** against that
+base, including all gradients, serving/live-token outputs and trained weights.
+The final `prepared-forward.pt` capture after direct ActorCritic API changes also
+matched all 3,248 tensors. After the learner-rollout cut, container saves and encoder moves,
+`rollout-container.pt` again matched all 3,248 tensors exactly. `updates.py` base/head comparisons of all five
+PPO/damped cases are byte-identical after the bootstrap correction below.
+
+Two measured layout hazards, beyond the kickoff arithmetic probes:
+- Hashed fact columns were a five-column view of a six-column NumPy allocation.
+  Equal input values chose a different Torch linear path: numeric output differed
+  by 2.4e-7, producing two belief fact-output gradient differences (2.9e-11).
+  Making the host feature matrix contiguous removed them.
+- Per-seat permanent matrices must be contiguous. The initial update matched,
+  but after biases trained, the strided projection drifted. Contiguous seat
+  inputs restored the one-iteration training probe and then the full oracle.
+  Inference preparation also must select compaction at preparation time, even
+  when a collector enters `no_grad` only around its later forward.
+
+Deleted: `CardReferences`, the Torch trimming path, `_bucketed`, `_ownership`,
+`_referenced_definitions`, `live_token_count`, `LiveTokens.pack`, and the old
+fact/shared-effect route-building bodies and record-routing helpers. The
+admitted carrier is temporary, explicitly not the completed one-input API.
+Input-buffer gradients are no longer a contract: route tests check model and
+object gradients; the timestamp-capacity test differentiates prepared numeric
+features. The saved parameter names and all state buffers are unchanged.
+
+Focused checks so far: nonempty facts/effects/programs, naming and history
+→ 21 passed; agent, attachment and value-readout files → 65 passed;
+host preparation (including new v10 masked-mean forward/backward cases),
+record vocabulary, shared effects and layer inputs → 61 passed, one existing
+CUDA-only skip. Final checks and remaining work follow in the next receipt.
+
+
+Container/input follow-through (2026-11-13 UTC): bootstrap observations originally
+prepared outside `no_grad` missed compaction; four update cases drifted despite
+the forward oracle passing. Preparing the already-admitted host bootstrap rows
+at `next_observation` restored byte-identical update JSON. This is retained as a
+counterexample to relying on the forward oracle alone.
+
+`pytest` over the general container cases, file format, catalog, capacity and
+policy-input refusals: **45 passed**. Parameters retain exact dtype; scalar
+buffers retain shape. Metadata includes belief/value/source/architecture records
+and ordered `parameter_names` for Adam warm starts. Legacy policies still load;
+optimizer/recovery/incident files remain Torch. Targeted warm-start, export,
+belief and Academy checks: **38 passed in 258.89s**. `ruff check --fix` and `ruff format`
+ran over changed Python files; finish with the final check and oracle.
+
+After the private encoder moves, the 3,248-tensor CPU oracle remains exact.
+Header-only metadata reading, real legacy conversion, update backend protocols
+and the affected framework-import guards: **17 passed in 20.25s**.
+The action-only estimator fixture now supplies its own rollout protocol instead
+of patching deleted player admission functions; 18 estimator checks passed,
+with its final materialization assertion updated to the fixture's two reads
+and passing separately (1 passed). Changed-file Ruff checks and formatting pass.

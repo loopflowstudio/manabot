@@ -1,10 +1,12 @@
 """The torch backend through the NumPy backend protocol parity uses."""
 
 import numpy as np
+import pytest
 import torch
 
 from manabot.backends.parity import minibatch_loss
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -59,7 +61,12 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
     ).eval()
     state = {k: v.detach().numpy().copy() for k, v in model.state_dict().items()}
     policy, learner = BACKEND.load(
-        from_torch_state(model.config, space.encoder.config, state)
+        from_torch_state(
+            model.config,
+            space.encoder.config,
+            state,
+            parameter_names=dict(model.named_parameters()),
+        )
     )
     obs = _batch(space, 6)
 
@@ -93,3 +100,32 @@ def test_torch_backend_runs_the_policy_and_damped_step_over_numpy() -> None:
     assert float(norm) > 0
     moved = [name for name in names if not np.array_equal(before[name], after[name])]
     assert moved
+
+
+def test_prepared_policy_boundary_and_cached_program_lifetime() -> None:
+    """The direct backend API refuses host arrays in forward and stale cached weights."""
+    torch.manual_seed(17)
+    model = ActorCritic(
+        ObservationSpace(), ModelConfig(hidden_dim=8, world=managym.WORLD_SETUP)
+    ).eval()
+    obs = _batch(model.observation_space, 3)
+    batch = model.prepare(obs, inference=True)
+    with pytest.raises(TypeError, match="device Prepared"):
+        model(batch)
+    expected = model.evaluate(batch)
+    model.cache_programs()
+    for wanted, actual in zip(expected, model.evaluate(batch), strict=True):
+        np.testing.assert_array_equal(wanted, actual)
+    assert model.semantic_cards is not None
+    with torch.no_grad():
+        model.semantic_cards.token_embedding.weight.add_(0.01)
+    with pytest.raises(RuntimeError, match="cached inference policy changed"):
+        model.evaluate(batch)
+    model.clear_cache()
+    assert any(
+        not np.array_equal(a, b)
+        for a, b in zip(expected, model.evaluate(batch), strict=True)
+    )
+    empty = {**obs, "actions_valid": np.zeros_like(obs["actions_valid"])}
+    with pytest.raises(ValueError, match="No valid actions"):
+        model.get_action_and_value(on_device(model.prepare(empty), "cpu"))

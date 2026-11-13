@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 import torch
 
+from tests.model.checkpoint_fixture import read_checkpoint
+
 mx = pytest.importorskip("mlx.core")
 
 from mlx.utils import tree_flatten  # noqa: E402
@@ -27,7 +29,10 @@ from manabot.backends.mlx.policy import (  # noqa: E402
     attend,
     packed_steps,
 )
-from manabot.backends.torch.checkpoint import save_checkpoint  # noqa: E402
+from manabot.backends.torch.checkpoint import (  # noqa: E402
+    load_metadata,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.env.match import Match  # noqa: E402
 from manabot.env.observation import ObservationSpace  # noqa: E402
@@ -132,6 +137,7 @@ def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:
         MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     )
     save_checkpoint(agent, space, original, player_configs=match.to_rust())
+    torch.save(read_checkpoint(original), original)
     target, tensors = convert(original)
     assert tensors == len(agent.state_dict())
     return original, target, agent
@@ -146,7 +152,7 @@ def test_converted_checkpoint_is_one_file_carrying_the_original_source(
         "policy.safetensors",
     ]
     _, metadata = read_safetensors(target)
-    source = torch.load(original, weights_only=False)["source"]
+    source = load_metadata(original)["source"]
     assert json.loads(metadata["source"]) == source
     assert metadata["converted_from"] == str(original)
 

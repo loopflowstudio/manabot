@@ -167,7 +167,7 @@ def test_object_embeddings(
     Verify that object embeddings maintain proper dimensionality and masking.
     """
     obs = real_observation
-    state = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs.prepared)
     objects, is_agent, validity = state.objects, state.is_agent, state.validity
 
     expected_objects = (
@@ -208,7 +208,7 @@ def test_attention_mechanism(
     Verify the attention mechanism's behavior and output properties.
     """
     obs = real_observation
-    state = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs.prepared)
     objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     attended = agent.attention(objects, is_agent, key_padding_mask=key_padding_mask)
@@ -233,7 +233,7 @@ def test_focus_object_incorporation(
     Verify that focus objects are correctly incorporated into action representations.
     """
     obs = real_observation
-    state = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs.prepared)
     objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     post_attention = agent.attention(
@@ -242,7 +242,7 @@ def test_focus_object_incorporation(
 
     batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
     features = agent._gather_informed_actions(
-        obs, post_attention, state, batches, slots
+        obs.prepared, post_attention, state, batches, slots
     )
     assert features.shape == (len(slots), agent.config.hidden_dim)
     # Changing a legal focus changes the action feature; absent focus has no
@@ -250,15 +250,24 @@ def test_focus_object_incorporation(
     changed = {key: value.clone() for key, value in obs.items()}
     changed["action_focus"].fill_(-1)
     absent = agent._gather_informed_actions(
-        changed, post_attention, state, batches, slots
+        admit_observation(agent, changed).prepared,
+        post_attention,
+        state,
+        batches,
+        slots,
     )
     mutated = post_attention.clone()
     mutated[:, 0] += 10
     torch.testing.assert_close(
-        absent, agent._gather_informed_actions(changed, mutated, state, batches, slots)
+        absent,
+        agent._gather_informed_actions(
+            admit_observation(agent, changed).prepared, mutated, state, batches, slots
+        ),
     )
     changed["action_focus"][batches, slots, 0] = 0
-    focused = agent._gather_informed_actions(changed, mutated, state, batches, slots)
+    focused = agent._gather_informed_actions(
+        admit_observation(agent, changed).prepared, mutated, state, batches, slots
+    )
     assert not torch.allclose(absent, focused)
 
 
@@ -343,7 +352,7 @@ def test_attention_stability(
     Verify that the attention mechanism produces stable outputs across multiple forward passes.
     """
     obs = real_observation
-    state = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs.prepared)
     objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     outputs = []
