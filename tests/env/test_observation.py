@@ -426,15 +426,17 @@ class TestObservationEncoder:
     @pytest.mark.parametrize(
         "method, capacity, label",
         [
-            ("_encode_cards", "max_cards_per_player", "Card list"),
+            ("_encode_object_rows", "max_cards_per_player", "Object list"),
             ("_encode_perms", "max_permanents_per_player", "Permanent list"),
         ],
     )
-    def test_object_capacity_rejects_omitted_objects(self, method, capacity, label):
+    def test_object_capacity_rejects_omitted_objects(
+        self, method: str, capacity: str, label: str
+    ) -> None:
         encoder = ObservationEncoder(ObservationConfig(**{capacity: 1}))
         objects = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
-        # Card rows also read the viewer and turn for cast permissions.
-        context = {"viewer": 0, "turn": 1} if method == "_encode_cards" else {}
+        # Object rows also read the viewer and turn for cast permissions.
+        context = {"viewer": 0, "turn": 1} if method == "_encode_object_rows" else {}
         with pytest.raises(ValueError, match=f"capacity exceeded: {label} 2 > 1"):
             getattr(encoder, method)(objects, is_mine=1.0, **context)
         assert encoder.object_to_index == {}

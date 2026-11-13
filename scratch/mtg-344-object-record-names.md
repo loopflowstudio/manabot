@@ -152,13 +152,9 @@ and the three concept reviews):
    `tests/env/test_object_record_aliases.py`.
 4. Python consumers, Academy, scripts, tests.
 5. Text wording and `manabot-text-7`; docs.
-6. **This slice: gate.** Run the suites under "Acceptance at gate" not yet run
-   at this HEAD: the debug `match_state_hash_tests`, `semantic_conformance_tests`
-   and `canonical_replay_tests`; the cards `observability` tests (so far only
-   `cargo check`); the conformance fuzz; the full
-   `tests/env/test_observation.py` and `tests/semantic/test_text_observation.py`
-   files under `-W error::DeprecationWarning`. The fixture diff base is now
-   `e363e4058e`. Then file the alias-removal Task at landing.
+6. Remaining acceptance checks completed (see final validation below). The
+   fixture diff base is `e363e4058e`. Publication and the alias-removal Task
+   at landing remain delivery steps.
 
 ## Acceptance at gate
 
@@ -458,3 +454,33 @@ Kickoff recheck (2026-11-13, HEAD `af34f988e4`): origin/main is still
 guard's explicit exclusion of it. Fixture/vocabulary diff against `e363e4058e`
 -> empty. Released version is 0.2.3, so the aliases name 0.3.0 as before. The
 plan stands unchanged; only slice 6 remains.
+
+Write-docs recheck (2026-11-13, HEAD `5d8bd0277c`): the shipped docs are the
+four files under "Docs written" plus the `managym/__init__.pyi` docstrings and
+the AGENTS.md field-guard note. Reran the `docs/engine.md` example against the
+installed extension -> `Object 7 {'Hand'}`, `0`; the three alias warnings match
+the documented format. One edit: "Deprecated names" now says the Rust records
+are renamed without aliases. No old name remains in tracked Markdown outside
+the deprecated-names text and the frozen JSON/array keys.
+
+## Final validation (2026-11-13)
+
+The remaining acceptance selection exposed a capacity test still calling the
+deleted private `_encode_cards` helper. Moved it to `_encode_object_rows` and
+the existing `Object list` error label, retaining the overflow and no-partial-write
+assertions. No runtime change or extension rebuild was needed.
+
+- Debug `match_state_hash_tests`, `semantic_conformance_tests`, and
+  `canonical_replay_tests` (command under Acceptance at gate) -> 23 passed.
+- Debug cards `observability` selection -> 66 passed.
+- Conformance fuzz, seed 24301, 32 cases, max 512 commands -> 6,345 commands,
+  no failures.
+- Python acceptance selection under `-W error::DeprecationWarning` -> 130
+  passed, one stale-helper failure. After the test correction,
+  `uv run --no-sync pytest tests/env/test_observation.py -k test_object_capacity_rejects_omitted_objects -q -W error::DeprecationWarning`
+  -> 2 passed (both capacity variants). Other passing cases were not rerun.
+- Ruff check and format for `tests/env/test_observation.py`, `git diff --check`
+  -> pass. Fixture/vocabulary diff against `e363e4058e` -> empty.
+
+Implementation and the listed acceptance checks are complete. Publication,
+landing and filing the linked alias-removal Task remain delivery steps.

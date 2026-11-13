@@ -557,7 +557,8 @@ Python shows a `DeprecationWarning` only for code in `__main__` and under test
 runners. To find every remaining use before upgrading, run your tests with
 `-W error::DeprecationWarning`.
 
-Only the Python names changed. Observation JSON still writes `agent_cards`,
+Only names in code changed (the Rust records are renamed outright, without
+aliases; see [names](#names)). Observation JSON still writes `agent_cards`,
 `opponent_cards` and `source_card_registry_key`, and the encoded arrays keep
 their keys (`agent_cards`, `agent_cards_valid`, `semantic_cards`,
 `card_turn_state`), shapes and columns, so saved observations, datasets and
