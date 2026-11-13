@@ -1123,7 +1123,7 @@ wheels = [
 
 [[package]]
 name = "manabot"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "." }
 dependencies = [
     { name = "etude-sdk" },
@@ -1256,7 +1256,7 @@ training-runtime = [
 
 [[package]]
 name = "managym"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "managym" }
 dependencies = [
     { name = "numpy" },

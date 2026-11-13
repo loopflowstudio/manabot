@@ -582,6 +582,13 @@ release.
 
 ### Build and verify
 
+Before publishing a release PR, update both Python project versions, all three
+Rust crate versions and the exact `managym` dependency together. Refresh
+`uv.lock` with `uv lock` and `managym/Cargo.lock` with
+`cargo metadata --manifest-path managym/Cargo.toml --format-version 1`, then run
+the release metadata check and `tests/infra/test_release.py` command below.
+These checks apply even when the release changes only versions and notes.
+
 From a clean checkout, with a fresh staging path and empty output directory:
 
 ```bash
