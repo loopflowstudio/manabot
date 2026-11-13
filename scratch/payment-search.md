@@ -114,11 +114,16 @@ Per-path conclusions:
   4/8/16 triggers. One ordering choice is about 0.015/0.022/0.040 ms. A whole
   ordering round still makes N choices; the harness exposes one boundary at a
   time, not a factorial set of orderings.
-- **Search:** counted-tap cast-choice search spends 23,526/76,202/533,168 calls
-  at 4/8/16. Its largest row is about 1.9 s; diverse-mana and mixed also grow
-  sharply. These are preserved named findings in `--list`; improving exact
-  source/payment reuse is deferred rather than changing witnesses or legal
-  choices in this harness slice. No performance improvement is claimed.
+- **Search:** the slow search rows have two shapes (from `states.jsonl`
+  `plans`/`max_plan_calls`):
+  - *One large plan:* diverse-mana spends 13,553 calls in one plan at size 8
+    (721 at 16, so not monotonic in N); restricted-filter 3,559/5,092 per plan
+    at 3/4 sources. This is payment-search pruning in `flow/mana.rs`.
+  - *Many small plans:* counted-tap cast-choice search makes 860/2,412/8,364
+    plans at 4/8/16 with at most 137 calls each (533,168 calls, about 1.3 s
+    at 16); mixed makes 10,571 plans of at most 13 calls (352 ms). Per-plan
+    bounds would not help; the cost is replanning across playout steps and
+    the per-call cost of counted tap costs.
 - **Observation/clone/Python:** work grows with objects/records and allocated
   capacity. The Python encoder and text renderer complete all supported
   checkpoints; the recorded announcement is the single text coverage gap.
@@ -148,8 +153,25 @@ Per-path conclusions:
   `bench_states`: 1,377 rows, digest `3f139b95…` unchanged; replay counts and
   the herbalist/recorded recipe export byte-identical.
 
-Gate/review remains. There is no runtime optimization to compare against base;
-ordinary `bench_steps`/`bench_search` acceptance checks belong to gate. The
-named filter/count-tap search costs and text announcement gap remain unresolved.
-Shipping remains held; no publication or landing was attempted. Earlier replay
-CI implementation history is retained at `6691ed956:scratch/payment-search.md`.
+## Remaining
+
+The harness, audit, list and skill edits exist; the optimisation deliverable
+does not. Comment `b0a6f0a4` step 3: "Optimise the ones that blow up ...
+Where one is too large for this Task, leave it benchmarked and named rather
+than half-fixed", delivering "the optimisations made, with before/after
+numbers". No runtime algorithm has changed, so:
+
+1. For each slow cell above (diverse-mana and restricted-filter single plans;
+   counted-tap and mixed plan counts), either optimise it with before/after
+   `bench_states` work and time, keeping legal actions, first witnesses and
+   the `bench_steps`/`bench_search` digests unchanged and validating in debug,
+   or record in `--list` and the PR body why it is too large for this Task.
+   Calling them all deferred without that reason does not meet the steer.
+2. The steer names "pairwise-different restricted sources plus a paid filter,
+   2^(N+1) states" as a benchmark. restricted-filter repeats three card-source
+   restrictions; whether the catalog can build N pairwise-distinct ones is
+   unchecked. Build it if real cards allow, otherwise say so in `--list`.
+3. Gate, review, PR body with the state x layer table. Shipping stays held
+   (comment `d55bd16b`); the text `announcement` gap is outside this Task.
+
+Earlier replay CI implementation history is retained at `6691ed956:scratch/payment-search.md`.
