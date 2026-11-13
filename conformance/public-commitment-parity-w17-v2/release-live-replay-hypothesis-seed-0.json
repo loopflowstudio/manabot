@@ -1,0 +1,1472 @@
+{
+  "atomic_negative_proof": {
+    "card_mismatch": {
+      "likelihood_not_called": true,
+      "match_witness_unchanged": true,
+      "pending_identity_unchanged": true,
+      "posterior_digest_unchanged": true,
+      "prior_digest_unchanged": true,
+      "records_unchanged": true,
+      "rejection": "RulesProviderGap",
+      "semantic_event_cursor_unchanged": true,
+      "stats_unchanged": true
+    },
+    "unsupported": {
+      "likelihood_not_called": true,
+      "match_witness_unchanged": true,
+      "pending_identity_unchanged": true,
+      "posterior_digest_unchanged": true,
+      "prior_digest_unchanged": true,
+      "records_unchanged": true,
+      "rejection": "RulesProviderGap",
+      "semantic_event_cursor_unchanged": true,
+      "stats_unchanged": true
+    }
+  },
+  "frozen_evidence": {
+    "int12_fixture": {
+      "file_sha256": "4a3fbeaa8461e00a785e961b9819508d2c1065ae98f058cc50a3783db0945e8d",
+      "path": "protocol/fixtures/advice-belief-conditioned-v1.json",
+      "rewritten": false
+    },
+    "rul9_measurement": {
+      "artifact_sha256": "498df1eda031f1d6ea68f72f792dfd68195bb10eab884b006aa7772b586564da",
+      "file_sha256": "9a3933a570772e8d3e04b59526faaf1d51b5fc0e26ba8c02e08eae36599bc951",
+      "path": "experiments/data/rul-9-played-workloads-v1.measurement.json",
+      "rerun": false
+    }
+  },
+  "identity": {
+    "authority_receipt_sha256": "39ec3796e6b09bc4775aa29894274e82e88b96aaed3f440b252ca54d7b34b1dc",
+    "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
+    "matchup": "ur-lessons-vs-gw-allies",
+    "relevant_source": {
+      "algorithm": "ordered-relative-path-and-file-sha256-v1",
+      "files": [
+        {
+          "path": "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
+          "sha256": "39ec3796e6b09bc4775aa29894274e82e88b96aaed3f440b252ca54d7b34b1dc"
+        },
+        {
+          "path": "academy/public_commitment_parity.py",
+          "sha256": "33d47f2168ed05fa66212162af7a9d1da4ecaeec457b0674f6c85cd07aacf15a"
+        },
+        {
+          "path": "academy/server.py",
+          "sha256": "e16bc94ff65c11ffeb889277e32ce391dbd686a474e60aaa22903c05cea02c44"
+        },
+        {
+          "path": "managym/experience_projection.py",
+          "sha256": "9d99f90ea46cec7c41aaa2c15e7edf1388139b79c149e6713a8ca7e13faabe63"
+        },
+        {
+          "path": "experiments/contracts/int-9-exact-range-v1.json",
+          "sha256": "ef0212864e9cfb88279db6d8bab0e7457b8bb59767fe1f24491ded87d9a99602"
+        },
+        {
+          "path": "manabot/belief/likelihood.py",
+          "sha256": "0c57e8c8225c1e94c4e7a1b42dfc1999e9e115070237214af9498083f48a8d53"
+        },
+        {
+          "path": "manabot/belief/tracker.py",
+          "sha256": "fe7079e161c2f65c715a53552864dbe888a144c4432402f42c033b7d31580c5d"
+        },
+        {
+          "path": "managym/__init__.pyi",
+          "sha256": "cd35425442363cb8ec5152095ce2e4ea446fc7493afa507a80dd5631f04a2838"
+        },
+        {
+          "path": "managym/decision.py",
+          "sha256": "879a2eb47eaf4011e67743ac429460359ba77d37594b423620293c4fc96cf3a1"
+        },
+        {
+          "path": "managym/possible_worlds.py",
+          "sha256": "b71063885e5260bf5c7999734b54238297072171d5b7a78408e97a42042a252b"
+        },
+        {
+          "path": "managym/src/agent/env.rs",
+          "sha256": "e786920a8cae5e02afba91300f81dc9825ccbd059e30b6706f5feb74dc01c51c"
+        },
+        {
+          "path": "managym/src/agent/structured_offer.rs",
+          "sha256": "943acdf1fb7f1c9be2474a2c011f7e0829367c333474a5848607d38bf3bb2cdb"
+        },
+        {
+          "path": "managym/src/decision.rs",
+          "sha256": "7de0c11c7053895ca3da39ead82014b354d7cd2664113cd4a031fa676b1c4b0e"
+        },
+        {
+          "path": "managym/src/possible_worlds.rs",
+          "sha256": "fe1b4aace7ad98e0ad903c6700d9934ff369382fbaf9b8454dca7432759332ce"
+        },
+        {
+          "path": "managym/src/python/bindings.rs",
+          "sha256": "22d02d71580ddeb4d35e607c5ba6bba48bf6e1a0e16b6662470632d70d5a9b7b"
+        },
+        {
+          "path": "managym/cards/tests/cards/stx.rs",
+          "sha256": "6b25a6a7df1cd15582681d815f2eb51939de7de17846375fe894e9f60afd0202"
+        },
+        {
+          "path": "scripts/verify-public-commitment-parity",
+          "sha256": "fd3a15066ca3df1a45c7fcb93e8964b8e13de3d7aac8f7cf8620a11d37be8f12"
+        },
+        {
+          "path": "tests/belief/test_player.py",
+          "sha256": "d734cdfe77c26a85a400853181e970f1f76aefdc17e14a64631d08f736b8d4ff"
+        },
+        {
+          "path": "tests/belief/test_tracker.py",
+          "sha256": "585d2af0495dbb3adab431a3599dc1c1421de43b24611b38edbbb03347357ddf"
+        },
+        {
+          "path": "tests/academy/test_public_commitment_parity.py",
+          "sha256": "9f3e2349db82d8416e05358108d18bd9dd34cbfe6800c6357cbc66dfc5314b30"
+        },
+        {
+          "path": "tests/sim/test_conditional_search.py",
+          "sha256": "00436e2c17e0f75c5756cfd4662b6eda7f5f386b0e3df890973bcbcd907db451"
+        }
+      ],
+      "sha256": "4fc9226f4caae9f5ec3f6d3177fa2471cffdd001882b2fac997c72d83fe2571f"
+    },
+    "seed": 0,
+    "semantic_decision_version": 8
+  },
+  "identity_stream": [
+    {
+      "actor": 0,
+      "after_revision": 2,
+      "before_revision": 1,
+      "command_id": "authored-authority.hero.0",
+      "ordinal": 0,
+      "public_commitment": {
+        "card": "Island",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 3,
+      "before_revision": 2,
+      "command_id": "authored-authority.hero.1",
+      "ordinal": 1,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 4,
+      "before_revision": 3,
+      "command_id": "authored-authority.hero.2",
+      "ordinal": 2,
+      "public_commitment": {
+        "card": "Tiger-Seal",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 5,
+      "before_revision": 4,
+      "command_id": "authority.policy.authored-authority-match.1",
+      "ordinal": 3,
+      "public_commitment": {
+        "card": "Forest",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 6,
+      "before_revision": 5,
+      "command_id": "authored-authority.hero.3",
+      "ordinal": 4,
+      "public_commitment": {
+        "card": "Island",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 7,
+      "before_revision": 6,
+      "command_id": "authority.policy.authored-authority-match.2",
+      "ordinal": 5,
+      "public_commitment": {
+        "card": "Plains",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 8,
+      "before_revision": 7,
+      "command_id": "authority.policy.authored-authority-match.3",
+      "ordinal": 6,
+      "public_commitment": {
+        "card": "Badgermole Cub",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 9,
+      "before_revision": 8,
+      "command_id": "authority.policy.authored-authority-match.4",
+      "ordinal": 7,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 10,
+      "before_revision": 9,
+      "command_id": "authored-authority.hero.4",
+      "ordinal": 8,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 11,
+      "before_revision": 10,
+      "command_id": "authored-authority.hero.5",
+      "ordinal": 9,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 12,
+      "before_revision": 11,
+      "command_id": "authority.policy.authored-authority-match.5",
+      "ordinal": 10,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 13,
+      "before_revision": 12,
+      "command_id": "authority.policy.authored-authority-match.6",
+      "ordinal": 11,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 14,
+      "before_revision": 13,
+      "command_id": "authority.policy.authored-authority-match.7",
+      "ordinal": 12,
+      "public_commitment": {
+        "card": "Forest",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 15,
+      "before_revision": 14,
+      "command_id": "authority.policy.authored-authority-match.8",
+      "ordinal": 13,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 16,
+      "before_revision": 15,
+      "command_id": "authority.policy.authored-authority-match.9",
+      "ordinal": 14,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 17,
+      "before_revision": 16,
+      "command_id": "authority.policy.authored-authority-match.10",
+      "ordinal": 15,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 18,
+      "before_revision": 17,
+      "command_id": "authority.policy.authored-authority-match.11",
+      "ordinal": 16,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 19,
+      "before_revision": 18,
+      "command_id": "authored-authority.hero.6",
+      "ordinal": 17,
+      "public_commitment": {
+        "card": "Mountain",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 20,
+      "before_revision": 19,
+      "command_id": "authored-authority.hero.7",
+      "ordinal": 18,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 21,
+      "before_revision": 20,
+      "command_id": "authored-authority.hero.8",
+      "ordinal": 19,
+      "public_commitment": {
+        "card": "Firebending Lesson",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 22,
+      "before_revision": 21,
+      "command_id": "authored-authority.hero.9",
+      "ordinal": 20,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 23,
+      "before_revision": 22,
+      "command_id": "authored-authority.hero.10",
+      "ordinal": 21,
+      "public_commitment": {
+        "card": "It'll Quench Ya!",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 24,
+      "before_revision": 23,
+      "command_id": "authority.policy.authored-authority-match.12",
+      "ordinal": 22,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 25,
+      "before_revision": 24,
+      "command_id": "authority.policy.authored-authority-match.13",
+      "ordinal": 23,
+      "public_commitment": {
+        "card": "Yip Yip!",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 26,
+      "before_revision": 25,
+      "command_id": "authority.policy.authored-authority-match.14",
+      "ordinal": 24,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 27,
+      "before_revision": 26,
+      "command_id": "authority.policy.authored-authority-match.15",
+      "ordinal": 25,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 28,
+      "before_revision": 27,
+      "command_id": "authority.policy.authored-authority-match.16",
+      "ordinal": 26,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 29,
+      "before_revision": 28,
+      "command_id": "authority.policy.authored-authority-match.17",
+      "ordinal": 27,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 30,
+      "before_revision": 29,
+      "command_id": "authored-authority.hero.11",
+      "ordinal": 28,
+      "public_commitment": {
+        "card": "Divide by Zero",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 31,
+      "before_revision": 30,
+      "command_id": "authored-authority.hero.12",
+      "ordinal": 29,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 32,
+      "before_revision": 31,
+      "command_id": "authored-authority.hero.13",
+      "ordinal": 30,
+      "public_commitment": {
+        "card": "Island",
+        "kind": "discard"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 33,
+      "before_revision": 32,
+      "command_id": "authored-authority.hero.14",
+      "ordinal": 31,
+      "public_commitment": {
+        "card": "Mountain",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 34,
+      "before_revision": 33,
+      "command_id": "authored-authority.hero.15",
+      "ordinal": 32,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 35,
+      "before_revision": 34,
+      "command_id": "authority.policy.authored-authority-match.18",
+      "ordinal": 33,
+      "public_commitment": {
+        "card": "White Lotus Reinforcements",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 36,
+      "before_revision": 35,
+      "command_id": "authority.policy.authored-authority-match.19",
+      "ordinal": 34,
+      "public_commitment": {
+        "card": "Plains",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 37,
+      "before_revision": 36,
+      "command_id": "authored-authority.hero.16",
+      "ordinal": 35,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 38,
+      "before_revision": 37,
+      "command_id": "authored-authority.hero.17",
+      "ordinal": 36,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 39,
+      "before_revision": 38,
+      "command_id": "authority.policy.authored-authority-match.20",
+      "ordinal": 37,
+      "public_commitment": {
+        "card": "Forest",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 40,
+      "before_revision": 39,
+      "command_id": "authority.policy.authored-authority-match.21",
+      "ordinal": 38,
+      "public_commitment": {
+        "card": "Compassionate Healer",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 41,
+      "before_revision": 40,
+      "command_id": "authority.policy.authored-authority-match.22",
+      "ordinal": 39,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 42,
+      "before_revision": 41,
+      "command_id": "authority.policy.authored-authority-match.23",
+      "ordinal": 40,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 43,
+      "before_revision": 42,
+      "command_id": "authority.policy.authored-authority-match.24",
+      "ordinal": 41,
+      "public_commitment": {
+        "card": "Water Tribe Rallier",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 44,
+      "before_revision": 43,
+      "command_id": "authored-authority.hero.18",
+      "ordinal": 42,
+      "public_commitment": {
+        "card": "Igneous Inspiration",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 45,
+      "before_revision": 44,
+      "command_id": "authored-authority.hero.19",
+      "ordinal": 43,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 46,
+      "before_revision": 45,
+      "command_id": "authored-authority.hero.20",
+      "ordinal": 44,
+      "public_commitment": {
+        "card": "Island",
+        "kind": "discard"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 47,
+      "before_revision": 46,
+      "command_id": "authored-authority.hero.21",
+      "ordinal": 45,
+      "public_commitment": {
+        "card": "Mountain",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 48,
+      "before_revision": 47,
+      "command_id": "authority.policy.authored-authority-match.25",
+      "ordinal": 46,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 49,
+      "before_revision": 48,
+      "command_id": "authority.policy.authored-authority-match.26",
+      "ordinal": 47,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 50,
+      "before_revision": 49,
+      "command_id": "authority.policy.authored-authority-match.27",
+      "ordinal": 48,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 51,
+      "before_revision": 50,
+      "command_id": "authority.policy.authored-authority-match.28",
+      "ordinal": 49,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 52,
+      "before_revision": 51,
+      "command_id": "authority.policy.authored-authority-match.29",
+      "ordinal": 50,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 53,
+      "before_revision": 52,
+      "command_id": "authority.policy.authored-authority-match.30",
+      "ordinal": 51,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 54,
+      "before_revision": 53,
+      "command_id": "authority.policy.authored-authority-match.31",
+      "ordinal": 52,
+      "public_commitment": {
+        "card": "Plains",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 55,
+      "before_revision": 54,
+      "command_id": "authority.policy.authored-authority-match.32",
+      "ordinal": 53,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 56,
+      "before_revision": 55,
+      "command_id": "authority.policy.authored-authority-match.33",
+      "ordinal": 54,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 57,
+      "before_revision": 56,
+      "command_id": "authority.policy.authored-authority-match.34",
+      "ordinal": 55,
+      "public_commitment": {
+        "card": "Badgermole Cub",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 58,
+      "before_revision": 57,
+      "command_id": "authority.policy.authored-authority-match.35",
+      "ordinal": 56,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 59,
+      "before_revision": 58,
+      "command_id": "authored-authority.hero.22",
+      "ordinal": 57,
+      "public_commitment": {
+        "card": "Forecasting Fortune Teller",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 60,
+      "before_revision": 59,
+      "command_id": "authored-authority.hero.23",
+      "ordinal": 58,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 61,
+      "before_revision": 60,
+      "command_id": "authored-authority.hero.24",
+      "ordinal": 59,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 62,
+      "before_revision": 61,
+      "command_id": "authored-authority.hero.25",
+      "ordinal": 60,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 63,
+      "before_revision": 62,
+      "command_id": "authority.policy.authored-authority-match.36",
+      "ordinal": 61,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 64,
+      "before_revision": 63,
+      "command_id": "authority.policy.authored-authority-match.37",
+      "ordinal": 62,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 65,
+      "before_revision": 64,
+      "command_id": "authority.policy.authored-authority-match.38",
+      "ordinal": 63,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 66,
+      "before_revision": 65,
+      "command_id": "authority.policy.authored-authority-match.39",
+      "ordinal": 64,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 67,
+      "before_revision": 66,
+      "command_id": "authority.policy.authored-authority-match.40",
+      "ordinal": 65,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 68,
+      "before_revision": 67,
+      "command_id": "authority.policy.authored-authority-match.41",
+      "ordinal": 66,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 69,
+      "before_revision": 68,
+      "command_id": "authority.policy.authored-authority-match.42",
+      "ordinal": 67,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 70,
+      "before_revision": 69,
+      "command_id": "authority.policy.authored-authority-match.43",
+      "ordinal": 68,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 71,
+      "before_revision": 70,
+      "command_id": "authority.policy.authored-authority-match.44",
+      "ordinal": 69,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 72,
+      "before_revision": 71,
+      "command_id": "authority.policy.authored-authority-match.45",
+      "ordinal": 70,
+      "public_commitment": {
+        "card": "Forest",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 73,
+      "before_revision": 72,
+      "command_id": "authority.policy.authored-authority-match.46",
+      "ordinal": 71,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 74,
+      "before_revision": 73,
+      "command_id": "authority.policy.authored-authority-match.47",
+      "ordinal": 72,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 75,
+      "before_revision": 74,
+      "command_id": "authority.policy.authored-authority-match.48",
+      "ordinal": 73,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 76,
+      "before_revision": 75,
+      "command_id": "authored-authority.hero.26",
+      "ordinal": 74,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 77,
+      "before_revision": 76,
+      "command_id": "authority.policy.authored-authority-match.49",
+      "ordinal": 75,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 78,
+      "before_revision": 77,
+      "command_id": "authored-authority.hero.27",
+      "ordinal": 76,
+      "public_commitment": {
+        "card": "Mountain",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 79,
+      "before_revision": 78,
+      "command_id": "authored-authority.hero.28",
+      "ordinal": 77,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 80,
+      "before_revision": 79,
+      "command_id": "authored-authority.hero.29",
+      "ordinal": 78,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 81,
+      "before_revision": 80,
+      "command_id": "authored-authority.hero.30",
+      "ordinal": 79,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 82,
+      "before_revision": 81,
+      "command_id": "authority.policy.authored-authority-match.50",
+      "ordinal": 80,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 83,
+      "before_revision": 82,
+      "command_id": "authority.policy.authored-authority-match.51",
+      "ordinal": 81,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 84,
+      "before_revision": 83,
+      "command_id": "authority.policy.authored-authority-match.52",
+      "ordinal": 82,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 85,
+      "before_revision": 84,
+      "command_id": "authority.policy.authored-authority-match.53",
+      "ordinal": 83,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 86,
+      "before_revision": 85,
+      "command_id": "authority.policy.authored-authority-match.54",
+      "ordinal": 84,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 87,
+      "before_revision": 86,
+      "command_id": "authority.policy.authored-authority-match.55",
+      "ordinal": 85,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 88,
+      "before_revision": 87,
+      "command_id": "authority.policy.authored-authority-match.56",
+      "ordinal": 86,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 89,
+      "before_revision": 88,
+      "command_id": "authority.policy.authored-authority-match.57",
+      "ordinal": 87,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 90,
+      "before_revision": 89,
+      "command_id": "authority.policy.authored-authority-match.58",
+      "ordinal": 88,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 91,
+      "before_revision": 90,
+      "command_id": "authority.policy.authored-authority-match.59",
+      "ordinal": 89,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 92,
+      "before_revision": 91,
+      "command_id": "authority.policy.authored-authority-match.60",
+      "ordinal": 90,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 93,
+      "before_revision": 92,
+      "command_id": "authority.policy.authored-authority-match.61",
+      "ordinal": 91,
+      "public_commitment": {
+        "card": "Plains",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 94,
+      "before_revision": 93,
+      "command_id": "authority.policy.authored-authority-match.62",
+      "ordinal": 92,
+      "public_commitment": {
+        "card": "Badgermole Cub",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 95,
+      "before_revision": 94,
+      "command_id": "authority.policy.authored-authority-match.63",
+      "ordinal": 93,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 96,
+      "before_revision": 95,
+      "command_id": "authority.policy.authored-authority-match.64",
+      "ordinal": 94,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 97,
+      "before_revision": 96,
+      "command_id": "authored-authority.hero.31",
+      "ordinal": 95,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 98,
+      "before_revision": 97,
+      "command_id": "authored-authority.hero.32",
+      "ordinal": 96,
+      "public_commitment": {
+        "card": "Tiger-Seal",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 99,
+      "before_revision": 98,
+      "command_id": "authored-authority.hero.33",
+      "ordinal": 97,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 100,
+      "before_revision": 99,
+      "command_id": "authored-authority.hero.34",
+      "ordinal": 98,
+      "public_commitment": {
+        "card": "Igneous Inspiration",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 101,
+      "before_revision": 100,
+      "command_id": "authored-authority.hero.35",
+      "ordinal": 99,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 102,
+      "before_revision": 101,
+      "command_id": "authored-authority.hero.36",
+      "ordinal": 100,
+      "public_commitment": {
+        "card": "Firebending Lesson",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 103,
+      "before_revision": 102,
+      "command_id": "authored-authority.hero.37",
+      "ordinal": 101,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 104,
+      "before_revision": 103,
+      "command_id": "authored-authority.hero.38",
+      "ordinal": 102,
+      "public_commitment": {
+        "kind": "decline_learn"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 105,
+      "before_revision": 104,
+      "command_id": "authored-authority.hero.39",
+      "ordinal": 103,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 106,
+      "before_revision": 105,
+      "command_id": "authority.policy.authored-authority-match.65",
+      "ordinal": 104,
+      "public_commitment": {
+        "card": "Forest",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 107,
+      "before_revision": 106,
+      "command_id": "authority.policy.authored-authority-match.66",
+      "ordinal": 105,
+      "public_commitment": {
+        "card": "South Pole Voyager",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 108,
+      "before_revision": 107,
+      "command_id": "authority.policy.authored-authority-match.67",
+      "ordinal": 106,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 109,
+      "before_revision": 108,
+      "command_id": "authority.policy.authored-authority-match.68",
+      "ordinal": 107,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 110,
+      "before_revision": 109,
+      "command_id": "authority.policy.authored-authority-match.69",
+      "ordinal": 108,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 111,
+      "before_revision": 110,
+      "command_id": "authority.policy.authored-authority-match.70",
+      "ordinal": 109,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 112,
+      "before_revision": 111,
+      "command_id": "authority.policy.authored-authority-match.71",
+      "ordinal": 110,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 113,
+      "before_revision": 112,
+      "command_id": "authority.policy.authored-authority-match.72",
+      "ordinal": 111,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 114,
+      "before_revision": 113,
+      "command_id": "authority.policy.authored-authority-match.73",
+      "ordinal": 112,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 115,
+      "before_revision": 114,
+      "command_id": "authored-authority.hero.40",
+      "ordinal": 113,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 116,
+      "before_revision": 115,
+      "command_id": "authored-authority.hero.41",
+      "ordinal": 114,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 117,
+      "before_revision": 116,
+      "command_id": "authority.policy.authored-authority-match.74",
+      "ordinal": 115,
+      "public_commitment": {
+        "card": "Earth King's Lieutenant",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 118,
+      "before_revision": 117,
+      "command_id": "authority.policy.authored-authority-match.75",
+      "ordinal": 116,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 119,
+      "before_revision": 118,
+      "command_id": "authority.policy.authored-authority-match.76",
+      "ordinal": 117,
+      "public_commitment": {
+        "card": "Earth Kingdom Jailer",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 120,
+      "before_revision": 119,
+      "command_id": "authority.policy.authored-authority-match.77",
+      "ordinal": 118,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 121,
+      "before_revision": 120,
+      "command_id": "authority.policy.authored-authority-match.78",
+      "ordinal": 119,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 122,
+      "before_revision": 121,
+      "command_id": "authored-authority.hero.42",
+      "ordinal": 120,
+      "public_commitment": {
+        "kind": "pass_priority"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 123,
+      "before_revision": 122,
+      "command_id": "authored-authority.hero.43",
+      "ordinal": 121,
+      "public_commitment": {
+        "card": "First-Time Flyer",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 0,
+      "after_revision": 124,
+      "before_revision": 123,
+      "command_id": "authored-authority.hero.44",
+      "ordinal": 122,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 125,
+      "before_revision": 124,
+      "command_id": "authority.policy.authored-authority-match.79",
+      "ordinal": 123,
+      "public_commitment": {
+        "card": "White Lotus Reinforcements",
+        "kind": "cast"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 126,
+      "before_revision": 125,
+      "command_id": "authority.policy.authored-authority-match.80",
+      "ordinal": 124,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 127,
+      "before_revision": 126,
+      "command_id": "authority.policy.authored-authority-match.81",
+      "ordinal": 125,
+      "public_commitment": {
+        "card": "Plains",
+        "kind": "play_land"
+      }
+    },
+    {
+      "actor": 1,
+      "after_revision": 128,
+      "before_revision": 127,
+      "command_id": "authority.policy.authored-authority-match.82",
+      "ordinal": 126,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 129,
+      "before_revision": 128,
+      "command_id": "authority.policy.authored-authority-match.83",
+      "ordinal": 127,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 130,
+      "before_revision": 129,
+      "command_id": "authority.policy.authored-authority-match.84",
+      "ordinal": 128,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 131,
+      "before_revision": 130,
+      "command_id": "authority.policy.authored-authority-match.85",
+      "ordinal": 129,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 132,
+      "before_revision": 131,
+      "command_id": "authority.policy.authored-authority-match.86",
+      "ordinal": 130,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 133,
+      "before_revision": 132,
+      "command_id": "authority.policy.authored-authority-match.87",
+      "ordinal": 131,
+      "public_commitment": null
+    },
+    {
+      "actor": 1,
+      "after_revision": 134,
+      "before_revision": 133,
+      "command_id": "authority.policy.authored-authority-match.88",
+      "ordinal": 132,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 135,
+      "before_revision": 134,
+      "command_id": "authored-authority.hero.45",
+      "ordinal": 133,
+      "public_commitment": null
+    },
+    {
+      "actor": 0,
+      "after_revision": 136,
+      "before_revision": 135,
+      "command_id": "authored-authority.hero.46",
+      "ordinal": 134,
+      "public_commitment": null
+    }
+  ],
+  "materialized_hypothesis": {
+    "pre_command_decision_hidden_from_non_actor": true,
+    "pre_command_opponent_hand_identities": 0,
+    "public_commitment": {
+      "card": "Island",
+      "kind": "discard"
+    },
+    "source_match_witness_unchanged": true,
+    "source_revision": 30,
+    "source_semantic_event_cursor_unchanged": true,
+    "source_viewer_observation_unchanged": true,
+    "support_size": 484,
+    "viewer": 1
+  },
+  "summary": {
+    "commands": 135,
+    "commitments": 66,
+    "consumed_commitments": 53,
+    "identity_stream_mismatches": 0,
+    "negative_proof_mutations": 0,
+    "rules_provider_gaps": 0,
+    "tracker_records_per_viewer": {
+      "0": 68,
+      "1": 135
+    },
+    "unadmitted_commands": 69
+  },
+  "surfaces": {
+    "headless": {
+      "commands": 135,
+      "commitments": 66,
+      "identity_stream_sha256": "959f57674f31d8df2e78fbe812aad1aebaeb745ba6a376433f12f19e832cc96d",
+      "likelihood_identity_audits": 53,
+      "rules_provider_gaps": 0,
+      "tracker_receipts": {
+        "0": {
+          "consumed_commitments": 21,
+          "history_digest": "ccf4f40068c3b18d7b61d1c1469a33cfa5daa3c7edb5a6073266eceb3f5afce8",
+          "posterior_digest": "84d278f90a1dc45f9b879f6d0211cd164c8421fd9c15fc459ac886ba923b57dc",
+          "prior_digest": "9d648936ae616e9b031c641f05f78f340dc86eb888e5908a6840477fda899bac",
+          "records": 68
+        },
+        "1": {
+          "consumed_commitments": 32,
+          "history_digest": "56459748a207f3b9d89f32c42e0f464407ea0e2b158f626f6d9ced9481805359",
+          "posterior_digest": "4a67f214eb5cf9d29cd3838d5d543ba1e0ba851ce3c2c4fbff15f4a8455a73db",
+          "prior_digest": "923dacf8d2cb80823f0574cb140ca7c705c73e7698273ddfe9296fc3dd9e427e",
+          "records": 135
+        }
+      }
+    },
+    "live": {
+      "commands": 135,
+      "commitments": 66,
+      "identity_stream_sha256": "959f57674f31d8df2e78fbe812aad1aebaeb745ba6a376433f12f19e832cc96d"
+    },
+    "persisted_replay": {
+      "atomic_negative_proof": null,
+      "commands": 135,
+      "commitments": 66,
+      "identity_stream_sha256": "959f57674f31d8df2e78fbe812aad1aebaeb745ba6a376433f12f19e832cc96d",
+      "likelihood_identity_audits": 0,
+      "rules_provider_gaps": 0,
+      "tracker_receipts": {}
+    }
+  },
+  "trackers": {
+    "0": {
+      "consumed_commitments": 21,
+      "history_digest": "ccf4f40068c3b18d7b61d1c1469a33cfa5daa3c7edb5a6073266eceb3f5afce8",
+      "posterior_digest": "84d278f90a1dc45f9b879f6d0211cd164c8421fd9c15fc459ac886ba923b57dc",
+      "prior_digest": "9d648936ae616e9b031c641f05f78f340dc86eb888e5908a6840477fda899bac",
+      "records": 68
+    },
+    "1": {
+      "consumed_commitments": 32,
+      "history_digest": "56459748a207f3b9d89f32c42e0f464407ea0e2b158f626f6d9ced9481805359",
+      "posterior_digest": "4a67f214eb5cf9d29cd3838d5d543ba1e0ba851ce3c2c4fbff15f4a8455a73db",
+      "prior_digest": "923dacf8d2cb80823f0574cb140ca7c705c73e7698273ddfe9296fc3dd9e427e",
+      "records": 135
+    }
+  },
+  "version": 1
+}

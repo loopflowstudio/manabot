@@ -30,10 +30,12 @@ pub(super) fn tokens() -> Vec<TokenDefinition> {
         komas_coil(),
         marit_lage(),
         monk(),
+        plain_spirit(),
         powerstone(),
         soldier(),
         spirit(),
         treasure(),
+        zeppelin(),
     ]
 }
 
@@ -353,4 +355,42 @@ fn treasure() -> TokenDefinition {
             )
         },
     )
+}
+
+/// Plain colorless Spirit, first printed in the 2004 player rewards tokens.
+fn plain_spirit() -> TokenDefinition {
+    let base = face("Spirit", [CardType::Creature], &["Spirit"], "");
+    token(
+        "token.plain_spirit",
+        "46b60d95-b9bc-40f8-b986-bfa8e3eb74f3",
+        creature(base, 1, 1, []),
+    )
+}
+
+/// Lita's named Vehicle token has no printed token card.
+fn zeppelin() -> TokenDefinition {
+    TokenDefinition {
+        key: "token.zeppelin",
+        scryfall_id: None,
+        printed: PrintedCharacteristics {
+            power: Some(5),
+            toughness: Some(5),
+            color_override: Some(Colors::default()),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                crew: Some(3),
+                effects: vec![Effect::until_end_of_turn(
+                    ObjectSelector::This,
+                    Modification::BecomeCreature,
+                )],
+                ..Default::default()
+            }],
+            ..face(
+                "Zeppelin",
+                [CardType::Artifact],
+                &["Vehicle"],
+                "Flying\nCrew 3",
+            )
+        },
+    }
 }

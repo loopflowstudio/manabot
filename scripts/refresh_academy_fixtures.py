@@ -10,8 +10,8 @@ Run from the repository root after rebuilding the extension:
 
     uv run --extra dev python scripts/refresh_academy_fixtures.py
 
-Refreshes `academy/fixtures/{learn,precision,precision-mana}-demo-w17.json`,
-`choice-navigation-w17.json` and `trigger-order-w17.json`. The conformance and
+Refreshes `academy/fixtures/{learn,precision,precision-mana}-demo-w17-token-cards.json`,
+`choice-navigation-w17-token-cards.json` and `trigger-order-w17-token-cards.json`. The conformance and
 parity receipts have their own writers (see `conformance/README.md`).
 """
 
@@ -29,9 +29,9 @@ from manabot.verify.trigger_order import root
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "academy" / "fixtures"
 DEMOS = {
-    "learn": "learn-demo-w17.json",
-    "precision": "precision-demo-w17.json",
-    "precision-mana": "precision-mana-demo-w17.json",
+    "learn": "learn-demo-w17-token-cards.json",
+    "precision": "precision-demo-w17-token-cards.json",
+    "precision-mana": "precision-mana-demo-w17-token-cards.json",
 }
 
 
@@ -101,7 +101,7 @@ def refresh_demo(name: str, trace_dir: Path) -> None:
 
 
 def refresh_navigation(trace_dir: Path) -> None:
-    path = FIXTURES / "choice-navigation-w17.json"
+    path = FIXTURES / "choice-navigation-w17-token-cards.json"
     fixture = json.loads(path.read_text())
     for family, position in fixture["positions"].items():
         session, frame, _ = _replay(position["config"], position["prefix"], trace_dir)
@@ -118,7 +118,7 @@ def refresh_navigation(trace_dir: Path) -> None:
 
 
 def refresh_trigger_order() -> None:
-    path = FIXTURES / "trigger-order-w17.json"
+    path = FIXTURES / "trigger-order-w17-token-cards.json"
     fixture = json.loads(path.read_text())
     env, _ = root()
     capture = json.loads(env.capture_decision(0).to_json())
