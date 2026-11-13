@@ -1,3 +1,0 @@
-{"games":512,"capped":0,"steps":101650,"elapsed_s":4.557622,"steps_per_s":22303.3,"digest":15843333459759757527}
-{"layer_metrics":{"board_ns":740533399,"boards":197413,"clone_ns":0,"comparisons":0,"contexts_cloned":0,"dependency_ns":0,"dependency_passes":0,"edges":0,"mana_invalidations":239611,"source_plans":17870}}
-{"payment_metrics":{"calls":1287779,"max_plan_calls":11,"max_sources":37,"plans":522421,"plans_over_1k":0,"states":791410}}
