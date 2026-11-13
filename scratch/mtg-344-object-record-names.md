@@ -143,17 +143,22 @@ Counts of `agent_cards` matches at kickoff (buffer-key uses included):
 
 ## Slices
 
-1. **This slice: baseline.** Build the extension at `493127545a` and record, in
-   this file, one SHA-256 over `toJSON()` and every scalar-encoder buffer for
-   each decision of 20 seeded games on the default decks (throwaway script in
-   `scratch/`, not committed). Before number: recorded here.
-2. Native rename with serde renames; Rust tests and guards compile and pass in debug.
-3. PyO3 classes, alias getters/setters, module `__getattr__`, stub;
-   `tests/env/test_object_record_aliases.py`.
-4. Python consumers, Academy, tests.
-5. Text wording and version; docs.
+Slices 1-5 are done and land as one PR (results under Implementation progress
+and the three concept reviews):
 
-Slices 2-5 land as one PR; they are not independently shippable.
+1. Baseline digest at `493127545a`: 3,512 decisions, `14c102e4...100a`.
+2. Native rename with serde renames.
+3. PyO3 classes, alias getters/setters, module `__getattr__`, stub,
+   `tests/env/test_object_record_aliases.py`.
+4. Python consumers, Academy, scripts, tests.
+5. Text wording and `manabot-text-7`; docs.
+6. **This slice: gate.** Run the suites under "Acceptance at gate" not yet run
+   at this HEAD: the debug `match_state_hash_tests`, `semantic_conformance_tests`
+   and `canonical_replay_tests`; the cards `observability` tests (so far only
+   `cargo check`); the conformance fuzz; the full
+   `tests/env/test_observation.py` and `tests/semantic/test_text_observation.py`
+   files under `-W error::DeprecationWarning`. The fixture diff base is now
+   `e363e4058e`. Then file the alias-removal Task at landing.
 
 ## Acceptance at gate
 
@@ -165,7 +170,7 @@ These are gate requirements; actual results are under Implementation progress.
 - `cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w17-v3 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures` -> no failures.
 - Rebuilt extension, then the slice-1 script -> the same SHA-256 as the baseline.
 - `uv run --extra dev pytest tests/env/test_object_record_aliases.py tests/env/test_observation.py tests/env/test_named_observation_layout.py tests/semantic/test_text_observation.py -q -W error::DeprecationWarning` -> pass. The alias test asserts, for `managym.Card`, `Observation.agent_cards`, `Observation.opponent_cards` and `StackObject.source_card_registry_key`: one `DeprecationWarning` containing "0.3.0" and the new name, value equal to the new name's, setters write through; and that a seeded game through the Python encoder, the text observation and the Academy projection raises none.
-- `git diff d1554835be --stat -- conformance protocol/fixtures academy/fixtures managym/tests/fixtures tests/fixtures managym/src/agent/record_vocabulary.rs` -> empty (the branch's main base; `493127545a..d1554835be` itself adds `managym/tests/fixtures/payment_search/manabot_slow_step.py`), except fixtures whose only content is the text observation at version 7, listed in the PR if any.
+- `git diff e363e4058e --stat -- conformance protocol/fixtures academy/fixtures managym/tests/fixtures tests/fixtures managym/src/agent/record_vocabulary.rs` -> empty (the branch's main base), except fixtures whose only content is the text observation at version 7, listed in the PR if any.
 
 ## Done when
 
@@ -446,3 +451,10 @@ Realign at `2265c71c97`: origin/main has not moved past `e363e4058e`. A grep of
 `.agent_cards`/`.opponent_cards` (excluding buffer fields), `source_card_registry_key`
 and `managym.Card` -> no matches. The code agrees with the plan; what remains is
 the gate suites under "Acceptance at gate" and filing the alias-removal Task at landing.
+
+Kickoff recheck (2026-11-13, HEAD `af34f988e4`): origin/main is still
+`c3dfd82476`, already merged. The Python grep above matches only MLX
+`batch.agent_cards` buffer fields, the stub's deprecated property and the text
+guard's explicit exclusion of it. Fixture/vocabulary diff against `e363e4058e`
+-> empty. Released version is 0.2.3, so the aliases name 0.3.0 as before. The
+plan stands unchanged; only slice 6 remains.
