@@ -56,7 +56,15 @@ impl Game {
     /// announced X and recorded excess damage.
     fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         match value {
-            EffectValue::Objects(of) => self.select(of, frame).len() as i32,
+            EffectValue::Objects { of, predicate } => self
+                .select(of, frame)
+                .into_iter()
+                .filter(|object| {
+                    predicate.as_ref().is_none_or(|predicate| {
+                        self.card_matches_predicate(CardId::from(object.entity), predicate)
+                    })
+                })
+                .count() as i32,
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
@@ -93,7 +101,7 @@ impl Game {
     pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         match value {
             EffectValue::Fixed(value) => *value,
-            EffectValue::Objects(_)
+            EffectValue::Objects { .. }
             | EffectValue::X
             | EffectValue::ExcessDamage
             | EffectValue::ManaSpentToCast

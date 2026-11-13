@@ -38,6 +38,7 @@ mod ice;
 mod iko;
 mod inv;
 mod isd;
+mod j22;
 mod khm;
 mod kld;
 mod ktk;
@@ -51,6 +52,7 @@ mod mh2;
 mod mid;
 mod mkm;
 mod mmq;
+mod nec;
 mod ody;
 mod ons;
 mod ori;
@@ -105,7 +107,7 @@ pub fn token_catalog() -> &'static [TokenDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 63] = [
+const SETS: &[fn() -> Vec<CardDefinition>] = &[
     aer::cards,
     afr::cards,
     blb::cards,
@@ -132,6 +134,7 @@ const SETS: [fn() -> Vec<CardDefinition>; 63] = [
     iko::cards,
     inv::cards,
     isd::cards,
+    j22::cards,
     khm::cards,
     kld::cards,
     ktk::cards,
@@ -145,6 +148,7 @@ const SETS: [fn() -> Vec<CardDefinition>; 63] = [
     mid::cards,
     mkm::cards,
     mmq::cards,
+    nec::cards,
     ody::cards,
     ons::cards,
     ori::cards,
