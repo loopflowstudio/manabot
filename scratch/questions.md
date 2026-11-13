@@ -285,3 +285,23 @@ groups and links `docs/engine.md#built-in-heuristic-opponent`; selection
 sentence, historical-version statement and MTG-152 figures are intact. Prose
 only (no identity file, build or runtime test); `git diff --check` passed.
 Full suites, release smoke and Engine Budget remain for gate.
+
+## Third concept review (2026-11-13)
+
+At `00e2090eb7`: nothing to change, no open product choice. Reread the adapter,
+native header, bindings/stub, `OpponentPolicy`, `register_anchor` and the three
+docs. The header owns the rules; `docs/engine.md` is the one user guide and
+agrees with it (rules, ties, fallback); README and evaluation guide only link.
+
+## QA after third concept review (2026-11-13)
+
+At `00e2090eb7`, real surfaces only; no code change. Docs snippet ran as
+written. Native batch, 200 games per arm, random learner in seat 0, viewer
+always seat 0: random opponent W102/L99; heuristic UR v GW W11/L189, BG v UG
+W28/L172; rewards ±1. `manabot train` smoke checkpoint →
+`manabot.eval.local --opponent heuristic` exit 0, `native-v2`/`heuristic-cpu-v2`,
+replay passed (548 decisions, 0 mismatches, 0 private exposures); `--request`
+repeat matched all 1,096 decision records. Academy Watch (heuristic v random,
+seed 42) played to "seat 1 wins" at decision 337 with no page errors; servers
+stopped. Bad names and capacities raise ValueError. Host load ≈500, so no speed
+evidence. Report: `scratch/qa.html`.
