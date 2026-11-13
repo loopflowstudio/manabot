@@ -89,15 +89,12 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 Full recheck history is retained at
 `9eb98a6aaee9f9eeaabea17ec40dd56717b63f22:scratch/plan.md`.
-Ninth recheck (after review 9's implementation, `a716c16ce`): Etude PR #103
-remains open at `105abdd`, pins remain 0.2.16, and origin/main has nothing new. Main `f4e1822fa` (#510) was merged; it is
-an ancestor of HEAD and owns the frozen-execution reference. Frozen precision
-ladder execution refuses; its retained digest and report remain. Live SelfPlay
-keeps explicit float32 (main's auto also resolves to float32). After that sync,
-39 focused precision/refusal/recipe/regime/experiment checks passed (23.18s).
-The parity proof predates main's observation changes; merged code still needs
-gate coverage. SDK release/pin, installed consumers and launcher/service proofs
-remain pending.
+Tenth recheck (after review 10, merge `fe3c794e1`): Etude PR #103 still open
+at `105abdd`; pins remain 0.2.16; origin/main has nothing new. The main merge
+left cli.py, the recipe tests, docs/training.md, training/ and the lock
+untouched, so review 10's recorded pass still applies. Main `f4e1822fa` (#510)
+owns the frozen-execution reference. The parity proof predates main's
+observation changes; merged code still needs gate coverage.
 
 ## Concept reviews 1–3: implemented — 2026-11-13
 
