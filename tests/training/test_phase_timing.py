@@ -6,6 +6,7 @@ bit-identical with timing on or off.
 """
 
 from copy import deepcopy
+from dataclasses import replace
 import os
 from pathlib import Path
 
@@ -82,8 +83,10 @@ def test_learning_timers_leave_state_and_diagnostics_identical(rule: int) -> Non
     agent = _agent()
     batch = collect(_collector(agent), agent, 1)
     timed = new_learner(deepcopy(agent), "cpu", minibatch_rows=2)
-    untimed = new_learner(deepcopy(agent), "cpu", minibatch_rows=2)
-    untimed.profiler = Profiler(enabled=False)
+    untimed = replace(
+        new_learner(deepcopy(agent), "cpu", minibatch_rows=2),
+        profiler=Profiler(enabled=False),
+    )
 
     assert _update(timed, learning, batch) == _update(untimed, learning, batch)
     for (name, a), (_, b) in zip(

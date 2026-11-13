@@ -6,8 +6,8 @@ For review at the demo step, before any Etude work.
 
 | File | What it is |
 | --- | --- |
-| `manabot/training/loops/self_play.py` | `SelfPlay` settings, `self_play(settings, out, *, seed, updates, run=None) -> Path`, `new_state`/`load_state`/`save_state`, `save_checkpoint`/`save_final`, `Tracker`, `Stopped`, `every(n)`. One visible `while` loop; resume = call again. |
-| `manabot/recipes/elemental.py` | `ElementalConfig` + `elemental(config)`: `track(...)`, then one `self_play` call, then `run.finish()`. |
+| `manabot/training/loops/self_play.py` | `SelfPlay` settings, `self_play(settings, out, *, seed, updates, run=None) -> Path`, `new_state`/`load_state`/`save_state`, `save_checkpoint`/`save_final`, `Tracker`, `Stopped`. Data plus functions: `step(state, ...) -> (state, row)` inside one visible `while` loop; resume = call again. |
+| `manabot/recipes/elemental.py` | `ElementalConfig` + `elemental(config)`: `with track(...) as run:` around one `self_play` call; leaving the block finishes the run (failed when it raised). |
 | `manabot/recipes/belief_sampler.py` | `belief(config)`: `self_play` → `collect_belief` → `train_belief`, passing paths; each step returns at once if its output exists. |
 | `manabot/belief/collect.py`, `manabot/belief/train.py` | The two belief steps. |
 | `manabot/recipes/builders.py` | `elemental_self_play()`, `gray_ogre_self_play()`. |
@@ -21,12 +21,11 @@ Run output (`/tmp` smoke, 4 streams, 2 updates, 79 s CPU): `state.pt`, `final.pt
 ## What the recipe asks of Etude
 
 ```python
-run = track(clocks=[Step("updates", ...)], seed=..., config=...)
+with track(clocks=[Step("updates", ...)], seed=..., config=...) as run:  # exists (Run is a context manager)
 run.out            # NEW: the run's directory
 run.log(row, updates=n); run.log_table(name, rows, updates=n)   # exists
 run.checkpoint(path, updates=n, tags=...)                        # exists
 run.stopping()     # NEW
-run.finish()       # exists
 training(elemental, config=ElementalConfig(...), max_hours=, max_usd=)  # exists
 etude continue RUN --until updates=N                                     # exists, needs run.out
 ```
@@ -93,6 +92,16 @@ loop's raw state and final EMA equal the executor's `self-play-raw.pt` and
 `self-play-ema.pt` bit for bit, for PPO (`Learning`, EMA 0.9) and damped
 policy. Same seed streams: init `s`, collection `s+10000`, sampling `s`,
 minibatches `s+20000`. Differences from the executor: no initial-raw
-`run.checkpoint` unless `0 in milestones`; no adaptive sampling, frozen
+`run.checkpoint` unless `checkpoint_every` is set; no adaptive sampling, frozen
 opponents, diagnostic roots, `initial`/`learning_state`/`initial_weights`
 imports or `active_seconds` endpoints.
+
+### Added 2026-11-12 (functional pass)
+
+8. **A local launch.** `manabot train --recipe X --out DIR` must tell `track`
+   the run directory and experiment as a launch does. The stub offers
+   `local_launch(out=, experiment=)`, a context manager that sets `ETUDE_OUT`
+   and `ETUDE_EXPERIMENT` for the block. Etude could ship that, or let `track`
+   take `out=`; either removes environment handling from the CLI.
+9. **Stop reserve.** The stub's `stopping()` measures the longest interval
+   between two `stopping()` calls (one per update), not between `log` calls.

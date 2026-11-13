@@ -98,9 +98,9 @@ them; check that revision out to reproduce a frozen experiment exactly.
 ## Write a recipe
 
 A recipe is a function of one config. It declares its run, then calls loops in
-order; nothing runs it but a call. This is the Elemental recipe (shown without
-its optional CUDA numerics gate, and without marking the run failed when the
-loop raises):
+order; nothing runs it but a call. Leaving the `with` block finishes the run,
+as failed when the block raised. This is the Elemental recipe (shown without
+its optional CUDA numerics gate):
 
 ```python
 # manabot/recipes/elemental.py
@@ -120,13 +120,12 @@ class ElementalConfig(BaseModel):
 
 
 def elemental(config: ElementalConfig) -> None:
-    run = track(
+    with track(
         clocks=[Step("updates", "optimizer updates")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
-    )
-    self_play(config.self_play, run.out, seed=config.seed, updates=config.updates, run=run)
-    run.finish()
+    ) as run:
+        self_play(config.self_play, run.out, seed=config.seed, updates=config.updates, run=run)
 ```
 
 `track` names no experiment. Under `etude launch` the run belongs to the
@@ -213,16 +212,15 @@ a sampler:
 ```python
 # manabot/recipes/belief_sampler.py
 def belief(config: BeliefConfig) -> None:
-    run = track(clocks=[Step("updates", "optimizer updates")],
-                seed=config.seed, config=config.model_dump(mode="json"))
-    policy = self_play(config.policy, run.out / "policy", seed=config.seed,
-                       updates=config.updates, run=run)
-    histories = collect_belief(policy, run.out / "histories.json",
-                               match=root_match(config.policy), games=config.games,
-                               seed=config.seed)
-    sampler = train_belief(histories, run.out / "belief.pt", config.sampler, seed=config.seed)
-    run.checkpoint(sampler, updates=config.updates, tags=("belief",))
-    run.finish()
+    with track(clocks=[Step("updates", "optimizer updates")],
+               seed=config.seed, config=config.model_dump(mode="json")) as run:
+        policy = self_play(config.self_play, run.out / "policy", seed=config.seed,
+                           updates=config.updates, run=run)
+        histories = collect_belief(policy, run.out / "histories.json",
+                                   match=root_match(config.self_play), games=config.games,
+                                   seed=config.seed)
+        sampler = train_belief(histories, run.out / "belief.pt", config.sampler, seed=config.seed)
+        run.checkpoint(sampler, updates=config.updates, tags=("belief",))
 ```
 
 `collect_belief` (`manabot.belief.collect`) plays `games` complete games with a
