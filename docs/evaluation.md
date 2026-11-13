@@ -102,8 +102,8 @@ Select `--opponent heuristic` for local evaluation or
 adapter and batched opponent share the
 [native heuristic rules](engine.md#built-in-heuristic-opponent).
 New arena registrations use `version="native-v2"` and bind the native rule
-sources and adapter as their source identity. Wheels include the engine sources
-at their original relative paths, so installed registration and validation hash
+sources and adapter as their source identity. The `managym` wheel includes engine
+sources at their original package paths, so installed registration and validation hash
 the same paths and bytes as a checkout. Results recorded against the Python
 heuristic retain their original identity.
 A changed anchor identity needs a new version, never a relabeling of old games.

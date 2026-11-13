@@ -2,7 +2,7 @@
   "reference": "757bb6257ef07cf2536ad7f7ec24f0f7309628c6:manabot/sim/heuristic.py",
   "world": {
     "world_version": "w17",
-    "card_digest": "0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f"
+    "card_digest": "b9344ef332cc07e1475e6a8860907ea84401ea427cec04a5cd23781e78c5818c"
   },
   "max_decisions": 256,
   "cases": [
@@ -800,6 +800,7 @@
         1,
         1,
         0,
+        0,
         7,
         1,
         0,
@@ -910,11 +911,12 @@
         7,
         5,
         7,
-        5,
-        0
+        5
       ],
       "terminated": false,
       "truncated": false
     }
-  ]
+  ],
+  "engine_commit": "1455cd563696f1f9c7116f3e2334ef34e6419ea4",
+  "note": "Original Python selector replayed against the integrated engine."
 }

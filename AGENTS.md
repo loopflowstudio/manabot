@@ -54,6 +54,9 @@ to stage self-contained source archives; direct engine sdists from the workspace
 do not preserve shared asset paths. `manabot` requires that exact `managym` version;
 `manabot.managym` is a compatibility alias to the same engine. manabot never imports
 Academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
+The engine wheel retains `managym/src/**/*.rs` and `managym/Cargo.lock` for
+source-byte identities. Keep wheel exclusions narrow: `**/cards/**` and
+`**/state/**` also match engine modules under `src/`.
 
 ## Academy's shared decision surface
 

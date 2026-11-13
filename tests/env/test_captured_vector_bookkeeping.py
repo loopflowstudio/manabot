@@ -18,8 +18,10 @@ def _players() -> list[managym.PlayerConfig]:
     return [managym.PlayerConfig(name, {"Mountain": 8}) for name in ("a", "b")]
 
 
-def _captured(seed: int) -> tuple[CapturedVector, dict[str, np.ndarray]]:
-    vector = CapturedVector(num_envs=1, seed=seed)
+def _captured(
+    seed: int, opponent_policy: str = "none"
+) -> tuple[CapturedVector, dict[str, np.ndarray]]:
+    vector = CapturedVector(num_envs=1, seed=seed, opponent_policy=opponent_policy)
     buffers = ObservationSpace().encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
@@ -67,8 +69,11 @@ def test_native_reads_are_delegated() -> None:
         vector.close()
 
 
-def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix() -> None:
-    vector, buffers = _captured(_MAX_SEED)
+@pytest.mark.parametrize("opponent_policy", ["none", "random", "heuristic"])
+def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix(
+    opponent_policy: str,
+) -> None:
+    vector, buffers = _captured(_MAX_SEED, opponent_policy)
     try:
         vector.reset_all_into_buffers(_players())
         generation = vector.current_game_generations()[0]
@@ -86,8 +91,9 @@ def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix() -> None:
         vector.close()
 
 
-def test_same_seed_reset_starts_a_new_prefix() -> None:
-    vector, _ = _captured(42)
+@pytest.mark.parametrize("opponent_policy", ["none", "random", "heuristic"])
+def test_same_seed_reset_starts_a_new_prefix(opponent_policy: str) -> None:
+    vector, _ = _captured(42, opponent_policy)
     try:
         vector.reset_all_into_buffers(_players())
         vector.step_into_buffers([0])
@@ -100,10 +106,19 @@ def test_same_seed_reset_starts_a_new_prefix() -> None:
         vector.close()
 
 
-def test_torch_reset_with_a_seed_restarts_and_without_continues() -> None:
+@pytest.mark.parametrize("opponent_policy", ["none", "random", "heuristic"])
+def test_torch_reset_with_a_seed_restarts_and_without_continues(
+    opponent_policy: str,
+) -> None:
     match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
     vector = TorchVectorEnv(
-        2, match, ObservationSpace(), Reward(RewardConfig()), "cpu", seed=42
+        2,
+        match,
+        ObservationSpace(),
+        Reward(RewardConfig()),
+        "cpu",
+        seed=42,
+        opponent_policy=opponent_policy,
     )
     try:
         first, _ = vector.reset(seed=42)

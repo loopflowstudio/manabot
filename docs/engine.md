@@ -296,7 +296,9 @@ Encoding capacity failures remain errors under the configured overflow policy;
 they do not switch the opponent to random play.
 
 The scalar `HeuristicPlayer` adapter and arena `heuristic` anchor use the same
-native rules. Direct native callers can create `managym.Heuristic()`, call
+native rules. Batch resets clear the per-game strategy memory, including a
+reset to the same seed; forks copy it. Direct native callers can create
+`managym.Heuristic()`, call
 `select_action(observation)` for each decision, and call `reset()` between
 independent games. Keep one selector per seat. Selection returns an original
 legal action index and rejects an empty action space. The optional

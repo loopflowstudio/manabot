@@ -1002,3 +1002,11 @@ class CardPool:
     @property
     def counts(self) -> np.ndarray:
         """Int32 counts of shape ``[cards]``, indexed by ``card_def_id``."""
+
+
+class Heuristic:
+    """Stateful, viewer-safe native opponent; reset between independent games."""
+
+    def __init__(self, max_actions: int | None = None) -> None: ...
+    def select_action(self, observation: Observation) -> int: ...
+    def reset(self) -> None: ...

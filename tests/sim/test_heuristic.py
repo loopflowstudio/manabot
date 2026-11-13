@@ -1,8 +1,9 @@
 """Installed native selector, Python adapter, and retained pre-port decisions.
 
 Rule-group fixtures live alongside the native selector in heuristic/tests.rs.
-The golden decisions below were produced by the Python owner at 757bb6257;
-retain those values when changing strategy and version the anchor instead.
+Golden decisions come from the Python owner at 757bb6257 on the fixture's
+engine world. A world change needs a new comparison with that reference,
+never relabeled actions.
 """
 
 from __future__ import annotations
@@ -13,10 +14,20 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+import torch
 
 from manabot import managym
 from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
+from manabot.env.vector_env import VectorEnv
+from manabot.eval.admission import register_anchor
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.infra.identity import file_sha256
+from manabot.sim import anchors
 from manabot.sim.heuristic import HeuristicPlayer, heuristic_source_paths
+from manabot.sim.players import build_code_player
+from tests.eval.arena_fixture import arena_fixture
 
 PARITY = Path(__file__).parents[1] / "fixtures/native_heuristic_parity.json"
 
@@ -36,6 +47,7 @@ def _players(decks: list[str]) -> list[managym.PlayerConfig]:
 
 def test_native_heuristic_matches_retained_python_decisions() -> None:
     fixture = json.loads(PARITY.read_text())
+    assert fixture["world"] == managym.world_identity()
     for case in fixture["cases"]:
         env = managym.Env(seed=case["seed"])
         raw, _ = env.reset(_players(case["decks"]))
@@ -51,9 +63,9 @@ def test_native_heuristic_matches_retained_python_decisions() -> None:
         assert (done, truncated) == (case["terminated"], case["truncated"])
 
 
-def test_native_batch_matches_scalar_choices_rewards_and_reset() -> None:
+@pytest.mark.parametrize("seed", [213, 2**64 - 1])
+def test_native_batch_matches_scalar_choices_rewards_and_reset(seed: int) -> None:
     configs = _players(["red", "green"])
-    seed = 213
     batch = managym.VectorEnv(num_envs=1, seed=seed, opponent_policy="heuristic")
     scalar = managym.Env(seed=seed)
     selector = managym.Heuristic()
@@ -80,7 +92,7 @@ def test_native_batch_matches_scalar_choices_rewards_and_reset() -> None:
         )
         if done or truncated:
             episodes += 1
-            scalar = managym.Env(seed=seed + episodes)
+            scalar = managym.Env(seed=min(seed + episodes, 2**64 - 1))
             raw, _ = scalar.reset(configs)
             selector.reset()
     assert episodes > 0
@@ -93,12 +105,6 @@ def test_adapter_rejects_invalid_capacity(capacity: object) -> None:
 
 
 def test_heuristic_registration_versions_native_sources() -> None:
-    from manabot.eval.admission import register_anchor
-    from manabot.infra.identity import file_sha256
-    from manabot.sim import anchors
-    from manabot.sim.players import build_code_player
-    from tests.eval.arena_fixture import arena_fixture
-
     candidate = arena_fixture().anchors[0]
     scripted = register_anchor(candidate, "scripted_greedy", player_id="scripted")
     native = register_anchor(candidate, "heuristic", player_id="native")
@@ -112,10 +118,6 @@ def test_heuristic_registration_versions_native_sources() -> None:
 
 @pytest.mark.parametrize("capacity", [None, True, 0, -1, "64"])
 def test_registered_heuristic_rejects_invalid_capacity(capacity: object) -> None:
-    from manabot.eval.admission import register_anchor
-    from manabot.sim.players import build_code_player
-    from tests.eval.arena_fixture import arena_fixture
-
     registration = register_anchor(
         arena_fixture().anchors[0], "heuristic", player_id="bounded"
     ).model_copy(
@@ -132,13 +134,6 @@ def test_registered_heuristic_rejects_invalid_capacity(capacity: object) -> None
 
 
 def test_python_vector_wrapper_accepts_native_heuristic() -> None:
-    import torch
-
-    from manabot.env.match import Match, Reward
-    from manabot.env.observation import ObservationSpace
-    from manabot.env.vector_env import VectorEnv
-    from manabot.infra.config import MatchConfig, RewardConfig
-
     deck = {"Forest": 20, "Llanowar Elves": 20}
     env = VectorEnv(
         2,

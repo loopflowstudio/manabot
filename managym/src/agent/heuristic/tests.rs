@@ -352,3 +352,44 @@ fn heuristic_prefix_and_empty_errors() {
     o.action_space.actions.clear();
     assert!(h.select_action(&o, None).is_err());
 }
+
+#[test]
+fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
+    use crate::agent::opponent::OpponentPolicy;
+
+    let players = ["a", "b"]
+        .map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])))
+        .to_vec();
+    let mut env = Env::new(42, true, false, false);
+    env.reset(players.clone()).unwrap();
+    // Select through the batch policy boundary. Kicker history must survive
+    // a fork even after the lands used to estimate its cost become tapped.
+    let policy = OpponentPolicy::Heuristic;
+    let mut obs = board(Space::PayOrNot);
+    let mut spell = card(1, "Firebending Lesson", 1);
+    spell.kicker_cost = 4;
+    obs.agent_cards.push(spell);
+    obs.action_space.focus = vec![1];
+    obs.action_space.actions = vec![
+        offer(Action::PayCost, &[], None),
+        offer(Action::DeclineChoice, &[], None),
+    ];
+    lands(&mut obs, 5);
+    assert_eq!(policy.select_action(&mut env, &obs).unwrap(), 0);
+    let mut fork = env.fork().unwrap();
+    let mut selected = env.selected_fork().unwrap();
+    for permanent in &mut obs.agent_permanents {
+        permanent.tapped = true;
+    }
+    obs.action_space.action_space_type = Space::ChooseTarget;
+    obs.opponent_permanents = vec![creature(30, 20, 2, 2), creature(31, 20, 4, 4)];
+    obs.action_space.actions = vec![
+        offer(Action::ChooseTarget, &[30], None),
+        offer(Action::ChooseTarget, &[31], None),
+    ];
+    assert_eq!(policy.select_action(&mut env, &obs).unwrap(), 1);
+    env.reset(players).unwrap();
+    assert_eq!(policy.select_action(&mut env, &obs).unwrap(), 0);
+    assert_eq!(policy.select_action(&mut fork, &obs).unwrap(), 1);
+    assert_eq!(policy.select_action(&mut selected, &obs).unwrap(), 1);
+}

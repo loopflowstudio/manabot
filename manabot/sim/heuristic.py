@@ -61,12 +61,12 @@ from manabot.env.env import Env
 
 def heuristic_source_paths() -> list[Path]:
     """Native rules and adapter bytes identifying newly registered opponents."""
-    root = Path(__file__).resolve().parents[2]
+    root = Path(managym.__file__).resolve().parent
     return [
         Path(__file__).resolve(),
-        root / "managym/src/agent/heuristic/mod.rs",
-        root / "managym/src/agent/heuristic/knowledge.rs",
-        root / "managym/src/python/heuristic_bindings.rs",
+        root / "src/agent/heuristic/mod.rs",
+        root / "src/agent/heuristic/knowledge.rs",
+        root / "src/python/heuristic_bindings.rs",
     ]
 
 

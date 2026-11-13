@@ -10,15 +10,15 @@ import torch
 import manabot
 from manabot import managym as compatibility
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.semantic.policy_catalog import bind_policy_catalog
-import managym
 from manabot.eval.admission import register_anchor
 from manabot.eval.evaluate import EvaluationError, validate_registration_source
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints
+from manabot.semantic.policy_catalog import bind_policy_catalog
 from manabot.sim import anchors
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.registration import PlayerRegistration
+import managym
 
 
 def check_heuristic_registration() -> str:

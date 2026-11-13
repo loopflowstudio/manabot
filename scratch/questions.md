@@ -3,106 +3,73 @@
 Outcome: one native heuristic owner for scalar arena players and
 `VectorEnv(opponent_policy="heuristic")`, preserving viewer visibility, chooser
 semantics, strategy, deterministic ties, optional prefix capacity and rewards.
-No rules/world/checkpoint/input-layout change; frozen `anchors.py`, historical
-registrations and results keep their bytes and identities. No Wave.
+No rules/world/checkpoint/input-layout change by this Task. Frozen `anchors.py`,
+historical registrations and results keep their bytes and identities. No Wave.
 
 Jack Heart (2026-11-11), recorded MTG-272 direction: "do C in this chagne,
 A in a nother diff (start it now)". C removes Passive there; A is this port.
 
-## Approach and deletion boundary
+## Design and deletion boundary
 
 `managym/src/agent/heuristic/mod.rs::Heuristic` owns rules, fallback and combat
-memory; `knowledge.rs` compiles public definition ratings once, borrowing the
+memory; `knowledge.rs` derives public definition ratings once, borrowing the
 serialized schema without a second effect vocabulary. Modal bodies remain
-opaque to ratings. The scalar `manabot/sim/heuristic.py::HeuristicPlayer` adapts
-the native selector. `Env` owns lazy batch memory, clones it on forks and clears
-it on reset; scalar arena games construct fresh players.
+opaque to ratings. Scalar `manabot/sim/heuristic.py::HeuristicPlayer` adapts
+native selection. `Env` owns lazy batch memory, clones it on forks and clears
+it on reset; scalar games construct fresh players. Selection consumes live
+viewer Observations, including combat events and `action_space.focus` (omitted
+by canonical viewer JSON), never Game state or privileged HandSnapshot.
 
-The selector consumes emitted live viewer Observations, including combat events
-and `action_space.focus`. Canonical viewer JSON omits that focus, so parity
-fixtures replay decisions. It reads neither Game state nor private hand snapshots.
-`docs/engine.md` and `docs/evaluation.md` describe behavior and identity.
+Delete — do not maintain: Python heuristic rules, derived knowledge, combat
+memory and their exclusive namespace fixtures. These are removed; native rule
+tests and retained decision parity cover the surviving owner. Do not restore
+the Python policy allowlist or Passive. Final policies: none/random/heuristic.
 
-Fresh registration uses native-v2 / heuristic-cpu-v2 and hashes the adapter plus
-three Rust files via `heuristic_source_paths`; validation still rejects drift.
-Wheels ship all `managym/src` at original relative paths: both heuristic identity
-and `engine_source_paths()` need those bytes. No hashing fallback or generated
-source copy.
+Fresh registrations use native-v2 / heuristic-cpu-v2 and hash the adapter plus
+three Rust files. Main now distributes managym separately; its wheel must ship
+`src/**/*.rs` and Cargo.lock at original package paths. No source hash fallback
+or generated source copy. Prior monolithic package paths are replaced by main's
+canonical engine package and compatibility alias, including the type stub.
 
-### Delete — do not maintain
+Concept review found no open product choice. Keep unsupported-policy, overflow
+and source-drift errors; use a matching install or new truthful registration
+for recovery. The docs describe the built-in rules, API and identity.
 
-Python heuristic rules, derived knowledge, combat memory and their exclusive
-namespace fixtures are removed. Do not restore them: native rule tests and
-retained decision parity cover the surviving owner. The wheel's `managym/src/**`
-exclusion is removed. No further deletion target remains in this cut.
+## Integration and remaining work (2026-11-13)
 
-Reversible compress choices: retain approximate strategy; share card-choice
-ranking and symmetric fight scoring; let `Board::creatures` yield observation
-order directly, collecting only for sorting/reuse. The bounded benchmark derives
-receipt counts from its actual slots/steps/seed. These do not change strategy.
+GitHub reports PR #458 MERGED on 2026-11-11T23:46:34Z, merge
+`0b296e617a87017c4cca71227749eddac0a0481b`. `lf sync --manual` integrated main
+`c0de38dcd01f37223bf0ec746d9aff152ee75f2e` with conflict resolution, then
+`lf sync --continue` completed. Preserve main's API/package changes and its
+process-wide reset generations, originating seeds, HandSnapshot and replay
+capture contracts. Exact forks and materialized worlds copy heuristic memory;
+reset clears it. All source selections still take live viewer observations.
+Main's QA skill supersedes the earlier local launch notes.
 
-## Current alignment and remaining acceptance
+Reversible integration choice: source identity locates Rust files through
+`managym.__file__` because engine and training now ship separately. The engine
+wheel retains Rust source bytes; the training wheel stays pure Python. Frozen
+experiment receipts are never rewritten. The parity fixture is a test input
+bound to its world digest: a world change replaces it with a new comparison
+against the original Python source, never relabeled actions.
 
-Concept review (2026-11-11): **no design change and no open product choice**.
-Keep one `heuristic` strategy across evaluation and collection. Its memory is
-part of a player's game lifecycle, not a second policy or a persisted game
-record: batch resets clear it, forks copy it, and scalar games get fresh players.
-The direct selector's explicit reset remains useful because it does not own a
-game. A snapshot alone cannot replace decision history: canonical viewer JSON
-also omits target/cost focus. Keep live observations as the selector boundary.
+Implementation integration and focused checks are complete (results below).
+Gate remains
+responsible for full debug Rust suite, fmt, all-target/all-feature clippy;
+affected Python simulation/evaluation, package-boundary and vector suites plus
+`tests/env/test_observation.py`, `tests/training/test_action_cutoff.py` and
+`tests/verify/test_native_buffer_capacities.py`. Normal same-runner Engine
+Budget must establish unused-policy cost/digests. No paid execution or
+artificial load. Publication and landing belong to later caller steps.
 
-Reviewed normal batch stepping, opponent terminal reward/reset, closed-view and
-controlled-chooser decisions, and installed registration failure/recovery against
-the implementation and existing fixtures; no runtime checks were rerun. Preserve
-errors on unsupported policies, capacity overflow and source drift. Recovery uses
-a matching install or a new truthful registration, never relabeled old evidence.
-The existing usage docs already describe that experience; no new skill workflow
-is needed. `scratch/concept-review.html` shows the before/after and counterexamples.
-Next show the integrated MTG-272 lifecycle and required gate evidence below;
-conceptual alignment does not complete that acceptance work.
-
-The earlier iteration's packaging defect and instant-timing mismatch are fixed:
-`pyproject.toml` includes the Rust sources at their original paths,
-`scripts/release/smoke.py::check_heuristic_registration` checks installed
-registration and drift rejection, and the adapter header agrees with
-`Heuristic::timely`. The post-compress standalone-venv proof below covers the
-current heuristic sources. These are completed work, not another implementation
-pass. Bounded collection evidence is retained below with its limits.
-
-Rechecked 2026-11-11 against GitHub and both Tasks: [PR #458](https://github.com/loopflowstudio/manabot/pull/458)
-was OPEN at `dfba956ac0c0824a6ebfb05b11335c293242ddea`, with no merge commit.
-Its title/body now describe HandSnapshot and the reset contracts correctly.
-The published diff removes Passive and the Python policy allowlist, adds
-process-wide reset generations and privileged hand snapshots, reproduces every
-explicit reset seed, and removes Gym auto_reset. Remote main was
-`3c169916e2d642b5ead16aa303b979232635a63f`, already an ancestor of this checkout
-through `04f601491`; the throughput closeout adds no heuristic requirement.
-
-1. Integrate MTG-272 after landing, before publication. Preserve live-observation
-   selection and lazy memory while reconciling Env constructors/forks, vector
-   reset/capture, bindings, stub, wrapper and docs. Verify reset/reward/chooser
-   behavior, including repeated explicit seeds and terminal replacement at the
-   maximum seed. Preserve upstream's single native policy validation owner;
-   do not restore `VALID_OPPONENT_POLICIES` while resolving the wrapper conflict.
-   Final policies are none/random/heuristic; Passive remains here until that
-   integration. The guide no longer claims the three documented choices are
-   exhaustive before the removal lands. HandSnapshot stays outside selector
-   inputs, observations and captures.
-2. Gate: full debug Rust suite, fmt, all-target/all-feature clippy; affected
-   Python simulation/evaluation, package-boundary and vector suites, plus
-   `tests/env/test_observation.py`, `tests/training/test_action_cutoff.py` and
-   `tests/verify/test_native_buffer_capacities.py`. Focused passes below do not
-   complete these suites.
-3. Normal same-runner Engine Budget must establish unchanged unused-policy
-   cost/digests. Bounded collection below establishes neither a training-speed
-   threshold nor strength. No artificial load or paid execution.
-
-PR #458 reports three retained-encoding replay failures (`binding_mismatch`)
-also reproduced on base `402dfd5b2`, and an intermittent Etude `seal_logs`
-missing-file failure that passed alone. These are upstream reports, not checks
-run on this branch or waivers of its gate. Compare any matching integration
-failures with that evidence; keep frozen receipts unchanged. No product decision
-is open for this port. Full release training smoke also remains unrun.
+Prior upstream PR #458 reported three retained-encoding replay failures
+(`binding_mismatch`) also reproduced on base `402dfd5b2`, plus intermittent
+Etude `seal_logs` missing-file failure passing alone. Those reports are not
+branch checks or gate waivers. Full release training smoke was not run by the
+prior implementation passes. Prior QA is in `scratch/qa.html` and concept
+review in `scratch/concept-review.html`; both explicitly predate integration.
+Full earlier notes, including unrelated inherited b015d5 direction and receipts,
+remain at `7fa516a404:scratch/questions.md`.
 
 ## Retained checks (2026-11-11)
 
@@ -150,7 +117,8 @@ rerun; its entry point includes the registration/drift check.
 
 ## Bounded collection evidence (2026-11-11, before iterator simplification)
 
-Command: `uv run --no-sync python scripts/bench_heuristic.py --setup <basic|elemental> --opponent <random|heuristic>`.
+Command (script at `1455cd5636:scripts/bench_heuristic.py`, removed by compress
+on 2026-11-13: it pinned policy input v6, which main now refuses): `uv run --no-sync python scripts/bench_heuristic.py --setup <basic|elemental> --opponent <random|heuristic>`.
 Four fresh processes, each with a 60-second deadline, finished in 0.788–0.857
 seconds including imports. Same host: macOS 26.0.1 arm64, world w17, release
 extension, CPU, one Torch thread, seed 213, two slots, 128 batch steps (256
@@ -207,66 +175,41 @@ within both configured limits.
 settings as the prior table; this single smoke sample is not a speed comparison.
 Full release training smoke, full suites and Engine Budget were not rerun.
 
-## Main sync resolution — 2026-11-11
+## Integration findings (2026-11-13)
 
-Assumption (reversible): keep MTG-277's design, acceptance work and verification
-as this branch's active context. Retain main's b015d5 closeout and operator
-review below as background. Its full notes remain at
-`53c2cb2f987f9768af7fd2360bb8c5f77c7113a5:scratch/questions.md`;
-they do not select new work for this branch. Main's experiment protocol,
-throughput summary and artifact manifest merged without manual changes.
+Initial focused run: 50 passed, one retained-parity failure at decision 144 of
+Elemental BG/UG, seed 213 (native 0, old receipt 7). Main changed game behavior
+and card digest while retaining world label w17. A temporary in-memory load of
+original Python source `757bb6257ef07cf2536ad7f7ec24f0f7309628c6` compared it with
+native on the integrated live observations: all 862 decisions matched across
+the same four bounded cases, including prefix 2. One game finished, three hit
+the 256-decision cap. No temporary Python rule implementation is retained.
+`tests/fixtures/native_heuristic_parity.json` records that new comparison
+and world digest; the pre-sync choices, which no test could run, remain at
+`1455cd5636:tests/fixtures/native_heuristic_parity.json`. The replay test checks
+world identity before interpreting expected actions. This supersedes the
+initial assumption that old golden choices would remain executable after sync.
 
-## b015d5 closeout direction, 2026-11-11 (background)
+The first release-wheel check found broad `**/cards/**` and `**/state/**`
+exclusions also removed engine `src/cards` and `src/state`. Narrowed exclusions
+retain all engine source files for provenance and heuristic registration.
 
+## Integrated implementation checks (2026-11-13)
 
-After the evidence review and recommendation to stop this measurement phase,
-Jack Heart said "sounds reasonable." He added "but i will say its probably
-reasonable to still do 1x seed sometimes", then "i think that should be the
-default ,but not e taht we can do 2 seeds".
+- `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib heuristic -- --test-threads 2` — 14 debug tests passed, including forked kicker history and same-seed reset clearing it.
+- `uv run --no-sync pytest tests/sim/test_heuristic.py tests/env/test_captured_vector_bookkeeping.py tests/semantic/test_player_control.py tests/env/test_opponents.py tests/infra/test_release.py::test_release_projects_preserve_native_paths_and_runtime_data tests/training/test_action_cutoff.py::test_heuristic_scores_only_retained_legal_offers -q` — 51 passed after adding the new-world parity receipt; includes max-seed terminal/reward parity, all-policy reset/capture prefixes and controlled chooser/closed-view selection.
+- Required release wheel build and atomic matching cp313 extension replacement passed. All 96 `managym/src/**/*.rs` files match wheel bytes. `scripts/release/prepare.py` plus `uv build --wheel --no-sources` built both staged distributions; the staged engine wheel also contains all 96 matching files.
+- Outside the checkout, with PYTHONPATH unset, copy-installed staged wheels in a fresh standalone venv passed scalar/batch heuristic API use and `scripts/release/smoke.py::check_heuristic_registration`: register, validate, reject each of four source edits, restore and revalidate. Installed and checkout digest: `c8c5657031e523ad8fa46a420726a002bf9495d08e600b04711a0ca820b77079`. Probe deadline 60 seconds; temporary venv removed. Ordinary resolution selected Torch 2.15.0, Etude SDK 0.3.1, NumPy 2.5.4 and Pydantic 2.14.3; this is not a minimum-dependency or second-interpreter proof.
+- Rust formatting, focused Ruff lint/format and `git diff --check` passed. `lf context` is within both limits.
 
-Final operating guidance: default to one seed per GPU for individual-model
-progress; two seeds is an option for aggregate throughput/cost. This supersedes
-the operator review's suggestion of two as a starting point, not the measured
-results. Existing four-seed w64 evidence remains an optional aggregate recipe.
-No frozen run or training configuration changes. Close the bounded measurement
-with its stated uncertainty; do not launch another campaign.
+Remaining: gate's full Rust/Python suites, all-target/all-feature clippy,
+normal same-runner Engine Budget, and full release training smoke. No publication,
+landing or Task completion in this implementation step. No background work remains.
 
-## Operator evidence review, 2026-11-11
+## Compress (2026-11-13)
 
-Jack Heart said "ok, do it" after the completed C2 execution/analysis notifications.
-Reviewed C2 here, without a new rental: the frozen reader reproduced readings.json
-exactly, all 128 C2 artifacts matched manifest sizes/hashes, and retained rental
-and teardown receipts account for all four acquired pods. No live Graph was
-observed. C2 measured all four required base cells and the conditional w160l8 K4;
-a384l8 K4 was excluded by memory. The scoped throughput conclusions are supported.
-
-The selector's three extra idle rentals were a procedural failure, not authorized
-scope: a failed database read was treated as a refusal. Keep their posted
-$0.504125 cost in C2's ≤$1.929936 and the total ≤$9.849497. A future selector must
-stop on unknown acquisition state and reconcile with the provider before any
-retry. All four pods have deletion evidence. No further rental is launched here.
-
-Recommendation: conclude this bounded measurement with its one-host limits,
-rather than spend on a second host merely to resolve the marginal 1.30 admission
-threshold. Two seeds is a useful large-model starting point for aggregate work;
-four w160l8 seeds buy only ~7% more decisions/hour while slowing each seed 1.88×.
-Four a384l8 seeds failed the admission memory rule; three was never tested, so
-do not call two a physical ceiling. Keep float32. The maintained throughput
-summary now carries the C1/C2 findings and supersedes its older status prose.
-No claim of task-wide completion, strength improvement, universal GPU ranking,
-or new user approval is made by this review.
-
-Historical step-1/2/3 design, implementation, reviews and execution notes are at
-`c2c813a475ef012bd0391e510dd7f0cb41859e83:scratch/questions.md`. Original reports,
-run projections, bills and cleanup receipts remain published in
-`experiments/data/training-throughput-b015d5-v1/`. Those sources retain exact
-run IDs and dated direction; no historical result is being rewritten.
-
-## QA pass (2026-11-11)
-
-Installed-API QA passed without fixes; see `scratch/qa.html`. Batched wrapper,
-scalar adapter, reseed/max seed and `manabot.eval.local --opponent heuristic`
-(replay passed, native-v2 / heuristic-cpu-v2) all worked. Assumption
-(reversible): the QA skill's launch notes went into a new repository
-`.lf/skills/qa.md` via `lf skill customize qa`; drop it from this PR if it
-should land separately.
+Removed `scripts/bench_heuristic.py` (unrunnable on main, one-off; its numbers
+stay above) and the unexecutable pre-sync parity fixture; the integrated
+comparison now owns the one fixture path. Test imports moved to the top. No
+Rust or runtime change, so no rebuild.
+`uv run --no-sync pytest tests/sim/test_heuristic.py -q` — 15 passed.
