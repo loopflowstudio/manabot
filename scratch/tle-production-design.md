@@ -142,8 +142,8 @@ compatibility alias; the behavior and learning representation are unchanged.
 - The obsolete "predates" comment is removed.
 
 The implementation and compression checks are recorded in
-`mtg-297-heartbeat-of-spring.md`. Remaining work is gate acceptance there:
-current-world evidence, affected checks and corpus admission. No open product
+`mtg-297-heartbeat-of-spring.md`. Current-world evidence and corpus admission now pass; publication is blocked by
+75 failures in the broader affected-file debug run, recorded there. No open product
 choice; the presentation repair is no longer pending implementation.
 
 ## Concept review after the pooled-class rename (2026-11-12)

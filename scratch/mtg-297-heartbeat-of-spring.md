@@ -89,45 +89,69 @@ shared-observation parity passed in the runs below. The earlier iteration
 feedback's 15/16 result predates this repair; it is not the current unresolved
 state. No known implementation blocker remains.
 
-## Remaining acceptance
+## Publication check (2026-11-12)
 
-The preceding iteration's pooled-class implementation direction is complete
-in `fcc7a514c`: code inspection confirms the renamed native/Python surfaces,
-optional omitted qualifiers, amount-first text, Academy's expiry fallback and
-all six schemas. The old names and obsolete comment have no remaining source
-consumers. The recorded 11 debug and 18 Python passes include the final
-compression; the earlier 3 parity passes are not the latest evidence. No
-runtime change or test rerun was needed for this reconciliation.
+`lf sync` completed cleanly at `3ee971e99`. Publication is blocked: the broader
+affected-file debug run has **568 passed, 75 failed, 492 skipped** (65.362s;
+nextest run `9644df6c-0cbb-4ba7-b5e3-30fb71cb76f7`). Earlier narrow passes do
+not establish readiness. No PR was published, auto-merge enabled or Task completed.
 
-Gate still needs the affected suites, current-world authored parity/authority,
-fixture binding and belief receipts, world-admission checks, and the three
-Heartbeat events among the first 1,000 MTG-213 corpus decks. Keep
-`docs/engine.md` counts aligned: its 998/1,000 claim still needs confirmation
-against this catalog. No production/spending behavior is deferred.
+Reproduce with:
 
-The earlier merge retained main's w17 fixtures, parity hashes and belief
-receipts. Neither parent's evidence describes the combined catalog: refresh
-current-world evidence only, preserving frozen evidence. The relevant checks
-include `tests/academy/test_authored_match_parity.py`,
-`test_authored_match_authority.py`, `test_learn_setup.py`, the authored-match
-receipt and fixture generators, and the world-admission/monitoring files in
-AGENTS.md. Focused debug card tests pass with the combined search; CI owns
-the full debug suite and Engine Budget.
+```sh
+cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --lib --test cards --test rules_tests --test match_state_hash_tests --test semantic_conformance_tests -E 'test(mana::tests) | test(chk::) | test(tle::) | test(roe::) | test(tla::) | test(observability::) | test(cr_106_mana) | test(cr_603_triggers) | test(cr_608_resolution) | test(cost_effect_completion_retains) | binary(match_state_hash_tests) | binary(semantic_conformance_tests)'
+```
 
-The affected-check list also includes the observation/action-selection checks
-in `docs/development.md#validation-by-change-area`:
-`tests/env/test_observation.py`, `tests/training/test_action_cutoff.py`,
-`tests/verify/test_native_buffer_capacities.py` and
-`tests/training/test_active_training.py`. The focused presentation checks below
-do not substitute for those checks or current-world admission.
+The local full log is `/tmp/mtg297-publish-native.log`. Many failures hit
+`support/play.rs:46`, "priority pass action should be available": existing
+fixtures pass priority while a native mana-spending choice is pending. Examples:
+`observability::a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires`,
+`tla::aang_airbends_another_permanent_and_gains_lifelink_from_lessons`, and
+`tla::committed_optional_payment_resumes_after_two_nested_mana_decisions`.
+Other failures need individual inspection, including
+`tla::hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only`
+(unwrap at `tla.rs:7844`) and the TLE Kindly Customer/Toucan Puffin baseline
+witnesses. Do not globally skip spending decisions or weaken assertions to
+make these pass. Update fixtures to make intentional payments, distinguishing
+fixture assumptions from engine regressions, then rerun the affected checks.
+Clippy and remaining broad gate checks were not run after this blocker emerged.
 
-Release to Memory and Lita are outside this Task; the token representation
-prerequisite landed but their card definitions are absent. Production limits
-remain in `questions.md`; none is newly approved out of acceptance. No new
-product decision is identified.
+The current-world evidence gap is repaired in this checkout. The original
+Academy check had **3 failed, 5 passed**: stale authority/parity state hashes
+and Learn's manifest mismatch. `refresh_academy_fixtures.py` replayed all
+existing Commands without label changes (Learn 10; precision 21;
+precision-mana 54; four navigation positions; trigger-order root).
+The authority receipt, authored parity, public-commitment parity, semantic
+kernel w17-v2 evidence and only current-v3 belief receipt pins were refreshed.
+Historical world evidence and old belief receipts are unchanged.
 
-The earlier `scripts/refresh_card_fixture.py` run dropped existing double-faced
-entries, so only the four new entries were added to the Scryfall fixture.
+Verification after refresh:
+
+- Academy authority/parity, Learn setup and choice navigation: **29 passed**.
+  Authored parity: 135 Commands, 136 checkpoints, 816 viewer checks, no
+  divergence; stale-object and stale-revision rejection retained.
+- Public-commitment writer: 135 Commands, 66 commitments, zero gaps.
+- Semantic conformance: 14 cases / 2,715 Commands / 15 Phase rows recorded;
+  checked evidence reproduction passes in the debug run above.
+- Observation, action cutoff, native buffer capacities and active training:
+  **118 passed**.
+- Elemental world, evaluation models, mirror admission, monitor evaluation,
+  choice separability and belief state: **77 passed, 1 stale belief pin failed**.
+  After refreshing only current-v3 pins, belief state plus model world:
+  **32 passed**, including independent scalar marginal accumulation.
+- Frontend PlayerArea, protocol conformance and decision labels: **14 passed**.
+- Changed-Python Ruff, Rust formatting, workflow validation and diff whitespace
+  pass. No Rust implementation changed during this publication check; the
+  already rebuilt extension was used.
+
+MTG-213 corpus bytes fetched from the artifact cache and re-admitted from
+original `Decklist.source` / `filename`, preserving historical records:
+**998/1,000 admit**. Heartbeat events `af3d52fd84ed4bfab9e13dd56354de5a`,
+`55481e295a8d4f28ac505c982cd9af31`, `d88c59ee998e456cad266dbebe4c0852` all admit.
+Only Lita events `2937d550424b4ec1b44c9fc30c85c418` and
+`ed932f4c0dad48e3b868517f69696c4c` fail. `docs/engine.md`'s counts are confirmed.
+Release to Memory and Lita remain outside this Task. Production limitations
+remain in `questions.md`; no product scope was reduced.
 
 ## Pooled-class presentation checks (2026-11-12)
 
