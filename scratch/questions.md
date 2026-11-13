@@ -23,6 +23,10 @@ Reversible report choice: readable comparisons are generated Markdown beside
 the PNGs (`comparisons.md`, hostname suffix for supplemental hosts), with all
 replay repetitions and the latest per-call/parity attempts. Unknown provenance
 is labelled rather than inferred; synthetic proofs stay under `.runs/`.
+For the allowed laptop-only fallback, a sole host uses the canonical artifact
+names, including `full_context.png`; its captions still identify the M4 Max.
+Combined M2/M4 reports keep the M4 hostname suffix. This filename choice does
+not treat the two hosts as comparable.
 
 The small CPU/MLX two-row smoke and synthetic chart checks are controlled
 implementation fixtures, not performance evidence. MPS execution is unverified.
@@ -113,7 +117,7 @@ Reversible execution choice: retain this checkout's prepared CPython 3.13
 venv for laptop runs; the M2 still requires its fresh Python 3.12 venv.
 Use separate per-host capture/ledger directories so the M2 comparison can
 proceed independently. Interpret the 12-hour window from comment creation
-2026-11-13T01:12:38.971Z (deadline 13:12:38.971Z); it has not elapsed.
+2026-11-13T01:12:38.971Z (deadline 2026-11-13T13:12:38.971Z).
 
 2026-11-13 01:14 UTC preflight: `etude pools` could not read the default
 launcher: `/Users/jack/.etude/launcher.db was written by another version of

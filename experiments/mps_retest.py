@@ -1641,7 +1641,7 @@ def report(bench_dir: Path, out: Path) -> None:
         summaries.append(data.summary)
         suffix = (
             ""
-            if data.summary["host"]["chip"] == "Apple M2"
+            if len(hosts) == 1 or data.summary["host"]["chip"] == "Apple M2"
             else "-" + hostname.replace("/", "_")
         )
         _call_charts(out, suffix, data)

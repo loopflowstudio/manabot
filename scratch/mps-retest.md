@@ -15,14 +15,16 @@ before laptop blocks. Each width/stream group still needs three replays per
 arm within one hour. If M2 never arrives within 12 hours, report laptop-only
 measurements with M2 explicitly unmeasured (deadline in `questions.md`).
 
-## Delete — do not maintain
+## Implementation owners
 
-Removed the laptop capture/small-width refusals, overflow-only wording and
-laptop exception to the same-hour completeness rule. Worker dispatch now takes
-one phase; `replays` no longer exposes an unused per-call `--repeats` option.
-The shared capture owner replaces the pilot's inline capture; `HostReport` is
-the one selection path. No remaining deletion targets or rental subsystem.
-Preserve load guards, eight-thread replays, four-thread capture and host provenance.
+`manabot/backends/capture.py::capture` records the real update for both this
+experiment and the pilot. `experiments/mps_retest.py::capture` selects the
+recipe; `_quiet` enforces the laptop load limit. `bench` admits per-call parity
+receipts before model allocation. `replays` interleaves arms across three
+repetitions; `_host_report` selects latest receipts and checks coverage and
+the same-hour span. `report` writes host-separated artifacts, using the named
+`full_context.png` for a sole host, including the laptop-only fallback.
+No rental subsystem is needed.
 
 ## Implemented and checked
 
@@ -62,19 +64,21 @@ Ruff passed for `mps_retest.py` and the pilot (one empty section header removed)
 
 ## Remaining execution and acceptance
 
-1. The laptop environment is prepared. Next is a real w384l8 capture at 256
-   streams (four threads, configured 20 GiB budget; peak unmeasured), then
-   parity, per-call timing and triple replays at selected widths. The 01:14
-   UTC load was 71.57, so no measurement started. Return the timing block to
-   the operator when busy; do not wait indefinitely or touch other Tasks.
-2. Launch through the prepared isolated local Etude home
-   (`ETUDE_HOME="$PWD/.runs/mps-etude"`) for a real run identity. Its local
-   pool read succeeded; the incompatible default DB was left intact. No
-   jobs are queued. Operator-owned AWS capacity is pending and access.md
-   still names the released pilot.
+1. Freeze executable changes before launching real captures with an Etude run
+   identity (`main` refuses dirty executable source). Begin with w384l8 at 256
+   streams: four capture threads, configured 20 GiB budget, peak unmeasured.
+   Parity, per-call timing and triple replays follow at selected widths. The
+   last measured load was 105.66 at 01:17 UTC, so the next capture still needs
+   a quiet window. Launcher preparation and access observations are preserved
+   in `questions.md`; they are not measurement receipts.
+2. Establish whether a complete width/stream group fits the one-hour window.
+   `replays` runs serially: five working arms require 15 replay processes,
+   including their startup/input-reading overhead. No observed durations
+   support this schedule yet. A group exceeding one hour remains incomplete;
+   changing the timeout or omitting arms cannot satisfy that constraint.
 3. Capture 512/1024 streams; attempt both MPS half dtypes and the full matrix.
-   Preserve errors; fix implementation failures. Schedule three replays within
-   an hour using observed durations. A 900-second timeout is failure, not OOM.
+   Preserve errors; fix implementation failures. A 900-second timeout is
+   failure, not OOM. Real MPS dtype support and gradient agreement are unverified.
 4. Run the M2 comparison when the operator supplies access; cite its cost
    receipt. Keep per-host captures/charts separate. If no M2 arrives before
    the deadline, report laptop measurements and M2 not run.
@@ -89,6 +93,19 @@ acceptance).
 Gate owns affected suites and final acceptance. No Wave is bound. Publication
 and Task movement belong to later Graph steps. Implementation checks do not
 complete this experiment.
+
+2026-11-12 realign: refreshed `origin/main`; it adds no commits beyond this
+checkout. Task comments still end with the operator's rental/laptop direction.
+The historical Task snapshot's adoption rule, narrow matrix and laptop ban are
+superseded by the exact comments in `questions.md`. The report and code retain
+the full steered matrix and unchanged load, provenance and same-hour constraints.
+Corrected the sole-laptop artifact filename so the fallback can supply the named
+chart. Measurements, publication, rental cost and recommendation remain open.
+An isolated `report` dispatch check passed sole-M2, sole-M4 and combined-host
+filename cases with rendering replaced by controlled fixtures; it ran no model
+or game. Ruff check/format and `git diff --check` passed. Scratch remains within
+both `lf context` limits. Actual chart rendering checks are the earlier results
+above; this pass changed only output naming.
 
 2026-11-12 sanity check: `uv run --no-sync python
 .runs/mps-laptop-check/check.py` passed quiet-capture provenance, refusal at

@@ -20,8 +20,9 @@ cells. Generated `comparisons.md` tables expose first-call/setup time, warmed
 rates, memory, gradient/logit/value/loss differences and sampled choices.
 Each host gets separate charts and tables; replay receipts preserve the
 capture host and its thread count. These outputs have been checked with
-synthetic receipts, not performance evidence. Receipt completeness requires the same-hour window on either host and is not a
-correctness verdict; the numerical differences must be interpreted separately.
+synthetic receipts, not performance evidence. Receipt completeness requires
+the same-hour window on either host and is not a correctness verdict; the
+numerical differences must be interpreted separately.
 
 The operator owns AWS allocation, access notes, release after the 24-hour
 minimum and the cost receipt. No rental lifecycle tooling is part of this
@@ -48,8 +49,10 @@ versions, half dtype and parity evidence. The chart uses an opaque light
 background for sharing in either light or dark interfaces.
 
 Publish the actual PNG with `manabot.data`, embed it here and link it first
-in the PR body after the run. M4 Max results get their own visibly labelled
-chart, never bars mixed with M2 results. An L4 reference is optional only if
+in the PR body after the run. A laptop-only report uses this same named path
+and identifies the M4 Max in its caption. When both hosts are reported together,
+M4 Max results get their own visibly labelled, hostname-suffixed chart, never
+bars mixed with M2 results. An L4 reference is optional only if
 the same capture can be replayed through Etude for under USD 1 within the
 whole-Task cap; the Apple harness does not implement that optional arm.
 
@@ -157,7 +160,13 @@ run identity. The operator supplies M2 access when available. These are
 measurement commands, not rental commands. Start with a selected width to
 establish replay durations before scheduling the full matrix; the default
 worker timeout is 900 seconds and a timeout is a failed attempt, not OOM.
-The three-replay, same-hour requirement remains unchanged.
+The three-replay, same-hour requirement remains unchanged. Its feasibility is
+unmeasured: `replays` runs arms serially, interleaved by repetition. With both
+half dtypes supported, each width/stream group needs 15 replay processes plus
+startup and input-reading overhead within that hour. Establish their durations
+before scheduling a complete group; raising the worker timeout does not relax
+the comparison window. If a group cannot fit, retain that limitation for review
+without claiming a complete same-hour comparison.
 
 ```sh
 uv run --extra mlx python experiments/mps_retest.py capture capture-256 --streams 256
@@ -175,7 +184,8 @@ One cell can be rerun with `bench bench --capture capture-256 --phase learner
 must exist first. `--phase parity` writes that receipt. The full matrix tries
 both half dtypes. `replays` checks parity for each width/arm before its replay
 blocks. `--widths` selects shapes for a partial run. Laptop measurement commands
-must include `--laptop`, including `capture`; every width is allowed. No M2 measurement is claimed for a laptop run.
+must include `--laptop`, including `capture`; every width is allowed. No M2
+measurement is claimed for a laptop run.
 
 `bench.jsonl` and `updates.jsonl` retain failures, timeout/OOM distinctions,
 source, capture identity, hardware, versions, dtype and before/after load.
@@ -186,8 +196,9 @@ each whole-update repetition and errors, rather than only successful medians.
 Report input refuses mixed source revisions or multiple captures at one stream
 count on one host. New attempts supersede the corresponding cell in summaries;
 raw receipts remain intact. Parity labels use the latest attempts for that
-stream count. M2 report artifacts use `full_context.png`; other hosts have a
-hostname suffix.
+stream count. A sole host uses `full_context.png`; in a combined report the M2
+uses that name and other hosts have a hostname suffix. Host identity remains
+in every chart and table regardless of filename.
 
 **2026-11-12:** The decision threshold was removed before any experiment run.
 The steered matrix adds small/wide models, all three stream counts, both half
