@@ -562,10 +562,9 @@ float32. The [MLX backend](../manabot/backends/mlx.md#compute-precision) applies
 the same width to a policy built without a precision. On every backend only the
 policy forwards run in bfloat16: logits, values, log-softmax, behavior
 log-probabilities, losses, master weights and optimizer state stay float32, and
-no loss scaling is used, since bfloat16 keeps float32's exponent range. Float16
-is not a default anywhere; MLX keeps it as an explicit option. Apple M1 and M2
-machines have weaker bfloat16 support and are unmeasured; a fallback for them
-is possible future work.
+no loss scaling is used, since bfloat16 keeps float32's exponent range.
+Float16 is not offered. Apple M1 and M2 machines have weaker bfloat16 support
+and are unmeasured; a fallback for them is possible future work.
 
 An explicit choice always wins:
 
