@@ -118,7 +118,14 @@ impl Game {
         }
 
         let mut game = Self {
-            mana_payment_stats: Default::default(),
+            mana_payment_shapes: None,
+            mana_payment_stats: {
+                let mut stats = crate::flow::mana::ManaPaymentStats::default();
+                // Temporary MTG-347 arm; the job command records this switch.
+                stats.automatic =
+                    std::env::var("MANAGYM_EXPERIMENT_AUTOSPEND").as_deref() == Ok("1");
+                stats
+            },
             derived: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {

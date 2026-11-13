@@ -14,6 +14,9 @@
 // player's sources across the questions of a `PaymentScan`. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
+mod outcomes;
+pub(crate) use outcomes::PaymentShapeCapture;
+
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
@@ -41,6 +44,7 @@ use crate::{
 /// upfront activation fees are payments of their own.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ManaPaymentStats {
+    pub automatic: bool,
     pub payments: usize,
     pub over_tapped: usize,
     pub spend_decisions_over_tapped: usize,
@@ -1944,6 +1948,12 @@ impl Game {
         {
             return Ok(());
         }
+        if self.mana_payment_shapes.is_some() {
+            let cost = self.characteristics(permanent).activated_abilities[ability_index]
+                .mana_cost
+                .clone();
+            self.capture_payment_outcomes(player, &cost, &model);
+        }
         for step in &path {
             match step {
                 PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, *source),
@@ -2220,6 +2230,7 @@ impl Game {
                 SourcePolicy::FixedOnly,
             )
             .ok_or_else(|| AgentError("not enough automatic mana".into()))?;
+        self.capture_payment_outcomes(player, cost, &model);
         for step in &path {
             if let PaymentStep::Fixed(source) = step {
                 self.tap_fixed_mana_source(player, *source);
@@ -2228,6 +2239,22 @@ impl Game {
         self.record_mana_payment(player, cost, &model, &path);
 
         Ok(())
+    }
+
+    fn capture_payment_outcomes(
+        &mut self,
+        player: PlayerId,
+        cost: &ManaCost,
+        model: &PaymentModel,
+    ) {
+        if let Some(capture) = &self.mana_payment_shapes {
+            let mut tail = self.payment_obligations(player);
+            if !tail.is_empty() {
+                tail.remove(0);
+            }
+            let row = model.fixed_outcomes(self.pooled_mana(player), cost, capture.cap, &tail);
+            self.mana_payment_shapes.as_mut().unwrap().rows.push(row);
+        }
     }
 
     /// Attribute this automatic prefix without changing it. Remove each
@@ -2378,9 +2405,18 @@ impl Game {
                 let choices = self.mana_spend_choices(player, &cost);
                 let index = match selected.take() {
                     Some(index) => index,
-                    None if choices.len() == 1 => 0,
+                    None if choices.len() == 1
+                        || (self.mana_payment_stats.automatic && !choices.is_empty()) =>
+                    {
+                        0
+                    }
                     None if !choices.is_empty() => {
                         // The player is offered this pip's units.
+                        if let Some(capture) = &mut self.mana_payment_shapes {
+                            if let Some(row) = capture.rows.last_mut() {
+                                row.spend_offers.push(choices.len());
+                            }
+                        }
                         self.mana_payment_stats.spend_decisions_over_tapped +=
                             usize::from(self.mana_payment_stats.latest_over_tapped);
                         return Ok(());
@@ -2664,6 +2700,17 @@ mod tests {
             let offered = game.state.suspended_decision.is_some();
             assert_eq!(usize::from(offered), expected_choices);
             if offered {
+                let mut automatic = game.clone();
+                automatic.mana_payment_stats.automatic = true;
+                automatic.advance_mana_spend(None).unwrap();
+                assert!(!matches!(
+                    automatic
+                        .state
+                        .suspended_decision
+                        .as_ref()
+                        .map(|s| &s.decision),
+                    Some(super::Decision::ManaSpend { .. })
+                ));
                 let mut fork = game.clone();
                 fork.advance_mana_spend(Some(0)).unwrap();
                 assert!(game.state.suspended_decision.is_some());
@@ -2701,7 +2748,7 @@ mod tests {
         }
     }
 
-    fn forests(count: usize) -> PaymentModel {
+    pub(in crate::flow::mana) fn forests(count: usize) -> PaymentModel {
         PaymentModel {
             sources: (0..count)
                 .map(|index| source(index, Some("G"), Vec::new()))

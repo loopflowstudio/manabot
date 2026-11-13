@@ -258,3 +258,16 @@ manifest committed.
 - `tests/eval/test_experiment_files.py::test_etude_finds_each_current_experiment_and_nothing_else`
   and `tests/infra/test_experiment_data_untracked.py`: passed. Ruff, format,
   `git diff --check` passed. Full affected suites belong to gate.
+
+## Implementation cut (2026-11-13)
+
+Delete — do not maintain: the report's planned-only shapes instructions, replaced
+by the native opt-in diagnostic and replay command. Preserve the frequency
+instrument, trajectories, native payment authority and published evidence.
+
+Reversible measurement choice: enumerate fixed-source subsets at each actual
+payment boundary (including surplus production), with a work cap per payment.
+Activated abilities stay outside this boundary; record their presence. Validate
+saved obligations using PaymentModel. Record exact-source identity counts beside
+capability counts because equal outputs need not mean strategically equal cards.
+Cast payments are labeled natively, separately from other payment purposes.

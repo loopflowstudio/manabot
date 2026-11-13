@@ -72,3 +72,18 @@ history through that supported integration rather than raw git rebase.
   specifies. Reopening BF16 admission needs another learning result.
 - Earlier A/B choices and launch history remain in git `e181224e7` and the
   experiment report. No new rental, experiment, or numerical-guard change.
+
+## Implementation assumptions (2026-11-13)
+
+- Keep the planned Elemental learning comparison (two seeds per arm, 32 matched
+  updates). Its rarity of pool decisions is a limitation, not a reason to replace
+  it with a competing compound-decision study.
+- Etude SDK 0.2.16 refuses launcher schema 13; SDK 0.2.15 reads it. Use that
+  compatible launcher without migrating or replacing the shared database.
+- Fixed-source enumeration includes surplus tapping; cap hits retain lower-bound
+  counts. Native saved payment obligations still gate every final remainder.
+
+- Equal mana output alone does not establish strategic interchangeability (a
+  mana creature may also attack, block or carry an effect). The diagnostic
+  reports exact-source identity counts separately; the recommendation must not
+  authorize a source-capability collapse without a rules equivalence argument.

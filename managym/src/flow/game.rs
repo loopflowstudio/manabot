@@ -548,6 +548,7 @@ pub(crate) enum CombatDamagePass {
 
 #[derive(Debug)]
 pub struct Game {
+    pub(crate) mana_payment_shapes: Option<crate::flow::mana::PaymentShapeCapture>,
     pub(crate) mana_payment_stats: crate::flow::mana::ManaPaymentStats,
     /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
@@ -584,6 +585,7 @@ impl Clone for Game {
     fn clone(&self) -> Self {
         Self {
             mana_payment_stats: self.mana_payment_stats.clone(),
+            mana_payment_shapes: self.mana_payment_shapes.clone(),
             state: self.state.clone(),
             derived: RefCell::new(self.derived.borrow().clone()),
             payment_sources: Default::default(),
