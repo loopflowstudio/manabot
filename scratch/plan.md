@@ -217,3 +217,34 @@ source manifests retain their original paths; no evidence was rewritten.
 SDK release/pin, installed-consumer and actual launcher/service proofs remain
 delivery obligations. Open CLI-config/local-follower judgments remain in
 questions.md. Focused validation is recorded in implementation.md.
+
+## Concept review 6: next implement direction — 2026-11-13
+
+Proposals drawn from the design, not statements anyone made. Walked the three
+paths a person takes (local train/stop/resume/extend, `etude launch` of an
+experiment file, reading a frozen experiment). Recipes, loop, CLI, recovery
+table and the nightly call agree with the guides. One mismatch remains: the
+current guides still present a frozen launcher as the way to launch.
+
+1. `docs/experiments.md` ("What an experiment is") and `experiments/README.md`
+   ("Etude experiment files") show `etude launch experiments/seat_comparison.py`,
+   whose `runs()` now refuses. Use `experiments/elemental.py` (the one file
+   whose `runs()` launches the current loop) in both examples. In the README
+   table, the seat_comparison `runs()` cell says it is retired and names the
+   pre-cutover source, as the recipe table above it already does.
+2. Frozen experiment modules whose header still describes launching in the
+   present tense (`seat_comparison`, `training_throughput`, `l4_step_profile`,
+   `cuda_precision`, `value_readout_252`, `mtg186`, `ataraxos_ablation`) get
+   one header sentence: the launch commands record how it ran and refuse at
+   this revision; reports and evaluation still read. Keep the commands; do not
+   touch report `.md` files, protocols or data (frozen evidence).
+3. `experiments/elemental.py` header says `runs()` "trains fresh seeds of the
+   frozen recipe"; it launches the current loop with `elemental_self_play()`
+   settings (no current-game recovery). Say that, matching its `runs()`
+   docstring.
+
+Docs and docstrings only; no test or parity rerun follows from this. Checked
+and left alone: nightly train and evaluate each get 1680 s under the 1800 s
+step timeout, the same shape as main's recipe (`wall_seconds` for training and
+again for monitoring). Etude PR #103 still OPEN at `105abdd`. Open choices are
+unchanged (questions.md: CLI recipe-config fields, local follower).
