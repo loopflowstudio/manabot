@@ -533,6 +533,43 @@ def paired_matchup(
 LOST_RUNS: frozenset[str] = frozenset({"5b7d8fa7b38c"})
 
 
+# Recorded in the stored tla-frontier-c5fba4-paired-v1 and -cuda-v1 tournaments.
+# report() has no state from which to recover the equal-hours partners, and
+# later planned milestones were never played. Keep the recorded pairs only.
+EQUAL_UPDATES: tuple[int, ...] = (25, 50, 75, 100, 150, 200, 300, 400, 600, 800)
+EQUAL_HOURS: tuple[tuple[str, int], ...] = (
+    ("u25", 50),
+    ("u50", 100),
+    ("u75", 175),
+    ("u100", 225),
+    ("u150", 350),
+    ("u200", 475),
+    ("u300", 700),
+    ("u400", 875),
+    ("u600", 1200),
+    ("u800", 1525),
+    ("final u925", 1700),
+)
+
+
+def _equal_update_seating(update: int) -> str:
+    return f"{LARGE} u{update} vs {SMALL} u{update}"
+
+
+def _equal_hours_seating(point: str, partner: int) -> str:
+    return f"{LARGE} {point} vs {SMALL} u{partner} at equal hours"
+
+
+def equal_update_seatings() -> tuple[str, ...]:
+    """The recorded equal-update pairs, named exactly as the schedule names them."""
+    return tuple(_equal_update_seating(update) for update in EQUAL_UPDATES)
+
+
+def equal_hours_seatings() -> tuple[str, ...]:
+    """The recorded equal-hours pairs, including the lost run's endpoint."""
+    return tuple(_equal_hours_seating(point, partner) for point, partner in EQUAL_HOURS)
+
+
 def with_launcher_ends(state: ExperimentState) -> ExperimentState:
     """`state` with each run the launcher closed unsuccessfully ended as failed.
 
@@ -723,7 +760,7 @@ def comparison_schedule(
                 LARGE,
                 update,
                 model(SMALL, update),
-                f"{LARGE} u{update} vs {SMALL} u{update}",
+                _equal_update_seating(update),
                 unreached=any(past_endpoint(label, update) for label in SIZES),
             )
     for label in SIZES:
@@ -777,7 +814,7 @@ def comparison_schedule(
             tag="equal-hours",
             update=update,
             matchup=paired_matchup(
-                f"{LARGE} {point} vs {SMALL} u{found[0]} at equal hours",
+                _equal_hours_seating(point, found[0]),
                 (candidate, partner),
                 "equal-hours",
                 protocol,
@@ -1108,7 +1145,7 @@ def report() -> Report:
     """Progress curves by update; `experiments.tla_frontier_analysis` owns claims.
 
     Etude's report axes are checkpoint clocks, and hours are not one yet, so the
-    equal-hours curve is drawn at each job's own update; a pair that is also an
+    equal-hours pair is drawn once, at Large's update; a pair that is also an
     equal-update or endpoint pair is played once, under that tag.
     """
     regimes, _ = frozen()
@@ -1129,9 +1166,10 @@ def report() -> Report:
                 "Model vs heuristic",
                 tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
-            # Both jobs are drawn; each pair's two hours are in analysis.
-            head_to_head("Large vs Small at fixed training time", tag="equal-hours"),
-            head_to_head("Large vs Small at fixed # updates", tag="head-to-head"),
+            head_to_head(
+                "Large vs Small at fixed training time", equal_hours_seatings()
+            ),
+            head_to_head("Large vs Small at fixed # updates", equal_update_seatings()),
         ),
         perf=PERF,
         ml=(*learning_schedule(jobs), *ML),

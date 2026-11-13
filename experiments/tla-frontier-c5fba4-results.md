@@ -43,6 +43,9 @@ for longer is the follow-up.
 
 ## Runs and cost
 
+2026-11-13: The report selects the recorded Large-vs-Small pairs by seating
+name, drawing each pair once at Large's update. No game or score changed.
+
 2026-11-13: The report retains the recorded machine-loss outcome for
 `5b7d8fa7b38c` in the experiment file, so reading its endpoint no longer needs
 the original launcher database. Stored runs and matches are unchanged.

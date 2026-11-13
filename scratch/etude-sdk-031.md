@@ -27,16 +27,27 @@ with nothing to move. Drop the "move it aside first" open question; after
 bumping to 0.3.2, confirm `uv run etude` launch/status/report work from this
 checkout with the old launcher.db still in place."
 
-## State (2026-11-13 20:40Z)
+## State (2026-11-13, implementation pass)
 
 - The 0.3.1 move is committed on the branch (aefeefcaf7 and after; main synced
   at 27cb65bba7): pins, renames, SQL reads, report helpers, the frozen lost-run
   record, the three reduced panels, docs. Its probe table and progress log are
   in git at fc4784d2e5 `scratch/etude-sdk-031.md`.
-- etude-sdk 0.3.2 is not released: PyPI's newest is 0.3.1. Etude #109 (fixed
-  pairs drawn once) merged 2026-11-13T20:10Z; #110 (`launcher-<schema>.db`) is
-  open with no release PR yet.
-- Slice 1 below needs no release. Slice 2 is blocked on the release.
+- Slice 1 is implemented and checked: six focused helper tests pass; changed
+  Python files pass Ruff check and format check. The retained R2 page built
+  against Etude #109 at ba00d4c in 790 seconds, in a temporary Etude home.
+- The saved page's two head-to-head chart selections have 11 and 10 scored
+  points, all on Large (`5b7d8fa7b38c`), each 16 matches / 64 games. There
+  are no failures or missing-seating notes; only the expected recorded
+  `tournament_conflict` note remains. HTML: `/tmp/mtg348-probe/seated.html`.
+  The first probe assertion mistook panel indices for selection IDs; checking
+  the saved page via each panel's `matches` selection passes without a rebuild.
+- Newly checked equal-hours points: u600 0.500 [0.421875, 0.59375], u800
+  0.53125 [0.453125, 0.609375], u925 0.53125 [0.4375, 0.609375]. Equal-update
+  u800 is 0.65625 [0.546875, 0.765625]; the docs now use its actual hover.
+- PyPI's JSON API still reports 0.3.1 after that build. Slice 2 remains blocked
+  on 0.3.2. No launcher command was run against the real home, and no paid
+  run was launched. The project pin and lock remain 0.3.1 until the release.
 
 ## Demo
 
@@ -120,7 +131,7 @@ Launcher and kept files under 0.3.2 (read from #110's diff and
 
 ## Approach
 
-### Slice 1 (this slice): one line per head-to-head chart
+### Slice 1 (complete): one line per head-to-head chart
 
 Needs only #109, which a locked 0.3.1 does not have. The code is valid on
 0.3.1 (it draws no seated points for fixed pairs there), so tests pass on the

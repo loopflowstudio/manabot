@@ -5,13 +5,13 @@ An experiment's `report()` composes these into an Etude `Report`, beside
 returns an ordinary Etude record, so a report mixes them with its own panels:
 
 - `job_labels`: `Report.labels`, a display name per job from its regime's model;
-- `against_earlier_self`, `against_fixed`, `head_to_head`: eval `Curve`s, one
-  chart per question with a line per job;
+- `against_earlier_self`, `against_fixed`: eval `Curve`s with a line per job;
+- `head_to_head`: an eval `Curve` of named pairs, one line for the first seat;
 - `learning_schedule`: ML `Planned` panels of the configured damped learning
   rate and policy damping on the update clock.
 
 Jobs are keyed by their Etude name, which for a `TrainingJob` is its regime id.
-Matches are named by the tags an experiment's `eval(state)` gives its seatings.
+Matches are selected by the tags or names `eval(state)` gives its seatings.
 """
 
 from collections.abc import Mapping, Sequence
@@ -72,13 +72,15 @@ def against_fixed(title: str, tags: Sequence[str]) -> Curve:
     return Curve(title=title, matches=tuple(Matches(tag=tag) for tag in tags))
 
 
-def head_to_head(title: str, tag: str) -> Curve:
-    """Two jobs against each other, with a line for each job.
+def head_to_head(title: str, seatings: Sequence[str]) -> Curve:
+    """One line: the first seat's score where its checkpoint stood.
 
-    Tags select the recorded matches, so both sides contribute their scores.
-    A single line needs an Aligned seating selected by Matches(seating=...).
+    `seatings` are the names `eval(state)` gave the pairs. An empty sequence
+    raises `ValueError`.
     """
-    return Curve(title=title, matches=Matches(tag=tag))
+    if not seatings:
+        raise ValueError("head-to-head needs at least one seating")
+    return Curve(title=title, matches=tuple(Matches(seating=name) for name in seatings))
 
 
 # -- Learning schedule ---------------------------------------------------------

@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
-from etude.report import Matches, Report, Score
+from etude.report import Curve, Matches, Report, Score
 import pytest
 
+from experiments.tla_frontier import report
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
@@ -57,13 +58,49 @@ def test_labels_name_width_and_only_a_differing_depth() -> None:
 def test_comparisons_draw_one_chart_per_question_across_jobs() -> None:
     earlier = against_earlier_self("Vs itself", tags=("half-w64", "half-w160"))
     fixed = against_fixed("Vs heuristic", tags=("heur-w64", "heur-w160"))
-    pair = head_to_head("Large vs Small", tag="head-to-head")
+    pair = head_to_head(
+        "Large vs Small", ("large u25 vs small u50", "large u50 vs small u100")
+    )
 
     assert earlier.matches == (Matches(tag="half-w64"), Matches(tag="half-w160"))
     assert fixed.matches == (Matches(tag="heur-w64"), Matches(tag="heur-w160"))
-    assert pair.matches == Matches(tag="head-to-head")
+    assert pair.matches == (
+        Matches(seating="large u25 vs small u50"),
+        Matches(seating="large u50 vs small u100"),
+    )
     # They compose into an ordinary Etude report.
     Report(score=Score(table="games", value="score"), evals=(earlier, fixed, pair))
+
+
+def test_head_to_head_refuses_an_empty_selection() -> None:
+    with pytest.raises(ValueError, match="at least one seating"):
+        head_to_head("Large vs Small", ())
+
+
+def test_frontier_selects_only_recorded_head_to_head_seatings() -> None:
+    hours, updates = report().evals[2:]
+    assert isinstance(hours, Curve)
+    assert isinstance(updates, Curve)
+    assert hours.matches == tuple(
+        Matches(seating=name)
+        for name in (
+            "w160l8 u25 vs w64 u50 at equal hours",
+            "w160l8 u50 vs w64 u100 at equal hours",
+            "w160l8 u75 vs w64 u175 at equal hours",
+            "w160l8 u100 vs w64 u225 at equal hours",
+            "w160l8 u150 vs w64 u350 at equal hours",
+            "w160l8 u200 vs w64 u475 at equal hours",
+            "w160l8 u300 vs w64 u700 at equal hours",
+            "w160l8 u400 vs w64 u875 at equal hours",
+            "w160l8 u600 vs w64 u1200 at equal hours",
+            "w160l8 u800 vs w64 u1525 at equal hours",
+            "w160l8 final u925 vs w64 u1700 at equal hours",
+        )
+    )
+    assert updates.matches == tuple(
+        Matches(seating=f"w160l8 u{update} vs w64 u{update}")
+        for update in (25, 50, 75, 100, 150, 200, 300, 400, 600, 800)
+    )
 
 
 def test_schedule_draws_the_learners_own_rates_to_the_horizon() -> None:

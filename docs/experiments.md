@@ -333,7 +333,7 @@ Large's score against Small at each of Large's checkpoints: above 0.5, Large is
 stronger. Small has no line of its own there, since it would be the same games
 read from the other seat. Fixed updates has ten points, from update 25 to 800,
 and fixed training time eleven, ending at Large's final checkpoint. Hovering a
-point reads like `0.66 · 95% interval 0.53–0.77 · 64 games · 16 matches`.
+point reads like `0.66 · 95% interval 0.55–0.77 · 64 games · 16 matches`.
 The learning schedule opens ML details.
 
 | Helper | Draws |
@@ -355,12 +355,17 @@ pair's hours.
 one seat only when every part of it is `Matches(seating=NAME)`. A tag is
 always drawn per job, both seats, so a tagged head-to-head shows two lines
 mirrored about 0.5. The names must be the recorded ones, character for
-character. The frontier keeps one function per name format, used by
-`eval(state)` to name the pairs and by `report()` to select them:
+character. The frontier shares its name formats between `eval(state)` and
+`report()`, which selects the recorded pairs through `equal_update_seatings()`
+and `equal_hours_seatings()`:
 
 ```python
+def _equal_update_seating(update: int) -> str:
+    return f"{LARGE} u{update} vs {SMALL} u{update}"
+
+
 def equal_update_seatings() -> tuple[str, ...]:
-    return tuple(f"{LARGE} u{update} vs {SMALL} u{update}" for update in EQUAL_UPDATES)
+    return tuple(_equal_update_seating(update) for update in EQUAL_UPDATES)
 ```
 
 `report()` receives no state, so it cannot work out which pairs were played.
