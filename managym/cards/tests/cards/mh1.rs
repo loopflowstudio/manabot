@@ -15,8 +15,8 @@ use managym::{
     },
 };
 
-fn casts(card: managym::state::game_object::CardId) -> impl Fn(&Action) -> bool {
-    move |action| matches!(action, Action::CastSpell { card: c, .. } if *c == card)
+fn casts(object: managym::state::game_object::ObjectId) -> impl Fn(&Action) -> bool {
+    move |action| matches!(action, Action::CastSpell { object: c, .. } if *c == object)
 }
 
 /// Outside its caster's turn and without mana, Force of Negation is cast by
@@ -89,7 +89,7 @@ fn force_of_negation_offers_its_alternative_only_outside_your_turn() {
     assert_eq!(exiled, blue);
     choose(
         &mut s,
-        |action| matches!(action, Action::SelectCard { card, .. } if *card == visions),
+        |action| matches!(action, Action::SelectCard { object, .. } if *object == visions),
     );
     settle(&mut s);
     assert_eq!(zone_of(&s, visions), Some(ZoneType::Exile));

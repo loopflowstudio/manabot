@@ -485,8 +485,7 @@ def _training_points(
     if run is None:
         return []
     rows = db.execute(
-        "SELECT clocks, wall_ms FROM training_checkpoints WHERE run = ? "
-        "ORDER BY ordinal",
+        "SELECT at, wall_ms FROM training_checkpoints WHERE run = ? ORDER BY ordinal",
         [run.name],
     ).fetchall()
     return [

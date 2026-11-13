@@ -12,20 +12,26 @@ only the rows a batch references; the others never reach the loss, so their
 outputs receive no gradient either way. GRU input and recurrent biases remain
 separate parameters, preserving Adam state and global gradient-norm clipping.
 
+Compute precision is policy-owned and defaults to float32. Optional half
+forwards cast weights differentiably and restore float32 masters; inference
+and learning therefore use the same dtype. Outputs remain float32.
+
 Parameter paths equal the PyTorch state-dict names except where MLX containers
 differ: `nn.Sequential` children live under `layers`, attention in-projections
 are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`, `hidden_bias`
 (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 import mlx.core as mx
 import mlx.nn as nn
+from mlx.utils import tree_map
 import numpy as np
 
-from manabot.backends.mlx.arrays import to_numpy
+from manabot.backends.mlx.arrays import precision_dtype, to_numpy
 from manabot.backends.mlx.rl import legal_mask
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig
@@ -38,6 +44,7 @@ from manabot.policy.prepare import (
     catalog_schedule,
     prepare,
 )
+from manabot.policy.protocol import Precision
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -234,7 +241,6 @@ class _Static:
     catalog: Packed
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
-    sign: mx.array  # [1,N,1]
     tables: Tables
     space: ObservationSpace
     cache: dict[str, mx.array] = field(default_factory=dict)
@@ -247,8 +253,12 @@ class MLXActorCritic(nn.Module):
         tables: Tables,
         config: ModelConfig,
         space: ObservationSpace,
+        *,
+        precision: Precision = "float32",
     ) -> None:
         super().__init__()
+        precision_dtype(precision)
+        object.__setattr__(self, "_precision", precision)
         self.dims = dims
         # The model configuration the weights were trained under, as the
         # torch policy carries it; the updates read its `value_kind`.
@@ -286,7 +296,6 @@ class MLXActorCritic(nn.Module):
         self.continuation = Continuation(dims)
         tokens, schedule = catalog_schedule(tables)
         named = np.nonzero(tables.name_definitions != 0)[0]
-        sign = np.where(tables.is_agent, 1.0, -1.0).astype(np.float32)
         # Underscore attributes outside the module tree: never parameters.
         object.__setattr__(
             self,
@@ -296,11 +305,48 @@ class MLXActorCritic(nn.Module):
                 schedule,
                 mx.array(tables.name_program_rows[named]),
                 mx.array(named),
-                mx.array(sign[None, :, None]),
                 tables,
                 space,
             ),
         )
+
+    @property
+    def precision(self) -> Precision:
+        return self._precision
+
+    @property
+    def compute_dtype(self) -> mx.Dtype:
+        """The dtype the weights hold now: float32 masters, or the selected
+        precision's casts inside `forward_precision`."""
+        return self.semantic_cards.token_embedding.weight.dtype
+
+    def set_precision(self, precision: Precision) -> None:
+        """Select compute precision without changing stored master weights."""
+        precision_dtype(precision)
+        if self.compute_dtype != mx.float32:
+            raise ValueError("change precision outside the forward precision scope")
+        if precision != self.precision:
+            self.clear_cache()
+            object.__setattr__(self, "_precision", precision)
+
+    @contextmanager
+    def forward_precision(self) -> Iterator[None]:
+        """Differentiable compute casts, restoring float32 masters on exit.
+
+        A fixed-weight inference loop may hold this scope across calls to reuse
+        cast weights. Close it before differentiating or updating the policy.
+        Public forwards enter it automatically; nested scopes reuse the casts.
+        """
+        dtype = precision_dtype(self.precision)
+        if self.compute_dtype == dtype:
+            yield
+            return
+        masters = self.parameters()
+        self.update(tree_map(lambda p: p.astype(dtype), masters))
+        try:
+            yield
+        finally:
+            self.update(masters)
 
     def prepare(
         self, obs: Mapping[str, np.ndarray], *, inference: bool = False
@@ -372,13 +418,16 @@ class MLXActorCritic(nn.Module):
 
     def programs(self) -> mx.array:
         """Encode the catalog into [definitions + 1, D]; row 0 is zero padding."""
-        static: _Static = self._static
-        cards = self.semantic_cards
-        _, finished = cards.encoder.run(
-            cards.token_embedding.weight, static.catalog_steps
-        )
-        encoded = _take(finished, mx.array(static.catalog.restore))
-        return mx.concatenate([mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded])
+        with self.forward_precision():
+            static: _Static = self._static
+            cards = self.semantic_cards
+            _, finished = cards.encoder.run(
+                cards.token_embedding.weight, static.catalog_steps
+            )
+            encoded = _take(finished, mx.array(static.catalog.restore))
+            return mx.concatenate(
+                [mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded]
+            )
 
     def cache_programs(self) -> None:
         """Encode the catalog once for inference with fixed weights (collection)."""
@@ -407,8 +456,16 @@ class MLXActorCritic(nn.Module):
 
     # Forward -----------------------------------------------------------------------
 
+    def _floating(self, values: np.ndarray) -> mx.array:
+        """Features and masks follow compute weights, never promote half activations."""
+        return mx.array(values).astype(self.compute_dtype)
+
     def __call__(self, batch: Prepared) -> tuple[mx.array, mx.array]:
         """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
+        with self.forward_precision():
+            return self._forward(batch)
+
+    def _forward(self, batch: Prepared) -> tuple[mx.array, mx.array]:
         static: _Static = self._static
         dims = self.dims
         hidden = dims.hidden
@@ -427,26 +484,29 @@ class MLXActorCritic(nn.Module):
 
         # Objects: players, cards and permanents with their programs.
         card_programs = defs(batch.card_rows)
-        known = (defs(batch.known_rows) * mx.array(batch.known_counts)[..., None]).sum(
-            2
-        )
+        known = (
+            defs(batch.known_rows) * self._floating(batch.known_counts)[..., None]
+        ).sum(2)
         pooled = mx.einsum(
-            "bsrh,bsrc->bsch", defs(batch.deck_rows), mx.array(batch.deck_counts)
+            "bsrh,bsrc->bsch", defs(batch.deck_rows), self._floating(batch.deck_counts)
         ).reshape(b, 2, 4 * hidden)
         known = known + cards.decklist_projection(pooled)
         agent_player = (
-            self.player_embedding(mx.array(batch.agent_player)) + known[:, 0, None]
+            self.player_embedding(self._floating(batch.agent_player))
+            + known[:, 0, None]
         )
         opponent_player = (
-            self.player_embedding(mx.array(batch.opponent_player)) + known[:, 1, None]
+            self.player_embedding(self._floating(batch.opponent_player))
+            + known[:, 1, None]
         )
         agent_cards = (
-            self.card_embedding(mx.array(batch.agent_cards)) + card_programs[:, 0]
+            self.card_embedding(self._floating(batch.agent_cards)) + card_programs[:, 0]
         )
         opponent_cards = (
-            self.card_embedding(mx.array(batch.opponent_cards)) + card_programs[:, 1]
+            self.card_embedding(self._floating(batch.opponent_cards))
+            + card_programs[:, 1]
         )
-        permanents = self.perm_embedding(mx.array(batch.permanents)) + defs(
+        permanents = self.perm_embedding(self._floating(batch.permanents)) + defs(
             batch.permanent_rows
         )
         objects = mx.concatenate(
@@ -469,18 +529,18 @@ class MLXActorCritic(nn.Module):
         flat = objects.reshape(b * count, hidden)
         linked = [
             _take(flat, mx.array(index)).reshape(b, -1, hidden)
-            * mx.array(mask)[..., None]
+            * self._floating(mask)[..., None]
             for index, mask in zip(
                 batch.relation_objects, batch.relation_object_masks, strict=True
             )
         ]
         relation_definitions = defs(batch.relation_rows)
-        valid = mx.array(batch.relation_valid)
+        valid = self._floating(batch.relation_valid)
         encoded = (
             self.continuation.projection(
                 mx.concatenate(
                     [
-                        mx.array(batch.relation_features),
+                        self._floating(batch.relation_features),
                         *linked,
                         relation_definitions[:, :, 0],
                         relation_definitions[:, :, 1],
@@ -494,17 +554,19 @@ class MLXActorCritic(nn.Module):
         shared = encoded.sum(1) / mx.maximum(valid.sum(1, keepdims=True), 1)
         frames = mx.array(batch.frame_indexes)
         pooled_frames = (
-            mx.zeros((b * rows, hidden))
+            mx.zeros((b * rows, hidden), objects.dtype)
             .at[frames]
             .add(encoded.reshape(b * rows, hidden))
         )
-        frame_counts = mx.zeros((b * rows,)).at[frames].add(valid.reshape(-1))
+        frame_counts = (
+            mx.zeros((b * rows,), objects.dtype).at[frames].add(valid.reshape(-1))
+        )
         frame_context = pooled_frames / mx.maximum(frame_counts, 1)[:, None]
         objects = objects + shared[:, None]
 
         # Attention over the object table.
-        validity = mx.array(batch.validity)
-        sign = static.sign
+        validity = self._floating(batch.validity)
+        sign = self._floating(batch.ownership)[None, :, None]
         attended, attended_validity = objects, validity
         columns = batch.attention_columns
         if columns is not None:
@@ -513,7 +575,7 @@ class MLXActorCritic(nn.Module):
             attended_validity = mx.take(validity, selected, axis=1)
             sign = mx.take(sign, selected, axis=1)
         keep = attended_validity != 0
-        mask = mx.where(keep, 0.0, -mx.inf)[:, None, None, :]
+        mask = mx.where(keep, 0.0, -mx.inf).astype(objects.dtype)[:, None, None, :]
         keep = keep[..., None].astype(objects.dtype)
         encoded_objects = self.attention(attended, sign, mask, keep)
         for layer in self.extra_attention:
@@ -526,44 +588,47 @@ class MLXActorCritic(nn.Module):
             used[columns] = 1
             encoded_objects = (
                 mx.take(encoded_objects, mx.array(positions), axis=1)
-                * mx.array(used)[None, :, None]
+                * self._floating(used)[None, :, None]
             )
         keep = (validity != 0)[..., None].astype(objects.dtype)
 
         # Legal actions: joined rows, focus objects, policy head.
         legal_batches = mx.array(batch.legal_batches)
-        actions = self.action_embedding(mx.array(batch.action_features))
+        actions = self.action_embedding(self._floating(batch.action_features))
         actions = (
             actions
             + _take(frame_context, mx.array(batch.action_frames))
-            * mx.array(batch.action_frame_mask)[:, None]
+            * self._floating(batch.action_frame_mask)[:, None]
         )
         names = self.name_candidates.embedding.weight
         actions = (
             actions
             + _take(names, mx.array(batch.name_rows))
-            * mx.array(batch.name_mask)[:, None]
+            * self._floating(batch.name_mask)[:, None]
         )
-        prefix = mx.concatenate([mx.zeros((1, hidden)), mx.cumsum(names[1:], axis=0)])
+        prefix = mx.concatenate(
+            [mx.zeros((1, hidden), names.dtype), mx.cumsum(names[1:], axis=0)]
+        )
         totals = _take(prefix, mx.array(batch.group_last)) - _take(
             prefix, mx.array(batch.group_first)
         )
         actions = (
             actions
             + totals
-            / mx.array(batch.group_counts)[:, None]
-            * mx.array(batch.group_mask)[:, None]
+            / self._floating(batch.group_counts)[:, None]
+            * self._floating(batch.group_mask)[:, None]
         )
         actions = actions + _take(programs, mx.array(batch.candidate_rows))
         actions = actions + _take(shared, legal_batches)
         post = encoded_objects.reshape(b * count, hidden)
         focus = batch.focus
         focused = _take(post, mx.array(focus.reshape(-1))).reshape(*focus.shape, hidden)
-        focused = (focused * mx.array(batch.focus_mask)[..., None]).reshape(
+        focused = (focused * self._floating(batch.focus_mask)[..., None]).reshape(
             focus.shape[0], -1
         )
         informed = self.action_layer(mx.concatenate([actions, focused], axis=-1))
-        scores = self.policy_head(informed)[:, 0]
+        # Loss arithmetic and the invalid-logit sentinel stay float32.
+        scores = self.policy_head(informed)[:, 0].astype(mx.float32)
         logits = mx.where(
             mx.array(batch.legal),
             _take(scores, mx.array(batch.logit_positions.reshape(-1))).reshape(
@@ -576,7 +641,7 @@ class MLXActorCritic(nn.Module):
         value = self.value_head.layers
         projected = value[1](value[0](encoded_objects)) * keep
         pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
-        return logits, value[5](value[4](value[3](pooled_value)))
+        return logits, value[5](value[4](value[3](pooled_value))).astype(mx.float32)
 
     def _links(self, batch: Prepared, objects: mx.array) -> mx.array:
         """`ActorCritic._join_permanent_links`."""
@@ -593,7 +658,7 @@ class MLXActorCritic(nn.Module):
             self.link_to_target,
             strict=True,
         ):
-            linked = mx.array(mask)[..., None]
+            linked = self._floating(mask)[..., None]
             index = mx.array(targets)
             delta = delta.at[index].add(
                 (to_target(permanents) * linked).reshape(-1, hidden)
@@ -603,7 +668,9 @@ class MLXActorCritic(nn.Module):
                 + from_target(_take(flat, index).reshape(permanents.shape)) * linked
             )
         delta = delta.reshape(b, count, hidden)
-        local = mx.concatenate([mx.zeros((b, start, hidden)), local], axis=1)
+        local = mx.concatenate(
+            [mx.zeros((b, start, hidden), objects.dtype), local], axis=1
+        )
         return objects + delta + local
 
     def _facts(
@@ -623,15 +690,17 @@ class MLXActorCritic(nn.Module):
             return _take(table, mx.array(index.reshape(-1))).reshape(*shape, hidden)
 
         ids = (
-            rows(tokens, routes.id_rows) * mx.array(routes.id_mask)[..., None]
-            + rows(tokens, routes.detail_rows) * mx.array(routes.detail_mask)[..., None]
-            + rows(tokens, routes.token_rows) * mx.array(routes.token_mask)[..., None]
+            rows(tokens, routes.id_rows) * self._floating(routes.id_mask)[..., None]
+            + rows(tokens, routes.detail_rows)
+            * self._floating(routes.detail_mask)[..., None]
+            + rows(tokens, routes.token_rows)
+            * self._floating(routes.token_mask)[..., None]
             + rows(definitions, routes.source_rows)
         )
         hidden_rows = (
             facts.kind(mx.array(routes.kinds))
             + ids
-            + facts.numeric(mx.array(routes.columns))
+            + facts.numeric(self._floating(routes.columns))
         )
         if routes.program_schedule is not None:
             assert (
@@ -644,7 +713,7 @@ class MLXActorCritic(nn.Module):
             flat = hidden_rows.reshape(-1, hidden)
             program = _take(
                 flat, mx.array(routes.program_rows)
-            ) + facts.program_numeric(mx.array(routes.program_numbers)[:, None])
+            ) + facts.program_numeric(self._floating(routes.program_numbers)[:, None])
             states, _ = facts.program_sequence.run(
                 program, packed_steps(schedule.gather, schedule)
             )
@@ -656,10 +725,11 @@ class MLXActorCritic(nn.Module):
             )
             hidden_rows = flat.reshape(*shape, hidden)
         encoded = (
-            facts.output(mx.tanh(hidden_rows)) * mx.array(routes.linked)[..., None]
+            facts.output(mx.tanh(hidden_rows))
+            * self._floating(routes.linked)[..., None]
         )
         delta = (
-            mx.zeros((b * count, hidden))
+            mx.zeros((b * count, hidden), objects.dtype)
             .at[mx.array(routes.targets)]
             .add(encoded.reshape(-1, hidden))
         )
@@ -681,15 +751,15 @@ class MLXActorCritic(nn.Module):
         flat = objects.reshape(b * count, hidden)
         controller = (
             _take(flat, mx.array(routes.controller))
-            * mx.array(routes.controller_mask)[:, None]
+            * self._floating(routes.controller_mask)[:, None]
         )
         source_object = (
             _take(flat, mx.array(routes.source_object))
-            * mx.array(routes.source_object_mask)[:, None]
+            * self._floating(routes.source_object_mask)[:, None]
         )
         header = effects.header(
             mx.concatenate(
-                [mx.array(routes.numeric), controller, source_object], axis=-1
+                [self._floating(routes.numeric), controller, source_object], axis=-1
             )
         )
         modification = _take(tokens, mx.array(routes.modification_rows))
@@ -697,8 +767,8 @@ class MLXActorCritic(nn.Module):
         detail = (
             _take(tokens, mx.array(routes.detail_rows))
             + effects.detail_kind(mx.array(routes.detail_kinds))
-            + effects.detail_number(mx.array(routes.detail_numbers)[:, None])
-            * mx.array(routes.detail_is_number)[:, None]
+            + effects.detail_number(self._floating(routes.detail_numbers)[:, None])
+            * self._floating(routes.detail_is_number)[:, None]
         )
         table = mx.concatenate(
             [

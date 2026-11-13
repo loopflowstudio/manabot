@@ -22,7 +22,7 @@ from etude.eval.records import (
     Environment,
     Inference,
     Match,
-    Matchup,
+    Seating,
 )
 from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
@@ -95,8 +95,8 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
             files=canonical_sha256(manifest.evaluation_identities),
             config={"purpose": "repeated-development-monitoring"},
         ),
-        matchups=(
-            Matchup(
+        seatings=(
+            Seating(
                 name="checkpoint vs heuristic",
                 players=(
                     Inference(

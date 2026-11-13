@@ -10,8 +10,9 @@ use crate::state::{
         LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, TargetSpec,
         TriggerCondition, TriggerSubject, TurnStep,
     },
-    card::{Card, CardType, Keyword, Keywords},
+    card::{CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
+    game_object::Object,
     mana::{Color, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -19,11 +20,15 @@ use crate::state::{
 };
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
-pub(crate) fn trigger_description(card: &Card, index: usize, inline: Option<&[Effect]>) -> String {
+pub(crate) fn trigger_description(
+    object: &Object,
+    index: usize,
+    inline: Option<&[Effect]>,
+) -> String {
     if let Some(effects) = inline {
         return format!(
             "{} — delayed ability: {}",
-            card.name,
+            object.name,
             effects_description(effects)
         );
     }
@@ -31,14 +36,14 @@ pub(crate) fn trigger_description(card: &Card, index: usize, inline: Option<&[Ef
         condition,
         intervening_if,
         effects,
-    } = &card.abilities[index];
+    } = &object.abilities[index];
     let intervening = intervening_if
         .as_ref()
         .map(|condition| format!(", if {}", condition_text(condition)))
         .unwrap_or_default();
     format!(
         "{} — {}{intervening}: {}",
-        card.name,
+        object.name,
         condition_description(condition),
         effects_description(effects)
     )
@@ -750,7 +755,23 @@ fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
-        EffectValue::Objects(of) => format!("the number of {}", selector_description(of)),
+        EffectValue::Objects { of, predicate } if matches!(of.as_ref(), ObjectSelector::Moved) => {
+            let cards = match predicate {
+                None => "cards".into(),
+                Some(predicate) => predicate_description(predicate, "cards"),
+            };
+            format!("the number of {cards} moved this way")
+        }
+        EffectValue::Objects { of, predicate } => {
+            let objects = selector_description(of);
+            match predicate {
+                None => format!("the number of {objects}"),
+                Some(predicate) => format!(
+                    "the number of {} among {objects}",
+                    predicate_description(predicate, "cards"),
+                ),
+            }
+        }
         EffectValue::Half(value) => format!("half of {}, rounded down", value_description(value)),
         EffectValue::OwnedPermanentsOpponentsControl => {
             "the number of permanents you own that your opponents control".into()
@@ -1373,5 +1394,43 @@ mod tests {
             },
         ]);
         assert_eq!(description, "Choose 0–2 target creature you control for this clause: For each chosen target: Untap target creature you control. You may pay {1}{W}. If paid: Draw 2 cards. Otherwise: Deal 1 damage to you");
+    }
+    #[test]
+    fn object_counts_describe_the_filter_and_resolution_result() {
+        let count = EffectValue::Objects {
+            of: Box::new(ObjectSelector::Moved),
+            predicate: Some(CardPredicate::creature()),
+        };
+        assert_eq!(
+            value_description(&count),
+            "the number of creature cards moved this way"
+        );
+        assert_eq!(
+            value_description(&EffectValue::Objects {
+                of: Box::new(ObjectSelector::Moved),
+                predicate: None,
+            }),
+            "the number of cards moved this way"
+        );
+    }
+
+    #[test]
+    fn flicker_descriptions_keep_the_moved_object_pronoun() {
+        assert_eq!(
+            effects_description(&[
+                Effect::exile(ObjectSelector::Target(TargetSpec::CreatureYouControl)),
+                Effect::Move {
+                    what: ObjectSelector::Moved,
+                    to: ZoneType::Battlefield,
+                    tapped: false,
+                    transformed: false,
+                    under: Some(PlayerSelector::Owner),
+                    with_counter: None,
+                    linked: None,
+                    library_end: None,
+                },
+            ]),
+            "Exile target creature you control. Put it onto the battlefield under its owner's control"
+        );
     }
 }

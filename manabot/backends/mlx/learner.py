@@ -10,7 +10,9 @@ differentiates as a function (`mlx.nn.value_and_grad`).
 `loss` evaluates the objective and its gradients together, so the forward runs
 once; `step` clips the global gradient norm, applies Adam and refuses
 nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
-`gradients` returns them without stepping. Precision is float32 throughout.
+`gradients` returns them without stepping. Float32 is the default; explicit
+bfloat16/float16 forwards keep float32 master weights, loss, clipping and Adam.
+Float16 uses fixed loss scaling (128); overflow is refused, never skipped.
 An optional recorder (`manabot.training.updates.health.OptimizerHealth`)
 counts steps and rejections; the sampled gradient and parameter detail it
 reads from torch modules stays absent here.
@@ -18,17 +20,18 @@ reads from torch modules stays absent here.
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
-from mlx.utils import tree_flatten
+from mlx.utils import tree_flatten, tree_map
 import numpy as np
 
 from manabot.backends.mlx.arrays import flat_numpy
 from manabot.backends.mlx.rl import NumericalError, require
 from manabot.infra.profiler import Profiler
+from manabot.policy.protocol import Precision
 
 if TYPE_CHECKING:
     from manabot.backends.mlx.policy import MLXActorCritic
@@ -65,18 +68,18 @@ class Learner:
         device: object = "gpu",
         *,
         minibatch_rows: int,
-        precision: Literal["float32"] = "float32",
+        precision: Precision | None = None,
     ) -> None:
         if minibatch_rows < 1:
             raise ValueError("minibatch_rows must be positive")
-        if precision != "float32":
-            raise ValueError("the MLX backend trains in float32")
-        self.device = device
+        if precision is not None:
+            agent.set_precision(precision)
         self.agent = agent
+        self._require_masters("the MLX learner requires float32 master parameters")
+        self.device = device
         # Cached programs are constants of the weights they were encoded from.
         agent.clear_cache()
         self.minibatch_rows = minibatch_rows
-        self.precision = precision
         self.optimizer = optim.Adam(
             learning_rate=2.5e-4, betas=[0.9, 0.999], eps=1e-5, bias_correction=True
         )
@@ -84,9 +87,23 @@ class Learner:
         # The loss `loss` last returned and its parameter gradients.
         self._pending: tuple[mx.array, dict[str, object]] | None = None
 
+    def _require_masters(self, message: str) -> None:
+        """Gradients and Adam apply to float32 masters; inside
+        `forward_precision` the policy holds compute-dtype casts instead."""
+        if self.agent.compute_dtype != mx.float32:
+            raise ValueError(message)
+
+    @property
+    def precision(self) -> Precision:
+        """The policy owns the precision used by both inference and learning."""
+        return self.agent.precision
+
+    @property
+    def loss_scale(self) -> float:
+        return 128.0 if self.precision == "float16" else 1.0
+
     def forward_precision(self) -> AbstractContextManager[object]:
-        """The context each policy forward runs in: float32, so nothing."""
-        return nullcontext()
+        return self.agent.forward_precision()
 
     def set_learning_rate(self, rate: float) -> None:
         """The rate every following optimizer step uses."""
@@ -98,7 +115,18 @@ class Learner:
         """Evaluate `objective`, a closure over this policy's forward whose
         first result is the loss, with the loss's parameter gradients; return
         its results. `step` and `gradients` take that loss."""
-        outputs, gradients = nn.value_and_grad(self.agent, objective)()
+        self._require_masters("close the inference precision scope before learning")
+        # Cached inference programs have no gradient path to the current weights.
+        self.agent.clear_cache()
+        scale = self.loss_scale
+
+        def scaled() -> tuple[mx.array, ...]:
+            result = objective()
+            return (result[0].astype(mx.float32) * scale, *result[1:])
+
+        outputs, gradients = nn.value_and_grad(self.agent, scaled)()
+        outputs = (outputs[0] / scale, *outputs[1:])
+        gradients = tree_map(lambda g: g.astype(mx.float32) / scale, gradients)
         mx.eval(outputs, gradients)
         self._pending = (outputs[0], gradients)
         return outputs
@@ -122,6 +150,7 @@ class Learner:
         and optimizer are then unchanged. Raises after stepping if a parameter
         became nonfinite.
         """
+        self._require_masters("close the inference precision scope before stepping")
         gradients = self._gradients(loss)
         self._pending = None
         track = recorder.track if recorder is not None else _untracked
@@ -136,6 +165,7 @@ class Learner:
                     )
             with track("Optimizer step"):
                 self.optimizer.update(self.agent, clipped)
+                self.agent.clear_cache()
                 parameters = tree_flatten(self.agent.parameters())
                 finite = mx.all(
                     mx.isfinite(mx.concatenate([p.flatten() for _, p in parameters]))

@@ -21,7 +21,7 @@ fn well_formed(id: &str) -> bool {
 fn printed_ids() -> impl Iterator<Item = (&'static str, &'static str)> {
     catalog()
         .iter()
-        .map(|card| (card.key, card.scryfall_id))
+        .map(|object| (object.key, object.scryfall_id))
         .chain(
             token_catalog()
                 .iter()

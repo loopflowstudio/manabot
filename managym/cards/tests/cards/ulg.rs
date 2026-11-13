@@ -13,8 +13,8 @@ use managym::{
 #[test]
 fn treetop_village_enters_tapped_and_becomes_a_3_3_green_ape_until_end_of_turn() {
     let mut s = five_color_setup(&["Treetop Village"]);
-    let card = enter_and_settle(&mut s, "Treetop Village");
-    let village = s.game().state.card_to_permanent[card].unwrap();
+    let object = enter_and_settle(&mut s, "Treetop Village");
+    let village = s.game().state.object_to_permanent[object].unwrap();
     assert!(tapped(&s, village));
     activate(&mut s, village, 0);
     settle(&mut s);

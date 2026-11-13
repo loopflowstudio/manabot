@@ -334,8 +334,8 @@ fn cr_702_trample_with_deathtouch_assigns_one_lethal() {
     let mammoth_card = s.game().state.permanents[mammoth]
         .as_ref()
         .expect("mammoth should exist")
-        .card;
-    s.game_mut().state.cards[mammoth_card]
+        .object;
+    s.game_mut().state.objects[mammoth_card]
         .keywords
         .insert(Keyword::Deathtouch);
 
@@ -573,8 +573,8 @@ fn cr_702_double_strike_with_trample_interaction() {
     let ace_card = s.game().state.permanents[ace]
         .as_ref()
         .expect("ace should exist")
-        .card;
-    s.game_mut().state.cards[ace_card]
+        .object;
+    s.game_mut().state.objects[ace_card]
         .keywords
         .insert(Keyword::Trample);
 
@@ -715,7 +715,7 @@ fn cr_702_ward_counters_an_opponents_triggered_ability() {
             )],
         },
     );
-    s.game_mut().move_card(ogre, ZoneType::Battlefield);
+    s.game_mut().move_object(ogre, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(aerialist)));

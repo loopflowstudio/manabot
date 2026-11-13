@@ -21,7 +21,7 @@ use crate::{
     state::{
         card::{CardDefId, Keyword, Keywords, PrintedCharacteristics},
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
-        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
     },
 };
@@ -31,7 +31,7 @@ impl Game {
     /// fixed at resolution (CR 611.2c) shares that timestamp.
     pub fn apply_continuous(
         &mut self,
-        source: Option<CardId>,
+        source: Option<ObjectId>,
         controller: PlayerId,
         affected: impl IntoIterator<Item = Affected>,
         modification: Modification,
@@ -44,7 +44,7 @@ impl Game {
     /// `WhileYouControlSource` duration follows.
     pub(crate) fn record_continuous(
         &mut self,
-        source: Option<CardId>,
+        source: Option<ObjectId>,
         source_object: Option<ObjectRef>,
         controller: PlayerId,
         affected: impl IntoIterator<Item = Affected>,
@@ -53,7 +53,8 @@ impl Game {
     ) {
         let source_object =
             source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
-        let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
+        let source: Option<CardDefId> =
+            source.map(|object| self.state.objects[object].definition_id);
         let timestamp = self.state.id_gen_mut().next_id();
         self.push_effects(affected.into_iter().map(|affected| ContinuousEffect {
             timestamp,
@@ -72,14 +73,15 @@ impl Game {
     pub fn animate_permanent(
         &mut self,
         permanent_id: PermanentId,
-        source: Option<CardId>,
+        source: Option<ObjectId>,
         controller: PlayerId,
     ) {
         let Some(object) = self.permanent_object_ref(permanent_id) else {
             return;
         };
         let timestamp = self.state.id_gen_mut().next_id();
-        let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
+        let source: Option<CardDefId> =
+            source.map(|object_id| self.state.objects[object_id].definition_id);
         let modifications = [
             Modification::BecomeCreature,
             Modification::SetBasePt {
