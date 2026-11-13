@@ -1,11 +1,11 @@
 """PPO CUDA update measurements for MTG-338 (report: experiments/ppo_cuda.md).
 
-uv run etude launch experiments/ppo_cuda.py --revision 9268966e1 --paired --rent mtg338-l4
+uv run etude launch experiments/ppo_cuda.py --revision c9f823739 --paired --rent mtg338-l4
 The harness lives in the launch revision's scratch/ (speed/, equivalence/), so
-launch at 9268966e1. The default mode times five unprofiled baseline repeats
+launch at c9f823739. The default mode times five unprofiled baseline repeats
 and an easier eight-stream workload; `diagnostic=True` adds a profile process.
 `paired=True` runs the CUDA tests, the CPU equivalence harness, five
-alternating kept/changed lookup pairs and a candidate profile.
+alternating original/changed lookup pairs and a candidate profile.
 """
 
 from decimal import Decimal

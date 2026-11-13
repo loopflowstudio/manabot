@@ -40858,6 +40858,54 @@
    "sha256": "590d8ba438948ee52b199d55da8cb50e08acc0ee0a035c25459fa72c7f3a5c45",
    "bytes": 30334
   },
+  "experiments/data/ppo_cuda/paired-all/baseline-0.pt": {
+   "sha256": "ba52eb1b06e34ea53c5bd557168b2ec63bda0d226a691c96a53c44cd1132a959",
+   "bytes": 11790609
+  },
+  "experiments/data/ppo_cuda/paired-all/baseline-1.pt": {
+   "sha256": "92394bbab61deebd89494acec93ef36550e5e4fb07ac9e3d8d9537747d26c3cd",
+   "bytes": 11790609
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-0.pt": {
+   "sha256": "045d788d757431ecbb2594048fc13a8b7121cc3ca3b77189c60f6671ba2fbf90",
+   "bytes": 11790935
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-1.pt": {
+   "sha256": "e819117b644b2aa3e1c7e83f93690dcb34ae988d8177840b831b40e0b22d5e64",
+   "bytes": 11790935
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-profile.json": {
+   "sha256": "4567b19a347f26240743a18676b88ccfdf815dc61e6077930319101f4d9aeac5",
+   "bytes": 39597
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-profile.ppo.txt": {
+   "sha256": "eff11c2b376aa8ade8bf910cc6ef713c4956566c06ea33b5c163fd2cb7d99a92",
+   "bytes": 9226
+  },
+  "experiments/data/ppo_cuda/paired-all/cpu-comparison.txt": {
+   "sha256": "8bee60ebc154d004ce76da54593d9854c58e8551a1fa2eb78424310666b67ffa",
+   "bytes": 147
+  },
+  "experiments/data/ppo_cuda/paired-all/differences.json": {
+   "sha256": "82089d0832cb27768650e6b0815b0283c9ff40dd68c837202cf0daa82b944a42",
+   "bytes": 294913
+  },
+  "experiments/data/ppo_cuda/paired-all/paired.json": {
+   "sha256": "97a4ea2e2d30f4376083c71d947958ce313e3187fbac56f6a5c72fd36e96498c",
+   "bytes": 487283
+  },
+  "experiments/data/ppo_cuda/paired-all/tests.txt": {
+   "sha256": "0e15d1ed55ea67fab7405767363bd65f478c9da2e6d82163910a973af7be146b",
+   "bytes": 949
+  },
+  "experiments/data/ppo_cuda/paired-all/updates-baseline.json": {
+   "sha256": "cb46f7033aced778bd38d4e7fccc2637a0ebe6fc2b6d2c940681f6689e9071c0",
+   "bytes": 42828
+  },
+  "experiments/data/ppo_cuda/paired-all/updates-candidate.json": {
+   "sha256": "cb46f7033aced778bd38d4e7fccc2637a0ebe6fc2b6d2c940681f6689e9071c0",
+   "bytes": 42828
+  },
   "experiments/data/ppo_cuda/paired/baseline-0.pt": {
    "sha256": "76bca20c44cfb17e88ddec0291b73c082f93dc978777ad1ed86c401f51901bf7",
    "bytes": 11321489
