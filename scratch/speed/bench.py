@@ -130,6 +130,13 @@ def _summary(values: list[float]) -> dict[str, float | list[float]]:
     }
 
 
+def _write_result(path: Path, result: dict[str, object]) -> None:
+    """Retain each completed sample even if a later update reaches the job cap."""
+    partial = path.with_suffix(".partial")
+    partial.write_text(json.dumps(result, indent=1))
+    partial.replace(path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("out", type=Path)
@@ -291,14 +298,15 @@ def main() -> None:
                     f"{name} repeat={repeat} seconds={elapsed:.3f} steps={_steps}",
                     flush=True,
                 )
-        result[name] = {
-            "sections": sections,
-            "sections_by_repeat": sections_by_repeat,
-            "receipts": receipts,
-            "steps_per_second": _summary(rates),
-            "seconds": _summary(seconds),
-            "steps": steps,
-        }
+                result[name] = {
+                    "sections": sections,
+                    "sections_by_repeat": sections_by_repeat,
+                    "receipts": receipts,
+                    "steps_per_second": _summary(rates),
+                    "seconds": _summary(seconds),
+                    "steps": steps,
+                }
+                _write_result(args.out, result)
 
     if not args.ppo_only:
         updates(
@@ -318,7 +326,7 @@ def main() -> None:
         if args.profile is not None:
             faulthandler.cancel_dump_traceback_later()
         collector.close()
-        args.out.write_text(json.dumps(result, indent=1))
+        _write_result(args.out, result)
         print(
             json.dumps(
                 {
@@ -363,7 +371,7 @@ def main() -> None:
     result["save_seconds"] = _summary(saves)
     result["load_seconds"] = _summary(loads)
     collector.close()
-    args.out.write_text(json.dumps(result, indent=1))
+    _write_result(args.out, result)
     print(
         json.dumps({k: v for k, v in result.items() if k != "gpu"}, default=str)[:2000]
     )
