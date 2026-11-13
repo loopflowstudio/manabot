@@ -22,28 +22,13 @@ KeyboardInterrupt. That fix belongs in Etude.
 
 ## Independent CLI deletion — 2026-11-13
 
-Source inspection: available Etude checkout HEAD 105abdd has none of the new
-resume/steps/save/input methods or run.seed. No rebuild stub was introduced.
-The train command no longer imports recipes or the self-play state code.
 `uv run --no-sync manabot train --recipe local --out /tmp/unused`: exit 2,
-replacement and resume guidance, no training. A separate fresh process with
-etude.stopping and self_play imports blocked produced the same guidance.
-
-The removed CLI's exclusive tests are gone; the mixed files retain tracker,
-learner, replay/provenance and saved-record tests. CI smoke and installed
-smoke now target the intended Etude CLI and need real-SDK validation when it
-lands. No claim of a passing training smoke or installed consumer is made.
-
-Validation:
-- `uv run --no-sync --with pytest --with typer pytest tests/training/test_train_command.py -q`: 5 passed (1.64s).
-- `uv run --no-sync --with pytest pytest tests/test_package_boundaries.py::test_only_listed_modules_import_torch_outside_its_backend -q`: 1 passed (0.41s).
-- `uv run --no-sync --with ruff ruff check` on the eight changed Python files: clean; `ruff format` applied. The environment lacks Ruff, so it was supplied as an isolated tool overlay.
-- `uv run --no-sync python scripts/check_loopflow_workflows.py`: all nine graphs compile and resolve; boundaries valid.
-- `uv run --no-sync --with pyyaml python` parse/compile probe: both changed workflow YAML files, all eight changed Python sources and the emitted installed-consumer recipe compile.
-- `git diff --check`: clean. `lf context`: 9,097/12,000 tokens and 37,714/98,304 bytes before these result lines, with full previous notes retained at bd14801a72.
-
-Remaining real training/consumer checks are blocked on EXP-56, not reported
-as passing. No server, watcher, provider job or child agent was started.
+replacement and resume guidance, no training (also with etude.stopping and
+self_play imports blocked). Exclusive CLI tests removed; mixed files keep
+tracker, learner, replay/provenance and saved-record tests.
+Validation: test_train_command 5 passed; torch import boundary test passed;
+Ruff clean; loopflow workflow check valid; changed YAML/Python compile; diff
+check clean. Full transcript: `7634686984:scratch/implementation.md`.
 
 ## Compress — 2026-11-13
 
@@ -57,21 +42,31 @@ docs/training.md's loop listing and the stop test follow.
 Ruff check/format and py_compile clean on the six changed files; `git diff
 --check` clean. test_self_play_loop was not run: it needs the unreleased SDK.
 
-## Realign — 2026-11-13
+## Realign probe against EXP-56 source — 2026-11-13 evening
 
-Seen: EXP-56 checkout at ddf6df5 (mid-merge with conflicts) has no
-resume/steps/save/input or run.seed; fe0d95c returned state publication to
-design review over an interrupted multi-file save. Etude main released 0.3.0
-and 0.3.1; this branch and main still pin 0.2.16; MTG-348 holds for 0.3.2.
-No code changed and no tests rerun in this pass.
+Seen: MTG-348 done; this branch merged main at 0.3.2 (`c3dfd82476`). 0.3.2
+still has `etude.run` and no Run.resume/steps/save. EXP-56 checkout at
+9a762a1 plus uncommitted edits (HEAD 98c8f05 by the end) has local
+`etude run`, explicit `--resume`, job seeds and `etude.tracking`.
+In a throwaway worktree of this HEAD with only `etude.run.` → `etude.tracking.`
+rewritten, EXP-56 `src` on PYTHONPATH (nothing committed):
+- every loop/recipe module imports (self_play, minimal, local, elemental,
+  belief_policy, belief_sampler, baseline, eval.benchmark).
+- `etude run manabot/recipes/local.py --name smoke`: exit 0, run
+  `track/local/smoke-seed-0/` with `out/policies/0000000{0,1,2}-{raw,ema}.pt`,
+  `out/state/current.json` → `save-00000001/{state.json,learner.pt,optimizer.pt,ema.pt}`,
+  checkpoints updates-0..2. Matches the smoke callers' expected path.
+- `--resume smoke-seed-0 --until updates=3`: exit 0, adds 00000003 policies,
+  earlier ones kept, save-00000002 replaces 00000001, outcome finished.
+  `--resume` with no target: `run_already_finished: give --until with a later target`.
+- pytest test_self_play_loop, test_minimal_loop, test_belief_stages,
+  test_recipe_etude: 13 passed (62.97s), 1 warning not inspected.
+Not exercised: signal stop, continue, start= linkage, parity, launched runs.
 
 ## Proposed-API client cut — 2026-11-13
 
 Wrote the loop/recipe/consumer cut against the proposed API; no stub or SDK
-change. Real source dda6b17 has the run methods but importing self_play stops
-at `manabot.infra.artifacts`: `ModuleNotFoundError: etude.run`. MTG-348's naming
-migration must land before EXP-56 execution, CLI, parity or consumer proof.
-The installed pin remains 0.2.16; no new training result is claimed.
+change. (Its etude.run import failure is resolved by the rename; see above.)
 
 Validation: 21 changed/new Python sources and both workflow heredocs compile;
 Ruff clean and formatted; minimal guide equals source; diff check clean.

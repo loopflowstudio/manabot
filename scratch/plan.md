@@ -57,20 +57,22 @@ Older collector snapshots use 439379869. Never rewrite frozen evidence.
 
 ## Remaining implementation
 
-1. Rebase onto MTG-348's Etude naming migration, then pin EXP-56's released
-   SDK with requirements, runtime pins, lock and consumer checks together.
-   No source override or compatibility shim is committed. EXP-56 at dda6b17
-   now implements run.seed/resume/steps/save/input and snapshot-pointer saves;
-   its CLI, job seeds and start=Job contracts remain unfinished. A real-source
-   import stops at Manabot's `etude.run.records` (removed in EXP-56); the
-   prerequisite naming migration belongs to MTG-348.
+1. When EXP-56 releases, pin it (requirements, runtime pins, lock, consumer
+   checks together) and in the same change rename every `etude.run.*` import
+   to `etude.tracking.*` (same module and symbol names: records, storage,
+   listing, errors, block_file; about 20 files here, more on main under
+   `experiments/`). MTG-348 is done and merged here at 0.3.2, but 0.3.2 still
+   ships `etude.run`; EXP-56 removed it without an alias, so this rename is
+   Manabot's, not MTG-348's. No source override or shim is committed.
 2. Proposed-API client cut is written: self_play and minimal, Pydantic counts,
    seed-free configs, linked belief jobs, baseline policy evidence, Etude CLI
    benchmark and nightly/release callers. User docs and surviving tests move
-   with the cut. This is unvalidated execution code until dependency work lands.
-3. Real fresh/stop/resume/continuation and immutable-policy checks, seed-197
-   learner parity, installed consumers, launch restore/retry and service
-   continuation. Do not count the older state.pt evidence as new-API proof.
+   with the cut. Its local path now runs against EXP-56 source (implementation.md,
+   Realign probe); launched paths remain unproved.
+3. Still unproved: Ctrl-C/SIGTERM stop then resume, `etude continue`,
+   seed-197 learner parity, linked belief jobs through `start=`, installed
+   consumers, launched `--resume` (not yet in EXP-56), launch restore/retry
+   and service continuation. Do not count the older state.pt evidence.
 4. Gate affected checks once. Resolve/report the frozen replay schema mismatch
    (fixture 7 vs current 8) without regenerating it. Demo recovery losses:
    no current-game resume, exact uninterrupted equivalence or in-run source
