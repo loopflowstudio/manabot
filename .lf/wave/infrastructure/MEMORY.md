@@ -42,8 +42,10 @@ successful post-merge verification of the repair remain outstanding.
   wheel-retention overrides were removed. All six installs in 43348710097
   took 5–6 s with Torch `2.15.0+cpu`, no NVIDIA/Triton log entries and
   unchanged model/evaluation pass and skip counts. This establishes CPU CI
-  coverage, not GPU admission. Python unit and Academy Integration still
-  use the default runtime, so their download variability remains relevant.
+  coverage, not GPU admission. Python unit then took the same selection on
+  both `uv sync` and `uv run` (plain `uv run` re-syncs the CUDA default):
+  dispatch 43353030839 cut it from 210 to 104 s with equal counts. Academy
+  Integration still uses the default runtime (install 18–20 s).
 - Parallel tests need isolated files/ports and injected time at scheduling
   boundaries. A 30-second future wait failed beside other workers; the final
   admission fixture releases the gate in its injected sleep instead. The
