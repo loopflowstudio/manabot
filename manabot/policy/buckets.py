@@ -8,10 +8,12 @@ at least `MIN_BUCKET` and at most the declared capacity. A forward then takes
 one of a few shapes per axis. The setting changes no `ModelConfig` field,
 parameter, buffer, checkpoint or policy input.
 
-This module chooses the sizes, on the host, with NumPy: `bucket_sizes`
-measures one admitted batch. Admission measures it before any device transfer
-(`manabot.model.admission`), so a forward trims device tensors without reading
-the device. Each backend trims its own arrays to these sizes
+This module chooses the sizes, on the host, with NumPy: `row_needs` measures
+what each row of a batch needs on every axis and `sizes_of` buckets a group of
+rows from those needs (`bucket_sizes` does both for one batch). Admission
+measures before any device transfer (`manabot.model.admission`), so a forward
+trims device tensors without reading the device; a learner measures each
+rollout row once and regroups the needs for every epoch's minibatches. Each backend trims its own arrays to these sizes
 (`trim_observation` in `manabot.model.inference` for torch), remapping the
 object references listed here.
 
@@ -142,18 +144,47 @@ def _capacities(encoder: ObservationEncoder) -> dict[str, int]:
     }
 
 
-def _extent(value: np.ndarray, axis: int) -> int:
-    """One past the last row along `axis` holding any nonzero (or NaN) value.
+def _batch_extent(value: np.ndarray, axis: int) -> int:
+    """One past the last row along `axis` that any batch row uses (nonzero or NaN).
 
-    A learner minibatch is hundreds of megabytes of mostly zero padding, so
-    this pass is the measurement's cost: one reduction over the batch axis
-    first, with no full-size temporary.
+    One reduction over the batch axis first, with no full-size temporary: a
+    learner minibatch is hundreds of megabytes of mostly zero padding, so this
+    pass is the measurement's cost.
     """
     flags = np.any(value, axis=0)
     if flags.ndim > 1:
         flags = np.any(flags, axis=tuple(d for d in range(flags.ndim) if d != axis - 1))
     used = np.flatnonzero(flags)
     return int(used[-1]) + 1 if used.size else 0
+
+
+def _last_rows(reversed_flags: np.ndarray) -> np.ndarray:
+    """[B] one past each row's last true entry, from C-contiguous [B,R] flags
+    whose rows are reversed (so `argmax` scans memory forward); zero if none."""
+    last = reversed_flags.shape[1] - np.argmax(reversed_flags, axis=1)
+    return np.where(reversed_flags.any(1), last, 0)
+
+
+def _extent(value: np.ndarray, axis: int) -> np.ndarray:
+    """[B] one past the last row along `axis` each batch row uses.
+
+    The batch's extent bounds every row's, so only that prefix is read per row
+    (buckets are usually a small part of the declared capacity). Each row's
+    prefix is flattened and its last nonzero element located, then divided
+    back to a row; seat-major buffers ([B, seats, rows, ...]) fold their seats
+    into the batch.
+    """
+    count = len(value)
+    extent = _batch_extent(value, axis)
+    if extent == 0:
+        return np.zeros(count, np.int64)
+    prefix = value[(slice(None),) * axis + (slice(0, extent),)]
+    seats = int(np.prod(prefix.shape[1:axis], dtype=np.int64))
+    width = int(np.prod(prefix.shape[axis + 1 :], dtype=np.int64))
+    flat = prefix.reshape(count * seats, -1)
+    elements = _last_rows(np.not_equal(flat[:, ::-1], 0, order="C"))
+    rows = np.where(elements > 0, (elements - 1) // width + 1, 0)
+    return rows.reshape(count, seats).max(1, initial=0)
 
 
 def _float32(values: np.ndarray, invalid: float) -> np.ndarray:
@@ -163,14 +194,11 @@ def _float32(values: np.ndarray, invalid: float) -> np.ndarray:
     )
 
 
-def _maximum(values: np.ndarray) -> int:
-    """Maximum of the integer parts, zero for an empty array."""
-    return int(values.max(initial=0))
-
-
-def _reference_extent(values: np.ndarray, capacity: int) -> int:
-    """Largest integer part of finite one-based references, clamped to capacity."""
-    return _maximum(np.clip(np.floor(_float32(values, 0.0)), 0, capacity))
+def _reference_extent(values: np.ndarray, capacity: int) -> np.ndarray:
+    """[B] largest integer part of each row's finite one-based references,
+    clamped to capacity."""
+    clipped = np.clip(np.floor(_float32(values, 0.0)), 0, capacity)
+    return clipped.reshape(len(values), -1).max(1, initial=0).astype(np.int64)
 
 
 def has_history_events(obs: Mapping[str, object]) -> bool:
@@ -207,30 +235,54 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
 
 def _object_extents(
     references: list[np.ndarray], capacities: dict[str, int]
-) -> dict[str, int]:
-    """Rows of each card and permanent axis that any reference names."""
+) -> dict[str, np.ndarray]:
+    """[B] rows of each card and permanent axis that any of a row's references names."""
     segments = object_segments(capacities)
     objects = segments[-1][1] + segments[-1][2]
-    # Which full object coordinates any reference names: integer parts of
-    # finite values inside the table; NaN and infinities name none.
-    named = np.zeros(objects, dtype=bool)
+    count = len(references[0])
+    # Which full object coordinates each row's references name: integer parts
+    # of finite values inside the table; NaN and infinities name none.
+    named = np.zeros((count, objects), dtype=bool)
+    flat = named.reshape(-1)
+    offsets = np.arange(count, dtype=np.int64)[:, None] * objects
     for values in references:
-        index = np.floor(_float32(values, -1.0))
-        named[index[(index >= 0) & (index < objects)].astype(np.int64)] = True
-    needs = {"cards": 0, "permanents": 0}
+        index = np.floor(_float32(values, -1.0)).reshape(count, -1)
+        inside = (index >= 0) & (index < objects)
+        flat[(offsets + index.astype(np.int64))[inside]] = True
+    needs = {
+        "cards": np.zeros(count, np.int64),
+        "permanents": np.zeros(count, np.int64),
+    }
     for axis, start, rows in segments:
-        used = np.flatnonzero(named[start : start + rows])
-        if used.size:
-            needs[axis] = max(needs[axis], int(used[-1]) + 1)
+        # This segment's columns, last first.
+        segment = np.ascontiguousarray(named[:, start + rows - 1 : start - 1 : -1])
+        needs[axis] = np.maximum(needs[axis], _last_rows(segment))
     return needs
 
 
-def bucket_sizes(
-    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder, *, objects: bool
-) -> BucketSizes | None:
-    """Measure one batch's buckets; None leaves it untouched.
+AXES: tuple[str, ...] = (
+    "facts",
+    "effects",
+    "details",
+    "members",
+    "relations",
+    "actions",
+    "events",
+    "cards",
+    "known",
+    "decklists",
+    "permanents",
+)
 
-    A batch whose keys or shapes differ from the declared layout is not
+
+def row_needs(
+    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder, *, objects: bool
+) -> np.ndarray | None:
+    """Rows each batch row needs on every variable axis, [B, len(AXES)] int64.
+
+    A batch's need on an axis is the maximum over its rows, so needs measured
+    once per row serve any later grouping of those rows (`sizes_of`). None for
+    a batch whose keys or shapes differ from the declared layout: it is not
     trimmed, so the model rejects it exactly as it would without buckets.
     """
     shapes = encoder.shapes
@@ -242,46 +294,68 @@ def bucket_sizes(
     ):
         return None
     capacities = _capacities(encoder)
-    needs: dict[str, list[int]] = {axis: [0] for axis in capacities}
+    count = len(obs["actions_valid"])
+    needs = {axis: np.zeros(count, np.int64) for axis in AXES}
+
+    def need(axis: str, rows: np.ndarray) -> None:
+        needs[axis] = np.maximum(needs[axis], rows)
+
     for axis, keys in ROW_KEYS.items():
-        needs[axis].extend(
-            _extent(obs[key], 1) for key in keys if key not in _UNMEASURED_KEYS
-        )
+        for key in keys:
+            if key not in _UNMEASURED_KEYS:
+                need(axis, _extent(obs[key], 1))
     for axis, keys in SEAT_KEYS.items():
-        needs[axis].extend(_extent(obs[key], 2) for key in keys)
+        for key in keys:
+            need(axis, _extent(obs[key], 2))
     # Live effect headers name detail and member spans [offset, offset + count).
     effects = obs["effects"]
-    needs["details"].append(
-        _reference_extent(
-            effects[..., _DETAIL_SPAN[0]] + effects[..., _DETAIL_SPAN[1]],
-            capacities["details"],
+    for axis, (offset, length) in (
+        ("details", _DETAIL_SPAN),
+        ("members", _MEMBER_SPAN),
+    ):
+        need(
+            axis,
+            _reference_extent(
+                effects[..., offset] + effects[..., length], capacities[axis]
+            ),
         )
-    )
-    needs["members"].append(
-        _reference_extent(
-            effects[..., _MEMBER_SPAN[0]] + effects[..., _MEMBER_SPAN[1]],
-            capacities["members"],
-        )
-    )
     # Frame ids and action continuation joins index the relation axis.
-    needs["relations"].append(
-        _reference_extent(
-            obs["relations"][..., _RELATION_FRAME], capacities["relations"]
+    for key, column in (
+        ("relations", _RELATION_FRAME),
+        ("actions", _ACTION_CONTINUATION),
+    ):
+        need(
+            "relations",
+            _reference_extent(obs[key][..., column], capacities["relations"]),
         )
-    )
-    needs["relations"].append(
-        _reference_extent(
-            obs["actions"][..., _ACTION_CONTINUATION], capacities["relations"]
-        )
-    )
     if objects:
-        for axis, need in _object_extents(_object_references(obs), capacities).items():
-            needs[axis].append(need)
-    sizes = {axis: bucket(max(needs[axis]), capacities[axis]) for axis in capacities}
+        for axis, rows in _object_extents(_object_references(obs), capacities).items():
+            need(axis, rows)
+    return np.stack([needs[axis] for axis in AXES], axis=1)
+
+
+def sizes_of(
+    needs: np.ndarray, encoder: ObservationEncoder, *, objects: bool
+) -> BucketSizes:
+    """The buckets of a batch whose rows need `needs` [B, len(AXES)]."""
+    capacities = _capacities(encoder)
+    most = needs.max(0, initial=0)
+    sizes = {
+        axis: bucket(int(most[column]), capacities[axis])
+        for column, axis in enumerate(AXES)
+    }
     if not objects:
         sizes["cards"] = capacities["cards"]
         sizes["permanents"] = capacities["permanents"]
     return BucketSizes(sizes, capacities)
+
+
+def bucket_sizes(
+    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder, *, objects: bool
+) -> BucketSizes | None:
+    """Measure one batch's buckets; None leaves it untouched (`row_needs`)."""
+    needs = row_needs(obs, encoder, objects=objects)
+    return None if needs is None else sizes_of(needs, encoder, objects=objects)
 
 
 def object_columns(buckets: BucketSizes) -> list[slice]:
