@@ -1,0 +1,4158 @@
+diff --git a/manabot/README.md b/manabot/README.md
+index e0dffb071..692725329 100644
+--- a/manabot/README.md
++++ b/manabot/README.md
+@@ -637,8 +637,7 @@ with those packages blocked.
+   selection, the safetensors checkpoint container and the backend Protocols.
+   It imports no array framework ([policy contract](policy/README.md)).
+ - `backends/<framework>/`: one folder per array framework with the same files
+-  (`policy.py`, `rl.py`, `learner.py`, `rollout.py`, `arrays.py`,
+-  `checkpoint.py`);
++  (`policy.py`, `rl.py`, `learner.py`, `arrays.py`, `checkpoint.py`);
+   `backends/torch/` is the reference and `backends/parity.py` checks the others
+   against it ([backends](backends/README.md)).
+   `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
+@@ -657,10 +656,8 @@ with those packages blocked.
+   complete-game accounting.
+ - `training/updates/`: an update learns from one collected batch. The damped
+   policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
+-  and their host-side pieces: numerical health and selection diagnostics.
+-  Each takes a backend module as its first argument and does its array math
+-  through it; recipes pass `manabot.backends.torch`
+-  ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
++  and their pieces: rollout admission, the reference magnet, numerical health
++  and selection diagnostics. They call the torch backend's `Learner`.
+ - `training/loops/`: a loop keeps playing and updating until it is done; a
+   one-page example (`minimal.py`).
+ - `training/state/`: policy admission, exact learning snapshots, recovery and
+diff --git a/manabot/backends/README.md b/manabot/backends/README.md
+index dd3fcad86..86349e90a 100644
+--- a/manabot/backends/README.md
++++ b/manabot/backends/README.md
+@@ -1,7 +1,7 @@
+ # Framework backends
+ 
+-A backend runs the manabot policy forward and the learner step of its
+-updates in one array framework. Backends share the framework-free contract in
++A backend runs the manabot policy forward and its PPO learner step in one
++array framework. Backends share the framework-free contract in
+ [`manabot.policy`](../policy/README.md): host preparation of observation
+ batches, the checkpoint container and the `BackendPolicy`,
+ `BackendLearner` and `Backend` protocols. Training, evaluation and the CLI
+@@ -11,7 +11,7 @@ checked against.
+ | Backend | Status | Guide |
+ | --- | --- | --- |
+ | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
+-| `mlx` | policy and the damped update, parity-checked; measurement only | [mlx.md](mlx.md) |
++| `mlx` | policy and learner step, parity-checked; measurement only | [mlx.md](mlx.md) |
+ 
+ ## Layout
+ 
+@@ -21,12 +21,11 @@ files; a backend may add private modules that its `policy.py` uses (torch's
+ 
+ | File | Holds |
+ | --- | --- |
+-| `__init__.py` | the import guard naming the optional extra, and the files below as attributes loaded on first use (`backend.rl`) |
++| `__init__.py` | the import guard naming the optional extra; nothing else |
+ | `arrays.py` | conversion to and from NumPy, the float dtype, the device |
+ | `policy.py` | the forward over a `Prepared` batch: logits and values |
+-| `rl.py` | the policy terms, losses, returns and selection the updates call, over the framework's arrays |
+-| `learner.py` | `Learner`: the optimizer, the differentiated loss, the guarded step and precision |
+-| `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
++| `rl.py` | the loss terms of `manabot.training.updates` over the framework's arrays |
++| `learner.py` | the optimizer, gradient step and precision |
+ | `checkpoint.py` | the map from canonical names to the backend's layout, loading, and `BACKEND` |
+ 
+ `BACKEND` in `checkpoint.py` implements `manabot.policy.protocol.Backend`, the
+@@ -38,112 +37,14 @@ outside `manabot/backends/torch/` only the modules the boundary test lists by
+ name import torch; that list shrinks as training and evaluation become
+ backend-generic.
+ 
+-## Algorithms are written once
+-
+-An update or a loop is written once and takes the backend as an argument:
+-the backend's module itself, not a class to subclass or a configuration
+-string. The maintained updates in `manabot/training/updates/` take it first:
+-
+-```python
+-import manabot.backends.torch as backend
+-
+-diagnostics = update_damped_iteration(
+-    backend, learner, batch, move_learning(), iteration=1
+-)
+-```
+-
+-The damped update runs on torch and on MLX. The same batch and the same
+-weights give the same diagnostics on both, within the
+-[parity check](#parity-check)'s bars
+-(`tests/training/test_update_backends.py` runs it on every installed
+-backend):
+-
+-```python
+-import manabot.backends.mlx as backend
+-
+-learner = backend.learner.Learner(policy, minibatch_rows=64)
+-diagnostics = update_damped_iteration(
+-    backend, learner, batch, move_learning(), iteration=1
+-)
+-```
+-
+-Inside an update, array math goes only through the backend's modules:
+-
+-- `backend.arrays`: moving host rows in and out (`from_numpy`, `to_numpy`)
+-  and `float32` for a forward output.
+-- `backend.rl`: the policy terms (`legal_mask`, `policy_logs`,
+-  `action_logs`, `reference_logs`, `damped_policy_loss`), the losses
+-  (`clipped_surrogate`, `reverse_kl`, `squared_value_loss`,
+-  `categorical_value_loss`, `entropy`, `clip_fraction`), returns
+-  (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`,
+-  `outcome_probabilities`, `expected_outcome`), selection (`selected_rows`,
+-  `selection_mask`, `selected_mean`), `constant` for a value with no gradient
+-  path, and the refusals (`require`, `require_finite`, `float64_operand`,
+-  `NumericalError`).
+-- `backend.learner`: its `Learner` holds the policy and optimizer, sets the
+-  learning rate (`set_learning_rate`), differentiates a loss (`loss`) and
+-  steps (`step`); `forward_precision` is the context a forward runs in,
+-  `no_grad` the one for constants and `check_objective` the loss's refusal.
+-- `backend.rollout`: `AdmittedRollout(agent, batch)` returns a batch's rows as
+-  the policy reads them (`rows`, `next_observation`), their legal mask
+-  (`legal`) and the arrays a rejected step retains (`evidence`).
+-
+-An update writes its minibatch loss as a closure over the policy forward and
+-hands it to the learner, because a functional framework differentiates a
+-function, not a value:
+-
+-```python
+-def objective():
+-    logits, values = learner.agent.forward_distribution(obs)
+-    return minibatch_objective(backend.rl, logits, values, valid, ...)
+-
+-loss, policy_loss, value_loss = learner.loss(objective)
+-norm = learner.step(loss, max_grad_norm, recorder=observer)
+-```
+-
+-Torch runs the closure once and keeps the graph for `step`; MLX evaluates it
+-with its gradients (`mlx.nn.value_and_grad`), so the forward also runs once.
+-
+-NumPy keeps the host-side bookkeeping and everything computed once per batch
+-on host rows: which rows train, minibatch indexes, action-type counts, batch
+-health, `selection_diagnostics` and `value_scale`. Logic that is pure NumPy
+-lives once in `manabot.policy`: `reference_distribution` (`prepare.py`) and
+-the returns and selection recursions (`returns.py`), which both backends'
+-`transition_gae` wrap; torch keeps advantage selection on the minibatch's
+-device (`selected_rows`, `torch.quantile`), matching `returns.quantile` bit
+-for bit. The
+-update modules import no framework and no backend at runtime
+-(`tests/test_package_boundaries.py` enforces it); the torch types they name
+-are annotations only.
+-
+-A function has the same name, arguments, shapes and per-row results in every
+-backend that has it; the torch backend's signatures are the reference, and
+-[training loops](../../docs/training-loop.md#standard-methods-kept-local)
+-documents them. A backend never carries its own copy of an update's loss:
+-`manabot.backends.parity` runs `minibatch_objective` through each backend's
+-`rl` and `Learner`. What still differs between the two backends:
+-
+-- MLX has no float64 on the GPU, so its surrogate ratio and loss sum are
+-  float32; torch's are float64.
+-- MLX's `rl` holds what the scalar damped update calls. It has no categorical
+-  critic functions (`categorical_lambda_returns`, `categorical_value_loss`,
+-  `outcome_probabilities`, `expected_outcome`), and the backend refuses a
+-  categorical checkpoint; it also lacks `standardized_advantages` and
+-  `selected_rows`, which only PPO calls.
+-- `OptimizerHealth` counts steps and rejections on every backend; its sampled
+-  gradient and parameter detail reads torch modules and is absent on MLX.
+-- The PPO update calls torch tensor methods (`.float()`, `.flatten()`,
+-  `.detach()`) and torch's `get_value`; only the damped update runs on MLX.
+-
+ ## The torch backend
+ 
+ | Module | Names |
+ | --- | --- |
+ | `manabot.backends.torch.policy` | `ActorCritic` |
+-| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
+-| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
+-| `manabot.backends.torch.rollout` | `AdmittedRollout`, `observation_tensors` |
+-| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `flat_numpy`, `device_of` |
++| `manabot.backends.torch.rl` | `transition_gae`, `standardized_advantages`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `clip_fraction`, `support_logs`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `selection_mask`, `selected_mean`, `NumericalError` |
++| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `forward_precision`, `apply_matmul_precision` |
++| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `flat_numpy`, `device_of` |
+ | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
+ 
+ ```python
+@@ -159,13 +60,11 @@ their first bytes; `save_checkpoint` writes `.pt` until the container carries
+ every configuration the torch policy runs (belief inputs, history, FiLM and
+ the rest refused below).
+ 
+-`BACKEND` is torch's `manabot.policy.protocol.Backend`, beside the native
+-torch API: `load` returns a `TorchPolicy` and a `Learner`, whose parameters
+-and gradients keep torch's names (`torch_name` in `manabot.policy.checkpoint`
+-maps canonical names back). Until `ActorCritic` reads `Prepared` indices, its
+-`prepare` builds the shared `Prepared` and keeps the admitted torch
+-observation on it (`Retained`), so parity can run torch against its own torch
+-reference.
++`BACKEND` is torch's `manabot.policy.protocol.Backend`, NumPy in and out,
++beside the native torch API; its parameters and gradients keep canonical
++names. Until `ActorCritic` reads `Prepared` indices, its `prepare` builds the
++shared `Prepared` and keeps the admitted torch observation on it (`Retained`),
++so parity can run torch against its own torch reference.
+ 
+ `rl.py`, `learner.py` and `arrays.py` import nothing else from manabot at
+ runtime, so another role reuses them unchanged.
+@@ -216,13 +115,6 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
+ ```text
+ mlx minibatch   0  B  46  logits 5.8e-09  values 2.4e-07  loss 1.4e-07  min cosine 1.000000 (...)
+ ...
+-torch  forward logits                           max |Δ| 9.7e-09 (tol 1e-4)  ok
+-torch  forward values                           max |Δ| 2.7e-07 (tol 1e-4)  ok
+-torch  collection logits                        max |Δ| 0.0e+00 (tol 1e-4)  ok
+-torch  collection values                        max |Δ| 0.0e+00 (tol 1e-4)  ok
+-torch  learner loss                             rel Δ 0.0000% (tol 0.1%)  ok
+-torch  gradient ...                             min cosine 1.000000 over 169 tensors (tol 0.999)  ok
+-torch  one step                                 params max |Δ| 7.5e-09, update min cosine 1.000000 (informative)
+ mlx    forward logits                           max |Δ| 7.7e-09 (tol 1e-4)  ok
+ mlx    forward values                           max |Δ| 3.6e-07 (tol 1e-4)  ok
+ mlx    collection logits                        max |Δ| 7.0e-09 (tol 1e-4)  ok
+@@ -230,17 +122,16 @@ mlx    collection values                        max |Δ| 3.3e-07 (tol 1e-4)  ok
+ mlx    learner loss                             rel Δ 0.0000% (tol 0.1%)  ok
+ mlx    gradient ...                             min cosine 0.999940 over 201 tensors (tol 0.999)  ok
+ mlx    one step                                 params max |Δ| 9.4e-05, update min cosine 0.944017 (informative)
+-parity: pass (torch, mlx)
++parity: pass (mlx)
+ ```
+ 
+-The check runs the PyTorch model in float32 on CPU as the reference and every
+-installed backend, torch included, on the same inputs, each side computing
+-the damped update's `minibatch_objective` through its own backend: a
++The check runs the PyTorch model in float32 on CPU as the reference, with the
++training code's own loss, and every installed backend on the same inputs: a
+ capture directory written by `experiments/mlx_pilot.py capture` (real learner
+ minibatches with their targets and settings, and real collection calls). Each
+ backend loads the reference's weights through the canonical names and is
+ compared in its own parameter layout. The check compares logits on legal
+-actions and values (absolute difference), the update's loss (relative difference)
++actions and values (absolute difference), the PPO loss (relative difference)
+ and each parameter's gradient (cosine similarity). Tolerances are fixed:
+ logits and values within 1e-4, loss within 0.1%, every gradient cosine at
+ least 0.999. A tensor whose gradient norm is below 1e-6 of the global norm in
+diff --git a/manabot/backends/mlx.md b/manabot/backends/mlx.md
+index e8b60155c..7cb00707b 100644
+--- a/manabot/backends/mlx.md
++++ b/manabot/backends/mlx.md
+@@ -1,8 +1,7 @@
+ # MLX backend (Apple Silicon pilot)
+ 
+-`manabot.backends.mlx` runs a saved `ActorCritic` policy, and the damped
+-update that trains it, in [MLX](https://ml-explore.github.io/mlx/) on Apple
+-Silicon. It loads
++`manabot.backends.mlx` runs a saved `ActorCritic` policy, and its PPO learner
++step, in [MLX](https://ml-explore.github.io/mlx/) on Apple Silicon. It loads
+ the shared checkpoint container ([backends](README.md#convert-a-pytorch-checkpoint))
+ and must agree with PyTorch numerically before it is used for any timing
+ ([parity check](README.md#parity-check)). Training, evaluation and the CLI
+@@ -55,7 +54,7 @@ path in MLX names the same component as in the torch state dict:
+ Two departures from the PyTorch forward are exact up to float rounding. The
+ catalog GRU always encodes every definition, where PyTorch learning encodes
+ only the rows a batch references; the others never reach the loss either way.
+-And the clipped surrogate's likelihood ratio is float32, where PyTorch uses
++And the PPO surrogate's likelihood ratio is float32, where PyTorch uses
+ float64 (the GPU has none); the two differ only for |log ratio| > 88.
+ 
+ ## Layout mapping
+@@ -74,37 +73,15 @@ float64 (the GPU has none); the two differ only for |log ratio| > 88.
+ 
+ Every canonical parameter maps to MLX arrays, or loading fails naming the key.
+ 
+-## Learner
++## Learner step
+ 
+-The backend carries no loss of its own. `manabot.backends.mlx.rl` has the
+-torch backend's functions that the scalar damped update calls, over MLX
+-arrays, and
+-`manabot.backends.mlx.learner.Learner` differentiates whatever loss an update
+-hands it, clips the global gradient norm and applies Adam (eps 1e-5, bias
+-correction). The damped update runs on it unchanged:
+-
+-```python
+-import manabot.backends.mlx as backend
+-from manabot.recipes.builders import move_learning
+-from manabot.training.updates.damped_policy import update_damped_iteration
+-
+-learner = backend.learner.Learner(policy, minibatch_rows=64)
+-diagnostics = update_damped_iteration(
+-    backend, learner, batch, move_learning(), iteration=1
+-)
+-```
+-
+-`batch` is a `RolloutBatch` as torch collection writes it. The same batch and
+-weights give the same diagnostics as the torch backend within the parity
+-bars. Returns and advantage selection run on the host in NumPy
+-(`manabot.policy.returns`), the surrogate ratio is float32, and the sampled
+-gradient detail of `OptimizerHealth` is absent
+-([what differs](README.md#algorithms-are-written-once)).
+-
+-The step runs eagerly: packed GRU schedules and legal-action counts change
++`manabot.backends.mlx.learner.MLXLearner` computes the same damped PPO loss as
++`manabot.training.updates.damped_policy` over one minibatch (its terms are in
++`rl.py`), clips the global gradient norm and applies Adam with the learner's
++settings. It runs eagerly: packed GRU schedules and legal-action counts change
+ with every batch, so a compiled graph would retrace per call; only the GRU cell
+-is compiled. The backend does not write checkpoints or collect; training
+-continuity stays with the PyTorch learner.
++is compiled. It exists to measure the step and does not write checkpoints;
++training continuity stays with the PyTorch learner.
+ 
+ Results, machine and cost are in
+ [the MLX pilot report](../../experiments/mlx_pilot.md).
+diff --git a/manabot/backends/mlx/__init__.py b/manabot/backends/mlx/__init__.py
+index 52028e4c4..9323c1ac8 100644
+--- a/manabot/backends/mlx/__init__.py
++++ b/manabot/backends/mlx/__init__.py
+@@ -2,15 +2,9 @@
+ ../mlx.md.
+ 
+ Requires the optional `mlx` extra. It is the only manabot package that imports
+-MLX, and no other manabot module imports it. The updates take this module as
+-their `backend` argument and reach its files as attributes (`backend.rl`,
+-`backend.learner`, `backend.arrays`, `backend.rollout`), which load on first
+-use.
++MLX, and no other manabot module imports it.
+ """
+ 
+-import importlib
+-from types import ModuleType
+-
+ try:
+     import mlx.core  # noqa: F401
+ except ImportError as error:  # pragma: no cover - depends on the platform
+@@ -18,11 +12,3 @@ except ImportError as error:  # pragma: no cover - depends on the platform
+         "manabot.backends.mlx requires the optional 'mlx' extra "
+         "(uv sync --extra mlx, Apple Silicon only)"
+     ) from error
+-
+-_FILES = frozenset({"arrays", "checkpoint", "learner", "policy", "rl", "rollout"})
+-
+-
+-def __getattr__(name: str) -> ModuleType:
+-    if name in _FILES:
+-        return importlib.import_module(f"{__name__}.{name}")
+-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+diff --git a/manabot/backends/mlx/arrays.py b/manabot/backends/mlx/arrays.py
+index 4d055d942..056fa0179 100644
+--- a/manabot/backends/mlx/arrays.py
++++ b/manabot/backends/mlx/arrays.py
+@@ -1,9 +1,8 @@
+ """NumPy at the MLX backend's boundary: conversion and dtype.
+ 
+-Every array crossing into the backend is float32, an integer index or a bool
+-mask; MLX's GPU has no float64, so `from_numpy` narrows float64 input. Arrays
+-live in unified memory, so conversion copies but never transfers between
+-devices, and the `device` argument the updates pass is ignored.
++Every array crossing into the backend is float32 or an integer index; MLX's
++GPU has no float64. Arrays live in unified memory, so conversion copies but
++never transfers between devices.
+ """
+ 
+ from collections.abc import Mapping
+@@ -19,22 +18,10 @@ def to_mlx(array: np.ndarray) -> mx.array:
+     return mx.array(array)
+ 
+ 
+-def from_numpy(array: np.ndarray, device: object = None) -> mx.array:
+-    """`array` as an MLX array; float64 becomes float32."""
+-    if array.dtype == np.float64:
+-        array = array.astype(np.float32)
+-    return mx.array(array)
+-
+-
+ def to_numpy(array: mx.array) -> np.ndarray:
+     return np.array(array)
+ 
+ 
+-def float32(array: mx.array) -> mx.array:
+-    """A forward output in float32, whatever precision the forward ran in."""
+-    return array.astype(FLOAT)
+-
+-
+ def flat_numpy(tree: Mapping[str, object] | list[object]) -> dict[str, np.ndarray]:
+     """A parameter or gradient tree as NumPy arrays under dotted names."""
+     return {name: np.array(value) for name, value in tree_flatten(tree)}
+diff --git a/manabot/backends/mlx/checkpoint.py b/manabot/backends/mlx/checkpoint.py
+index 348c36516..723dbc465 100644
+--- a/manabot/backends/mlx/checkpoint.py
++++ b/manabot/backends/mlx/checkpoint.py
+@@ -28,7 +28,7 @@ from mlx.utils import tree_flatten, tree_unflatten
+ import numpy as np
+ 
+ from manabot.backends.mlx.arrays import to_mlx
+-from manabot.backends.mlx.learner import Learner
++from manabot.backends.mlx.learner import MLXLearner
+ from manabot.backends.mlx.policy import MLXActorCritic
+ from manabot.env.observation import ObservationSpace
+ from manabot.infra.config import ModelConfig, ObservationConfig
+@@ -104,9 +104,7 @@ def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
+     """An MLX policy holding the checkpoint's weights; names and shapes must
+     match the MLX model exactly."""
+     parameters = mlx_parameters(checkpoint.parameters)
+-    policy = MLXActorCritic(
+-        checkpoint.dimensions(), checkpoint.tables(), checkpoint.model
+-    )
++    policy = MLXActorCritic(checkpoint.dimensions(), checkpoint.tables())
+     expected = dict(tree_flatten(policy.parameters()))
+     unmapped = sorted(set(parameters) ^ set(expected))
+     if unmapped:
+@@ -142,9 +140,9 @@ class _MLX:
+ 
+     name = "mlx"
+ 
+-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
++    def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, MLXLearner]:
+         policy = assemble(checkpoint)
+-        return policy, Learner(policy, minibatch_rows=1)
++        return policy, MLXLearner(policy)
+ 
+     def parameter_layout(
+         self, canonical: Mapping[str, np.ndarray]
+diff --git a/manabot/backends/mlx/learner.py b/manabot/backends/mlx/learner.py
+index ba38a69a9..087393acd 100644
+--- a/manabot/backends/mlx/learner.py
++++ b/manabot/backends/mlx/learner.py
+@@ -1,163 +1,99 @@
+-"""The MLX learner: optimizer state and the guarded update step.
+-
+-`Learner` bundles an `MLXActorCritic` with its Adam optimizer (eps 1e-5, bias
+-correction, the rate set per iteration) and a profiler; the updates in
+-`manabot.training.updates` step it through `loss` and `step`, as they step the
+-torch backend's. It carries no loss of its own: an update hands `loss` its
+-minibatch objective as a closure over the policy forward, which MLX
+-differentiates as a function (`mlx.nn.value_and_grad`).
+-
+-`loss` evaluates the objective and its gradients together, so the forward runs
+-once; `step` clips the global gradient norm, applies Adam and refuses
+-nonfinite results (`NumericalError`, `manabot.backends.mlx.rl`), and
+-`gradients` returns them without stepping. Precision is float32 throughout.
+-An optional recorder (`manabot.training.updates.health.OptimizerHealth`)
+-counts steps and rejections; the sampled gradient and parameter detail it
+-reads from torch modules stays absent here.
++"""The damped-policy PPO learner step in MLX (`manabot.training.updates.damped_policy`).
++
++`damped_loss` is equation (6) of the damped update over one minibatch plus the
++scalar critic's squared error (`manabot.backends.mlx.rl`): a clipped
++likelihood-ratio surrogate, reverse KL to the collection policy and reverse KL
++to the reference policy, averaged over the actor-selected rows. Behavior
++log-likelihoods, the reference and targets are constants; gradients reach the
++policy and critic logits only through the current forward.
++
++Precision is float32 throughout, including the surrogate ratio PyTorch takes
++in float64 (`rl.clipped_surrogate` states the bound).
++
++`MLXLearner.step` then clips the global gradient norm and applies Adam with the
++learner's settings (lr per iteration, eps 1e-5, bias correction), matching
++`OptimizerHealth`'s backward and optimizer step. It keeps no EMA or reference
++copy of its own: the reference distribution arrives in `Targets`. It measures
++the step; it does not write checkpoints.
+ """
+ 
+-from collections.abc import Callable
+-from contextlib import AbstractContextManager, nullcontext
+-from typing import TYPE_CHECKING, Literal, Protocol
+-
+ import mlx.core as mx
+ import mlx.nn as nn
+ import mlx.optimizers as optim
+-from mlx.utils import tree_flatten
+ import numpy as np
+ 
+-from manabot.backends.mlx.arrays import flat_numpy
+-from manabot.backends.mlx.rl import NumericalError, require
+-from manabot.infra.profiler import Profiler
+-
+-if TYPE_CHECKING:
+-    from manabot.backends.mlx.policy import MLXActorCritic
+-
+-
+-class StepRecorder(Protocol):
+-    """What `Learner.step` reports: its timed sections, every refusal and each
+-    completed step. Recording never changes the loss or the step."""
+-
+-    def track(self, section: str) -> AbstractContextManager[object]: ...
+-
+-    def rejecting(self) -> AbstractContextManager[object]: ...
+-
+-    def record_step(self, parameters: list[object], before: list[object]) -> None: ...
+-
+-
+-def check_objective(loss: mx.array) -> None:
+-    """Raise NumericalError for a nonfinite loss."""
+-    require(mx.isfinite(loss), "nonfinite_objective", loss=loss)
+-
+-
+-def no_grad() -> AbstractContextManager[object]:
+-    """Compute constants. MLX records no graph outside a differentiated
+-    function, so there is nothing to switch off."""
+-    return nullcontext()
+-
+-
+-class Learner:
+-    """Trainable policy and Adam state shared by every update."""
+-
+-    def __init__(
+-        self,
+-        agent: "MLXActorCritic",
+-        device: object = "gpu",
+-        *,
+-        minibatch_rows: int,
+-        precision: Literal["float32"] = "float32",
+-    ) -> None:
+-        if minibatch_rows < 1:
+-            raise ValueError("minibatch_rows must be positive")
+-        if precision != "float32":
+-            raise ValueError("the MLX backend trains in float32")
+-        self.device = device
+-        self.agent = agent
+-        # Cached programs are constants of the weights they were encoded from.
+-        agent.clear_cache()
+-        self.minibatch_rows = minibatch_rows
+-        self.precision = precision
++from manabot.backends.mlx.arrays import FLOAT, flat_numpy, to_mlx
++from manabot.backends.mlx.policy import MLXActorCritic
++from manabot.backends.mlx.rl import (
++    clipped_surrogate,
++    masked_log_softmax,
++    reverse_kl,
++    selected_mean,
++    squared_error,
++)
++from manabot.policy.prepare import Prepared
++from manabot.policy.protocol import Settings, Targets
++
++
++def damped_loss(
++    policy: MLXActorCritic, batch: Prepared, targets: Targets, settings: Settings
++) -> tuple[mx.array, tuple[mx.array, mx.array]]:
++    """Loss, and the logits and values it read."""
++    logits, values = policy(batch)
++    valid = to_mlx(batch.legal)
++    logs = masked_log_softmax(logits, valid)
++    behavior = to_mlx(targets.behavior_logs)
++    surrogate = clipped_surrogate(
++        logs,
++        behavior,
++        to_mlx(targets.actions.astype(np.int64))[:, None],
++        to_mlx(targets.advantages),
++        settings.clip,
++    )
++    reference = mx.log(mx.where(valid, to_mlx(targets.reference), 1.0))
++    policy_rows = (
++        surrogate
++        + settings.collection_kl * reverse_kl(logs, behavior, valid)
++        + settings.tau * reverse_kl(logs, reference, valid)
++    )
++    policy_loss = selected_mean(policy_rows, to_mlx(targets.actor_mask).astype(FLOAT))
++    value_loss = squared_error(values[:, 0], to_mlx(targets.value_targets))
++    return policy_loss + value_loss, (logits, values)
++
++
++class MLXLearner:
++    """Adam over `policy`'s parameters, one minibatch per `step`."""
++
++    def __init__(self, policy: MLXActorCritic) -> None:
++        self.policy = policy
++        policy.clear_cache()
+         self.optimizer = optim.Adam(
+             learning_rate=2.5e-4, betas=[0.9, 0.999], eps=1e-5, bias_correction=True
+         )
+-        self.profiler = Profiler()
+-        # The loss `loss` last returned and its parameter gradients.
+-        self._pending: tuple[mx.array, dict[str, object]] | None = None
+-
+-    def forward_precision(self) -> AbstractContextManager[object]:
+-        """The context each policy forward runs in: float32, so nothing."""
+-        return nullcontext()
++        self._value_and_grad = nn.value_and_grad(policy, self._loss)
+ 
+-    def set_learning_rate(self, rate: float) -> None:
+-        """The rate every following optimizer step uses."""
+-        self.optimizer.learning_rate = rate
++    def _loss(self, batch: Prepared, targets: Targets, settings: Settings) -> mx.array:
++        loss, _ = damped_loss(self.policy, batch, targets, settings)
++        return loss
+ 
+-    def loss(
+-        self, objective: Callable[[], tuple[mx.array, ...]]
+-    ) -> tuple[mx.array, ...]:
+-        """Evaluate `objective`, a closure over this policy's forward whose
+-        first result is the loss, with the loss's parameter gradients; return
+-        its results. `step` and `gradients` take that loss."""
+-        outputs, gradients = nn.value_and_grad(self.agent, objective)()
+-        mx.eval(outputs, gradients)
+-        self._pending = (outputs[0], gradients)
+-        return outputs
+-
+-    def _gradients(self, loss: mx.array) -> dict[str, object]:
+-        if self._pending is None or self._pending[0] is not loss:
+-            raise ValueError("step and gradients take the loss `loss` last returned")
+-        return self._pending[1]
++    def gradients(
++        self, batch: Prepared, targets: Targets, settings: Settings
++    ) -> tuple[float, dict[str, np.ndarray]]:
++        """Loss and unclipped parameter gradients."""
++        loss, grads = self._value_and_grad(batch, targets, settings)
++        mx.eval(loss, grads)
++        return float(loss), flat_numpy(grads)
+ 
+     def step(
+-        self,
+-        loss: mx.array,
+-        max_grad_norm: float,
+-        *,
+-        recorder: StepRecorder | None = None,
+-    ) -> mx.array:
+-        """Clip the global gradient norm to `max_grad_norm` and apply Adam;
+-        return the pre-clip norm.
+-
+-        Raises before stepping on a nonfinite loss or gradients; the policy
+-        and optimizer are then unchanged. Raises after stepping if a parameter
+-        became nonfinite.
+-        """
+-        gradients = self._gradients(loss)
+-        self._pending = None
+-        track = recorder.track if recorder is not None else _untracked
+-        with recorder.rejecting() if recorder is not None else nullcontext():
+-            check_objective(loss)
+-            with track("Backward and gradient clipping"):
+-                clipped, norm = optim.clip_grad_norm(gradients, max_grad_norm)
+-                if not bool(mx.isfinite(norm)):
+-                    raise NumericalError(
+-                        "nonfinite_gradients",
+-                        {f"gradient/{name}": g for name, g in tree_flatten(gradients)},
+-                    )
+-            with track("Optimizer step"):
+-                self.optimizer.update(self.agent, clipped)
+-                parameters = tree_flatten(self.agent.parameters())
+-                finite = mx.all(
+-                    mx.isfinite(mx.concatenate([p.flatten() for _, p in parameters]))
+-                )
+-                mx.eval(finite, self.agent.parameters(), self.optimizer.state)
+-                if not bool(finite):
+-                    raise NumericalError(
+-                        "nonfinite_parameters_after_step",
+-                        {f"parameter/{name}": p for name, p in parameters},
+-                    )
+-                if recorder is not None:
+-                    recorder.record_step([], [])
+-        return norm
+-
+-    def gradients(self, loss: mx.array) -> dict[str, np.ndarray]:
+-        """Unclipped gradients of `loss` in MLX's layout, without stepping."""
+-        return flat_numpy(self._gradients(loss))
++        self, batch: Prepared, targets: Targets, settings: Settings
++    ) -> tuple[float, float]:
++        """One optimizer step; returns the loss and the pre-clip gradient norm."""
++        loss, grads = self._value_and_grad(batch, targets, settings)
++        grads, norm = optim.clip_grad_norm(grads, settings.max_grad_norm)
++        self.optimizer.learning_rate = settings.learning_rate
++        self.optimizer.update(self.policy, grads)
++        mx.eval(loss, norm, self.policy.parameters(), self.optimizer.state)
++        return float(loss), float(norm)
+ 
+     def parameters(self) -> dict[str, np.ndarray]:
+-        """A host copy of the parameters in MLX's layout."""
+-        return flat_numpy(self.agent.parameters())
+-
+-
+-def _untracked(section: str) -> AbstractContextManager[object]:
+-    return nullcontext()
++        return flat_numpy(self.policy.parameters())
+diff --git a/manabot/backends/mlx/policy.py b/manabot/backends/mlx/policy.py
+index 550e2c558..60cf31694 100644
+--- a/manabot/backends/mlx/policy.py
++++ b/manabot/backends/mlx/policy.py
+@@ -29,7 +29,6 @@ import mlx.nn as nn
+ import numpy as np
+ 
+ from manabot.backends.mlx.arrays import to_numpy
+-from manabot.infra.config import ModelConfig
+ from manabot.policy.checkpoint import Dimensions
+ from manabot.policy.prepare import (
+     Packed,
+@@ -231,12 +230,9 @@ class _Static:
+ 
+ 
+ class MLXActorCritic(nn.Module):
+-    def __init__(self, dims: Dimensions, tables: Tables, config: ModelConfig) -> None:
++    def __init__(self, dims: Dimensions, tables: Tables) -> None:
+         super().__init__()
+         self.dims = dims
+-        # The model configuration the weights were trained under, as the
+-        # torch policy carries it; the updates read its `value_kind`.
+-        self.config = config
+         hidden = dims.hidden
+         self.semantic_cards = SemanticCards(dims)
+         self.player_embedding = Projection(dims.player, hidden)
+@@ -319,10 +315,6 @@ class MLXActorCritic(nn.Module):
+         mx.eval(logits, values)
+         return to_numpy(logits), to_numpy(values)[:, 0]
+ 
+-    def forward_distribution(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+-        """The training forward the updates differentiate: `__call__`."""
+-        return self(batch)
+-
+     def _public(self, programs: mx.array) -> mx.array:
+         """`NameCandidateEncoder.public_definitions`: add names to their programs."""
+         static: _Static = self._static
+diff --git a/manabot/backends/mlx/rl.py b/manabot/backends/mlx/rl.py
+index 2b5648f84..4c038ba34 100644
+--- a/manabot/backends/mlx/rl.py
++++ b/manabot/backends/mlx/rl.py
+@@ -1,296 +1,56 @@
+-"""The standard reinforcement-learning functions over MLX arrays.
++"""The damped update's loss terms over MLX arrays.
+ 
+-The same functions, with the same names, arguments, shapes and per-row
+-results, as `manabot.backends.torch.rl`; the updates in
+-`manabot.training.updates` reach them as `backend.rl`. Rows are minibatch
++Each function is the MLX form of its PyTorch counterpart in
++`manabot.training.updates.damped_policy` and `manabot.backends.torch.rl`, term
++for term, so the parity check can compare them on the same minibatch. Rows are minibatch
+ samples [B]; distributions are over action slots [B,A] with `valid` marking
+-the legal support. Targets, behavior likelihoods and references are
+-constants: gradients reach only the current policy and value outputs.
+-
+-Three differences from torch are deliberate. MLX's GPU has no float64, so the
+-surrogate ratio is float32 (`clipped_surrogate` states the bound) and
+-`float64_operand` is the identity. Returns and advantage selection run on the
+-host through `manabot.policy.returns`, whose NumPy functions match torch's
+-bit for bit. The categorical critic's functions are absent: the backend
+-refuses a categorical checkpoint (`manabot.policy.checkpoint.require_supported`).
++the legal support.
+ """
+ 
+-from collections.abc import Mapping
+-from typing import Literal
+-
+ import mlx.core as mx
+-import numpy as np
+-
+-from manabot.policy import returns
+-
+-# -- Numerical refusals --------------------------------------------------------
+-
+-
+-class NumericalError(ValueError):
+-    """An identified invariant plus arrays for bounded private failure capture."""
+-
+-    def __init__(self, invariant: str, tensors: Mapping[str, mx.array]) -> None:
+-        super().__init__(invariant)
+-        self.invariant = invariant
+-        self.health: dict[str, int | float] = {}
+-        self.tensors = {key: mx.stop_gradient(value) for key, value in tensors.items()}
+-
+-
+-def require(condition: mx.array, invariant: str, **tensors: mx.array) -> None:
+-    """Raise `NumericalError(invariant)` unless every element of `condition` holds."""
+-    if not bool(condition.all()):
+-        raise NumericalError(
+-            invariant, {**tensors, "failed": mx.logical_not(condition)}
+-        )
+-
+-
+-def require_finite(invariant: str, **tensors: mx.array) -> None:
+-    """Raise `NumericalError(invariant)` unless every element of each array is finite."""
+-    for tensor in tensors.values():
+-        require(mx.isfinite(tensor), invariant, **tensors)
+-
+-
+-def float64_operand(tensor: mx.array) -> mx.array:
+-    """The identity: MLX computes every term in float32 on one device."""
+-    return tensor
+-
+-
+-def constant(tensor: mx.array) -> mx.array:
+-    """The same values with no gradient path: targets, evidence, diagnostics."""
+-    return mx.stop_gradient(tensor)
+-
+-
+-# -- Policy distribution -------------------------------------------------------
+ 
+ 
+-def legal_mask(mask: mx.array) -> mx.array:
+-    """The boolean legal support of a 0/1 mask [*,A]."""
+-    require(
+-        mx.isfinite(mask) & ((mask == 0) | (mask == 1)),
+-        "invalid_action_mask",
+-        mask=mask,
+-    )
+-    return mask.astype(mx.bool_)
+-
+-
+-def policy_logs(logits: mx.array, valid: mx.array) -> mx.array:
+-    """Normalize [*,A] logits; padding is -inf and legal logs must be finite."""
+-    if logits.shape != valid.shape or logits.ndim < 2:
+-        raise NumericalError("policy_shape", {"logits": logits, "valid": valid})
+-    require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
+-    illegal = mx.logical_not(valid)
+-    require(
+-        mx.isfinite(logits) | illegal,
+-        "nonfinite_legal_logits",
+-        logits=logits,
+-        valid=valid,
+-    )
++def masked_log_softmax(logits: mx.array, valid: mx.array) -> mx.array:
++    """Log-probabilities on the legal support, -inf elsewhere."""
+     masked = mx.where(valid, logits, -mx.inf)
+-    logs = masked - mx.logsumexp(masked, axis=-1, keepdims=True)
+-    require(
+-        mx.isfinite(logs) | illegal,
+-        "nonfinite_legal_logs",
+-        logs=logs,
+-        logits=logits,
+-        valid=valid,
+-    )
+-    return logs
+-
+-
+-def action_logs(logs: mx.array, actions: mx.array) -> mx.array:
+-    """The entry of each row of `logs` [B,A] at its sampled action [B]: [B]."""
+-    return mx.take_along_axis(logs, actions[:, None], axis=-1)[:, 0]
+-
+-
+-def reference_logs(reference: mx.array, valid: mx.array) -> mx.array:
+-    """Log probabilities [B,A] of a constant reference, zero off `valid`."""
+-    return mx.log(mx.where(valid, mx.stop_gradient(reference), 1.0))
+-
+-
+-def check_probabilities(
+-    probabilities: mx.array, valid: mx.array, *, positive: bool
+-) -> None:
+-    if probabilities.shape != valid.shape or probabilities.ndim < 2:
+-        raise NumericalError(
+-            "distribution_shape", {"probabilities": probabilities, "valid": valid}
+-        )
+-    tensors = {"probabilities": probabilities, "valid": valid}
+-    illegal = mx.logical_not(valid)
+-    require(valid.any(-1), "empty_legal_support", **tensors)
+-    require(mx.isfinite(probabilities), "nonfinite_probabilities", **tensors)
+-    require(probabilities >= 0, "negative_probabilities", **tensors)
+-    if positive:
+-        require((probabilities > 0) | illegal, "nonpositive_legal_support", **tensors)
+-    require((probabilities == 0) | valid, "illegal_probability_mass", **tensors)
+-    require(
+-        mx.abs(probabilities.sum(-1) - 1) <= 2e-5,
+-        "probability_normalization",
+-        **tensors,
+-    )
+-
+-
+-def check_logs(logs: mx.array, valid: mx.array) -> None:
+-    if logs.shape != valid.shape:
+-        raise NumericalError("log_shape", {"logs": logs, "valid": valid})
+-    require(valid.any(-1), "empty_legal_support", logs=logs, valid=valid)
+-    require(
+-        mx.isfinite(logs) | mx.logical_not(valid),
+-        "nonfinite_behavior_logs",
+-        logs=logs,
+-        valid=valid,
+-    )
+-    require(mx.isneginf(logs) | valid, "illegal_log_mass", logs=logs, valid=valid)
+-    require(
+-        mx.abs(mx.logsumexp(logs, axis=-1)) <= 1e-5,
+-        "log_normalization",
+-        logs=logs,
+-        valid=valid,
+-    )
++    return masked - mx.logsumexp(masked, axis=-1, keepdims=True)
+ 
+ 
+-# -- Returns -------------------------------------------------------------------
+-
+-
+-def transition_gae(
+-    rewards: mx.array,
+-    values: mx.array,
+-    ends: mx.array,
+-    next_value: mx.array,
+-    gamma: float,
+-    lam: float,
+-) -> tuple[mx.array, mx.array]:
+-    """GAE for transition-end flags [T,E], on the host
+-    (`manabot.policy.returns.transition_gae`)."""
+-    advantages, value_targets = returns.transition_gae(
+-        np.array(rewards),
+-        np.array(values),
+-        np.array(ends),
+-        np.array(next_value),
+-        gamma,
+-        lam,
+-    )
+-    return mx.array(advantages), mx.array(value_targets)
+-
+-
+-# -- Losses --------------------------------------------------------------------
+-# Per-row loss terms over one minibatch; the caller reduces, masks and weights.
+-
+-
+-def clipped_surrogate(
+-    log_ratio: mx.array, advantages: mx.array, clip: float
+-) -> mx.array:
+-    """Negative clipped surrogate [B] (Schulman et al. 2017, eq. 7) from log ratios.
+-
+-    PyTorch evaluates the ratio in float64 so exp(log ratio) cannot overflow;
+-    MLX's GPU has no float64, so the ratio is float32 here. The two differ only
+-    for |log ratio| > 88, which no sampled action reaches in practice; the
+-    parity check would fail first. Advantages are constants.
+-    """
+-    ratio = mx.exp(log_ratio)
+-    advantages = mx.stop_gradient(advantages)
+-    return -mx.minimum(
+-        ratio * advantages, mx.clip(ratio, 1 - clip, 1 + clip) * advantages
+-    )
+-
+-
+-def reverse_kl(logs: mx.array, target_logs: mx.array, valid: mx.array) -> mx.array:
+-    """KL(current || frozen target) [B], zero terms on padding without 0 * -inf."""
+-    difference = mx.where(valid, logs, 0.0) - mx.where(
+-        valid, mx.stop_gradient(target_logs), 0.0
+-    )
++def reverse_kl(logs: mx.array, target: mx.array, valid: mx.array) -> mx.array:
++    """KL(current || target) per row from log-probabilities, zero on padding
++    without 0 * -inf."""
++    difference = mx.where(valid, logs, 0.0) - mx.where(valid, target, 0.0)
+     return (mx.exp(logs) * difference).sum(-1)
+ 
+ 
+-def squared_value_loss(values: mx.array, targets: mx.array) -> mx.array:
+-    """Squared error [B] of a scalar critic's `[B]` or `[B,1]` predictions."""
+-    if values.shape != targets.shape:
+-        values = values.squeeze(-1)
+-    if values.shape != targets.shape or targets.ndim != 1:
+-        raise ValueError("scalar values and targets require [B]")
+-    return mx.square(values - targets)
+-
+-
+-def entropy(logs: mx.array, valid: mx.array) -> mx.array:
+-    """Policy entropy [B] of normalized log-probabilities `[B,A]` over `valid` entries."""
+-    return -(mx.exp(logs) * mx.where(valid, logs, 0.0)).sum(-1)
+-
+-
+-def damped_policy_loss(
+-    logits: mx.array,
++def clipped_surrogate(
++    logs: mx.array,
++    behavior: mx.array,
+     actions: mx.array,
+     advantages: mx.array,
+-    behavior_logs: mx.array,
+-    reference: mx.array,
+-    valid: mx.array,
+-    *,
+     clip: float,
+-    collection_kl: float,
+-    tau: float,
+ ) -> mx.array:
+-    """The damped policy objective, equation (6), per row [B] over offers [B,A].
++    """PPO's clipped likelihood-ratio surrogate per row, as a loss.
+ 
+-    Sources and departures: docs/learning.md#fidelity-to-the-sources. Ratios
+-    use the actual action likelihood at collection; the reverse KLs sum all
+-    legal actions.
++    `actions` [B,1] index the sampled slot. PyTorch evaluates the ratio in
++    float64 so exp(log ratio) cannot overflow; MLX's GPU has no float64, so the
++    ratio is float32 here. The two differ only for |log ratio| > 88, which no
++    sampled action reaches in practice; the parity check would fail first.
+     """
+-    if logits.ndim != 2 or logits.shape != valid.shape:
+-        raise ValueError("policy logits require [B,A] legal support")
+-    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
+-        raise ValueError("actions and advantages require [B]")
+-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
+-        raise ValueError("invalid damping coefficients")
+-    check_logs(behavior_logs, valid)
+-    check_probabilities(reference, valid, positive=True)
+-    require(
+-        mx.isfinite(advantages),
+-        "nonfinite_advantages",
+-        advantages=advantages,
+-        valid=valid,
++    ratio = mx.exp(
++        mx.take_along_axis(logs, actions, axis=-1)[:, 0]
++        - mx.take_along_axis(behavior, actions, axis=-1)[:, 0]
+     )
+-    if bool(((actions < 0) | (actions >= logits.shape[-1])).any()):
+-        raise ValueError("action index outside legal support")
+-    if not bool(mx.take_along_axis(valid, actions[:, None], axis=-1).all()):
+-        raise ValueError("sampled action is not legal")
+-    logs = policy_logs(logits, valid)
+-    behavior_logs = mx.stop_gradient(behavior_logs)
+-    # Each side is gathered before the difference: on padding both are -inf.
+-    ratio_logs = action_logs(logs, actions) - action_logs(behavior_logs, actions)
+-    return (
+-        clipped_surrogate(ratio_logs, advantages, clip)
+-        + collection_kl * reverse_kl(logs, behavior_logs, valid)
+-        + tau * reverse_kl(logs, reference_logs(reference, valid), valid)
++    return -mx.minimum(
++        ratio * advantages, mx.clip(ratio, 1 - clip, 1 + clip) * advantages
+     )
+ 
+ 
+-def clip_fraction(log_ratio: mx.array, clip: float) -> float:
+-    """Fraction of rows whose likelihood ratio lies outside `1 ± clip`."""
+-    outside = mx.abs(mx.exp(mx.stop_gradient(log_ratio)) - 1) > clip
+-    return float(outside.astype(mx.float32).mean())
+-
+-
+-# -- Selection -----------------------------------------------------------------
+-
+-
+-def magnitude_quantile(advantages: mx.array, quantile: float) -> float:
+-    """The inclusive `quantile` of |advantages| over every row."""
+-    return returns.magnitude_quantile(np.array(advantages), quantile)
+-
+-
+-def selection_mask(
+-    advantages: mx.array,
+-    kind: Literal["top_count", "quantile"],
+-    fraction: float,
+-    minimum: float,
+-) -> mx.array:
+-    """Boolean mask shaped like `advantages` keeping `fraction` of rows,
+-    |A| >= minimum, on the host (`manabot.policy.returns.selection_mask`)."""
+-    return mx.array(
+-        returns.selection_mask(np.array(advantages), kind, fraction, minimum)
+-    )
++def selected_mean(rows: mx.array, selected: mx.array) -> mx.array:
++    """Mean over the selected rows (float mask [B]); zero when none is."""
++    return (rows * selected).sum() / mx.maximum(selected.sum(), 1)
+ 
+ 
+-def selected_mean(values: mx.array, selected: mx.array) -> mx.array:
+-    """Mean of `values` [B] over the rows of bool `selected` [B]; an empty
+-    selection is zero with zero gradient."""
+-    count = selected.astype(mx.float32).sum()
+-    return mx.where(selected, values, 0.0).sum() / mx.maximum(count, 1)
++def squared_error(values: mx.array, targets: mx.array) -> mx.array:
++    """The scalar critic's mean squared error."""
++    return mx.square(values - targets).mean()
+diff --git a/manabot/backends/mlx/rollout.py b/manabot/backends/mlx/rollout.py
+deleted file mode 100644
+index b509f82a0..000000000
+--- a/manabot/backends/mlx/rollout.py
++++ /dev/null
+@@ -1,58 +0,0 @@
+-"""Rollout admission for the updates: a collected batch's observations as the
+-MLX policy reads them.
+-
+-The updates reach `AdmittedRollout` as `backend.rollout.AdmittedRollout`, with
+-the methods of the torch backend's. The MLX policy reads `Prepared` batches,
+-so "admitting" a row is preparing it on the host; nothing is kept between
+-minibatches.
+-"""
+-
+-from dataclasses import fields
+-from typing import TYPE_CHECKING
+-
+-import mlx.core as mx
+-import numpy as np
+-from numpy.typing import NDArray
+-
+-from manabot.backends.mlx.policy import MLXActorCritic
+-from manabot.policy.prepare import Prepared
+-
+-if TYPE_CHECKING:
+-    from manabot.training.rollout.actions import ActionRows
+-    from manabot.training.rollout.collection import RolloutBatch
+-
+-
+-class AdmittedRollout:
+-    """A rollout batch whose observations one MLX policy reads. The batch must
+-    not change afterwards."""
+-
+-    def __init__(self, agent: MLXActorCritic, batch: "RolloutBatch") -> None:
+-        self.agent = agent
+-        self.batch = batch
+-
+-    def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
+-        """Nothing to check ahead of time: `rows` prepares what it returns."""
+-
+-    def next_observation(self, device: object) -> Prepared:
+-        """Bootstrap observations [trajectory, ...]."""
+-        return self.agent.prepare(self.batch.next_obs)
+-
+-    def rows(
+-        self, indexes: NDArray[np.int64], device: object
+-    ) -> "tuple[Prepared, ActionRows]":
+-        """Prepared observations of flat rollout `indexes`, with their behavior
+-        distributions."""
+-        rows = self.batch.observations(indexes)
+-        return self.agent.prepare(rows.observation), rows
+-
+-    def legal(self, obs: Prepared) -> mx.array:
+-        """The legal-action mask [B,A] of rows this rollout returned."""
+-        return mx.array(obs.legal)
+-
+-    def evidence(self, obs: Prepared) -> dict[str, np.ndarray]:
+-        """The arrays a rejected step retains for rows this rollout returned."""
+-        return {
+-            item.name: value
+-            for item in fields(obs)
+-            if isinstance(value := getattr(obs, item.name), np.ndarray)
+-        }
+diff --git a/manabot/backends/parity.py b/manabot/backends/parity.py
+index ca7d7d758..2ff0039d4 100644
+--- a/manabot/backends/parity.py
++++ b/manabot/backends/parity.py
+@@ -5,13 +5,12 @@ real inputs.
+ 
+ `DIR` is a capture written by `experiments/mlx_pilot.py capture`: learner
+ minibatches (`learner/NNN.npz` with `minibatches.json`) and collection calls
+-(`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU.
++(`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU,
++running the training code's own loss (`damped_policy_loss`, `selected_mean`).
+ Each backend whose framework is installed (`BACKENDS`) loads the same weights
+ through the shared container's canonical names and is compared in its own
+-parameter layout (`manabot.policy.protocol.Backend`). Both sides run the one
+-loss the damped update trains (`minibatch_objective`), each over its own
+-backend's `rl` functions and learner (`minibatch_loss`). For each minibatch,
+-at the checkpoint's weights:
++parameter layout (`manabot.policy.protocol.Backend`). For each minibatch, at
++the checkpoint's weights:
+ 
+ - forward logits on legal actions and values: max absolute difference <= 1e-4;
+ - PPO loss: relative difference <= 0.1%;
+@@ -39,15 +38,15 @@ import importlib.util
+ import json
+ from pathlib import Path
+ import sys
+-from types import ModuleType
+ from typing import Any, cast
+ 
+ import numpy as np
+ import torch
+ 
+-import manabot.backends.torch as torch_backend
+ from manabot.backends.torch.checkpoint import load_checkpoint
++from manabot.backends.torch.rl import selected_mean
+ from manabot.model.admission import admit_observation
++from manabot.model.policy_distribution import legal_mask
+ from manabot.policy.checkpoint import (
+     UnsupportedPolicy,
+     canonical_parameters,
+@@ -61,7 +60,10 @@ from manabot.policy.protocol import (
+     Settings,
+     Targets,
+ )
+-from manabot.training.updates.damped_policy import minibatch_objective
++from manabot.training.updates.damped_policy import damped_policy_loss
++from manabot.training.updates.references import (
++    reference_distribution as torch_reference,
++)
+ 
+ LOGIT_TOLERANCE = 1e-4
+ LOSS_TOLERANCE = 1e-3
+@@ -70,7 +72,7 @@ ZERO_GRADIENT = 1e-6  # of the global gradient norm
+ 
+ # Backend name -> the framework it needs; each provides
+ # `manabot.backends.<name>.checkpoint.BACKEND`.
+-BACKENDS = {"torch": "torch", "mlx": "mlx"}
++BACKENDS = {"mlx": "mlx"}
+ 
+ 
+ def installed_backends() -> list[str]:
+@@ -81,56 +83,9 @@ def installed_backends() -> list[str]:
+     ]
+ 
+ 
+-def backend_module(name: str) -> ModuleType:
+-    """`manabot.backends.<name>`, the module an update takes as its backend."""
+-    return importlib.import_module(f"manabot.backends.{name}")
+-
+-
+ def backend(name: str) -> Backend:
+-    return cast(Backend, backend_module(name).checkpoint.BACKEND)
+-
+-
+-def minibatch_loss(
+-    module: ModuleType,
+-    policy: BackendPolicy,
+-    learner: BackendLearner,
+-    batch: Prepared,
+-    targets: Targets,
+-    settings: Settings,
+-) -> Any:
+-    """The damped update's loss on one captured minibatch, as `module`'s
+-    array, ready for `learner.step` or `learner.gradients`.
+-
+-    The same `minibatch_objective` the update trains, over the backend's own
+-    `rl` functions, with the scalar critic every backend supports.
+-    """
+-    rl, to_device = module.rl, module.arrays.from_numpy
+-    device = getattr(learner, "device", "cpu")
+-    valid = rl.legal_mask(to_device(batch.legal, device))
+-    constants = {
+-        "actions": to_device(targets.actions.astype(np.int64), device),
+-        "advantages": to_device(targets.advantages, device),
+-        "value_targets": to_device(targets.value_targets, device),
+-        "behavior_logs": to_device(targets.behavior_logs, device),
+-        "reference": to_device(targets.reference, device),
+-        "actor_mask": to_device(targets.actor_mask.astype(bool), device),
+-    }
+-
+-    def objective() -> tuple[Any, ...]:
+-        logits, values = policy.forward_distribution(batch)
+-        return minibatch_objective(
+-            rl,
+-            logits,
+-            values,
+-            valid,
+-            **constants,
+-            categorical=False,
+-            clip=settings.clip,
+-            collection_kl=settings.collection_kl,
+-            tau=settings.tau,
+-        )
+-
+-    return learner.loss(objective)[0]
++    module = importlib.import_module(f"manabot.backends.{name}.checkpoint")
++    return cast(Backend, module.BACKEND)
+ 
+ 
+ @dataclass
+@@ -220,6 +175,20 @@ def minibatches(
+         yield obs, targets, settings, row
+ 
+ 
++def torch_gradients(agent: torch.nn.Module) -> dict[str, np.ndarray]:
++    """PyTorch gradients under canonical names (zero where none flowed)."""
++    return canonical_parameters(
++        {
++            name: (
++                np.zeros(tuple(parameter.shape), np.float32)
++                if parameter.grad is None
++                else parameter.grad.detach().numpy()
++            )
++            for name, parameter in agent.named_parameters()
++        }
++    )
++
++
+ def _cosine(a: np.ndarray, b: np.ndarray, floor: float = 0.0) -> float | None:
+     a, b = a.astype(np.float64).ravel(), b.astype(np.float64).ravel()
+     na, nb = np.linalg.norm(a), np.linalg.norm(b)
+@@ -251,40 +220,52 @@ def check(
+     agent, space = load_checkpoint(str(checkpoint))
+     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
+     weights = from_torch_state(agent.config, space.encoder.config, state)
+-    module = backend_module(backend_name)
+     port = backend(backend_name)
+     policy, learner = port.load(weights)
+-    # The reference: the same loss over the torch backend, on the loaded agent.
+-    reference_policy = torch_backend.checkpoint.TorchPolicy(agent, weights)
+-    reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
+     report = Report()
++    agent.train()
+     for index, (obs, targets, settings, meta) in enumerate(
+         minibatches(capture, minibatch_count)
+     ):
+-        reference_batch = reference_policy.prepare(obs)
+-        valid = reference_batch.legal
+-        with torch.no_grad():
+-            logits, values = reference_policy.forward_distribution(reference_batch)
+-        loss = minibatch_loss(
+-            torch_backend,
+-            reference_policy,
+-            reference_learner,
+-            reference_batch,
+-            targets,
+-            settings,
++        tensors = {k: torch.from_numpy(v) for k, v in obs.items()}
++        admitted = admit_observation(agent, tensors)
++        valid = legal_mask(admitted["actions_valid"])
++        agent.zero_grad(set_to_none=True)
++        logits, values = agent.forward_distribution(admitted)
++        reference = torch_reference(admitted, meta["reference"])
++        if not np.allclose(reference.numpy(), targets.reference, atol=1e-7):
++            raise AssertionError("numpy and torch reference distributions differ")
++        policy_loss = damped_policy_loss(
++            logits,
++            torch.from_numpy(targets.actions),
++            torch.from_numpy(targets.advantages),
++            torch.from_numpy(targets.behavior_logs),
++            reference,
++            valid,
++            clip=settings.clip,
++            collection_kl=settings.collection_kl,
++            tau=settings.tau,
+         )
+-        reference_loss = float(loss.detach())
+-        expected = port.gradient_layout(
+-            canonical_parameters(reference_learner.gradients(loss))
++        policy_loss = selected_mean(policy_loss, torch.from_numpy(targets.actor_mask))
++        value_loss = (
++            (values.squeeze(-1) - torch.from_numpy(targets.value_targets))
++            .square()
++            .mean()
+         )
++        loss = policy_loss + value_loss
++        loss.backward()
++        expected = port.gradient_layout(torch_gradients(agent))
+ 
+         batch = policy.prepare(obs)
+         port_logits, port_values = policy.evaluate(batch)
+-        port_loss = minibatch_loss(module, policy, learner, batch, targets, settings)
+-        loss_value = float(port_loss)
+-        grads = learner.gradients(port_loss)
+-        absolute, relative = _legal_difference(port_logits, logits.numpy(), valid)
+-        value_difference = float(np.abs(port_values - values.numpy().reshape(-1)).max())
++        loss_value, grads = learner.gradients(batch, targets, settings)
++        absolute, relative = _legal_difference(
++            port_logits, logits.detach().numpy(), valid.numpy()
++        )
++        value_difference = float(
++            np.abs(port_values - values.detach().numpy().reshape(-1)).max()
++        )
++        reference_loss = float(loss.detach())
+         loss_relative = abs(loss_value - reference_loss) / max(
+             abs(reference_loss), 1e-12
+         )
+@@ -327,29 +308,9 @@ def check(
+             report.gradient_min_cosine = cosines[worst]
+             report.gradient_worst = worst
+         if index == 0:
+-            reference_loss_again = minibatch_loss(
+-                torch_backend,
+-                reference_policy,
+-                reference_learner,
+-                reference_batch,
+-                targets,
+-                settings,
+-            )
+-            _compare_step(
+-                reference_learner,
+-                reference_loss_again,
+-                port,
+-                learner,
+-                minibatch_loss(module, policy, learner, batch, targets, settings),
+-                settings,
+-                zero,
+-                report,
+-            )
++            _compare_step(agent, port, learner, batch, targets, settings, zero, report)
+             policy, learner = port.load(weights)
+             agent.load_state_dict({k: torch.from_numpy(v) for k, v in state.items()})
+-            reference_learner = torch_backend.learner.Learner(
+-                agent, "cpu", minibatch_rows=1
+-            )
+         print(
+             f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
+             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
+@@ -361,11 +322,11 @@ def check(
+ 
+ 
+ def _compare_step(
+-    reference: BackendLearner,
+-    reference_loss: Any,
++    agent: torch.nn.Module,
+     port: Backend,
+     learner: BackendLearner,
+-    loss: Any,
++    batch: Prepared,
++    targets: Targets,
+     settings: Settings,
+     zero: set[str],
+     report: Report,
+@@ -375,17 +336,19 @@ def _compare_step(
+     Tensors with structurally zero gradients (`zero`) are skipped: Adam's
+     first step moves their rounding noise by +-lr in either direction.
+     """
+-    before = reference.parameters()
+-    reference.set_learning_rate(settings.learning_rate)
+-    reference.step(reference_loss, settings.max_grad_norm)
+-    now = reference.parameters()
++    before = {k: v.detach().clone() for k, v in agent.named_parameters()}
++    optimizer = torch.optim.Adam(
++        agent.parameters(), lr=settings.learning_rate, eps=1e-5
++    )
++    torch.nn.utils.clip_grad_norm_(list(agent.parameters()), settings.max_grad_norm)
++    optimizer.step()
+     initial = learner.parameters()
+-    learner.set_learning_rate(settings.learning_rate)
+-    learner.step(loss, settings.max_grad_norm)
++    learner.step(batch, targets, settings)
+     after = learner.parameters()
++    now = {k: v.detach().numpy() for k, v in agent.named_parameters()}
+     expected_after = port.parameter_layout(canonical_parameters(now))
+     expected_delta = port.parameter_layout(
+-        canonical_parameters({k: v - before[k] for k, v in now.items()})
++        canonical_parameters({k: v - before[k].numpy() for k, v in now.items()})
+     )
+     worst = 1.0
+     largest = 0.0
+diff --git a/manabot/backends/torch/__init__.py b/manabot/backends/torch/__init__.py
+index 6c9f97e56..0c8483216 100644
+--- a/manabot/backends/torch/__init__.py
++++ b/manabot/backends/torch/__init__.py
+@@ -1,17 +1 @@
+-"""The PyTorch backend: the reference every other backend is compared with.
+-
+-The updates take this module as their `backend` argument and reach its files
+-as attributes (`backend.rl`, `backend.learner`, `backend.arrays`,
+-`backend.rollout`), which load on first use.
+-"""
+-
+-import importlib
+-from types import ModuleType
+-
+-_FILES = frozenset({"arrays", "checkpoint", "learner", "policy", "rl", "rollout"})
+-
+-
+-def __getattr__(name: str) -> ModuleType:
+-    if name in _FILES:
+-        return importlib.import_module(f"{__name__}.{name}")
+-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
++"""The PyTorch backend: the reference every other backend is compared with."""
+diff --git a/manabot/backends/torch/arrays.py b/manabot/backends/torch/arrays.py
+index 359a9f937..28f4d6bb1 100644
+--- a/manabot/backends/torch/arrays.py
++++ b/manabot/backends/torch/arrays.py
+@@ -21,11 +21,6 @@ def to_numpy(tensor: Tensor) -> np.ndarray:
+     return tensor.detach().cpu().numpy()
+ 
+ 
+-def float32(tensor: Tensor) -> Tensor:
+-    """A forward output in float32, whatever precision the forward ran in."""
+-    return tensor.float()
+-
+-
+ def flat_numpy(named: Iterable[tuple[str, Tensor]]) -> dict[str, np.ndarray]:
+     """Named parameters, buffers or gradients as host arrays under the same names."""
+     return {name: to_numpy(value) for name, value in named}
+diff --git a/manabot/backends/torch/checkpoint.py b/manabot/backends/torch/checkpoint.py
+index ca93c1bd4..eee8c8914 100644
+--- a/manabot/backends/torch/checkpoint.py
++++ b/manabot/backends/torch/checkpoint.py
+@@ -22,8 +22,9 @@ from etude.train.records import CheckpointRecord
+ import numpy as np
+ import torch
+ 
+-from manabot.backends.torch.learner import Learner
++from manabot.backends.torch.learner import gradient_step
+ from manabot.backends.torch.policy import ActorCritic
++from manabot.backends.torch.rl import selected_mean, squared_value_loss
+ from manabot.belief.encoding import (
+     BeliefCheckpointBinding,
+     BeliefEncodingSchema,
+@@ -38,6 +39,7 @@ from manabot.infra.artifacts import (
+ from manabot.infra.config import ModelConfig, ObservationConfig
+ from manabot.model.admission import AdmittedObservation, admit_observation
+ from manabot.model.architecture import validate_architecture_receipt
++from manabot.model.policy_distribution import legal_mask
+ from manabot.model.world import (
+     checkpoint_source,
+     checkpoint_world,
+@@ -48,10 +50,11 @@ from manabot.model.world import (
+ from manabot.policy.checkpoint import (
+     PolicyCheckpoint,
+     canonical_name,
++    canonical_parameters,
+     read_container,
+-    torch_name,
+ )
+ from manabot.policy.prepare import Prepared, prepare
++from manabot.policy.protocol import Settings, Targets
+ import managym
+ 
+ 
+@@ -253,8 +256,8 @@ def save_checkpoint(
+ # -- the NumPy backend protocol ------------------------------------------------------
+ # Until `ActorCritic` reads `Prepared` indices itself, `prepare` builds the shared
+ # `Prepared` and retains the admitted torch observation on it (`Retained`), which
+-# the forward runs; parity against the reference torch path then exercises the
+-# harness with torch alone.
++# `evaluate` and the learner run; parity against the retained-reference torch
++# path then exercises the harness with torch alone.
+ 
+ 
+ @dataclass(frozen=True)
+@@ -291,13 +294,6 @@ class TorchPolicy:
+             logits, values = self.agent(_admitted(batch))
+         return logits.numpy(), values.numpy()
+ 
+-    def forward_distribution(
+-        self, batch: Prepared
+-    ) -> tuple[torch.Tensor, torch.Tensor]:
+-        """The training-mode forward, as the learner runs it."""
+-        self.agent.train()
+-        return self.agent.forward_distribution(_admitted(batch))
+-
+     def cache_programs(self) -> None:
+         """The torch forward encodes its programs per call; nothing to cache."""
+ 
+@@ -305,6 +301,77 @@ class TorchPolicy:
+         pass
+ 
+ 
++class TorchLearner:
++    """`BackendLearner`: the damped PPO loss with a clipped Adam step, as
++    `manabot.training.updates.damped_policy` computes it, over canonical names."""
++
++    def __init__(self, agent: ActorCritic) -> None:
++        self.agent = agent
++        self.optimizer = torch.optim.Adam(agent.parameters(), lr=0.0, eps=1e-5)
++
++    def _loss(
++        self, batch: Prepared, targets: Targets, settings: Settings
++    ) -> torch.Tensor:
++        # Imported here: the update module reaches collection and search,
++        # which load checkpoints through this module.
++        from manabot.training.updates.damped_policy import damped_policy_loss
++
++        obs = _admitted(batch)
++        self.agent.train()
++        logits, values = self.agent.forward_distribution(obs)
++        policy = damped_policy_loss(
++            logits,
++            torch.from_numpy(targets.actions),
++            torch.from_numpy(targets.advantages),
++            torch.from_numpy(targets.behavior_logs),
++            torch.from_numpy(targets.reference),
++            legal_mask(obs["actions_valid"]),
++            clip=settings.clip,
++            collection_kl=settings.collection_kl,
++            tau=settings.tau,
++        )
++        value = squared_value_loss(values, torch.from_numpy(targets.value_targets))
++        return (
++            selected_mean(policy, torch.from_numpy(targets.actor_mask)) + value.mean()
++        )
++
++    def gradients(
++        self, batch: Prepared, targets: Targets, settings: Settings
++    ) -> tuple[float, dict[str, np.ndarray]]:
++        self.agent.zero_grad(set_to_none=True)
++        loss = self._loss(batch, targets, settings)
++        loss.backward()
++        gradients = canonical_parameters(
++            {
++                name: (
++                    np.zeros(tuple(parameter.shape), np.float32)
++                    if parameter.grad is None
++                    else parameter.grad.numpy().copy()
++                )
++                for name, parameter in self.agent.named_parameters()
++            }
++        )
++        self.agent.zero_grad(set_to_none=True)
++        return float(loss.detach()), gradients
++
++    def step(
++        self, batch: Prepared, targets: Targets, settings: Settings
++    ) -> tuple[float, float]:
++        for group in self.optimizer.param_groups:
++            group["lr"] = settings.learning_rate
++        loss = self._loss(batch, targets, settings)
++        norm = gradient_step(loss, self.agent, self.optimizer, settings.max_grad_norm)
++        return float(loss.detach()), float(norm)
++
++    def parameters(self) -> dict[str, np.ndarray]:
++        return canonical_parameters(
++            {
++                name: parameter.detach().numpy().copy()
++                for name, parameter in self.agent.named_parameters()
++            }
++        )
++
++
+ def _admitted(batch: Prepared) -> AdmittedObservation:
+     if not isinstance(batch, Retained):
+         raise TypeError("the torch backend evaluates batches its own prepare built")
+@@ -314,17 +381,15 @@ def _admitted(batch: Prepared) -> AdmittedObservation:
+ class _Torch:
+     name = "torch"
+ 
+-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[TorchPolicy, Learner]:
++    def load(self, checkpoint: PolicyCheckpoint) -> tuple[TorchPolicy, TorchLearner]:
+         agent = assemble(checkpoint)
+-        return TorchPolicy(agent, checkpoint), Learner(agent, "cpu", minibatch_rows=1)
++        return TorchPolicy(agent, checkpoint), TorchLearner(agent)
+ 
+     def parameter_layout(
+         self, canonical: Mapping[str, np.ndarray]
+     ) -> dict[str, np.ndarray]:
+-        """Torch tensors have the canonical shapes under torch's own names."""
+-        return {
+-            torch_name(name): np.asarray(value) for name, value in canonical.items()
+-        }
++        """Torch tensors have the canonical names and shapes."""
++        return {name: np.asarray(value) for name, value in canonical.items()}
+ 
+     gradient_layout = parameter_layout
+ 
+diff --git a/manabot/backends/torch/learner.py b/manabot/backends/torch/learner.py
+index 552f3c6fa..18dd345fc 100644
+--- a/manabot/backends/torch/learner.py
++++ b/manabot/backends/torch/learner.py
+@@ -2,22 +2,18 @@
+ 
+ `Learner` bundles a trainable `ActorCritic` with its Adam optimizer, its
+ forward precision and a profiler; the updates in `manabot.training.updates`
+-step it through `Learner.loss` and `Learner.step`, the two calls every
+-backend's learner has. `gradient_step` runs backward, global-norm clipping and the
++step it. `gradient_step` runs backward, global-norm clipping and the
+ optimizer for any `nn.Module`, refusing to step on a loss or gradients it
+ cannot trust (`NumericalError`, `manabot.backends.torch.rl`); an optional
+ `StepRecorder` (the player's `OptimizerHealth` in
+ `manabot.training.updates.health` is one) observes what it did. `update_ema`
+ keeps the averaged model that evaluation and exports read. `forward_precision` and
+-`apply_matmul_precision` apply a stage's declared numeric precision;
+-`no_grad` wraps work whose outputs are constants (targets, diagnostics).
++`apply_matmul_precision` apply a stage's declared numeric precision.
+ """
+ 
+-from collections.abc import Callable
+ from contextlib import AbstractContextManager, nullcontext
+ from typing import TYPE_CHECKING, Protocol
+ 
+-import numpy as np
+ import torch
+ from torch import Tensor, nn
+ 
+@@ -202,11 +198,6 @@ def forward_precision(
+     return torch.autocast(device.type, dtype=torch.bfloat16)
+ 
+ 
+-def no_grad() -> AbstractContextManager[object]:
+-    """Compute constants: nothing inside records a gradient graph."""
+-    return torch.no_grad()
+-
+-
+ # -- Learner -------------------------------------------------------------------
+ 
+ 
+@@ -241,54 +232,3 @@ class Learner:
+     def forward_precision(self) -> AbstractContextManager[object]:
+         """Wrap each policy forward; callers cast its outputs to float32."""
+         return forward_precision(self.precision, self.device)
+-
+-    def set_learning_rate(self, rate: float) -> None:
+-        """The rate every following optimizer step uses."""
+-        for group in self.optimizer.param_groups:
+-            group["lr"] = rate
+-
+-    def loss(self, objective: Callable[[], tuple[Tensor, ...]]) -> tuple[Tensor, ...]:
+-        """Run `objective`, whose first result is the loss `step` or
+-        `gradients` then differentiates; the rest are returned with it.
+-
+-        An update writes its minibatch loss as this closure over the policy
+-        forward, because a functional framework differentiates a function
+-        rather than a value; torch runs it once and keeps the graph.
+-        """
+-        return objective()
+-
+-    def step(
+-        self,
+-        loss: Tensor,
+-        max_grad_norm: float,
+-        *,
+-        recorder: StepRecorder | None = None,
+-    ) -> Tensor:
+-        """`gradient_step` on this learner's policy and optimizer: the
+-        pre-clip gradient norm."""
+-        return gradient_step(
+-            loss, self.agent, self.optimizer, max_grad_norm, recorder=recorder
+-        )
+-
+-    def gradients(self, loss: Tensor) -> dict[str, np.ndarray]:
+-        """Unclipped gradients of `loss` by parameter name, without stepping
+-        (zero where none flowed)."""
+-        self.optimizer.zero_grad(set_to_none=True)
+-        loss.backward()
+-        gradients = {
+-            name: (
+-                np.zeros(tuple(parameter.shape), np.float32)
+-                if parameter.grad is None
+-                else parameter.grad.cpu().numpy().copy()
+-            )
+-            for name, parameter in self.agent.named_parameters()
+-        }
+-        self.optimizer.zero_grad(set_to_none=True)
+-        return gradients
+-
+-    def parameters(self) -> dict[str, np.ndarray]:
+-        """A host copy of every parameter by name."""
+-        return {
+-            name: parameter.detach().cpu().numpy().copy()
+-            for name, parameter in self.agent.named_parameters()
+-        }
+diff --git a/manabot/backends/torch/rl.py b/manabot/backends/torch/rl.py
+index 2434a6288..4bf7e7465 100644
+--- a/manabot/backends/torch/rl.py
++++ b/manabot/backends/torch/rl.py
+@@ -1,19 +1,15 @@
+ """The standard reinforcement-learning functions over torch tensors.
+ 
+-The masked policy distribution (legal mask, normalized logs and the checks on
+-collected behavior), returns (GAE, standardized advantages, categorical lambda
+-returns), per-row loss terms including the damped policy objective, advantage
+-selection and the named numerical refusals they raise. The updates in
+-`manabot.training.updates` reach these as `backend.rl`.
++Returns (GAE, standardized advantages, categorical lambda returns), per-row
++loss terms, advantage selection and the named numerical refusals they raise.
+ They read tensors and small typed records and import nothing else from
+-manabot beyond the framework-free host recursions in `manabot.policy.returns`
+-(`tests/test_package_boundaries.py` enforces it), so another role reuses them
+-unchanged. Every backend under `manabot.backends` has the same
++manabot (`tests/test_package_boundaries.py` enforces it), so another role
++reuses them unchanged. Every backend under `manabot.backends` has the same
+ functions over its own arrays; the gradient step and EMA live in
+ `manabot.backends.torch.learner`.
+ """
+ 
+-from collections.abc import Mapping
++from collections.abc import Iterator, Mapping
+ import math
+ from typing import Literal
+ 
+@@ -21,9 +17,6 @@ import torch
+ from torch import Tensor
+ from torch.nn import functional as F
+ 
+-from manabot.backends.torch.arrays import from_numpy, to_numpy
+-import manabot.policy.returns as returns
+-
+ # -- Numerical refusals --------------------------------------------------------
+ # Named numerical refusals, and the host boundary for float64 arithmetic.
+ #
+@@ -48,12 +41,6 @@ def require(condition: Tensor, invariant: str, **tensors: Tensor) -> None:
+         raise NumericalError(invariant, {**tensors, "failed": ~condition})
+ 
+ 
+-def require_finite(invariant: str, **tensors: Tensor) -> None:
+-    """Raise `NumericalError(invariant)` unless every element of each tensor is finite."""
+-    for tensor in tensors.values():
+-        require(torch.isfinite(tensor), invariant, **tensors)
+-
+-
+ def float64_operand(tensor: Tensor) -> Tensor:
+     """Move MPS operands to the host, where float64 is supported.
+ 
+@@ -65,165 +52,6 @@ def float64_operand(tensor: Tensor) -> Tensor:
+     return tensor.cpu() if tensor.device.type == "mps" else tensor
+ 
+ 
+-def constant(tensor: Tensor) -> Tensor:
+-    """The same values with no gradient path: targets, evidence, diagnostics."""
+-    return tensor.detach()
+-
+-
+-# -- Policy distribution -------------------------------------------------------
+-# Masked categorical policies with retained log-space support.
+-#
+-# Normalized legal logs describe the policy; exp(logs) are the finite precision
+-# sampling weights. Underflow in the latter is counted, never repaired with a
+-# floor. Collection and learning share this normalization and legal mask.
+-
+-
+-def legal_mask(mask: Tensor) -> Tensor:
+-    require(
+-        torch.isfinite(mask) & ((mask == 0) | (mask == 1)),
+-        "invalid_action_mask",
+-        mask=mask,
+-    )
+-    return mask.bool()
+-
+-
+-def policy_logs(logits: Tensor, valid: Tensor) -> Tensor:
+-    """Normalize [*,A] logits; padding is -inf and legal logs must be finite.
+-
+-    log_softmax subtracts the maximum before reduction, avoiding cancellation
+-    from subtracting a large absolute logsumexp. Unrepresentable log differences
+-    fail explicitly even when the original logits were finite.
+-    """
+-    if logits.shape != valid.shape or logits.ndim < 2:
+-        raise NumericalError("policy_shape", {"logits": logits, "valid": valid})
+-    require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
+-    require(
+-        torch.isfinite(logits) | ~valid,
+-        "nonfinite_legal_logits",
+-        logits=logits,
+-        valid=valid,
+-    )
+-    logs = logits.masked_fill(~valid, -torch.inf).log_softmax(-1)
+-    require(
+-        torch.isfinite(logs) | ~valid,
+-        "nonfinite_legal_logs",
+-        logs=logs,
+-        logits=logits,
+-        valid=valid,
+-    )
+-    return logs
+-
+-
+-def action_logs(logs: Tensor, actions: Tensor) -> Tensor:
+-    """The entry of each row of `logs` [B,A] at its sampled action [B]: [B]."""
+-    return logs.gather(-1, actions[:, None]).squeeze(-1)
+-
+-
+-def reference_logs(reference: Tensor, valid: Tensor) -> Tensor:
+-    """Log probabilities [B,A] of a constant reference, zero off `valid`."""
+-    return reference.detach().masked_fill(~valid, 1).log()
+-
+-
+-def check_probabilities(
+-    probabilities: Tensor, valid: Tensor, *, positive: bool
+-) -> None:
+-    if probabilities.shape != valid.shape or probabilities.ndim < 2:
+-        raise NumericalError(
+-            "distribution_shape", {"probabilities": probabilities, "valid": valid}
+-        )
+-    tensors = {"probabilities": probabilities, "valid": valid}
+-    require(valid.any(-1), "empty_legal_support", **tensors)
+-    require(torch.isfinite(probabilities), "nonfinite_probabilities", **tensors)
+-    require(probabilities >= 0, "negative_probabilities", **tensors)
+-    if positive:
+-        require((probabilities > 0) | ~valid, "nonpositive_legal_support", **tensors)
+-    require((probabilities == 0) | valid, "illegal_probability_mass", **tensors)
+-    require(
+-        torch.isclose(
+-            probabilities.sum(-1),
+-            torch.ones_like(probabilities[..., 0]),
+-            atol=1e-5,
+-            rtol=1e-5,
+-        ),
+-        "probability_normalization",
+-        **tensors,
+-    )
+-
+-
+-def check_logs(logs: Tensor, valid: Tensor) -> None:
+-    if logs.shape != valid.shape:
+-        raise NumericalError("log_shape", {"logs": logs, "valid": valid})
+-    require(valid.any(-1), "empty_legal_support", logs=logs, valid=valid)
+-    require(
+-        torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", logs=logs, valid=valid
+-    )
+-    require(torch.isneginf(logs) | valid, "illegal_log_mass", logs=logs, valid=valid)
+-    require(
+-        torch.isclose(
+-            logs.logsumexp(-1), torch.zeros_like(logs[..., 0]), atol=1e-5, rtol=0
+-        ),
+-        "log_normalization",
+-        logs=logs,
+-        valid=valid,
+-    )
+-
+-
+-def check_behavior(
+-    logs: Tensor,
+-    probabilities: Tensor,
+-    actions: Tensor,
+-    selected_logs: Tensor,
+-    valid: Tensor,
+-) -> None:
+-    """Admit copied collection evidence, including rounded legal zeros.
+-
+-    Zero is accepted only when exp(the saved finite legal log) also rounds to
+-    zero. Positive sampled mass and its selected log identity remain mandatory.
+-    """
+-    check_probabilities(probabilities, valid, positive=False)
+-    tensors = dict(
+-        logs=logs,
+-        probabilities=probabilities,
+-        actions=actions,
+-        selected_logs=selected_logs,
+-        valid=valid,
+-    )
+-    if (
+-        logs.shape != valid.shape
+-        or actions.shape != valid.shape[:-1]
+-        or selected_logs.shape != actions.shape
+-    ):
+-        raise NumericalError("behavior_shape", tensors)
+-    require(torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", **tensors)
+-    require(torch.isneginf(logs) | valid, "illegal_log_mass", **tensors)
+-    require(
+-        torch.isclose(
+-            logs.logsumexp(-1), torch.zeros_like(selected_logs), atol=1e-5, rtol=0
+-        ),
+-        "log_normalization",
+-        **tensors,
+-    )
+-    # Zero absolute tolerance prevents accepting fabricated tiny probabilities.
+-    require(
+-        torch.isclose(logs.exp(), probabilities, atol=0, rtol=1e-5),
+-        "behavior_log_probability_mismatch",
+-        **tensors,
+-    )
+-    require(
+-        (actions >= 0) & (actions < logs.shape[-1]), "action_out_of_range", **tensors
+-    )
+-    chosen = actions[..., None]
+-    require(valid.gather(-1, chosen), "illegal_sampled_action", **tensors)
+-    require(probabilities.gather(-1, chosen) > 0, "zero_sampled_probability", **tensors)
+-    require(
+-        torch.isclose(
+-            logs.gather(-1, chosen).squeeze(-1), selected_logs, atol=1e-5, rtol=1e-5
+-        ),
+-        "selected_log_mismatch",
+-        **tensors,
+-    )
+-
+-
+ # -- Returns -------------------------------------------------------------------
+ # Same-player lambda returns for transition-end rollout flags.
+ #
+@@ -233,13 +61,33 @@ def check_behavior(
+ # opponent and skipped forced decisions do not add discount steps.
+ #
+ # Complete-game rollouts are one packed column of ~50,000 rows, so a recursion
+-# over time is ~50,000 dependent steps. An end flag cuts the recursion, which
+-# makes trajectories independent: `manabot.policy.returns.reverse_waves`
+-# advances every trajectory by one row per step, on the host, in as many steps
+-# as the longest trajectory has rows. Each row still takes the same float
+-# operations in the same order as a row-by-row recursion, and device kernels of
+-# that size are launch latency, not work. GAE is that module's NumPy function;
+-# the categorical targets walk its waves over host tensors.
++# over time is ~50,000 dependent steps. An end flag cuts the recursion, which makes
++# trajectories independent: `reverse_waves` advances every trajectory by one row
++# per step, on the host, in as many steps as the longest trajectory has rows. Each
++# row still takes the same float operations in the same order as a row-by-row
++# recursion, and device kernels of that size are launch latency, not work.
++
++
++def terminal_distances(ends: torch.Tensor) -> torch.Tensor:
++    """Return [T,E] distances (terminal=0, censored=-1), reset at each end."""
++    steps = torch.arange(len(ends), device=ends.device).unsqueeze(1)
++    # The nearest end at or after each row, by a running minimum toward the start.
++    following = torch.where(ends, steps, len(ends)).flip(0).cummin(0).values.flip(0)
++    return torch.where(following < len(ends), following - steps, -1)
++
++
++def reverse_waves(ends: torch.Tensor) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
++    """Yield (time, column) rows of [T,E] bool flags, each after the row it reads.
++
++    A trajectory ends at an end flag or a column's last row. Wave k holds the row
++    k from the end of every trajectory with more than k rows.
++    """
++    last = ends.clone()
++    last[-1] = True
++    waves = terminal_distances(last).flatten()
++    steps, columns = torch.unravel_index(waves.argsort(stable=True), ends.shape)
++    sizes = waves.bincount().tolist()
++    return zip(steps.split(sizes), columns.split(sizes), strict=True)
+ 
+ 
+ def transition_gae(
+@@ -250,20 +98,38 @@ def transition_gae(
+     gamma: float,
+     lam: float,
+ ) -> tuple[torch.Tensor, torch.Tensor]:
+-    """GAE for transition-end flags [T,E], on the host
+-    (`manabot.policy.returns.transition_gae`), back on the rewards' device."""
+-    advantages, value_targets = returns.transition_gae(
+-        to_numpy(rewards),
+-        to_numpy(values),
+-        to_numpy(ends),
+-        to_numpy(next_value),
+-        gamma,
+-        lam,
+-    )
+-    return (
+-        from_numpy(advantages, rewards.device),
+-        from_numpy(value_targets, rewards.device),
+-    )
++    """GAE (Schulman et al. 2016): advantages and lambda returns, both [T,E].
++
++    `rewards`, `values` and `ends` are [T,E]; terminal rewards credit their own
++    episode. `next_value` [E] is read only where a column's last row is not an
++    end. Mismatched shapes raise `ValueError` rather than broadcast.
++    """
++    if (
++        rewards.ndim != 2
++        or values.shape != rewards.shape
++        or ends.shape != rewards.shape
++        or next_value.numel() != rewards.shape[1]
++    ):
++        raise ValueError(
++            "transition_gae requires rewards, values and ends [T,E] and next_value [E]; "
++            f"got {tuple(rewards.shape)}, {tuple(values.shape)}, "
++            f"{tuple(ends.shape)} and {tuple(next_value.shape)}"
++        )
++    host_ends = ends.cpu().bool()
++    host_values = values.cpu()
++    live = (~host_ends).to(rewards.dtype)
++    following = torch.cat([host_values[1:], next_value.cpu().reshape(1, -1)])
++    deltas = rewards.cpu() + gamma * live * following - host_values
++    carried = gamma * lam * live
++    # The extra zero row is the empty tail past each column's last row.
++    advantages = torch.zeros(len(rewards) + 1, rewards.shape[1], dtype=rewards.dtype)
++    for steps, columns in reverse_waves(host_ends):
++        advantages[steps, columns] = (
++            deltas[steps, columns]
++            + carried[steps, columns] * advantages[steps + 1, columns]
++        )
++    moved = advantages[:-1].to(rewards.device)
++    return moved, moved + values
+ 
+ 
+ def standardized_advantages(advantages: Tensor, over: Tensor | None = None) -> Tensor:
+@@ -284,11 +150,6 @@ def expected_outcome(probabilities: Tensor) -> Tensor:
+     return probabilities[..., 2] - probabilities[..., 0]
+ 
+ 
+-def outcome_probabilities(value_logits: Tensor) -> Tensor:
+-    """Loss/draw/win mixtures `[...,3]` of a categorical critic's logits."""
+-    return value_logits.softmax(-1)
+-
+-
+ @torch.no_grad()
+ def categorical_lambda_returns(
+     probabilities: Tensor,
+@@ -346,8 +207,7 @@ def categorical_lambda_returns(
+     terminal = F.one_hot((rewards.cpu() + 1).long(), 3).to(host_probabilities.dtype)
+     # The extra row is the trace past each column's last row.
+     targets = torch.cat([torch.empty_like(host_probabilities), last_row])
+-    for wave_steps, wave_columns in returns.reverse_waves(host_ends.numpy()):
+-        steps, columns = torch.from_numpy(wave_steps), torch.from_numpy(wave_columns)
++    for steps, columns in reverse_waves(host_ends):
+         continuation = (1 - trace_lambda) * following[
+             steps, columns
+         ] + trace_lambda * targets[steps + 1, columns]
+@@ -360,7 +220,8 @@ def categorical_lambda_returns(
+ # -- Losses --------------------------------------------------------------------
+ # Per-row loss terms over one minibatch; the caller reduces, masks and weights.
+ #
+-# Every function returns one value per row, `[B]`. Policy terms read padded
++# Every loss returns one value per row, `[B]`; `support_logs` builds a frozen
++# target for `reverse_kl` and `clip_fraction` is the surrogate's diagnostic. Policy terms read padded
+ # categorical log-probabilities `[B,A]` that are `-inf` off a `valid` mask
+ # `[B,A]`, and never read the padding. Targets, behavior likelihoods and
+ # references are constants: gradients reach only the current policy and value
+@@ -384,6 +245,25 @@ def clipped_surrogate(log_ratio: Tensor, advantages: Tensor, clip: float) -> Ten
+     )
+ 
+ 
++@torch.no_grad()
++def clip_fraction(log_ratio: Tensor, clip: float) -> float:
++    """Fraction of rows whose likelihood ratio lies outside `1 ± clip`.
++
++    The ratio is exponentiated in float64 so large log ratios do not overflow.
++    """
++    return float(
++        ((float64_operand(log_ratio).double().exp() - 1).abs() > clip).float().mean()
++    )
++
++
++def support_logs(probabilities: Tensor, valid: Tensor) -> Tensor:
++    """Log-probabilities `[B,A]` of a distribution, zero off `valid` (log 1).
++
++    `reverse_kl` never reads the padding; filling it with 1 keeps `log` finite.
++    """
++    return probabilities.masked_fill(~valid, 1).log()
++
++
+ def reverse_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
+     """KL(current || frozen target) [B], zero terms on padding without 0 * -inf."""
+     difference = logs.masked_fill(~valid, 0) - target_logs.detach().masked_fill(
+@@ -420,68 +300,6 @@ def entropy(logs: Tensor, valid: Tensor) -> Tensor:
+     return -(logs.exp() * logs.masked_fill(~valid.bool(), 0)).sum(-1)
+ 
+ 
+-def damped_policy_loss(
+-    logits: Tensor,
+-    actions: Tensor,
+-    advantages: Tensor,
+-    behavior_logs: Tensor,
+-    reference: Tensor,
+-    valid: Tensor,
+-    *,
+-    clip: float,
+-    collection_kl: float,
+-    tau: float,
+-) -> Tensor:
+-    """The damped policy objective, equation (6), per row [B] over offers [B,A].
+-
+-    Sources and departures: docs/learning.md#fidelity-to-the-sources.
+-
+-    Ratios use the actual action likelihood at collection, even after earlier
+-    minibatches change the learner. The reverse KLs sum all legal actions.
+-    This is per-action reuse correction, not trajectory importance weighting.
+-    MPS combines these terms on the host to retain float64 surrogate range.
+-    """
+-    valid = valid.bool()
+-    if logits.ndim != 2 or logits.shape != valid.shape:
+-        raise ValueError("policy logits require [B,A] legal support")
+-    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
+-        raise ValueError("actions and advantages require [B]")
+-    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
+-        raise ValueError("invalid damping coefficients")
+-    check_logs(behavior_logs, valid)
+-    check_probabilities(reference, valid, positive=True)
+-    require(
+-        torch.isfinite(advantages),
+-        "nonfinite_advantages",
+-        advantages=advantages,
+-        valid=valid,
+-    )
+-    if ((actions < 0) | (actions >= logits.shape[-1])).any():
+-        raise ValueError("action index outside legal support")
+-    if not valid.gather(-1, actions[:, None]).all():
+-        raise ValueError("sampled action is not legal")
+-    logs = policy_logs(logits, valid)
+-    ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
+-    surrogate = clipped_surrogate(ratio_logs, advantages, clip)
+-    return (
+-        surrogate
+-        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
+-        + tau
+-        * float64_operand(reverse_kl(logs, reference_logs(reference, valid), valid))
+-    )
+-
+-
+-@torch.no_grad()
+-def clip_fraction(log_ratio: Tensor, clip: float) -> float:
+-    """Fraction of rows whose likelihood ratio lies outside `1 ± clip`.
+-
+-    The ratio is exponentiated in float64 so large log ratios do not overflow.
+-    """
+-    return float(
+-        ((float64_operand(log_ratio).double().exp() - 1).abs() > clip).float().mean()
+-    )
+-
+-
+ # -- Selection -----------------------------------------------------------------
+ # Advantage selection: which rows a policy loss reads, and its masked mean.
+ #
+diff --git a/manabot/model/admission.py b/manabot/model/admission.py
+index a3785620d..3df0b6b56 100644
+--- a/manabot/model/admission.py
++++ b/manabot/model/admission.py
+@@ -32,7 +32,6 @@ import numpy as np
+ import torch
+ 
+ from manabot.backends.torch.arrays import to_numpy
+-from manabot.backends.torch.rl import legal_mask
+ from manabot.env.observation import (
+     PERMANENT_DEFINITION_INDEX,
+     PERMANENT_LINK_INDEXES,
+@@ -41,6 +40,7 @@ from manabot.env.observation import (
+ from manabot.model.continuation import admit_relations
+ from manabot.model.facts import admit_facts
+ from manabot.model.numerics import buffer_on
++from manabot.model.policy_distribution import legal_mask
+ from manabot.model.recent_events import admit_recent_events
+ from manabot.model.semantic_cards import (
+     CardReferences,
+diff --git a/manabot/model/agent.md b/manabot/model/agent.md
+index 3da6ff76f..ed1adba60 100644
+--- a/manabot/model/agent.md
++++ b/manabot/model/agent.md
+@@ -204,7 +204,7 @@ Each observation path admits once per batch:
+ 
+ - Collection and search serving admit inside `PolicyInference.prepare` (below).
+ - Learning wraps each rollout batch in `AdmittedRollout`
+-  ([`rollout.py`](../backends/torch/rollout.py)): it admits the bootstrap
++  ([`learner.py`](../training/updates/learner.py)): it admits the bootstrap
+   rows and then the rows an update trains, in minibatch-sized chunks; rows the
+   advantage filter drops are never admitted, and epochs re-read admitted rows
+   without checks.
+diff --git a/manabot/model/policy_distribution.py b/manabot/model/policy_distribution.py
+new file mode 100644
+index 000000000..62921753a
+--- /dev/null
++++ b/manabot/model/policy_distribution.py
+@@ -0,0 +1,147 @@
++"""Masked categorical policies with retained log-space support.
++
++Normalized legal logs describe the policy; exp(logs) are the finite precision
++sampling weights. Underflow in the latter is counted, never repaired with a
++floor. Collection and learning share this normalization and legal mask.
++"""
++
++import torch
++from torch import Tensor
++
++from manabot.backends.torch.rl import NumericalError, require
++
++
++def legal_mask(mask: Tensor) -> Tensor:
++    require(
++        torch.isfinite(mask) & ((mask == 0) | (mask == 1)),
++        "invalid_action_mask",
++        mask=mask,
++    )
++    return mask.bool()
++
++
++def policy_logs(logits: Tensor, valid: Tensor) -> Tensor:
++    """Normalize [*,A] logits; padding is -inf and legal logs must be finite.
++
++    log_softmax subtracts the maximum before reduction, avoiding cancellation
++    from subtracting a large absolute logsumexp. Unrepresentable log differences
++    fail explicitly even when the original logits were finite.
++    """
++    if logits.shape != valid.shape or logits.ndim < 2:
++        raise NumericalError("policy_shape", {"logits": logits, "valid": valid})
++    require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
++    require(
++        torch.isfinite(logits) | ~valid,
++        "nonfinite_legal_logits",
++        logits=logits,
++        valid=valid,
++    )
++    logs = logits.masked_fill(~valid, -torch.inf).log_softmax(-1)
++    require(
++        torch.isfinite(logs) | ~valid,
++        "nonfinite_legal_logs",
++        logs=logs,
++        logits=logits,
++        valid=valid,
++    )
++    return logs
++
++
++def check_probabilities(
++    probabilities: Tensor, valid: Tensor, *, positive: bool
++) -> None:
++    if probabilities.shape != valid.shape or probabilities.ndim < 2:
++        raise NumericalError(
++            "distribution_shape", {"probabilities": probabilities, "valid": valid}
++        )
++    tensors = {"probabilities": probabilities, "valid": valid}
++    require(valid.any(-1), "empty_legal_support", **tensors)
++    require(torch.isfinite(probabilities), "nonfinite_probabilities", **tensors)
++    require(probabilities >= 0, "negative_probabilities", **tensors)
++    if positive:
++        require((probabilities > 0) | ~valid, "nonpositive_legal_support", **tensors)
++    require((probabilities == 0) | valid, "illegal_probability_mass", **tensors)
++    require(
++        torch.isclose(
++            probabilities.sum(-1),
++            torch.ones_like(probabilities[..., 0]),
++            atol=1e-5,
++            rtol=1e-5,
++        ),
++        "probability_normalization",
++        **tensors,
++    )
++
++
++def check_logs(logs: Tensor, valid: Tensor) -> None:
++    if logs.shape != valid.shape:
++        raise NumericalError("log_shape", {"logs": logs, "valid": valid})
++    require(valid.any(-1), "empty_legal_support", logs=logs, valid=valid)
++    require(
++        torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", logs=logs, valid=valid
++    )
++    require(torch.isneginf(logs) | valid, "illegal_log_mass", logs=logs, valid=valid)
++    require(
++        torch.isclose(
++            logs.logsumexp(-1), torch.zeros_like(logs[..., 0]), atol=1e-5, rtol=0
++        ),
++        "log_normalization",
++        logs=logs,
++        valid=valid,
++    )
++
++
++def check_behavior(
++    logs: Tensor,
++    probabilities: Tensor,
++    actions: Tensor,
++    selected_logs: Tensor,
++    valid: Tensor,
++) -> None:
++    """Admit copied collection evidence, including rounded legal zeros.
++
++    Zero is accepted only when exp(the saved finite legal log) also rounds to
++    zero. Positive sampled mass and its selected log identity remain mandatory.
++    """
++    check_probabilities(probabilities, valid, positive=False)
++    tensors = dict(
++        logs=logs,
++        probabilities=probabilities,
++        actions=actions,
++        selected_logs=selected_logs,
++        valid=valid,
++    )
++    if (
++        logs.shape != valid.shape
++        or actions.shape != valid.shape[:-1]
++        or selected_logs.shape != actions.shape
++    ):
++        raise NumericalError("behavior_shape", tensors)
++    require(torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", **tensors)
++    require(torch.isneginf(logs) | valid, "illegal_log_mass", **tensors)
++    require(
++        torch.isclose(
++            logs.logsumexp(-1), torch.zeros_like(selected_logs), atol=1e-5, rtol=0
++        ),
++        "log_normalization",
++        **tensors,
++    )
++    # Zero absolute tolerance prevents accepting fabricated tiny probabilities.
++    require(
++        torch.isclose(logs.exp(), probabilities, atol=0, rtol=1e-5),
++        "behavior_log_probability_mismatch",
++        **tensors,
++    )
++    require(
++        (actions >= 0) & (actions < logs.shape[-1]), "action_out_of_range", **tensors
++    )
++    chosen = actions[..., None]
++    require(valid.gather(-1, chosen), "illegal_sampled_action", **tensors)
++    require(probabilities.gather(-1, chosen) > 0, "zero_sampled_probability", **tensors)
++    require(
++        torch.isclose(
++            logs.gather(-1, chosen).squeeze(-1), selected_logs, atol=1e-5, rtol=1e-5
++        ),
++        "selected_log_mismatch",
++        **tensors,
++    )
+diff --git a/manabot/policy/README.md b/manabot/policy/README.md
+index 907c2980e..8b3708386 100644
+--- a/manabot/policy/README.md
++++ b/manabot/policy/README.md
+@@ -9,8 +9,6 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
+   definition rows, record-vocabulary lookups, legal-action coordinates, packed
+   GRU schedules, shared-effect routes and inference column compaction. A
+   backend's graph then holds only gathers, scatters and arithmetic.
+-  `reference_distribution` is the magnet a reverse KL pulls toward, `[B,A]`
+-  float32 from the legal-action buffers.
+ - `checkpoint.py` is the checkpoint container: one safetensors file of
+   canonical float32 parameters, lookup buffers and the checkpoint's
+   configuration, world binding and source record. It validates the world
+@@ -20,18 +18,11 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
+ - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
+   axes to (`bucket_sizes`). Admission measures them on the host; each backend
+   trims its own arrays.
+-- `returns.py` holds the returns and advantage-selection recursions over host
+-  NumPy rows (`transition_gae`, `selection_mask`, `quantile`,
+-  `terminal_distances`). The update diagnostics read them and every backend's
+-  `transition_gae` wraps them; torch's device-side selection matches them bit
+-  for bit.
+ - `protocol.py` states what a backend provides (`BackendPolicy`,
+-  `BackendLearner`, `Backend`) and one captured minibatch's constants and
+-  coefficients (`Targets`, `Settings`). Values are `[B]`.
++  `BackendLearner`, `Backend`) and the learner's per-minibatch inputs
++  (`Targets`, `Settings`). Values are `[B]`.
+ 
+-Backends live in [`manabot/backends/`](../backends/README.md), which also
+-covers [writing and loading a container](../backends/README.md#convert-a-pytorch-checkpoint).
+-The PyTorch backend uses the bucket sizes, the reference distribution, the
+-NumPy returns in the update diagnostics and the container (`load_checkpoint`
+-reads one). Its `ActorCritic` still does its own lookups in the forward rather
+-than reading a `Prepared` batch, and `save_checkpoint` writes `.pt`.
++Backends live in [`manabot/backends/`](../backends/README.md). The PyTorch
++backend uses the bucket sizes and reads the container (`load_checkpoint`
++accepts one). Its `ActorCritic` still does its own lookups in the forward
++rather than reading a `Prepared` batch, and `save_checkpoint` writes `.pt`.
+diff --git a/manabot/policy/checkpoint.py b/manabot/policy/checkpoint.py
+index 75e75d284..535876cf5 100644
+--- a/manabot/policy/checkpoint.py
++++ b/manabot/policy/checkpoint.py
+@@ -150,21 +150,6 @@ def canonical_name(torch_name: str) -> str:
+     return torch_name
+ 
+ 
+-def torch_name(canonical: str) -> str:
+-    """The PyTorch name of one canonical parameter: `canonical_name`'s inverse."""
+-    for prefix in GRUS:
+-        if canonical.startswith(prefix + "."):
+-            leaf = canonical[len(prefix) + 1 :]
+-            for torch_leaf, canonical_leaf in _GRU_LEAVES.items():
+-                if leaf == canonical_leaf:
+-                    return f"{prefix}.{torch_leaf}"
+-            raise KeyError(f"unmapped GRU tensor {canonical}")
+-    for packed, renamed in _ATTENTION_LEAVES.items():
+-        if canonical.endswith(renamed):
+-            return canonical[: -len(renamed)] + packed
+-    return canonical
+-
+-
+ def canonical_parameters(
+     torch_named: Mapping[str, np.ndarray],
+ ) -> dict[str, np.ndarray]:
+diff --git a/manabot/policy/prepare.py b/manabot/policy/prepare.py
+index b9a26892e..76bbbda75 100644
+--- a/manabot/policy/prepare.py
++++ b/manabot/policy/prepare.py
+@@ -608,28 +608,16 @@ def _effects(
+ 
+ 
+ def reference_distribution(obs: Mapping[str, Array], kind: str) -> Array:
+-    """The full-support magnet [B,A] float32 a reverse KL pulls toward.
+-
+-    `"uniform"` spreads mass evenly over the legal offers; `"action_type_uniform"`
+-    spreads it evenly over the legal action types, then over offers within a
+-    type. Reads `actions_valid` [B,A] and `actions` [B,A,F]; every row needs a
+-    legal offer.
+-    """
+-    if kind not in {"uniform", "action_type_uniform"}:
+-        raise ValueError(f"unknown reference: {kind}")
++    """`manabot.training.updates.references.reference_distribution` in numpy."""
+     valid = np.asarray(obs["actions_valid"]) > 0
+-    if not valid.any(-1).all():
+-        raise ValueError("reference requires at least one legal offer per row")
+     if kind == "uniform":
+         return (valid / valid.sum(-1, keepdims=True)).astype(np.float32)
++    if kind != "action_type_uniform":
++        raise ValueError(f"unknown reference: {kind}")
+     action_types = np.asarray(obs["actions"])[..., :ACTION_TYPE_DIM]
+     types = action_types.argmax(-1)
+-    # Legal offers of each type per row, [B,types]: exact small integers.
+-    width = action_types.shape[-1]
+-    slots = types + width * np.arange(valid.shape[0])[:, None]
+-    counts = np.bincount(
+-        slots.ravel(), weights=valid.ravel(), minlength=valid.shape[0] * width
+-    )
+-    counts = counts.reshape(valid.shape[0], width).astype(np.float32)
++    counts = np.zeros((valid.shape[0], action_types.shape[-1]), dtype=np.float32)
++    for row in range(valid.shape[0]):
++        np.add.at(counts[row], types[row], valid[row].astype(np.float32))
+     weights = valid / np.take_along_axis(counts, types, -1).clip(min=1)
+     return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
+diff --git a/manabot/policy/protocol.py b/manabot/policy/protocol.py
+index 2b4fefa6b..6e87d0c3a 100644
+--- a/manabot/policy/protocol.py
++++ b/manabot/policy/protocol.py
+@@ -1,18 +1,15 @@
+ """What a framework backend provides: a policy, a learner and a parameter layout.
+ 
+-A backend (`manabot.backends.<name>`) runs the policy forward and an update's
+-optimizer step in one array framework, over the `Prepared` batches of
+-`manabot.policy.prepare`. `BackendPolicy.prepare` and `evaluate` and every
+-`Backend` method take and return NumPy, so callers such as
+-`manabot.backends.parity` compare backends without touching their arrays.
+-`BackendLearner` is what an update steps: it differentiates a loss written
+-once over the backend's own arrays (`manabot.training.updates`). `Targets`
+-and `Settings` are one captured minibatch's constants and coefficients.
++A backend (`manabot.backends.<name>`) runs the policy forward and the damped
++PPO learner step in one array framework, over the `Prepared` batches of
++`manabot.policy.prepare`. Every method here takes and returns NumPy, so
++callers such as `manabot.backends.parity` never touch the framework's arrays.
++`Targets` and `Settings` are the learner's per-minibatch inputs.
+ """
+ 
+-from collections.abc import Callable, Mapping
++from collections.abc import Mapping
+ from dataclasses import dataclass
+-from typing import Any, Protocol
++from typing import Protocol
+ 
+ import numpy as np
+ 
+@@ -57,11 +54,6 @@ class BackendPolicy(Protocol):
+         """Logits [B,A] (-1e8 off the legal support) and values [B]."""
+         ...
+ 
+-    def forward_distribution(self, batch: Prepared) -> tuple[Any, Any]:
+-        """The training forward as the backend's own arrays, differentiable:
+-        logits [B,A] and the critic's output [B,1]."""
+-        ...
+-
+     def cache_programs(self) -> None:
+         """Encode weight-only inputs once, for inference with fixed weights."""
+         ...
+@@ -72,31 +64,21 @@ class BackendPolicy(Protocol):
+ 
+ 
+ class BackendLearner(Protocol):
+-    """One optimizer over a policy's parameters. Losses and norms are the
+-    backend's arrays; `float()` reads them."""
+-
+-    def set_learning_rate(self, rate: float) -> None:
+-        """The rate every following optimizer step uses."""
+-        ...
++    """One optimizer over a policy's parameters, in the backend's layout."""
+ 
+-    def loss(self, objective: Callable[[], tuple[Any, ...]]) -> tuple[Any, ...]:
+-        """Evaluate `objective`, a closure over the policy forward whose first
+-        result is the loss; return its results. `step` and `gradients`
+-        differentiate the loss most recently returned here."""
++    def gradients(
++        self, batch: Prepared, targets: Targets, settings: Settings
++    ) -> tuple[float, dict[str, np.ndarray]]:
++        """Loss and unclipped gradients, without stepping."""
+         ...
+ 
+-    def step(self, loss: Any, max_grad_norm: float) -> Any:
+-        """One clipped optimizer step on `loss`: the pre-clip gradient norm."""
++    def step(
++        self, batch: Prepared, targets: Targets, settings: Settings
++    ) -> tuple[float, float]:
++        """One clipped optimizer step: loss and pre-clip gradient norm."""
+         ...
+ 
+-    def gradients(self, loss: Any) -> dict[str, np.ndarray]:
+-        """Unclipped gradients of `loss` in the backend's layout, without
+-        stepping."""
+-        ...
+-
+-    def parameters(self) -> dict[str, np.ndarray]:
+-        """A host copy of the parameters in the backend's layout."""
+-        ...
++    def parameters(self) -> dict[str, np.ndarray]: ...
+ 
+ 
+ class Backend(Protocol):
+diff --git a/manabot/policy/returns.py b/manabot/policy/returns.py
+deleted file mode 100644
+index c807d2ca8..000000000
+--- a/manabot/policy/returns.py
++++ /dev/null
+@@ -1,134 +0,0 @@
+-"""Returns and advantage selection over host NumPy rows.
+-
+-The recursions here run on the host in every backend: a complete-game rollout
+-is one packed column of tens of thousands of rows whose trajectories advance
+-together (`reverse_waves`), which is launch latency on a device, not work. A
+-backend's `transition_gae` wraps them (`manabot.backends.torch.rl`,
+-`manabot.backends.mlx.rl`), and the update diagnostics in
+-`manabot.training.updates.selection` read them directly. Torch's categorical
+-targets walk `reverse_waves` over host tensors, and its device-side advantage
+-selection (`torch.quantile`) matches `quantile` bit for bit.
+-
+-Rows are [T,E]: T same-viewer transitions of E packed columns. An end flag
+-belongs to its own row's reward and cuts both bootstrap and trace.
+-"""
+-
+-from collections.abc import Iterator
+-import math
+-from typing import Literal
+-
+-import numpy as np
+-from numpy.typing import NDArray
+-
+-
+-def terminal_distances(ends: NDArray[np.bool_]) -> NDArray[np.int64]:
+-    """[T,E] distances to the next end (terminal=0, censored=-1), reset at each end."""
+-    count = len(ends)
+-    steps = np.arange(count)[:, None]
+-    # The nearest end at or after each row, by a running minimum toward the start.
+-    following = np.minimum.accumulate(np.where(ends, steps, count)[::-1], axis=0)[::-1]
+-    return np.where(following < count, following - steps, -1)
+-
+-
+-def reverse_waves(
+-    ends: NDArray[np.bool_],
+-) -> Iterator[tuple[NDArray[np.intp], NDArray[np.intp]]]:
+-    """Yield (time, column) rows of [T,E] flags, each after the row it reads.
+-
+-    A trajectory ends at an end flag or a column's last row. Wave k holds the
+-    row k from the end of every trajectory with more than k rows.
+-    """
+-    last = ends.copy()
+-    last[-1] = True
+-    waves = terminal_distances(last).ravel()
+-    steps, columns = np.unravel_index(np.argsort(waves, kind="stable"), ends.shape)
+-    bounds = np.cumsum(np.bincount(waves))[:-1]
+-    return zip(np.split(steps, bounds), np.split(columns, bounds), strict=True)
+-
+-
+-def transition_gae(
+-    rewards: NDArray[np.floating],
+-    values: NDArray[np.floating],
+-    ends: NDArray[np.bool_],
+-    next_value: NDArray[np.floating],
+-    gamma: float,
+-    lam: float,
+-) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
+-    """GAE (Schulman et al. 2016): advantages and lambda returns, both [T,E].
+-
+-    `rewards`, `values` and `ends` are [T,E]; terminal rewards credit their own
+-    episode. `next_value` [E] is read only where a column's last row is not an
+-    end. Mismatched shapes raise `ValueError` rather than broadcast.
+-    """
+-    if (
+-        rewards.ndim != 2
+-        or values.shape != rewards.shape
+-        or ends.shape != rewards.shape
+-        or next_value.size != rewards.shape[1]
+-    ):
+-        raise ValueError(
+-            "transition_gae requires rewards, values and ends [T,E] and next_value [E]; "
+-            f"got {rewards.shape}, {values.shape}, {ends.shape} and {next_value.shape}"
+-        )
+-    ends = ends.astype(bool)
+-    live = (~ends).astype(rewards.dtype)
+-    following = np.concatenate([values[1:], next_value.reshape(1, -1)])
+-    deltas = rewards + gamma * live * following - values
+-    carried = gamma * lam * live
+-    # The extra zero row is the empty tail past each column's last row.
+-    advantages = np.zeros((len(rewards) + 1, rewards.shape[1]), rewards.dtype)
+-    for steps, columns in reverse_waves(ends):
+-        advantages[steps, columns] = (
+-            deltas[steps, columns]
+-            + carried[steps, columns] * advantages[steps + 1, columns]
+-        )
+-    return advantages[:-1], advantages[:-1] + values
+-
+-
+-def quantile(values: NDArray[np.float32], q: float) -> float:
+-    """The linearly interpolated `q` quantile of float32 `values`, bit for bit
+-    as `torch.quantile` computes it on CPU.
+-
+-    Torch holds `q` in float32, takes the rank in float64 and interpolates in
+-    float32 with one fused multiply-add from the nearer end: `low + w * span`
+-    below one half, `high + (w - 1) * span` above. The float64 products here
+-    are exact, so their single rounding is that fused operation.
+-    """
+-    ordered = np.sort(values.astype(np.float32, copy=False), axis=None)
+-    if not len(ordered):
+-        raise ValueError("quantile of no rows")
+-    rank = np.float64(np.float32(q)) * (len(ordered) - 1)
+-    below = int(np.floor(rank))
+-    weight = np.float32(rank - below)
+-    low, high = ordered[below], ordered[min(below + 1, len(ordered) - 1)]
+-    span = np.float64(high - low)
+-    if weight < 0.5:
+-        return float(np.float32(np.float64(low) + np.float64(weight) * span))
+-    return float(
+-        np.float32(np.float64(high) + np.float64(weight - np.float32(1)) * span)
+-    )
+-
+-
+-def magnitude_quantile(advantages: NDArray[np.float32], q: float) -> float:
+-    """The inclusive `q` quantile of |advantages| over every row."""
+-    return quantile(np.abs(advantages), q)
+-
+-
+-def selection_mask(
+-    advantages: NDArray[np.float32],
+-    kind: Literal["top_count", "quantile"],
+-    fraction: float,
+-    minimum: float,
+-) -> NDArray[np.bool_]:
+-    """Boolean mask shaped like `advantages` keeping `fraction` of rows by
+-    magnitude, |A| >= minimum. A quantile filter keeps every tie at its
+-    inclusive threshold; a top-count filter keeps a fixed share, stable ties."""
+-    magnitude = np.abs(advantages)
+-    if kind == "quantile":
+-        return magnitude >= max(quantile(magnitude, 1 - fraction), minimum)
+-    flat = magnitude.ravel()
+-    count = max(1, math.ceil(len(flat) * fraction))
+-    kept = np.argsort(-flat, kind="stable")[:count]
+-    mask = np.zeros(len(flat), bool)
+-    mask[kept[flat[kept] >= minimum]] = True
+-    return mask.reshape(advantages.shape)
+diff --git a/manabot/training/execution.py b/manabot/training/execution.py
+index 2b82bc2a3..db26e23b7 100644
+--- a/manabot/training/execution.py
++++ b/manabot/training/execution.py
+@@ -18,7 +18,6 @@ import numpy as np
+ import psutil
+ import torch
+ 
+-import manabot.backends.torch as torch_backend
+ from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+ from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
+ from manabot.backends.torch.policy import ActorCritic
+@@ -1468,7 +1467,6 @@ def _execute_regime(
+                                     }
+                                 elif isinstance(stage.learning, DampedPolicyLearning):
+                                     diagnostic = update_damped_iteration(
+-                                        torch_backend,
+                                         learner,
+                                         batch,
+                                         stage.learning,
+@@ -1477,7 +1475,6 @@ def _execute_regime(
+                                     )
+                                 else:
+                                     diagnostic = update_iteration(
+-                                        torch_backend,
+                                         learner,
+                                         batch,
+                                         stage.learning,
+diff --git a/manabot/training/loops/minimal.py b/manabot/training/loops/minimal.py
+index 83ebd77d2..630aebc08 100644
+--- a/manabot/training/loops/minimal.py
++++ b/manabot/training/loops/minimal.py
+@@ -5,13 +5,21 @@ from copy import deepcopy
+ import numpy as np
+ import torch
+ 
+-from manabot.backends.torch import learner, rl
++from manabot.backends.torch.learner import gradient_step, update_ema
+ from manabot.backends.torch.policy import ActorCritic
++from manabot.backends.torch.rl import (
++    clipped_surrogate,
++    entropy,
++    squared_value_loss,
++    standardized_advantages,
++    transition_gae,
++)
+ from manabot.env.match import Match, Reward
+ from manabot.env.observation import ObservationSpace
+ from manabot.infra.config import ModelConfig, RewardConfig
++from manabot.model.policy_distribution import legal_mask, policy_logs
+ from manabot.training.rollout.collection import SeatRoutedCollector
+-from manabot.backends.torch.rollout import AdmittedRollout
++from manabot.training.updates.learner import AdmittedRollout
+ 
+ 
+ def train(
+@@ -44,12 +52,12 @@ def train(
+             values = torch.as_tensor(batch.values)
+             # Complete games end every trajectory, so the tail value is never read.
+             tail = torch.zeros(ends.shape[1])
+-            advantages, returns = rl.transition_gae(
++            advantages, returns = transition_gae(
+                 torch.as_tensor(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
+             )
+             # Time-major [T,E] rows, the order `batch.observations` indexes.
+             advantages, returns = advantages.flatten(), returns.flatten()
+-            advantages = rl.standardized_advantages(advantages)
++            advantages = standardized_advantages(advantages)
+             actions = torch.as_tensor(batch.actions).flatten()
+             behavior = torch.as_tensor(batch.logprobs).flatten()
+ 
+@@ -61,19 +69,19 @@ def train(
+                 order = torch.as_tensor(rng.permutation(len(actions)))
+                 for rows in order.split(256):
+                     obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
+-                    valid = rl.legal_mask(obs["actions_valid"])
++                    valid = legal_mask(obs["actions_valid"])
+                     logits, value = agent(obs)
+-                    logs = rl.policy_logs(logits, valid)
+-                    chosen = rl.action_logs(logs, actions[rows])
++                    logs = policy_logs(logits, valid)
++                    chosen = logs.gather(-1, actions[rows, None]).squeeze(-1)
+                     loss = (
+-                        rl.clipped_surrogate(
++                        clipped_surrogate(
+                             chosen - behavior[rows], advantages[rows], 0.2
+                         ).mean()
+-                        + 0.5 * rl.squared_value_loss(value, returns[rows]).mean()
+-                        - 0.01 * rl.entropy(logs, valid).mean()
++                        + 0.5 * squared_value_loss(value, returns[rows]).mean()
++                        - 0.01 * entropy(logs, valid).mean()
+                     )
+-                    learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
+-            learner.update_ema(averaged, agent, rate=0.99)
++                    gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
++            update_ema(averaged, agent, rate=0.99)
+     finally:
+         collector.close()
+     return averaged
+diff --git a/manabot/training/rollout/actions.py b/manabot/training/rollout/actions.py
+index 074148e9d..dadea0c6e 100644
+--- a/manabot/training/rollout/actions.py
++++ b/manabot/training/rollout/actions.py
+@@ -13,12 +13,8 @@ import numpy as np
+ from numpy.typing import NDArray
+ import torch
+ 
+-from manabot.backends.torch.rl import (
+-    NumericalError,
+-    check_behavior,
+-    legal_mask,
+-    require,
+-)
++from manabot.backends.torch.rl import NumericalError, require
++from manabot.model.policy_distribution import check_behavior, legal_mask
+ 
+ ACTION_FIELDS = frozenset(
+     {"actions", "actions_valid", "action_focus", "name_candidates"}
+diff --git a/manabot/training/rollout/collection.py b/manabot/training/rollout/collection.py
+index a172c786e..5248edb99 100644
+--- a/manabot/training/rollout/collection.py
++++ b/manabot/training/rollout/collection.py
+@@ -34,7 +34,7 @@ import torch
+ 
+ from manabot.backends.torch.learner import forward_precision
+ from manabot.backends.torch.policy import ActorCritic
+-from manabot.backends.torch.rl import NumericalError, legal_mask, policy_logs, require
++from manabot.backends.torch.rl import NumericalError, require
+ from manabot.env.failures import CapturedVector
+ from manabot.env.match import Match, Reward
+ from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
+@@ -42,6 +42,7 @@ from manabot.infra.config import MatchConfig
+ from manabot.infra.profiler import Profiler
+ from manabot.model.admission import AdmittedObservation
+ from manabot.model.inference import PolicyInference
++from manabot.model.policy_distribution import legal_mask, policy_logs
+ from manabot.policy.buckets import AXES
+ from manabot.sim.rollout import (
+     BatchedSampler,
+diff --git a/manabot/training/rollout/selection_data.py b/manabot/training/rollout/selection_data.py
+index 61aa3c67d..9316ee239 100644
+--- a/manabot/training/rollout/selection_data.py
++++ b/manabot/training/rollout/selection_data.py
+@@ -23,8 +23,8 @@ from manabot.infra.config import MatchConfig
+ from manabot.infra.identity import canonical_sha256
+ from manabot.model.admission import admit_observation
+ from manabot.model.world import validate_agent_setup
+-from manabot.policy.prepare import reference_distribution
+ from manabot.training.regime import SelectionGameSpec, Strict
++from manabot.training.updates.references import reference_distribution
+ import managym
+ from managym.decision import Command, DecisionFrame, Observation
+ 
+@@ -146,12 +146,7 @@ def collect_selection_game(
+             probabilities = logits.softmax(-1)
+             action = int(torch.multinomial(probabilities[0], 1, generator=generator))
+             logs = probabilities.clamp_min(1e-12).log()
+-            ref = torch.from_numpy(
+-                reference_distribution(
+-                    {k: encoded[k][None] for k in ("actions_valid", "actions")},
+-                    reference,
+-                )
+-            )
++            ref = reference_distribution(tensors, reference)
+             row = SelectionDecision(
+                 step=len(rows),
+                 actor=actor,
+diff --git a/manabot/training/updates/__init__.py b/manabot/training/updates/__init__.py
+index 588cfd73d..2e755c8c0 100644
+--- a/manabot/training/updates/__init__.py
++++ b/manabot/training/updates/__init__.py
+@@ -1,10 +1,8 @@
+ """Updates: each learns from one collected batch.
+ 
+ `damped_policy.py` is the default update and `ppo.py` the control it is
+-measured against. Both take the backend module first
+-(`manabot.backends.torch`) and do array math through it; the damped update
+-also runs on `manabot.backends.mlx`. The rest are the pieces they share and
+-that a custom update may call: numerical health and selection diagnostics,
+-over host rows. The terms and losses live in the backend's `rl.py`, the
+-optimizer step in its `learner.py` and rollout admission in its `rollout.py`.
++measured against. The rest are the pieces they share and that a custom update
++may call: learner state and rollout admission, the reference magnet, numerical
++health and selection diagnostics. These read the player's observations, legal
++actions and `ActorCritic` heads; model-agnostic pieces live in `manabot.rl`.
+ """
+diff --git a/manabot/training/updates/damped_policy.py b/manabot/training/updates/damped_policy.py
+index 44f3da883..21bcf6a4d 100644
+--- a/manabot/training/updates/damped_policy.py
++++ b/manabot/training/updates/damped_policy.py
+@@ -5,26 +5,38 @@ KL penalties, not a novel replacement for that surrogate. Targets, behavior
+ likelihoods and the magnet are constants. Only current policy/critic logits
+ receive gradients. MTG uses same-viewer transitions and an action-type magnet;
+ see docs/learning.md#fidelity-to-the-sources for the fidelity boundary and unresolved source details.
+-
+-The update is written once over a backend module (`manabot.backends.torch`,
+-`manabot.backends.mlx`): array math goes through `backend.rl`,
+-`backend.learner` and `backend.arrays`, observations are admitted by
+-`backend.rollout`, and row bookkeeping and diagnostics (which rows train,
+-minibatch indexes, selection groups, value scale) are NumPy. The minibatch
+-loss is `minibatch_objective`, equation (6) in `backend.rl.damped_policy_loss`
+-plus the critic's loss; the learner differentiates it as a closure over the
+-policy forward (`Learner.loss`), which is how a functional framework takes a
+-gradient.
+ """
+ 
+ from dataclasses import dataclass
+-from types import ModuleType
+-from typing import TYPE_CHECKING, Any
+ 
+-import numpy as np
++import torch
++from torch import Tensor
+ 
++from manabot.backends.torch.learner import Learner, gradient_step
++from manabot.backends.torch.policy import ActorCritic
++from manabot.backends.torch.rl import (
++    categorical_lambda_returns,
++    categorical_value_loss,
++    clip_fraction,
++    clipped_surrogate,
++    entropy,
++    expected_outcome,
++    float64_operand,
++    require,
++    reverse_kl,
++    selected_mean,
++    selection_mask,
++    squared_value_loss,
++    support_logs,
++    transition_gae,
++)
+ from manabot.env.observation import ACTION_TYPE_DIM
+-from manabot.policy.prepare import reference_distribution
++from manabot.model.policy_distribution import (
++    check_logs,
++    check_probabilities,
++    legal_mask,
++    policy_logs,
++)
+ from manabot.training.regime import DampedPolicyLearning
+ from manabot.training.rollout.collection import RolloutBatch
+ from manabot.training.updates.health import (
+@@ -33,177 +45,163 @@ from manabot.training.updates.health import (
+     failure_tensors,
+     minibatch_tensors,
+ )
++from manabot.training.updates.learner import AdmittedRollout
++from manabot.training.updates.references import reference_distribution
+ from manabot.training.updates.selection import (
+     UpdateDiagnostics,
+     selection_diagnostics,
+     value_scale,
+ )
+ 
+-if TYPE_CHECKING:
+-    # The torch backend's types are the reference signatures.
+-    from torch import Tensor
+-
+-    from manabot.backends.torch.learner import Learner
+-    from manabot.backends.torch.policy import ActorCritic
+-    from manabot.backends.torch.rollout import AdmittedRollout
+-
+ 
+-@dataclass(frozen=True)
+-class DampedTargets:
+-    advantages: "Tensor"
+-    values: "Tensor"
+-    selected: "Tensor"
+-
+-
+-def minibatch_objective(
+-    rl: ModuleType,
+-    logits: "Tensor",
+-    value_logits: "Tensor",
+-    valid: "Tensor",
++def damped_policy_loss(
++    logits: Tensor,
++    actions: Tensor,
++    advantages: Tensor,
++    behavior_logs: Tensor,
++    reference: Tensor,
++    valid: Tensor,
+     *,
+-    actions: "Tensor",
+-    advantages: "Tensor",
+-    value_targets: "Tensor",
+-    behavior_logs: "Tensor",
+-    reference: "Tensor",
+-    actor_mask: "Tensor",
+-    categorical: bool,
+     clip: float,
+     collection_kl: float,
+     tau: float,
+-) -> "tuple[Tensor, Tensor, Tensor]":
+-    """The damped rule's loss on one minibatch: (loss, policy loss, value loss).
++) -> Tensor:
++    """The damped policy objective, equation (6), per row [B] over offers [B,A].
++
++    Sources and departures: docs/learning.md#fidelity-to-the-sources.
+ 
+-    `rl` is a backend's `rl` module and every array is that backend's:
+-    float32 `logits` [B,A] and critic output ([B,1], or [B,3] outcome logits
+-    when `categorical`) from the current forward, the legal mask [B,A], and
+-    the constants `actions` [B], `advantages` [B], `value_targets` ([B] or
+-    [B,3]), `behavior_logs` [B,A], `reference` probabilities [B,A] and the
+-    actor-selected rows [B]. The policy term averages equation (6) over the
+-    actor's rows; the critic term averages every row. Gradients reach only
+-    `logits` and `value_logits`.
++    Ratios use the actual action likelihood at collection, even after earlier
++    minibatches change the learner. The reverse KLs sum all legal actions.
++    This is per-action reuse correction, not trajectory importance weighting.
++    MPS combines these terms on the host to retain float64 surrogate range.
+     """
+-    policy_loss = rl.selected_mean(
+-        rl.damped_policy_loss(
+-            logits,
+-            actions,
+-            advantages,
+-            behavior_logs,
+-            reference,
+-            valid,
+-            clip=clip,
+-            collection_kl=collection_kl,
+-            tau=tau,
+-        ),
+-        actor_mask,
++    valid = valid.bool()
++    if logits.ndim != 2 or logits.shape != valid.shape:
++        raise ValueError("policy logits require [B,A] legal support")
++    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
++        raise ValueError("actions and advantages require [B]")
++    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
++        raise ValueError("invalid damping coefficients")
++    check_logs(behavior_logs, valid)
++    check_probabilities(reference, valid, positive=True)
++    require(
++        torch.isfinite(advantages),
++        "nonfinite_advantages",
++        advantages=advantages,
++        valid=valid,
+     )
+-    if categorical:
+-        value_loss = rl.categorical_value_loss(value_logits, value_targets).mean()
+-    else:
+-        # Representation ablation, not the paper's outcome objective.
+-        value_loss = rl.squared_value_loss(value_logits, value_targets).mean()
+-    return policy_loss + rl.float64_operand(value_loss), policy_loss, value_loss
++    if ((actions < 0) | (actions >= logits.shape[-1])).any():
++        raise ValueError("action index outside legal support")
++    if not valid.gather(-1, actions[:, None]).all():
++        raise ValueError("sampled action is not legal")
++    logs = policy_logs(logits, valid)
++    reference_logs = support_logs(reference.detach(), valid)
++    ratio_logs = (
++        (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
++    )
++    surrogate = clipped_surrogate(ratio_logs, advantages, clip)
++    return (
++        surrogate
++        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
++        + tau * float64_operand(reverse_kl(logs, reference_logs, valid))
++    )
++
++
++@dataclass(frozen=True)
++class DampedTargets:
++    advantages: Tensor
++    values: Tensor
++    selected: Tensor
+ 
+ 
++@torch.no_grad()
+ def _targets(
+-    backend: ModuleType,
+-    learner: "Learner",
+-    admitted: "AdmittedRollout",
++    learner: Learner,
++    admitted: AdmittedRollout,
+     learning: DampedPolicyLearning,
+-    bootstrap_agent: "ActorCritic | None" = None,
++    bootstrap_agent: ActorCritic | None = None,
+ ) -> DampedTargets:
+-    rl, device = backend.rl, learner.device
++    device = learner.device
+     batch = admitted.batch
+-    with backend.learner.no_grad():
+-        rewards = backend.arrays.from_numpy(batch.rewards, device)
+-        ends = backend.arrays.from_numpy(batch.dones, device)
+-        values = backend.arrays.from_numpy(batch.values, device)
+-        rl.require_finite("nonfinite_collection_values", values=values)
+-        rl.require_finite("nonfinite_rewards", rewards=rewards)
+-        next_obs = admitted.next_observation(device)
+-        with learner.forward_precision():
+-            policy = bootstrap_agent or learner.agent
+-            _, next_raw = policy.forward_distribution(next_obs)
+-        next_raw = backend.arrays.float32(next_raw)
+-        rl.require_finite("nonfinite_bootstrap", values=next_raw)
+-        if learner.agent.config.value_kind == "categorical_wdl":
+-            if batch.outcome_probabilities is None:
+-                raise ValueError(
+-                    "categorical update requires collection outcome probabilities"
+-                )
+-            outcomes = batch.outcome_probabilities
+-            if not np.allclose(
+-                batch.values, outcomes[..., 2] - outcomes[..., 0], atol=1e-5
+-            ):
+-                raise ValueError(
+-                    "saved value differs from collection outcome probabilities"
+-                )
+-            probabilities = backend.arrays.from_numpy(outcomes, device)
+-            bootstrap = rl.outcome_probabilities(next_raw)
+-            value_targets = rl.categorical_lambda_returns(
+-                probabilities, rewards, ends, bootstrap, learning.value_lambda
++    rewards = torch.as_tensor(batch.rewards, device=device)
++    ends = torch.as_tensor(batch.dones, device=device)
++    values = torch.as_tensor(batch.values, device=device)
++    require(torch.isfinite(values), "nonfinite_collection_values", values=values)
++    require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
++    next_obs = admitted.next_observation(device)
++    with learner.forward_precision():
++        _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
++    next_raw = next_raw.float()
++    require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
++    if learner.agent.config.value_kind == "categorical_wdl":
++        if batch.outcome_probabilities is None:
++            raise ValueError(
++                "categorical update requires collection outcome probabilities"
+             )
+-            next_value = rl.expected_outcome(bootstrap)
+-        else:
+-            next_value = next_raw.squeeze(-1)
+-            _, value_targets = rl.transition_gae(
+-                rewards, values, ends, next_value, 1.0, learning.value_lambda
++        probabilities = torch.as_tensor(batch.outcome_probabilities, device=device)
++        if not torch.allclose(values, expected_outcome(probabilities), atol=1e-5):
++            raise ValueError(
++                "saved value differs from collection outcome probabilities"
+             )
+-        advantages, _ = rl.transition_gae(
+-            rewards, values, ends, next_value, 1.0, learning.policy_lambda
++        bootstrap = next_raw.softmax(-1)
++        value_targets = categorical_lambda_returns(
++            probabilities, rewards, ends, bootstrap, learning.value_lambda
+         )
+-        rl.require_finite("nonfinite_advantages", advantages=advantages)
+-        rl.require_finite("nonfinite_value_targets", targets=value_targets)
+-        # Inclusive quantile keeps all ties, unlike a top-k filter with fixed count.
+-        selected = rl.selection_mask(
+-            advantages,
+-            learning.filter_kind,
+-            1 - learning.advantage_quantile,
+-            learning.min_advantage,
++        next_value = expected_outcome(bootstrap)
++    else:
++        next_value = next_raw.squeeze(-1)
++        _, value_targets = transition_gae(
++            rewards, values, ends, next_value, 1.0, learning.value_lambda
+         )
++    advantages, _ = transition_gae(
++        rewards, values, ends, next_value, 1.0, learning.policy_lambda
++    )
++    require(torch.isfinite(advantages), "nonfinite_advantages", advantages=advantages)
++    require(
++        torch.isfinite(value_targets), "nonfinite_value_targets", targets=value_targets
++    )
++    # Inclusive quantile keeps all ties, unlike a top-k filter with fixed count.
++    selected = selection_mask(
++        advantages,
++        learning.filter_kind,
++        1 - learning.advantage_quantile,
++        learning.min_advantage,
++    )
+     return DampedTargets(advantages, value_targets, selected)
+ 
+ 
+ def update_damped_iteration(
+-    backend: ModuleType,
+-    learner: "Learner",
++    learner: Learner,
+     batch: RolloutBatch,
+     learning: DampedPolicyLearning,
+     iteration: int,
+     *,
+-    bootstrap_agent: "ActorCritic | None" = None,
++    bootstrap_agent: ActorCritic | None = None,
+ ) -> UpdateDiagnostics:
+     """One fresh epoch grouped by native stream count, with frozen targets.
+ 
+-    `backend` is the module whose arrays `learner` holds
+-    (`manabot.backends.torch`). EMA belongs to the calling stage and advances
+-    once even on an empty filter. No batch shuffling, advantage normalization,
+-    replay or hidden truth. Scalar value is an explicit MSE ablation;
+-    categorical uses equation (5).
++    EMA belongs to the calling stage and advances once even on an empty
++    filter. No batch shuffling, advantage normalization, replay or hidden truth.
++    Scalar value is an explicit MSE ablation; categorical uses equation (5).
+ 
+     Timed phases end where the code already reads device values (the behavior
+     checks, target and diagnostic floats, the objective and gradient checks).
+     """
+-    rl, to_device = backend.rl, backend.arrays.from_numpy
+-    to_host, float32 = backend.arrays.to_numpy, backend.arrays.float32
+     device = learner.device
+-    categorical = learner.agent.config.value_kind == "categorical_wdl"
+     track = learner.profiler.track
+     with track("Batch transfer and behavior checks"):
+         batch.action_data.check(batch.actions, batch.logprobs)
+-        admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
+-        actions = to_device(batch.actions, device)
++        admitted = AdmittedRollout(learner.agent, batch)
++        actions = torch.as_tensor(batch.actions, device=device)
+     with track("Targets"):
+-        targets = _targets(backend, learner, admitted, learning, bootstrap_agent)
++        targets = _targets(learner, admitted, learning, bootstrap_agent)
+         advantage_abs_mean = float(targets.advantages.abs().mean())
+-    # Which rows the actor trains on, [T,E] on the host.
+-    actor_rows = to_host(targets.selected)
+     rate, tau = learning.rates(iteration)
+     diagnostics: UpdateDiagnostics = {
+         "gradient": learning.gradient,
+         "value_kind": learner.agent.config.value_kind,
+-        "rows": batch.actions.size,
+-        "retained": int(actor_rows.sum()),
++        "rows": actions.numel(),
++        "retained": int(targets.selected.sum()),
+         "optimizer_exposures": 0,
+         "actor_exposures": 0,
+         "critic_exposures": 0,
+@@ -214,151 +212,168 @@ def update_damped_iteration(
+         "reference": learning.reference,
+         "advantage_abs_mean": advantage_abs_mean,
+         "bootstrapped_tail_fraction": float(
+-            np.mean(~batch.dones[-1], dtype=np.float32)
++            (~torch.as_tensor(batch.dones[-1])).float().mean()
+         ),
+     }
+     with track("Selection and health diagnostics"):
+-        advantage_rows = to_host(targets.advantages)
+         health = batch_health(
+             batch.action_data,
+-            advantage_rows,
+-            actor_rows,
++            targets.advantages,
++            targets.selected,
+             actor_only=learning.filter_scope == "actor",
+         )
+         diagnostics["numerical"] = health
+-        observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
++        observer = OptimizerHealth(health, iteration, learner.profiler)
+         expected_targets = (
+-            rl.expected_outcome(targets.values) if categorical else targets.values
++            expected_outcome(targets.values)
++            if learner.agent.config.value_kind == "categorical_wdl"
++            else targets.values
+         )
+-        expected_rows = to_host(expected_targets)
+-        # In the backend's arithmetic: these residuals are credit evidence.
+-        residuals = to_host(expected_targets - to_device(batch.values, device))
++        predictions = torch.as_tensor(batch.values, device=device)
+         if batch.assignments is not None:
+-            batch.target_residuals = residuals
+-        diagnostics["selection_groups"] = selection_diagnostics(
+-            advantage_rows,
+-            residuals,
+-            actor_rows,
+-            batch.dones,
++            batch.target_residuals = (
++                (expected_targets - predictions).detach().cpu().numpy()
++            )
++        chosen_types = torch.as_tensor(
+             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
++            device=device,
++        )
++        diagnostics["selection_groups"] = selection_diagnostics(
++            targets.advantages,
++            expected_targets - predictions,
++            targets.selected,
++            torch.as_tensor(batch.dones, device=device),
++            chosen_types,
+         )
+         diagnostics["value_scale"] = value_scale(
+-            batch.values,
+-            expected_rows,
+-            advantage_rows,
++            predictions,
++            expected_targets,
++            targets.advantages,
+             kind=learning.filter_kind,
+             quantile=learning.advantage_quantile,
+             minimum=learning.min_advantage,
+         )
+-    learner.set_learning_rate(rate)
++    for group in learner.optimizer.param_groups:
++        group["lr"] = rate
+     # Compute credit on the original seat trajectories before regrouping rows.
+     # Rectangular rollouts retain one timestep per minibatch. Complete-game
+     # rollouts are packed into one column; use the same native stream count
+     # rather than accidentally taking one optimizer step per recorded decision.
+     width = learner.minibatch_rows
+     actions = actions.flatten(0, 1)
+-    advantages = targets.advantages.flatten(0, 1)
+-    value_targets = targets.values.flatten(0, 1)
+-    actor_rows = actor_rows.reshape(-1)
+-    actor_critic = learning.filter_scope == "actor_critic"
+-    if not actor_rows.any() and actor_critic:
++    targets = DampedTargets(
++        targets.advantages.flatten(0, 1),
++        targets.values.flatten(0, 1),
++        targets.selected.flatten(0, 1),
++    )
++    if not targets.selected.any() and learning.filter_scope == "actor_critic":
+         diagnostics["skipped"] = "empty advantage filter"
+-        health["skipped_steps"] = (len(actor_rows) + width - 1) // width
++        health["skipped_steps"] = (actions.numel() + width - 1) // width
+         return diagnostics
+-    # Rows each minibatch trains: the actor's under actor_critic scope, else all.
+-    trained = actor_rows if actor_critic else np.ones_like(actor_rows)
+     with track("Minibatches"):
+-        admitted.admit_rows(np.flatnonzero(trained), width)
+-        for start in range(0, len(actor_rows), width):
+-            window = trained[start : start + width]
+-            if not window.any():
++        trained = (
++            targets.selected
++            if learning.filter_scope == "actor_critic"
++            else torch.ones_like(targets.selected)
++        )
++        admitted.admit_rows(trained.nonzero().flatten().cpu().numpy(), width)
++        for start in range(0, actions.numel(), width):
++            actor_selected = targets.selected[start : start + width]
++            selected = (
++                actor_selected
++                if learning.filter_scope == "actor_critic"
++                else torch.ones_like(actor_selected)
++            )
++            if not selected.any():
+                 health["skipped_steps"] += 1
+                 continue
+             with track("Forward and loss"):
+-                rows_host = np.arange(start, start + len(window))[window]
+-                indexes = to_device(rows_host, device)
+-                minibatch_actions = actions[indexes]
+-                obs, rows = admitted.rows(rows_host, device)
+-                valid = rl.legal_mask(admitted.legal(obs))
+-                behavior_logs = to_device(rows.log_probabilities, device)
+-                reference = to_device(
+-                    reference_distribution(rows.observation, learning.reference),
+-                    device,
++                indexes = torch.arange(start, start + len(selected), device=device)[
++                    selected
++                ]
++                obs, rows = admitted.rows(indexes.cpu().numpy(), device)
++                valid = legal_mask(obs["actions_valid"])
++                behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
++                with learner.forward_precision():
++                    logits, value_logits = learner.agent.forward_distribution(obs)
++                logits, value_logits = logits.float(), value_logits.float()
++                reference = reference_distribution(obs, learning.reference)
++                policy_loss = damped_policy_loss(
++                    logits,
++                    actions[indexes],
++                    targets.advantages[indexes],
++                    behavior_logs,
++                    reference,
++                    valid,
++                    clip=learning.clip,
++                    collection_kl=learning.collection_kl,
++                    tau=tau,
+                 )
+-                actor_selected = actor_rows[rows_host]
+-                actor_mask = to_device(actor_selected, device)
+-
+-                def _objective() -> "tuple[Tensor, ...]":
+-                    with learner.forward_precision():
+-                        logits, value_logits = learner.agent.forward_distribution(obs)
+-                    logits, value_logits = float32(logits), float32(value_logits)
+-                    return (
+-                        *minibatch_objective(
+-                            rl,
+-                            logits,
+-                            value_logits,
+-                            valid,
+-                            actions=minibatch_actions,
+-                            advantages=advantages[indexes],
+-                            value_targets=value_targets[indexes],
+-                            behavior_logs=behavior_logs,
+-                            reference=reference,
+-                            actor_mask=actor_mask,
+-                            categorical=categorical,
+-                            clip=learning.clip,
+-                            collection_kl=learning.collection_kl,
+-                            tau=tau,
+-                        ),
+-                        logits,
+-                        value_logits,
+-                    )
++                actor_mask = actor_selected[selected]
++                policy_loss = selected_mean(policy_loss, actor_mask)
++                if learner.agent.config.value_kind == "categorical_wdl":
++                    value_loss = categorical_value_loss(
++                        value_logits, targets.values[indexes]
++                    ).mean()
++                else:
++                    # Representation ablation, not the paper's outcome objective.
++                    value_loss = squared_value_loss(
++                        value_logits, targets.values[indexes]
++                    ).mean()
++                loss = policy_loss + float64_operand(value_loss)
+ 
+-                loss, policy_loss, value_loss, logits, value_logits = learner.loss(
+-                    _objective
+-                )
+-
+-                def _failure() -> dict[str, Any]:
++                def _failure() -> dict[str, Tensor]:
+                     return minibatch_tensors(
+-                        logits=rl.constant(logits),
+-                        value_logits=rl.constant(value_logits),
++                        logits=logits,
++                        value_logits=value_logits,
+                         valid=valid,
+-                        actions=minibatch_actions,
++                        actions=actions[indexes],
+                         behavior_logs=behavior_logs,
+                         reference=reference,
+-                        advantages=advantages[indexes],
+-                        value_targets=value_targets[indexes],
++                        advantages=targets.advantages[indexes],
++                        value_targets=targets.values[indexes],
+                         actor_selected=actor_mask,
+                         indexes=indexes,
+-                        obs=admitted.evidence(obs),
++                        obs=obs,
+                     )
+ 
+-                with failure_tensors(_failure, rl.NumericalError):
++                with failure_tensors(_failure):
+                     observer.check(loss)
+-            with failure_tensors(_failure, rl.NumericalError):
+-                norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
++            with failure_tensors(_failure):
++                norm = gradient_step(
++                    loss,
++                    learner.agent,
++                    learner.optimizer,
++                    learning.max_grad_norm,
++                    recorder=observer,
++                )
+             with track("Minibatch diagnostics"):
+-                diagnostics["optimizer_exposures"] += len(rows_host)
+-                diagnostics["actor_exposures"] += int(actor_selected.sum())
+-                diagnostics["critic_exposures"] += len(rows_host)
+-                with backend.learner.no_grad():
+-                    logs = rl.policy_logs(logits, valid)
+-                    diagnostics["entropy"] = float(rl.entropy(logs, valid).mean())
++                diagnostics["optimizer_exposures"] += int(selected.sum())
++                diagnostics["actor_exposures"] += int(actor_mask.sum())
++                diagnostics["critic_exposures"] += int(selected.sum())
++                with torch.no_grad():
++                    logs = policy_logs(logits, valid)
++                    diagnostics["entropy"] = float(entropy(logs, valid).mean())
+                     diagnostics["collection_kl"] = float(
+-                        rl.reverse_kl(logs, behavior_logs, valid).mean()
++                        reverse_kl(logs, behavior_logs, valid).mean()
+                     )
+                     diagnostics["reference_kl"] = float(
+-                        rl.reverse_kl(
+-                            logs, rl.reference_logs(reference, valid), valid
++                        reverse_kl(
++                            logs,
++                            support_logs(reference, valid),
++                            valid,
+                         ).mean()
+                     )
+-                    ratio_logs = rl.action_logs(logs - behavior_logs, minibatch_actions)
+-                    health["clip_fraction"] = rl.clip_fraction(
+-                        ratio_logs, learning.clip
++                    ratio_logs = (
++                        (logs - behavior_logs)
++                        .gather(-1, actions[indexes, None])
++                        .squeeze(-1)
+                     )
++                    health["clip_fraction"] = clip_fraction(ratio_logs, learning.clip)
+                 diagnostics.update(
+-                    loss=float(rl.constant(loss)),
+-                    value_loss=float(rl.constant(value_loss)),
+-                    policy_loss=float(rl.constant(policy_loss)),
++                    loss=float(loss.detach()),
++                    value_loss=float(value_loss.detach()),
++                    policy_loss=float(policy_loss.detach()),
+                     gradient_norm=float(norm),
+                 )
+     return diagnostics
+diff --git a/manabot/training/updates/health.py b/manabot/training/updates/health.py
+index 332208720..719c4f79e 100644
+--- a/manabot/training/updates/health.py
++++ b/manabot/training/updates/health.py
+@@ -7,18 +7,16 @@ including the critic readout's share, at iteration 1 and every 25th iteration.
+ Safety checks run on every step, observed or not; absent samples remain absent.
+ """
+ 
+-from collections.abc import Callable, Iterator, Mapping
++from collections.abc import Callable, Iterator
+ from contextlib import AbstractContextManager, contextmanager
+-from types import ModuleType
+-from typing import Any, TypedDict
++from typing import TypedDict
+ 
+ import numpy as np
+-from numpy.typing import NDArray
+ import torch
+ from torch import Tensor, nn
+ 
+-import manabot.backends.torch as torch_backend
+-from manabot.backends.torch.rl import float64_operand
++from manabot.backends.torch.learner import check_objective
++from manabot.backends.torch.rl import NumericalError, float64_operand
+ from manabot.infra.profiler import Profiler
+ from manabot.training.rollout.actions import PackedActions
+ 
+@@ -75,15 +73,14 @@ class NumericalHealth(TypedDict, total=False):
+     clip_fraction: float
+ 
+ 
++@torch.no_grad()
+ def batch_health(
+     action_data: PackedActions,
+-    advantages: NDArray[np.floating],
+-    selected: NDArray[np.bool_],
++    advantages: Tensor,
++    selected: Tensor,
+     *,
+     actor_only: bool,
+ ) -> NumericalHealth:
+-    """Measurements over every collected row; `advantages` and `selected` are
+-    host rows of any one shape."""
+     logs, probabilities = action_data.log_probabilities, action_data.probabilities
+     starts = action_data.offsets[:-1]
+     gaps = np.maximum.reduceat(logs, starts) - np.minimum.reduceat(logs, starts)
+@@ -95,7 +92,7 @@ def batch_health(
+         forced_rows=int((np.diff(action_data.offsets) == 1).sum()),
+         zero_advantage_rows=int((advantages == 0).sum()),
+         actor_rows=int(selected.sum()),
+-        critic_rows=selected.size if actor_only else int(selected.sum()),
++        critic_rows=selected.numel() if actor_only else int(selected.sum()),
+         empty_actor_batch=int(not selected.any()),
+         optimizer_steps=0,
+         skipped_steps=0,
+@@ -113,10 +110,6 @@ class OptimizerHealth:
+ 
+     `check` rejects a detached or nonfinite objective; it waits for the loss on
+     the device, so a caller timing its forward pass ends that timer there.
+-    `backend` is the module whose learner steps (`manabot.backends.torch` when
+-    omitted): its `learner.check_objective` and `rl.NumericalError` are the
+-    check and the refusal counted. The gradient and parameter samples read
+-    torch modules; a backend whose step takes none leaves them absent.
+     With a profiler, `gradient_step` times backward and the optimizer step
+     separately; each ends at a finite check that already waits for the device,
+     so timing adds no synchronization.
+@@ -129,12 +122,8 @@ class OptimizerHealth:
+         health: NumericalHealth,
+         iteration: int,
+         profiler: Profiler | None = None,
+-        *,
+-        backend: ModuleType = torch_backend,
+     ) -> None:
+         self.health = health
+-        self._check_objective: Callable[[Any], None] = backend.learner.check_objective
+-        self._refusal: type[Exception] = backend.rl.NumericalError
+         self.measure = iteration == 1 or iteration % HEALTH_INTERVAL == 0
+         self.profiler = profiler or Profiler(enabled=False)
+         self._critic_norms = None
+@@ -142,18 +131,18 @@ class OptimizerHealth:
+     def track(self, section: str) -> AbstractContextManager[object]:
+         return self.profiler.track(section)
+ 
+-    def check(self, loss: Any) -> None:
++    def check(self, loss: Tensor) -> None:
+         with self.rejecting():
+-            self._check_objective(loss)
++            check_objective(loss)
+ 
+     @contextmanager
+     def rejecting(self) -> Iterator[None]:
+         """Count a NumericalError as a rejected step and attach the record."""
+         try:
+             yield
+-        except self._refusal as error:
++        except NumericalError as error:
+             self.health["rejected_steps"] += 1
+-            error.health = dict(self.health)  # type: ignore[attr-defined]
++            error.health = dict(self.health)
+             raise
+ 
+     def sampling(self) -> bool:
+@@ -232,41 +221,36 @@ def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
+ 
+ 
+ @contextmanager
+-def failure_tensors(
+-    tensors: Callable[[], Mapping[str, Any]],
+-    refusal: type[Exception],
+-) -> Iterator[None]:
+-    """Attach `tensors()` to a `refusal` (the backend's `rl.NumericalError`)
+-    raised inside, then re-raise it.
++def failure_tensors(tensors: Callable[[], dict[str, Tensor]]) -> Iterator[None]:
++    """Attach `tensors()` to a NumericalError raised inside, then re-raise it.
+ 
+     The callable runs only on failure, so a healthy step builds no evidence.
+     """
+     try:
+         yield
+-    except refusal as error:
+-        error.tensors.update(tensors())  # type: ignore[attr-defined]
++    except NumericalError as error:
++        error.tensors.update(tensors())
+         raise
+ 
+ 
+ def minibatch_tensors(
+     *,
+-    logits: Any,
+-    value_logits: Any,
+-    valid: Any,
+-    actions: Any,
+-    behavior_logs: Any,
+-    reference: Any,
+-    advantages: Any,
+-    value_targets: Any,
+-    actor_selected: Any,
+-    indexes: Any,
+-    obs: Mapping[str, Any],
+-) -> dict[str, Any]:
+-    """The evidence a rejected update step retains: its minibatch and outputs,
+-    as the backend's arrays. `logits` and `value_logits` arrive as constants."""
++    logits: Tensor,
++    value_logits: Tensor,
++    valid: Tensor,
++    actions: Tensor,
++    behavior_logs: Tensor,
++    reference: Tensor,
++    advantages: Tensor,
++    value_targets: Tensor,
++    actor_selected: Tensor,
++    indexes: Tensor,
++    obs: dict[str, Tensor],
++) -> dict[str, Tensor]:
++    """The evidence a rejected update step retains: its minibatch and outputs."""
+     return {
+-        "logits": logits,
+-        "value_logits": value_logits,
++        "logits": logits.detach(),
++        "value_logits": value_logits.detach(),
+         "valid": valid,
+         "actions": actions,
+         "behavior_logs": behavior_logs,
+diff --git a/manabot/backends/torch/rollout.py b/manabot/training/updates/learner.py
+similarity index 85%
+rename from manabot/backends/torch/rollout.py
+rename to manabot/training/updates/learner.py
+index 81143817d..c232fe407 100644
+--- a/manabot/backends/torch/rollout.py
++++ b/manabot/training/updates/learner.py
+@@ -1,9 +1,9 @@
+-"""Rollout admission for the updates: a collected batch's observations as the
+-torch policy reads them.
++"""Rollout admission for the updates.
+ 
+-`AdmittedRollout` admits a batch's observations once before its minibatches.
+-The updates reach it as `backend.rollout.AdmittedRollout`; every backend has
+-one with these methods over its own policy input.
++AdmittedRollout admits a collected batch's observations once before its
++minibatches. The updates step a `Learner` (`manabot.backends.torch.learner`);
++execute_regime owns collection, clocks, tracking, exports and recovery. Native
++stream count sets the damped rule's minibatch width.
+ """
+ 
+ import numpy as np
+@@ -97,11 +97,3 @@ class AdmittedRollout:
+             self.agent, observation_tensors(rows.observation), needs=needs
+         )
+         return transfer_admitted(admitted, device)[0], rows
+-
+-    def legal(self, obs: AdmittedObservation) -> torch.Tensor:
+-        """The 0/1 legal-action input [B,A] of rows this rollout returned."""
+-        return obs["actions_valid"]
+-
+-    def evidence(self, obs: AdmittedObservation) -> dict[str, torch.Tensor]:
+-        """The arrays a rejected step retains for rows this rollout returned."""
+-        return dict(obs)
+diff --git a/manabot/training/updates/ppo.py b/manabot/training/updates/ppo.py
+index 91aba12c9..020afc7cf 100644
+--- a/manabot/training/updates/ppo.py
++++ b/manabot/training/updates/ppo.py
+@@ -2,20 +2,32 @@
+ 
+ `update_iteration` is PPO (Schulman et al. 2017) over complete-game GAE:
+ shuffled minibatches, advantage filtering and normalization, a scalar value
+-target and optional reference and collection KL penalties. Like the damped
+-rule it is written once over a backend module (`manabot.backends.torch`):
+-array math through `backend.rl`, `backend.learner` and `backend.arrays`, row
+-bookkeeping in NumPy.
++target and optional reference and collection KL penalties.
+ """
+ 
+ import math
+-from types import ModuleType
+-from typing import TYPE_CHECKING
+ 
+ import numpy as np
++import torch
+ 
++from manabot.backends.torch.learner import Learner, gradient_step
++from manabot.backends.torch.policy import ActorCritic
++from manabot.backends.torch.rl import (
++    clip_fraction,
++    clipped_surrogate,
++    entropy,
++    float64_operand,
++    require,
++    reverse_kl,
++    selected_mean,
++    selected_rows,
++    squared_value_loss,
++    standardized_advantages,
++    support_logs,
++    transition_gae,
++)
+ from manabot.env.observation import ACTION_TYPE_DIM
+-from manabot.policy.prepare import reference_distribution
++from manabot.model.policy_distribution import legal_mask, policy_logs
+ from manabot.training.regime import Learning
+ from manabot.training.rollout.collection import RolloutBatch
+ from manabot.training.updates.health import (
+@@ -24,48 +36,37 @@ from manabot.training.updates.health import (
+     failure_tensors,
+     minibatch_tensors,
+ )
++from manabot.training.updates.learner import AdmittedRollout
++from manabot.training.updates.references import reference_distribution
+ from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
+ 
+-if TYPE_CHECKING:
+-    # The torch backend's types are the reference signatures.
+-    from torch import Tensor
+-
+-    from manabot.backends.torch.learner import Learner
+-    from manabot.backends.torch.policy import ActorCritic
+-
+ 
+ def update_iteration(
+-    backend: ModuleType,
+-    learner: "Learner",
++    learner: Learner,
+     batch: RolloutBatch,
+     learning: Learning,
+     progress: float,
+     rng: np.random.Generator,
+     *,
+     iteration: int = 1,
+-    bootstrap_agent: "ActorCritic | None" = None,
++    bootstrap_agent: ActorCritic | None = None,
+ ) -> UpdateDiagnostics:
+-    """Optimize one fresh collector batch on the shared learner and Adam owner.
+-
+-    `backend` is the module whose arrays `learner` holds
+-    (`manabot.backends.torch`).
+-    """
+-    rl, to_device = backend.rl, backend.arrays.from_numpy
++    """Optimize one fresh collector batch on the shared learner and Adam owner."""
+     dev = learner.device
+     track = learner.profiler.track
+     with track("Batch transfer, targets and behavior checks"):
+         batch.action_data.check(batch.actions, batch.logprobs)
+-        admitted = backend.rollout.AdmittedRollout(learner.agent, batch)
+-        values = to_device(batch.values, dev)
+-        rewards = to_device(batch.rewards, dev)
+-        ends = to_device(batch.dones, dev)
+-        with backend.learner.no_grad():
++        admitted = AdmittedRollout(learner.agent, batch)
++        values = torch.as_tensor(batch.values, device=dev)
++        rewards = torch.as_tensor(batch.rewards, device=dev)
++        ends = torch.as_tensor(batch.dones, device=dev)
++        with torch.no_grad():
+             with learner.forward_precision():
+                 next_value = (bootstrap_agent or learner.agent).get_value(
+                     admitted.next_observation(dev)
+                 )
+             next_value = next_value.float()
+-            advantages, _ = rl.transition_gae(
++            advantages, _ = transition_gae(
+                 rewards,
+                 values,
+                 ends,
+@@ -73,45 +74,41 @@ def update_iteration(
+                 learning.gamma,
+                 learning.policy_lambda,
+             )
+-            _, returns = rl.transition_gae(
++            _, returns = transition_gae(
+                 rewards, values, ends, next_value, learning.gamma, learning.value_lambda
+             )
+         if batch.assignments is not None:
+-            batch.target_residuals = backend.arrays.to_numpy(returns - values)
++            batch.target_residuals = (returns - values).detach().cpu().numpy()
+         advantages, returns = advantages.flatten(), returns.flatten()
+-        actions = to_device(batch.actions, dev).flatten()
+-        old_logs = to_device(batch.logprobs, dev).flatten()
+-        rl.require_finite("nonfinite_advantages", advantages=advantages)
+-        rl.require_finite("nonfinite_value_targets", targets=returns)
++        actions = torch.as_tensor(batch.actions, device=dev).flatten()
++        old_logs = torch.as_tensor(batch.logprobs, device=dev).flatten()
++        require(
++            torch.isfinite(advantages), "nonfinite_advantages", advantages=advantages
++        )
++        require(torch.isfinite(returns), "nonfinite_value_targets", targets=returns)
+     with track("Selection and health diagnostics"):
+-        selected = rl.selected_rows(
++        selected = selected_rows(
+             advantages,
+             learning.retained_fraction,
+             learning.min_advantage,
+             kind=learning.filter_kind,
+         )
+-        # Row bookkeeping on the host: retained indexes in selection order,
+-        # the actor's mask and the rows each epoch trains on.
+-        retained = backend.arrays.to_numpy(selected)
+-        actor_rows = np.zeros(len(advantages), dtype=bool)
+-        actor_rows[retained] = True
+-        mask = to_device(actor_rows, dev)
++        mask = torch.zeros_like(advantages, dtype=torch.bool)
++        mask[selected] = True
+         residuals = returns - values.flatten()
+         training_rows = (
+-            retained
++            selected
+             if learning.filter_scope == "actor_critic"
+-            else np.arange(len(advantages))
++            else torch.arange(len(advantages), device=dev)
+         )
+         diagnostics: UpdateDiagnostics = {
+             "rows": len(advantages),
+-            "retained": len(retained),
++            "retained": len(selected),
+             "optimizer_exposures": 0,
+             "actor_exposures": 0,
+             "critic_exposures": 0,
+             "advantage_abs_mean": float(advantages.abs().mean()),
+-            "bootstrapped_tail_fraction": float(
+-                np.mean(~batch.dones[-1], dtype=np.float32)
+-            ),
++            "bootstrapped_tail_fraction": float((~ends[-1]).float().mean()),
+             "learning_rate": learning.learning_rate.at(progress),
+             "tau": learning.tau.at(progress),
+             "schedule_progress": progress,
+@@ -121,93 +118,96 @@ def update_iteration(
+             "value_lambda": learning.value_lambda,
+             "reference": learning.reference,
+             "collection_kl_coefficient": learning.collection_kl,
+-            "retained_fraction": len(retained) / len(advantages),
++            "retained_fraction": len(selected) / len(advantages),
+             "return_mean": float(returns.mean()),
+             "value_residual_abs_mean": float(residuals.abs().mean()),
+         }
+-        types = batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)
+-        chosen_types = types.reshape(-1)
+-        diagnostics["action_types"] = np.bincount(
++        chosen_types = torch.as_tensor(
++            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM), device=dev
++        ).flatten()
++        diagnostics["action_types"] = torch.bincount(
+             chosen_types, minlength=ACTION_TYPE_DIM
+         ).tolist()
+-        diagnostics["selected_action_types"] = np.bincount(
+-            chosen_types[retained], minlength=ACTION_TYPE_DIM
++        diagnostics["selected_action_types"] = torch.bincount(
++            chosen_types[selected], minlength=ACTION_TYPE_DIM
+         ).tolist()
+-        advantage_rows = backend.arrays.to_numpy(advantages)
+         diagnostics["selection_groups"] = selection_diagnostics(
+-            advantage_rows.reshape(types.shape),
+-            backend.arrays.to_numpy(residuals).reshape(types.shape),
+-            actor_rows.reshape(types.shape),
+-            batch.dones,
+-            types,
++            advantages.reshape_as(ends),
++            residuals.reshape_as(ends),
++            mask.reshape_as(ends),
++            ends,
++            chosen_types.reshape_as(ends),
+         )
+         health = batch_health(
+             batch.action_data,
+-            advantage_rows,
+-            actor_rows,
++            advantages,
++            mask,
+             actor_only=learning.filter_scope == "actor",
+         )
+         diagnostics["numerical"] = health
+-    observer = OptimizerHealth(health, iteration, learner.profiler, backend=backend)
++    observer = OptimizerHealth(health, iteration, learner.profiler)
+     if not len(training_rows):
+         diagnostics["skipped"] = "empty advantage filter"
+         health["skipped_steps"] = learning.epochs * learning.minibatches
+         return diagnostics
+-    if len(retained):
+-        advantages = rl.standardized_advantages(advantages, selected)
+-    learner.set_learning_rate(diagnostics["learning_rate"])
++    if len(selected):
++        advantages = standardized_advantages(advantages, selected)
++    for group in learner.optimizer.param_groups:
++        group["lr"] = diagnostics["learning_rate"]
+     size = max(1, math.ceil(len(training_rows) / learning.minibatches))
+     with track("Minibatches"):
+-        admitted.admit_rows(training_rows, size)
++        admitted.admit_rows(training_rows.cpu().numpy(), size)
+         for _ in range(learning.epochs):
+-            order = training_rows[rng.permutation(len(training_rows))]
+-            for start in range(0, len(order), size):
+-                rows_host = order[start : start + size]
+-                indices = to_device(rows_host, dev)
++            order = training_rows[
++                torch.as_tensor(rng.permutation(len(training_rows)), device=dev)
++            ]
++            for indices in order.split(size):
+                 with track("Forward and loss"):
+-                    obs, rows = admitted.rows(rows_host, dev)
+-                    valid = rl.legal_mask(admitted.legal(obs))
+-                    behavior_logs = to_device(rows.log_probabilities, dev)
+-                    reference = to_device(
+-                        reference_distribution(rows.observation, learning.reference),
+-                        dev,
+-                    )
++                    obs, rows = admitted.rows(indices.cpu().numpy(), dev)
++                    valid = legal_mask(obs["actions_valid"])
++                    behavior_logs = torch.as_tensor(rows.log_probabilities, device=dev)
++                    reference = reference_distribution(obs, learning.reference)
+                     with learner.forward_precision():
+                         logits, value = learner.agent(obs)
+                     logits, value = logits.float(), value.float()
+-                    logs = rl.policy_logs(logits, valid)
++                    logs = policy_logs(logits, valid)
+                     log_ratio = (
+-                        rl.action_logs(logs, actions[indices]) - old_logs[indices]
++                        logs.gather(-1, actions[indices, None]).squeeze(-1)
++                        - old_logs[indices]
+                     )
+                     actor_mask = mask[indices]
+-                    policy = rl.selected_mean(
+-                        rl.clipped_surrogate(
++                    policy = selected_mean(
++                        clipped_surrogate(
+                             log_ratio, advantages[indices], learning.clip
+                         ),
+                         actor_mask,
+                     )
+-                    kl_ref = rl.selected_mean(
+-                        rl.reverse_kl(logs, rl.reference_logs(reference, valid), valid),
++                    kl_ref = selected_mean(
++                        reverse_kl(
++                            logs,
++                            support_logs(reference, valid),
++                            valid,
++                        ),
+                         actor_mask,
+                     )
+-                    kl_behavior = rl.selected_mean(
+-                        rl.reverse_kl(logs, behavior_logs, valid),
++                    kl_behavior = selected_mean(
++                        reverse_kl(logs, behavior_logs, valid),
+                         actor_mask,
+                     )
+                     value_loss = (
+-                        0.5 * rl.squared_value_loss(value, returns[indices]).mean()
++                        0.5 * squared_value_loss(value, returns[indices]).mean()
+                     )
+                     loss = (
+                         policy
+-                        + learning.value_weight * rl.float64_operand(value_loss)
++                        + learning.value_weight * float64_operand(value_loss)
+                         + diagnostics["tau"] * kl_ref
+                         + learning.collection_kl * kl_behavior
+                     )
+ 
+-                    def _failure() -> "dict[str, Tensor]":
++                    def _failure() -> dict[str, torch.Tensor]:
+                         return minibatch_tensors(
+-                            logits=rl.constant(logits),
+-                            value_logits=rl.constant(value),
++                            logits=logits,
++                            value_logits=value,
+                             valid=valid,
+                             actions=actions[indices],
+                             behavior_logs=behavior_logs,
+@@ -216,23 +216,29 @@ def update_iteration(
+                             value_targets=returns[indices],
+                             actor_selected=actor_mask,
+                             indexes=indices,
+-                            obs=admitted.evidence(obs),
++                            obs=obs,
+                         )
+ 
+-                    with failure_tensors(_failure, rl.NumericalError):
++                    with failure_tensors(_failure):
+                         observer.check(loss)
+-                with failure_tensors(_failure, rl.NumericalError):
+-                    norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
++                with failure_tensors(_failure):
++                    norm = gradient_step(
++                        loss,
++                        learner.agent,
++                        learner.optimizer,
++                        learning.max_grad_norm,
++                        recorder=observer,
++                    )
+                 with track("Minibatch diagnostics"):
+-                    health["clip_fraction"] = rl.clip_fraction(log_ratio, learning.clip)
+-                    diagnostics["optimizer_exposures"] += len(rows_host)
+-                    diagnostics["actor_exposures"] += int(actor_rows[rows_host].sum())
+-                    diagnostics["critic_exposures"] += len(rows_host)
++                    health["clip_fraction"] = clip_fraction(log_ratio, learning.clip)
++                    diagnostics["optimizer_exposures"] += len(indices)
++                    diagnostics["actor_exposures"] += int(actor_mask.sum())
++                    diagnostics["critic_exposures"] += len(indices)
+                     diagnostics.update(
+                         loss=float(loss.detach()),
+                         policy_loss=float(policy.detach()),
+                         value_loss=float(value_loss.detach()),
+-                        entropy=float(rl.entropy(logs, valid).mean().detach()),
++                        entropy=float(entropy(logs, valid).mean().detach()),
+                         gradient_norm=float(norm),
+                         reference_kl=float(kl_ref.detach()),
+                         collection_kl=float(kl_behavior.detach()),
+diff --git a/manabot/training/updates/references.py b/manabot/training/updates/references.py
+new file mode 100644
+index 000000000..b2e480164
+--- /dev/null
++++ b/manabot/training/updates/references.py
+@@ -0,0 +1,22 @@
++"""Full-support reference policies over viewer-visible legal offers."""
++
++import torch
++
++from manabot.env.observation import ACTION_TYPE_DIM
++
++
++def reference_distribution(obs: dict[str, torch.Tensor], kind: str) -> torch.Tensor:
++    if kind not in {"uniform", "action_type_uniform"}:
++        raise ValueError(f"unknown reference: {kind}")
++    valid = obs["actions_valid"] > 0
++    if not valid.any(-1).all():
++        raise ValueError("reference requires at least one legal offer per row")
++    if kind == "uniform":
++        return valid / valid.sum(-1, keepdim=True)
++    action_types = obs["actions"][..., :ACTION_TYPE_DIM]
++    types = action_types.argmax(-1)
++    # Count each type once per row without an offers-by-offers matrix.
++    counts = action_types.new_zeros(*types.shape[:-1], action_types.shape[-1])
++    counts.scatter_add_(-1, types, valid.to(counts.dtype))
++    weights = valid / counts.gather(-1, types).clamp_min(1)
++    return weights / weights.sum(-1, keepdim=True)
+diff --git a/manabot/training/updates/selection.py b/manabot/training/updates/selection.py
+index 67f21d586..efd6fd687 100644
+--- a/manabot/training/updates/selection.py
++++ b/manabot/training/updates/selection.py
+@@ -1,8 +1,7 @@
+ """Censored rollout diagnostics of the player's advantage selection.
+ 
+-The selection itself is the backend's (`backend.rl.selection_mask`); these
+-group it by the player's action types and terminal distances, on the host in
+-NumPy, so every backend reports them the same way.
++The selection itself is generic (`manabot.backends.torch.rl`); these group it by the
++player's action types and terminal distances.
+ 
+ Distances count same-viewer transitions to a terminal observed in this batch.
+ Unfinished tails are unknown, never labeled distant or terminal. Residuals are
+@@ -11,15 +10,17 @@ lambda-target minus collection prediction, not independent ground-truth error.
+ 
+ from typing import Literal, TypedDict
+ 
+-import numpy as np
+-from numpy.typing import ArrayLike
++import torch
++from torch import Tensor
+ 
+-from manabot.policy.returns import magnitude_quantile, quantile, terminal_distances
++from manabot.backends.torch.rl import (
++    float64_operand,
++    magnitude_quantile,
++    terminal_distances,
++)
+ from manabot.training.rollout.adaptive import AdaptiveDiagnostics
+ from manabot.training.updates.health import NumericalHealth
+ 
+-_QUARTILES = (0.0, 0.25, 0.5, 0.75, 1.0)
+-
+ 
+ class SelectionGroup(TypedDict):
+     action_type: int
+@@ -32,25 +33,21 @@ class SelectionGroup(TypedDict):
+     retained_residual_abs_mean: float | None
+ 
+ 
++@torch.no_grad()
+ def selection_diagnostics(
+-    advantages: ArrayLike,
+-    residuals: ArrayLike,
+-    selected: ArrayLike,
+-    ends: ArrayLike,
+-    action_types: ArrayLike,
++    advantages: Tensor,
++    residuals: Tensor,
++    selected: Tensor,
++    ends: Tensor,
++    action_types: Tensor,
+ ) -> list[SelectionGroup]:
+     """Raw/retained signed quartiles and residual magnitudes per type/distance.
+ 
+-    Every argument is [T,E] host rows. Fixed descriptive bins are not a
+-    scientific short/long horizon definition. Cross-stratification permits
+-    comparisons within distance and action type; selection-correlated
+-    residuals alone cannot establish critic error causality.
++    Fixed descriptive bins are not a scientific short/long horizon definition.
++    Cross-stratification permits comparisons within distance and action type;
++    selection-correlated residuals alone cannot establish critic error causality.
+     """
+-    advantages = np.asarray(advantages, np.float32)
+-    residuals = np.asarray(residuals, np.float32)
+-    selected = np.asarray(selected, bool)
+-    action_types = np.asarray(action_types)
+-    distances = terminal_distances(np.asarray(ends, bool))
++    distances = terminal_distances(ends)
+     result: list[SelectionGroup] = []
+     bins = {
+         "terminal": distances == 0,
+@@ -58,7 +55,8 @@ def selection_diagnostics(
+         "5+": distances >= 5,
+         "censored": distances < 0,
+     }
+-    for kind in np.unique(action_types).tolist():
++    quantiles = advantages.new_tensor([0, 0.25, 0.5, 0.75, 1])
++    for kind in action_types.unique().tolist():
+         for label, distance_mask in bins.items():
+             mask = distance_mask & (action_types == kind)
+             if not mask.any():
+@@ -70,17 +68,17 @@ def selection_diagnostics(
+                     terminal_distance=label,
+                     rows=int(mask.sum()),
+                     retained=int(retained.sum()),
+-                    advantage_quantiles=[
+-                        quantile(advantages[mask], q) for q in _QUARTILES
+-                    ],
++                    advantage_quantiles=torch.quantile(
++                        advantages[mask], quantiles
++                    ).tolist(),
+                     retained_advantage_quantiles=(
+-                        [quantile(advantages[retained], q) for q in _QUARTILES]
++                        torch.quantile(advantages[retained], quantiles).tolist()
+                         if retained.any()
+                         else []
+                     ),
+-                    residual_abs_mean=float(np.abs(residuals[mask]).mean()),
++                    residual_abs_mean=float(residuals[mask].abs().mean()),
+                     retained_residual_abs_mean=(
+-                        float(np.abs(residuals[retained]).mean())
++                        float(residuals[retained].abs().mean())
+                         if retained.any()
+                         else None
+                     ),
+@@ -111,37 +109,37 @@ class ValueScale(TypedDict):
+     floor_binds: bool | None
+ 
+ 
++@torch.no_grad()
+ def value_scale(
+-    predictions: ArrayLike,
+-    targets: ArrayLike,
+-    advantages: ArrayLike,
++    predictions: Tensor,
++    targets: Tensor,
++    advantages: Tensor,
+     *,
+     kind: Literal["top_count", "quantile"],
+     quantile: float,
+     minimum: float,
+ ) -> ValueScale:
+-    """Summarize critic/advantage scale in float64 over host rows; see
+-    ValueScale for target semantics."""
+-    predictions = np.asarray(predictions, np.float64)
+-    targets = np.asarray(targets, np.float64)
+-    target_variance = float(targets.var())
++    """Summarize critic/advantage scale; see ValueScale for target semantics."""
++    predictions = float64_operand(predictions).double()
++    targets = float64_operand(targets).double()
++    target_variance = float(targets.var(correction=0))
+     threshold: float | None = None
+     floor_binds: bool | None = None
+     if kind == "quantile":
+-        empirical = magnitude_quantile(np.asarray(advantages, np.float32), quantile)
++        empirical = magnitude_quantile(advantages, quantile)
+         threshold = max(empirical, minimum)
+         floor_binds = minimum > empirical
+     return ValueScale(
+         prediction_mean=float(predictions.mean()),
+-        prediction_std=float(predictions.std()),
++        prediction_std=float(predictions.std(correction=0)),
+         target_mean=float(targets.mean()),
+         target_std=target_variance**0.5,
+         explained_variance=(
+-            1 - float((targets - predictions).var()) / target_variance
++            1 - float((targets - predictions).var(correction=0)) / target_variance
+             if target_variance > 0
+             else None
+         ),
+-        advantage_std=float(np.asarray(advantages, np.float64).std()),
++        advantage_std=float(float64_operand(advantages).double().std(correction=0)),
+         selection_threshold=threshold,
+         floor_binds=floor_binds,
+     )

@@ -41,16 +41,17 @@ for arm in $arms; do
   find "$work/$arm/manabot" -type d -empty -delete
 done
 uv run --locked python -c "import torch; print('GPU', torch.cuda.get_device_name(), torch.__version__, torch.version.cuda)"
-for i in $(seq 1 ${{REPEATS:-2}}); do
+for i in $(seq 1 ${{REPEATS:-3}}); do
   for arm in $arms head; do
     echo "== $arm $i"
     PYTHONPATH="$work/$arm" uv run --locked python {_HERE}/bench.py "$out/$arm-$i.json"
   done
 done
-uv run --locked python {_HERE}/compare.py "$out" | tee "$out/compare.txt"""
+uv run --locked python {_HERE}/compare.py "$out" | tee "$out/compare.txt"
+"""
 
 
-def runs(revision: str, hours: float = 2.0, usd: float = 4.0) -> list[Run]:
+def runs(revision: str, hours: float = 2.5, usd: float = 4.0) -> list[Run]:
     """The one L4 job at `revision`."""
     return Job(
         name="mtg325-speed",
