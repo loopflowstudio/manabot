@@ -1,8 +1,10 @@
 //! Opt-in counts of mana payment search work, never enabled in wheels.
-//! A plan is one `PaymentModel::plan`/`plan_after_tap` request; a call is one
-//! `PaymentModel::witness` entry; a state is a call that passed the bounds and
-//! was new to its plan's memo, so it expanded successors. Counts are
-//! per-thread and deterministic for a fixed workload.
+//! A plan is one `PaymentModel::plan`/`plan_after_tap` request, whether the
+//! search or the direct answer builds its witness; an affordability question
+//! `PaymentModel::payable` answers directly builds no witness and is not
+//! counted. A call is one `PaymentModel::witness` entry; a state is a call
+//! that passed the bounds and was new to its plan's memo, so it expanded
+//! successors. Counts are per-thread and deterministic for a fixed workload.
 
 use std::cell::RefCell;
 
