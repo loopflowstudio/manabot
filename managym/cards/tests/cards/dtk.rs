@@ -24,8 +24,11 @@ fn clone_legion_copies_each_creature_target_player_controls() {
     assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 2);
     let copies = s.battlefield_permanents_named(0, "Agent of Treachery");
     assert_eq!(copies.len(), 1);
-    let copy = s.game().state.permanents[copies[0]].as_ref().unwrap().card;
-    assert!(s.game().state.cards[copy].is_token);
+    let copy = s.game().state.permanents[copies[0]]
+        .as_ref()
+        .unwrap()
+        .object;
+    assert!(!s.game().state.objects[copy].is_card());
     assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
     assert_eq!(
         s.battlefield_permanents_named(1, "Agent of Treachery")

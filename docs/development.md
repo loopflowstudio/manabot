@@ -83,8 +83,9 @@ The dev profile builds at opt-level 1, keeping debug assertions and overflow
 checks while running the suite about 3x faster; release-only passes are not
 enough. `cargo nextest run` runs every binary's tests in parallel, where
 `cargo test` runs binaries one after another; `--profile ci` adds CI's 5-minute
-per-test limit (`managym/.config/nextest.toml`). Use `-j 2` and
-`--test-threads 2` on shared hosts, and select a binary while iterating
+per-test limit (`managym/.config/nextest.toml`). Use `CARGO_BUILD_JOBS=2` and
+`--test-threads 2` for nextest on shared hosts (`-j` is its test-thread alias),
+and select a binary while iterating
 (`cargo nextest run -E 'binary(rules_tests)'`). Keep one Cargo operation per
 build directory. `--all-features` builds the PyO3 bindings; if the default `python3`
 is newer than PyO3 supports, set `PYO3_PYTHON=../.venv/bin/python`. A failure of

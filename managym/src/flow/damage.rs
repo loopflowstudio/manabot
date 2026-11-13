@@ -11,7 +11,7 @@ use crate::{
     state::{
         ability::DelayedExpiry,
         card::StaticAbility,
-        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
         permanent::CounterKind,
     },
 };
@@ -55,7 +55,7 @@ impl Game {
         if amount <= 0 {
             return false;
         }
-        let source_card = source.map(|object_ref| CardId::from(object_ref.entity));
+        let source_object = source.map(|object_ref| ObjectId::from(object_ref.entity));
         let source_has_deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
@@ -89,7 +89,7 @@ impl Game {
                 let new_life = *life;
 
                 self.emit(GameEvent::DamageDealt {
-                    source: source_card,
+                    source: source_object,
                     target: DamageTarget::Player(player),
                     amount: amount as u32,
                 });
@@ -132,7 +132,7 @@ impl Game {
                     self.commit_counter_change(object_ref, CounterKind::Defense, -amount, None);
                 }
                 self.emit(GameEvent::DamageDealt {
-                    source: source_card,
+                    source: source_object,
                     target: DamageTarget::Permanent(permanent_id),
                     amount: amount as u32,
                 });
@@ -204,11 +204,14 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);
         }
-        let card = CardId::from(source.entity);
-        if let Some(controller) = self.stack_spell_controller(card) {
-            return Some(self.spell_keywords(card, controller));
+        let object = ObjectId::from(source.entity);
+        if let Some(controller) = self.stack_spell_controller(object) {
+            return Some(self.spell_keywords(object, controller));
         }
-        self.state.cards.get(card.0).map(|card| card.keywords)
+        self.state
+            .objects
+            .get(object.0)
+            .map(|object| object.keywords)
     }
 
     fn source_controller(&self, source: ObjectRef) -> Option<PlayerId> {
@@ -220,8 +223,8 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.controller);
         }
-        let card = CardId::from(source.entity);
-        self.state.cards.get(card.0).map(|card| card.owner)
+        let object = ObjectId::from(source.entity);
+        self.state.objects.get(object.0).map(|object| object.owner)
     }
 
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {

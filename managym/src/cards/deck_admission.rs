@@ -64,11 +64,11 @@ fn construction_issues(deck: &Deck) -> Vec<DeckIssue> {
         });
     }
     let mut total = 0usize;
-    for (section, cards) in [
+    for (section, objects) in [
         (DeckSection::Main, &deck.main),
         (DeckSection::Sideboard, &deck.sideboard),
     ] {
-        for (name, count) in cards {
+        for (name, count) in objects {
             if *count == 0 {
                 issues.push(DeckIssue {
                     line: None,
@@ -110,11 +110,11 @@ pub fn check_decks(decks: &[Deck]) -> Vec<Vec<DeckIssue>> {
 /// ambiguous names.
 pub(crate) fn admit_in_world(pool: &ContentPool, deck: &Deck) -> Vec<DeckIssue> {
     let mut issues = construction_issues(deck);
-    for (section, cards) in [
+    for (section, objects) in [
         (DeckSection::Main, &deck.main),
         (DeckSection::Sideboard, &deck.sideboard),
     ] {
-        for name in cards.keys() {
+        for name in objects.keys() {
             let rows: Vec<_> = pool
                 .definitions
                 .iter()

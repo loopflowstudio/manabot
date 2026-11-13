@@ -19,7 +19,7 @@ use crate::{
     cards::names::{NameCandidate, NameVocabulary},
     flow::{decision::Decision, game::Game},
     state::{
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         permanent::Permanent,
         zone::ZoneType,
     },
@@ -95,15 +95,18 @@ impl Game {
     /// Move every card in `player`'s hand to the bottom of their library.
     pub fn scenario_clear_hand(&mut self, player: PlayerId) {
         self.policy_history = Default::default();
-        let hand: Vec<CardId> = self.state.zones.zone_cards(ZoneType::Hand, player).to_vec();
-        for card in hand {
-            self.state.zones.move_card(card, player, ZoneType::Library);
-            // move_card pushes to the top (end); rotate to the bottom so the
+        let hand: Vec<ObjectId> = self
+            .state
+            .zones
+            .zone_objects(ZoneType::Hand, player)
+            .to_vec();
+        for object in hand {
+            self.state.place_object(object, player, ZoneType::Library);
+            // move_object pushes to the top (end); rotate to the bottom so the
             // cleared hand is not immediately drawn back.
-            let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
-            if let Some(top) = library.pop() {
-                library.insert(0, top);
-            }
+            self.state
+                .zones
+                .reposition(ZoneType::Library, player, object, 0);
         }
     }
 
@@ -118,13 +121,13 @@ impl Game {
             let found = self
                 .state
                 .zones
-                .zone_cards(zone, player)
+                .zone_objects(zone, player)
                 .iter()
                 .copied()
-                .find(|card| self.state.cards[*card].name == name);
-            if let Some(card) = found {
+                .find(|object| self.state.objects[*object].name == name);
+            if let Some(object) = found {
                 self.policy_history = Default::default();
-                self.state.zones.move_card(card, player, ZoneType::Hand);
+                self.state.place_object(object, player, ZoneType::Hand);
                 return Ok(());
             }
         }
@@ -149,12 +152,12 @@ impl Game {
             .find_map(|zone| {
                 self.state
                     .zones
-                    .zone_cards(zone, player)
+                    .zone_objects(zone, player)
                     .iter()
                     .copied()
-                    .find(|card| self.state.cards[*card].name == name)
+                    .find(|object| self.state.objects[*object].name == name)
             });
-        let Some(card_id) = found else {
+        let Some(object_id) = found else {
             return Err(AgentError(format!(
                 "scenario_force_battlefield: no '{name}' outside battlefield for player {}",
                 player.0
@@ -163,24 +166,23 @@ impl Game {
 
         self.policy_history = Default::default();
         self.state
-            .zones
-            .move_card(card_id, player, ZoneType::Battlefield);
+            .place_object(object_id, player, ZoneType::Battlefield);
 
         let permanent_id = PermanentId(self.state.permanents.len());
         let mut permanent = Permanent::new(
             self.state.id_gen_mut().next_id(),
-            card_id,
-            &self.state.cards[card_id],
+            object_id,
+            &self.state.objects[object_id],
         );
         if ready {
             permanent.summoning_sick = false;
             permanent.tapped = false;
         }
         self.state.permanents.push(Some(permanent));
-        if self.state.card_to_permanent.len() <= card_id.0 {
-            self.state.card_to_permanent.resize(card_id.0 + 1, None);
+        if self.state.object_to_permanent.len() <= object_id.0 {
+            self.state.object_to_permanent.resize(object_id.0 + 1, None);
         }
-        self.state.card_to_permanent[card_id] = Some(permanent_id);
+        self.state.object_to_permanent[object_id] = Some(permanent_id);
         self.invalidate_mana_cache(player);
         Ok(permanent_id)
     }

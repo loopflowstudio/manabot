@@ -20,7 +20,7 @@ use crate::{
     state::{
         ability::TargetSpec,
         card::Restriction,
-        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId, PublicId, Target},
         zone::ZoneType,
     },
 };
@@ -209,7 +209,7 @@ pub enum AtomicCommand {
     CastSpell {
         binding: OfferSetBinding,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
         targets: Vec<BoundTarget>,
     },
     DeclareAttackers {
@@ -232,8 +232,8 @@ pub enum AtomicCommand {
 pub enum BoundTarget {
     Player(PlayerId),
     Permanent(ObjectRef),
-    StackSpell(CardId),
-    StackAbility(ObjectId),
+    StackSpell(ObjectId),
+    StackAbility(PublicId),
     GraveyardCard(ObjectRef),
 }
 
@@ -244,7 +244,7 @@ enum InternalOffer {
     },
     CastSingleTarget {
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
         role: RoleId,
         targets: BTreeMap<CandidateId, BoundTarget>,
     },
@@ -343,7 +343,7 @@ impl StructuredOfferSet {
             }
             InternalOffer::CastSingleTarget {
                 player,
-                card,
+                object,
                 role,
                 targets,
             } => {
@@ -364,7 +364,7 @@ impl StructuredOfferSet {
                 Ok(AtomicCommand::CastSpell {
                     binding: self.binding,
                     player: *player,
-                    card: *card,
+                    object: *object,
                     targets: vec![target],
                 })
             }
@@ -631,21 +631,21 @@ impl Game {
                 .unwrap_or_else(|| format!("{:?}", action.action_type()));
             let public_commitment = match (action_space.kind, action) {
                 (_, Action::PassPriority { .. }) => Some(PublicCommitment::PassPriority),
-                (_, Action::CastSpell { card, .. }) => Some(PublicCommitment::Cast {
-                    card: self.state.cards[*card].name.clone(),
+                (_, Action::CastSpell { object, .. }) => Some(PublicCommitment::Cast {
+                    card: self.state.objects[*object].name.clone(),
                 }),
-                (_, Action::PlayLand { card, .. }) => Some(PublicCommitment::PlayLand {
-                    card: self.state.cards[*card].name.clone(),
+                (_, Action::PlayLand { object, .. }) => Some(PublicCommitment::PlayLand {
+                    card: self.state.objects[*object].name.clone(),
                 }),
-                (ActionSpaceKind::Learn, Action::LearnDiscard { card, .. })
-                | (ActionSpaceKind::Discard, Action::SelectCard { card, .. }) => {
+                (ActionSpaceKind::Learn, Action::LearnDiscard { object, .. })
+                | (ActionSpaceKind::Discard, Action::SelectCard { object, .. }) => {
                     Some(PublicCommitment::Discard {
-                        card: self.state.cards[*card].name.clone(),
+                        card: self.state.objects[*object].name.clone(),
                     })
                 }
-                (ActionSpaceKind::Learn, Action::LearnTakeLesson { card, .. }) => {
+                (ActionSpaceKind::Learn, Action::LearnTakeLesson { object, .. }) => {
                     Some(PublicCommitment::LearnTakeLesson {
-                        card: self.state.cards[*card].name.clone(),
+                        card: self.state.objects[*object].name.clone(),
                     })
                 }
                 (ActionSpaceKind::Learn, Action::Decline { .. }) => {
@@ -699,7 +699,7 @@ impl Game {
                 let presentation = self.structured_priority_offers()?;
                 for offer in &mut complete.projection.offers {
                     let Some(InternalOffer::SearchAction {
-                        action: Action::CastSpell { card, .. },
+                        action: Action::CastSpell { object, .. },
                     }) = complete.internal.get(&offer.id)
                     else {
                         continue;
@@ -710,8 +710,9 @@ impl Game {
                             .iter()
                             .find_map(|(id, inner)| match inner {
                                 InternalOffer::CastSingleTarget {
-                                    card: target_card, ..
-                                } if target_card == card => Some((*id, inner.clone())),
+                                    object: target_card,
+                                    ..
+                                } if target_card == object => Some((*id, inner.clone())),
                                 _ => None,
                             });
                     if let Some((id, inner)) = replacement {
@@ -872,8 +873,8 @@ impl Game {
         };
         if !self.state.delayed_triggers.is_empty()
             || self.state.permanents.iter().flatten().any(|permanent| {
-                let card = &self.state.cards[permanent.card];
-                !card.abilities.is_empty() || !card.triggered_mana_abilities.is_empty()
+                let object = &self.state.objects[permanent.object];
+                !object.abilities.is_empty() || !object.triggered_mana_abilities.is_empty()
             })
         {
             return Ok(None);
@@ -884,7 +885,9 @@ impl Game {
             self.state.permanents[*id]
                 .as_ref()
                 .is_some_and(|permanent| {
-                    !self.state.cards[permanent.card].mana_abilities.is_empty()
+                    !self.state.objects[permanent.object]
+                        .mana_abilities
+                        .is_empty()
                 })
         }) {
             return Ok(None);
@@ -971,7 +974,7 @@ impl Game {
                     id: object_render_id(permanent.id, object.incarnation.0),
                 },
             },
-            label: self.state.cards[permanent.card].name.clone(),
+            label: self.state.objects[permanent.object].name.clone(),
             help: None,
             preview: None,
         })
@@ -1054,8 +1057,8 @@ impl Game {
                     });
                     internal.insert(id, InternalOffer::PassPriority { player: *player });
                 }
-                Action::CastSpell { player, card } => {
-                    let card_ref = &self.state.cards[*card];
+                Action::CastSpell { player, object } => {
+                    let card_ref = &self.state.objects[*object];
                     if card_ref.optional_cost().is_some() {
                         continue;
                     }
@@ -1072,7 +1075,7 @@ impl Game {
                     }
 
                     let legal_targets =
-                        self.legal_targets_for_requirement(*player, *card, requirement);
+                        self.legal_targets_for_requirement(*player, *object, requirement);
                     if legal_targets.is_empty() {
                         return Err(StructuredOfferError::Invariant(format!(
                             "castable card {} has no legal target",
@@ -1106,7 +1109,7 @@ impl Game {
                         source: Some(SubjectRef::Object {
                             id: object_render_id(
                                 card_ref.id,
-                                self.current_object_ref(*card)
+                                self.current_object_ref(*object)
                                     .ok_or(StructuredOfferError::InvalidCurrentTarget)?
                                     .incarnation
                                     .0,
@@ -1133,7 +1136,7 @@ impl Game {
                         id,
                         InternalOffer::CastSingleTarget {
                             player: *player,
-                            card: *card,
+                            object: *object,
                             role,
                             targets: target_by_candidate,
                         },
@@ -1193,7 +1196,7 @@ impl Game {
                         id: object_render_id(permanent.id, object_ref.incarnation.0),
                     },
                 },
-                label: self.state.cards[permanent.card].name.clone(),
+                label: self.state.objects[permanent.object].name.clone(),
                 help: None,
                 preview: None,
             });
@@ -1328,7 +1331,7 @@ impl Game {
             }
             AtomicCommand::CastSpell {
                 player,
-                card,
+                object,
                 targets,
                 ..
             } => {
@@ -1347,8 +1350,8 @@ impl Game {
                                 action,
                                 Action::CastSpell {
                                     player: legal_player,
-                                    card: legal_card,
-                                } if legal_player == player && legal_card == card
+                                    object: legal_card,
+                                } if legal_player == player && legal_card == object
                             )
                         })
                     })
@@ -1620,7 +1623,7 @@ impl Game {
             }
             AtomicCommand::CastSpell {
                 player,
-                card,
+                object,
                 targets,
                 ..
             } => {
@@ -1641,8 +1644,8 @@ impl Game {
                             action,
                             Action::CastSpell {
                                 player: legal_player,
-                                card: legal_card,
-                            } if legal_player == player && legal_card == card
+                                object: legal_card,
+                            } if legal_player == player && legal_card == object
                         )
                     })
                     .cloned()
@@ -1814,7 +1817,7 @@ impl Game {
                 .permanent_object_ref(permanent)
                 .map(BoundTarget::Permanent)
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
-            Target::StackSpell(card) => Ok(BoundTarget::StackSpell(card)),
+            Target::StackSpell(object_id) => Ok(BoundTarget::StackSpell(object_id)),
             Target::StackAbility(id) => Ok(BoundTarget::StackAbility(id)),
             Target::GraveyardCard(object) => Ok(BoundTarget::GraveyardCard(object)),
         }
@@ -1832,15 +1835,15 @@ impl Game {
                         object_ref.entity.0, object_ref.incarnation.0
                     ))
                 }),
-            BoundTarget::StackSpell(card) => Ok(Target::StackSpell(card)),
+            BoundTarget::StackSpell(object_id) => Ok(Target::StackSpell(object_id)),
             BoundTarget::StackAbility(id) => self
                 .find_ability_on_stack_index(id)
                 .map(|_| Target::StackAbility(id))
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
             BoundTarget::GraveyardCard(object) => {
-                let card = CardId::from(object.entity);
-                if self.current_object_ref(card) == Some(object)
-                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                let object_id = ObjectId::from(object.entity);
+                if self.current_object_ref(object_id) == Some(object)
+                    && self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
                 {
                     Ok(Target::GraveyardCard(object))
                 } else {
@@ -1875,19 +1878,22 @@ impl Game {
                     SubjectRef::Object {
                         id: object_render_id(permanent_ref.id, object_ref.incarnation.0),
                     },
-                    self.state.cards[permanent_ref.card].name.clone(),
+                    self.state.objects[permanent_ref.object].name.clone(),
                 ))
             }
             BoundTarget::GraveyardCard(object) => {
-                let card = CardId::from(object.entity);
-                if self.current_object_ref(card) != Some(object) {
+                let object_id = ObjectId::from(object.entity);
+                if self.current_object_ref(object_id) != Some(object) {
                     return Err(StructuredOfferError::InvalidCurrentTarget);
                 }
                 Ok((
                     SubjectRef::Object {
-                        id: object_render_id(self.state.cards[card].id, object.incarnation.0),
+                        id: object_render_id(
+                            self.state.objects[object_id].id,
+                            object.incarnation.0,
+                        ),
                     },
-                    self.state.cards[card].name.clone(),
+                    self.state.objects[object_id].name.clone(),
                 ))
             }
             BoundTarget::StackSpell(_) | BoundTarget::StackAbility(_) => {
@@ -1925,7 +1931,7 @@ fn candidate_answer(
     Ok(candidates)
 }
 
-fn object_render_id(id: ObjectId, incarnation: u32) -> ObjectRenderId {
+fn object_render_id(id: PublicId, incarnation: u32) -> ObjectRenderId {
     ObjectRenderId {
         entity: id.0,
         incarnation,

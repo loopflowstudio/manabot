@@ -12,10 +12,10 @@ use managym::state::{card::Keyword, permanent::CounterKind, zone::ZoneType};
 #[test]
 fn dark_depths_becomes_marit_lage_when_its_last_ice_counter_is_removed() {
     let mut s = five_color_setup(&["Dark Depths"]);
-    let card = crate::support::inspect::library_card(&s, 0, "Dark Depths");
-    s.game_mut().move_card(card, ZoneType::Battlefield);
+    let object = crate::support::inspect::library_card(&s, 0, "Dark Depths");
+    s.game_mut().move_object(object, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
-    let depths = s.game().state.card_to_permanent[card].unwrap();
+    let depths = s.game().state.object_to_permanent[object].unwrap();
     assert_eq!(counters_of(&s, depths, CounterKind::Ice), 10);
     activate(&mut s, depths, 0);
     settle(&mut s);
@@ -24,7 +24,7 @@ fn dark_depths_becomes_marit_lage_when_its_last_ice_counter_is_removed() {
     activate(&mut s, depths, 0);
     settle(&mut s);
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Graveyard)
     );
     let lage = permanent_named(&s, "Marit Lage");
