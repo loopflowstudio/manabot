@@ -612,7 +612,6 @@ fn toph_put_onto_the_battlefield_earthbends_zero() {
         .state
         .pending_triggers
         .iter()
-        .chain(&[])
         .all(|trigger| trigger.spent.is_empty()));
 }
 

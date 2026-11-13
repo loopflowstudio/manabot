@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::{
     agent::{
-        ability_description::effects_description,
+        ability_description::{effects_description, mana_description},
         continuation::{ContinuationFrame, VisibleReference},
     },
     cards::{content_pack::default_content_pack, tokens::TokenWriter},
@@ -30,7 +30,7 @@ use crate::{
         ability::Effect,
         card::CardDefId,
         game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
-        mana::ManaSpent,
+        mana::{Mana, ManaSpent},
     },
 };
 
@@ -503,13 +503,10 @@ impl<'a> Projection<'a> {
     fn receipt(&mut self, spent: &ManaSpent) {
         self.field("mana spent", spent);
         self.summary(|| {
-            let mana: String = ["W", "U", "B", "R", "G", "C"]
-                .into_iter()
-                .zip(spent.amounts)
-                .flat_map(|(symbol, amount)| {
-                    std::iter::repeat_n(format!("{{{symbol}}}"), usize::from(amount))
-                })
-                .collect();
+            let mana = mana_description(&Mana {
+                mana: spent.amounts,
+                ..Default::default()
+            });
             match spent.entry_counters {
                 0 => format!("Mana spent to cast: {mana}."),
                 counters => format!(
@@ -824,16 +821,14 @@ pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) 
         return true;
     }
     let reads = READS.get_or_init(|| {
-        let mut reads = Vec::new();
-        for (id, definition) in default_content_pack().definition_entries() {
-            let index = id.0 as usize;
-            if reads.len() <= index {
-                reads.resize(index + 1, false);
-            }
-            let json = serde_json::to_string(definition).expect("serializable definition");
-            reads[index] = json.contains("ManaSpentToCast") || json.contains("ColorsSpentToCast");
-        }
-        reads
+        // The catalog iterates definitions in CardDefId order.
+        default_content_pack()
+            .definitions()
+            .map(|definition| {
+                let json = serde_json::to_string(definition).expect("serializable definition");
+                json.contains("ManaSpentToCast") || json.contains("ColorsSpentToCast")
+            })
+            .collect()
     });
     definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
 }

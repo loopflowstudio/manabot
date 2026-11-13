@@ -1300,7 +1300,7 @@ impl Game {
             .expect("a tapped fixed source is on the battlefield");
         let resolved = self.resolve_mana_bonuses(player, source, &produced, bonuses, None);
         assert!(
-            matches!(resolved, Ok(None)),
+            resolved.is_none(),
             "a fixed source's bonuses need no choice"
         );
     }
@@ -1325,7 +1325,7 @@ impl Game {
 
     /// Every triggered mana ability on the battlefield, with its source and
     /// controller, read from one board.
-    pub(crate) fn mana_triggers(&self) -> Vec<ManaTrigger> {
+    fn mana_triggers(&self) -> Vec<ManaTrigger> {
         let mut triggers = Vec::new();
         for controller in [PlayerId(0), PlayerId(1)] {
             for (source, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
@@ -1344,7 +1344,7 @@ impl Game {
     /// The planner's estimate of the outputs of the triggered mana abilities
     /// that `producer` tapping `tapped` for mana would trigger, from the
     /// current board. Play reads them at production (`production_bonuses`).
-    pub(crate) fn tap_bonuses(
+    fn tap_bonuses(
         &self,
         triggers: &[ManaTrigger],
         producer: PlayerId,
@@ -1362,7 +1362,7 @@ impl Game {
 
     /// Record `permanent`, just tapped for mana, against every triggered
     /// mana ability predicate on the board.
-    pub(crate) fn tapped_for_mana(&self, permanent: PermanentId) -> TappedForMana {
+    fn tapped_for_mana(&self, permanent: PermanentId) -> TappedForMana {
         let mut matched = Vec::new();
         for trigger in self.mana_triggers() {
             let predicate = trigger.ability.predicate;
@@ -1403,8 +1403,8 @@ impl Game {
     /// Resolve `bonuses` after `tapped`'s production of `produced` into
     /// `player`'s pool (CR 605.4a): a fixed or single-type bonus adds at
     /// once; a choice among several produced types suspends as a
-    /// `ManaChoice` naming its source and holding the rest. Returns the
-    /// caller's `resume` when every bonus resolved, or the choice.
+    /// `ManaChoice` naming its source and holding the rest. Returns that
+    /// choice, or the caller's `resume` when every bonus resolved.
     pub(crate) fn resolve_mana_bonuses(
         &mut self,
         player: PlayerId,
@@ -1412,12 +1412,12 @@ impl Game {
         produced: &Mana,
         bonuses: Vec<PendingManaBonus>,
         resume: Option<Box<Decision>>,
-    ) -> Result<Option<Box<Decision>>, Box<Decision>> {
+    ) -> Option<Box<Decision>> {
         let mut pending = bonuses.into_iter();
         while let Some(bonus) = pending.next() {
             let mut choices = bonus.output.alternatives(produced);
             if choices.len() > 1 {
-                return Err(Box::new(Decision::ManaChoice {
+                return Some(Box::new(Decision::ManaChoice {
                     player,
                     choices,
                     production: ManaProduction::Bonus {
@@ -1433,7 +1433,7 @@ impl Game {
                 self.state.mana_pool_mut(player).add(&mana);
             }
         }
-        Ok(resume)
+        resume
     }
 
     pub fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
@@ -1620,7 +1620,7 @@ impl Game {
 
 /// A triggered mana ability on the battlefield and its controller, the
 /// "you" its `who` is relative to.
-pub(crate) struct ManaTrigger {
+struct ManaTrigger {
     source: PermanentId,
     controller: PlayerId,
     ability: TriggeredManaAbility,

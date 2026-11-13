@@ -1,99 +1,72 @@
-# MTG-297: Heartbeat of Spring, Animal Attendant, Toph, Uncle's Musings
+# MTG-297: Heartbeat, Animal Attendant, Toph, Uncle's Musings
 
-Design: `scratch/tle-production-design.md` with the review decisions in
-`scratch/heartbeat-design.md`.
+Contract: `tle-production-design.md`; review answers and MTG-242 coordination:
+`heartbeat-design.md`. Implementation inventory before compression:
+`2af8bc650:scratch/mtg-297-heartbeat-of-spring.md`.
 
-## Scope
+## Current approach
 
-Steer 41eb2776 (2026-11-12): "Do the production half now. Build spending
-(pool classes, receipts, Animal Attendant, Toph, Uncle's Musings) on MTG-242's
-ManaRestriction/SpendingContext and proposed restricted-mana fact row; don't
-rewrite pool storage in parallel. If spending must wait for MTG-242 to reach
-main, finish production and stop there."
+- Production authority is `flow/mana.rs`: tap captures `TappedForMana`, output
+  selects live `production_bonuses`, and `resolve_mana_bonuses` resolves or
+  returns the next choice. `ManaProduction` retains source/bonus identity.
+  The planner includes the same bonus alternatives; tap-time firing is deleted.
+- Spending extends MTG-242's types with `ManaClass { restriction, effect }` and
+  `ManaSpent`. The receipt follows payment → stack → resolution → entering
+  permanent → its own trigger; `ZoneEntry` applies Attendant's counters.
+  `EffectValue::{ManaSpentToCast, ColorsSpentToCast}` serves Toph/converge.
+- Projection uses kind-11 `PooledMana` programs and kind-14 `mana spent`
+  execution occurrences, with native/Python/text/token parity. No new layout,
+  model kind or version branch. Only rule-relevant receipts are projected.
+- The four definitions and Scryfall fixture entries are present.
+  `scripts/refresh_card_fixture.py` dropped existing double-faced entries in
+  the earlier run, so only the four new entries were added.
 
-MTG-242 (PR #496) merged 2026-11-12T21:37Z; main is merged into this branch
-(824753626) and the spending half is built on its types.
+## Remaining / Delete — do not maintain
 
-## Built: production
+**Spending choices remain required.** Replace automatic first-remainder and
+class/expiry selection in `Mana::pay` / `Game::spend_mana` /
+`spend_mana_to_remainder` with native choices whenever receipts or remainders
+differ. Do not refactor the automatic policy while waiting for this cut.
+Today converge gets the colors automatic tapping/spending chooses, and a
+player cannot hold Attendant mana back from a qualifying creature.
 
-- `TriggeredManaAbility { who: Actor, predicate, output }`,
-  `TriggeredManaOutput::{Fixed(Mana), OneProducedType}` (`state/card.rs`).
-  Badgermole Cub is `who: You, Fixed(G)`; Heartbeat of Spring
-  (`cards/src/chk.rs`) is `who: AnyPlayer`, land, `OneProducedType`.
-- Tapping no longer fires bonuses. `flow/mana.rs`: tapping records
-  `TappedForMana`; trigger sources are read from the board when the output is
-  produced (`production_bonuses`, CR 106.12a) and resolved after it
-  (`resolve_mana_bonuses`); a choice among produced types suspends as a
-  `ManaChoice` whose `ManaProduction` names its source and the tapped
-  permanent. Deleted `tap_mana_bonus`, `tap_mana_bonus_from`,
-  `tap_bonus_sources`, `fire_triggered_mana_abilities`.
-- Planner folds every bonus combination into the output alternatives.
+Remaining witnesses: countered then reanimated creatures receive no counter
+or X; a filter's activation fee is excluded from the outer cast receipt.
+The combat-pool Attendant witness is already present in
+`cards/tests/cards/tle.rs::animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect`.
+Academy's `experience.rs` player view still omits the spend-effect rider.
 
-## Built: spending
+Production's obsolete bonus path and restriction-only pool equivalence are
+already deleted; the detailed deletion list is in the contract.
 
-- `state/mana.rs`: the pool's class key is `ManaClass { restriction, effect }`
-  (was the restriction alone); `Mana.classes` replaces `Mana.restricted`.
-  `SpendEffect::CreatureEntersWithPlusOneCounter { without_subtype }` is
-  Animal Attendant's rider. Combat and regular pools stay distinct.
-- `Mana::pay` and `Game::spend_mana` return `ManaSpent { amounts,
-  entry_counters }`. Automatic order within a color: restricted classes and
-  classes whose effect applies, then ordinary mana, then classes whose effect
-  would be wasted.
-- The receipt travels `commit_payment` → `FrameCompletion::Paid.spent` →
-  `SpellOnStack.spent` → the resolution frame (`EffectFrame.spent`) → the
-  entering permanent (`Permanent.cast_spent`) → its own entering trigger
-  (`PendingTrigger.spent`, `TriggeredAbilityOnStack.spent`). A permanent
-  spell's `entry_counters` become +1/+1 counters in its `ZoneEntry`.
-- `EffectValue::ManaSpentToCast` (Toph) and `ColorsSpentToCast` (converge).
-- Cards in `cards/src/tle.rs`: Animal Attendant, Toph, Greatest Earthbender,
-  Uncle's Musings; Scryfall fixture entries added for these and Heartbeat.
-  `scripts/refresh_card_fixture.py` currently drops the double-faced cards
-  already in the fixture, so only the four new entries were added.
-- Observation, with no new buffer, column or fact kind:
-  - `PlayerData.mana` counts unrestricted class mana;
-    `PlayerData.spend_effect_mana` (description, amounts, token program) is
-    an `EffectProgram` (kind 11) on the player under the id `PooledMana`,
-    native and Python in parity; the text observation names the rider.
-  - The receipt is an execution occurrence (`mana spent`) of the stack frame
-    or resolution frame, only when a rule reads it
-    (`effect_execution::receipt_matters`: the definition mentions the
-    spent-mana values, or a spend effect applied).
-  - Vocabulary: `PooledMana`, `ManaSpent`, `amounts`, `entry_counters`,
-    `mana spent` registered in `record_vocabulary.rs`/`EXECUTION_TEXT`.
+## Compression
 
-## Remaining
+Return the next decision directly from the infallible bonus resolver; both a
+bonus choice and its caller use the same suspension path. `advance_mana_upfront`
+only advances upfront payments, so a bonus choice stays pending. Keep
+trigger-enumeration helpers private to `flow/mana.rs`. Reuse `mana_description`
+for receipt amounts; build the receipt relevance index in catalog order.
+No serialized game state, choice order or projected bytes change.
 
-- **Spending choices.** The design replaces automatic first-remainder payment
-  with a choice whenever receipts or remaining pools differ. Not built:
-  payment is still automatic (`Mana::payment_remainders`, the planner's fixed
-  sources). Consequences today: converge counts whatever colors automatic
-  tapping and the colorless-first generic order spend, and a player cannot
-  hold Attendant mana back from a qualifying creature. This is the design's
-  second spending deletion ("unconditional first-remainder selection") and a
-  new decision surface (action offers, Academy, replay); it is the next
-  implement direction or its own Task.
-- Witnesses still to write: a countered then reanimated creature gets no
-  counter or X; mana spent on a filter's own cost is not in the outer
-  receipt; combat-pool Attendant mana.
-- Academy's player view shows Attendant mana as ordinary mana without its
-  rider (`experience.rs` has no spend-effect field).
+## Run evidence
 
-## For the PR description
-
-- CR over design: bonuses trigger when the mana ability produces mana
-  (CR 106.12a), sources read at production; the design's proposed v10
-  `mana_choices[A,4]` block and fact kinds after 14 were not needed.
-- Spending choices are not in this change (above).
-
-## Checks
-
-- Production half (before the merge): cards 694, rules_tests 169, engine lib
-  197 passed in debug; corpus first 1,000 decks 998 admit (the two failures
-  list Lita).
-- After the merge and spending (debug): cards 707, engine lib 197,
+- Production before the main merge: cards 694, rules_tests 169, engine lib
+  197 passed in debug; first 1,000 corpus decks: 998 admit, two failures name Lita.
+- After merging MTG-242 and adding spending: debug cards 707, engine lib 197,
   rules_tests 170, match_state_hash 11, search_state_contract 6,
   canonical_replay 6, experience_protocol 5, conformance 2, content_pack 3,
-  state 15 passed. Python: academy parity/authority/fixture, semantic text and
-  mana input, env observation and layout, belief state, authored matchup
-  pass after re-recording w17 evidence (authored-match receipt 66d51605…,
+  state 15 passed. Python academy parity/authority/fixture, semantic text/mana
+  input, env observation/layout, belief state and authored matchup passed after
+  re-recording w17 evidence (authored-match receipt 66d51605…,
   terminal state db1a0bbb…, belief v3 receipts).
+
+For PR review: trigger timing follows CR 106.12a over the original proposal;
+existing fact/frame joins replace its proposed v10 block and new kinds.
+Spending choices remain unfinished.
+
+Compression checks (2026-11-12):
+- `cargo fmt --manifest-path managym/Cargo.toml --all --check` — passed.
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --lib --test cards -E 'test(chk::) | test(tle::) | test(observability::cast_receipt) | test(observability::spend_effect_mana) | test(agent::continuation::) | test(flow::mana::) | test(cost_effect_completion_retains_output) | test(the_great_henge) | test(tarnished_citadel)'` — 53 passed on the final Rust source.
+- `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -j 2 -- -D warnings` — passed.
+- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 Darwin extension installed atomically.
+- `uv run --extra dev pytest tests/semantic/test_spend_effect_mana_input.py -q` — 2 passed against the rebuilt extension (native/reference encoding and text).

@@ -219,10 +219,11 @@ import](../docs/engine.md#decks)) or reset fails. Fixed setups and tests leave
 it unset and run as given without submitted-deck construction checks.
 Any other `world` value is rejected: authored content packs are retired.
 
-Mana feasibility and production share typed costs and pools. `Mana.lesson`
-retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
-casting context, while resolving costs and activations remain unrestricted
-contexts. Chosen-color mana abilities pay their activation costs before their
+Mana feasibility and production share typed costs and pools. `ManaClass`
+retains each class's spending restriction and spend effect; `SpendingContext`
+distinguishes casting, activation and resolving costs. A spell's payment records
+`ManaSpent`, carried to resolution and the entering permanent's own triggers.
+Chosen-color mana abilities pay their activation costs before their
 immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a

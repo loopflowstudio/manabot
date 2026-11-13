@@ -2052,41 +2052,38 @@ impl Game {
                 },
                 Action::ChooseMode { mode, .. },
             ) => {
-                let mana = choices[*mode].clone();
-                self.state.mana_pool_mut(*player).add(&mana);
+                let mana = &choices[*mode];
+                self.state.mana_pool_mut(*player).add(mana);
                 let player = *player;
                 // The output is produced: its triggered mana abilities
                 // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
-                let bonuses = match production {
+                let next = match production {
                     ManaProduction::Output {
                         source: Some(source),
                         tapped: Some(tapped),
-                    } => Some((*source, mana, self.production_bonuses(player, tapped))),
-                    ManaProduction::Output { .. } => None,
+                    } => {
+                        let bonuses = self.production_bonuses(player, tapped);
+                        self.resolve_mana_bonuses(player, *source, mana, bonuses, resume.take())
+                    }
+                    ManaProduction::Output { .. } => resume.take(),
                     ManaProduction::Bonus {
                         tapped,
                         produced,
                         pending,
                         ..
-                    } => Some((*tapped, produced.clone(), std::mem::take(pending))),
+                    } => self.resolve_mana_bonuses(
+                        player,
+                        *tapped,
+                        produced,
+                        std::mem::take(pending),
+                        resume.take(),
+                    ),
                 };
-                let resume = match bonuses {
-                    None => Ok(resume.take()),
-                    Some((tapped, produced, bonuses)) => {
-                        self.resolve_mana_bonuses(player, tapped, &produced, bonuses, resume.take())
-                    }
-                };
-                let resume = match resume {
-                    Ok(resume) => resume,
-                    Err(choice) => {
-                        suspended.decision = *choice;
-                        *self.state.suspended_decision_mut() = Some(suspended);
-                        return Ok(());
-                    }
-                };
-                if let Some(resume) = resume {
-                    suspended.decision = *resume;
+                if let Some(next) = next {
+                    suspended.decision = *next;
                     *self.state.suspended_decision_mut() = Some(suspended);
+                    // Only an upfront payment advances here; a bonus choice
+                    // stays suspended for the chooser.
                     self.advance_mana_upfront()?;
                 } else {
                     // An activated mana ability retains its payer's priority;
