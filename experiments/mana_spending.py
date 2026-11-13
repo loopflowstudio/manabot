@@ -366,10 +366,9 @@ def shapes(source: Path, out: Path, cap: int) -> None:
                     == int(managym.ActionEnum.PRIORITY_CAST_SPELL)
                 ]
                 if cast_actions:
-                    expanded = len(raw.action_space.actions) - len(cast_actions)
-                    non_redundant_expanded = identity_expanded = (
-                        non_redundant_identity_expanded
-                    ) = expanded
+                    # One total per counting rule, in FoldedCounts order; a cast
+                    # without exactly one immediate payment counts as one offer.
+                    expanded = [len(raw.action_space.actions) - len(cast_actions)] * 4
                     unresolved = capped = 0
                     for i in cast_actions:
                         fork = env.clone_env()
@@ -382,29 +381,24 @@ def shapes(source: Path, out: Path, cap: int) -> None:
                         ]
                         if len(alternatives) != 1:
                             unresolved += 1
-                            expanded += 1
-                            non_redundant_expanded += 1
-                            identity_expanded += 1
-                            non_redundant_identity_expanded += 1
+                            outcomes = (1, 1, 1, 1)
                         else:
-                            expanded += max(1, alternatives[0].outcomes)
-                            non_redundant_expanded += max(
-                                1, alternatives[0].non_redundant_outcomes
+                            payment = alternatives[0]
+                            capped += payment.cap_hit
+                            outcomes = (
+                                payment.outcomes,
+                                payment.non_redundant_outcomes,
+                                payment.identity_outcomes,
+                                payment.non_redundant_identity_outcomes,
                             )
-                            identity_expanded += max(
-                                1, alternatives[0].identity_outcomes
-                            )
-                            non_redundant_identity_expanded += max(
-                                1, alternatives[0].non_redundant_identity_outcomes
-                            )
-                            capped += alternatives[0].cap_hit
+                        expanded = [
+                            total + max(1, n)
+                            for total, n in zip(expanded, outcomes, strict=True)
+                        ]
                     folded.append(
                         FoldedCounts(
-                            original=len(raw.action_space.actions),
-                            expanded=expanded,
-                            non_redundant_expanded=non_redundant_expanded,
-                            identity_expanded=identity_expanded,
-                            non_redundant_identity_expanded=non_redundant_identity_expanded,
+                            len(raw.action_space.actions),
+                            *expanded,
                             cast_offers=len(cast_actions),
                             unresolved=unresolved,
                             capped=capped,
@@ -473,53 +467,6 @@ def summarize_shapes(source: Path) -> None:
         # Cast payments stop prompting per unit under C-E; a capped row may or
         # may not hold a real choice, which separates the lower and upper counts.
         without_cast_spend = decisions - cast_spend
-        certified_real = sum(p.outcomes > 1 for p in casts)
-        possibly_real = sum(p.outcomes > 1 or p.cap_hit for p in casts)
-        row = {
-            "deck_set": deck_set,
-            "policy": policy,
-            "games": len(games),
-            "payments": len(payments),
-            "cast_payments": len(casts),
-            "cast_cap_hits": sum(p.cap_hit for p in casts),
-            "all_cap_hits": sum(p.cap_hit for p in payments),
-            "casts_with_activated_sources": sum(p.activated_sources > 0 for p in casts),
-            "casts_with_saved_obligations": sum(p.saved_obligations > 0 for p in casts),
-            "exact_casts": len(exact),
-            "exact_real_casts": len(real),
-            "certified_real_casts": certified_real,
-            "exact_untapped_choices": sum(p.untapped_outcomes > 1 for p in exact),
-            "exact_receipt_choices": sum(p.receipt_outcomes > 1 for p in exact),
-            "exact_identity_loss": sum(p.identity_outcomes > p.outcomes for p in exact),
-            "A_decisions_per_game": decisions / len(games),
-            "A_offers": _quantiles(spend),
-            "B_decisions_per_game": (decisions - len(spend)) / len(games),
-            "C_decisions_per_game_lower": (without_cast_spend + certified_real)
-            / len(games),
-            "C_decisions_per_game_upper": (
-                without_cast_spend
-                + possibly_real
-                + sum(p.outcomes > 2 or p.cap_hit for p in casts)
-            )
-            / len(games),
-            "D_decisions_per_game_lower": (without_cast_spend + certified_real)
-            / len(games),
-            "D_decisions_per_game_upper": (without_cast_spend + possibly_real)
-            / len(games),
-            "C_worst_path_exact_offers": _quantiles(
-                [2 for p in real] + [p.outcomes - 1 for p in real if p.outcomes > 2]
-            ),
-            "D_exact_offers": _quantiles([p.outcomes for p in real]),
-            "D_exact_over64": sum(p.outcomes > 64 for p in exact),
-            "D_certified_over64": sum(p.outcomes > 64 for p in casts),
-            "E_decisions_per_game": without_cast_spend / len(games),
-            "E_priority_windows": len(folded),
-            "E_exact_windows": len(folded_exact),
-            "E_unresolved_cast_offers": sum(f.unresolved for f in folded),
-            "E_capped_cast_offers": sum(f.capped for f in folded),
-            "E_exact_offers": _quantiles([f.expanded for f in folded_exact]),
-            "E_original_offers": _quantiles([f.original for f in folded_exact]),
-        }
         measurements: tuple[
             tuple[str, Callable[[ShapeCounts], int], Callable[[FoldedCounts], int]], ...
         ] = (
@@ -536,13 +483,14 @@ def summarize_shapes(source: Path) -> None:
                 lambda f: f.non_redundant_identity_expanded,
             ),
         )
+        rules: dict[str, dict[str, object]] = {}
         for label, count_outcomes, count_folded in measurements:
             counts = [count_outcomes(p) for p in casts]
             exact_counts = [count_outcomes(p) for p in exact]
             real_counts = [n for n in exact_counts if n > 1]
             certain = sum(n > 1 for n in counts)
             possible = sum(n > 1 or p.cap_hit for n, p in zip(counts, casts))
-            row[label] = {
+            rules[label] = {
                 "D_exact_offers": _quantiles(real_counts),
                 "D_certified_over64": sum(n > 64 for n in counts),
                 "D_exact_over64": sum(n > 64 for n in exact_counts),
@@ -567,6 +515,42 @@ def summarize_shapes(source: Path) -> None:
                 "E_exact_over64": sum(count_folded(f) > 64 for f in folded_exact),
                 "E_certified_over64": sum(count_folded(f) > 64 for f in folded),
             }
+        capability = cast(dict[str, list[float]], rules["capability"])
+        row = {
+            "deck_set": deck_set,
+            "policy": policy,
+            "games": len(games),
+            "payments": len(payments),
+            "cast_payments": len(casts),
+            "cast_cap_hits": sum(p.cap_hit for p in casts),
+            "all_cap_hits": sum(p.cap_hit for p in payments),
+            "casts_with_activated_sources": sum(p.activated_sources > 0 for p in casts),
+            "casts_with_saved_obligations": sum(p.saved_obligations > 0 for p in casts),
+            "exact_casts": len(exact),
+            "exact_real_casts": len(real),
+            "certified_real_casts": capability["certified_real_casts"],
+            "exact_untapped_choices": sum(p.untapped_outcomes > 1 for p in exact),
+            "exact_receipt_choices": sum(p.receipt_outcomes > 1 for p in exact),
+            "exact_identity_loss": sum(p.identity_outcomes > p.outcomes for p in exact),
+            "A_decisions_per_game": decisions / len(games),
+            "A_offers": _quantiles(spend),
+            "B_decisions_per_game": (decisions - len(spend)) / len(games),
+            "C_decisions_per_game_lower": capability["C_decisions_per_game"][0],
+            "C_decisions_per_game_upper": capability["C_decisions_per_game"][1],
+            "D_decisions_per_game_lower": capability["D_decisions_per_game"][0],
+            "D_decisions_per_game_upper": capability["D_decisions_per_game"][1],
+            "C_worst_path_exact_offers": capability["C_worst_path_exact_offers"],
+            "D_exact_offers": capability["D_exact_offers"],
+            "D_exact_over64": capability["D_exact_over64"],
+            "D_certified_over64": capability["D_certified_over64"],
+            "E_decisions_per_game": without_cast_spend / len(games),
+            "E_priority_windows": len(folded),
+            "E_exact_windows": len(folded_exact),
+            "E_unresolved_cast_offers": sum(f.unresolved for f in folded),
+            "E_capped_cast_offers": sum(f.capped for f in folded),
+            "E_exact_offers": _quantiles([f.expanded for f in folded_exact]),
+            "E_original_offers": _quantiles([f.original for f in folded_exact]),
+        } | rules
         summaries.append(row)
         print(json.dumps(row), flush=True)
     (source / "summary.json").write_text(json.dumps(summaries, indent=2) + "\n")

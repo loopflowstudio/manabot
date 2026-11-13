@@ -1014,6 +1014,27 @@ impl PaymentModel {
         path
     }
 
+    /// The over-tap criterion, asked of the board after the payment's taps:
+    /// without one source's complete `output` (triggered bonuses included),
+    /// `pool` still holds `cost` and the saved callers in `tail` stay payable.
+    /// Callers first check that the pool exceeds the cost at all.
+    fn is_surplus(&self, pool: &Mana, output: &Mana, cost: &ManaCost, tail: &[Obligation]) -> bool {
+        let mut remaining = pool.clone();
+        remaining.spend(output, &cost.purpose);
+        if !remaining.can_pay(cost) {
+            return false;
+        }
+        if tail.is_empty() {
+            return true;
+        }
+        let mut obligations = vec![Obligation::Pay {
+            cost: cost.clone(),
+            waterbend: false,
+        }];
+        obligations.extend_from_slice(tail);
+        self.payable(remaining, obligations, SourcePolicy::All)
+    }
+
     /// Whether `obligations` can be paid: `plan(..).is_some()` without
     /// building the witness when the direct answer applies.
     fn payable(&self, pool: Mana, obligations: Vec<Obligation>, policy: SourcePolicy) -> bool {
@@ -2262,6 +2283,14 @@ impl Game {
         Ok(())
     }
 
+    /// Costs of the callers suspended behind the payment now being made.
+    fn saved_obligations(&self, player: PlayerId) -> Vec<Obligation> {
+        self.payment_obligations(player)
+            .into_iter()
+            .skip(1)
+            .collect()
+    }
+
     fn capture_payment_outcomes(
         &mut self,
         player: PlayerId,
@@ -2269,19 +2298,14 @@ impl Game {
         model: &PaymentModel,
     ) {
         if let Some(capture) = &self.mana_payment_shapes {
-            let mut tail = self.payment_obligations(player);
-            if !tail.is_empty() {
-                tail.remove(0);
-            }
+            let tail = self.saved_obligations(player);
             let row = model.fixed_outcomes(self.pooled_mana(player), cost, capture.cap, &tail);
             self.mana_payment_shapes.as_mut().unwrap().rows.push(row);
         }
     }
 
-    /// Attribute this automatic prefix without changing it. Remove each
-    /// source's complete modeled output (including triggered bonuses) in turn.
-    /// The current cost must still be pooled, and saved callers must remain
-    /// feasible on the actual post-tap board. No search runs for exact pools.
+    /// Attribute this automatic prefix without changing it: over-tapped when
+    /// some tapped source `is_surplus`. No search runs for exact pools.
     fn record_mana_payment(
         &mut self,
         player: PlayerId,
@@ -2290,9 +2314,12 @@ impl Game {
         path: &[PaymentStep],
     ) {
         let pool = self.pooled_mana(player);
-        let over_tapped = pool.usable_total(cost) > u16::from(cost.mana_value)
-            && path
-                .iter()
+        let over_tapped = pool.usable_total(cost) > u16::from(cost.mana_value) && {
+            let tail = self.saved_obligations(player);
+            // Only saved callers read the board, which is then the tapped one.
+            let after = (!tail.is_empty()).then(|| self.payment_model(player, None));
+            let board = after.as_ref().unwrap_or(model);
+            path.iter()
                 .take_while(|step| !matches!(step, PaymentStep::Spend))
                 .any(|step| {
                     let PaymentStep::Fixed(id) = step else {
@@ -2304,25 +2331,9 @@ impl Game {
                         .find(|source| source.permanent == *id)
                         .and_then(|source| source.fixed.as_ref())
                         .expect("fixed witness source has an output");
-                    let mut remaining = pool.clone();
-                    remaining.spend(output, &cost.purpose);
-                    if !remaining.can_pay(cost) {
-                        return false;
-                    }
-                    let mut obligations = self.payment_obligations(player);
-                    if obligations.len() <= 1 {
-                        return true;
-                    }
-                    obligations[0] = Obligation::Pay {
-                        cost: cost.clone(),
-                        waterbend: false,
-                    };
-                    self.payment_model(player, None).payable(
-                        remaining,
-                        obligations,
-                        SourcePolicy::All,
-                    )
-                });
+                    board.is_surplus(&pool, output, cost, &tail)
+                })
+        };
         self.mana_payment_stats.payments += 1;
         self.mana_payment_stats.over_tapped += usize::from(over_tapped);
         self.mana_payment_stats.latest_over_tapped = over_tapped;

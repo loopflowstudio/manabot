@@ -111,3 +111,20 @@ This is a second measured baseline, not a rebind of the old trace or checkpoint.
 - Zero-mana payments keep their existing pool and add no fixed sources in this
   boundary measurement. Unresolved folded probes include every case without
   exactly one immediate cast-payment row, not only target/mode announcements.
+
+## Non-redundant capture iteration (2026-11-13)
+
+- Use the existing traversal and its cap for both surplus-inclusive and
+  non-redundant counts. No selected source is restored in the omission probe,
+  matching the recorded over-tap attribution on the post-tap board.
+- Keep definition/state equivalence unresolved: PaymentModel holds outputs and
+  resource transitions, not complete object state. Exact-identity loss is an
+  upper bound on strategically meaningful loss and includes identical basics.
+- Preserve current/shapes bytes; put the new paired measurement in
+  current/non-redundant-shapes/.
+
+The first paired-shapes command stopped during import, before any games or
+evidence directory: installed etude-sdk 0.2.16 lacks `Seating`, while the merged
+lock/source require 0.3.2. Sync the checkout's environment from its current lock
+without rebuilding the native package. This does not rerun or migrate the
+frozen pilot or its launcher database.

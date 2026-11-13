@@ -193,27 +193,13 @@ impl PaymentModel {
                 sacrifice: false,
             });
         }
-        // Match record_mana_payment's attribution: remove one whole fixed
-        // output, keeping the actual post-tap board reserved. The current cost
-        // must be payable from the pool; saved callers may use other sources.
-        // Classify the subset once, before enumerating its receipts. Sharing
-        // the traversal and cap preserves surplus-inclusive lower bounds.
+        // record_mana_payment's attribution, classified once per subset before
+        // its receipts. Sharing the traversal and cap preserves the
+        // surplus-inclusive lower bounds.
         let redundant = pool.usable_total(cost) > u16::from(cost.mana_value)
             && selected.iter().any(|index| {
-                let mut remaining = pool.clone();
-                remaining.spend(self.sources[*index].fixed.as_ref().unwrap(), &cost.purpose);
-                if !remaining.can_pay(cost) {
-                    return false;
-                }
-                if tail.is_empty() {
-                    return true;
-                }
-                let mut obligations = vec![Obligation::Pay {
-                    cost: cost.clone(),
-                    waterbend: false,
-                }];
-                obligations.extend_from_slice(tail);
-                after.payable(remaining, obligations, SourcePolicy::All)
+                let output = self.sources[*index].fixed.as_ref().unwrap();
+                after.is_surplus(&pool, output, cost, tail)
             });
         let mut pending = vec![(pool, cost.clone(), ManaSpent::default())];
         let mut visited = HashSet::new();
