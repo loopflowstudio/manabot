@@ -78,8 +78,8 @@ Rust/uv machine setup remains Manabot-specific. Historical regime tags remain.
   was available to replace the source override.
 - The earlier main-sync replay mismatch (three game-error fixture variants,
   schema 7 versus 8) remains recorded in plan.md for gate; frozen evidence was
-  not rewritten. Post-merge executor parity was not re-proved before deleting
-  the executor; earlier parity evidence is historical.
+  not rewritten. The post-merge parity proof below supersedes the earlier
+  prototype-only evidence.
 
 Before publishing: release EXP-56's API, raise all Etude requirements and the
 training-runtime pin together, refresh uv.lock, run the isolated dependency and
@@ -91,3 +91,24 @@ Publication/landing remain outside this implement step.
 ## Compress validation — 2026-11-13
 
 `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_attack_execution.py tests/eval/test_elemental_long.py tests/training/test_value_readout_252.py -q`: 23 passed; five evaluation checks refused an untracked source file (`identity_path_without_files`). Marked the three new production files intent-to-add so Etude's git-based identity includes them. Reran `tests/training/test_value_readout_252.py tests/eval/test_experiment_files.py`: 15 passed (11.53s). `tests/infra/test_ci_selection.py`: 53 passed (0.55s). Changed Python files pass Ruff and compileall; `git diff --check` passes. No provider launch or installed-consumer proof was performed. Deletion rationale is in plan.md; the SDK release and frozen replay mismatch remain gate items.
+
+## Fresh-run parity after the backend merge — 2026-11-13
+
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training python scratch/parity.py`: passed all four raw/EMA comparisons. Each of PPO and damped policy matched all 87 state-dict tensors bitwise, both in the final exported checkpoint and in state.pt. No production-code fix or numerical difference was needed.
+
+Reference: unmodified git archive of main `6ce618b8adacee3a4894d05572399853680bb9fe`, including the backend merge and retired executor. Candidate: this checkout at `eb040c04f` plus the existing documentation-only self_play edits. Separate processes used Torch 2.15.0, CPython 3.13, CPU float32, one thread, the same native extension (SHA256 `fb6e3de8f371472ea88ef6a895466e2746676c52cef4c5829291acb938f310a4`). The reference archive was admitted through its hashed source manifest; no old module was restored or adapted in production. Temporary archives and outputs were removed after comparison.
+
+Both used seed 197, gray-ogre match, hidden_dim 16, two attention heads, two streams, 16 transitions per stream as a floor, both learning seats, complete games and two updates. PPO used one epoch/minibatch and EMA 0.9; damped policy used its defaults (EMA 0.999). The reference used iteration_fraction scheduling. The candidate additionally exported checkpoints at updates 0 and 1; final raw/EMA at update 2 still matched. Each completed four games and 357 learner/environment decisions, with 23 idle stream steps. PPO counted two optimizer updates/179 exposures; damped policy 61/90.
+
+The initial harness invocation failed before learning because EXP-56 removed track(resumed_at=...). The unchanged reference therefore used released SDK 0.2.16 from the root environment; the candidate used real EXP-56 source `105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (whose metadata still says 0.2.16). The corrected invocation above passed. This is an execution extraction comparison, not an installed-consumer proof.
+
+Intentional differences remain in persistence and tracking: update-named immutable policies and state.pt replace stage exports/recovery snapshots; checkpoint metadata and container bytes differ, while model tensors match. Native/RNG streams restart on resume; this fresh-run proof does not restore exact interrupted-run equivalence. Frozen staged/adaptive/frozen-opponent execution still refuses. No GPU, provider retry or service continuation claim follows from this CPU fixture.
+
+## Compress follow-through — 2026-11-13
+
+Removed unused scheduler-only `MonitoringBudget.protocols_for`, `Hardware.admit`
+and `HardwareInventory.select`; retained their schemas/validators and offline
+readers. README now describes separate baseline evaluation and the actual update
+clock. Historical stub/audit notes now point to their exact git versions.
+
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training --with nbclient --with nbformat --with matplotlib --with ipykernel pytest tests/training/test_experiments.py tests/training/test_experiment_report.py tests/eval/test_experiment_files.py -q`: 34 passed, seven report failures solely for missing nbconvert. Same invocation with `--with nbconvert pytest tests/training/test_experiment_report.py --lf -q`: seven passed (17.25s). Earlier collection attempts lacked nbclient, then matplotlib; temporary uv overlays supplied dependencies without changing the project environment. Ruff, compileall and diff whitespace checks passed. No learner code changed, so the recorded post-merge parity proof was not rerun.

@@ -1,8 +1,8 @@
 # Execution extraction: implementation direction
 
 2026-11-13, Jack Heart: "lets go" after the recipe-structure clarification in
-`plan.md`. Continue MTG-329 in this checkout through the code Graph's demo;
-shipping has not been requested in this conversation.
+`plan.md`. The current implementation and remaining acceptance checks are in
+`plan.md`; this note preserves the extraction direction.
 
 ## Outcome
 
@@ -24,8 +24,8 @@ revision; do not silently rewrite frozen evidence.
 
 ## Etude dependency observed 2026-11-13
 
-EXP-56 has a live code Graph (`7eae9bcc-7249-455e-94e5-2206d9530da7`) at
-`pr-publish`. Leave it running; do not start a competing Etude implementation.
+At implementation handoff, EXP-56 had a live code Graph at `pr-publish`.
+Realign rechecked its PR #103: still open at `105abdd`; no release is implied.
 The source in `/Users/jack/src/etude.exp-56-give-a-training/src/etude/` provides:
 
 - `train.run.local_launch(out=, experiment=)` for local process context.

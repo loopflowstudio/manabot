@@ -13,7 +13,7 @@ their pieces and a loop to copy.
 
 ```bash
 uv run manabot train              # bounded local production-path smoke
-uv run manabot train --recipe baseline  # ordinary self-play + evaluation
+uv run manabot train --recipe baseline  # ordinary self-play; evaluate separately
 uv run manabot train --recipe elemental --seed 197 --out .runs/elemental  # current recipe; rerun to resume
 uv run manabot train --recipe batched_baseline --out .runs/batched  # batched GPU baseline
 uv run manabot train --learning-seats one  # explicit one-seat control
@@ -22,7 +22,7 @@ uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
-The default `local-smoke-v1` recipe runs two collection/update iterations
+The default `local` recipe runs two collection/update iterations
 through the ordinary self-play loop: two streams, 16 decisions per stream as
 a floor, both seats and complete games, with a 120-second failure deadline.
 It uses the baseline model and horizon-scaled damped policy objective, records
@@ -38,8 +38,8 @@ Torch 2.15 or newer; evaluation
 and search run on CPU. MPS process recovery, belief inputs and frozen opponents
 are unsupported. This makes no speed or strength claim.
 
-The self-play loop logs update and transition clocks to the run's Etude
-record, records each milestone checkpoint there and keeps its resumable
+The self-play loop logs an update clock and cumulative transition counts to
+the run's Etude record, records each milestone checkpoint there and keeps its resumable
 learner in `state.pt` in the output directory
 ([recovery](../docs/training.md#recovery)). Remote storage, rentals and
 scientific runs require explicit allocation.
@@ -50,7 +50,9 @@ that runs them ([saved regimes](../docs/training.md#saved-regimes)).
 Simulation retains its presets and `--set` overrides.
 
 `--recipe baseline` selects a complete ordinary training run: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
-checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
+and checkpoint exports. Paired outcome evaluation is a separate call to
+`manabot.recipes.baseline.evaluate(config, directory)`; the nightly check runs
+both operations. `--steps N` counts completed
 collection/update iterations (four streams, at least 64 combined seat decisions
 each, finishing current games before updating), not optimizer
 calls. Its CPU test variant drives the [nightly learning check](../.github/workflows/baseline.yml).

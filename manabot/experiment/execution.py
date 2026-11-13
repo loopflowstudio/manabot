@@ -1,23 +1,20 @@
-"""Experiment execution intent and receipts, separate from regime learning rules.
+"""Retained experiment declarations and receipts for offline reports.
 
-ExperimentSchedule declares seeds, placement and monitoring allocation. Hardware
-is explicitly configured, never provisioned. ExperimentRun records every actual
-process attempt; VerifyStore is its persistence owner.
+ExperimentSchedule, Hardware and ExperimentRun preserve serialized evidence
+from the retired scheduler. They do not select machines or dispatch evaluation.
+New recipes launch and track through Etude.
 """
 
 from decimal import Decimal
 import hashlib
 import math
 from pathlib import Path
-import socket
 from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from manabot.eval.monitor import MonitorProtocol
-from manabot.experiment.checkpoint_evaluation import Checkpoint, stage_checkpoint
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.threads import effective_cpus
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -63,20 +60,6 @@ class MonitoringBudget(Strict):
                 )
             used.update(protocol.deal_seeds)
         return self
-
-    def protocols_for(
-        self, run: TrainingRun, checkpoint: Checkpoint
-    ) -> list[MonitorProtocol]:
-        """Select final cohorts only for the last completed stage's raw artifact."""
-        if (
-            self.terminal_protocols
-            and run.stages
-            and run.stages[-1].status == "completed"
-        ):
-            final = stage_checkpoint(run, run.regime.stages[-1].id)
-            if final is not None and final.artifact == checkpoint.artifact:
-                return list(self.terminal_protocols)
-        return [self.protocol, *self.additional_protocols]
 
 
 class Attempt(Strict):
@@ -173,14 +156,6 @@ class Hardware(Strict):
     # Dollars per occupied host hour, optional and explicitly supplied.
     dollars_per_hour: float | None = Field(default=None, ge=0)
 
-    def admit(self) -> None:
-        if self.cpu_threads > effective_cpus():
-            raise ValueError("configured CPU capacity exceeds this host")
-        if self.host != socket.gethostname():
-            raise ValueError(
-                "configured hardware is not this host; remote execution is unsupported"
-            )
-
 
 class HardwareInventory(Strict):
     resources: tuple[Hardware, ...]
@@ -190,13 +165,6 @@ class HardwareInventory(Strict):
         if len({r.name for r in self.resources}) != len(self.resources):
             raise ValueError("hardware names must be unique")
         return self
-
-    def select(self, name: str) -> Hardware:
-        for resource in self.resources:
-            if resource.name == name:
-                resource.admit()
-                return resource
-        raise ValueError(f"hardware is not configured: {name}")
 
 
 class ExperimentSchedule(CheckpointCadence):

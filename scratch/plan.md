@@ -2,13 +2,13 @@
 
 2026-11-12 naming direction, Jack Heart: "why is _verify_checkpoint private -- in etude i saw that we had instructions to keep functions private if they werent used outside, but i dont think thats necessary and find that to be distracting".
 
-2026-11-12 recipe interface review, Jack Heart: "im not sure i liek this set u     self_play: SelfPlay = Field(default_factory=elemental_self_play)" and "i liekd it better when there were explicit eval(), train() and launch() functions". He clarified: "the idea was just to expose more primitives in etude to facilitate the ML OPs part of the train loop" and "but not to change the overall structure of hte recipe files". Preserve the existing recipe-file structure and explicit operations. Expose and use Etude primitives for the loop's ML operations; do not introduce a recipe framework or require the prototype's nested `ElementalConfig.self_play` structure. This narrows the prototype direction above; the proposed recipe restructuring is not the intended outcome.
+2026-11-12 recipe interface review, Jack Heart: "im not sure i liek this set u     self_play: SelfPlay = Field(default_factory=elemental_self_play)" and "i liekd it better when there were explicit eval(), train() and launch() functions". He clarified: "the idea was just to expose more primitives in etude to facilitate the ML OPs part of the train loop" and "but not to change the overall structure of hte recipe files". Preserve the existing recipe-file structure and explicit operations. Expose and use Etude primitives for the loop's ML operations; do not introduce a recipe framework or require the prototype's nested `ElementalConfig.self_play` structure. This narrows the earlier prototype direction; the proposed recipe restructuring is not the intended outcome.
 
 Further clarification, Jack Heart: "well, to move the thigns that were in the execution loop itno things that are provided as general tools by etude" and "so they dont have to be in a 1000 line file". The intended simplification is extracting reusable ML operations from the large manabot executor into general Etude tools, then calling those tools from ordinary training code while preserving recipe-file structure. Merely adding conveniences around the existing executor would not achieve this outcome.
 
-Approach (task): prototype manabot against the ideal Etude API → review at
-demo → build the Etude API (its own linked Task/PR) → land the manabot diff
-that deletes `execution.py`.
+The prototype and EXP-56 API implementation exist. The current approach is
+ordinary typed recipe functions using Etude run primitives, with the reusable
+SDK delivered separately before the Manabot dependency can be pinned.
 
 ## Current status — 2026-11-13
 
@@ -31,7 +31,10 @@ exclusive tests were removed; mixed tests retain model, collector, record and
 evaluation coverage. The complete path inventory is in implementation.md. Compress also removed
 unused attack registration, Elemental parent staging, value-readout launch helpers,
 CUDA capture hooks and profiler-only state. Public frozen execution refusals and
-historical report/data readers remain; no further deletion target is pending.
+historical report/data readers remain. Removed the unused scheduler methods
+`MonitoringBudget.protocols_for`, `Hardware.admit` and `HardwareInventory.select`
+from the surviving record models; their fields and validators stay readable.
+No further deletion target is pending.
 The obsolete attack executor tests now check refusal without creating a cohort.
 The former recovery CI group only held pretrained loading; it joins training.
 
@@ -54,7 +57,13 @@ revision; it is not translated to different learning semantics.
    below. Demo/review the explicit loss of in-collection/source-repair recovery.
 3. Prove actual launch output restoration/retry and service continuation once
    the SDK/service are available; local target continuation and etude.call are
-   exercised. Publishing and landing are later Graph steps.
+   exercised.
+
+Demo judgment remains explicit: the loop gives up current-game recovery, exact
+uninterrupted equivalence and in-run source repair; frozen staged/adaptive/
+frozen-opponent launchers refuse instead of migrating their methods. Whether
+a local checkpoint follower is wanted is still open; none is implemented.
+These choices do not waive fresh-run parity or measurement-quality requirements.
 
 ## Contrary finding from the main sync
 
@@ -66,4 +75,19 @@ boundary tests. Three variants of
 matched main, whose CI was green. This pass leaves frozen evidence unchanged;
 gate must resolve or explicitly report the failure, not regenerate it away.
 
-Check results for this cutover are recorded once in implementation.md.
+Fresh-run parity after the backend merge is now proved for the bounded PPO
+and damped-policy cases; raw and EMA weights match bitwise. No numerical
+difference was needed. Check details are recorded once in implementation.md.
+
+## Realign observations — 2026-11-13
+
+Etude PR #103 remains OPEN at `105abdd323016b7f7baaaf57aaaa7f5d896c71bf`
+(`mergedAt: null`); the release dependency has not cleared. Remote main and
+local `origin/main` both name `6ce618b8adacee3a4894d05572399853680bb9fe`,
+already incorporated in this checkout. No new upstream reconciliation was
+needed. Requirements and runtime pin in `pyproject.toml` remain 0.2.16.
+
+Reviewed `self_play`, `save_state`, `save_checkpoint` and the recipe calls to
+`run.until`: state is saved before publishing policies, and target extension
+leaves recipe settings unchanged. Existing results in implementation.md were
+reused; no training test was rerun for this documentation reconciliation.

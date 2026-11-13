@@ -55,7 +55,7 @@ update_iteration(backend, learner, batch, Learning(), progress=0.0, rng=np.rando
 diagnostics (`UpdateDiagnostics`, a typed dictionary); EMA and checkpoints
 stay with the caller.
 
-Recipes and the executor pass `manabot.backends.torch`. Inside an update,
+Recipes and the self-play loop pass `manabot.backends.torch`. Inside an update,
 array math goes only through `backend.rl`, `backend.learner` and
 `backend.arrays`, and observations come from `backend.rollout`; NumPy keeps
 the host-side bookkeeping and diagnostics (which rows train, minibatch

@@ -16,8 +16,9 @@ Seeds. With run seed `s` and starting update `u` (0 for a fresh loop): model
 initialization uses `s`; native streams `s + 10000 + u`; Torch, NumPy and
 Python sampling `s + u`; minibatch order `s + 20000 + u`. At `u = 0` these are
 the streams the retired regime executor used for a fresh one-stage self-play
-regime, so the same seed produces the same updates and checkpoints. A resumed
-loop starts fresh, reproducible streams at the update it resumes from.
+regime. This preserves seed offsets; numerical parity also depends on the
+collector and update implementation. A resumed loop starts fresh, reproducible
+streams at the update it resumes from.
 """
 
 from collections.abc import Iterator, Sequence
