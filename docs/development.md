@@ -92,6 +92,12 @@ is newer than PyO3 supports, set `PYO3_PYTHON=../.venv/bin/python`. A failure of
 `cargo test --all-features` for missing Python dev/link symbols is environment
 setup, not engine correctness. Record unavailable tooling in the gate summary.
 
+**Engine cost on large boards.** Random play and the Engine Budget decks
+rarely build big boards, so a change to mana payment, legal-action, target or
+combat enumeration, layers, triggers or observation encoding also runs the
+[stress states](#stress-states) it could make expensive, before and after, on
+one machine.
+
 **Authored rules, worlds and setups.** Run the complete debug Rust suite,
 including semantic-kernel conformance, and focused browser interactions. Also:
 
@@ -515,6 +521,157 @@ locally only as a smoke check:
 `cargo run --release --example bench_search --manifest-path managym/Cargo.toml`
 (and `bench_steps`). Never add load to make a measurement move
 ([TESTING.md](../TESTING.md)).
+
+### Stress states
+
+Engine Budget plays two curated decks, where no payment plan passes 12 search
+calls, and random play rarely builds a board with many permanents. Cost that
+grows with the size or shape of a board is measured separately, on constructed
+states, by one harness that runs each state through every engine layer:
+
+```bash
+cargo run --release --features benchmark --example bench_states \
+  --manifest-path managym/Cargo.toml -- diverse-mana
+```
+
+```json
+{"state":"diverse-mana","size":8,"checkpoint":"priority","layer":"actions","work":{"plans":31,"calls":212,"states":154},"ms":0.41}
+```
+
+The line above illustrates the JSON-lines format, not a measurement. Each row
+is one state, size, decision checkpoint and layer. Read down a layer's rows:
+work that grows much faster than size is a cell to investigate. Without a name
+the harness runs every state. Defaults are 4, 8 and 16 copies. `restricted-filter`
+and `distinct-restrictions` default to 2, 3 and 4: nested-filter search already
+grows sharply there, and the catalog has only four spending restrictions, so
+`distinct-restrictions` accepts no other size and cannot establish a growth
+rate in the number of restrictions. `--sizes 8,16` overrides the sizes of
+every named state (1–64), `--layers actions,step` selects
+layers, and `--list` names the cards and known expensive shapes. Do not
+increase a known expensive cell just to make it run longer.
+
+**States.** Each uses defined cards or registered tokens and is deterministic.
+`--list` names every state with its cards and known growth; the list lives in
+the harness, not here. They come in three families: many copies of one thing
+(`duplicate-lands`, `duplicate-creatures`, `duplicate-tokens`), many different
+things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
+`diverse-statics`, `attachments`, `mixed`) and one mechanic at size (`herbalist`,
+`paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
+`names`). Combat states put
+creatures on both sides and measure the pass that resolves damage; payment
+states isolate one player. Every state is constructed; none replays a recorded
+game ([the reported game](#the-reported-game) says why).
+
+**Layers.** Every checkpoint runs through the same list. Action steps with no
+applicable action print no row.
+Preparation reaches combat, cast choices, trigger ordering, a deep stack and
+naming through rules actions; it is outside the measured region.
+
+| Layer | Measures | Work reported |
+|---|---|---|
+| `actions` | computing the legal action space at priority | payment plans, calls, states; actions offered |
+| `step:cast`, `step:activate`, `step:attack`, `step:block`, `step:damage`, `step:choice` | one representative action of each kind, to the next decision | the same, plus trigger sources and matches |
+| `characteristics` | cold `Game::characteristics` for one permanent then `characteristics_many` for the board | board rebuilds, views, dependency probes |
+| `triggers` | matching one controlled entry event against the indexed trigger sources | sources examined, triggers found |
+| `observe` | the native observation encoder | visible cards, permanents and legal actions (allocated capacities are explicit) |
+| `vector` | a one-slot `VectorEnv` step into buffers | as `step` |
+| `clone` | cloning the game with its caches | separately measured allocation traffic in bytes |
+| `search` | one `flat_mc_scores` reply (4 worlds × 1 rollout, 4-step horizon per action) | simulations and cap hits |
+
+*Work* counts are deterministic for the same features and build profile
+(debug invariant probes perform additional work): compare them
+between two commits anywhere. A payment *plan* is one payment request, a *call*
+is one search entry, and a *state* is a call that passes the bounds and memo and
+expands successors; the other counters are described in `benchmark_layers.rs`
+and `benchmark_payments.rs`. They exist only in `benchmark` builds, never in
+wheels. *ms* is the median of repeated runs and is comparable only between two
+builds on one machine. The closing digest folds every state's legal actions and
+first payment witnesses, so an optimization that changes behavior shows as a
+changed digest beside its faster numbers. It also folds engine state digests,
+which hash the serialized game, card definition ids included, so adding cards or
+changing a rules type moves every state's digest without changing behavior;
+across such a change, compare the rows' `work` (witness digests included)
+instead.
+
+The Python-side layers read the same states (the Rust harness prints their
+recipes with `--recipes`) and report time only:
+
+```bash
+uv run --extra play python scripts/bench_states.py diverse-mana
+```
+
+It adds `encode-py` (the Python policy-input encoder) and `text` (the LLM text
+renderer) time rows. `--recipes` exports the exact native observation and
+atomic decision capture beside each recipe, so both consumers see the same
+checkpoint, including separately serialized continuation frames via
+`Observation.from_json(..., continuation_json=...)`. Academy frame construction
+requires a live Academy session and is not measured here.
+`--recipes-file <path>` reuses an export; `--layers encode-py` selects one
+consumer. The script uses the installed extension, so rebuild after Rust changes.
+Both encoders use input v10 with capacities expanded to hold the complete state;
+neither truncates actions or facts.
+
+**Using it.** When a change adds or alters payment, choice, targeting,
+enumeration or continuous-effect behavior, run the states whose shape it could
+make expensive on the base commit and on the change, and put both tables in
+the PR. A cell that grows much faster than its size is fixed there; when the
+fix is larger than the change, the state's `--list` line names the growth so
+the next reader finds it measured rather than rediscovers it.
+Preserve legal actions, first payment witnesses and the `bench_steps` and
+`bench_search` digests, and validate in debug: debug builds recompute cached
+views and assert they match.
+
+A mechanic that no state reaches gets a state: add a recipe to
+`managym/examples/bench_states.rs` from defined cards, with the shape that
+makes it expensive. A large constructed board is a workload, not induced load
+([TESTING.md](../TESTING.md)); keep sizes small enough that the whole harness
+finishes in about a minute, and stop a state at the size where its cost is
+already clear.
+
+The harness is not a CI job and asserts no ceiling. Nothing fails when a
+number grows; the table is read by whoever changes the code under it.
+`bench_payment boards` (its source mixes) and `bench_layers` remain for
+attributing one layer in detail once a state has pointed at it.
+
+#### The reported game
+
+`managym/tests/fixtures/payment_search/manabot_slow_step.py` is the game that
+exposed slow payment search on large boards: a seed, two 40-card TLA decks and
+426 actions, kept byte for byte as it was reported (SHA-256
+`42c6bec5f6a94fbb189ef40a92c7f197489e75756d3e813eaff063bd996596fa`).
+`bench_payment replay <script>` plays such a script on a scalar `Env` and
+prints the payment work of its heaviest steps.
+
+The recording stores each action as an index into the legal-action list the
+engine offered at that step, so it replays only on an engine that offers the
+same actions in the same order: the v0.2.3-era engine it was recorded against.
+Rules and card changes since then alter those lists, and the current engine
+stops partway through:
+
+```text
+AgentError("Action index 2 out of bounds: 2")
+```
+
+That failure means the engine and the recording disagree about the game, not
+that payment search regressed. To replay the game, build the `v0.2.3` tag in
+its own worktree and give it the script:
+
+```bash
+git worktree add ../manabot-v0.2.3 v0.2.3
+cargo run --release --features benchmark --example bench_payment \
+  --manifest-path ../manabot-v0.2.3/managym/Cargo.toml -- \
+  replay managym/tests/fixtures/payment_search/manabot_slow_step.py
+```
+
+```json
+{"steps":426,"total":{"plans":2100,"calls":9382,"states":7167,"max_plan_calls":180,"max_sources":21,"plans_over_1k":0},"workload":"replay"}
+```
+
+(The output also lists the five heaviest steps, their times and a digest.)
+Do not edit the indices to make a later engine accept them: nothing in the
+file says which action an index meant. A board shape from that game that
+should stay measured is a constructed stress state (`counted-tap`,
+`diverse-mana`), which names its cards and survives engine changes.
 
 ## Releases
 
