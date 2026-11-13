@@ -17,9 +17,9 @@ from etude.run.storage import storage_from_uri
 from etude.train.read import read
 from etude.train.records import CheckpointRecord
 
-from manabot.infra.artifacts import verify_file
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.infra.artifacts import fetch_etude_checkpoint, verify_file
 from manabot.model.catalog import inspect_checkpoint
-from manabot.model.checkpoint import fetch_etude_checkpoint, load_checkpoint
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RUN = "f3748bcabac8"

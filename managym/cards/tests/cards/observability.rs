@@ -65,11 +65,11 @@ use managym::{
             Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::{
-            ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
-            Keyword, Keywords, PowerCda, Restriction, SacrificeCost, SetCharacteristics,
-            SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
-            StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant,
-            TargetCostReduction,
+            ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardType, Keyword,
+            Keywords, ObjectDefinition, PowerCda, PrintedCharacteristics, Restriction,
+            SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility,
+            StaticKeywordGrant, StaticLandType, StaticPtBuff, StaticRestriction, StaticScope,
+            StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
         },
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -79,6 +79,7 @@ use managym::{
     Game, PlayerConfig,
 };
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Where each piece of state is observed.
@@ -843,7 +844,7 @@ fn effect_witnesses() -> Vec<Effect> {
             player: PlayerSelector::TriggeringPlayer,
             amount: EffectValue::Fixed(2),
         },
-        Effect::create_tokens("Clue", value()),
+        Effect::create_tokens("token.clue", value()),
         Effect::gain_life(value()),
         Effect::OnNthResolutionThisTurn {
             n: 2,
@@ -1303,7 +1304,7 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
         StaticAbility::BlockRestriction(_) => witnessed(
             "StaticAbility::BlockRestriction",
             Seen::Actions("block offers omit forbidden pairs"),
-            "Spirit",
+            "token.spirit",
             "tla",
             "spirit_tokens_cannot_block_or_be_blocked_by_nonspirits",
         ),
@@ -1783,16 +1784,16 @@ fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
         .collect()
 }
 
-fn tokens_of(definition: &CardDefinition) -> Vec<(TokenKind, i32)> {
+fn tokens_of(definition: &ObjectDefinition) -> Vec<(TokenKind, i32)> {
     definition_tokens(definition, default_content_pack()).unwrap()
 }
 
-fn spell(effects: Vec<Effect>) -> CardDefinition {
-    CardDefinition {
+fn spell(effects: Vec<Effect>) -> ObjectDefinition {
+    ObjectDefinition::face(PrintedCharacteristics {
         name: "Witness".into(),
         spell_effects: effects,
         ..Default::default()
-    }
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1823,11 +1824,11 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
                 count: EffectValue::Fixed(1),
             }],
         };
-        let definition = CardDefinition {
+        let definition = ObjectDefinition::face(PrintedCharacteristics {
             name: "Witness".into(),
             abilities: vec![ability.clone()],
             ..Default::default()
-        };
+        });
         let tokens = tokens_of(&definition);
         for name in [trigger_token(&condition), ability_token(&ability)] {
             assert!(
@@ -1893,7 +1894,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
         });
         expected.push(format!("AttackSize::{attackers:?}"));
     }
-    let definition = CardDefinition {
+    let definition = ObjectDefinition::face(PrintedCharacteristics {
         name: "Witness".into(),
         abilities: conditions
             .into_iter()
@@ -1906,7 +1907,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
             })
             .collect(),
         ..Default::default()
-    };
+    });
     let tokens = tokens_of(&definition);
     for name in expected {
         assert!(
@@ -1920,7 +1921,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
     let mut subjects: Vec<Vec<(TokenKind, i32)>> = Vec::new();
     for controlled_by in [Actor::You, Actor::Opponent, Actor::AnyPlayer] {
         for another in [false, true] {
-            let tokens = tokens_of(&CardDefinition {
+            let tokens = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
                 name: "Witness".into(),
                 abilities: vec![Ability::Triggered {
                     intervening_if: None,
@@ -1936,7 +1937,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
                     }],
                 }],
                 ..Default::default()
-            });
+            }));
             assert!(
                 tokens.contains(&(
                     TokenKind::Variant,
@@ -1968,7 +1969,7 @@ fn every_condition_reaches_the_learning_tokens() {
 
 #[test]
 fn an_intervening_if_reaches_the_learning_tokens() {
-    let definition = CardDefinition {
+    let definition = ObjectDefinition::face(PrintedCharacteristics {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
@@ -1976,7 +1977,7 @@ fn an_intervening_if_reaches_the_learning_tokens() {
             effects: vec![Effect::discard()],
         }],
         ..Default::default()
-    };
+    });
     let expected = (
         TokenKind::Variant,
         name_value(condition_token(&Condition::AttackedThisTurn)),
@@ -2141,10 +2142,10 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
 fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens() {
     let (base_game, ogre) = ogre_game();
     let (base_obs, base) = observe(&base_game, 0);
-    let bare = tokens_of(&CardDefinition {
+    let bare = tokens_of(&ObjectDefinition::face(PrintedCharacteristics {
         name: "Witness".into(),
         ..Default::default()
-    });
+    }));
     for keyword in Keyword::ALL {
         let name = keyword.name();
         let (card_column, permanent_column) = keyword_columns(keyword);
@@ -2179,11 +2180,11 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
             "{name}"
         );
 
-        let definition = CardDefinition {
+        let definition = ObjectDefinition::face(PrintedCharacteristics {
             name: "Witness".into(),
             keywords,
             ..Default::default()
-        };
+        });
         let keyword_token = (TokenKind::Variant, name_value(&format!("Keyword::{name}")));
         let tokens = tokens_of(&definition);
         let at = tokens
@@ -2205,7 +2206,7 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
 
 #[test]
 fn sorcery_timing_reaches_the_activated_ability_tokens() {
-    let definition = CardDefinition {
+    let definition = ObjectDefinition::face(PrintedCharacteristics {
         name: "Witness".into(),
         activated_abilities: vec![ActivatedAbilityDefinition {
             sorcery_timing: true,
@@ -2213,7 +2214,7 @@ fn sorcery_timing_reaches_the_activated_ability_tokens() {
             ..Default::default()
         }],
         ..Default::default()
-    };
+    });
     let tokens = tokens_of(&definition);
     let at = tokens
         .iter()
@@ -2387,10 +2388,16 @@ fn learning_tokens_never_carry_names_or_printed_text() {
 // ---------------------------------------------------------------------------
 // Static abilities and additional costs.
 
-/// The definition of `name` in the default pack.
-fn card_definition(name: &str) -> CardDefinition {
+/// The definition of the card named `name`, or of the token keyed `name`
+/// (`token.*`), in the default pack.
+fn card_definition(name: &str) -> ObjectDefinition {
     let pack = default_content_pack();
-    let id = pack.definition_id(name).unwrap_or_else(|| panic!("{name}"));
+    let id = if name.starts_with("token.") {
+        pack.token_id(name)
+    } else {
+        pack.definition_id(name)
+    }
+    .unwrap_or_else(|| panic!("{name}"));
     pack.definition(id).unwrap().clone()
 }
 
@@ -2467,11 +2474,12 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
         }
         let tokens = tokens_of(&card);
         let mut stripped = card.clone();
-        stripped.statics.retain(|candidate| {
+        let printed = Arc::make_mut(&mut stripped.printed);
+        printed.statics.retain(|candidate| {
             std::mem::discriminant(candidate) != std::mem::discriminant(&ability)
         });
         // A copy exception granting the same static (Sakashima) goes too.
-        for effect in &mut stripped.replacement_effects {
+        for effect in &mut printed.replacement_effects {
             if let managym::state::card::ReplacementEffect::EntersAsCopy { exceptions, .. } = effect
             {
                 exceptions.retain(|exception| {
@@ -2487,11 +2495,11 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
             assert!(!without.contains(&variant(name)), "{name}");
         }
         // The token also appears for a bare definition with only this ability.
-        let bare = CardDefinition {
+        let bare = ObjectDefinition::face(PrintedCharacteristics {
             name: "Witness".into(),
             statics: vec![ability.clone()],
             ..Default::default()
-        };
+        });
         assert!(
             tokens_of(&bare).contains(&variant(row.token)),
             "{ability:?}"
@@ -2502,7 +2510,7 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
         let card = card_definition(row.card);
         let tokens = tokens_of(&card);
         let mut stripped = card.clone();
-        stripped
+        Arc::make_mut(&mut stripped.printed)
             .additional_costs
             .retain(|candidate| std::mem::discriminant(candidate) != std::mem::discriminant(&cost));
         let without = tokens_of(&stripped);
@@ -2525,13 +2533,13 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
         .into_iter()
         .map(|ability| {
             let row = static_seen(&ability);
-            let edit: Box<dyn Fn(&mut CardDefinition)> =
+            let edit: Box<dyn Fn(&mut PrintedCharacteristics)> =
                 Box::new(move |definition| definition.statics.push(ability.clone()));
             (row, edit)
         })
         .chain(cost_witnesses().into_iter().map(|cost| {
             let row = cost_seen(&cost);
-            let edit: Box<dyn Fn(&mut CardDefinition)> =
+            let edit: Box<dyn Fn(&mut PrintedCharacteristics)> =
                 Box::new(move |definition| definition.additional_costs.push(cost.clone()));
             (row, edit)
         }));
@@ -2616,14 +2624,13 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
 fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics() {
     let pack = default_content_pack();
     let catalog = catalog_tokens(pack).unwrap();
-    let tokens = managym_cards::catalog()
-        .iter()
-        .filter(|definition| definition.key.starts_with("token."))
-        .collect::<Vec<_>>();
+    let tokens = managym_cards::token_catalog();
     assert!(!tokens.is_empty());
-    for token in tokens {
+    for definition in tokens {
+        let row = pack.token_id(definition.key).unwrap();
+        let token = pack.definition(row).unwrap();
         assert!(token.is_token, "{}", token.key);
-        let row = pack.definition_id(&token.name).unwrap().0 as i32;
+        let row = row.0 as i32;
         let referencing = catalog
             .definition_ref_source_tokens
             .iter()
@@ -2637,7 +2644,7 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
         );
 
         let (mut game, _) = ogre_game();
-        game.create_token(&token.name, PlayerId(0), false);
+        game.create_token(token.key, PlayerId(0), false);
         let (observation, encoded) = observe(&game, 0);
         let card = observation
             .agent_cards
@@ -4640,7 +4647,10 @@ fn counter_and_creation_replacements_reach_learning_tokens() {
     assert!(caradora.contains(&(TokenKind::Text, name_value("Vehicle"))));
     let mut definition = card_definition("Doubling Season");
     let managym::state::card::ReplacementEffect::ModifyCounters { effects_only, .. } =
-        &mut definition.replacement_effects[1]
+        Arc::make_mut(&mut definition.printed)
+            .replacement_effects
+            .get_mut(1)
+            .unwrap()
     else {
         panic!("counter rule")
     };
@@ -4654,7 +4664,7 @@ fn merchant_counted_tap_cost_reaches_learning_tokens() {
         .iter()
         .find(|card| card.name == "The Cabbage Merchant")
         .unwrap();
-    let tokens = tokens_of(definition);
+    let tokens = tokens_of(&ObjectDefinition::card(definition));
     let cost = tokens
         .iter()
         .position(|token| *token == (TokenKind::Structure, name_value("TapCost")))
@@ -4735,7 +4745,7 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     let mut s = five_color_setup(&["Gray Ogre"]);
     assert_eq!(refusal(&s), None);
     s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::restricted_to(
-        managym::state::mana::ManaUse::except_nonartifact_spells(),
+        managym::state::mana::ManaRestriction::ExceptNonartifactSpells,
         [0, 0, 0, 0, 0, 1],
     );
     assert_eq!(

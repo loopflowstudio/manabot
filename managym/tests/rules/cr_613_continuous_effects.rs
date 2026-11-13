@@ -410,13 +410,19 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
 fn layer_fixture(
     s: &mut Scenario,
     name: &str,
-    definition: managym::state::card::CardDefinition,
+    definition: managym::state::card::PrintedCharacteristics,
 ) -> PermanentId {
     use managym::state::card::Card;
     let id = s.force_permanent_on_battlefield(0, name);
     let card_id = card_of(s, id);
     let old = &s.game().state.cards[card_id];
-    let card = Card::from_definition(old.id, old.owner, old.definition_id, Arc::new(definition));
+    let card = Card::from_definition(
+        old.id,
+        old.owner,
+        old.definition_id,
+        Arc::new(definition),
+        old.is_token,
+    );
     s.game_mut().state.cards[card_id] = card;
     id
 }
@@ -439,14 +445,14 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
     use managym::state::{
         ability::Condition,
         card::{
-            CardDefinition, CardType, CardTypes, LayerValue, StaticAbility, StaticLandType,
+            CardType, CardTypes, LayerValue, PrintedCharacteristics, StaticAbility, StaticLandType,
             StaticScope,
         },
         predicate::CardPredicate,
     };
     for moon_first in [false, true] {
         let (mut s, _) = ogre_scenario();
-        let moon = CardDefinition {
+        let moon = PrintedCharacteristics {
             name: "Moon witness".into(),
             types: CardTypes::new([CardType::Enchantment]),
             statics: vec![StaticAbility::SetsLandType(StaticLandType {
@@ -460,7 +466,7 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
             })],
             ..Default::default()
         };
-        let urborg = CardDefinition {
+        let urborg = PrintedCharacteristics {
             name: "Urborg witness".into(),
             types: CardTypes::new([CardType::Land]),
             statics: vec![continuous(
@@ -493,7 +499,7 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
     // Lattice/March: March depends on Lattice, even with the older timestamp.
     for lattice_first in [false, true] {
         let (mut s, _) = ogre_scenario();
-        let lattice = CardDefinition {
+        let lattice = PrintedCharacteristics {
             name: "Lattice witness".into(),
             types: CardTypes::new([CardType::Artifact]),
             mana_cost: Some(managym::state::mana::ManaCost::parse("{6}")),
@@ -503,7 +509,7 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
             )],
             ..Default::default()
         };
-        let march = CardDefinition {
+        let march = PrintedCharacteristics {
             name: "March witness".into(),
             types: CardTypes::new([CardType::Enchantment]),
             mana_cost: Some(managym::state::mana::ManaCost::parse("{3}{U}")),
@@ -548,8 +554,8 @@ fn witness(
     types: &[managym::state::card::CardType],
     cost: &str,
     statics: Vec<managym::state::card::StaticAbility>,
-) -> managym::state::card::CardDefinition {
-    managym::state::card::CardDefinition {
+) -> managym::state::card::PrintedCharacteristics {
+    managym::state::card::PrintedCharacteristics {
         name: name.into(),
         types: managym::state::card::CardTypes::new(types.iter().copied()),
         mana_cost: Some(managym::state::mana::ManaCost::parse(cost)),
@@ -864,7 +870,7 @@ fn cr_613_sun_urborg_magus_and_saga_keep_earlier_layers_and_external_grants() {
             tap_source: true,
             // Existing Construct token witnesses the retained creation program;
             // Saga-specific token sizing is independent of this layer interaction.
-            effects: vec![Effect::create_tokens("Ballistic Boulder", 1)],
+            effects: vec![Effect::create_tokens("token.ballistic_boulder", 1)],
             ..Default::default()
         })),
     );
@@ -1120,7 +1126,7 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
             mana_cost: ManaCost::parse("{2}"),
             // Existing Construct token witnesses the retained creation program;
             // Saga-specific token sizing is independent of this layer interaction.
-            effects: vec![Effect::create_tokens("Ballistic Boulder", 1)],
+            effects: vec![Effect::create_tokens("token.ballistic_boulder", 1)],
             ..Default::default()
         },
     ];

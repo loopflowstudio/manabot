@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.experiment.evaluation_queue import checkpoints
-from manabot.model.checkpoint import load_checkpoint
 from manabot.reports import training as monitoring
 from manabot.reports.training import (
     Dashboard,

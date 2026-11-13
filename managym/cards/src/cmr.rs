@@ -1,7 +1,10 @@
 //! Commander Legends.
 use managym_state::{
     ability::{Ability, Effect, EffectValue, ObjectSelector, Scope, TriggerCondition},
-    card::{CardDefinition, CardType, CardTypes, ReplacementEffect, StaticAbility},
+    card::{
+        CardDefinition, CardType, CardTypes, PrintedCharacteristics, ReplacementEffect,
+        StaticAbility,
+    },
     effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
@@ -17,22 +20,25 @@ fn sakashima_of_a_thousand_faces() -> CardDefinition {
     CardDefinition {
         key: "cmr.sakashima_of_a_thousand_faces",
         scryfall_id: "714c3a1f-7b30-4ed8-8f38-6176758741fb",
-        name: "Sakashima of a Thousand Faces".into(),
-        mana_cost: Some(ManaCost::parse("{3}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Rogue".into()],
-        power: Some(3),
-        toughness: Some(1),
-        statics: vec![StaticAbility::LegendRuleDoesntApply],
-        replacement_effects: vec![ReplacementEffect::EntersAsCopy {
-            scope: Scope::YouControl,
-            predicate: CardPredicate::creature(),
-            exceptions: vec![Modification::GrantStatic(Box::new(
-                StaticAbility::LegendRuleDoesntApply,
-            ))],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Sakashima of a Thousand Faces".into(),
+            mana_cost: Some(ManaCost::parse("{3}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Rogue".into()],
+            power: Some(3),
+            toughness: Some(1),
+            statics: vec![StaticAbility::LegendRuleDoesntApply],
+            replacement_effects: vec![ReplacementEffect::EntersAsCopy {
+                scope: Scope::YouControl,
+                predicate: CardPredicate::creature(),
+                exceptions: vec![Modification::GrantStatic(Box::new(
+                    StaticAbility::LegendRuleDoesntApply,
+                ))],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -42,25 +48,28 @@ fn volcanic_torrent() -> CardDefinition {
     CardDefinition {
         key: "cmr.volcanic_torrent",
         scryfall_id: "eb586da6-670d-4c50-9d9b-f320f1c288d7",
-        name: "Volcanic Torrent".into(),
-        mana_cost: Some(ManaCost::parse("{4}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::YouCastThis,
-            effects: vec![Effect::Cascade],
-        }],
-        spell_effects: vec![Effect::deal_damage(
-            EffectValue::SpellsCastThisTurn,
-            ObjectSelector::each(
-                Scope::OpponentsControl,
-                CardPredicate {
-                    card_types_any: vec![CardType::Creature, CardType::Planeswalker],
-                    ..Default::default()
-                },
-            ),
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Volcanic Torrent".into(),
+            mana_cost: Some(ManaCost::parse("{4}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::YouCastThis,
+                effects: vec![Effect::Cascade],
+            }],
+            spell_effects: vec![Effect::deal_damage(
+                EffectValue::SpellsCastThisTurn,
+                ObjectSelector::each(
+                    Scope::OpponentsControl,
+                    CardPredicate {
+                        card_types_any: vec![CardType::Creature, CardType::Planeswalker],
+                        ..Default::default()
+                    },
+                ),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

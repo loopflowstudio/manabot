@@ -4,7 +4,7 @@ from copy import deepcopy
 import math
 from pathlib import Path
 import time
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Literal
 
 import numpy as np
@@ -15,6 +15,11 @@ from typer.testing import CliRunner
 from experiments import training_throughput_packing as packing
 from experiments.tla_frontier import frozen
 from manabot import cli
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import clipped_surrogate, float64_operand
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
@@ -31,10 +36,8 @@ from manabot.experiment.job import TrainingJob
 from manabot.infra.config import RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model import semantic_cards, shared_effects
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.facts import FactEncoder
-from manabot.model.numerics import embedding_rows, float64_operand
-from manabot.model.policy_distribution import clipped_surrogate
+from manabot.model.numerics import embedding_rows
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
     RecordNamespace,
@@ -45,9 +48,6 @@ from manabot.recipes.baseline import baseline
 from manabot.recipes.device import accelerator
 from manabot.recipes.local import local_smoke
 from manabot.training import execution
-from manabot.training.learning import damped_policy
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.selection import UpdateDiagnostics
 from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -58,6 +58,8 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates import damped_policy, ppo
+from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -256,26 +258,25 @@ def test_mps_one_update_and_export(
     assert isinstance(stage, TrainSelfPlay)
     stage.learning.min_advantage = 0
     observed: list[UpdateDiagnostics] = []
-    original = execution.update_iteration
+    assert isinstance(stage.learning, DampedPolicyLearning)
+    original = execution.update_damped_iteration
 
     def update(
+        backend: ModuleType,
         learner: Learner,
         batch: RolloutBatch,
-        learning: Learning | DampedPolicyLearning,
-        progress: float,
-        rng: np.random.Generator,
+        learning: DampedPolicyLearning,
+        iteration: int,
         *,
-        iteration: int = 1,
         bootstrap_agent: ActorCritic | None = None,
     ) -> UpdateDiagnostics:
         assert all(p.device.type == "mps" for p in learner.agent.parameters())
         result = original(
+            backend,
             learner,
             batch,
             learning,
-            progress,
-            rng,
-            iteration=iteration,
+            iteration,
             bootstrap_agent=bootstrap_agent,
         )
         assert all(torch.isfinite(p).all() for p in learner.agent.parameters())
@@ -283,7 +284,7 @@ def test_mps_one_update_and_export(
         observed.append(result)
         return result
 
-    monkeypatch.setattr(execution, "update_iteration", update)
+    monkeypatch.setattr(execution, "update_damped_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         run = execution.execute_regime(plan, 197, tmp_path / "mps", store)
     assert run.status == "completed", run.error
@@ -440,12 +441,13 @@ def test_mps_w64_single_selected_row_without_program_facts(
     original = damped_policy._targets
 
     def singleton(
+        backend: ModuleType,
         learner: Learner,
-        batch: RolloutBatch,
+        batch: AdmittedRollout,
         learning: DampedPolicyLearning,
         bootstrap_agent: ActorCritic | None = None,
     ) -> damped_policy.DampedTargets:
-        targets = original(learner, batch, learning, bootstrap_agent)
+        targets = original(backend, learner, batch, learning, bootstrap_agent)
         selected = torch.zeros_like(targets.selected)
         selected.flatten()[0] = True
         return damped_policy.DampedTargets(targets.advantages, targets.values, selected)
@@ -460,8 +462,8 @@ def test_mps_w64_single_selected_row_without_program_facts(
     monkeypatch.setattr(damped_policy, "_targets", singleton)
     monkeypatch.setattr(semantic_cards, "embedding_rows", checked)
     learner = Learner(agent, "mps", minibatch_rows=256)
-    result = execution.update_iteration(
-        learner, batch, stage.learning, 0, np.random.default_rng(197), iteration=1
+    result = damped_policy.update_damped_iteration(
+        torch_backend, learner, batch, stage.learning, 1
     )
     assert empty_calls
     assert result["retained"] == result["optimizer_exposures"] == 1
@@ -471,7 +473,8 @@ def test_mps_w64_single_selected_row_without_program_facts(
 
     # PPO shares the catalog owner; an empty actor filter still trains its critic.
     empty_calls.clear()
-    result = execution.update_iteration(
+    result = ppo.update_iteration(
+        torch_backend,
         learner,
         batch,
         Learning(epochs=1, minibatches=1, filter_scope="actor", min_advantage=1e6),

@@ -8,6 +8,9 @@ This is a bounded wiring check on real games, not a learning-quality claim.
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -16,11 +19,9 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates.ppo import update_iteration
 
 SOZIN = {"Swamp": 17, "The Rise of Sozin": 23}
 
@@ -74,6 +75,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     assert agent.name_candidates is not None
     before = agent.name_candidates.embedding.weight.detach().clone()
     update_iteration(
+        torch_backend,
         learner,
         batch,
         Learning(retained_fraction=1, epochs=1, minibatches=1, collection_kl=0),

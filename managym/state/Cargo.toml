@@ -1,11 +1,11 @@
 [package]
 name = "managym-state"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "MIT"
 description = "Rules vocabulary and game-state types of the managym engine"
 
 [dependencies]
 rand = "0.8"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 smallvec = "1"

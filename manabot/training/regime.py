@@ -7,7 +7,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PrivateAttr,
     SerializerFunctionWrapHandler,
     model_serializer,
     model_validator,
@@ -210,27 +209,30 @@ class DampedPolicyLearning(Strict):
 
 
 # float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
-# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.training.precision).
+# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.backends.torch.learner).
 Precision = Literal["float32", "tf32", "bf16"]
 Device = Literal["cpu", "mps", "cuda"]
 
-# The precision ladder `auto` resolves to. On an L4 with bucketed shapes, BF16 is
-# slower than float32 at hidden_dim 160, 1.66x faster at 256 and 2-2.7x faster at
-# 384 (experiments/cuda_precision.md); depth, bucketing and GPU model do not move it.
+# The narrowest measured BF16 speed crossover on an L4 with bucketed shapes.
+# Learning admission is separate: experiments/precision_ladder.md.
 BF16_MIN_HIDDEN_DIM = 256
 
 
 def ladder_precision(device: Device, hidden_dim: int) -> Precision:
-    """What `auto` trains in: bf16 on CUDA at or above the threshold, else float32."""
-    if device == "cuda" and hidden_dim >= BF16_MIN_HIDDEN_DIM:
-        return "bf16"
+    """Keep float32 until the learning comparison admits the measured crossover."""
     return "float32"
+
+
+# A forward-layout switch (`Execution.bucketed_shapes`, `live_tokens`). `auto`
+# exists only while authoring: the regime replaces it with the stage's resolved
+# layout (`TrainingRegime.resolve_forward_layout`), so no saved regime holds it.
+Layout = bool | Literal["auto"]
+LAYOUT_FIELDS = ("bucketed_shapes", "live_tokens")
+AUTO_EXECUTION_FIELDS = ("precision", *LAYOUT_FIELDS)
 
 
 class Execution(Strict):
     device: Device = "cpu"
-    # `auto` exists only while authoring: the regime replaces it with
-    # `ladder_precision` for its model, so no regime stores or runs `auto`.
     precision: Precision | Literal["auto"] = "auto"
     # Coarse native observation producers; policy/learning remain on one device.
     workers: Literal[1, 2, 4] = 1
@@ -241,31 +243,28 @@ class Execution(Strict):
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
     # Collection and learner forwards trim variable axes to power-of-two
-    # buckets (`manabot.model.buckets`). Omitted when unset so existing regime
-    # hashes are unchanged; never part of the model or its checkpoints.
-    bucketed_shapes: bool = Field(default=False, exclude_if=lambda value: not value)
+    # buckets (`manabot.policy.buckets`). Off is omitted, so regimes saved
+    # before the `auto` default keep their hashes and read back as off; never
+    # part of the model or its checkpoints.
+    bucketed_shapes: Layout = Field(
+        default="auto", exclude_if=lambda value: value is False
+    )
     # The same forwards attend over valid objects only, packed into one
-    # sequence (`manabot.model.live_tokens`). Omitted when unset, like
-    # bucketed shapes, and likewise never model state.
-    live_tokens: bool = Field(default=False, exclude_if=lambda value: not value)
-
-    # Whether `precision` came from the ladder rather than being written. Not
-    # serialized: a saved regime keeps the precision it names. Builders that
-    # change the model re-resolve these stages (`TrainingRegime.authored_dump`).
-    _from_ladder: bool = PrivateAttr(default=False)
+    # sequence (`manabot.backends.torch.live_tokens`). Serialized like bucketed shapes,
+    # and likewise never model state.
+    live_tokens: Layout = Field(default="auto", exclude_if=lambda value: value is False)
 
     @model_validator(mode="after")
-    def reduced_precision_on_cuda(self) -> "Execution":
+    def cuda_settings(self) -> "Execution":
         if self.precision not in ("float32", "auto") and self.device != "cuda":
             raise ValueError(f"precision {self.precision} requires CUDA")
+        # Off CUDA, jagged attention falls back to one call per observation.
+        if self.live_tokens is True and self.device != "cuda":
+            raise ValueError(
+                'live tokens require CUDA; set live_tokens to false or "auto" '
+                f"for device {self.device}"
+            )
         return self
-
-    def __eq__(self, other: object) -> bool:
-        # Equal settings are equal executions, however the precision was chosen:
-        # a regime equals its own saved form.
-        if not isinstance(other, Execution):
-            return NotImplemented
-        return type(self) is type(other) and self.__dict__ == other.__dict__
 
     @property
     def resolved_precision(self) -> Precision:
@@ -273,6 +272,22 @@ class Execution(Strict):
         if self.precision == "auto":
             raise ValueError("precision auto is resolved by the regime")
         return self.precision
+
+    @property
+    def resolved_bucketed_shapes(self) -> bool:
+        """Whether a stage's forwards use buckets; `auto` must already be resolved."""
+        return _resolved(self.bucketed_shapes, "bucketed shapes")
+
+    @property
+    def resolved_live_tokens(self) -> bool:
+        """Whether a stage's forwards use live tokens; `auto` must be resolved."""
+        return _resolved(self.live_tokens, "live tokens")
+
+
+def _resolved(value: Layout, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} auto is resolved by the regime")
+    return value
 
 
 class Stage(Strict):
@@ -285,9 +300,9 @@ class Stage(Strict):
             return self
         if self.execution.profile_collection:
             raise ValueError("collection profiling requires train_self_play")
-        if self.execution.bucketed_shapes:
+        if self.execution.bucketed_shapes is True:
             raise ValueError("bucketed shapes require train_self_play")
-        if self.execution.live_tokens:
+        if self.execution.live_tokens is True:
             raise ValueError("live tokens require train_self_play")
         if self.execution.workers != 1:
             raise ValueError(
@@ -680,25 +695,26 @@ class RecoveryPolicy(Strict):
     checkpoint_updates: int = Field(default=128, ge=1)
 
 
-def _read_saved_self_play(
-    stage: dict[str, object], one_seat: bool
-) -> dict[str, object]:
-    seats = "one" if one_seat else _default_seats(stage.get("behavior"))
-    resolved = {"learning_seats": seats, **stage}
-    return {"batch_closure": _implied_closure(resolved), **resolved}
-
-
-def _read_saved_precision(stage: dict[str, object]) -> dict[str, object]:
-    execution = stage.get("execution")
-    if not isinstance(execution, dict) or "precision" in execution:
+def _read_saved_stage(stage: object, one_seat: bool) -> object:
+    if not isinstance(stage, dict):
         return stage
-    return {**stage, "execution": {**execution, "precision": "float32"}}
-
-
-def _read_saved_stage(stage: dict[str, object], one_seat: bool) -> dict[str, object]:
-    stage = _read_saved_precision(stage)
+    # A saved execution omits an off layout, and every regime saved before the
+    # `auto` default omitted both. A missing precision predates that field
+    # and means float32. Restore the settings those saved runs trained with.
+    execution = stage.get("execution")
+    if isinstance(execution, dict):
+        stage = {
+            **stage,
+            "execution": {
+                "precision": "float32",
+                **dict.fromkeys(LAYOUT_FIELDS, False),
+                **execution,
+            },
+        }
     if stage.get("operation") == "train_self_play":
-        return _read_saved_self_play(stage, one_seat)
+        seats = "one" if one_seat else _default_seats(stage.get("behavior"))
+        stage = {"learning_seats": seats, **stage}
+        stage = {"batch_closure": _implied_closure(stage), **stage}
     return stage
 
 
@@ -737,11 +753,10 @@ class TrainingRegime(Strict):
         """Resolve what saved stages omit; never relabel frozen evidence.
 
         Schema 1 omitted the one-seat choice, and no saved stage declared its
-        batch closure. A saved execution without a precision predates the
-        field and trained in float32, never the ladder. Stage instances are new
-        authoring and keep their defaults.
-        Retired `train_compound` stages fail with the reproduction commit
-        rather than as an unknown discriminator.
+        batch closure. Saved execution omissions mean float32 precision and
+        disabled layouts, never `auto`. Stage instances are new authoring
+        and keep their defaults. Retired `train_compound` stages fail with the
+        reproduction commit rather than as an unknown discriminator.
         """
         if isinstance(value, dict) and any(
             isinstance(stage, dict) and stage.get("operation") == "train_compound"
@@ -753,48 +768,28 @@ class TrainingRegime(Strict):
             return {
                 **value,
                 "stages": [
-                    _read_saved_stage(stage, one_seat)
-                    if isinstance(stage, dict)
-                    else stage
-                    for stage in value["stages"]
+                    _read_saved_stage(stage, one_seat) for stage in value["stages"]
                 ],
             }
         return value
 
-    @model_validator(mode="after")
-    def resolve_precision_ladder(self) -> "TrainingRegime":
-        """Replace each stage's `auto` precision with the ladder's for this model.
-
-        Stages are copied, never mutated, so a stage instance shared by regimes
-        of different widths resolves separately in each.
-        """
-        stages = []
-        for stage in self.stages:
-            execution = stage.execution
-            if execution.precision == "auto":
-                precision = ladder_precision(execution.device, self.agent.hidden_dim)
-                execution = execution.model_copy(update={"precision": precision})
-                execution._from_ladder = True
-                stage = stage.model_copy(update={"execution": execution})
-            stages.append(stage)
-        self.stages = stages
-        return self
-
     def authored_dump(self) -> dict[str, object]:
-        """The regime as authored: ladder-resolved stages say `auto` again.
+        """The regime as authored: settings resolved from `auto` say `auto` again.
 
         Builders that rebuild a regime through its dump use this, so a changed
-        model re-resolves the ladder while explicit precisions stay as written.
-        It is not a record: `model_dump` is what saves and hashes a regime.
+        model, device or operation resolves execution defaults again while
+        explicit values stay as written. It is not a record: `model_dump` is
+        what saves and hashes a regime.
         """
         values: dict[str, object] = self.model_dump()
         stages = values["stages"]
         assert isinstance(stages, list)
         for stage, dumped in zip(self.stages, stages, strict=True):
-            if stage.execution._from_ladder:
-                execution = dumped["execution"]
-                assert isinstance(execution, dict)
-                execution["precision"] = "auto"
+            execution = dumped["execution"]
+            assert isinstance(execution, dict)
+            for name in AUTO_EXECUTION_FIELDS:
+                if name not in stage.execution.model_fields_set:
+                    execution[name] = "auto"
         return values
 
     @model_serializer(mode="wrap")
@@ -828,6 +823,45 @@ class TrainingRegime(Strict):
     @property
     def recoverable(self) -> bool:
         return self.recovery is not None or self.recovery_max_microsteps is not None
+
+    @model_validator(mode="after")
+    def resolve_forward_layout(self) -> "TrainingRegime":
+        """Resolve automatic precision and layouts once for this model and stage.
+
+        Bucketed shapes and live tokens pay on CUDA at every measured width
+        (experiments/live_token_attention.md), so `auto` is on for a CUDA
+        `train_self_play` stage and off on CPU and MPS and for every other
+        operation. Precision follows the learning-gated width ladder.
+        Stages are copied, never mutated, so a stage instance shared
+        by several regimes resolves separately in each. Runs before
+        `references`, which validates the resolved values.
+        """
+        stages = []
+        for stage in self.stages:
+            execution = stage.execution
+            auto = [
+                name
+                for name in AUTO_EXECUTION_FIELDS
+                if getattr(execution, name) == "auto"
+            ]
+            if auto:
+                on = isinstance(stage, TrainSelfPlay) and execution.device == "cuda"
+                resolved: dict[str, object] = {
+                    "precision": ladder_precision(
+                        execution.device, self.agent.hidden_dim
+                    ),
+                    **dict.fromkeys(LAYOUT_FIELDS, on),
+                }
+                execution = execution.model_copy(
+                    update={name: resolved[name] for name in auto}
+                )
+                # Resolved defaults remain unset. Pydantic tracks later explicit
+                # assignments/copies, so authored_dump preserves those overrides.
+                execution.model_fields_set.difference_update(auto)
+                stage = stage.model_copy(update={"execution": execution})
+            stages.append(stage)
+        self.stages = stages
+        return self
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
@@ -913,14 +947,6 @@ class TrainingRegime(Strict):
                 raise ValueError(
                     f"{accelerator} requires self-contained ordinary self-play"
                 )
-        if self.agent.token_stream == "pooled" and any(
-            stage.execution.bucketed_shapes for stage in self.stages
-        ):
-            raise ValueError("token_stream='pooled' does not support bucketed shapes")
-        if self.agent.token_stream == "pooled" and any(
-            stage.execution.live_tokens for stage in self.stages
-        ):
-            raise ValueError("token_stream='pooled' does not support live tokens")
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:

@@ -7,6 +7,10 @@ mean, and how interrupted or failed work is recovered. Comparisons are declared
 in [experiments.md](experiments.md); metric definitions live in
 [experiment-metrics.md](experiment-metrics.md); evaluation protocols live in
 [evaluation.md](evaluation.md).
+An update learns from one collected batch, a loop keeps playing and updating
+until it is done, and a recipe is our loops with our settings;
+[training loops](training-loop.md) lists the updates, their pieces and a loop
+to copy.
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)
@@ -26,6 +30,7 @@ in [experiments.md](experiments.md); metric definitions live in
 ```bash
 uv run manabot train                                   # --recipe local: bounded smoke
 uv run manabot train --recipe baseline --seed 197      # baseline-v3 with evaluation
+uv run manabot train --recipe baseline --seed 197 --padded-shapes  # CUDA comparison without bucketed shapes or live tokens
 uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
 uv run manabot train --regime regime.json --seed 197 --out .runs/example
 ```
@@ -33,17 +38,20 @@ uv run manabot train --regime regime.json --seed 197 --out .runs/example
 `--recipe local` (`manabot.recipes.local`) is a two-update production-path
 smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
-with initial and endpoint evaluation. `--steps`, `--seconds` and
-`--learning-seats`, `--device cpu|mps|cuda` and `--bucketed-shapes` apply only
+with initial and endpoint evaluation. `--steps`, `--seconds`,
+`--learning-seats`, `--device cpu|mps|cuda` and `--padded-shapes` apply only
 to these recipes; a regime sets the same choices in its stages' `Execution`.
 Without `--device`, both select CUDA when available; Apple MPS is used only
 when requested with `--device mps`. Baseline requires an accelerator and
 rejects CPU; use `--recipe local` on machines without CUDA. Local defaults to
 CPU otherwise, including on Apple Silicon, and accepts an explicit override.
 `--preset` and `--set` are
-retired and fail. `--bucketed-shapes` trains with
-[bucketed padding](observation-and-model.md#bucketed-padding-profiling), an
-opt-in way to compare accelerator cost; it is off by default.
+retired and fail. On CUDA the recipes train with
+[bucketed padding](observation-and-model.md#bucketed-padding) and
+[live-token attention](observation-and-model.md#live-token-attention), and
+record both in `run.json`; `--padded-shapes` turns both off to compare against
+the padded path. Off CUDA both stay off. `--bucketed-shapes` is a deprecated
+alias that warns, does nothing beyond the default, and is removed in 0.3.0.
 
 CPU is the default and recommended device on Apple Silicon. On a quiet Apple
 M2, MPS was slower than CPU for collection at every measured batch size, only
@@ -60,7 +68,9 @@ device fails explicitly. Float64 loss and diagnostic arithmetic runs on the
 host with gradients preserved; no automatic operator fallback is enabled.
 Reduced precision remains CUDA-only. MPS process recovery, belief
 inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
-for this workflow. The baseline coordinator reserves a CPU evaluator thread
+for this workflow. A separate [MLX backend](../manabot/backends/mlx.md) of the policy
+and the damped update reads the same checkpoints, converted to the shared container,
+for measurement on Apple Silicon; no recipe runs on it. The baseline coordinator reserves a CPU evaluator thread
 alongside accelerator training. Monitoring exports do not require process
 recovery; accelerator runs cannot resume a stopped learner. This support makes
 no speed or strength claim.
@@ -126,12 +136,16 @@ damping horizon fitted to the run's expected updates and `recover_capacity`.
 The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
-`execution.bucketed_shapes` (default `False`, serialized only when `True`)
-selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
-for the stage's collection and learner policies.
-`execution.live_tokens` (default `False`, serialized only when `True`) selects
-[live-token attention](observation-and-model.md#live-token-attention-profiling)
-for the same policies.
+`execution.bucketed_shapes` and `execution.live_tokens` select
+[bucketed padding](observation-and-model.md#bucketed-padding) and
+[live-token attention](observation-and-model.md#live-token-attention) for the
+stage's collection and learner policies. Both default to `auto`, which the
+regime resolves when it is built: on for a CUDA `train_self_play` stage, off
+otherwise. A stage serializes them only when on, and a saved stage that omits
+them reads as off, so saved regimes keep their identity and fresh CUDA regimes
+record `true`. An explicit `live_tokens=True` off CUDA fails validation
+(`live tokens require CUDA`). A continuation stage must resolve both to the
+same values as the stage it continues.
 
 Self-play `initial` continues the live collector, learner and optimizer of an
 earlier stage in the same execution. External checkpoints never act as
@@ -518,59 +532,47 @@ NVIDIA L4 on 2026-10-08; neither is full training throughput.
 
 ### Reduced precision
 
-A stage's `Execution.precision` defaults to `auto`, a ladder by model width:
-on CUDA, a model whose `ModelConfig.hidden_dim` is at least
-`BF16_MIN_HIDDEN_DIM` (256, in `manabot.training.regime`) trains in `bf16`;
-narrower models, and every stage off CUDA, train in `float32`. The regime
-resolves `auto` when it is built and stores the result, so the regime, its
-`run.json` and its stage records name the precision a run actually used:
+A stage's `Execution.precision` defaults to `auto`. The regime resolves it
+alongside `bucketed_shapes` and `live_tokens` when it is built, and records
+only the resolved precision. **Currently `auto` selects `float32` at every
+width and on every device:** the BF16 learning gate failed.
+
+Explicit choices remain available:
 
 ```python
-from experiments.batched_baseline import batched_baseline
-from manabot.recipes.builders import with_capacity
+from manabot.training.regime import Execution
 
-regime = batched_baseline()  # a CUDA stage at hidden_dim 64
-wide = with_capacity(regime, id="batched-w384l8", width=384, depth=8, heads=8)
-
-[stage.execution.precision for stage in regime.stages]  # ['float32']
-[stage.execution.precision for stage in wide.stages]    # ['bf16']
+execution = Execution(device="cuda", precision="bf16")
 ```
 
-Builders that change the model (`with_capacity`, `with_agent`) resolve the
-ladder again for the new width; a precision written explicitly
-(`Execution(device="cuda", precision="float32")`) is kept as written.
+Builders (`with_capacity`, `with_agent`) resolve automatic settings again
+for the new model and device; explicit choices stay as written. Saved regimes
+keep their recorded precision, and a saved stage from before the field existed
+reads as `float32`. Only fresh authoring meets the automatic policy.
 
 | `precision` | What changes |
 | --- | --- |
-| `auto` (default) | The ladder above; never serialized. |
+| `auto` (default) | Float32 until the learning gate admits BF16; never serialized. |
 | `float32` | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the stage, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
 | `bf16` | `torch.autocast(cuda, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
 
-The ladder reads width alone: depth (`attention_layers`), bucketed shapes and
-the GPU model do not move it. Saved regimes and `run.json` files already name a precision in
-every stage, so they load, continue and [resume](#recovery) with the precision
-they were trained under; a saved stage from before the field existed names
-none and reads as `float32`, the precision it trained in. Only a regime built
-fresh in code meets the ladder. A
-reduced precision off CUDA fails validation (`precision tf32 requires CUDA`);
-`auto` off CUDA resolves to `float32` and never fails. Checkpoint evaluation
-and search run on CPU in float32. Precision changes no `ModelConfig` field,
-checkpoint or world binding: a checkpoint trained in any precision loads and
-runs in any other.
+A reduced precision off CUDA fails validation (`precision tf32 requires
+CUDA`); `auto` off CUDA resolves to `float32`. Checkpoint evaluation and search
+run on CPU in float32. Precision changes no `ModelConfig` field, checkpoint or
+world binding: a checkpoint trained in any precision loads in any other.
 
-The threshold is the narrowest measured width at which BF16 is faster than
-float32. On an L4 with bucketed shapes, BF16 is slower than float32 at w160l8
-(autocast's casts cost more than the small matmuls save), 1.66× faster in the
-learner step and large collection calls at w256l8, and 2–2.7× faster at w384l8
-([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)); at fixed
-weights its gradients and losses match float32's at both widths. In a
-learning comparison at w384l8, BF16 and float32 from the same seeds reached
-the same strength against the heuristic at matched updates, with policy
-and value loss, clip fraction and approximate KL inside float32's seed band
-([`experiments/precision_ladder.md`](../experiments/precision_ladder.md)). TF32
-is 1.1× faster at w160l8, 1.2× at w256l8 and 1.3–1.5× at w384l8 but has had no learning
-comparison, so the ladder never selects it.
+The measured speed crossover is width 256 (`BF16_MIN_HIDDEN_DIM` in
+`manabot.training.regime`). On an L4 with bucketed shapes, BF16 is slower than
+float32 at w160l8, 1.66× faster per learner step at w256l8, and 2–2.7× faster
+at w384l8 ([measurement](../experiments/cuda_precision.md)). But in the
+[learning A/B](../experiments/precision_ladder.md), BF16 seed 32401 stopped
+after 140 completed updates with `behavior_log_probability_mismatch`.
+That terminal numerical failure rejects BF16 under the pre-registered rule;
+the speed crossover therefore remains inactive. Playing strength was not
+scored, and the failure does not establish a strength difference. The A/B
+used bucketed shapes without live-token attention; their combination with
+BF16 has no learning admission from this run. TF32 remains explicit too.
 
 Before training a reduced precision on another GPU, run the
 [CUDA numerics validation](#validation), which checks float32, and the bf16

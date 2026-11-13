@@ -16,14 +16,14 @@ import torch
 from torch import nn
 
 from experiments.elemental_variants import elemental_recipe
+from manabot.backends.torch.learner import forward_precision
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.model.semantic_cards import SemanticCardEncoder
-from manabot.training.precision import forward_precision
 from manabot.training.rollout.collection import SeatRoutedCollector
 
 

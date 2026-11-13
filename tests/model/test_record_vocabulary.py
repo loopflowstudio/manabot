@@ -6,6 +6,8 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
     FACT_DIM,
@@ -18,10 +20,8 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.architecture import architecture_identity, architecture_receipt
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.architecture import architecture_identity
 from manabot.model.facts import FactEncoder, admit_facts
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
@@ -273,7 +273,7 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
             torch.save(checkpoint, path)
         restored, _ = load_checkpoint(str(path))
         assert restored.config.record_vocabulary == vocabulary
-        assert architecture_receipt(restored) == architecture_receipt(model)
+        assert restored.architecture_receipt() == model.architecture_receipt()
         torch.testing.assert_close(
             model(admit_observation(model, values))[0],
             restored(admit_observation(restored, values))[0],

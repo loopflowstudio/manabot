@@ -335,8 +335,8 @@ def _inputs(captures: Path) -> list[tuple[str, dict[str, torch.Tensor]]]:
 
 
 def _agent(captures: Path, size: str, device: str, *, bucketed: bool) -> Any:
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.model.actor_critic import ActorCritic
     from manabot.training.regime import TrainingRegime
 
     regime = TrainingRegime.model_validate_json((captures / "regime.json").read_text())
@@ -363,7 +363,7 @@ def call(
     """Collection's preparation and `Policy inference and action selection` block
     (`SeatRoutedCollector._sample_learning_rows`), with `forward` in place of the
     policy's own `forward_distribution`."""
-    from manabot.model.policy_distribution import legal_mask, policy_logs, require
+    from manabot.backends.torch.rl import legal_mask, policy_logs, require
 
     obs_t = inference.prepare(obs)
     with torch.no_grad():

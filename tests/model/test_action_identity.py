@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ACTION_ABILITY_INDEX,
     ACTION_MODE_INDEX,
@@ -14,7 +15,6 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import (
     Family,

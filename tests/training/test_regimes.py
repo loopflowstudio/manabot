@@ -12,21 +12,23 @@ import torch
 import typer
 
 from experiments.direct_self_play import direct_self_play
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import selected_rows
 from manabot.cli import named_regime, regime_names
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
+from manabot.policy.prepare import reference_distribution
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
-from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.selection import selected_rows
 from manabot.training.records import StageRecord, TrainingRun
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.update_metrics import read_updates, stage_rows
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.ppo import update_iteration
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
 from tests.training.test_monitoring import _recipe
@@ -78,13 +80,14 @@ def test_reference_has_full_support_and_is_permutation_invariant():
             ]
         ),
     }
+    obs = {key: value.numpy() for key, value in obs.items()}
     probs = reference_distribution(obs, "action_type_uniform")
-    torch.testing.assert_close(probs, torch.tensor([[0.25, 0.25, 0.5, 0.0]]))
-    permutation = torch.tensor([2, 0, 3, 1])
+    np.testing.assert_allclose(probs, [[0.25, 0.25, 0.5, 0.0]], rtol=1e-6)
+    permutation = np.array([2, 0, 3, 1])
     moved = reference_distribution(
         {k: v[:, permutation] for k, v in obs.items()}, "action_type_uniform"
     )
-    torch.testing.assert_close(moved, probs[:, permutation])
+    np.testing.assert_allclose(moved, probs[:, permutation], rtol=1e-6)
     assert selected_rows(torch.zeros(4), 0.25, 0.01).numel() == 0
 
 
@@ -161,8 +164,17 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
         stage = named_regime(name).stages[0]
         if stage.operation != "train_self_play":
             continue
-        result = update_iteration(
-            trainer, batch, stage.learning, 0.5, np.random.default_rng(7)
+        result = (
+            update_damped_iteration(torch_backend, trainer, batch, stage.learning, 1)
+            if isinstance(stage.learning, DampedPolicyLearning)
+            else update_iteration(
+                torch_backend,
+                trainer,
+                batch,
+                stage.learning,
+                0.5,
+                np.random.default_rng(7),
+            )
         )
         assert result["optimizer_exposures"] > 0
         assert np.isfinite(result["loss"])
@@ -417,8 +429,6 @@ def test_regime_names_say_file_and_recipe() -> None:
 
 
 def test_legacy_learning_discriminator_is_rejected() -> None:
-    from manabot.training.regime import DampedPolicyLearning
-
     with pytest.raises(ValueError):
         DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})
     rule = DampedPolicyLearning(gradient="damped_policy")

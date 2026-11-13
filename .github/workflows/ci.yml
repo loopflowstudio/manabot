@@ -116,11 +116,12 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: uv sync --python 3.13 --extra dev
+        run: uv sync --python 3.13 --no-default-groups --group play-runtime --extra dev
 
       - name: Run unit tests
         run: |
-          uv run --python 3.13 --extra dev pytest tests/infra/ \
+          uv run --python 3.13 --no-default-groups --group play-runtime \
+            --extra dev pytest tests/infra/ \
             tests/academy/test_clean_machine_verifier.py deploy/play/tests/
 
       - name: Website routing tests

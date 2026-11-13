@@ -15,6 +15,8 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.eval.admission import register_checkpoint
@@ -25,8 +27,6 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.model.inference import transfer
 from manabot.sim import child, serving
 from manabot.sim.execution import EvalComputeV1, EvalExecution
@@ -454,8 +454,12 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
     clock = [10.0]
     load = serving.load_checkpoint
 
-    def delayed_load(filename: str) -> tuple[ActorCritic, ObservationSpace]:
-        result = load(filename)
+    def delayed_load(
+        filename: str, *, bucketed_shapes: bool, live_tokens: bool
+    ) -> tuple[ActorCritic, ObservationSpace]:
+        result = load(
+            filename, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+        )
         clock[0] += 40  # Inject the duration; never create resource pressure.
         return result
 
@@ -770,6 +774,44 @@ def test_expired_allocation_starts_no_games_and_search_stays_unbound(
         EvalExecution(deadline_unix=time.time() + 30),
     )
     assert search == contract.anchors[2]
+
+
+def test_forward_layout_is_opt_in_and_outside_identity() -> None:
+    deadline = time.time() + 30
+    cuda = EvalExecution(device="cuda", deadline_unix=deadline)
+    assert (cuda.bucketed_shapes, cuda.live_tokens) == (False, False)
+    layout = EvalExecution(
+        device="cuda", deadline_unix=deadline, bucketed_shapes=True, live_tokens=True
+    )
+    assert layout.identity == cuda.identity
+    receipt = layout.model_dump()
+    assert (receipt["bucketed_shapes"], receipt["live_tokens"]) == (True, True)
+    assert EvalExecution.model_validate(receipt) == layout
+    with pytest.raises(ValueError, match="live tokens require CUDA"):
+        EvalExecution(deadline_unix=deadline, live_tokens=True)
+
+
+def test_served_bucketed_policy_matches_the_padded_path(tmp_path: Path) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    logits = []
+    for bucketed in (False, True):
+        execution = EvalExecution(
+            deadline_unix=time.time() + 120, bucketed_shapes=bucketed
+        )
+        _, (bound,) = bind_execution(key, (player,), execution)
+        store = PolicyStore(execution, EvalPerformance(str(bucketed)))
+        store.admit(PolicyAdmission(bound, str(path), (selected_match(),)))
+        request = request_for(bound, execution)
+        policy = store.get(request.policy)
+        assert policy.agent.bucketed_shapes is bucketed
+        with torch.no_grad():
+            inputs = {
+                k: torch.from_numpy(v).float().unsqueeze(0)
+                for k, v in request.observation.items()
+            }
+            logits.append(policy.agent(policy.scope.prepare(inputs))[0])
+        store.close()
+    torch.testing.assert_close(logits[0], logits[1], atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA runner")

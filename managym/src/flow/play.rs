@@ -23,7 +23,7 @@ use crate::{
         ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        mana::{ManaCost, ManaUse},
+        mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         stack_object::ActivatedAbilityOnStack,
         zone::ZoneType,
     },
@@ -204,10 +204,7 @@ impl Game {
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
         let mut cost = self.casting_mana_cost(player, card, cast)?.with_x(cast.x);
-        cost.purpose = ManaUse::cast(
-            card_ref.subtypes.iter().map(String::as_str),
-            card_ref.types.is_artifact(),
-        );
+        cost.purpose = SpendingContext::Cast(SpellSnapshot(card_ref.copiable_definition()));
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }
@@ -1250,8 +1247,11 @@ impl Game {
             return None;
         }
         let mut ability = ability.clone();
-        let purpose = ManaUse::ability(card_ref.subtypes.iter().map(String::as_str));
-        self.price_activation(player, purpose, &mut ability);
+        ability.mana_cost.purpose = SpendingContext::Activate {
+            zone: ability.zone.zone(),
+            source: SpendingObject::new(card_ref.subtypes.iter().map(String::as_str)),
+        };
+        self.price_activation(player, &mut ability);
         Some(ability)
     }
 
@@ -2149,7 +2149,9 @@ impl Game {
         if !ability.tap_source {
             return self.can_pay_with_waterbend(player, &cost);
         }
-        self.waterbend_payment_after_taps(player, &cost, cost.generic(), std::iter::once(source))
+        !self
+            .waterbend_taps_keeping_payable(player, &cost, cost.generic(), vec![source], None)
+            .is_empty()
     }
 
     /// Can `player` cover `cost` with untapped waterbend candidates

@@ -5,7 +5,9 @@ training, and verification. You train *a* manabot; this package is how.
 
 The central loop is self-play: play a batch, turn game results into per-decision
 credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
-explains it, and [training.md](../docs/training.md) covers running it.
+explains it, [training.md](../docs/training.md) covers running it, and
+[training loops](../docs/training-loop.md) lists the updates we maintain,
+their pieces and a loop to copy.
 
 ## Quickstart
 
@@ -631,9 +633,20 @@ training, experiment scheduling or reports, even when loading a frozen model.
 The package-boundary tests import every simulation module and play a checkpoint
 with those packages blocked.
 
-- `model/`: network construction/inference and portable checkpoint admission.
-  `model.checkpoint.save_checkpoint` and `load_checkpoint` own policy files;
-  their serialized historical keys remain unchanged.
+- `policy/`: the framework-free policy contract: host preparation, bucket
+  selection, the safetensors checkpoint container and the backend Protocols.
+  It imports no array framework ([policy contract](policy/README.md)).
+- `backends/<framework>/`: one folder per array framework with the same files
+  (`policy.py`, `rl.py`, `learner.py`, `rollout.py`, `arrays.py`,
+  `checkpoint.py`);
+  `backends/torch/` is the reference and `backends/parity.py` checks the others
+  against it ([backends](backends/README.md)).
+  `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
+  files: `save_checkpoint` writes a `.pt` file, whose serialized historical
+  keys remain unchanged, and `load_checkpoint` reads either that or the shared
+  container.
+- `model/`: the torch model's components, observation admission and
+  inference preparation, architecture receipts and world binding.
 - `sim/`: registered players, bounded game execution, replay, native card evidence,
   search and batched games.
 - `training/`: regime execution, seat-routed collection, learning rules,
@@ -642,8 +655,14 @@ with those packages blocked.
   `execution.py` sequences stages and owns the run lifecycle.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
   complete-game accounting.
-- `training/learning/`: Learner, optimization rules, per-seat returns, sample
-  selection and numerical health.
+- `training/updates/`: an update learns from one collected batch. The damped
+  policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
+  and their host-side pieces: numerical health and selection diagnostics.
+  Each takes a backend module as its first argument and does its array math
+  through it; recipes pass `manabot.backends.torch`
+  ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
+- `training/loops/`: a loop keeps playing and updating until it is done; a
+  one-page example (`minimal.py`).
 - `training/state/`: policy admission, exact learning snapshots, recovery and
   retained game-failure state.
 - `belief/`: viewer histories, world distributions and belief models;

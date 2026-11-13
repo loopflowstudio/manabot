@@ -84,7 +84,7 @@ seat decides again or the game ends.
 The expected game outcome from the acting seat's observation, under the
 policies currently playing: $V(o) \approx \mathbb{E}[\text{outcome} \mid o]$.
 From `ActorCritic.forward` in
-[`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py):
+[`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py):
 
 ```python
 logits, raw_value = self.forward_distribution(obs)
@@ -173,8 +173,9 @@ recursion with λ = 0.8, which leans more on what actually happened. A
 categorical value head uses a three-way loss/draw/win mixture with the same λ
 and a one-hot terminal. A scalar head uses $A_t + V_t$.
 
-From `transition_gae` in
-[`manabot/training/learning/returns.py`](../manabot/training/learning/returns.py):
+The backend's `transition_gae` calls the shared
+[`policy/returns.py`](../manabot/policy/returns.py) recursion. Its equivalent
+row-by-row form is:
 
 ```python
 for step in reversed(range(len(rewards))):
@@ -257,7 +258,7 @@ prints this view in a few seconds:
 | 0 | .003 | −1.003 | Yes |
 
 From `selected_moves` in
-[`manabot/training/learning/selection.py`](../manabot/training/learning/selection.py):
+[`manabot/training/updates/selection.py`](../manabot/training/updates/selection.py):
 
 ```python
 magnitude = advantages.detach().abs()
@@ -296,12 +297,10 @@ has a separate job:
 The **behavior policy** is the frozen weights that played the batch, and the
 ratio measures how far the learner has moved from them. From
 `damped_policy_loss` in
-[`manabot/training/learning/damped_policy.py`](../manabot/training/learning/damped_policy.py):
+[`manabot/backends/torch/rl.py`](../manabot/backends/torch/rl.py):
 
 ```python
-ratio_logs = (
-    (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
-)
+ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
 surrogate = clipped_surrogate(ratio_logs, advantages, clip)
 ```
 
@@ -311,12 +310,16 @@ per-action correction; there is no trajectory-level importance weighting.
 
 The **magnet** is a fixed reference policy built for each row from its legal
 actions. From `reference_distribution` in
-[`manabot/training/learning/references.py`](../manabot/training/learning/references.py):
+[`manabot/policy/prepare.py`](../manabot/policy/prepare.py), in NumPy:
 
 ```python
-counts.scatter_add_(-1, types, valid.to(counts.dtype))
-weights = valid / counts.gather(-1, types).clamp_min(1)
-return weights / weights.sum(-1, keepdim=True)
+slots = types + width * np.arange(valid.shape[0])[:, None]
+counts = np.bincount(
+    slots.ravel(), weights=valid.ravel(), minlength=valid.shape[0] * width
+)
+counts = counts.reshape(valid.shape[0], width).astype(np.float32)
+weights = valid / np.take_along_axis(counts, types, -1).clip(min=1)
+return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
 ```
 
 Each action type present gets equal mass, split evenly among that type's legal
@@ -460,7 +463,9 @@ objects, and paired evaluation were built for this project. The PPO-style
 
 ## Fidelity to the sources
 
-`manabot/training/learning/damped_policy.py` owns the objective; recipes select
+`damped_policy_loss` in `manabot/backends/torch/rl.py` owns the
+objective and `update_damped_iteration` in
+`manabot/training/updates/damped_policy.py` applies it; recipes select
 `DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
 regimes are rejected and need their pinned source; frozen evidence keeps the
 old tag. Per retained observation the policy loss is the negative clipped-ratio
@@ -522,13 +527,18 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 
 ## Where the code lives
 
+[Training loops](training-loop.md) names the maintained updates and lists
+each piece they are made of as a public function.
+
 | Step | Code |
 | --- | --- |
-| Iteration loop, EMA, checkpoints | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
+| Iteration loop, checkpoints; which update a stage calls | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
 | Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
-| Advantages | `transition_gae` in [`training/learning/returns.py`](../manabot/training/learning/returns.py) |
-| Value targets, loss, update | `_targets`, `damped_policy_loss`, `update_damped_iteration` in [`training/learning/damped_policy.py`](../manabot/training/learning/damped_policy.py) |
-| Filter | [`training/learning/selection.py`](../manabot/training/learning/selection.py) |
-| Magnet | [`training/learning/references.py`](../manabot/training/learning/references.py) |
+| Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
+| Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
+| Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
+| Magnet | `reference_distribution` in [`policy/prepare.py`](../manabot/policy/prepare.py) |
 | Defaults | `DampedPolicyLearning`, `TrainSelfPlay` in [`training/regime.py`](../manabot/training/regime.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

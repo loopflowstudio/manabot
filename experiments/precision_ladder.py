@@ -1,7 +1,7 @@
 """Does BF16 learn the same as float32 at w384l8? The gate on the precision ladder (MTG-324).
 
-`Execution.precision="auto"` trains a CUDA model of width at least
-`BF16_MIN_HIDDEN_DIM` (256) in BF16. MTG-317 (`experiments/cuda_precision.md`)
+The proposed BF16 default starts at `BF16_MIN_HIDDEN_DIM` (256); the
+learning gate rejected it, so `auto` currently resolves to float32 everywhere. MTG-317 (`experiments/cuda_precision.md`)
 measured BF16 2–2.7× faster than float32 at w384l8 on an L4, but its 200-step
 replay could not tell same from different learning. This experiment trains the
 frontier recipe twice from the same seeds, once in each precision, and compares
@@ -111,10 +111,9 @@ def arm(precision: Precision) -> TrainingRegime:
     assert isinstance(stage, TrainSelfPlay)
     stage.updates = UPDATES
     stage.execution.bucketed_shapes = True
+    stage.execution.live_tokens = False
     stage.execution.precision = precision
-    # The JSON round trip drops the ladder's private mark from the stage, so
-    # the written precision is authored rather than re-resolved.
-    return TrainingRegime.model_validate(regime.model_dump(mode="json"))
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> None:

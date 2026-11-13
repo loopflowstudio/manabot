@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.training.rollout.collection import SeatRoutedCollector
 
@@ -167,6 +167,12 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
 def test_invalid_architecture_rejected(fields: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         ModelConfig.model_validate(fields)
+
+
+def test_saved_pooled_token_stream_names_its_removal() -> None:
+    assert ModelConfig.model_validate({"token_stream": "tables"}) == ModelConfig()
+    with pytest.raises(ValueError, match="token_stream='pooled' was removed"):
+        ModelConfig.model_validate({"token_stream": "pooled"})
 
 
 def test_missing_fields_preserve_historical_initialization() -> None:

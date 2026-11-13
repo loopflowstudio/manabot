@@ -40,8 +40,15 @@ def batched_baseline() -> TrainingRegime:
                 learning=move_learning(
                     IterationSchedule(steps=128, reference_steps=2048)
                 ),
+                # The study ran padded; the frozen family keeps that layout and
+                # its digests while fresh CUDA recipes resolve `auto` to the
+                # bucketed, live-token layout.
                 execution=Execution(
-                    device="cuda", wall_seconds=1740, memory_bytes=48 * GIB
+                    device="cuda",
+                    wall_seconds=1740,
+                    memory_bytes=48 * GIB,
+                    bucketed_shapes=False,
+                    live_tokens=False,
                 ),
             )
         ],
@@ -68,7 +75,11 @@ def scale_ladder() -> TrainingRegime:
     stage.batch_closure = "exact-quota"
     stage.learning = move_learning()
     stage.execution = Execution(
-        device="cuda", wall_seconds=400_000, memory_bytes=40 * GIB
+        device="cuda",
+        wall_seconds=400_000,
+        memory_bytes=40 * GIB,
+        bucketed_shapes=False,
+        live_tokens=False,
     )
     regime.wall_seconds = 400_000
     regime.schedule_clock = "iteration_fraction"

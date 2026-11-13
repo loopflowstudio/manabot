@@ -71,6 +71,25 @@ publish, land or choose the next Graph step from here.
   process supervised through completion or cleanup. Measurements require the
   Task's scope and resource authority; never create artificial contention to
   test them (see `TESTING.md`).
+- Engine changes that must not alter play (performance work in `managym/src`):
+  build `main`'s release extension from a detached worktree with its own
+  `CARGO_TARGET_DIR`, unzip the wheel's `.so` into that worktree's `managym/`,
+  and play the same seeded random games on both engines by switching
+  `PYTHONPATH` (print `managym.__file__` to confirm which loaded). Per game,
+  hash `obs.toJSON()` at every decision and step `rng.randrange(len(
+  obs.action_space.actions))`; equal digests mean equal offers, taps and
+  events. Use the authored setups (`managym.authored_deck_keys`) plus the TLA
+  pool corpus human builds (`experiments/data/mtg282/pools-v2/corpus.json`,
+  `PlayerConfig(name, pool["human_build"])`), which bring waterbend, Treasure
+  and any-color sources the curated benchmark decks lack; 2,400 games took
+  about two minutes per engine. A few games end in `PyAgentError` on `main`
+  too; the error must match, not be absent. `maturin build` without
+  `--release` gives an extension with `debug_assert!` live, about 10x slower;
+  unzip it to its own directory, never over `managym/`.
+- Academy browser scripts: offers are `[data-testid=action-option]:not([disabled])`
+  (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
+  the panel is not an offer). Tapped lands show only in a `fullPage`
+  screenshot, not in the board's text.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
@@ -111,6 +130,16 @@ publish, land or choose the next Graph step from here.
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
+- MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
+  run it on the Mac that owns the measurement, not on a shared laptop. Convert a w160l8
+  checkpoint (the published `experiments/data/mlx_pilot/capture/initial.pt`;
+  `local` recipe checkpoints use FiLM and are refused), load it with
+  `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
+  admitting each batch with `admit_observation` and comparing against torch
+  `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
+  `policy.evaluate`; untrained-policy argmax
+  differences are exact ties). `python -m manabot.backends.parity <initial.pt>
+  --capture <capture dir>` on the published subset takes about 50 s on an M2.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
@@ -124,6 +153,17 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Python-only library changes (no engine change): `uv build --wheel --package
+  manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
+  venv with `uv pip install <wheel> --index-url https://pypi.org/simple
+  --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
+  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
+  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
+  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+- Training guide (`docs/training-loop.md`): run its example command verbatim
+  (about 20 s on CPU), save and reload the policy as it says, call both
+  maintained rules directly on a collected batch, and compare the tables'
+  signatures with `inspect.signature`.
 - Training recipes: write a regime JSON from Python
   (`TrainingRegime(...).model_dump_json()`) and run
   `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
@@ -138,7 +178,13 @@ publish, land or choose the next Graph step from here.
   the same `--seed`. Equal layouts then give `run.json` files that differ only in
   `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
   `bucketed_shapes` makes learning about 7× slower than padded, so time
-  bucketed arms against a bucketed control.
+  bucketed arms against a bucketed control. Rebuild a regime for another
+  device from `authored_dump()`, not `model_dump()`, so `auto` fields resolve
+  again. To resume, the regime needs `recovery` (e.g.
+  `{"checkpoint_updates": 2}`); without it `--resume-from` passes the digest
+  check, then fails with "no committed recovery boundary". Resume with the same
+  regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
+  time. macOS has no `timeout`; use the tool's own timeout.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
@@ -155,6 +201,12 @@ publish, land or choose the next Graph step from here.
   the Rust is unchanged), and run the driver with
   `PYTHONPATH=/private/tmp/<x>`; use the resolved `/private` path, or
   `_source()`'s `relative_to(ROOT)` fails. Remove the worktree afterwards.
+- CI workflow or test-timing changes: the user surface is hosted CI on the
+  pushed branch: `gh workflow run ci.yml --ref <branch>`. Read job and step
+  timestamps with `gh run view <id> --json jobs`; read logs with
+  `gh run view <id> --job <job-id> --log`. Compare install time with peers in
+  the same run and inspect dependency logs for unexpected downloads.
+  See `docs/development.md` (Job time) for the budget.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell

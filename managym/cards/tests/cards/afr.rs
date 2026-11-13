@@ -53,7 +53,8 @@ fn selected_sacrifice_cannot_also_fund_the_announced_spell() {
         if mode == 2 {
             enter_and_settle(&mut s, "Callous Inspector");
         }
-        s.game_mut().create_token("Treasure", PlayerId(0), false);
+        s.game_mut()
+            .create_token("token.treasure", PlayerId(0), false);
         let treasure = permanent_named(&s, "Treasure");
         let treasure_card = s.game().state.permanents[treasure].as_ref().unwrap().card;
         s.set_player_mana_pool(0, if mode == 1 { "BB" } else { "B" });

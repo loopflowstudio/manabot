@@ -7,6 +7,12 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import transition_gae
+from manabot.backends.torch.rollout import observation_tensors
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -14,13 +20,8 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.learning.learner import Learner, observation_tensors
-from manabot.training.learning.objectives import update_iteration
-from manabot.training.learning.returns import transition_gae
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
@@ -28,6 +29,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates
@@ -327,15 +329,14 @@ def test_move_learning_consumes_complete_seat_trajectories(
     collector = _collector(agent)
     batch = collector.collect(agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    result = update_iteration(
+    result = update_damped_iteration(
+        torch_backend,
         trainer,
         batch,
         DampedPolicyLearning(
             gradient="damped_policy", advantage_quantile=0, min_advantage=0
         ),
-        0,
-        np.random.default_rng(1),
-        iteration=1,
+        1,
     )
     assert result["rows"] == 8
     assert result["optimizer_exposures"] == result["retained"]

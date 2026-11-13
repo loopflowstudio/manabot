@@ -125,9 +125,9 @@ deals. A rule-based `heuristic` bot and frozen checkpoints anchor the scale,
 ratings are fit across the whole population, and tactical scenarios and
 bounded attacks probe what a win rate hides ([evaluation](docs/evaluation.md)).
 
-Most runs are exploratory and need no prediction. A result cited as a finding
-commits its question, numeric prediction, refuting result and cost cap to git
-before the run, and claims about a method need independent training seeds.
+Most runs are exploratory. A result cited as a finding commits its question,
+method and cost cap to git before the run and decides what it means after
+reading the data, and claims about a method need independent training seeds.
 Refutations stay on the record
 ([experiments](docs/experiments.md)).
 
@@ -194,8 +194,9 @@ deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
 `heuristic` and frozen checkpoints as working anchors. No win rate, rating or
 report promotes a checkpoint; scores never enter the loss.
 
-**Findings are preregistered.** A result cited as a finding commits its
-question, prediction, refuting result and cost cap before the run; everything
+**Findings decide after the data.** A result cited as a finding commits its
+question, method and cost cap before the run and gives its recommendation, with
+the reasoning, in the report; nothing fixes the verdict in advance. Everything
 else is exploratory and says so. The training seed is the unit of evidence for
 a method; refutations stay on the record.
 
@@ -414,6 +415,7 @@ know and where the code lives.
 | [learning.md](docs/learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run, down to the code |
 | [evaluation.md](docs/evaluation.md) | One deal, what counts, anchors and ratings, scenarios, frozen-policy attacks, LLM players, shared inference, card data |
 | [experiments.md](docs/experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring a comparison |
+| [training-loop.md](docs/training-loop.md) | Training loops: the damped policy and PPO updates we maintain, the pieces they are made of, and a complete self-play loop to copy |
 | [training.md](docs/training.md) | Running training: regimes and stages, remote training, monitoring, numerical health, recovery, game failures |
 | [experiment-metrics.md](docs/experiment-metrics.md) | Metric definitions the experiment reports read |
 | [workflows.md](docs/workflows.md) | Wave responsibilities, Coverage loops and experiment execution boundaries |
