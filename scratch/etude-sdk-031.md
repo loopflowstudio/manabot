@@ -146,11 +146,24 @@ current lock and the charts are checked against Etude main.
 3. Tests, in `tests/training/test_report_helpers.py`: `head_to_head` builds one
    `Matches(seating=...)` per name and no tag; the frontier `report()`'s two
    charts name exactly 11 and 10 seatings. No page build in tests.
-4. Docs: `docs/experiments.md` example (:295-296) and helper row (:337, now
-   "a line per job ... mirror each other about 0.5") describe one line for the
-   first-seated job and that the seatings are named; `docs/experiments.md`'s
-   launcher note says 0.3.2 keeps `launcher-<schema>.db` beside an older file
-   and drops "moved aside".
+4. Docs: written 2026-11-13, ahead of the code, in `docs/experiments.md`
+   ("What an experiment is" launcher paragraph; "Writing a report" example,
+   page description, helper row and the seating-name passage) and
+   `docs/development.md` (launcher sentence, two `etude-sdk>=0.3.2` mentions).
+   They describe the finished state, so the code follows them:
+   - `head_to_head(title, seatings)`; empty raises `ValueError`.
+   - The frontier's name functions are `equal_hours_seatings()` and
+     `equal_update_seatings()`, and the frozen equal-update record is
+     `EQUAL_UPDATES`; rename in the docs if the code picks other names.
+   - Hover example `0.66 · 95% interval 0.53–0.77 · 64 games · 16 matches`:
+     the 0.66 is the probed u800 point, the interval is illustrative. Replace
+     both with the built page's values.
+   - The docs say 0.3.2 while the lock holds 0.3.1 until slice 2. If 0.3.2's
+     launcher file or schema number differs from #110 (`launcher-17.db`),
+     correct the launcher paragraph.
+   - The `--with "etude-sdk[s3,eval]==0.2.15" etude status` line is the form
+     `experiments/cuda_precision.py` uses; slice 2's launcher check confirms
+     it still reads `launcher.db`.
 5. Dated line in `experiments/tla-frontier-c5fba4-results.md`: the report draws
    Large-vs-Small by seating from 2026-11-13; no game or score changed.
 

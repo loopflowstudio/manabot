@@ -19,3 +19,9 @@ Reversible choices taken without asking; details in `etude-sdk-031.md`.
    alternative, teaching Etude to seat a tag, is noted and not taken.
 7. The one-line charts are built and checked against Etude main before 0.3.2
    is released; only the pin waits.
+
+8. Docs written before the code name the frontier's functions
+   `equal_hours_seatings()` / `equal_update_seatings()` and the record
+   `EQUAL_UPDATES`, and state 0.3.2 and `launcher-17.db` as shipped. The
+   dated line in `experiments/tla-frontier-c5fba4-results.md` is left to the
+   implementation, since it records a change to the report once made.
