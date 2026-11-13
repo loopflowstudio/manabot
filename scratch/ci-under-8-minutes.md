@@ -54,7 +54,7 @@ disabled and uses setup-uv defaults. The retained-wheel repair is removed.
 The fixture and all test/build commands remain unchanged. Basis measured on
 2026-11-12:
 
-- Each Integration job downloads 3,046 MiB of wheels (job log, run 43345024882).
+- Each Integration job downloaded 3,046 MiB of wheels in run 43345024882.
   About 2.8 GiB is `nvidia-*`, `triton` and `torch==2.15.0+cu132`, which a
   hosted CPU runner cannot use. The slow job spent 2 m 59 s on them; five
   peers took 17–30 s for the same downloads. The tail is download variance.
@@ -83,7 +83,7 @@ The fixture and all test/build commands remain unchanged. Basis measured on
   extension build, per-worker watchdog, dependency definitions and lockfile.
 - Preserve QA's hosted-CI commands and within-run install comparison.
 
-### Checks and remaining implementation
+### Implementation checks
 
 CUDA review found no selected test requiring a CUDA-built Torch on a CPU
 runner. Actual GPU cases already guard on `torch.cuda.is_available()`;
@@ -101,19 +101,45 @@ the declared CI extras resolved it. Frozen export selects Linux Torch
 build/test commands, bounded fixture, dependency definitions and lockfile
 are unchanged.
 
-Pending: one full hosted Ubuntu dispatch showing CPU Torch installation
-without NVIDIA/Triton downloads and every ordinary job below 480 s.
-PR-event and post-merge evidence belong to delivery.
+Hosted dispatch [43348710097](https://github.com/loopflowstudio/manabot/actions/runs/43348710097)
+at `a1efea11bab6669ff9dfdc06f79511f7139555f8` completed successfully.
+Every ordinary job passed below 480 s; Engine Budget passed in 571 s and
+Tests Result passed in 2 s. Integration
+installed Torch `2.15.0+cpu` in 5–6 s in every group; all six logs contain no
+NVIDIA/Triton entries. All six retain the native dev build. Model passed 823
+with 5 existing skips, training 346, recovery 49, experiment 130, evaluation
+288 with 1 existing skip, evaluation-long 66. The repaired comparison took
+138.45 s. The tests and hardware-availability guards are unchanged;
+model/evaluation pass and skip counts match prior CUDA run `43345024882`.
+The experiment dev build took 70 s and its test step 239 s, alongside the
+5 s install (previous run: build 66 s, tests 284 s, install 181 s).
+The CI observer exited 0 and was reaped; no local background process remains.
 
-What survives: same Torch version, same lockfile, same test selections, debug
-extension build, watchdog. What changes on purpose: Integration stops importing
-the cu132 wheel. Python unit and Academy Integration still sync the default
-`training-runtime` group, so a hosted job still imports the Linux training
-build. Counterexample to check during implement: a selected test that needs a
-CUDA-build-only component on a CPU runner; the 17 test files that mention
-`cuda`, `torch.compile` or `triton` (`tests/llm/test_llm_vllm.py` among them)
-are the places to look. If one exists, keep that group on the default install rather than
-restoring cache retention.
+| Job | Total seconds (including install/build/cache) |
+|---|---:|
+| Rust Tests | 406 |
+| Integration recovery | 350 |
+| Integration training | 344 |
+| Integration experiment | 340 |
+| Integration evaluation-long | 293 |
+| Integration model | 287 |
+| Integration evaluation | 277 |
+| Protocol v1 | 249 |
+| Academy Integration | 178 |
+| Academy UI | 175 |
+| Clean-machine Play | 149 |
+| Semantic conformance | 119 |
+| Python unit | 89 |
+| Detect Changes | 5 |
+| Tests Result | 2 |
+| Engine Budget (exempt) | 571 |
+
+The ordinary maximum is 406 s, leaving 74 s. This is one measured dispatch,
+not a guarantee about runner variability. PR-event and post-merge validation
+remain delivery obligations.
+
+Python unit and Academy Integration still select the default
+`training-runtime`, retaining hosted imports of the Linux CUDA build.
 
 Known limit, not changed here: Python unit (308 s on the merged push) and
 Academy Integration (146 s) keep the 3 GiB download and its tail. The observed
@@ -130,8 +156,8 @@ The checkout includes main through `f1b0109ae` (#504, mana-payment engine
 optimization), merged here before `b8ed0970b`. A fresh fetch found no main
 commits missing from this checkout. That engine change postdates the fixture
 QA revision `4db5cd64b`; its timing cannot be inferred from the old run.
-The fixture repair remains present after the merge. The next Ubuntu run must exercise both the current engine and the CPU runtime
-change; the prior run does not establish their timing.
+The fixture repair remains present after the merge. Run `43348710097`
+exercises both the current engine and the CPU runtime change.
 
 ## Evidence and limits
 
@@ -149,6 +175,7 @@ watchdog, injected-time admission tests and a two-stream real-worker size smoke.
 | 43337105047 | `1fc4e1b24`, PR | green; recovery 349 s |
 | 43341403551 | `60664d149`, merged push | experiment failed at 433 s; other ordinary jobs passed, max 418 s |
 | 43345024882 | `4db5cd64b`, dispatch | green; experiment 549 s, over budget |
+| 43348710097 | `a1efea11b`, dispatch | green; Rust 406 s, slowest Integration recovery 350 s |
 
 Runs: `https://github.com/loopflowstudio/manabot/actions/runs/<id>`.
 Engine Budget passed in 613 s on #506's PR and 685 s on its merged push.
@@ -200,9 +227,10 @@ Pre-compression investigation and command details:
 
 ## Remaining delivery
 
-After the CPU Torch change, one hosted Ubuntu run on the current head must show
-every ordinary job below 480 s with all selected tests passing under debug
-assertions. It also supplies the first timing with #504's engine change.
+Implementation and hosted dispatch validation are complete. The changed
+workflow meets the timing target with #504's engine change and CPU Torch
+under native debug assertions. This evidence is for a manual dispatch;
+PR-event timing and post-merge validation have not yet happened for this repair.
 
 If the fixture's resource deadline fails again, identify the expired clock
 and charged/allowed seconds in `manabot/training/execution.py::remaining/check`
