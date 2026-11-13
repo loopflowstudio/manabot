@@ -50,19 +50,16 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   module). Registration in `backends/parity.py` waits for #495 on this
   branch (parity.py/convert.py are not here).
 
-## Coordination (rechecked at realign, 2026-11-12)
+## Coordination (rechecked at realign after speed pass 4)
 
-- #495 (MTG-321) is on main and merged here; the `policy/prepare.py` and
-  `policy/checkpoint.py` extensions fall to this Task or its follow-up.
-- #474 is still open at e0e99309a, merged here (acf319cca). Merge again if
-  it moves; rebase onto main once it lands.
-- Main has one commit past this branch, e38518093 (engine-only: typed mana
-  spending restrictions, Rust plus two Python tests); `git merge-tree` shows
-  it merges cleanly. Taking it needs the extension rebuilt; leave it to gate
-  or the post-#474 rebase.
-- The scope decision is posted on the Task (steer aeac5366, 21:39Z): ship
-  this PR as it stands and stack Remaining 1 and 2, or build them here.
-  Unanswered at realign.
+- #474 merged to main (a343904ee); main through e82a20033 (v0.2.3 release
+  prep) is merged here (a00a1c490); `HEAD..origin/main` is empty.
+- #503 (PR A, `jack/mtg-325-torch-backend`) is open as a draft at c314838a9,
+  an ancestor of this branch; it has not taken main's last four commits
+  (#504-#506 and e82a20033). #501 (this branch, PR B) is a draft based on
+  main and contains all of #503.
+- Scope settled (steer bc2e6bd3, Jack Heart: "thats fine"): ship as is;
+  Remaining 1 and 2 are MTG-333, named in #501's body.
 
 ## Checks
 
@@ -116,18 +113,20 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 
 ## Remaining
 
-1. ActorCritic over `manabot.policy.prepare.Prepared`: not built; sized in
-   "Pass of 21:30Z" below. Recommended as its own stacked Task.
-2. `save_checkpoint` writing the container: follows item 1 (the container
-   must first carry every configuration and the `.pt` extras).
-3. Done (f61ed7dcc): `BACKENDS = {"torch", "mlx"}`; torch passes its own
-   parity on the w160l8 capture (see "Pass of 21:00Z").
-4. Done (Etude 15d399dab9ae, see Checks). Re-run CPU and the L4 launch
-   (`scratch/equivalence/mtg325_cuda_equivalence.py`, regenerate
-   `base.patch`) after item 1 changes the forward.
-5. Done (b62cd6c8e).
-6. Done: #474 at 9b2aeae33 merged (e56150ece). Merge again if #474 moves;
-   delete `scratch/` before landing.
+For this PR: gate (both PRs ready, #503 merged with main, CI green), then
+delete `scratch/` before landing. Nothing is left to build here.
+
+Stacked on MTG-333 (not this PR):
+1. `ActorCritic` over `manabot.policy.prepare.Prepared`; sized in "Pass of
+   21:30Z" below.
+2. `save_checkpoint` writing the container (needs every configuration and
+   the `.pt` extras in it first).
+3. After 1: rerun CPU `scratch/equivalence/run.py`, the L4 equivalence
+   launch and the speed check (steer 449b1a8e: rerun "if the forward
+   changes").
+
+Done items 3-6 of the old list: `BACKENDS = {"torch", "mlx"}` (f61ed7dcc);
+L4 equivalence (Etude 15d399dab9ae); #474 and main merged.
 
 ## Concept review items (2026-11-12): built
 
@@ -356,8 +355,6 @@ Checks:
   torch backend and the updates written once, and its docs state the
   interim (`.pt` save, torch does its own lookups).
 
-Remaining for this PR (if steer aeac5366 is answered "ship"): gate; delete `scratch/` before landing. Items 1 and
-2 and the item 4 rerun belong to the stacked follow-up.
 
 ## Pass of 21:45Z 2026-11-12: main and #474 merged again
 
@@ -375,8 +372,6 @@ Remaining for this PR (if steer aeac5366 is answered "ship"): gate; delete `scra
   backends, mlx backend, returns, experiment files: 80 passed.
   `scratch/equivalence/updates.py` against `after.json`: identical except the
   known 1-ulp `value_scale` std per damped configuration.
-- Item 1 not started in this pass; the stacked follow-up still needs a
-  person's yes (questions.md).
 
 ## Docs (write-docs pass, 2026-11-12)
 
@@ -409,58 +404,15 @@ State reviewed: HEAD 8420fb69d. The three layers hold: `manabot.policy`
 backend module. One mismatch and one new direction; the scope question stays
 open.
 
-Next implement direction, in order:
-
-1. One owner for the host recursions. Torch's `rl.terminal_distances`,
-   `reverse_waves` and `transition_gae` already run on the host (`.cpu()`),
-   duplicating `manabot.policy.returns` bit for bit, while MLX's `rl` calls
-   `policy.returns`. The matched rule is that a backend may import
-   `manabot.policy` (framework-free) and never another backend; torch's `rl`
-   should follow it like MLX. Make torch's `transition_gae` a wrapper over
-   `returns.transition_gae` (`arrays.to_numpy` in, `from_numpy` back to the
-   rewards' device), delete torch's `terminal_distances`/`reverse_waves`, and
-   add `manabot.policy.returns` to `_GENERIC_ALLOWED` in
-   `test_generic_learning_pieces_import_only_themselves` (and the runtime
-   probe's allowed set). Keep torch's device-side selection
-   (`selected_rows`, `torch.quantile`): it runs on the minibatch's device,
-   and moving it to the host adds a device read per PPO minibatch on CUDA.
-   Check: `scratch/equivalence/updates.py` against `after.json` (only the
-   known 1-ulp `value_scale` std), returns, update backends, minimal loop,
-   boundaries. Update `backends/README.md`/`mlx.md` sentences that say torch
-   keeps its own recursions, and drop the questions.md follow-up line.
-2. Speed check, steer 449b1a8e (Jack Heart: "lets give a $10 budget for
-   making sure there is no performance regression on pytorch due to this
-   change"). Run it after item 1 so it measures the code that ships.
-   - Base: `manabot/` at `git merge-base HEAD origin/main` (adf601acb at
-     review time; it excludes #474, so a regression found there is bisected
-     against #474's tip e0e99309a before blaming this branch). Head: HEAD.
-     One L4, one venv and native build, only `manabot/` swapped
-     (regenerate `base.patch` from that merge-base).
-   - Measure, ABAB interleaved, at least 3 repeats each, medians with spread:
-     damped and PPO learner steps/s at a current-recipe size (Elemental),
-     padded, `bucketed_shapes`, `live_tokens`, `precision="tf32"`;
-     `PolicyInference` obs/s for collection; `save_checkpoint` /
-     `load_checkpoint` time.
-   - Suspects to time separately if a gap shows: buckets measured on the
-     host at admission; NumPy `reference_distribution` plus its upload per
-     minibatch; host reads for `selection_diagnostics`, `value_scale`,
-     `batch_health`; the `learner.loss` closure; NumPy minibatch indexes and
-     PPO epoch order; the zip-magic sniff in `load_checkpoint`.
-   - A regression is any median slower than the run-to-run spread; fix it in
-     this PR before gate. Launch through Etude with `--max-usd 10` for the
-     whole check; record the launcher's cost once here and in the PR body.
-     A short targeted CPU run of the same harness on the laptop first, no
-     load. Rerun if the forward changes (the Prepared rewrite).
-
-Settled without change: `backend` stays typed `types.ModuleType`; the
-`BACKEND` object in `checkpoint.py` (MTG-321's published name) is the
-parity loader, the module is the backend the updates take; both read
-clearly at their call sites.
-
-Open product choice (unchanged): steer aeac5366, ship this PR with
-Remaining 1 and 2 stacked, or build them here. Steer 449b1a8e's "Rerun this
-check if the forward changes (e.g. if the Prepared rewrite lands here)"
-leaves it open. Items 1 and 2 above are needed on either answer.
+Implement direction, both built (see the next section and the speed
+passes): (1) one owner for the host recursions, torch `rl.transition_gae`
+wrapping `manabot.policy.returns`, device-side selection kept; (2) the speed
+check, steer 449b1a8e (Jack Heart: "lets give a $10 budget for making sure
+there is no performance regression on pytorch due to this change"): one L4,
+one venv and native build, only `manabot/` swapped, ABAB >= 3 repeats, a
+regression is any median slower than the run-to-run spread. Settled without
+change: `backend` stays typed `types.ModuleType`; `checkpoint.BACKEND` is
+the parity loader, the module is the backend the updates take.
 
 ## Pass after the concept review (2026-11-12)
 

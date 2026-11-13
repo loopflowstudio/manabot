@@ -32,9 +32,9 @@
 
 ## Open
 
-- Who extends `manabot/policy/prepare.py` and `checkpoint.py` to every torch
-  configuration and the `.pt` extras? #495 merged without answering steer
-  8d8dc862; assumed this Task, editing those files in place.
+- Extending `manabot/policy/prepare.py` and `checkpoint.py` to every torch
+  configuration and the `.pt` extras (steer 8d8dc862, unanswered when #495
+  merged) falls to MTG-333 with Remaining 1 and 2.
 - `save_checkpoint` keeps writing `.pt` until the container carries every
   configuration and the `.pt` extras (belief binding, `bc` value semantic);
   `load_checkpoint` reads both, choosing by the zip magic (`PK\x03\x04`).
