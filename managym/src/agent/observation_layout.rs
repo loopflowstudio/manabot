@@ -502,7 +502,7 @@ fn fact_row_kind(kind: FactKind) -> &'static str {
         FactKind::CopyException => "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance",
         FactKind::Transforms => "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count",
         FactKind::CombatRestriction => "id: frame index + 1; detail: attacker-predicate token",
-        FactKind::EffectProgram => "Copy-exception program: id: Modification token; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal; duration, timestamp, source_definition retain provenance",
+        FactKind::EffectProgram => "Rules program: id: Modification token (a copy exception, with duration, timestamp and source_definition as its provenance) or PooledMana (a player's pooled mana with a spend effect or combat expiry, one program per class and expiry, no provenance); detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal",
         FactKind::EffectiveColor => "id: Color token (Colorless for empty colors); value: 1",
         FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
         FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",

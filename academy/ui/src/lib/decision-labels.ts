@@ -48,7 +48,7 @@ export function stageLabel(stage: string): string {
     trigger_mode: 'Choose a trigger mode',
     priority: 'Choose an action', targets: 'Choose a target', mode: 'Choose a spell mode',
     additional_cost: 'Choose an additional cost', payment: 'Pay the announced cost',
-    mana_color: 'Choose mana to add', declare_attackers: 'Declare attackers',
+    mana_color: 'Choose mana to add', mana_spend: 'Choose mana to spend', declare_attackers: 'Declare attackers',
     declare_blockers: 'Declare blockers', resolution_choice: 'Choose a permanent during resolution',
     name_card: 'Name a card', private_search: 'Search cards', learn: 'Learn', private_inspection: 'Inspect cards',
     scry: 'Scry', surveil: 'Surveil', resolution_payment: 'Pay during resolution', resolution_mode: 'Choose an effect',

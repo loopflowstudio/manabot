@@ -10,7 +10,10 @@
 
 use managym::{
     agent::action::{Action, ActionSpaceKind, ActionType},
-    flow::turn::{PhaseKind, StepKind},
+    flow::{
+        decision::Decision,
+        turn::{PhaseKind, StepKind},
+    },
     state::{
         game_object::{CardId, PermanentId, PlayerId},
         target::Target,
@@ -296,6 +299,49 @@ pub fn choose_mode(s: &mut Scenario, wanted: usize) {
         .position(|a| matches!(a, Action::ChooseMode { mode, .. } if *mode == wanted))
         .unwrap();
     s.step_action(index);
+}
+
+/// Submit a native spending offer matching its public description. A color
+/// predicate must not accidentally select an "Add" offer during production.
+pub fn spend_named(s: &mut Scenario, predicate: impl Fn(&str) -> bool) {
+    assert!(
+        matches!(
+            s.game()
+                .state
+                .suspended_decision
+                .as_ref()
+                .map(|pending| &pending.decision),
+            Some(Decision::ManaSpend { .. })
+        ),
+        "expected a pending mana payment"
+    );
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let index = frame
+        .offers
+        .iter()
+        .position(|offer| predicate(&offer.label))
+        .unwrap_or_else(|| panic!("missing spend: {:?}", frame.offers));
+    s.step_action(index);
+}
+
+/// Pay the pending generic pips with ordinary, step-expiring colorless mana.
+/// Call explicitly in funded fixtures that intend to preserve their colors.
+/// Stops at the next non-spending decision; never chooses production or riders.
+pub fn spend_colorless(s: &mut Scenario) {
+    for _ in 0..256 {
+        if !matches!(
+            s.game()
+                .state
+                .suspended_decision
+                .as_ref()
+                .map(|pending| &pending.decision),
+            Some(Decision::ManaSpend { .. })
+        ) {
+            return;
+        }
+        spend_named(s, |label| label == "Spend {C} (expires at step end)");
+    }
+    panic!("colorless payment did not complete");
 }
 
 pub fn select_card(s: &mut Scenario, card: CardId) {

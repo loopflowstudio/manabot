@@ -13,7 +13,10 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     flow::{
-        decision::{Decision, EffectFrame, FrameCompletion, ResolutionRef, SuspendedResolution},
+        decision::{
+            Decision, EffectFrame, FrameCompletion, ResolutionRef, SpendCompletion,
+            SuspendedResolution,
+        },
         game::{Game, GameState},
     },
     state::{
@@ -745,6 +748,11 @@ impl Game {
             }
             Decision::LookAndSelect { looked, .. } => rebind(looked.iter_mut(), &rebinding.cards),
             Decision::OrderLibrary { cards, .. } => rebind(cards.iter_mut(), &rebinding.cards),
+            Decision::ManaSpend { completion, .. } => {
+                if let SpendCompletion::Upfront(parent) = completion.as_mut() {
+                    self.rebind_decision_selection(parent, rebinding);
+                }
+            }
             Decision::ManaUpfront {
                 resume: Some(parent),
                 ..

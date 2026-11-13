@@ -306,6 +306,9 @@ class LegacyCastPermissionView(ProtocolModel):
 
 
 class LegacyRestrictedManaView(ProtocolModel):
+    except_nonartifact_spells: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     spells: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
     abilities: list[str] = Field(
         default_factory=list, exclude_if=lambda value: not value
@@ -434,7 +437,20 @@ class SideboardCardView(ProtocolModel):
     name: str
 
 
+class PooledManaView(ProtocolModel):
+    mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32]
+    effect: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    restriction: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    combat: bool
+
+
 class LegacyPlayerView(ProtocolModel):
+    pooled_mana_classes: list[PooledManaView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+
     mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
