@@ -170,6 +170,12 @@ the digest above; `scripts/bench_states.py --recipes-file
 The library edit touches only `benchmark`-feature code, so the installed
 extension is unaffected.
 
+Those checks predate merge `82ab8e54a6`, which brought main's J22/NEC cards
+and a `flow/resolution.rs` change (no new `ManaRestriction`, no `flow/mana.rs`
+change). The recipes name their cards, but whether the digest folds catalog
+ids is unchecked: gate reruns the debug example test and the release default
+run, and the PR body cites the digest from that run.
+
 1. Gate, PR body with the state x layer table, the optimization, the two
    residual costs and the replay finding, then land. The text renderer's
    `announcement` stage gap (seen only on the recorded checkpoint) is outside
