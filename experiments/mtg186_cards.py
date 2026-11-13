@@ -92,7 +92,7 @@ from experiments.mtg186_eval import (
 )
 from manabot.eval.card_evaluation import trace_card_tables
 from manabot.eval.card_metrics import CARD_ROLLUPS
-from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.sim.matchup import AuthoredMatchup

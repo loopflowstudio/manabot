@@ -1,6 +1,5 @@
 """Native two-seat curriculum credit, post-update reassignment and exact recovery."""
 
-from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -15,7 +14,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
-    ObservationConfig,
     RewardConfig,
 )
 from manabot.training.regime import DampedPolicyLearning, Learning, TrainSelfPlay
@@ -33,7 +31,6 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
-import managym
 
 
 def _config(signal: Literal["U", "M", "E", "ME"] = "ME") -> AdaptiveConfig:
@@ -162,66 +159,3 @@ def test_adaptive_recipe_excludes_one_seat_and_static_curriculum() -> None:
             TrainSelfPlay(
                 id="train", operation="train_self_play", adaptive=config, **options
             )
-
-
-def test_current_elemental_training_exports_scored_admitted_checkpoint(
-    tmp_path: Path,
-) -> None:
-    from experiments.elemental_long import recipe
-    from manabot.backends.torch.checkpoint import load_checkpoint
-    from manabot.model.world import validate_agent_setup
-    from manabot.training.execution import execute_regime
-    from manabot.verify.store import VerifyStore
-    from tests.training.test_recovery import tracked_updates
-
-    regime = recipe(1, hours=0.05, setup_seconds=0, finalization_seconds=5)
-    regime.id = "curriculum-current-world-proof"
-    # This proof trains fresh weights on today's contract. The historical
-    # campaign recipe and its retained checkpoints keep their original identity.
-    regime.world = managym.WORLD_VERSION
-    regime.observation = ObservationConfig()
-    regime.agent.hidden_dim = 8
-    regime.agent.num_attention_heads = 2
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.execution.device = "cpu"
-    stage.streams = 2
-    stage.transitions = 2
-    stage.matchup_curriculum = "fixed"
-    keys = managym.authored_deck_keys("elemental-world-v2")
-    stage.adaptive = AdaptiveConfig(
-        signal="ME",
-        seed=17501,
-        cells=tuple(
-            MatchConfig.authored("elemental-world-v2", a, b) for a in keys for b in keys
-        ),
-    )
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        run = execute_regime(regime, 17501, tmp_path / "run", store)
-    assert run.status == "completed"
-    updates = tracked_updates(run, tmp_path / "run")
-    assert len(updates) == 1
-    diagnostic = updates[0]
-    assert diagnostic["adaptive/completed_games"] > 0
-    assert (
-        diagnostic["adaptive/completed_roles"]
-        == 2 * diagnostic["adaptive/completed_games"]
-    )
-    assert (
-        len(
-            [
-                key
-                for key in diagnostic
-                if key.startswith("adaptive/priority_probabilities/")
-            ]
-        )
-        == 100
-    )
-    assert diagnostic["adaptive/residual_count"] == sum(
-        value
-        for key, value in diagnostic.items()
-        if key.startswith("adaptive/exposures/") and key.endswith("/transitions")
-    )
-    final, _ = load_checkpoint(run.stages[0].artifacts["raw"]["path"])
-    for cell in stage.adaptive.cells:
-        validate_agent_setup(final, Match(cell).to_rust())

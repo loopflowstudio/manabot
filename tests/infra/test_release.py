@@ -68,7 +68,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (stage / "experiments").exists()
     source = json.loads((stage / ".manabot-source.json").read_text())
     assert len(source["commit"]) == 40
-    assert "manabot/training/execution.py" in source["files"]
+    assert "manabot/training/loops/self_play.py" in source["files"]
     assert "managym/decision.py" in source["files"]
     assert "protocol/experience-v1.schema.json" in source["files"]
     for name, digest in source["files"].items():

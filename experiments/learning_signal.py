@@ -13,7 +13,6 @@ within it, so the model plays both decks on the play and on the draw of that dea
 experiments/protocols/closure-lambda-v1.md and closure-lambda-elemental-v1.md.
 """
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal
 from itertools import combinations
@@ -36,7 +35,7 @@ from etude.eval.records import (
 )
 from etude.experiment import ExperimentState, TrainingRun
 from etude.jobs import evaluation
-from etude.launch.records import Job, Run
+from etude.launch.records import Job
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
 from pydantic import BaseModel, ConfigDict
 import torch
@@ -46,14 +45,13 @@ from manabot.eval.admission import register_checkpoint
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -189,40 +187,11 @@ def _environment(design: Design) -> Environment:
     )
 
 
-def training_runs(
-    recipes: Iterable[TrainingRegime],
-    *,
-    updates: int,
-    revision: str,
-    experiment: str,
-    seeds: tuple[int, ...],
-    hours: float,
-    usd_per_run: float,
-) -> list[Run]:
-    """Each arm's job, once per seed; a watchdog stop keeps its exports."""
-    wall_seconds = hours * 3600 - SETUP_SECONDS - FINALIZATION_SECONDS
-    found: list[Run] = []
-    for recipe in recipes:
-        stage = recipe.stages[0]
-        assert isinstance(stage, TrainSelfPlay)
-        recipe.wall_seconds = wall_seconds
-        stage.execution.wall_seconds = wall_seconds
-        found += (
-            TrainingJob(
-                regime=TrainingRegime.model_validate(recipe.model_dump(mode="json")),
-                experiment=experiment,
-                milestones=tuple(u for u in SCORED_UPDATES if u < updates),
-                finalization_seconds=FINALIZATION_SECONDS,
-            )
-            .job(
-                repo=ROOT,
-                revision=revision,
-                max_hours=hours,
-                max_usd=Decimal(str(usd_per_run)),
-            )
-            .runs(*seeds)
-        )
-    return found
+def training_runs(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    raise RuntimeError(
+        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
+    )
 
 
 def scheduled_matchups(run: TrainingRun, design: Design) -> list[Matchup]:

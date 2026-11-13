@@ -1,112 +1,14 @@
-"""The configured attack runner produces replayable four-leg learning curves."""
+"""Frozen attack execution refuses before creating a new cohort."""
 
-import json
 from pathlib import Path
-import signal
 
 import pytest
-import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
-from manabot.experiment import attack_execution
 from manabot.experiment.attack_execution import execute_attack_plan
-from manabot.experiment.attacks import AttackPlan, AttackTarget
-from manabot.infra.config import ModelConfig
-from manabot.infra.identity import file_sha256
-from manabot.sim.matchup import selected_match
-from manabot.training.regime import (
-    FrozenOpponent,
-    Learning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
-import managym
 
 
-def _plan(tmp_path: Path) -> AttackPlan:
-    torch.set_num_threads(1)
-    match = selected_match()
-    space = ObservationSpace()
-    config = ModelConfig(
-        hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
-    )
-    target = tmp_path / "target.pt"
-    torch.manual_seed(17)
-    save_checkpoint(
-        ActorCritic(space, config), space, target, player_configs=Match(match).to_rust()
-    )
-    plan = AttackPlan(
-        id="attack-smoke",
-        targets=(
-            AttackTarget(
-                id="target-a",
-                policy=FrozenOpponent(path=str(target), sha256=file_sha256(target)),
-                producer_seeds=(17,),
-            ),
-        ),
-        attacker_seeds=(301, 401),
-        cumulative_updates=(1, 2),
-        final_deal_seeds=(950701,),
-        template=TrainingRegime(
-            id="attacker",
-            world=managym.WORLD_VERSION,
-            match=match,
-            agent=config,
-            wall_seconds=30,
-            stages=[
-                TrainSelfPlay(
-                    id="policy",
-                    operation="train_self_play",
-                    streams=2,
-                    transitions=8,
-                    learning=Learning(epochs=1, minibatches=1, retained_fraction=1),
-                )
-            ],
-        ),
-        total_seconds=180,
-        evaluation_seconds=120,
-        game_seconds=10,
-        prediction="Workflow proof only; no strength prediction at this tiny budget.",
-    )
-    return plan
-
-
-def test_selected_world_attack_cohort_replays_all_rungs(tmp_path: Path) -> None:
-    plan = _plan(tmp_path)
-    result = execute_attack_plan(plan, tmp_path / "attack")
-    assert result.status == "completed"
-    assert len(result.runs) == 2
-    assert len(result.points) == 6
-    assert sum(point.games for point in result.points) == 24
-    assert all(
-        point.replay_passed and point.score is not None for point in result.points
-    )
-    assert {point.updates for point in result.points} == {0, 1, 2}
-    assert "2 independent attacker seeds" in (tmp_path / "attack/report.md").read_text()
-    assert file_sha256(plan.targets[0].policy.path) == plan.targets[0].policy.sha256
-
-
-def test_failed_training_is_retained_and_deadline_is_restored(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    plan = _plan(tmp_path)
-    handler = signal.getsignal(signal.SIGALRM)
-
-    def failed_training(*args: object, **kwargs: object) -> None:
-        raise RuntimeError("injected training failure")
-
-    monkeypatch.setattr(attack_execution, "execute_regime", failed_training)
-    with pytest.raises(RuntimeError, match="injected"):
-        execute_attack_plan(plan, tmp_path / "failed")
-    result = json.loads((tmp_path / "failed/result.json").read_text())
-    assert result["status"] == "failed"
-    assert len(result["run_paths"]) == 1
-    assert result["runs"] == []
-    assert "injected training failure" in result["error"]
-    assert result["seconds"] > 0
-    assert signal.getsignal(signal.SIGALRM) == handler
-    assert signal.getitimer(signal.ITIMER_REAL)[0] == 0
+def test_attack_execution_names_its_last_runnable_revision(tmp_path: Path) -> None:
+    out = tmp_path / "attack"
+    with pytest.raises(RuntimeError, match="f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"):
+        execute_attack_plan(None, out)
+    assert not out.exists()

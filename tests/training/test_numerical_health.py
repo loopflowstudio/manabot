@@ -5,10 +5,8 @@ explicit unavailable CUDA request fails; CPU results never count as CUDA proof.
 """
 
 from collections.abc import Iterator
-import json
 import os
 from pathlib import Path
-import time
 from typing import Literal
 
 import numpy as np
@@ -16,7 +14,6 @@ import pytest
 import torch
 from torch import Tensor
 
-from experiments.ataraxos_move import ataraxos_move_scalar
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner, gradient_step
 from manabot.backends.torch.policy import ActorCritic
@@ -33,9 +30,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.inference import admit_on_device
-from manabot.training import execution
-from manabot.training.records import TrainingRun
-from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
+from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     collect,
     open_collector,
@@ -43,8 +38,6 @@ from manabot.training.rollout.collection import (
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 from manabot.training.updates.selection import value_scale
-from manabot.verify.store import VerifyStore
-import managym
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
 ROOT = Path(__file__).resolve().parents[2]
@@ -427,144 +420,6 @@ def test_value_scale_reports_target_fit_and_binding_floor() -> None:
     )
     assert constant["explained_variance"] is None
     assert constant["selection_threshold"] is None and constant["floor_binds"] is None
-
-
-class _AccountingClock:
-    def __init__(self) -> None:
-        self.epoch = time.perf_counter()
-        self.elapsed = 0.0
-
-    def perf_counter(self) -> float:
-        return self.epoch + self.elapsed
-
-    def __getattr__(self, name: str) -> object:
-        return getattr(time, name)
-
-
-@pytest.mark.parametrize("fault", ["none", "capture", "telemetry"])
-def test_failed_update_retains_state_and_excludes_prior_overhead(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
-) -> None:
-    recipe = ataraxos_move_scalar()
-    recipe.world = managym.WORLD_VERSION
-    recipe.id = f"test-{recipe.world}-{recipe.id}"
-    recipe.stages = recipe.stages[:1]
-    recipe.agent.hidden_dim = 8
-    stage = recipe.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.transitions = 2
-    stage.updates = 2
-    # Fault accounting needs two tiny updates, not completion of sampled games.
-    # Keep the workload bounded as well as the injected accounting clock.
-    stage.learning_seats = "one"
-    stage.batch_closure = "exact-quota"
-    stage.execution.device = DEVICE
-    stage.learning.min_advantage = 0
-    # Charge only injected durations in the executor. Keep watchdogs and the
-    # collector's clocks real, so CPU/CUDA speed cannot decide this assertion.
-    clock = _AccountingClock()
-    monkeypatch.setattr(execution, "time", clock)
-    original_update = execution.update_damped_iteration
-    calls = [0]
-    corrupted_rows: list[int] = []
-
-    def update(*args: object, **kwargs: object) -> object:
-        calls[0] += 1
-        if calls[0] == 1:
-            result = original_update(*args, **kwargs)
-            clock.elapsed += 10.0
-            return result
-        clock.elapsed += 0.25
-        batch = args[2]
-        rows = batch.observations()
-        probabilities = torch.as_tensor(rows.probabilities).clone()
-        probabilities[-1, -1, 0] = float("nan")
-        corrupted_rows.append(probabilities.numel() // probabilities.shape[-1] - 1)
-        check_probabilities(
-            probabilities,
-            torch.as_tensor(rows.observation["actions_valid"]) > 0,
-            positive=False,
-        )
-        raise AssertionError("expected invariant failure")
-
-    original_save = VerifyStore.save_training_run
-    initial_content: bytes | None = None
-
-    def save(self: VerifyStore, run: TrainingRun) -> None:
-        nonlocal initial_content
-        if initial_content is None and run.stages:
-            initial = run.stages[0].artifacts.get("initial_raw")
-            if initial is not None:
-                initial_content = Path(initial["path"]).read_bytes()
-        if fault == "telemetry" and run.status == "failed":
-            raise OSError("fixture telemetry failure")
-        original_save(self, run)
-        # Simulates expensive initialization/persistence accumulated before the
-        # failing operation. Keep watchdog limits unchanged and generous.
-        if run.status == "running":
-            clock.elapsed += 2.0
-
-    monkeypatch.setattr(execution, "update_damped_iteration", update)
-    monkeypatch.setattr(VerifyStore, "save_training_run", save)
-    if fault == "capture":
-
-        def failed_capture(*args: object, **kwargs: object) -> list[Path]:
-            raise OSError("fixture disk failure")
-
-        monkeypatch.setattr(execution, "save_incident", failed_capture)
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        with pytest.raises(NumericalError, match="nonfinite_probabilities"):
-            execution.execute_regime(recipe, 123, tmp_path / "run", store)
-    if fault == "telemetry":
-        assert (
-            "nonfinite_probabilities"
-            in json.loads((tmp_path / "run/terminal-error.json").read_text())["error"]
-        )
-        return
-    run = json.loads((tmp_path / "run/run.json").read_text())
-    record = run["stages"][0]
-    assert run["status"] == "failed"
-    assert record["numerical_failure"]["invariant"] == "nonfinite_probabilities"
-    if fault == "capture":
-        assert "incident capture failed: OSError" in run["error"]
-        return
-    assert "incident capture failed" not in run["error"]
-    assert record["updates"] == 1
-    assert record["learning_seconds"] == pytest.approx(10.25)
-    assert record["diagnostic_seconds"] >= 2
-    artifacts = record["rejected_artifacts"]
-    assert set(artifacts) == {
-        "numerical/tensors.pt",
-        "numerical/state.pt",
-        "numerical/incident.json",
-    }
-    metadata = json.loads(
-        Path(artifacts["numerical/incident.json"]["path"]).read_text()
-    )
-    assert metadata["iteration"] == 2 and metadata["completed_updates"] == 1
-    assert metadata["schema"] == 2
-    assert "packed_actions/offsets" in metadata["tensors"]
-    assert "packed_actions/slots" in metadata["tensors"]
-    assert "packed_actions/log_probabilities" in metadata["tensors"]
-    assert metadata["source"]["training_source_sha256"]
-    tensors = torch.load(artifacts["numerical/tensors.pt"]["path"], weights_only=True)
-    assert torch.isnan(tensors["probabilities"]).any()
-    assert tensors["row_indexes"].tolist() == corrupted_rows
-    state = torch.load(artifacts["numerical/state.pt"]["path"], weights_only=False)
-    assert (
-        state["optimizer"]["state"]
-        and state["model"]
-        and state["collector_rng"].numel()
-    )
-    # Initialization is valid retained evidence; no failed replacement is exported.
-    assert set(record["artifacts"]) == {"initial_raw"}
-    assert run["selected_artifact"] is None
-    initial_path = Path(record["artifacts"]["initial_raw"]["path"])
-    assert initial_content is not None and initial_path.read_bytes() == initial_content
-    initial_agent, _ = execution.load_checkpoint(str(initial_path))
-    assert all(
-        torch.isfinite(value).all() for value in initial_agent.state_dict().values()
-    )
 
 
 @pytest.mark.parametrize("bad", [float("nan"), -1.0, 0.5])

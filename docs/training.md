@@ -32,6 +32,10 @@ launch, track and evaluate it, or bring your own.
 
 ## Run training
 
+This cutover requires the Etude run API in
+[Etude PR #103](https://github.com/loopflowstudio/etude/pull/103). SDK 0.2.16
+does not contain it; the release and dependency pin are pending before publication.
+
 ```bash
 uv run manabot train                                         # local: a two-update smoke
 uv run manabot train --recipe elemental --seed 197 --out .runs/elemental
@@ -72,7 +76,9 @@ for checking an installation. `--device cpu|mps|cuda` overrides the recipe's
 device; without it a recipe uses CUDA when available and CPU otherwise.
 `uv run manabot train --list` names every recipe the CLI can run: ours in
 `manabot.recipes`, and each experiment module's recipe functions as
-`<experiment>` or `<experiment>:<variant>`.
+`<experiment>` for modules exposing `train(config)`. An explicitly named
+`<experiment>:<function>` also accepts a function with one typed Pydantic config.
+Frozen zero-argument regime builders are data readers, not executable recipes.
 
 CPU is the default and recommended device on Apple Silicon. On a quiet Apple
 M2, MPS was slower than CPU for collection at every measured batch size, only
@@ -95,7 +101,8 @@ Before recipes were functions, a run was a saved `TrainingRegime` executed by
 `execute_regime`. Saved regime files, their `run.json` records and their
 checkpoints stay readable: `manabot.training.records` reads every retained
 record and `load_checkpoint` loads every world-bound checkpoint as before,
-with serialized keys unchanged. They no longer execute. `manabot train
+with serialized keys unchanged. They no longer execute. Their last executor revision is
+`f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653`. `manabot train
 --regime FILE` and `--regime-name` refuse, naming the last revision that runs
 them; check that revision out to reproduce a frozen experiment exactly.
 
@@ -168,7 +175,7 @@ with local_launch(out=".runs/elemental", experiment="elemental"):
 
 `self_play` (`manabot.training.loops.self_play`) is the loop every current
 recipe uses. Read it as the template for your own; its body is the loop you
-would write (shown without its game-error ledger, failure capture and outcome
+would write (shown without its game-error ledger, failure capture, initial checkpoint and outcome
 table):
 
 ```python
@@ -187,9 +194,10 @@ def self_play(
             state, row = step(state, collector, rng, updates=updates, base=base)
             if run:
                 run.log(row, updates=state.update)
-            if state.update % settings.save_every == 0:
+            checkpoint_due = state.update < updates and is_checkpoint(settings, state.update)
+            if checkpoint_due or state.update % settings.save_every == 0:
                 save_state(out / "state.pt", state)
-            if is_checkpoint(settings, state.update):
+            if checkpoint_due:
                 checkpoint = save_checkpoint(out / "checkpoints", state)
                 if run:
                     run.checkpoint(checkpoint, updates=state.update)
@@ -220,7 +228,7 @@ The pieces it uses:
 | `step(state, collector, rng, updates=, base=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `LoopState` (update and counts replaced; the learner, Adam and EMA are updated in place) with its metric row. |
 | `learn(state, batch, rng, updates=)` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Damped-policy schedules read the absolute iteration; PPO schedules read `state.update / updates`. |
 | `Tracker` | What a loop asks of a tracker: `log(values, **clocks)`, `log_table(name, rows, **clocks)`, `checkpoint(path, **clocks)` and `stopping()`. Etude's `Run` is one; pass `None` to train with no tracking. |
-| `Stopped` | Etude's planned-stop exception (`etude.train.run.Stopped`); the loop raises it after saving, short of its target. |
+| `Stopped` | Etude's planned-stop exception (`etude.stopping.Stopped`); the loop raises it after saving, short of its target. |
 
 `run.stopping()` is asked once per update. The loop then saves its state and
 raises `Stopped`, and the next call carries on from that update. There is no
@@ -262,7 +270,7 @@ def train(config: BeliefConfig) -> None:
                seed=config.seed, config=config.model_dump(mode="json")) as run:
         updates = int(run.until("updates", default=config.updates))
         policy = self_play(settings, run.out / "policy", seed=config.seed,
-                           updates=updates, run=run)   # policy/checkpoints/00000064-ema.pt
+                           updates=updates, run=run)   # policy/checkpoints/00000064-raw.pt
         histories = collect_belief(policy, run.out / f"histories-{policy.stem}.json",
                                    match=root_match(settings), games=config.games,
                                    seed=config.seed)
@@ -272,7 +280,7 @@ def train(config: BeliefConfig) -> None:
 ```
 
 Run to 64 updates and then to 128, the directory holds
-`histories-00000064-ema.json` and `histories-00000128-ema.json`, each with its
+`histories-00000064-raw.json` and `histories-00000128-raw.json`, each with its
 own sampler; nothing made from the earlier policy is overwritten or mistaken
 for the later one's.
 
@@ -316,8 +324,6 @@ evaluation output with its own clock. The selection rule is
 
 ### Schedules and clocks
 
-A loop's schedules are functions of the absolute update count, so a resumed
-loop and one that was never interrupted use the same rates at every update.
 Damped-policy (Ataraxos) schedules use their absolute iteration formulas, so
 moving `updates` changes only where training stops. PPO (`Learning`) schedules
 read the fraction of `updates` completed, so for PPO the target also sets the
@@ -329,8 +335,8 @@ a budget; they run only from the revision [saved regimes](#saved-regimes) names.
 ### Learning from both seats
 
 `SelfPlay.learning_seats` defaults to `"both"` for current-self and
-EMA-self training; `"one"` is the ablation control. Random and frozen
-opponents default to one seat and are never trained on. The default is a
+EMA-self training; `"one"` is the ablation control. Random behavior requires an explicit one-seat setting. Frozen-opponent
+regimes run from their recorded revision; the current loop has no frozen opponent. The default is a
 choice, not a measured strength or cost gain.
 
 Both-seat collection records each acting seat's behavior outputs; each seat
@@ -368,7 +374,7 @@ its exact-quota attackers; schema 2 uses the template's closure.
 
 ### Costs and counters
 
-Each update logs collection, optimization and checkpoint time separately from
+Each update logs collection and optimization time separately from
 evaluation, with complete games, environment decisions, `learner_transitions`,
 `optimizer_updates` (completed `optimizer.step()` calls) and
 `optimizer_exposures` (sample uses across minibatches); `updates` is the
@@ -390,10 +396,11 @@ that record compound fields remain readable.
 
 ### Selection diagnostics
 
-`collect_selection(policy, out, population)` (`manabot.training.rollout.selection_data`)
+`collect_selection(policy, out, population, match=...)` (`manabot.training.rollout.selection_data`)
 freezes a checkpoint's raw or EMA policy and collects a declared population
 with unique seeds and whole-game development/held-out splits; no weights
-change. Like every step it returns at once when `out` exists. Scalar and
+change. It returns at once when `out` binds the same policy, population, match,
+reference and step cap; a different request refuses. Scalar and
 categorical values are supported; belief-input policies are not. The protocol
 is in
 [ataraxos-omitted-controls](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
@@ -448,7 +455,7 @@ from manabot.recipes.elemental import ElementalConfig, train
 def runs() -> list[Job]:
     return [
         training(train, config=ElementalConfig(seed=seed, updates=3200),
-                 smoke=ElementalConfig(seed=seed, updates=1),
+                 smoke=ElementalConfig(seed=seed, updates=1, streams=2),
                  max_hours=12, max_usd=Decimal(9))
         for seed in (197, 198)
     ]
@@ -721,7 +728,7 @@ MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest tests/model/test_semantic_card_
 
 A terminal numerical error ends the attempt with the invariant, attempted
 update and update health in its error, and writes a private
-`numerical-incident/` directory under `run.out`: `incident.json` (identities, shapes,
+`numerical-incident/<failure>/` directory under `run.out`: `incident.json` (identities, shapes,
 extrema, counts), `tensors.pt` (up to 16 offending rows and 32 MiB, plus the
 triggering minibatch for optimizer failures) and `state.pt` (learner, Adam,
 EMA, gradients and RNGs, up to 512 MiB). These may contain invalid state; they

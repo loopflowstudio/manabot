@@ -25,7 +25,7 @@ from manabot.training.rollout.collection import (
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
-from tests.training.test_recovery import recipe
+from tests.model.policy_fixture import recipe
 
 
 def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:

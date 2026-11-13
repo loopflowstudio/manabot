@@ -20,12 +20,14 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import authored_matchup_sha256, runtime_fingerprints
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.inference import PolicyInference
-from manabot.model.world import checkpoint_world, validate_agent_setup
+from manabot.model.world import (
+    checkpoint_world,
+    validate_agent_decks,
+    validate_agent_setup,
+)
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.execution import _runtime_identities, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
@@ -34,7 +36,6 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
-from manabot.training.state.admission import _admit_setups
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorPolicy,
@@ -42,7 +43,7 @@ from manabot.training.state.game_errors import (
     open_ledger,
     replay_attempt,
 )
-from manabot.training.state.recovery import admit_recovery_identities
+from manabot.training.validation import validate_regime
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 
@@ -313,10 +314,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             load_checkpoint(str(path))
 
     # Producer admission for a deck run checks the world, not one pair.
-    regime = _regime(decks)
-    _admit_setups(policy, regime)
-    with pytest.raises(ValueError, match="bound to a world"):
-        _admit_setups(_agent(), regime)
+    validate_agent_decks(policy, decks.players())
     # A setup-bound checkpoint plays only its roster, under the shared rule.
     authored = deepcopy(policy)
     authored.world_binding = checkpoint_world(
@@ -327,7 +325,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         ObservationSpace(),
     )
     with pytest.raises(ValueError, match="outside checkpoint's exact setup roster"):
-        _admit_setups(authored, regime)
+        validate_agent_decks(authored, decks.players())
 
     # The same model collects from a later supply it never trained on.
     later = _uniform("Swamp", "Forest")
@@ -434,44 +432,6 @@ def test_failure_records_actual_sampled_decks(
             ]
     finally:
         close_collector(collector)
-
-
-def test_deck_run_identities_name_the_source_not_a_pair(
-    decks: UniformDecks,
-) -> None:
-    space = ObservationSpace()
-    regime = _regime(decks)
-    identities = _runtime_identities(7, regime, space)
-    assert "matchup" not in identities and "matchup_sha256" not in identities
-    assert identities["deck_source_sha256"] == decks.digest
-    assert "content_pool" not in identities
-    opened = runtime_fingerprints(
-        7, match_config=regime.root_match, observation_space=space
-    )
-    for name in ("content_manifest_sha256", "observation_abi_sha256"):
-        assert identities[name] == opened[name]
-    with pytest.raises(ValueError, match="monitoring requires an authored matchup"):
-        authored_matchup_sha256(identities, "monitoring")
-
-    changed = _regime(_uniform("Plains", "Swamp"))
-    with pytest.raises(ValueError, match="recovery runtime/source identity mismatch"):
-        admit_recovery_identities(
-            identities, _runtime_identities(7, changed, space), None
-        )
-
-    authored = TrainingRegime.model_validate(
-        {
-            **regime.model_dump(mode="json", exclude={"deck_source"}),
-            "match": decks.match_config().model_dump(),
-        }
-    )
-    recorded = _runtime_identities(7, authored, space)
-    fingerprints = runtime_fingerprints(
-        7, match_config=authored.match, observation_space=space
-    )
-    assert {k: recorded[k] for k in fingerprints} == fingerprints
-    assert "deck_source_sha256" not in recorded
-    assert authored_matchup_sha256(recorded, "monitoring") == recorded["matchup_sha256"]
 
 
 def test_independent_population_retains_event_ids_and_mirrors() -> None:

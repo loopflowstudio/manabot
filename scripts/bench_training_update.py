@@ -29,17 +29,14 @@ the checkouts being compared and retain the timing spread.
 
 import argparse
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import contextmanager
 import importlib
 import json
 from pathlib import Path
-import tempfile
 import warnings
 
-from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.verify.store import VerifyStore
+from manabot.training.validation import validate_regime
 import managym
 
 RECIPE = Path(__file__).parents[1] / "experiments/regimes/elemental-long-183-v1.json"
@@ -152,23 +149,11 @@ def main() -> None:
             print(f"{label:10} {path:64} {micros:9.1f} us/decision")
 
 
-def _execute(
-    regime: TrainingRegime, seed: int, keep: Path | None, counts: Path | None
-) -> TrainingRun:
-    """Run the regime in `keep`, or in a temporary folder deleted afterwards."""
-    folder: AbstractContextManager[str | Path] = (
-        tempfile.TemporaryDirectory(prefix="bench-update-")
-        if keep is None
-        else nullcontext(keep)
+def _execute(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    raise RuntimeError(
+        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
     )
-    with folder as name:
-        out = Path(name)
-        out.mkdir(parents=True, exist_ok=True)
-        counting: AbstractContextManager[None] = (
-            nullcontext() if counts is None else _cuda_counts(counts)
-        )
-        with VerifyStore(out / "runs.sqlite") as store, counting:
-            return execute_regime(regime, seed, out / "run", store)
 
 
 if __name__ == "__main__":

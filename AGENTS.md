@@ -358,7 +358,7 @@ admission. Admission-rejection fixtures must mark the config as submitted
 - Artifact storage and Etude integration tests require the `artifacts` extra.
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
-  `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q`.
+  `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py -q`.
 - Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
   `bench_steps` in release for the change and for the reference commit of
   `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
@@ -626,3 +626,8 @@ and native imports. Load the evaluation projection only for evaluation inputs;
 keep its simulation dependencies off the LLM-only path. Check this boundary in a
 fresh process with those imports blocked, and exercise mixed reports through the
 actual builder CLI in the existing headless Perf proof.
+
+Etude launched source is an extracted commit without `.git`. Read its revision
+through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
+loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
+continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.

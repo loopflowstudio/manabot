@@ -23,7 +23,7 @@ from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.recipes.baseline import baseline_test
+from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     RolloutBatch,
@@ -92,9 +92,9 @@ def main() -> None:
     args = _arguments()
     torch.manual_seed(args.seed)
     torch.set_num_threads(1)
-    regime = baseline_test(steps=2).regime
+    regime = settings(BaselineConfig(updates=2, device="cpu"))
     space = ObservationSpace(regime.observation)
-    agent = ActorCritic(space, regime.agent)
+    agent = ActorCritic(space, regime.model)
     learning = DampedPolicyLearning(
         gradient="damped_policy",
         policy_lambda=args.policy_lambda,

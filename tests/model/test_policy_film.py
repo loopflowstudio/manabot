@@ -12,8 +12,8 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.admission import admit_observation
-from manabot.recipes.baseline import baseline_test
-from manabot.recipes.local import local_smoke
+from manabot.recipes.baseline import BaselineConfig, settings
+from manabot.recipes.local import LocalConfig
 from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
 
 SPEC = {"hidden_dim": 32, "num_attention_heads": 2, "attention_feedforward_dim": 64}
@@ -32,9 +32,9 @@ def test_disabled_film_preserves_serialized_spec() -> None:
 
 
 def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:
-    assert local_smoke(device="cpu").agent.policy_film
-    recipe = baseline_test(1)
-    assert recipe.version == "baseline-v3" and recipe.regime.agent.policy_film
+    assert settings(LocalConfig()).model.policy_film
+    recipe = settings(BaselineConfig(updates=1, device="cpu"))
+    assert recipe.model.policy_film
     assert not ModelConfig.model_validate({"hidden_dim": 64}).policy_film
 
 

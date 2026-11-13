@@ -348,7 +348,7 @@ def runs(revision: str, hours: str = "1.0", usd: str = "3.00") -> Any:
     """One L4 job at `revision`."""
     from etude.launch.records import Job
 
-    from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+    from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 
     return Job(
         name="mtg328-eval-forward-layout",

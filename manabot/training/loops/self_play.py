@@ -7,12 +7,10 @@ finished loop returns its final policy at once. Nothing else drives it: there
 is no executor, attempt record or lease here. A tracker (`Tracker`, which
 Etude's run satisfies) receives rows, checkpoints and the stop signal.
 
-The module is data and functions. `SelfPlay` is the settings (a Pydantic model
-so a recipe config that holds one serializes); `LoopState` is the learner a
+The module is data and functions. `SelfPlay` is the validated settings; `LoopState` is the learner a
 loop carries. `step` makes one update and returns the next state; the loop
 body is `state = step(...)` plus saving, logging and checkpoints, each one
-call. `new_state`, `load_state`, `save_state`, `save_checkpoint` and
-`save_final` are the state file and the published policies.
+call. `new_state`, `load_state`, `save_state`, `save_checkpoint` implement the state file and the published policies.
 
 Seeds. With run seed `s` and starting update `u` (0 for a fresh loop): model
 initialization uses `s`; native streams `s + 10000 + u`; Torch, NumPy and
@@ -22,7 +20,7 @@ regime, so the same seed produces the same updates and checkpoints. A resumed
 loop starts fresh, reproducible streams at the update it resumes from.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import asdict, dataclass, replace
@@ -30,7 +28,9 @@ import os
 from pathlib import Path
 import time
 from typing import Literal, Protocol
+from uuid import uuid4
 
+from etude.stopping import Stopped
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
@@ -42,6 +42,8 @@ from manabot.backends.torch.checkpoint import (
 )
 from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.random import seed_random
+from manabot.backends.torch.rl import NumericalError
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -52,18 +54,18 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.runtime import seed_random
-from manabot.infra.source import source_commit
-from manabot.model.world import validate_agent_setup
+from manabot.model.world import (
+    checkpoint_source,
+    validate_agent_decks,
+    validate_agent_setup,
+)
 from manabot.training.decks import UniformDecks
+from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     BatchClosure,
     DampedPolicyLearning,
-    Execution,
     Learning,
     Precision,
-    TrainingRegime,
-    TrainSelfPlay,
 )
 from manabot.training.rollout.collection import (
     Collector,
@@ -73,6 +75,7 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
+from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -83,6 +86,7 @@ from manabot.training.state.game_errors import (
     append_attempt,
     open_ledger,
 )
+from manabot.training.state.incidents import save_incident
 from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
@@ -139,53 +143,68 @@ class SelfPlay(BaseModel):
     checkpoint_every: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
-    def _runs_here(self) -> "SelfPlay":
-        from manabot.training.execution import validate_regime
-
-        validate_regime(to_regime(self, id="self-play", updates=1))
+    def valid_settings(self) -> "SelfPlay":
+        if self.world != managym.WORLD_VERSION:
+            raise ValueError("self-play world differs from native runtime")
+        if (self.match is None) == (self.deck_source is None):
+            raise ValueError("self-play needs exactly one match or deck source")
+        if self.model.value_kind == "categorical_wdl" and not isinstance(
+            self.learning, DampedPolicyLearning
+        ):
+            raise ValueError("categorical outcome training requires damped_policy")
+        if self.model.belief_count_buckets:
+            raise ValueError("self-play does not produce belief inputs")
+        if self.precision != "float32" and self.device != "cuda":
+            raise ValueError(f"precision {self.precision} requires CUDA")
+        if self.live_tokens and self.device != "cuda":
+            raise ValueError("live tokens require CUDA")
+        if self.device == "mps" and (error := mps_torch_error()) is not None:
+            raise ValueError(error)
+        if self.workers > self.streams:
+            raise ValueError("producer count cannot exceed streams")
+        if self.learning_seats == "both" and (
+            self.behavior == "random" or self.batch_closure == "exact-quota"
+        ):
+            raise ValueError("both learning seats require complete-game self-play")
+        if self.batch_closure == "exact-quota":
+            if self.games_per_stream is not None:
+                raise ValueError("games_per_stream requires complete games")
+            if self.game_errors is not None and not self.game_errors.recover_capacity:
+                raise ValueError("game error recovery requires complete games")
+        if self.behavior == "ema-self" and self.learning.ema is None:
+            raise ValueError("ema-self behavior requires an EMA rate")
+        if self.matchup_curriculum == "elemental-uniform":
+            if self.behavior != "current-self":
+                raise ValueError("elemental-uniform requires current-self")
+            elemental_roster(Match(root_match(self)))
+            if self.model.world != "elemental-world-v2":
+                raise ValueError(
+                    "elemental-uniform requires complete Elemental policy input"
+                )
+        elif self.matchup_curriculum != "fixed":
+            width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
+            if self.streams % width or self.behavior != "current-self":
+                raise ValueError(
+                    "balanced matchups require current-self and complete stream strata"
+                )
+        if self.deck_source is not None:
+            if self.behavior != "current-self" or self.matchup_curriculum != "fixed":
+                raise ValueError(
+                    "a deck source requires current-self and no curriculum"
+                )
+            self.deck_source.check()
+            if self.model.world != managym.WORLD_SETUP:
+                raise ValueError(
+                    "a deck source requires the complete world policy vocabulary"
+                )
+        if self.model.recent_events and (
+            self.model.world is None or not 1 <= self.observation.max_events <= 32
+        ):
+            raise ValueError("recent events require a world and 1..32 event rows")
+        self.observation = self.observation.model_copy(
+            update={"policy_history_version": 1 if self.model.recent_events else 0}
+        )
         return self
-
-
-def to_regime(settings: SelfPlay, *, id: str, updates: int) -> TrainingRegime:
-    """The one-stage saved-regime form of `settings`.
-
-    Validation reuses the regime's checks, and the parity test runs the
-    retired executor on it. Wall and memory limits are left to the tracker.
-    """
-    stage = TrainSelfPlay(
-        id="self-play",
-        operation="train_self_play",
-        behavior=settings.behavior,
-        updates=updates,
-        streams=settings.streams,
-        transitions=settings.transitions,
-        games_per_stream=settings.games_per_stream,
-        learning_seats=settings.learning_seats,
-        batch_closure=settings.batch_closure,
-        matchup_curriculum=settings.matchup_curriculum,
-        learning=settings.learning.model_copy(deep=True),
-        game_errors=settings.game_errors,
-        execution=Execution(
-            device=settings.device,
-            precision=settings.precision,
-            workers=settings.workers,
-            threads=settings.threads,
-            wall_seconds=1e9,
-            bucketed_shapes=settings.bucketed_shapes,
-            live_tokens=settings.live_tokens,
-        ),
-    )
-    return TrainingRegime(
-        id=id,
-        world=settings.world,
-        match=settings.match,
-        deck_source=settings.deck_source,
-        observation=settings.observation,
-        agent=settings.model,
-        stages=[stage],
-        wall_seconds=1e9,
-        schedule_clock="iteration_fraction",
-    )
 
 
 def root_match(settings: SelfPlay) -> MatchConfig:
@@ -256,17 +275,11 @@ class Tracker(Protocol):
         self, name: str, rows: list[dict[str, object]], /, **clocks: float
     ) -> object: ...
 
-    def checkpoint(self, path: Path, /, **clocks: float) -> object: ...
+    def checkpoint(
+        self, path: Path, /, *, tags: Sequence[str] = (), **clocks: float
+    ) -> object: ...
 
     def stopping(self) -> bool: ...
-
-
-class Stopped(Exception):
-    """The loop saved its state at `update` and stopped before its target."""
-
-    def __init__(self, update: int) -> None:
-        super().__init__(f"stopped at update {update}; run again to resume")
-        self.update = update
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +352,10 @@ def _pretrained(settings: SelfPlay, space: ObservationSpace) -> dict[str, torch.
         or published_space.encoder.config != space.encoder.config
     ):
         raise ValueError("pretrained policy has other model or observation configs")
-    validate_agent_setup(published, Match(root_match(settings)).to_rust())
+    if settings.deck_source is not None:
+        validate_agent_decks(published, settings.deck_source.players())
+    else:
+        validate_agent_setup(published, Match(root_match(settings)).to_rust())
     weights = published.state_dict()
     if any(not torch.isfinite(v).all() for v in weights.values()):
         raise ValueError("pretrained policy contains nonfinite tensors")
@@ -406,7 +422,7 @@ def save_state(path: Path, state: LoopState) -> None:
             "world": state.settings.world,
             "seed": state.seed,
             "settings": learner_digest(state.settings),
-            "source_commit": source_commit(),
+            "source_commit": checkpoint_source()["commit"],
             "update": state.update,
             "counts": asdict(state.counts),
             "raw": state.learner.agent.state_dict(),
@@ -421,6 +437,8 @@ def save_state(path: Path, state: LoopState) -> None:
 def _save_policy(
     model: ActorCritic, state: LoopState, path: Path, weights: Literal["raw", "ema"]
 ) -> Path:
+    if path.exists():
+        return path
     temporary = path.with_name(f".{path.name}.tmp")
     # A deck-source run binds the world (`None`); a fixed match binds its setups.
     players = (
@@ -458,20 +476,13 @@ def _save_policy(
 
 
 def save_checkpoint(directory: Path, state: LoopState) -> Path:
-    """World-bound raw (returned) and EMA policies at this update, named by update."""
+    """Write immutable raw/EMA policies; return EMA when kept, otherwise raw."""
     directory.mkdir(parents=True, exist_ok=True)
     name = f"{state.update:08d}"
     raw = _save_policy(state.learner.agent, state, directory / f"{name}-raw.pt", "raw")
     if state.ema is not None:
-        _save_policy(state.ema, state, directory / f"{name}-ema.pt", "ema")
+        return _save_policy(state.ema, state, directory / f"{name}-ema.pt", "ema")
     return raw
-
-
-def save_final(path: Path, state: LoopState) -> Path:
-    """The EMA policy (raw without EMA) at the last completed update."""
-    if state.ema is not None:
-        return _save_policy(state.ema, state, path, "ema")
-    return _save_policy(state.learner.agent, state, path, "raw")
 
 
 # ---------------------------------------------------------------------------
@@ -541,15 +552,34 @@ def step(
     *,
     updates: int,
     base: Counts,
+    out: Path | None = None,
 ) -> tuple[LoopState, dict[str, object]]:
     """Collect one batch, learn from it, and return the next state and its metric row."""
     device = state.settings.device
     started = time.perf_counter()
-    batch = collect(collector, behavior(state), state.settings.transitions)
-    _synchronize(device)
-    collected = time.perf_counter()
-    metrics = learn(state, batch, rng, updates=updates)
-    _synchronize(device)
+    batch: RolloutBatch | None = None
+    try:
+        batch = collect(collector, behavior(state), state.settings.transitions)
+        _synchronize(device)
+        collected = time.perf_counter()
+        metrics = learn(state, batch, rng, updates=updates)
+        _synchronize(device)
+    except NumericalError as error:
+        if out is not None:
+            try:
+                save_incident(
+                    out / "numerical-incident" / uuid4().hex,
+                    error,
+                    state,
+                    collector,
+                    batch,
+                    rng,
+                    out=out,
+                    settings_digest=learner_digest(state.settings),
+                )
+            except Exception as capture_error:
+                error.add_note(f"incident capture failed: {capture_error}")
+        raise
     state = replace(
         state,
         update=state.update + 1,
@@ -632,21 +662,21 @@ def self_play(
     stops; raises `Stopped` when `run.stopping()` ends it early. Run it again
     to carry on.
     """
+    settings = SelfPlay.model_validate(settings.model_dump())
     if updates < 1:
         raise ValueError("updates must be positive")
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    final = out / "final.pt"
     with _device(settings):
         state = load_state(out / "state.pt", settings, seed)
         if state is None:
-            if final.exists():
-                raise ValueError(f"{final} has no state.pt to validate or resume")
+            if any((out / "checkpoints").glob("*.pt")):
+                raise ValueError(
+                    "checkpoints exist without state.pt; choose a fresh output directory"
+                )
             state = new_state(settings, seed)
         if state.update >= updates:
-            return final if final.exists() else save_final(final, state)
-        # A later target invalidates the earlier endpoint, including during a stop.
-        final.unlink(missing_ok=True)
+            return record_checkpoint(out, state, run, final=True)
 
         # Only the learner is durable. Each attempt starts fresh random streams
         # and adds its collector's totals to the counts saved before it.
@@ -676,27 +706,37 @@ def self_play(
         try:
             with capture_scope(failures):
                 if state.update == 0 and is_checkpoint(settings, 0):
-                    _checkpoint(out, state, run)
+                    save_state(out / "state.pt", state)
+                    record_checkpoint(out, state, run)
                 while state.update < updates and not (run and run.stopping()):
-                    state, row = step(state, collector, rng, updates=updates, base=base)
+                    state, row = step(
+                        state, collector, rng, updates=updates, base=base, out=out
+                    )
                     if run:
                         run.log(row, updates=state.update)
                         if settings.behavior != "random":
                             outcomes = collector.stats.self_play.drain()
                             run.log_table(OUTCOME_TABLE, outcomes, updates=state.update)
-                    if state.update % settings.save_every == 0:
+                    checkpoint_due = state.update < updates and is_checkpoint(
+                        settings, state.update
+                    )
+                    # Commit resume state once, before publishing immutable policy bytes.
+                    if checkpoint_due or state.update % settings.save_every == 0:
                         save_state(out / "state.pt", state)
-                    if is_checkpoint(settings, state.update):
-                        _checkpoint(out, state, run)
+                    if checkpoint_due:
+                        record_checkpoint(out, state, run)
         finally:
             close_collector(collector)
         save_state(out / "state.pt", state)
         if state.update < updates:
-            raise Stopped(state.update)
-        return save_final(final, state)
+            raise Stopped(f"stopped at update {state.update}; run again to resume")
+        return record_checkpoint(out, state, run, final=True)
 
 
-def _checkpoint(out: Path, state: LoopState, run: Tracker | None) -> None:
+def record_checkpoint(
+    out: Path, state: LoopState, run: Tracker | None, *, final: bool = False
+) -> Path:
     path = save_checkpoint(out / "checkpoints", state)
     if run:
-        run.checkpoint(path, updates=state.update)
+        run.checkpoint(path, updates=state.update, tags=("final",) if final else ())
+    return path

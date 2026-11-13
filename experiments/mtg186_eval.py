@@ -72,7 +72,7 @@ from experiments.elemental_grid import (
 )
 from experiments.mtg186 import CAP_USD, LAUNCHES, MILESTONES, ROOT, SEED, STORAGE
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration

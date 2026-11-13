@@ -15,7 +15,8 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from manabot.eval.monitor import MonitorProtocol
-from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.experiment.checkpoint_evaluation import Checkpoint, stage_checkpoint
+from manabot.infra.identity import canonical_sha256
 from manabot.sim.threads import effective_cpus
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -25,6 +26,69 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+
+
+class MonitoringBudget(Strict):
+    """Execution allocation, frozen before training; never a scientific protocol."""
+
+    seconds: float = Field(gt=0)
+    attempt_seconds: float = Field(default=600, gt=0)
+    protocol: MonitorProtocol = Field(default_factory=MonitorProtocol)
+    active_runtime: bool = Field(default=False, exclude_if=lambda value: not value)
+    include_initial: bool = Field(default=False, exclude_if=lambda value: not value)
+    include_monitoring: bool = Field(default=True, exclude_if=lambda value: value)
+    updates: tuple[int, ...] = Field(default=(), exclude_if=lambda value: not value)
+    require_initial_admission: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    additional_protocols: tuple[MonitorProtocol, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
+    terminal_protocols: tuple[MonitorProtocol, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
+
+    @model_validator(mode="after")
+    def separate_terminal_deals(self) -> "MonitoringBudget":
+        if self.require_initial_admission and not self.include_initial:
+            raise ValueError("initial admission requires initialization evaluation")
+        protocols = (self.protocol, *self.additional_protocols)
+        if len({canonical_sha256(p.model_dump()) for p in protocols}) != len(protocols):
+            raise ValueError("duplicate monitoring protocols")
+        used = {seed for p in protocols for seed in p.deal_seeds}
+        for protocol in self.terminal_protocols:
+            if used.intersection(protocol.deal_seeds):
+                raise ValueError(
+                    "terminal and monitoring deal cohorts must be disjoint"
+                )
+            used.update(protocol.deal_seeds)
+        return self
+
+    def protocols_for(
+        self, run: TrainingRun, checkpoint: Checkpoint
+    ) -> list[MonitorProtocol]:
+        """Select final cohorts only for the last completed stage's raw artifact."""
+        if (
+            self.terminal_protocols
+            and run.stages
+            and run.stages[-1].status == "completed"
+        ):
+            final = stage_checkpoint(run, run.regime.stages[-1].id)
+            if final is not None and final.artifact == checkpoint.artifact:
+                return list(self.terminal_protocols)
+        return [self.protocol, *self.additional_protocols]
+
+
+class Attempt(Strict):
+    ordinal: int
+    identity: str
+    job_sha256: str
+    status: Literal["running", "completed", "failed", "interrupted"] = "running"
+    reserved_seconds: float
+    started_unix: float | None = None
+    finished_unix: float | None = None
+    charged_seconds: float = 0
+    error: str | None = None
 
 
 class StepCalibration(Strict):

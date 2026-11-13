@@ -7,29 +7,16 @@ from pydantic import ValidationError
 import pytest
 import torch
 
-from experiments import training_throughput_packing as packing
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch import learner as torch_learner
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.experiment.job import TrainingJob
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.infra.identity import canonical_sha256
 from manabot.training.regime import DampedPolicyLearning, Execution, Precision
 from manabot.training.rollout.collection import close_collector, collect, open_collector
 from manabot.training.updates.damped_policy import update_damped_iteration
-
-
-def test_float32_regimes_keep_their_bytes() -> None:
-    # The D1 packing regime omits the input version, so it resolves to v9.
-    d1 = TrainingJob.model_validate_json(packing.runs("HEAD", "d1")[0].job.config or "")
-    assert (
-        canonical_sha256(d1.regime.model_dump(mode="json"))
-        == "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
-    )
-    assert Execution().model_dump()["precision"] == "float32"
 
 
 @pytest.mark.parametrize("declared", ["tf32", "bf16"])

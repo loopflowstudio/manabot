@@ -70,3 +70,22 @@ def test_bundle_reads_committed_bytes_not_the_working_tree(tmp_path: Path) -> No
     bundle = source_bundle.bundle_at(tmp_path, "HEAD")
     assert len(bundle.commit) == 40
     assert bundle.files == {"a.py": hashlib.sha256(b"committed").hexdigest()}
+
+
+def test_launched_archive_uses_etudes_commit_without_git(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        source_bundle, "__file__", str(tmp_path / "manabot/infra/source.py")
+    )
+    monkeypatch.setenv("ETUDE_SOURCE_DIR", str(tmp_path))
+    monkeypatch.setenv("ETUDE_COMMIT", "b" * 40)
+    source_bundle.source_commit.cache_clear()
+    source_bundle.source_dirty.cache_clear()
+    try:
+        assert source_bundle.source_commit() == "b" * 40
+        assert source_bundle.source_dirty() is None
+    finally:
+        source_bundle.source_commit.cache_clear()
+        source_bundle.source_dirty.cache_clear()

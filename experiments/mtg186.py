@@ -102,7 +102,9 @@ def experiment() -> Experiment:
 
 def train(revision: str) -> tuple[Run, ...]:
     """The one training run, frozen at an explicit committed revision."""
-    return experiment().runs(repo=ROOT, revision=revision)
+    raise RuntimeError(
+        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
+    )
 
 
 def identity() -> dict[str, object]:

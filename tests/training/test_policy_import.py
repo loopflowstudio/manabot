@@ -1,6 +1,5 @@
 """Fixed-weight published fixtures: no optimizer or scientific cohort runs."""
 
-import json
 from pathlib import Path
 from typing import Literal
 
@@ -9,24 +8,20 @@ import torch
 
 from manabot.backends.torch.checkpoint import save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.belief.sampling_data import read_dataset
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
     CollectBelief,
     ImportPolicy,
     Learning,
-    ProducerCost,
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.verify.store import VerifyStore
 import managym
 
 
@@ -122,123 +117,6 @@ def published_fixture(
     )
 
 
-@pytest.mark.parametrize("weights", ["raw", "ema"])
-def test_saved_policy_consumers_and_costs(
-    tmp_path: Path, weights: Literal["raw", "ema"]
-) -> None:
-    recipe = published_fixture(tmp_path, weights)
-    imported = recipe.stages[0]
-    assert isinstance(imported, ImportPolicy)
-    recipe.stages.extend(
-        [
-            CollectBelief(
-                id="histories",
-                operation="collect_belief",
-                policy="policy",
-                weights=weights,
-                games=3,
-                max_steps=1000,
-            ),
-        ]
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 112, tmp_path / "run", store)
-        assert run.status == "completed", run.error
-        assert store.training_run(run.id) == run
-    admission = run.stages[0]
-    assert admission.producer_cost is not None
-    assert admission.producer_cost.cumulative_seconds == 12.0
-    assert admission.producer_cost.weights == weights
-    assert admission.seconds > 0 and admission.export_seconds > 0
-    assert admission.learning_seconds == admission.collection_seconds == 0
-    assert all(s.optimizer_exposures == 0 for s in run.stages)
-    assert run.stages[1].games == 3
-    assert ("raw" in admission.artifacts) == (weights == "raw")
-    assert (run.selected_artifact is None) == (weights == "ema")
-    dataset = read_dataset(Path(run.stages[1].artifacts["dataset"]["path"]))
-    assert dataset.policy_identity == imported.checkpoint["sha256"]
-    # The import is self-contained after the original publication is unavailable.
-    Path(imported.checkpoint["path"]).unlink()
-    assert (
-        file_sha256(admission.artifacts[weights]["path"])
-        == imported.checkpoint["sha256"]
-    )
-    assert (
-        file_sha256(admission.artifacts["source_run"]["path"])
-        == imported.source_run["sha256"]
-    )
-
-
-@pytest.mark.parametrize(
-    "fault,match",
-    [
-        ("missing", "FileNotFoundError"),
-        ("checkpoint_hash", "hash/size"),
-        ("receipt_hash", "hash/size"),
-        ("model", "model/observation/world"),
-        ("observation", "model/observation/world"),
-        ("setup", "setup differs"),
-        ("weight", "weight artifact"),
-        ("metadata", "metadata mismatch"),
-        ("cost", "cost is unavailable"),
-        ("provenance", "source provenance"),
-        ("incomplete", "completed producer"),
-        ("ema_identity", "averaging identity"),
-    ],
-)
-def test_rejects_and_persists_failed_admission(
-    tmp_path: Path, fault: str, match: str
-) -> None:
-    recipe = published_fixture(tmp_path, "ema" if fault == "ema_identity" else "raw")
-    stage = recipe.stages[0]
-    assert isinstance(stage, ImportPolicy)
-    path = Path(stage.checkpoint["path"])
-    export = Path(stage.source_run["path"])
-    source = TrainingRun.model_validate_json(export.read_text())
-    if fault == "missing":
-        path.unlink()
-    elif fault == "checkpoint_hash":
-        path.write_bytes(b"tampered")
-    elif fault == "receipt_hash":
-        export.write_text("{}")
-    elif fault == "model":
-        recipe.agent.hidden_dim = 16
-    elif fault == "observation":
-        recipe.observation.max_cards_per_player += 1
-    elif fault == "setup":
-        recipe.match.hero_deck = {"Mountain": 16}
-    elif fault == "weight":
-        stage.weights = "ema"
-    elif fault in {"metadata", "ema_identity"}:
-        payload = torch.load(path, weights_only=False)
-        if fault == "metadata":
-            payload["bc"]["run_id"] = "different-producer"
-        else:
-            payload["bc"]["averaging"]["rate"] = 0.2
-        torch.save(payload, path)
-        stage.checkpoint = reference(path)
-        source.stages[0].artifacts[stage.weights] = reference(path)
-    elif fault == "cost":
-        source.stages[0].cumulative_seconds = None
-    elif fault == "provenance":
-        source.identities = {}
-    elif fault == "incomplete":
-        source.stages[0].status = "failed"
-    if fault in {"metadata", "ema_identity", "cost", "provenance", "incomplete"}:
-        atomic_json(export, source.model_dump(mode="json"))
-        stage.source_run = reference(export)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises((ValueError, FileNotFoundError)):
-            execute_regime(recipe, 112, tmp_path / "run", store)
-        run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_text())
-        assert run.status == "failed"
-        assert match in (run.error or "")
-        assert store.training_run(run.id) == run
-    assert run.stages[0].status == "failed"
-    assert run.stages[0].inputs["source_run"] == stage.source_run
-    assert not run.stages[0].artifacts
-
-
 def test_declarative_weight_contracts(tmp_path: Path) -> None:
     recipe = published_fixture(tmp_path, "ema")
     histories = CollectBelief(
@@ -253,65 +131,3 @@ def test_declarative_weight_contracts(tmp_path: Path) -> None:
     histories.weights = "raw"
     with pytest.raises(ValueError, match="weights differ"):
         TrainingRegime.model_validate(recipe.model_dump())
-
-
-def test_original_wire_digest_precedes_default_normalization(tmp_path: Path) -> None:
-    recipe = published_fixture(tmp_path)
-    stage = recipe.stages[0]
-    assert isinstance(stage, ImportPolicy)
-    export = Path(stage.source_run["path"])
-    source = json.loads(export.read_text())
-    # Explicitly serialized historical off contract is normalized away today.
-    source["regime"]["observation"]["policy_history_version"] = 0
-    source["regime_digest"] = canonical_sha256(source["regime"])
-    path = Path(stage.checkpoint["path"])
-    payload = torch.load(path, weights_only=False)
-    payload["bc"]["regime_digest"] = source["regime_digest"]
-    torch.save(payload, path)
-    stage.checkpoint = reference(path)
-    source["stages"][0]["artifacts"]["raw"] = reference(path)
-    atomic_json(export, source)
-    stage.source_run = reference(export)
-    assert (
-        canonical_sha256(
-            TrainingRun.model_validate(source).regime.model_dump(mode="json")
-        )
-        != source["regime_digest"]
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 112, tmp_path / "run", store)
-    assert run.status == "completed", run.error
-
-
-def test_nested_producer_cost_cannot_be_lost(tmp_path: Path) -> None:
-    recipe = published_fixture(tmp_path)
-    stage = recipe.stages[0]
-    assert isinstance(stage, ImportPolicy)
-    export = Path(stage.source_run["path"])
-    source = TrainingRun.model_validate_json(export.read_text())
-    # No training: a synthetic A-import -> B-producer receipt exercises accounting.
-    ancestor = stage.model_copy(update={"id": "ancestor"})
-    source.regime.stages.insert(0, ancestor)
-    source.regime_digest = canonical_sha256(source.regime.model_dump(mode="json"))
-    source.stages.insert(
-        0,
-        StageRecord(
-            id="ancestor",
-            status="completed",
-            producer_cost=ProducerCost(
-                run_id="ancestor-run",
-                stage_id="ancestor-policy",
-                weights="raw",
-                cumulative_seconds=100,
-            ),
-        ),
-    )
-    atomic_json(export, source.model_dump(mode="json"))
-    stage.source_run = reference(export)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(ValueError, match="nested published producer costs"):
-            execute_regime(recipe, 112, tmp_path / "run", store)
-    run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_text())
-    assert run.status == "failed"
-    assert "nested published producer costs" in (run.error or "")
-    assert run.stages[0].producer_cost is None

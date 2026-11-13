@@ -8,12 +8,17 @@ samples retained) and coordinated learning-rate/regularization decay.
 runs the five-arm study (smoke by default; see `--help`).
 """
 
-from manabot.experiment.study import main
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, ppo_checkpoints
 from manabot.sim.matchup import selected_match
 from manabot.training.regime import Learning, Schedule, TrainingRegime
 import managym
+
+
+def main(*args: object, **kwargs: object) -> None:
+    raise RuntimeError(
+        "Frozen study execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
+    )
 
 
 def _arm(

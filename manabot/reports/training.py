@@ -8,7 +8,9 @@ retry. In-progress evaluation stays in the summary until settled.
 """
 
 import argparse
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+import fcntl
 import json
 import math
 from pathlib import Path
@@ -24,7 +26,6 @@ from manabot.eval.monitor import MonitorResult
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.reports.records import ReportRun
-from manabot.training.state.recovery import attempt_lock
 from manabot.training.update_metrics import MetricRow
 
 Scalar = int | float | str | bool
@@ -221,7 +222,7 @@ def publish_dashboard(
     """
     directory = out / "etude"
     # Separate per-projection locks also cover callers without a publisher lease.
-    with attempt_lock(out / "etude-projection.lock"):
+    with dashboard_lock(out / "etude-projection.lock"):
         seal_runs(directory)
         recorded = _recorded_rows(directory, experiment, dashboard.run_id)
         rows = dashboard.rows
@@ -362,7 +363,7 @@ def main() -> None:
     parser.add_argument("--destination", help="Etude directory or s3://bucket/prefix")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
-    with attempt_lock(args.out / "publisher.lock"):
+    with dashboard_lock(args.out / "publisher.lock"):
         dashboard = evaluation_dashboard(
             [MonitorResult.model_validate_json(p.read_text()) for p in args.evaluations]
         )
@@ -388,6 +389,24 @@ def main() -> None:
             {"status": "delivered" if args.destination else "recorded", "url": url},
         )
         print(json.dumps({"run": dashboard.run_id, "rows": len(dashboard.rows)}))
+
+
+@contextmanager
+def dashboard_lock(path: Path, *, existing: bool = False) -> Iterator[None]:
+    """Hold a local POSIX lease through execution; process death releases it.
+
+    Never unlink a lock file: replacing its inode could admit two writers.
+    Missing old leases fail closed instead of treating old runs as recoverable.
+    """
+    with path.open("r+b" if existing else "a+b") as stream:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError("training attempt still has a live writer") from error
+        try:
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 if __name__ == "__main__":

@@ -8,25 +8,33 @@ resamples training seeds. Incomplete evidence is never a passing learning result
 
 import argparse
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 import time
 from typing import Literal
 
+from etude.train.read import read_all
 import numpy as np
 from pydantic import Field
 import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.observation import ActionEnum
+from manabot.eval.evaluation import EvaluationResult, evaluate_local
+from manabot.eval.local import checkpoint_request
 from manabot.eval.monitor import MonitorResult
-from manabot.experiment.evaluation_queue import Attempt, checkpoints
-from manabot.experiment.execution import ExperimentRun
+from manabot.eval.results import EvaluationRow
+from manabot.experiment.checkpoint_evaluation import checkpoints
+from manabot.experiment.execution import Attempt, ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
+from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES
+from manabot.training.loops.self_play import SelfPlay, learner_digest, load_state
 from manabot.training.records import TrainingRun
 from manabot.training.regime import Strict, TrainSelfPlay
 from manabot.training.update_metrics import read_updates, stage_rows
@@ -269,18 +277,27 @@ def _paired(initial: MonitorResult, final: MonitorResult) -> list[PairedDeal]:
         or initial.training_seed != final.training_seed
     ):
         raise ValueError("arena protocol/seed changed between checkpoints")
-    before = {(row.deal_seed, row.leg): row for row in initial.rows}
-    after = {(row.deal_seed, row.leg): row for row in final.rows}
-    expected = {(deal, leg) for deal in initial.protocol.deal_seeds for leg in range(4)}
+    return paired_rows(initial.rows, final.rows, initial.protocol.deal_seeds)
+
+
+def paired_rows(
+    initial_rows: Sequence[EvaluationRow],
+    final_rows: Sequence[EvaluationRow],
+    deals: tuple[int, ...],
+) -> list[PairedDeal]:
+    """Admit every replayed leg before reducing the four legs to one deal block."""
+    before = {(row.deal_seed, row.leg): row for row in initial_rows}
+    after = {(row.deal_seed, row.leg): row for row in final_rows}
+    expected = {(deal, leg) for deal in deals for leg in range(4)}
     if (
         set(before) != expected
         or set(after) != expected
-        or len(before) != len(initial.rows)
-        or len(after) != len(final.rows)
+        or len(before) != len(initial_rows)
+        or len(after) != len(final_rows)
     ):
         raise ValueError("missing or duplicate arena legs")
     result = []
-    for deal in initial.protocol.deal_seeds:
+    for deal in deals:
         left, right = [], []
         for leg in range(4):
             a, b = before[deal, leg], after[deal, leg]
@@ -364,69 +381,91 @@ def report_baseline(directory: Path) -> BaselineReport:
                 "arena evidence does not bind this run's initial/final checkpoints"
             )
         report.paired = _paired(initial, final)
-        report.learning = learning_evidence([report.paired])
-        cases: list[Case] = []
-        corpus_hashes: list[str] = []
-        deadline = time.perf_counter() + 60
-        for round_index in range(3):
-            target = directory / "choices" / str(round_index)
-            rows, _, findings = collect_choices(
-                target, 4000 + round_index, deadline, closest=True
+        points = [
+            PolicyPoint(
+                Path(c.artifact["path"]), c.coordinates.updates, c.artifact["sha256"]
             )
-            if findings or not rows or time.perf_counter() >= deadline:
-                raise ValueError(
-                    f"native corpus audit incomplete or failed: {findings}"
-                )
-            collisions = {
-                case.name: input_collisions(case)
-                for case in rows
-                if input_collisions(case)
-            }
-            if collisions:
-                raise ValueError(f"public choices lost in encoded inputs: {collisions}")
-            cases.extend(rows)
-            corpus_hashes.append(file_sha256(target / "cases.json"))
-        report.corpus_sha256 = canonical_sha256(corpus_hashes)
-        with torch.random.fork_rng():
-            for checkpoint in exported:
-                if (
-                    file_sha256(checkpoint.artifact["path"])
-                    != checkpoint.artifact["sha256"]
-                ):
-                    raise ValueError("checkpoint bytes changed")
-                report.policies.append(
-                    inspect_policy(
-                        Path(checkpoint.artifact["path"]),
-                        cases,
-                        checkpoint.coordinates.updates,
-                    )
-                )
-        report.families = family_changes(report.policies[0], report.policies[-1])
-        exposure: dict[int, ActionExposure] = {}
+            for c in exported
+        ]
         rows = stage_rows(run, read_updates(Path(attempt.path), [run]))
-        for row in (row for stage in rows.values() for row in stage):
-            for name, count in row.items():
-                parts = name.split("/")
-                if len(parts) != 4 or parts[0] != "selection_groups":
-                    continue
-                if parts[3] not in ("rows", "retained") or not isinstance(count, int):
-                    continue
-                kind = int(parts[1])
-                total = exposure.setdefault(kind, ActionExposure(action_type=kind))
-                if parts[3] == "rows":
-                    total.collected += count
-                else:
-                    total.retained += count
-        report.exposure = [exposure[key] for key in sorted(exposure)]
-        if sum(item.retained for item in report.exposure) == 0:
-            raise ValueError("no observed training rows retained by learner")
-        report.software = "passed"
+        inspect_baseline(
+            report, directory, points, [row for stage in rows.values() for row in stage]
+        )
     except Exception as error:
         report.error = f"{type(error).__name__}: {error}"
         report.learning = LearningEvidence(
             verdict="error", seeds=1, deals=0, reason=report.error
         )
     torch.set_num_threads(previous_threads)
+    return write_baseline_report(report, directory)
+
+
+@dataclass(frozen=True)
+class PolicyPoint:
+    path: Path
+    updates: int
+    sha256: str
+
+
+def inspect_baseline(
+    report: BaselineReport,
+    directory: Path,
+    exported: Sequence[PolicyPoint],
+    metric_rows: Sequence[Mapping[str, object]],
+) -> None:
+    """Fill policy and exposure diagnostics in place, using the frozen native corpus."""
+    report.learning = learning_evidence([report.paired])
+    cases: list[Case] = []
+    corpus_hashes: list[str] = []
+    deadline = time.perf_counter() + 60
+    for round_index in range(3):
+        target = directory / "choices" / str(round_index)
+        rows, _, findings = collect_choices(
+            target, 4000 + round_index, deadline, closest=True
+        )
+        if findings or not rows or time.perf_counter() >= deadline:
+            raise ValueError(f"native corpus audit incomplete or failed: {findings}")
+        collisions = {
+            case.name: input_collisions(case) for case in rows if input_collisions(case)
+        }
+        if collisions:
+            raise ValueError(f"public choices lost in encoded inputs: {collisions}")
+        cases.extend(rows)
+        corpus_hashes.append(file_sha256(target / "cases.json"))
+    report.corpus_sha256 = canonical_sha256(corpus_hashes)
+    with torch.random.fork_rng():
+        for checkpoint in exported:
+            if file_sha256(checkpoint.path) != checkpoint.sha256:
+                raise ValueError("checkpoint bytes changed")
+            report.policies.append(
+                inspect_policy(
+                    Path(checkpoint.path),
+                    cases,
+                    checkpoint.updates,
+                )
+            )
+    report.families = family_changes(report.policies[0], report.policies[-1])
+    exposure: dict[int, ActionExposure] = {}
+    for row in metric_rows:
+        for name, count in row.items():
+            parts = name.split("/")
+            if len(parts) != 4 or parts[0] != "selection_groups":
+                continue
+            if parts[3] not in ("rows", "retained") or not isinstance(count, int):
+                continue
+            kind = int(parts[1])
+            total = exposure.setdefault(kind, ActionExposure(action_type=kind))
+            if parts[3] == "rows":
+                total.collected += count
+            else:
+                total.retained += count
+    report.exposure = [exposure[key] for key in sorted(exposure)]
+    if sum(item.retained for item in report.exposure) == 0:
+        raise ValueError("no observed training rows retained by learner")
+    report.software = "passed"
+
+
+def write_baseline_report(report: BaselineReport, directory: Path) -> BaselineReport:
     atomic_json(directory / "learning.json", report.model_dump(mode="json"))
     lines = [
         f"# Baseline learning: {report.learning.verdict}",
@@ -473,6 +512,97 @@ def report_baseline(directory: Path) -> BaselineReport:
         lines += ["", report.error]
     (directory / "report.md").write_text("\n".join(lines) + "\n")
     return report
+
+
+def report_recipe(
+    directory: Path,
+    settings: SelfPlay,
+    *,
+    seed: int,
+    updates: int,
+    deals: tuple[int, ...],
+    seconds: float,
+) -> BaselineReport:
+    """Evaluate the loop's initial/final raw policies and retain the nightly evidence.
+
+    This is an explicit post-training evaluation; all four deck/seat legs share
+    the same deals. Etude remains the owner of training attempts and metric rows.
+    """
+    report = BaselineReport(
+        seed=seed,
+        regime_digest=learner_digest(settings),
+        world=settings.world,
+        steps=updates,
+        learning=learning_evidence([]),
+    )
+    previous_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        state = load_state(directory / "state.pt", settings, seed)
+        if (
+            state is None
+            or state.update != updates
+            or state.counts.optimizer_updates == 0
+        ):
+            raise ValueError(
+                "training did not complete the requested optimizer updates"
+            )
+        exported = [
+            PolicyPoint(path, int(path.stem.split("-")[0]), file_sha256(path))
+            for path in sorted((directory / "checkpoints").glob("*-raw.pt"))
+        ]
+        if not exported or exported[0].updates != 0 or exported[-1].updates != updates:
+            raise ValueError("missing initial or endpoint checkpoint")
+        payload = torch.load(exported[-1].path, weights_only=False, map_location="cpu")
+        source = payload.get("source", {}).get("commit")
+        if not isinstance(source, str):
+            raise ValueError("checkpoint has no source revision")
+        report.source = source
+        results: list[EvaluationResult] = []
+        deadline = time.time() + seconds
+        for point in (exported[0], exported[-1]):
+            request = checkpoint_request(
+                point.path, opponent="random", deal_seeds=deals
+            )
+            target = directory / "evaluation" / f"{point.updates:08d}"
+            if (target / "evaluation.json").exists():
+                result = EvaluationResult.model_validate_json(
+                    (target / "evaluation.json").read_bytes()
+                )
+                if not isinstance(
+                    result.execution, EvalExecution
+                ) or result.request != request.bind(result.execution):
+                    raise ValueError("evaluation belongs to another checkpoint")
+            else:
+                result = evaluate_local(
+                    request,
+                    limits=EvalExecution(deadline_unix=deadline),
+                    out_dir=target,
+                )
+            result.validate_cohort()
+            if result.status != "completed" or result.request.deal_seeds != deals:
+                raise ValueError(
+                    "paired arena evaluation incomplete or from other deals"
+                )
+            results.append(result)
+        report.paired = paired_rows(results[0].rows, results[1].rows, deals)
+        (tracked,) = [
+            run for run in read_all(directory / "etude") if run.experiment == "baseline"
+        ]
+        exposure = {
+            name: int(np.nansum(tracked.points(name, "updates").y))
+            for name in tracked.metrics()
+            if name.startswith("selection_groups/")
+        }
+        inspect_baseline(report, directory, exported, [exposure])
+    except Exception as error:
+        report.error = f"{type(error).__name__}: {error}"
+        report.learning = LearningEvidence(
+            verdict="error", seeds=1, deals=0, reason=report.error
+        )
+    finally:
+        torch.set_num_threads(previous_threads)
+    return write_baseline_report(report, directory)
 
 
 def aggregate_reports(

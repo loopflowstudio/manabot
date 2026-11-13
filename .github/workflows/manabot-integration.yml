@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [model, training, recovery, experiment, evaluation, evaluation-long]
+        group: [model, training, experiment, evaluation, evaluation-long]
     env:
       # Sync dependencies once, then build managym below. Later syncs would
       # rebuild the engine.
@@ -82,29 +82,18 @@ jobs:
             tests/training/test_monitoring.py \
             tests/training/test_experiment_report.py tests/training/test_learning_dashboard.py \
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \
-            tests/training/test_active_training.py \
-            tests/training/test_process_tree_rss.py \
+            tests/training/test_active_training.py tests/training/test_pretrained.py \
             tests/training/test_precision.py tests/training/test_training_throughput_sizes.py \
             tests/training/test_experiment_data.py \
-            tests/training/test_checkpoint_queue.py \
-            tests/training/test_experiments.py tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_study.py \
+            tests/training/test_experiments.py tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py \
             tests/training/test_batch_closure.py tests/training/test_frozen_opponent.py \
             tests/training/test_outcome_tables.py
-
-      - name: Recovery and cadence tests
-        if: matrix.group == 'recovery'
-        run: |
-          uv run pytest -n logical --durations=20 \
-            tests/training/test_recovery.py tests/training/test_active_recovery.py \
-            tests/training/test_step_cadence.py tests/training/test_learning_state.py
 
       - name: Experiment runner, monitoring and verification tests
         if: matrix.group == 'experiment'
         run: |
           uv run pytest -n logical --durations=20 \
-            tests/training/test_experiment_runner.py \
             tests/training/test_monitor_evaluation.py \
-            tests/training/test_rl_runtime.py \
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py \
             tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py \
             tests/verify/test_observation_parity.py::test_encodes_every_observed_permanent_and_card_field_in_parity \
@@ -115,7 +104,7 @@ jobs:
         if: matrix.group == 'evaluation'
         run: |
           uv run pytest -n logical --durations=20 \
-            tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
+            tests/training/test_two_seat_learning.py \
             tests/training/test_adaptive_sampler.py tests/training/test_adaptive_two_seat.py \
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
             tests/training/test_elemental_uniform.py \

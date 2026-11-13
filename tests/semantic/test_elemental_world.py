@@ -32,9 +32,6 @@ from manabot.model.world import (
     validate_checkpoint_world,
 )
 from manabot.semantic.learning import BoundSemanticPack
-from manabot.training.execution import execute_regime
-from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
-from manabot.verify.store import VerifyStore
 import managym
 from managym.experience import LegacyPermanentView
 from managym.experience_projection import describe_actions, serialize_observation
@@ -175,47 +172,6 @@ def test_elemental_names_cannot_fall_back_to_an_uncompiled_mixed_world() -> None
                 "villain_type": "random",
             }
         )
-
-
-def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
-    tmp_path: Path,
-) -> None:
-
-    recipe = TrainingRegime(
-        id="elemental-ppo-smoke",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"),
-        agent=ModelConfig(hidden_dim=16, world=PACK, policy_film=True),
-        stages=[
-            TrainSelfPlay(
-                id="self-play",
-                operation="train_self_play",
-                updates=2,
-                streams=2,
-                transitions=8,
-                learning_seats="one",
-                batch_closure="exact-quota",
-                learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
-            )
-        ],
-    )
-    with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execute_regime(recipe, 164, tmp_path / "run", store)
-    assert run.status == "completed", run.error
-    stage = run.stages[0]
-    assert stage.learner_transitions == 32
-    initial, _ = load_checkpoint(stage.artifacts["initial_raw"]["path"])
-    restored, _ = load_checkpoint(stage.artifacts["raw"]["path"])
-    assert any(
-        not torch.equal(a, b)
-        for a, b in zip(initial.parameters(), restored.parameters())
-    )
-    assert all(torch.isfinite(value).all() for value in restored.parameters())
-    assert len(restored.world_binding["setups"]) == 10
-    validate_agent_setup(
-        restored,
-        Match(MatchConfig.authored(PACK, "elemental_wr", "elemental_wr")).to_rust(),
-    )
 
 
 def test_avatar_grant_reaches_native_python_and_academy_views() -> None:

@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 import math
-from pathlib import Path
 import time
 from types import ModuleType, SimpleNamespace
 from typing import Literal
@@ -12,7 +11,6 @@ import pytest
 import torch
 from typer.testing import CliRunner
 
-from experiments import training_throughput_packing as packing
 from experiments.tla_frontier import frozen
 from manabot import cli
 import manabot.backends.torch as torch_backend
@@ -32,9 +30,7 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
-from manabot.experiment.job import TrainingJob
 from manabot.infra.config import RewardConfig
-from manabot.infra.identity import canonical_sha256
 from manabot.model import semantic_cards, shared_effects
 from manabot.model.facts import FactEncoder
 from manabot.model.numerics import embedding_rows
@@ -44,131 +40,26 @@ from manabot.model.semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.model.shared_effects import SharedEffectEncoder
-from manabot.recipes.baseline import baseline
-from manabot.recipes.device import accelerator
-from manabot.recipes.local import local_smoke
-from manabot.training import execution
-from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
     Learning,
     Precision,
-    TrainingRegime,
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import (
-    RolloutBatch,
     close_collector,
     collect,
     open_collector,
 )
 from manabot.training.updates import damped_policy, ppo
-from manabot.training.updates.selection import UpdateDiagnostics
-from manabot.verify.store import VerifyStore
 import managym
-
-
-def test_mps_admitted_without_changing_saved_regimes() -> None:
-    assert Execution(device="mps").precision == "float32"
-    assert Execution().model_dump() == {
-        "device": "cpu",
-        "precision": "float32",
-        "workers": 1,
-        "threads": 1,
-        "wall_seconds": 300,
-        "memory_bytes": 32 * 1024**3,
-    }
-    saved = TrainingJob.model_validate_json(
-        packing.runs("HEAD", "d1")[0].job.config or ""
-    )
-    assert canonical_sha256(saved.regime.model_dump(mode="json")) == (
-        "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
-    )
-    for plan in (local_smoke(device="mps"), baseline(device="mps").regime):
-        assert TrainingRegime.model_validate_json(plan.model_dump_json()) == plan
-        assert plan.stages[0].execution.device == "mps"
 
 
 @pytest.mark.parametrize("precision", ["tf32", "bf16"])
 def test_mps_rejects_reduced_precision(precision: Precision) -> None:
     with pytest.raises(ValueError, match="requires CUDA"):
         Execution(device="mps", precision=precision)
-
-
-def test_mps_rejects_process_recovery_and_belief() -> None:
-    data = local_smoke(device="mps").model_dump()
-    data["recovery_max_microsteps"] = 100
-    with pytest.raises(ValueError, match="MPS process recovery is unsupported"):
-        TrainingRegime.model_validate(data)
-    data["recovery_max_microsteps"] = None
-    data["agent"]["belief_count_buckets"] = 4
-    with pytest.raises(
-        ValueError, match="MPS requires self-contained ordinary self-play"
-    ):
-        TrainingRegime.model_validate(data)
-
-
-def test_unavailable_mps_fails_without_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: False)
-    with VerifyStore(tmp_path / "runs.sqlite") as store:
-        with pytest.raises(
-            ValueError, match="MPS requested but unavailable; CPU fallback is forbidden"
-        ):
-            execution.execute_regime(
-                local_smoke(steps=1, seconds=600, learning_seats="one", device="mps"),
-                197,
-                tmp_path / "unavailable",
-                store,
-            )
-
-
-@pytest.mark.parametrize(
-    "version,admitted",
-    [("2.10.0", False), ("2.14.1", False), ("2.15.0", True), ("3.0.0+cpu", True)],
-)
-def test_mps_torch_minimum_gates_selection(
-    version: str, admitted: bool, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(torch, "__version__", version)
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
-    assert (mps_torch_error() is None) == admitted
-    # MPS is never selected automatically, whatever the Torch version.
-    assert accelerator() is None
-    assert local_smoke().stages[0].execution.device == "cpu"
-    if admitted:
-        assert baseline(device="mps").regime.stages[0].execution.device == "mps"
-        assert local_smoke(device="mps").stages[0].execution.device == "mps"
-    else:
-        with pytest.raises(
-            ValueError, match=f"installed Torch {version} is below that minimum"
-        ):
-            baseline(device="mps")
-
-
-def test_old_torch_mps_stage_fails_before_training(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(torch, "__version__", "2.10.0")
-    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
-    with VerifyStore(tmp_path / "runs.sqlite") as store:
-        with pytest.raises(
-            ValueError,
-            match=(
-                "MPS training requires Torch 2.15 or newer; installed Torch 2.10.0 "
-                "is below that minimum"
-            ),
-        ):
-            execution.execute_regime(
-                local_smoke(steps=1, seconds=600, learning_seats="one", device="mps"),
-                197,
-                tmp_path / "old-torch",
-                store,
-            )
-    assert not (tmp_path / "old-torch" / "checkpoints").exists()
 
 
 def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:
@@ -223,83 +114,6 @@ def _assert_finite(value: object) -> None:
     elif isinstance(value, (list, tuple)):
         for item in value:
             _assert_finite(item)
-
-
-@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
-def test_mps_host_loss_and_rng_preservation() -> None:
-    logs = torch.tensor([-2.0, 0.0, 2.0, 90.0], device="mps", requires_grad=True)
-    advantages = torch.tensor([0.5, -0.5, 1.0, 1.0], device="mps")
-    loss = clipped_surrogate(logs, advantages, 0.2)
-    assert loss.device.type == "cpu" and loss.dtype == torch.float64
-    assert torch.isfinite(loss).all()
-    loss.sum().backward()
-    assert logs.grad is not None and logs.grad.device.type == "mps"
-    assert torch.isfinite(logs.grad).all() and logs.grad.abs().sum() > 0
-
-    generator = torch.Generator(device="mps").manual_seed(198)
-    state = generator.get_state()
-    weights = torch.ones((4, 3), device="mps")
-    expected = torch.multinomial(weights, 1, generator=generator)
-    generator.set_state(state)
-    assert torch.equal(torch.multinomial(weights, 1, generator=generator), expected)
-    cpu_state, mps_state = torch.get_rng_state(), torch.mps.get_rng_state()
-    with torch.random.fork_rng(devices=[0], device_type="mps"):
-        torch.rand(4)
-        torch.rand(4, device="mps")
-    assert torch.equal(torch.get_rng_state(), cpu_state)
-    assert torch.equal(torch.mps.get_rng_state(), mps_state)
-    assert execution.cuda_peak_metrics("mps") == {}
-    assert execution.mps_memory_metrics("cpu") == {}
-    assert execution.mps_memory_metrics("cuda") == {}
-    assert all(value >= 0 for value in execution.mps_memory_metrics("mps").values())
-
-
-@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
-def test_mps_one_update_and_export(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    plan = local_smoke(steps=1, seconds=600, learning_seats="one", device="mps")
-    stage = plan.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.learning.min_advantage = 0
-    observed: list[UpdateDiagnostics] = []
-    assert isinstance(stage.learning, DampedPolicyLearning)
-    original = execution.update_damped_iteration
-
-    def update(
-        backend: ModuleType,
-        learner: Learner,
-        batch: RolloutBatch,
-        learning: DampedPolicyLearning,
-        iteration: int,
-        *,
-        bootstrap_agent: ActorCritic | None = None,
-    ) -> UpdateDiagnostics:
-        assert all(p.device.type == "mps" for p in learner.agent.parameters())
-        result = original(
-            backend,
-            learner,
-            batch,
-            learning,
-            iteration,
-            bootstrap_agent=bootstrap_agent,
-        )
-        assert all(torch.isfinite(p).all() for p in learner.agent.parameters())
-        _assert_finite(result)
-        observed.append(result)
-        return result
-
-    monkeypatch.setattr(execution, "update_damped_iteration", update)
-    with VerifyStore(tmp_path / "runs.sqlite") as store:
-        run = execution.execute_regime(plan, 197, tmp_path / "mps", store)
-    assert run.status == "completed", run.error
-    record = run.stages[0]
-    assert record.actual_device is not None
-    assert torch.device(record.actual_device).type == "mps"
-    assert record.updates == 1 and (record.optimizer_updates or 0) > 0
-    assert len(observed) == 1
-    assert Path(record.artifacts["raw"]["path"]).is_file()
-    _assert_finite(record.model_dump())
 
 
 @pytest.mark.parametrize("family", ["none", "name", "detail"])

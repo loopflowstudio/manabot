@@ -2,9 +2,14 @@
 
 from typing import Literal
 
+from etude.train.records import Step
+from etude.train.run import track
+from pydantic import BaseModel, Field
+
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
 from manabot.sim.matchup import selected_match
+from manabot.training.loops.self_play import SelfPlay, self_play
 from manabot.training.regime import (
     BatchClosure,
     Execution,
@@ -150,3 +155,37 @@ def lambda_sweep(
     stage.learning.policy_lambda = policy_lambda
     stage.learning.value_lambda = value_lambda
     return TrainingRegime.model_validate(regime.authored_dump())
+
+
+class BatchedConfig(BaseModel):
+    seed: int = 197
+    updates: int = Field(default=128, ge=1)
+    device: Literal["cpu", "mps", "cuda"] = "cuda"
+
+
+def train(config: BatchedConfig) -> None:
+    """Current batched recipe; historical regime builders above remain data."""
+    inputs = SelfPlay(
+        match=selected_match(),
+        model=ModelConfig(
+            world=PACK, value_aggregation="masked_mean", attention_layers=2
+        ),
+        learning=move_learning(IterationSchedule(steps=128, reference_steps=2048)),
+        streams=64,
+        transitions=64,
+        matchup_curriculum="cross-balanced",
+        device=config.device,
+        checkpoint_every=64,
+    )
+    with track(
+        clocks=[Step("updates", "optimizer updates")],
+        seed=config.seed,
+        config=config.model_dump(mode="json"),
+    ) as run:
+        self_play(
+            inputs,
+            run.out,
+            seed=config.seed,
+            updates=int(run.until("updates", default=config.updates)),
+            run=run,
+        )

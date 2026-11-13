@@ -72,7 +72,7 @@ from experiments import tla_frontier
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
@@ -330,28 +330,10 @@ def export_updates(regime: TrainingRegime, protocol: Protocol) -> tuple[int, ...
     return tuple(sorted({*cadence, *protocol.milestones}))
 
 
-def capped_runs(
-    regime: TrainingRegime,
-    *,
-    experiment: str,
-    revision: str,
-    seed: int,
-    max_hours: float,
-    max_usd: Decimal,
-    milestones: tuple[int, ...] = (),
-) -> list[Run]:
-    """One capped allocation; calibration measures the job the frontier launches."""
-    return (
-        TrainingJob(
-            regime=regime,
-            experiment=experiment,
-            milestones=milestones,
-            finalization_seconds=600,
-            stop_reserve_seconds=600,
-            validate_numerics=True,
-        )
-        .job(repo=ROOT, revision=revision, max_hours=max_hours, max_usd=max_usd)
-        .runs(seed)
+def capped_runs(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    raise RuntimeError(
+        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
     )
 
 

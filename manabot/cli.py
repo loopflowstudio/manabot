@@ -1,297 +1,187 @@
 """CLI entrypoints for training and simulation."""
 
-from collections.abc import Callable, Mapping
+import ast
+from collections.abc import Callable, Sequence
+from datetime import datetime, timedelta, timezone
 import importlib
+import importlib.util
 import inspect
+import os
 from pathlib import Path
-import pkgutil
-from typing import Any, Literal, Optional, Protocol, Self, Sequence
+from typing import Any, Literal, Optional, get_type_hints
 
+from etude.stopping import Stopped
+from etude.train.run import local_launch
+from pydantic import BaseModel
 import typer
 
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
-from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
-from manabot.recipes.belief_sampler import BeliefConfig, belief
+from manabot.recipes import baseline, belief_sampler, elemental, local
 from manabot.recipes.device import accelerator
-from manabot.recipes.elemental import ElementalConfig, elemental
-from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
-from manabot.recipes.proposed_etude import local_launch
 from manabot.sim.sim import run_simulation
-from manabot.training.loops.self_play import SelfPlay, Stopped
-from manabot.training.regime import TrainingRegime
 import managym
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
 )
 
-# Named regimes are repository experiment code outside the installed package,
-# found by module name: experiments/<experiment>.py, one experiment per file.
-EXPERIMENTS = "experiments"
-
-
-def regime_names() -> list[str]:
-    """Every `--regime-name`, in file order.
-
-    A recipe is a public zero-argument function returning a TrainingRegime.
-    `<experiment>` names the module's canonical recipe, the function named like
-    the module; `<experiment>:<variant>` names any other recipe in it.
-    """
-    names: list[str] = []
-    package = importlib.import_module(EXPERIMENTS)
-    for file in sorted(info.name for info in pkgutil.iter_modules(package.__path__)):
-        module = importlib.import_module(f"{EXPERIMENTS}.{file}")
-        for name, value in vars(module).items():
-            if name.startswith("_") or not inspect.isfunction(value):
-                continue
-            signature = inspect.signature(value)
-            if (
-                value.__module__ == module.__name__
-                and not signature.parameters
-                and signature.return_annotation is TrainingRegime
-            ):
-                names.append(file if name == file else f"{file}:{name}")
-    return names
-
-
-def named_regime(name: str) -> TrainingRegime:
-    """Build a fresh copy of the named recipe; reject an unknown name."""
-    if name not in regime_names():
-        raise typer.BadParameter(
-            f"unknown regime {name!r}; available: {', '.join(regime_names())}"
-        )
-    file, _, function = name.partition(":")
-    module = importlib.import_module(f"{EXPERIMENTS}.{file}")
-    recipe = getattr(module, function or file)
-    regime = recipe()
-    assert isinstance(regime, TrainingRegime)
-    return regime
-
-
-class LoopConfig(Protocol):
-    """What every loop recipe's config has; the command line overrides these."""
-
-    seed: int
-    updates: int
-    self_play: SelfPlay
-
-    def model_copy(self, *, update: Mapping[str, object]) -> Self: ...
-
-
-# Recipes written as functions over a self-play loop (`manabot.recipes`):
-# each name's recipe function and its default config.
-LOOP_RECIPES: dict[str, tuple[Callable[[Any], None], Callable[[], LoopConfig]]] = {
-    "elemental": (elemental, ElementalConfig),
-    "belief": (belief, BeliefConfig),
+LEGACY_REVISION = "f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
+RECIPES = {
+    "local": (local.train, local.LocalConfig),
+    "baseline": (baseline.train, baseline.BaselineConfig),
+    "elemental": (elemental.train, elemental.ElementalConfig),
+    "belief": (belief_sampler.train, belief_sampler.BeliefConfig),
 }
 
 
-def loop_config(
-    default: LoopConfig,
-    *,
-    seed: int | None,
-    steps: int | None,
-    device: Literal["cpu", "mps", "cuda"] | None,
-) -> LoopConfig:
-    """`default` with the seed, update target and device the command line names."""
-    chosen = device or accelerator() or "cpu"
-    return default.model_copy(
-        update={
-            "seed": default.seed if seed is None else seed,
-            "updates": default.updates if steps is None else steps,
-            "self_play": default.self_play.model_copy(update={"device": chosen}),
-        }
-    )
+def recipe_names() -> list[str]:
+    """List explicit training functions without importing experiment evaluations."""
+    names = list(RECIPES)
+    package = importlib.util.find_spec("experiments")
+    if package is not None:
+        for directory in package.submodule_search_locations or ():
+            for path in sorted(Path(directory).glob("*.py")):
+                tree = ast.parse(path.read_text())
+                if (
+                    any(
+                        isinstance(node, ast.FunctionDef)
+                        and node.name == "train"
+                        and len(node.args.args) == 1
+                        and node.args.args[0].arg == "config"
+                        or isinstance(node, ast.ImportFrom)
+                        and any(
+                            alias.name == "train" and alias.asname is None
+                            for alias in node.names
+                        )
+                        for node in tree.body
+                    )
+                    and path.stem not in names
+                ):
+                    names.append(path.stem)
+    return names
 
 
-def _run_loop_recipe(
-    name: str,
-    *,
-    seed: int | None,
-    steps: int | None,
-    device: Literal["cpu", "mps", "cuda"] | None,
-    out: str | None,
-) -> None:
-    """Call a loop recipe as a launch would; rerunning resumes `--out`."""
-    recipe, default = LOOP_RECIPES[name]
-    config = loop_config(default(), seed=seed, steps=steps, device=device)
-    directory = out or f".runs/{name}-{config.seed}"
-    try:
-        with local_launch(out=directory, experiment=name):
-            recipe(config)
-    except Stopped as stopped:
-        typer.echo(f"{name}: {stopped}", err=True)
-        raise typer.Exit(1) from stopped
-    typer.echo(f"{name}: completed in {directory}")
+def experiment_recipe(name: str) -> tuple[Callable[[Any], None], type[BaseModel]]:
+    """Validate an experiment's typed function at the dynamic CLI boundary."""
+    module_name, _, function = name.partition(":")
+    if not module_name.isidentifier() or (function and not function.isidentifier()):
+        raise typer.BadParameter("recipe must name a module and optional function")
+    module = importlib.import_module(f"experiments.{module_name}")
+    train = getattr(module, function or "train", None)
+    if not callable(train):
+        raise typer.BadParameter("recipe must be a function taking one typed config")
+    parameters = inspect.signature(train).parameters
+    if len(parameters) != 1:
+        raise typer.BadParameter("recipe must be a function taking one typed config")
+    parameter = next(iter(parameters))
+    config = get_type_hints(train).get(parameter)
+    if not isinstance(config, type) or not issubclass(config, BaseModel):
+        raise typer.BadParameter("recipe config must be a Pydantic model")
+    if not {"seed", "updates"} <= config.model_fields.keys():
+        raise typer.BadParameter("CLI recipe configs need seed and updates fields")
+    return train, config
 
 
 @app.command("train")
 def train_command(
-    preset: Optional[str] = typer.Option(
-        None, help="Retired; select --recipe or --regime"
-    ),
-    recipe: str | None = typer.Option(
-        None, help="Training recipe: local (default), baseline, elemental or belief"
-    ),
-    learning_seats: Literal["one", "both"] | None = typer.Option(
-        None, help="Learning seats for local/baseline recipes (default: both)"
-    ),
-    device: Literal["cpu", "mps", "cuda"] | None = typer.Option(
-        None,
-        help="Training device (default: CUDA, then MPS; local alone falls back to CPU)",
-    ),
-    padded_shapes: bool = typer.Option(
-        False,
-        "--padded-shapes",
-        help="Train local/baseline recipes on CUDA without bucketed shapes or live tokens",
-    ),
-    bucketed_shapes: bool = typer.Option(
-        False,
-        "--bucketed-shapes",
-        help="Deprecated and removed in 0.3.0; bucketed shapes are the CUDA default",
-        hidden=True,
-    ),
-    steps: int | None = typer.Option(
-        None, min=1, help="Recipe horizon in collection/update iterations"
-    ),
+    recipe: str = typer.Option("local", help="Training recipe"),
+    list_recipes: bool = typer.Option(False, "--list", help="List runnable recipes"),
+    seed: int = typer.Option(197, help="Training seed"),
+    steps: int | None = typer.Option(None, min=1, help="Absolute update target"),
+    device: Literal["cpu", "mps", "cuda"] | None = typer.Option(None),
+    out: Path | None = typer.Option(None, help="Run directory; rerun to resume"),
     seconds: float | None = typer.Option(
-        None, min=1, help="Recipe wall-time limit; does not alter learning schedules"
+        None, min=1, help="Stop and save after this allowance"
     ),
-    regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
-    regime_name: str | None = typer.Option(
-        None,
-        help="Recipe in experiments/: <experiment> or <experiment>:<variant>",
-    ),
-    seed: Optional[int] = typer.Option(None, help="Regime or recipe training seed"),
-    out: Optional[str] = typer.Option(None, help="New run directory"),
-    resume_from: Optional[str] = typer.Option(
-        None, help="Stopped TrainingRun ID in the same store"
-    ),
-    source_repair_reason: str | None = typer.Option(
-        None, help="Explicit compatible source repair on complete-game recovery"
-    ),
-    checkpoint_updates: int | None = typer.Option(
-        None, min=1, help="Raw monitoring export every N absolute self-play iterations"
-    ),
-    checkpoint_seconds: Optional[float] = typer.Option(
-        None,
-        help="Legacy elapsed-time monitoring interval for an explicitly frozen recipe",
-    ),
-    initial_admission: Optional[str] = typer.Option(None, hidden=True),
-    set_values: Optional[list[str]] = typer.Option(
-        None,
-        "--set",
-        help="Retired training overrides; use an explicit --regime JSON",
-    ),
+    learning_seats: Literal["one", "both"] = typer.Option("both"),
+    padded_shapes: bool = typer.Option(False, "--padded-shapes"),
+    regime: str | None = typer.Option(None, hidden=True),
+    regime_name: str | None = typer.Option(None, hidden=True),
+    resume_from: str | None = typer.Option(None, hidden=True),
+    source_repair_reason: str | None = typer.Option(None, hidden=True),
+    checkpoint_updates: int | None = typer.Option(None, hidden=True),
+    checkpoint_seconds: float | None = typer.Option(None, hidden=True),
+    preset: str | None = typer.Option(None, hidden=True),
+    set_values: list[str] | None = typer.Option(None, "--set", hidden=True),
 ) -> None:
-    if preset is not None or set_values:
-        raise typer.BadParameter(
-            "training --preset/--set are retired; use --recipe local, --recipe baseline, "
-            "or an explicit --regime JSON. Historical reward and optimizer settings "
-            "are not translated."
+    if any(
+        value is not None
+        for value in (
+            regime,
+            regime_name,
+            resume_from,
+            source_repair_reason,
+            checkpoint_updates,
+            checkpoint_seconds,
+            preset,
+            set_values,
         )
-    if bucketed_shapes:
-        typer.echo(
-            "--bucketed-shapes is deprecated and removed in 0.3.0; CUDA recipes "
-            "use bucketed shapes by default (--padded-shapes turns them off)",
-            err=True,
-        )
-    if recipe is None and regime is None and regime_name is None:
-        recipe = "local"
-    if recipe is not None:
-        if recipe not in {"local", "baseline", *LOOP_RECIPES}:
-            raise typer.BadParameter(
-                "unknown recipe; available: local, baseline, " + ", ".join(LOOP_RECIPES)
-            )
-        if any(
-            value is not None
-            for value in (
-                regime,
-                regime_name,
-                resume_from,
-                source_repair_reason,
-                checkpoint_updates,
-                checkpoint_seconds,
-                initial_admission,
-            )
-        ):
-            raise typer.BadParameter(
-                "--recipe cannot be combined with regime inputs or resume/cadence controls"
-            )
-        if recipe in LOOP_RECIPES:
-            if seconds is not None or learning_seats is not None or bucketed_shapes:
-                raise typer.BadParameter(
-                    "--seconds, --learning-seats and --bucketed-shapes require "
-                    "local or baseline; configure loop recipes in Python"
-                )
-            _run_loop_recipe(recipe, seed=seed, steps=steps, device=device, out=out)
-            return
-        if recipe == "local":
-            result = run_local(
-                steps=LOCAL_STEPS if steps is None else steps,
-                seed=197 if seed is None else seed,
-                out=Path(out) if out else None,
-                seconds=LOCAL_SECONDS if seconds is None else seconds,
-                learning_seats=learning_seats or "both",
-                device=device,
-                padded_shapes=padded_shapes,
-            )
-            status = result.status
-            typer.echo(f"local: {status}; run: {result.id}")
-            if status == "completed":
-                typer.echo(f"checkpoint: {result.stages[-1].artifacts['raw']['path']}")
-            elif result.error:
-                typer.echo(result.error, err=True)
-        else:
-            baseline_result = run_baseline(
-                steps=BASELINE_STEPS if steps is None else steps,
-                seed=197 if seed is None else seed,
-                out=Path(out) if out else None,
-                seconds=seconds,
-                learning_seats=learning_seats or "both",
-                device=device,
-                padded_shapes=padded_shapes,
-            )
-            status = baseline_result.status
-            typer.echo(
-                f"baseline: {status}; report: {Path(baseline_result.notebook).with_name('report.md')}"
-            )
-        if status != "completed":
-            raise typer.Exit(1)
-        return
-    if padded_shapes or any(
-        value is not None for value in (steps, seconds, learning_seats, device)
     ):
         raise typer.BadParameter(
-            "--steps, --seconds, --learning-seats, --device and --padded-shapes "
-            "require a recipe; a regime sets them in its stages' execution"
+            f"saved-regime execution is retired; run revision {LEGACY_REVISION}. "
+            "Current training uses --recipe; repeat --out to resume."
         )
-    if regime is not None and regime_name is not None:
-        raise typer.BadParameter("select --regime or --regime-name, not both")
-    if out is None:
-        raise typer.BadParameter("--regime requires --out")
-    from manabot.training.execution import execute_regime
-    from manabot.verify.store import VerifyStore
-
-    if regime_name is not None:
-        regime_spec = named_regime(regime_name)
+    if list_recipes:
+        typer.echo("\n".join(recipe_names()))
+        return
+    if recipe not in {"local", "baseline"} and (
+        learning_seats != "both" or padded_shapes
+    ):
+        raise typer.BadParameter(
+            "--learning-seats and --padded-shapes require local or baseline"
+        )
+    chosen = device or accelerator() or "cpu"
+    if recipe == "baseline" and chosen == "cpu":
+        raise typer.BadParameter(
+            "baseline requires CUDA or explicit --device mps; use local for CPU"
+        )
+    if recipe in RECIPES:
+        recipe_train, config_type = RECIPES[recipe]
     else:
-        assert regime is not None
-        regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())
-    with VerifyStore(Path(out).parent / "training.sqlite") as store:
-        execute_regime(
-            regime_spec,
-            197 if seed is None else seed,
-            out,
-            store,
-            resume_from=resume_from,
-            source_repair_reason=source_repair_reason,
-            checkpoint_seconds=checkpoint_seconds,
-            checkpoint_updates=checkpoint_updates,
-            initial_admission=Path(initial_admission) if initial_admission else None,
-        )
+        try:
+            recipe_train, config_type = experiment_recipe(recipe)
+        except (ImportError, AttributeError) as error:
+            raise typer.BadParameter(
+                f"unknown recipe {recipe!r}; use --list"
+            ) from error
+    values: dict[str, object] = {"seed": seed, "device": chosen}
+    if recipe in {"local", "baseline"}:
+        values.update(learning_seats=learning_seats, padded_shapes=padded_shapes)
+    config = config_type.model_validate(values)
+    directory = out or Path(".runs") / (
+        "local-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        if recipe == "local"
+        else f"{recipe.replace(':', '-')}-{seed}"
+    )
+    # A target-only continuation keeps the recipe's learning settings unchanged.
+    environment = {}
+    if steps is not None:
+        environment["ETUDE_UNTIL_CLOCK"] = "updates"
+        environment["ETUDE_UNTIL_VALUE"] = str(steps)
+    allowance = (
+        local.LOCAL_SECONDS if seconds is None and recipe == "local" else seconds
+    )
+    if allowance is not None:
+        environment["ETUDE_DEADLINE"] = (
+            datetime.now(timezone.utc) + timedelta(seconds=allowance)
+        ).isoformat()
+    previous = {key: os.environ.get(key) for key in environment}
+    os.environ.update(environment)
+    try:
+        with local_launch(out=directory, experiment=recipe):
+            recipe_train(config)
+    except Stopped as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(75) from error
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    typer.echo(f"{recipe}: completed in {directory}")
 
 
 @app.command("sim")

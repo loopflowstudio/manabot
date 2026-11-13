@@ -21,7 +21,7 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
-from tests.training.test_recovery import recipe
+from tests.model.policy_fixture import recipe
 
 
 def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:

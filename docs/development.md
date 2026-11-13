@@ -112,12 +112,10 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   `npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts trigger-order.spec.ts`
   with isolated `ACADEMY_RELEASE_API_PORT` and `ACADEMY_RELEASE_FRONTEND_PORT`.
 
-**Training recovery.** Resume admission or game-error recovery:
-`uv run --extra dev --extra artifacts pytest tests/training/test_recovery.py tests/training/test_game_error_recovery.py -q`.
-Observation-input or model-cost changes add
-`uv run --extra dev pytest tests/training/test_active_training.py -q`; its
-endpoint checks use injected durations, so never mix host elapsed time into an
-exact-update-count assertion.
+**Training resume and game errors.**
+`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
+Resume restores learner state at a saved update and opens fresh native streams;
+it does not restore an unfinished collection.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
@@ -151,9 +149,9 @@ adapters:
 `uv run pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`
 (a fresh process rejecting managed evaluation imports; adapter-only tests cannot
 establish that boundary). Tracking or report discovery:
-`uv run pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q`;
-the live tiny comparison writes both TrainingRun exports and Etude tracker
-declarations named `run.json`.
+`uv run pytest tests/training/test_experiment_report.py tests/training/test_recipe_etude.py -q`;
+the recipe proof checks local tracking, stop/resume, immutable checkpoints and
+belief output provenance.
 
 **Python package and CLI moves.** Experiment imports or recipe discovery:
 `uv run --extra dev pytest tests/training/test_regimes.py -q` (listing recipes
@@ -549,7 +547,7 @@ MPS is admitted, on explicit request, for float32 self-play training with Torch 
 newer. Baseline requires CUDA or an explicit `--device mps`; local selects CUDA when
 available and CPU otherwise.
 Evaluation and search run on CPU for this workflow. GPU-less tests use
-`baseline_test()`, which shares baseline construction and changes only the device.
+`BaselineConfig(device="cpu")` with the same `train` and `evaluate` functions.
 No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 

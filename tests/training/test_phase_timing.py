@@ -6,34 +6,22 @@ bit-identical with timing on or off.
 """
 
 from copy import deepcopy
-import os
-from pathlib import Path
 
-from etude.report import Series
 import numpy as np
 import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
-from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
-from manabot.training.execution import execute_regime
-from manabot.training.panels import PERF
-from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
     Schedule,
-    TrainingRegime,
-    TrainSelfPlay,
 )
 from manabot.training.rollout.collection import collect
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
-from manabot.verify.store import VerifyStore
-import managym
-from tests.training.test_recovery import tracked_updates
 from tests.training.test_two_seat_learning import _agent, _collector
 
 DAMPED_PHASES = {
@@ -137,68 +125,3 @@ def test_collection_timers_leave_the_batch_identical() -> None:
     for field in ("actions", "logprobs", "rewards", "dones", "values"):
         np.testing.assert_array_equal(getattr(a, field), getattr(b, field))
     assert any(path.startswith("Collection/") for path in timed.profiler.get_stats())
-
-
-def test_self_play_stage_records_both_timing_trees_by_default(tmp_path: Path) -> None:
-    agent = _agent()
-    stage = TrainSelfPlay(
-        id="learn",
-        operation="train_self_play",
-        updates=2,
-        streams=2,
-        transitions=1,
-        learning_seats="both",
-        games_per_stream=1,
-        learning=Learning(epochs=1, minibatches=1, retained_fraction=1, ema=0.9),
-    )
-    regime = TrainingRegime(
-        id="phase-timing-smoke",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig(),
-        agent=agent.config,
-        stages=[stage],
-        wall_seconds=120,
-        schedule_clock="iteration_fraction",
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 17, tmp_path / "run", store)
-    record = run.stages[0]
-    assert record.collection_timings and record.learning_timings
-    assert record.learning_timings["EMA update"].calls == 2
-    assert record.learning_timings["Minibatches/Forward and loss"].calls >= 2
-    top = sum(t.seconds for p, t in record.learning_timings.items() if "/" not in p)
-    assert top <= record.learning_seconds
-    collected = sum(
-        t.seconds for p, t in record.collection_timings.items() if "/" not in p
-    )
-    assert collected <= record.collection_seconds
-    step = record.collection_timings["Environment step and encoding"]
-    stepping = record.collection_timings[
-        "Environment step and encoding/Native stepping"
-    ]
-    encoding = record.collection_timings[
-        "Environment step and encoding/Observation encoding"
-    ]
-    assert stepping.seconds > 0 and encoding.seconds > 0
-    # The engine's clock covers exactly the steps of its phase: the reset that
-    # built the collector and any recovery replay sit outside that phase.
-    assert stepping.calls == encoding.calls == step.calls
-    assert stepping.seconds + encoding.seconds <= step.seconds
-    assert record.collection_timings["Stream bookkeeping"].calls >= step.calls
-    assert run.host is not None and run.host.logical_cpus == os.cpu_count()
-    assert TrainingRun.model_validate_json(run.model_dump_json()).host == run.host
-    row = tracked_updates(run, tmp_path)[0]
-    assert {
-        key
-        for panel in PERF
-        if isinstance(panel, Series)
-        for key in panel.keys
-        if key.startswith("time/")
-    } <= row.keys()
-    # Retained rows and the Python vector have only the parent stepping key.
-    update_time = next(
-        panel
-        for panel in PERF
-        if isinstance(panel, Series) and panel.title == "Update time"
-    )
-    assert "time/collection/environment_step_and_encoding" in update_time.keys

@@ -1,166 +1,19 @@
 """MTG-183's frozen windows, rated checkpoints and pairing graph."""
 
 from collections import Counter
-import json
-from pathlib import Path
-
-from etude.run.storage import DirectoryStorage
-import pytest
 
 from experiments.elemental_grid import DECKS, schedule
 from experiments.elemental_long import (
-    CADENCE,
     H2H_GAMES_PER_CELL,
     H2H_SCHEDULE_SHA256,
     HEURISTIC_FULL,
     REFERENCES,
-    REGIME,
-    SEED,
-    STAGE,
     h2h_schedule,
     h2h_schedule_sha256,
     heuristic_games,
     pair_design,
     rated_updates,
-    segment_job,
-    stage_monitoring,
-    stage_parent,
 )
-from manabot.experiment.job import LearnerContinuation, StagedExport
-from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.training.execution import execute_regime
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
-from manabot.verify.store import VerifyStore
-import managym
-
-
-def _export(name: str) -> StagedExport:
-    return StagedExport(key=f"mtg183/w2/{name}", sha256="0" * 64, bytes=1)
-
-
-def test_segment_continues_the_frozen_recipe_on_the_cadence() -> None:
-    continuation = LearnerContinuation(
-        from_update=2551,
-        source_stage=STAGE,
-        **{role: _export(role) for role in ("source_run", "raw", "ema", "optimizer")},
-    )
-    spec = segment_job(continuation, 4000, hours=24)
-    frozen = TrainingRegime.model_validate_json(REGIME.read_bytes()).stages[0]
-    stage = spec.regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay) and isinstance(frozen, TrainSelfPlay)
-    assert stage.learning == frozen.learning and stage.streams == frozen.streams
-    assert spec.milestones[0] == 2600 and spec.milestones[-1] == 3950
-    assert all(m % CADENCE == 0 for m in spec.milestones)
-    job = spec.job(repo=REGIME.parent, revision="HEAD", max_hours=24)
-    assert job.until == "updates=4000" and len(job.inputs) == 4
-
-
-def _window(tmp_path: Path, checkpoint_updates: int | None = None) -> Path:
-    """A tiny run shaped like a window: MTG-183's seed and stage name."""
-    regime = TrainingRegime(
-        id="window-fixture",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig(
-            hero_deck={"Mountain": 8, "Gray Ogre": 8},
-            villain_deck={"Forest": 8, "Llanowar Elves": 8},
-        ),
-        agent=ModelConfig(
-            hidden_dim=8, num_attention_heads=2, value_kind="categorical_wdl"
-        ),
-        schedule_clock="iteration_fraction",
-        stages=[
-            TrainSelfPlay(
-                id=STAGE,
-                operation="train_self_play",
-                updates=2,
-                streams=2,
-                transitions=16,
-                learning=DampedPolicyLearning(
-                    gradient="damped_policy",
-                    ema=0.9,
-                    min_advantage=0,
-                    advantage_quantile=0,
-                ),
-            )
-        ],
-    )
-    with VerifyStore(tmp_path / "window.sqlite") as store:
-        execute_regime(
-            regime,
-            SEED,
-            tmp_path / "window",
-            store,
-            checkpoint_updates=checkpoint_updates,
-        )
-    return tmp_path / "window"
-
-
-def test_staging_binds_published_exports_at_the_parent_update(
-    tmp_path: Path,
-) -> None:
-    parent = _window(tmp_path)
-    storage = DirectoryStorage(tmp_path / "bucket")
-    continuation = stage_parent(parent, storage, "mtg183/w2")
-    assert continuation.from_update == 2
-    assert continuation.raw.key == f"mtg183/w2/{STAGE}-raw.pt"
-    assert (
-        storage.get(continuation.ema.key) == (parent / f"{STAGE}-ema.pt").read_bytes()
-    )
-    # Restaging is idempotent; other bytes under a key are refused.
-    assert stage_parent(parent, storage, "mtg183/w2") == continuation
-    storage.put(continuation.raw.key, b"other")
-    with pytest.raises(ValueError, match="other bytes"):
-        stage_parent(parent, storage, "mtg183/w2")
-    (parent / f"{STAGE}-optimizer.pt").write_bytes(b"tampered")
-    with pytest.raises(ValueError, match="published optimizer"):
-        stage_parent(parent, storage, "mtg183/w3")
-
-
-def test_staging_counts_a_historical_parent_by_its_inline_update_rows(
-    tmp_path: Path,
-) -> None:
-    # w1/w2 were written before StageRecord.updates; their exports keep one
-    # diagnostics row per update and are admitted by digest, never rewritten.
-    parent = _window(tmp_path)
-    record = json.loads((parent / "run.json").read_bytes())
-    stage = record["stages"][0]
-    stage["diagnostics"] = [{"update": i} for i in range(stage.pop("updates"))]
-    (parent / "run.json").write_text(json.dumps(record))
-    continuation = stage_parent(parent, DirectoryStorage(tmp_path / "bucket"), "w")
-    assert continuation.from_update == 2
-
-
-def test_monitoring_staging_binds_an_interrupted_parent_raw_export(
-    tmp_path: Path,
-) -> None:
-    parent = _window(tmp_path, checkpoint_updates=1)
-    storage = DirectoryStorage(tmp_path / "bucket")
-    with pytest.raises(ValueError, match="final exports"):
-        stage_monitoring(parent, storage, "mtg183/w3", 1)
-    record = json.loads((parent / "run.json").read_bytes())
-    record["status"] = record["stages"][0]["status"] = "interrupted"
-    (parent / "run.json").write_text(json.dumps(record))
-    continuation = stage_monitoring(parent, storage, "mtg183/w3", 1)
-    assert continuation.from_monitoring and continuation.from_update == 1
-    assert continuation.ema is None and continuation.optimizer is None
-    assert continuation.raw.key == "mtg183/w3/monitor-00000000.pt"
-    assert (
-        storage.get(continuation.raw.key)
-        == (parent / "monitor-00000000.pt").read_bytes()
-    )
-    spec = segment_job(continuation, 120, hours=24)
-    assert spec.milestones[0] == CADENCE
-    job = spec.job(repo=REGIME.parent, revision="HEAD", max_hours=24)
-    assert len(job.inputs) == 2
-    with pytest.raises(ValueError, match="no monitoring export"):
-        stage_monitoring(parent, storage, "mtg183/w3", 2)
-    (parent / "monitor-00000000.pt").write_bytes(b"tampered")
-    with pytest.raises(ValueError, match="published monitoring raw"):
-        stage_monitoring(parent, storage, "mtg183/w4", 1)
 
 
 def test_h2h_schedule_is_frozen_and_disjoint_from_the_heuristic_grid() -> None:

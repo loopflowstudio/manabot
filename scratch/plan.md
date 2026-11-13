@@ -10,159 +10,60 @@ Approach (task): prototype manabot against the ideal Etude API → review at
 demo → build the Etude API (its own linked Task/PR) → land the manabot diff
 that deletes `execution.py`.
 
-## Status
+## Current status — 2026-11-13
 
-- write-docs (2026-11-12): `docs/training.md`, `README.md`, `manabot/README.md`
-  describe the end state.
-- implement (2026-11-12): prototype built; see `scratch/etude-api.md` (the
-  one-page review: files, the Etude gaps, parity). Docs corrected to the
-  built signatures (loop body, `settings.update`, `Tracker.log_table`,
-  checkpoint names, `belief_sampler.py`, `collect_belief(match=)`,
-  `game-attempts/` ledgers, PPO schedule note).
-- write-docs, second pass (2026-11-12): docs matched to the simplified loop
-  (`final.pt` is replaced when a later `updates` target runs; `--steps` sets
-  the target; default `--out` is `.runs/<recipe>-<seed>`; `Stopped` exits 1;
-  `failures/` in the run directory; `save_final`). Executor wording removed
-  from `README.md` (belief bullet), `manabot/README.md` (Etude jobs section,
-  package layout), `docs/learning.md` (code table), `docs/engine.md` (deck
-  source), `docs/development.md`, `experiments/README.md`. Changed doc paths:
-  `docs/training.md`, `README.md`, `manabot/README.md`, `docs/learning.md`,
-  `docs/engine.md`, `docs/experiments.md`, `docs/development.md`,
-  `experiments/README.md`.
-  Left for the land diff: `docs/experiments.md` "Declaring a comparison"
-  (`TrainingRegime` resolution, `active_runtime`, `pause.request`) and the
-  `experiment/` line of the package layout, until each scheduler piece is
-  verified as covered by Etude. `docs/training-loop.md` is linked but arrives
-  with PR #474 (open). Three frozen reports link the removed
-  `training.md#regimes-and-stages` / `#freeze-step-targets` anchors
-  (`experiments/ataraxos-technique-screen.md`, `ataraxos-transfer.md`,
-  `training-regime-followups.md`); not rewritten.
-- Check: `uv run --extra dev pytest tests/training/test_self_play_loop.py -q`
-  → 5 passed (parity PPO + damped bitwise, resume, refusal, stop). CLI
-  `--recipe belief` twice and a 4-stream Elemental run via the stub both ran.
+The cutover is implemented against EXP-56's real SDK source. See
+`implementation.md` for the deletion inventory, focused proof and remaining
+release dependency. `cutover.md` is the accepted implementation direction;
+`config-api-direction.md` records the Pydantic interface direction.
 
-- implement, second pass (2026-11-12): code checked against the second-pass
-  docs; no behavior change needed (ruff format of `cli.py`, `self_play.py`;
-  loop snippet's omission list now names the carried counts). Check:
-  `uv run --extra dev pytest tests/training/test_self_play_loop.py -q` → 5
-  passed (226 s total). CLI smoke `--recipe belief --out TMP`: run 36 s exit 0;
-  rerun 6 s exit 0; `ETUDE_STOP_FILE` set with `--steps 2` → "stopped at update
-  1; run again to resume", exit 1, `final.pt` removed; rerun reaches 2 and
-  writes a new `final.pt`; `--seed 6` on the same out refuses ("written for
-  another seed: 5, not 6"). See `questions.md` 10.
-  Docs describe, and the prototype does not yet build (all land-diff work):
-  `manabot train --list` and experiment recipes through `--recipe`;
-  `--regime`/`--regime-name` refusing (they still execute);
-  `sampled_self_play()` returning `SelfPlay` (it returns a `TrainingRegime`);
-  `collect_selection(policy, out, population)`; `run.json`/`metrics/` at the
-  top of `out` (the stub writes `out/etude/<run>/`); `etude continue` from
-  `run.out`; `local` as a loop recipe.
+Earlier prototype progress, smoke transcripts and parity results remain in
+`f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653:scratch/plan.md` and `etude-api.md`.
+Those prototype results predate the main/backend merge; they do not prove
+post-merge parity. The old final.pt, local stub and nested recipe config are
+superseded by immutable checkpoint paths and ordinary typed train functions.
 
-- write-docs, third pass (2026-11-12): recipes in `docs/training.md` call
-  `track` with no experiment (Etude refuses a name that differs from the
-  launch); default `--out` stated for every recipe, `local` keeps a fresh
-  timestamped directory; `manabot/README.md` loses its remaining executor
-  wording (`checkpoint_updates` → `SelfPlay.milestones`, `TrainSelfPlay` →
-  `SelfPlay`, `TrainingRun` admission, the resume snapshot);
-  `experiments/README.md` no longer cites `TrainingJob.experiment`. Changed
-  doc paths are the same eight. Docs now also describe, and the prototype does
-  not build: recipes omitting `experiment=` with the CLI supplying it;
-  baseline on the resumable default `--out` and `--seconds` as a saved stop.
-  New: `questions.md` 11–13, `etude-api.md` gaps 6–7.
+## Delete — do not maintain
 
-- implement, third pass (2026-11-12): recipes call `track` with no
-  experiment; `manabot train --recipe` sets `ETUDE_EXPERIMENT` to the recipe's
-  name beside `ETUDE_OUT`; the stub refuses a recipe called with neither.
-  Check: `uv run manabot train --recipe belief --out TMP` → exit 0,
-  `run.json` records `"experiment":"belief"`; a bare `belief(BeliefConfig())`
-  refuses. The loop is unchanged, so its test was not rerun. Still docs-only
-  (land diff): baseline on the resumable default `--out`, `--seconds` as a
-  saved stop, and the earlier list above.
+Deleted the executor, stage/recovery admission, recovery state, local scheduler,
+monitor follower, study launcher, RunContext and proposed_etude stub. Their
+exclusive tests were removed; mixed tests retain model, collector, record and
+evaluation coverage. The complete path inventory is in implementation.md. Compress also removed
+unused attack registration, Elemental parent staging, value-readout launch helpers,
+CUDA capture hooks and profiler-only state. Public frozen execution refusals and
+historical report/data readers remain; no further deletion target is pending.
+The obsolete attack executor tests now check refusal without creating a cohort.
+The former recovery CI group only held pretrained loading; it joins training.
 
-## Remaining work (after demo review, not before)
+The CLI selects each built-in function/config pair in one table. The loop saves
+resume state once when persistence and checkpoint cadences coincide, before
+publishing the policy; docs use the same ordering.
 
-Etude Task: `Run.out`, `Run.stopping()`, call-again on `Stopped`,
-`etude continue` from `run.out` (gaps 1–5 in `etude-api.md`).
+Preserve saved TrainingRegime/TrainingRun and comparison records, serialized
+checkpoint keys, world binding, game-error ledgers/replay and failure capture,
+paired deals and training seeds. Current callers use train(config), real Etude
+tracking and jobs.training. Frozen execution refuses with the last executable
+revision; it is not translated to different learning semantics.
 
-Land diff (step 3), **Delete — do not maintain**:
-- `manabot/training/execution.py` and its exclusive tests (`test_recovery`,
-  `test_active_recovery`, executor paths of `test_regimes`, …), the
-  `--regime`/`--regime-name`/`--resume-from`/`--source-repair-reason`/
-  checkpoint-cadence CLI options (refuse naming the last revision).
-- `training/state/recovery.py`, executor parts of `admission.py`,
-  `infra/runtime.RunContext`, `experiment/{job,runner,evaluation_queue,
-  monitor_worker,study}.py` as Etude covers them (verify each).
-- `manabot/recipes/proposed_etude.py` (recipes import `etude.train.run`).
-- `SelfPlay.regime()` (move `validate_regime`'s checks into `SelfPlay`) and the
-  executor parity test.
-- Must survive: `TrainingRegime`/`records` reading, `load_checkpoint`, saved
-  keys, game-error ledger/replay, failure capture, paired deals, world-bound
-  checkpoints, seeds.
-- Move `local`/`baseline`/`batched_baseline` recipes and experiment files'
-  `runs()` to `training(recipe, config=...)`; add `manabot train --list`.
+## Remaining work
 
-- functional pass (2026-11-12, in the Task conversation). Jack Heart: "the
-  style in self_play.py still seems very Object ORiented and Frameworky. can
-  we make it more functional?" `SelfPlay` is data only; its methods became
-  functions (`to_regime`, `root_match`, `learner_digest`, `open_collector`,
-  `is_checkpoint`); `Every`/`every()` became `checkpoint_every: int | None`;
-  `LoopState`/`Counts` are frozen; `LoopState.advance`/`.behavior` became
-  `counted`/`behavior`; one update is `step(state, ...) -> (state, row)`
-  using `learn`. Check: `uv run --extra dev pytest
-  tests/training/test_self_play_loop.py -q` → 5 passed (153 s), parity
-  bitwise for PPO and damped. Docs updated (`docs/training.md`,
-  `manabot/README.md`). Recipes' `try/except: run.finish("failed")` is still
-  frameworky; not changed.
+1. Release EXP-56, raise every Etude requirement and the runtime pin together,
+   refresh uv.lock and verify isolated/installed consumers. SDK 0.2.16 cannot
+   run this branch. No local dependency path is committed.
+2. Gate the affected suites, including the retained game-error replay issue
+   below. Demo/review the explicit loss of in-collection/source-repair recovery.
+3. Prove actual launch output restoration/retry and service continuation once
+   the SDK/service are available; local target continuation and etude.call are
+   exercised. Publishing and landing are later Graph steps.
 
-- Etude Task filed and started 2026-11-12: EXP-56 "Give a training recipe a run
-  directory, a stop signal and a retry after a planned stop" (loopflow://etude/task/EXP-56),
-  `code` graph; its brief carries gaps 1-8 of `etude-api.md`. Jack Heart:
-  "ready to run an etude task?" / "open its task session in rex so i can
-  review its work once its done".
+## Contrary finding from the main sync
 
-- sync + write-docs, fourth pass (2026-11-13, clarified extraction scope).
-  Main (`b531853a5`, with the torch/MLX backend move) is merged as `344b7d116`.
-  Resolution: main's `backends/torch` `Learner` class is kept (it is the
-  backend protocol MLX also implements), so the branch's `new_learner` /
-  `learner_precision` are gone and callers use `Learner(...)` /
-  `learner.forward_precision()`; updates take `torch_backend` first. The
-  branch's functional collector (`open_collector`/`collect`/`close_collector`)
-  is kept, with main's bucket-needs recording ported into it.
-  `self_play.py` imports from `manabot.backends.torch.*` and is listed in
-  `_TORCH_NOT_YET_MOVED`; `cli.py` uses `recipes.device.accelerator`.
-  Checked after the merge: 173 passed across the merged learner, collector,
-  update-backend, admission, artifact and boundary tests. Failing and not
-  diagnosed to a cause: `tests/training/test_game_errors.py::
-  test_resource_limit_receipt_replays_its_retained_encoding_boundary` (3
-  params) returns `binding_mismatch`: the replayed decision frame has
-  `schema_version` 8 and the fixture `tests/fixtures/tla-pilot-permanent-capacity.jsonl`
-  has 7. `replay_attempt`'s comparison and the fixture are identical on main,
-  where CI is green, so check whether CI runs this test before changing
-  anything. `tests/training/test_self_play_loop.py` (executor parity) was not
-  rerun after the merge. Pre-existing on the branch, untouched:
-  `experiments/l4_step_profile.py`, `collection_tail_graphs.py` and
-  `cuda_precision.py` still patch `SeatRoutedCollector`, which no longer exists.
-  Docs now describe the preserved file structure. Changed doc paths:
-  `docs/training.md`, `manabot/README.md`, `experiments/README.md`,
-  `docs/learning.md`, `docs/training-loop.md` (the last two only for the merge).
-  What the docs now say that the code does not yet do (implement step):
-  - A recipe module exposes `train(config)` (`manabot.recipes.elemental.train`,
-    `manabot.recipes.belief_sampler.train`), not `elemental(config)` /
-    `belief(config)`. Configs hold only varying inputs (`seed`, `updates`,
-    `games`, `validate_numerics`); the `SelfPlay` settings are built in the
-    function body, not held as `ElementalConfig.self_play`.
-  - `updates = int(run.until("updates", default=config.updates))`; imports are
-    Etude's own (`etude.train.run.track`, `local_launch`, `Stopped`;
-    `etude.train.records.Step`); `manabot/recipes/proposed_etude.py` is gone
-    and the loop raises Etude's `Stopped`, not its own.
-  - No `final.pt` and no `save_final`: the loop always writes and records the
-    last update's checkpoint (tag `final`) and returns its path (EMA when
-    kept). `save_checkpoint` never rewrites an existing file.
-  - Belief outputs are named for the policy (`histories-<policy stem>.json`,
-    `belief-<policy stem>.pt`).
-  - A planned stop exits 75 from `manabot train` (was 1).
-  - The local Etude record is under `OUT/etude/`.
-  - `etude continue --run RUN --until updates=N`.
-  - Experiment files: `runs()` returns `training(train, config=..., smoke=...)`.
-  Still describing the executor, unchanged: `docs/experiments.md` "Declaring a
-  comparison" (questions.md 13).
+The earlier merge check passed 173 learner/collector/backend/admission/artifact/
+boundary tests. Three variants of
+`test_resource_limit_receipt_replays_its_retained_encoding_boundary` failed
+`binding_mismatch`: replayed frame schema 8 versus retained fixture schema 7
+(`tests/fixtures/tla-pilot-permanent-capacity.jsonl`). Comparison and fixture
+matched main, whose CI was green. This pass leaves frozen evidence unchanged;
+gate must resolve or explicitly report the failure, not regenerate it away.
+
+Check results for this cutover are recorded once in implementation.md.

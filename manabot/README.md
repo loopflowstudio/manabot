@@ -611,9 +611,10 @@ policy catalog. Research report presentation and Etude evaluation recording are
 still separate remaining integration work.
 
 Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
-`ObservationConfig`, `RewardConfig`, `RuntimeConfig`). `infra/runtime.py::RunContext`
-owns per-run seeding and tracking; `experiment/config.py::Experiment` describes
-experiment cases and jobs. Built-in recipes live in `manabot/recipes/`.
+`ObservationConfig`, `RewardConfig`, `RuntimeConfig`). Recipes declare tracking
+through Etude and pass their seed to the self-play loop.
+`experiment/config.py::Experiment` retains historical comparison declarations;
+current launch files return Etude jobs. Built-in recipes live in `manabot/recipes/`.
 Search distillation (the exp-10 BC/value loops and the `train_supervised`
 regime stage) is retired; replaying that workflow requires pinned source. Historical checkpoint dictionary keys remain unchanged,
 but old `ataraxos_move` recipes require pinned source rather than runtime aliases.

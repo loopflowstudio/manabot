@@ -1,7 +1,7 @@
 # Training ownership and learning rules
 
 RL entry points resolve a `TrainingRegime` and call
-`manabot.training.execution.execute_regime`. Bounded diagnostics may use the
+`manabot.training.loops.self_play.self_play`. Bounded diagnostics may use the
 same `SeatRoutedCollector` and update rules (`update_damped_iteration`,
 `update_iteration`) directly. A new
 loop or optimizer implementation needs a concrete unsupported behavior and a

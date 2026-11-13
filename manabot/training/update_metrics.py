@@ -1,6 +1,6 @@
 """Per-update self-play diagnostics as Etude metrics, written once and read back.
 
-The learner logs each update's diagnostics to its Etude run (RunContext);
+The learner logs each update's diagnostics to its Etude run;
 TrainingRun keeps counters and receipts. Matchup outcomes are an Etude row
 table per update (`OUTCOME_TABLE`, logged with `Run.log_table`), so deck pairs
 add rows rather than metric columns. `metric_row` produces flat "/"-joined

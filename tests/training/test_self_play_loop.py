@@ -1,22 +1,22 @@
-"""The self-play loop: same-seed parity with the regime executor, resume and refusal."""
+"""Self-play resume, immutable exports, refusal and failure evidence."""
 
+from collections.abc import Sequence
+import json
 from pathlib import Path
 
+from etude.stopping import Stopped
+import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.rl import NumericalError
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import gray_ogre_match
-from manabot.training.execution import execute_regime
-from manabot.training.loops.self_play import (
-    SelfPlay,
-    Stopped,
-    load_state,
-    self_play,
-    to_regime,
-)
+from manabot.training.loops import self_play as loop
+from manabot.training.loops.self_play import LoopState, SelfPlay, load_state, self_play
 from manabot.training.regime import DampedPolicyLearning, Learning
-from manabot.verify.store import VerifyStore
+from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.selection import UpdateDiagnostics
 
 SEED = 197
 
@@ -31,53 +31,13 @@ def _settings(learning: Learning | DampedPolicyLearning) -> SelfPlay:
     )
 
 
-def _weights(path: Path) -> dict[str, torch.Tensor]:
-    return torch.load(path, map_location="cpu", weights_only=False)["model_state_dict"]
-
-
-def _assert_equal(
-    left: dict[str, torch.Tensor], right: dict[str, torch.Tensor]
-) -> None:
-    assert left.keys() == right.keys()
-    for name in left:
-        assert torch.equal(left[name], right[name]), name
-
-
-@pytest.mark.parametrize(
-    "learning",
-    [
-        Learning(epochs=1, minibatches=1, ema=0.9),
-        DampedPolicyLearning(gradient="damped_policy"),
-    ],
-    ids=["ppo", "damped"],
-)
-def test_loop_matches_the_executor_with_the_same_seed(
-    tmp_path: Path, learning: Learning | DampedPolicyLearning
-) -> None:
-    settings = _settings(learning)
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        record = execute_regime(
-            to_regime(settings, id="parity", updates=2),
-            SEED,
-            tmp_path / "executor",
-            store,
-        )
-    assert record.status == "completed", record.error
-
-    final = self_play(settings, tmp_path / "loop", seed=SEED, updates=2)
-
-    raw = torch.load(tmp_path / "loop" / "state.pt", weights_only=False)["raw"]
-    _assert_equal(raw, _weights(tmp_path / "executor" / "self-play-raw.pt"))
-    _assert_equal(_weights(final), _weights(tmp_path / "executor" / "self-play-ema.pt"))
-
-
 def test_a_rerun_resumes_and_a_finished_loop_returns_at_once(tmp_path: Path) -> None:
     settings = _settings(Learning(epochs=1, minibatches=1, ema=0.9)).model_copy(
         update={"checkpoint_every": 1}
     )
     out = tmp_path / "run"
-    self_play(settings, out, seed=SEED, updates=1)
-    (out / "final.pt").unlink()
+    earlier = self_play(settings, out, seed=SEED, updates=1)
+    original = earlier.read_bytes()
 
     final = self_play(settings, out, seed=SEED, updates=2)
 
@@ -88,6 +48,8 @@ def test_a_rerun_resumes_and_a_finished_loop_returns_at_once(tmp_path: Path) -> 
         "00000001-raw.pt",
         "00000002-raw.pt",
     ]
+    assert earlier.read_bytes() == original
+    assert final.name == "00000002-ema.pt"
     written = final.stat().st_mtime_ns
     assert self_play(settings, out, seed=SEED, updates=2) == final
     assert final.stat().st_mtime_ns == written
@@ -121,7 +83,9 @@ class _StopAfterOne:
     ) -> None:
         pass
 
-    def checkpoint(self, path: Path, /, **clocks: float) -> None:
+    def checkpoint(
+        self, path: Path, /, *, tags: Sequence[str] = (), **clocks: float
+    ) -> None:
         self.checkpoints.append(path)
 
     def stopping(self) -> bool:
@@ -137,7 +101,45 @@ def test_a_stop_saves_at_an_update_boundary_and_the_next_call_finishes(
     with pytest.raises(Stopped) as stopped:
         self_play(settings, tmp_path, seed=SEED, updates=3, run=tracker)
 
-    assert stopped.value.update == 1 and tracker.updates == [1]
+    assert "update 1" in str(stopped.value) and tracker.updates == [1]
     final = self_play(settings, tmp_path, seed=SEED, updates=3)
     state = load_state(tmp_path / "state.pt", settings, SEED)
     assert final.exists() and state is not None and state.update == 3
+
+
+@pytest.mark.parametrize("capture_failure", [False, True])
+def test_numerical_failure_retains_diagnostics_without_replacing_valid_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capture_failure: bool
+) -> None:
+    settings = _settings(Learning(epochs=1, minibatches=1, ema=0.9))
+    policy = self_play(settings, tmp_path, seed=SEED, updates=1)
+    original = {path: path.read_bytes() for path in (policy, tmp_path / "state.pt")}
+
+    def fail(
+        state: LoopState, batch: RolloutBatch, rng: np.random.Generator, *, updates: int
+    ) -> UpdateDiagnostics:
+        raise NumericalError(
+            "fixture_nonfinite", {"values": torch.tensor([float("nan")])}
+        )
+
+    monkeypatch.setattr(loop, "learn", fail)
+    if capture_failure:
+        # A regular file prevents creating the diagnostic directory.
+        (tmp_path / "numerical-incident").touch()
+    with pytest.raises(NumericalError, match="fixture_nonfinite") as caught:
+        self_play(settings, tmp_path, seed=SEED, updates=2)
+    for path, content in original.items():
+        assert path.read_bytes() == content
+    assert not (tmp_path / "checkpoints/00000002-raw.pt").exists()
+    if capture_failure:
+        assert any("incident capture failed" in note for note in caught.value.__notes__)
+        return
+    receipt = next((tmp_path / "numerical-incident").glob("*/incident.json"))
+    metadata = json.loads(receipt.read_text())
+    assert metadata["iteration"] == 2 and metadata["completed_updates"] == 1
+    assert metadata["invariant"] == "fixture_nonfinite"
+    assert "packed_actions/offsets" in metadata["tensors"]
+    evidence = torch.load(receipt.with_name("tensors.pt"), weights_only=True)
+    assert torch.isnan(evidence["values"]).any()
+    diagnostic = torch.load(receipt.with_name("state.pt"), weights_only=False)
+    assert diagnostic["optimizer"]["state"] and diagnostic["ema"]

@@ -9,18 +9,14 @@ ownership and provenance separately from the unchanged TrainingRegime digest.
 from dataclasses import dataclass
 from itertools import product
 import json
-import pathlib
 import re
 from typing import Literal
 
-from etude.launch.records import Run
 from pydantic import BaseModel, JsonValue, TypeAdapter
 
 from manabot.experiment.execution import ExperimentSchedule, PlannedRun
-from manabot.experiment.job import TrainingJob
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_json, canonical_sha256
-from manabot.training.execution import validate_regime
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -29,6 +25,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.validation import validate_regime
 
 ComponentName = Literal[
     "model", "environment", "learning", "resources", "pipeline", "run", "identity"
@@ -386,40 +383,6 @@ class Experiment:
     matrix: tuple[Axis, ...] = ()
     schedule: ExperimentSchedule | None = None
     jobs: tuple[PlannedRun, ...] = ()
-
-    def runs(
-        self, *, experiment: str, repo: pathlib.Path, revision: str
-    ) -> tuple[Run, ...]:
-        """Each planned run as an Etude training run of `experiment`; launching is the caller's.
-
-        Pure: nothing is submitted. `experiment` is the stem of the experiment
-        file that returns these runs from its `runs()`, so `etude eval` and
-        `etude report` find them. Queue or launch the result with
-        `etude.launch.client.queue_cohort`, or with `etude launch FILE`.
-        """
-        if self.schedule is not None and self.jobs:
-            raise ValueError("choose local schedule or launched runs")
-        cases = {case.name: case for case in self.resolve().cases}
-        if len({(run.case, run.seed) for run in self.jobs}) != len(self.jobs):
-            raise ValueError("launched case/seed bindings must be unique")
-        if any(run.case not in cases for run in self.jobs):
-            raise ValueError("a launched run references an unresolved case")
-        runs: list[Run] = []
-        for binding in self.jobs:
-            case = cases[binding.case]
-            job = TrainingJob(
-                regime=case.regime,
-                experiment=experiment,
-                milestones=binding.milestones,
-                validate_numerics=binding.validate_numerics,
-            ).job(
-                repo=repo,
-                revision=revision,
-                max_hours=binding.max_hours,
-                max_usd=binding.max_usd,
-            )
-            runs += job.runs(binding.seed, params={"case": case.name})
-        return tuple(runs)
 
     def resolve(self) -> ResolvedExperiment:
         if self.name:

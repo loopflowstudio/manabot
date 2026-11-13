@@ -136,104 +136,51 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 ## Declaring a comparison
 
-`manabot.experiment.config.Experiment` declares a typed comparison. `resolve()`
-returns complete validated `TrainingRegime` values plus a provenance receipt;
-it never builds a model, opens a store or launches work.
+An experiment file keeps its explicit `train(config)`, `runs()`, `eval(state)`
+and `report()` functions. Training is an ordinary function that calls a loop;
+Etude supplies its run directory, stop signal, tracking and retry. `runs()`
+returns jobs made with `etude.jobs.training(train, config=..., smoke=...)`.
+Put each arm and training seed in that declaration, with its hours and dollar
+cap. Evaluation and reports continue to read the recorded checkpoints.
+
+For example, `experiments/elemental.py` launches the current Elemental recipe
+and evaluates its checkpoints on the existing paired-deal grid. A local call
+uses the same function:
 
 ```python
-from experiments.batched_baseline import batched_baseline
-from manabot.experiment.config import Axis, Baseline, Case, Experiment, ModelOverride
-from manabot.infra.config import ModelConfig
+from etude.train.run import local_launch
+from manabot.recipes.elemental import ElementalConfig, train
 
-experiment = Experiment(
-    name="value-output",
-    baseline=Baseline.capture("control", batched_baseline()),
-    matrix=(Axis("output", (
-        Case("scalar", (ModelOverride(ModelConfig(value_kind="scalar")),), "Scalar"),
-        Case("wdl", (ModelOverride(ModelConfig(value_kind="categorical_wdl")),), "WDL"),
-    )),),
-)
-resolved = experiment.resolve()
-regime = resolved.regimes["value-output-wdl"]
-receipt = resolved.receipt()
+with local_launch(out=".runs/elemental-197", experiment="elemental"):
+    train(ElementalConfig(seed=197))
 ```
 
-`cases` vary together; `matrix` axes cross, last axis fastest. IDs join
-experiment, case and choice names with hyphens; names are lowercase
-alphanumeric. Labels are presentation only.
+Repeating a call resumes that directory. An Etude continuation sets the target
+with `--until updates=N`, preserving the recipe's settings and the parent's
+output. See [training](training.md#recovery) for the guarantees and limits.
 
-| Component | Owns |
-| --- | --- |
-| `ModelOverride(ModelConfig(...))` | Explicitly supplied `agent.*` fields. |
-| `Environment(world=, match=, observation=)` | World, matchup, input capacity; a supplied deck map replaces the whole map. |
-| `LearningRule(Learning(...) \| DampedPolicyLearning(...))` | The complete learning rule on every self-play stage. |
-| `Resources(execution=, wall_seconds=)` | Explicit execution fields on every stage and the run deadline. |
-| `Pipeline(stages=(...))` | The complete ordered stage list. |
-| `RunControl(...)` | `schedule_clock` (default `iteration_fraction`), `recovery_max_microsteps`, `selection`, `recovery_every_updates`. |
+The nightly baseline calls `manabot.recipes.baseline.train(config)` and then
+`evaluate(config, directory)`. Evaluation compares the initial and final raw
+checkpoints on the same four deck/seat legs per deal, runs the existing native
+choice inspection, and writes `learning.json` for aggregation across training
+seeds. Training time and evaluation time remain separate.
 
-Every setting has exactly one owner. Writes from common overrides, cases and
-axes may replace a baseline value but never each other, even with equal
-values; overlapping parent/child writes fail (so `Pipeline` cannot accompany
-`LearningRule`). There is no last-write-wins. Pydantic's explicitly-set fields
-define a patch, so an explicit default still counts as an override.
-Resolution runs `validate_regime`; artifact existence and runtime binding stay
-execution checks.
+### Retained comparisons
 
-`Baseline.capture(name, regime)` freezes all current serialized defaults into
-immutable bytes; its identity is the full snapshot. `ResolvedCase.digest` is
-the canonical regime digest; `ResolvedCase.identity` also hashes label,
-baseline and provenance. Tests use the small categorical-WDL baseline in
-`tests/training/wdl_baseline.py`, built with `ataraxos_baseline`. A
-declaration is not a study type: the arena studies in
-`manabot.experiment.study` admit only their own arms, seeds and budgets.
+`manabot.experiment.config.Experiment` still resolves saved comparison
+snapshots into `TrainingRegime` values and provenance receipts. The record
+models and reports still read their original fields. Resolution does not
+launch work, and those declarations no longer have a `runs()` method.
+The local comparison scheduler, checkpoint follower and study executor are
+retired. Frozen entry points and the CLI name revision
+`f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653` when asked to execute them.
+Use their recorded revision and lock to reproduce old experiments; do not
+translate their schedules or recovery contracts silently.
 
-### Execute locally
-
-`Experiment.schedule = ExperimentSchedule(...)` declares seeds, hardware,
-`wall_seconds`, `process_seconds`, `MonitoringBudget` and `checkpoint_updates`.
-`manabot.experiment.runner.run_experiment(experiment, hardware, out)` executes
-it and records actual attempts in `ExperimentRun`.
-
-```python
-hardware = HardwareInventory.model_validate_json(Path("hardware.json").read_text())
-result = run_experiment(experiment, hardware, Path(".runs/my-comparison"))
-result = run_experiment(experiment, hardware, out, resume=True)              # pending work only
-result = run_experiment(experiment, hardware, out, resume=True, recover=(0,))  # recover attempt 0
-```
-
-`HardwareInventory` lists resource names, exact hostnames, `backend:
-"local-cpu"`, `cpu_threads` and optional `dollars_per_hour`. Only that host and
-CPU are admitted; there is no discovery, provisioning or device fallback. One
-learner and at most one evaluator run concurrently; reserve a thread for
-evaluation. `wall_seconds` bounds the whole execution; `process_seconds`
-bounds additive learner plus evaluator time. The full monitoring allocation
-is reserved before each learner; jobs that do not fit stay pending rather than
-shrink. Failed learners keep their exported checkpoints; stopped evaluations
-are not retried; resume grants no extra budget. `active_runtime=True` requires
-the [current-game recovery policy](training.md#what-resume-does-not-promise) on every
-learner. A `pause.request` file in the output directory requests a pause at
-the next learning boundary.
-
-The report is one editable `comparison.ipynb` per execution directory, created
-only when absent so edits survive; it reads retained files only and renders
-`comparison.html`. `demo_declaration()` in
-`tests/training/test_experiment_runner.py` is a complete small declaration;
-the retained [demo HTML](../tests/fixtures/experiment-demo/comparison.html)
-and [evidence note](../tests/fixtures/experiment-demo/README.md) show the
-output. Interpretation belongs to the experiment author, never the runner.
-
-Remote runs go through Etude ([remote training](training.md#remote-training)).
-
-### Freeze step targets
-
-`manabot.experiment.execution.StepCalibration.from_export(path)` reads a
-completed single-stage fresh self-play `run.json` and measures completed
-iterations per collection-plus-learning second; `updates_for(hours)` floors to
-whole iterations. Use a representative, separately authorized pilot per
-capacity; apply each target to `TrainSelfPlay.updates` and one shared interval
-to every `checkpoint_updates`; commit the declaration before launch.
-Execution never consults pilot rates. Equal steps do not mean equal
-transitions, exposures, active time or dollars.
+`StepCalibration.from_export(path)` remains a reader of a retained completed
+single-stage export. Its `updates_for(hours)` gives an author a target; a new
+recipe fixes its learning horizon before launch and leaves the stopping target
+to Etude. Equal updates do not imply equal transitions, exposures or dollars.
 
 ## Writing a report
 

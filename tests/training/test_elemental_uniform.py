@@ -1,6 +1,5 @@
 """Native game-root uniform sampling and real CPU learning."""
 
-from copy import deepcopy
 import json
 from pathlib import Path
 from typing import Literal
@@ -9,16 +8,12 @@ import numpy as np
 import pytest
 import torch
 
-from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
-from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout import collection
 from manabot.training.rollout.collection import (
     Collector,
@@ -34,9 +29,7 @@ from manabot.training.state.game_errors import (
     open_ledger,
     replay_attempt,
 )
-from manabot.verify.store import VerifyStore
 import managym
-from tests.training.test_recovery import tracked_updates
 
 PACK = "elemental-world-v2"
 
@@ -181,73 +174,6 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
         native.set_uniform_roster(roster[:-1])
     with pytest.raises(RuntimeError, match="every exact Elemental"):
         native.set_uniform_roster([roster[0]] * 10)
-
-
-def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
-    torch.set_num_threads(1)
-    value = ataraxos_move_scalar().model_dump(mode="json")
-    value.update(
-        world=managym.WORLD_VERSION,
-        id="uniform-cpu-proof",
-        match=_match().config.model_dump(),
-    )
-    value["agent"].update(hidden_dim=8, world=PACK, policy_film=False)
-    value["stages"] = value["stages"][:1]
-    stage = value["stages"][0]
-    stage.update(
-        streams=4,
-        transitions=64,
-        updates=2,
-        matchup_curriculum="elemental-uniform",
-        learning_seats="one",
-    )
-    stage["execution"]["wall_seconds"] = 180
-    stage["learning"].update(min_advantage=0, advantage_quantile=0)
-    bad_input = deepcopy(value)
-    bad_input["agent"]["world"] = "ur-lessons-vs-gw-allies"
-    with pytest.raises(ValueError, match="complete Elemental policy input"):
-        validate_regime(bad_input)
-    recipe = validate_regime(value)
-    stage_model = recipe.stages[0]
-    assert isinstance(stage_model, TrainSelfPlay)
-    baseline = deepcopy(value)
-    baseline["stages"][0].update(streams=256, transitions=64)
-    assert validate_regime(baseline).stages[0].streams == 256
-    for workers in (2, 4):
-        parallel = deepcopy(value)
-        parallel["stages"][0]["execution"]["workers"] = workers
-        assert TrainingRegime.model_validate(parallel).stages[0].execution.workers == (
-            workers
-        )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 17402, tmp_path / "run", store)
-    assert run.status == "completed"
-    result = run.stages[0]
-    assert result.learner_transitions == 4 * 64 * 2
-    assert result.optimizer_exposures > 0
-    assert result.updates == 2
-    last = tracked_updates(run, tmp_path)[-1]
-
-    def exposure(count: str) -> int:
-        prefix = "cumulative_matchup_exposure/"
-        return sum(
-            int(value)
-            for name, value in last.items()
-            if name.startswith(prefix) and name.endswith(f"/{count}")
-        )
-
-    assert exposure("learner_transitions") == 512
-    assert exposure("terminal_games") == result.games
-    raw, _ = load_checkpoint(result.artifacts["raw"]["path"])
-    ema, _ = load_checkpoint(result.artifacts["ema"]["path"])
-    initial, _ = load_checkpoint(result.artifacts["initial_raw"]["path"])
-    assert any(
-        not torch.equal(a, b)
-        for a, b in zip(raw.parameters(), initial.parameters(), strict=True)
-    )
-    assert len(raw.world_binding["setups"]) == 10
-    assert len(ema.world_binding["setups"]) == 10
-    assert all(torch.isfinite(p).all() for p in raw.parameters())
 
 
 def test_uniform_crash_refill_retains_sampled_setups(

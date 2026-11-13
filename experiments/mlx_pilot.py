@@ -75,11 +75,11 @@ def capture(out: Path) -> None:
     from experiments.tla_frontier import frozen
     from manabot.backends.torch.policy import ActorCritic
     from manabot.model.inference import PolicyInference
-    from manabot.training import execution
-    from manabot.training.regime import TrainingRegime
+    from manabot.training.loops import self_play as execution
+    from manabot.training.loops.self_play import SelfPlay
+    from manabot.training.regime import TrainingRegime, TrainSelfPlay
     from manabot.training.rollout.collection import Collector
     from manabot.training.updates.health import OptimizerHealth
-    from manabot.verify.store import VerifyStore
 
     out.mkdir(parents=True, exist_ok=False)
     (out / "collection").mkdir()
@@ -183,27 +183,43 @@ def capture(out: Path) -> None:
     started = time.perf_counter()
     meta: dict[str, Any] = {"host_before": _host(), "torch": torch.__version__}
     try:
-        with VerifyStore(out / "capture.sqlite") as store:
-            result = execution.execute_regime(
-                regime,
-                protocol.training_seed,
-                out / "execution",
-                store,
-                experiment="mlx-pilot-capture",
-                training_exposure=False,
-            )
+        stage_config = regime.stages[0]
+        assert isinstance(stage_config, TrainSelfPlay)
+        inputs = SelfPlay(
+            world=regime.world,
+            match=regime.match,
+            deck_source=regime.deck_source,
+            observation=regime.observation,
+            model=regime.agent,
+            learning=stage_config.learning,
+            behavior=stage_config.behavior,
+            streams=stage_config.streams,
+            transitions=stage_config.transitions,
+            learning_seats=stage_config.learning_seats,
+            batch_closure=stage_config.batch_closure,
+            matchup_curriculum=stage_config.matchup_curriculum,
+            game_errors=stage_config.game_errors,
+            device="cpu",
+            workers=1,
+            threads=4,
+            checkpoint_every=1,
+        )
+        execution.self_play(
+            inputs, out / "execution", seed=protocol.training_seed, updates=1
+        )
+
     finally:
         PolicyInference.prepare = original_prepare  # type: ignore[method-assign]
         ActorCritic.forward = original_forward  # type: ignore[method-assign]
         execution.collect = original_collect  # type: ignore[method-assign]
         OptimizerHealth.check = original_check  # type: ignore[method-assign]
-    initial = sorted((out / "execution").rglob("*-initial-raw.pt"))
+    initial = sorted((out / "execution").rglob("00000000-raw.pt"))
     if len(initial) != 1:
         raise RuntimeError(f"expected one initial checkpoint, found {initial}")
     shutil.copyfile(initial[0], out / "initial.pt")
     policy = sum(c["prepare"] + c["forward"] for c in calls)
     meta.update(
-        status=str(result.status),
+        status="completed",
         wall=time.perf_counter() - started,
         collection_wall=clock.get("collection"),
         collection_policy=policy,

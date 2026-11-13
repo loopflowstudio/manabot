@@ -263,3 +263,73 @@ def evaluate_checkpoint(
             result.win = result.draw = result.score = None
         atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
     return result
+
+
+def checkpoints(
+    run: TrainingRun, *, include_initial: bool = False, include_monitoring: bool = True
+) -> list[Checkpoint]:
+    """Admitted raw exports with their original cumulative training coordinates."""
+    found = [
+        Checkpoint(
+            artifact=c.artifact,
+            coordinates=TrainingCoordinates.model_validate(
+                c.model_dump(exclude={"ordinal", "artifact", "error"})
+            ),
+        )
+        for c in run.monitoring_checkpoints
+        if include_monitoring and c.artifact is not None and c.error is None
+    ]
+    for stage in run.stages:
+        if (
+            include_initial
+            and "initial_raw" in stage.artifacts
+            and not (
+                run.monitoring_checkpoint_updates is not None
+                and stage.learning_state_origin is not None
+            )
+        ):
+            origin = stage.learning_state_origin
+            found.append(
+                Checkpoint(
+                    artifact=stage.artifacts["initial_raw"],
+                    coordinates=TrainingCoordinates(
+                        stage_id=stage.id,
+                        updates=origin.iteration if origin is not None else 0,
+                        segment_updates=0
+                        if stage.optimizer_updates is not None
+                        else None,
+                        optimizer_updates=(
+                            origin.optimizer_updates if origin is not None else 0
+                        )
+                        if stage.optimizer_updates is not None
+                        else None,
+                        training_seconds=origin.cumulative_seconds
+                        if origin is not None
+                        else 0,
+                        **{
+                            name: getattr(origin, name)
+                            for name in (
+                                "active_training_seconds",
+                                "environment_decisions",
+                                "learner_transitions",
+                                "optimizer_exposures",
+                                "games",
+                            )
+                        }
+                        if origin is not None
+                        # Untrained: every clock is zero, not unknown.
+                        else {"active_training_seconds": 0.0},
+                    ),
+                )
+            )
+        checkpoint = stage_checkpoint(run, stage.id)
+        if checkpoint is not None and not (
+            run.monitoring_checkpoint_updates is not None
+            and any(
+                c.coordinates.stage_id == stage.id
+                and c.coordinates.updates == checkpoint.coordinates.updates
+                for c in found
+            )
+        ):
+            found.append(checkpoint)
+    return sorted(found, key=lambda c: c.coordinates.training_seconds or 0)

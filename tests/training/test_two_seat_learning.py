@@ -1,6 +1,5 @@
 """Both-seat terminal credit, behavior ownership and independent optimizer updates."""
 
-from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -8,7 +7,6 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
-from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
@@ -21,10 +19,8 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.admission import admit_observation
-from manabot.training.execution import execute_regime
 from manabot.training.regime import (
     DampedPolicyLearning,
-    Learning,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -37,9 +33,7 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.verify.store import VerifyStore
 import managym
-from tests.training.test_recovery import tracked_updates
 
 
 class ScriptedGames:
@@ -261,46 +255,6 @@ def test_self_play_defaults_to_both_and_rejects_off_policy_rows() -> None:
             behavior="random",
             learning_seats="both",
         )
-
-
-@pytest.mark.parametrize("behavior", ["current-self", "ema-self"])
-def test_regime_trains_and_exports_both_seats(
-    behavior: Literal["current-self", "ema-self"], tmp_path: Path
-) -> None:
-    agent = _agent()
-    stage = TrainSelfPlay(
-        id="learn",
-        operation="train_self_play",
-        updates=2,
-        streams=2,
-        transitions=1,
-        learning_seats="both",
-        games_per_stream=1,
-        behavior=behavior,
-        learning=Learning(epochs=1, minibatches=1, retained_fraction=1, ema=0.9),
-    )
-    regime = TrainingRegime(
-        id="two-seat-smoke",
-        world=managym.WORLD_VERSION,
-        match=MatchConfig(),
-        agent=agent.config,
-        stages=[stage],
-        wall_seconds=120,
-        schedule_clock="iteration_fraction",
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 17, tmp_path / "run", store)
-    assert run.status == "completed"
-    record = run.stages[0]
-    assert record.games == 4
-    assert record.environment_decisions == record.learner_transitions
-    rows = tracked_updates(run, tmp_path)
-    assert sum(row["rows"] for row in rows) == record.learner_transitions
-    assert record.optimizer_exposures == record.learner_transitions
-    assert all(row["bootstrapped_tail_fraction"] == 0 for row in rows)
-    for role in ("raw", "ema"):
-        loaded, _ = load_checkpoint(record.artifacts[role]["path"])
-        assert loaded.config == agent.config
 
 
 def test_live_continuation_cannot_silently_change_seat_recipe() -> None:

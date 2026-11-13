@@ -1,6 +1,8 @@
 # MTG-329: the prototype and the Etude API it wants
 
-For review at the demo step, before any Etude work.
+Historical prototype and pre-EXP-56 gap analysis. Current implementation and
+remaining release work are in implementation.md; APIs and filenames below
+describe the earlier stub, not the current code.
 
 ## The prototype (manabot, runs today against a local stub)
 

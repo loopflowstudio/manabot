@@ -41,7 +41,7 @@ from etude.launch.records import Job, Run
 import psutil
 from pydantic import BaseModel, ConfigDict, Field
 
-from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.host import MemoryLimit, MemorySource, memory_limit
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 

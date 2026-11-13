@@ -38,7 +38,7 @@ jobs:
           uv sync --frozen --extra dev --extra play --no-default-groups --group play-runtime
           uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
       - name: Recipe and evidence contracts
-        run: uv run --no-sync pytest tests/training/test_baseline_recipe.py tests/verify/test_learning_regression.py -q
+        run: uv run --no-sync pytest tests/training/test_recipe_etude.py tests/verify/test_learning_regression.py -q
       - name: Ordinary baseline training and frozen evaluation
         env:
           BASELINE_STEPS: ${{ inputs.steps || '' }}
@@ -47,13 +47,20 @@ jobs:
           timeout --signal=TERM 1800s uv run --no-sync python - <<'PY'
           import os
           from pathlib import Path
-          from manabot.recipes.baseline import BASELINE_STEPS, baseline_test
+          from datetime import datetime, timedelta, timezone
+          from etude.train.run import local_launch
+          from manabot.recipes.baseline import BASELINE_STEPS, BaselineConfig, train, evaluate
 
-          plan = baseline_test(
-              steps=int(os.environ["BASELINE_STEPS"] or BASELINE_STEPS), seconds=1680
+          config = BaselineConfig(
+              updates=int(os.environ["BASELINE_STEPS"] or BASELINE_STEPS),
+              seed=int(os.environ["BASELINE_SEED"]), device="cpu",
           )
-          result = plan.run(seed=int(os.environ["BASELINE_SEED"]), out=Path(".runs/baseline"))
-          raise SystemExit(result.status != "completed")
+          destination = Path(".runs/baseline")
+          os.environ["ETUDE_DEADLINE"] = (datetime.now(timezone.utc) + timedelta(seconds=1680)).isoformat()
+          with local_launch(out=destination, experiment="baseline"):
+              train(config)
+          result = evaluate(config, destination)
+          raise SystemExit(result.software != "passed")
           PY
       - name: Summary
         if: always()

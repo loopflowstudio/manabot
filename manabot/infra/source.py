@@ -17,6 +17,7 @@ import subprocess
 import sysconfig
 import tarfile
 
+from etude.eval.source import source_commit as etude_source_commit
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from manabot.infra.identity import file_sha256
@@ -76,26 +77,27 @@ def source_commit() -> str:
     root = Path(__file__).resolve().parents[2]
     path = root / ".manabot-source.json"
     if not path.exists():
-        return subprocess.check_output(
-            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
-        ).strip()
+        commit = etude_source_commit([root])
+        if commit is None:
+            raise ValueError("source has no recorded commit")
+        return commit
     bundle = SourceBundle.model_validate_json(path.read_text())
     _verify(root, bundle, "source bundle")
     return bundle.commit
 
 
 @cache
-def source_dirty() -> bool:
+def source_dirty() -> bool | None:
     """Whether tracked files differ from `source_commit`; a verified bundle never does."""
     root = Path(__file__).resolve().parents[2]
     if (root / ".manabot-source.json").exists():
         return False
-    return bool(
-        subprocess.check_output(
-            ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
-            text=True,
-        ).strip()
+    status = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=no"],
+        text=True,
+        capture_output=True,
     )
+    return bool(status.stdout) if status.returncode == 0 else None
 
 
 def bind_etude_source() -> None:

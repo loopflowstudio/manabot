@@ -31,7 +31,7 @@ from pathlib import Path
 
 from etude.eval.records import Benchmark, Inference, Matchup, Player
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
-from etude.jobs import evaluation
+from etude.jobs import evaluation, training
 from etude.launch.records import Job, Run
 from etude.report import (
     Anchors,
@@ -51,7 +51,6 @@ from experiments.elemental_long import (
     heuristic_games,
     pair_design,
     rated_updates,
-    recipe,
 )
 from experiments.elemental_long_eval import (
     INFERENCE_CODE,
@@ -63,7 +62,8 @@ from experiments.elemental_long_eval import (
     play,
     rows,
 )
-from manabot.experiment.job import TrainingJob
+from manabot.experiment.setup import machine_setup
+from manabot.recipes.elemental import ElementalConfig, train
 from manabot.training.panels import ML, PERF
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,20 +92,19 @@ def runs(
     usd_per_run: float,
     seed: int = 18101,
 ) -> list[Run]:
-    """One seed of the frozen recipe to `updates`, exporting every `CADENCE` updates."""
-    job = TrainingJob(
-        regime=recipe(updates, hours=hours),
-        experiment=EXPERIMENT,
-        milestones=tuple(range(CADENCE, updates, CADENCE)),
-        finalization_seconds=600,
-        validate_numerics=True,
-    ).job(
-        repo=ROOT,
+    """Launch current-world self-play; frozen regimes use their recorded revision."""
+    return training(
+        train,
+        config=ElementalConfig(
+            seed=seed, updates=updates, device="cuda", validate_numerics=True
+        ),
+        smoke=ElementalConfig(seed=seed, updates=1, device="cpu", streams=2),
+        repo=str(ROOT),
         revision=revision,
+        setup=machine_setup(" --extra artifacts"),
         max_hours=hours,
         max_usd=Decimal(str(usd_per_run)),
-    )
-    return job.runs(seed)
+    ).runs(seed)
 
 
 # ---------------------------------------------------------------------------

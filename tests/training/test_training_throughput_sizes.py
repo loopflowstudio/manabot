@@ -10,11 +10,7 @@ from experiments import training_throughput_sizes as sizes
 from experiments.elemental_variants import elemental_recipe
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
-from manabot.experiment.job import TrainingJob
-from manabot.infra.identity import canonical_sha256
-from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
-from tests.training.test_training_throughput import _worker
 
 ROOT = Path(__file__).parents[2]
 SIZE_FIELDS = {
@@ -85,63 +81,6 @@ def _launched(*arguments: str) -> list[sizes.Run]:
     )
 
 
-def test_launch_file_declares_every_cell() -> None:
-    found = {leg: _launched("--revision", "HEAD", "--leg", leg) for leg in sizes.LEGS}
-
-    assert len(found) == 42
-    for name, runs in found.items():
-        leg = sizes.LEGS[name]
-        assert [run.seed for run in runs] == list(sizes.SEEDS[: leg.packed])
-        job = TrainingJob.model_validate_json(runs[0].job.config or "")
-        stage = job.regime.stages[0]
-        assert stage.execution.device == "cuda"
-        assert stage.execution.workers == 1
-        assert stage.streams == 256
-        assert stage.learning_seats == "both"
-        assert sizes.GPU_SAMPLER in runs[0].job.command
-    checks = {name for name, leg in sizes.LEGS.items() if leg.updates == 12}
-    assert checks == {
-        "fast-w160l8-k1-float32",
-        "fast-w160l8-k1-float32-repeat",
-        "fast-w160l8-k1-tf32",
-        "fast-w160l8-k1-bf16",
-    }
-    assert not any(name.startswith(("a4000-w64", "l4-w64")) for name in sizes.LEGS)
-
-
-def test_the_repeat_shares_regime_bytes_and_is_its_own_job() -> None:
-    first, repeat = (
-        sizes.runs("HEAD", leg)[0]
-        for leg in ("fast-w160l8-k1-float32", "fast-w160l8-k1-float32-repeat")
-    )
-
-    def regime(run: sizes.Run) -> str:
-        job = TrainingJob.model_validate_json(run.job.config or "")
-        return canonical_sha256(job.regime.model_dump(mode="json"))
-
-    assert regime(first) == regime(repeat)
-    assert first.job.environment != repeat.job.environment
-
-
-def test_limits_follow_the_pace_and_cover_setup_at_the_ceiling() -> None:
-    small = sizes.limits(sizes.LEGS["a4000-w128l4-k1-float32"], 37)
-    assert (small.watchdog_seconds, small.max_hours, small.stall_seconds) == (
-        1500,
-        0.75,
-        600,
-    )
-
-    large = sizes.limits(sizes.LEGS["l4-a384l8-k2-float32"], 350)
-    assert large.watchdog_seconds >= 6 * 350 * 4
-    assert large.stall_seconds == 3 * 350
-    assert large.max_usd >= (large.max_hours + 0.25) * 0.60
-
-    run = sizes.runs("HEAD", "l4-a384l8-k2-float32", pace="350")[0]
-    frozen = TrainingJob.model_validate_json(run.job.config or "")
-    assert frozen.regime.wall_seconds == large.watchdog_seconds
-    assert run.job.max_hours == large.max_hours
-
-
 def test_unknown_legs_and_seeds_are_refused() -> None:
     with pytest.raises(ValueError, match="unknown leg"):
         sizes.runs("HEAD", "a4000-w64-k1-float32")
@@ -149,30 +88,3 @@ def test_unknown_legs_and_seeds_are_refused() -> None:
         sizes.runs("HEAD", "a4000-w128l4-k2-float32", seeds="26303")
     with pytest.raises(ValueError, match="pace"):
         sizes.limits(sizes.LEGS["l4-w128l4-k1-float32"], 0)
-
-
-@pytest.mark.training
-@pytest.mark.parametrize("leg", ["a4000-w128l4-k1-float32", "a4000-a384l8-k1-float32"])
-def test_a_size_cell_trains_through_the_real_worker_on_cpu(
-    tmp_path: Path, leg: str
-) -> None:
-    """The leg's regime at 2 streams and 1 update, moved to CPU.
-
-    Collection plays every stream's game to its end, so the stream count, not
-    the transition floor, sets how long the largest model takes here.
-    """
-    chosen = sizes.LEGS[leg]
-    regime = sizes.recipe(chosen.size, chosen.precision, 1)
-    regime.wall_seconds = 600
-    stage = regime.stages[0]
-    stage.streams = 2
-    stage.execution.device = "cpu"
-    stage.execution.wall_seconds = 600
-    spec = TrainingJob(regime=regime, experiment=sizes.EXPERIMENT)
-
-    process, training = _worker(tmp_path, spec, "cell", 26301)
-
-    assert process.wait() == 0, (tmp_path / "cell" / "log.txt").read_text()[-4000:]
-    receipt = TrainingRun.model_validate_json((training / "run.json").read_bytes())
-    assert receipt.status == "completed"
-    assert receipt.stages[0].updates == 1
