@@ -138,6 +138,24 @@ iteration feedback are implemented. No further implementation mismatch or
 open product decision was found. Infrastructure memory now records the CPU
 result and removes the superseded cache-retention guidance.
 
+## Final-revision QA (2026-11-12)
+
+[Dispatch 43350950910](https://github.com/loopflowstudio/manabot/actions/runs/43350950910)
+at `38e3e5557` (with v0.2.3 merge): green; ordinary max Integration evaluation
+399 s, Rust 396 s. Python unit spent 195 s installing: engine build ended
+about 105 s in, then CUDA/NVIDIA/Triton downloads ran another ~88 s for 4 s of
+tests. `ef0839c9c` gives Python unit the same locked CPU selection on `uv sync`
+and its `uv run` (otherwise `uv run` re-syncs the default CUDA group); the
+website step is its own project and is unchanged.
+[Dispatch 43353030839](https://github.com/loopflowstudio/manabot/actions/runs/43353030839)
+at `ef0839c9c`: green; Python unit 104 s (install 89 s, Torch `2.15.0+cpu`,
+157 passed/1 skipped and 21 passed, same as before). Ordinary max Rust 406 s,
+Integration max experiment 335 s (comparison test 140 s in the prior run).
+Engine Budget (exempt) took 901 and 906 s in these two runs, against
+571–685 s earlier; its paired benchmark step alone was 715 s. Not investigated.
+Academy Integration still installs the default runtime (20 s here).
+Still required: PR-event timing and post-merge verification.
+
 ## Other retained checks
 
 - Exact locked CI sync, frozen export, actionlint and workflow validation passed.
