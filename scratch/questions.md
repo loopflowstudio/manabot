@@ -31,7 +31,7 @@ the combined catalog, because main's mana spending redesign changed Commands.
 The managed `lf sync` plan selected merge_target for this branch; preserve
 history through that supported integration rather than raw git rebase.
 
-## Historical precision notes from main (MTG-328)
+## Historical precision notes from main
 
 # Assumptions and scope
 
