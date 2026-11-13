@@ -536,3 +536,18 @@ the code diff against #474 was 4,332 / 2,500.
   rows and 204 damped steps in every process. Launcher cost ~$0.27.
 - Pass 2 queued as Etude e978886d15e5: revision bb7c3e6a0 (base main a343904ee), cohort
   `mtg325-speed-2`, `--max-usd 9` (pass 1 counts against the USD10).
+
+## Speed check pass 2 (Etude e978886d15e5, revision bb7c3e6a0, base main a343904ee)
+
+3 ABAB pairs, `scratch/speed/run2/compare.txt`; same 53,341 learner rows and
+208 damped steps everywhere. Medians [min, max], base vs head:
+damped 6.05 [5.96, 6.37] vs 6.38 [6.20, 6.39] steps/s (1.055); PPO 0.2199
+[0.2194, 0.2210] vs 0.2108 [0.2105, 0.2116] (0.959, REGRESSION);
+`PolicyInference` 831 vs 1,257 obs/s (1.51); save 0.033 vs 0.032 s; load
+0.165 vs 0.173 s [0.168, 0.188] (within spread). Launcher cost ~$0.27; the
+machine stayed rented after success and was terminated by hand.
+PPO is +0.19 s per step (16 steps of ~3,300 rows: 4 epochs x 4). Host bucket
+measurement explains about half (67 ms per 3,300 rows on the laptop, every
+epoch). Pass 3 (Etude cohort `mtg325-speed-3`, revision f3b7fbaa4) adds a
+`backend` arm (#503's tree) and the learner's profiler sections, to place
+the rest in #503 or #501.
