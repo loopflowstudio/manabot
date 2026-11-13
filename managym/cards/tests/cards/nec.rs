@@ -48,7 +48,7 @@ fn release_to_memory_counts_the_graveyard_at_resolution_and_not_preexisting_exil
     s.set_player_mana_pool(0, "3W");
     cast(&mut s, "Release to Memory");
     // A response removes one creature and puts a different one in the graveyard.
-    s.game_mut().move_card(ogre, ZoneType::Exile);
+    s.game_mut().move_object(ogre, ZoneType::Exile);
     let elf = plant_in_graveyard(&mut s, 1, "Llanowar Elves");
     settle_targeting_opponent(&mut s);
     assert_eq!(s.game().state.zones.zone_of(elf), Some(ZoneType::Exile));

@@ -22,7 +22,7 @@ use crate::{
     decision::ObservationIdentity,
     flow::game::Game,
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -81,7 +81,7 @@ pub(crate) fn binom(n: u32, k: u32) -> u128 {
 }
 
 /// One opponent-hand card-**name** multiset of the public hand size, drawn from
-/// the opponent's unseen pool. The weight is the number of physical `CardId`
+/// the opponent's unseen pool. The weight is the number of physical `ObjectId`
 /// deals that yield this name-multiset with every foretold slot filled by a
 /// foretell-bearing card, not a probability.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -384,12 +384,12 @@ pub struct HiddenHandConstraints {
     pub retained_selection: bool,
 }
 
-/// Card-name multiset of `cards`.
-fn name_counts(game: &Game, cards: impl IntoIterator<Item = CardId>) -> BTreeMap<String, u32> {
+/// Card-name multiset of `objects`.
+fn name_counts(game: &Game, objects: impl IntoIterator<Item = ObjectId>) -> BTreeMap<String, u32> {
     let mut counts = BTreeMap::new();
-    for card in cards {
+    for object in objects {
         *counts
-            .entry(game.state.cards[card].name.clone())
+            .entry(game.state.objects[object].name.clone())
             .or_insert(0) += 1;
     }
     counts
@@ -407,17 +407,17 @@ impl HiddenHandConstraints {
             "possible worlds require the opponent's open decklist"
         );
         let commitments = game.hidden_commitments(viewer);
-        let unseen = commitments.unseen_cards(game, opponent);
+        let unseen = commitments.unseen_objects(game, opponent);
         let foretell = unseen
             .iter()
-            .filter(|card| game.state.cards[**card].foretell().is_some())
-            .map(|card| game.state.cards[*card].name.clone())
+            .filter(|object| game.state.objects[**object].foretell().is_some())
+            .map(|object| game.state.objects[*object].name.clone())
             .collect();
         let pool = name_counts(game, unseen);
         let foretold = if game.shares_information(viewer, opponent) {
             0
         } else {
-            game.foretold_cards(opponent).len() as u32
+            game.foretold_cards(opponent).count() as u32
         };
         let hand_size = game.state.zones.size(ZoneType::Hand, opponent) as u32;
         let source_observation = game
@@ -431,7 +431,7 @@ impl HiddenHandConstraints {
                 game,
                 game.state
                     .zones
-                    .zone_cards(ZoneType::Hand, opponent)
+                    .zone_objects(ZoneType::Hand, opponent)
                     .iter()
                     .copied(),
             )
@@ -537,28 +537,29 @@ impl HiddenHandConstraints {
         if !source.inspects_library(self.viewer, opponent)
             && !source.shares_information(self.viewer, opponent)
         {
-            // Group the opponent's unseen CardIds by name, sorted ascending so
-            // the lowest CardIds of each name go to the hand deterministically.
-            let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
-            for card in commitments.unseen_cards(&branch, opponent) {
+            // Group the opponent's unseen ObjectIds by name, sorted ascending so
+            // the lowest ObjectIds of each name go to the hand deterministically.
+            let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
+            for object in commitments.unseen_objects(&branch, opponent) {
                 by_name
-                    .entry(branch.state.cards[card].name.clone())
+                    .entry(branch.state.objects[object].name.clone())
                     .or_default()
-                    .push(card);
+                    .push(object);
             }
-            for cards in by_name.values_mut() {
-                cards.sort_unstable_by_key(|card| (!commitments.pins_card(*card), card.0));
+            for objects in by_name.values_mut() {
+                objects
+                    .sort_unstable_by_key(|object| (!commitments.pins_object(*object), object.0));
             }
 
-            let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
-            let mut new_library: Vec<CardId> = Vec::new();
-            for (name, cards) in &by_name {
+            let mut new_hand: Vec<ObjectId> = Vec::with_capacity(self.hand_size as usize);
+            let mut new_library: Vec<ObjectId> = Vec::new();
+            for (name, objects) in &by_name {
                 let k = world.hand.get(name).copied().unwrap_or(0) as usize;
-                if k > cards.len() {
+                if k > objects.len() {
                     return Err(MaterializeError::InconsistentWorld);
                 }
-                new_hand.extend_from_slice(&cards[..k]);
-                new_library.extend_from_slice(&cards[k..]);
+                new_hand.extend_from_slice(&objects[..k]);
+                new_library.extend_from_slice(&objects[k..]);
             }
             if new_hand.len() as u32 != self.hand_size {
                 return Err(MaterializeError::InconsistentWorld);
@@ -580,7 +581,7 @@ impl HiddenHandConstraints {
             if !branch.fill_foretold_slots(opponent, &mut new_library) {
                 return Err(MaterializeError::InconsistentWorld);
             }
-            let pending = commitments.pinned_library_cards(source, opponent);
+            let pending = commitments.pinned_library_objects(source, opponent);
             if !pending.is_empty() {
                 new_library.extend(pending);
                 new_library.shuffle(&mut rng);
@@ -588,7 +589,6 @@ impl HiddenHandConstraints {
 
             branch
                 .state
-                .zones
                 .reassign_hidden(opponent, new_hand, new_library);
         }
         if source.shares_information(self.viewer, opponent)
@@ -602,7 +602,7 @@ impl HiddenHandConstraints {
         }
 
         // Fail closed: the realized hand name-multiset must equal the world.
-        let hand = branch.state.zones.zone_cards(ZoneType::Hand, opponent);
+        let hand = branch.state.zones.zone_objects(ZoneType::Hand, opponent);
         if name_counts(&branch, hand.iter().copied()) != world.hand {
             return Err(MaterializeError::InconsistentWorld);
         }
@@ -1012,7 +1012,7 @@ impl PossibleWorldSpace {
     /// Materialize `world` into an exact `Game` branch of `source`.
     ///
     /// Clones the source, reassigns only the opponent's hidden split to match
-    /// the world (lowest `CardId`s of each name to hand; seeded library
+    /// the world (lowest `ObjectId`s of each name to hand; seeded library
     /// shuffle; foretold slots refilled from the seeded remainder's
     /// foretell-bearing cards), using ordinary hidden-zone reassignment.
     /// Public zones and any suspended-decision revealed library cards are
@@ -1132,9 +1132,9 @@ impl PossibleWorldSpace {
             }
         }
         let current_hand_size = source.state.zones.size(ZoneType::Hand, self.opponent) as u32;
-        if name_counts(source, source.unseen_cards(self.opponent, self.viewer)) != self.pool
+        if name_counts(source, source.unseen_objects(self.opponent, self.viewer)) != self.pool
             || current_hand_size != self.hand_size
-            || source.foretold_cards(self.opponent).len() as u32 != self.foretold
+            || source.foretold_cards(self.opponent).count() as u32 != self.foretold
         {
             return Err(MaterializeError::StaleSource);
         }
@@ -1203,7 +1203,7 @@ mod tests {
     fn weights_match_brute_force_physical_deals() {
         let space =
             PossibleWorldSpace::from_pool(PlayerId(0), 2, pool(&[("A", 2), ("B", 1), ("C", 1)]));
-        // Independent brute force over physical CardId deals: enumerate every
+        // Independent brute force over physical ObjectId deals: enumerate every
         // unordered 2-card deal from [A, A, B, C] and count name-multisets.
         let physical = ["A", "A", "B", "C"];
         let mut brute: BTreeMap<BTreeMap<String, u32>, u128> = BTreeMap::new();

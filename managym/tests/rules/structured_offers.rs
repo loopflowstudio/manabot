@@ -13,7 +13,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
-        game_object::{CardId, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, Target},
         stack_object::StackObject,
         target::Target as ActionTarget,
     },
@@ -98,14 +98,14 @@ fn pass_priority(game: &mut Game) {
     game.step(index).expect("pass should succeed");
 }
 
-fn legacy_cast_at_player(game: &mut Game, card: CardId, player: PlayerId) {
+fn legacy_cast_at_player(game: &mut Game, object: ObjectId, player: PlayerId) {
     let cast_index = game
         .action_space()
         .expect("priority action space")
         .actions
         .iter()
         .position(
-            |action| matches!(action, Action::CastSpell { card: legal, .. } if *legal == card),
+            |action| matches!(action, Action::CastSpell { object: legal, .. } if *legal == object),
         )
         .expect("legacy cast action");
     game.step(cast_index).expect("legacy cast declaration");
@@ -180,7 +180,10 @@ fn structured_offer_bolt_cast_is_atomic_and_legacy_equivalent() {
     let command = set
         .decode(&submission)
         .expect("offered target should decode");
-    let AtomicCommand::CastSpell { card, targets, .. } = &command else {
+    let AtomicCommand::CastSpell {
+        object, targets, ..
+    } = &command
+    else {
         panic!("expected cast command")
     };
     assert_eq!(targets, &[BoundTarget::Player(PlayerId(1))]);
@@ -190,13 +193,13 @@ fn structured_offer_bolt_cast_is_atomic_and_legacy_equivalent() {
     assert!(!structured
         .apply_offer_submission(&set, &submission)
         .expect("atomic cast should apply"));
-    legacy_cast_at_player(&mut legacy, *card, PlayerId(1));
+    legacy_cast_at_player(&mut legacy, *object, PlayerId(1));
 
     assert!(structured.pending_choice.is_none());
     let Some(StackObject::Spell(spell)) = structured.state.stack_objects.last() else {
         panic!("Bolt should be on the stack")
     };
-    assert_eq!(spell.card, *card);
+    assert_eq!(spell.object, *object);
     assert_eq!(spell.targets, vec![Target::Player(PlayerId(1))]);
     assert_equivalent_surface(&structured, &legacy);
 

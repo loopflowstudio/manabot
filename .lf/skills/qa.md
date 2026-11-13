@@ -116,6 +116,9 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a New Game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
+  Detect the end by a visible "Play Again" button (the page holds hidden
+  "game over" text); after clicking it, wait for the button to hide before
+  reading offers again.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
   textareas appear only then), fill both, press Check decklists, then New
@@ -195,6 +198,32 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Engine rules changes (zones, tokens, copies, SBAs): play many games through
+  `managym.Env` with `PlayerConfig(name, {card: count}, world=managym.WORLD_SETUP)`
+  decks built around the cards involved, and a scripted policy over
+  `obs.action_space.actions`. Actions carry no `description`; match
+  `action.focus` ids against `env.observation_for_player(env.current_agent_index())`
+  card ids to pick a card. Read `observation_for_player(p).agent_cards`
+  (`zone`, `is_token`) at every decision. A token in the graveyard during a
+  mana ability's color choice is correct: SBAs wait for priority. Academy's
+  game end is a "Game Over" dialog with "Play Again".
+- "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
+  <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
+  /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into
+  `/tmp/<x>/managym/`, and run one seeded script against each tree
+  (`sys.path.insert(0, root)` before `import managym`). Per decision, write a
+  hash of both seats' `toJSON()` plus `env.state_digest()`; `cmp` the files.
+  Use `random.Random(seed).randrange(env.action_count())` for actions.
+  `managym.authored_deck_keys(pack)` / `authored_deck_setup(pack, key)` give
+  the authored decks. Remove the worktree afterwards. Include the TLA pool
+  human builds too: in MTG-320, 138 authored and Azula games matched while 33
+  of 120 pool games exposed a regression (Kyoshi Battle Fan's token attach).
+  When games diverge, replay one to the first differing decision on both
+  engines and diff the parsed `toJSON()`; permanents' `attached_to`, `power`
+  and the cast action's `focus` names locate the card.
+- Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
+  QA observed both at load averages around 300, but did not establish a cause.
+  Repeat on an idle host before attributing a stall to the change or to load.
 - Python-only library changes (no engine change): `uv build --wheel --package
   manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
   venv with `uv pip install <wheel> --index-url https://pypi.org/simple

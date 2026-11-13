@@ -33,9 +33,9 @@ fn tokens(s: &Scenario, player: usize) -> usize {
     s.game()
         .state
         .zones
-        .zone_cards(ZoneType::Battlefield, PlayerId(player))
+        .zone_objects(ZoneType::Battlefield, PlayerId(player))
         .iter()
-        .filter(|card| s.game().state.cards[**card].is_token)
+        .filter(|object| !s.game().state.objects[**object].is_card())
         .count()
 }
 

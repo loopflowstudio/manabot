@@ -70,13 +70,12 @@ fn ancestral_recall_decking_loses_game() {
         .game()
         .state
         .zones
-        .zone_cards(ZoneType::Library, PlayerId(0))
+        .zone_objects(ZoneType::Library, PlayerId(0))
         .to_vec();
-    for card in library {
+    for object in library {
         s.game_mut()
             .state
-            .zones
-            .move_card(card, PlayerId(0), ZoneType::Graveyard);
+            .place_object(object, PlayerId(0), ZoneType::Graveyard);
     }
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
@@ -116,7 +115,7 @@ fn counterspell_counters_ancestral_recall() {
         .stack_objects
         .iter()
         .find_map(|obj| match obj {
-            managym::state::stack_object::StackObject::Spell(spell) => Some(spell.card),
+            managym::state::stack_object::StackObject::Spell(spell) => Some(spell.object),
             _ => None,
         })
         .expect("recall should be on stack");
@@ -148,7 +147,7 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
         let elves_card = enter_and_settle(&mut s, "Llanowar Elves");
         ready(&mut s, "Llanowar Elves");
         let elves = permanent_named(&s, "Llanowar Elves");
-        s.game_mut().state.cards[elves_card]
+        s.game_mut().state.objects[elves_card]
             .activated_abilities
             .push(ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("1"),
@@ -232,10 +231,10 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
 
-    let copy = s.game().state.card_to_permanent[clone].expect("entered");
-    let card = &s.game().state.cards[clone];
-    assert_eq!(card.name, "Gray Ogre");
-    assert!(!card.is_token);
+    let copy = s.game().state.object_to_permanent[clone].expect("entered");
+    let object = &s.game().state.objects[clone];
+    assert_eq!(object.name, "Gray Ogre");
+    assert!(object.is_card());
     assert_eq!(s.game().characteristics(copy).pt(), (2, 2));
     assert_eq!(
         s.game().state.permanents[copy].as_ref().unwrap().controller,
@@ -249,9 +248,9 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
         .expect("the copy effect is observed");
     assert_eq!(seen.name, "Gray Ogre");
 
-    s.game_mut().move_card(clone, ZoneType::Graveyard);
-    assert_eq!(s.game().state.cards[clone].name, "Clone");
-    assert!(s.game().state.cards[clone].copy.is_none());
+    s.game_mut().move_object(clone, ZoneType::Graveyard);
+    assert_eq!(s.game().state.objects[clone].name, "Clone");
+    assert!(s.game().state.objects[clone].copy.is_none());
 }
 
 /// The copied creature's own entry replacement applies (CR 614.12): a copy
@@ -266,11 +265,11 @@ fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(villager)));
     settle(&mut s);
-    let copy = s.game().state.card_to_permanent[clone].expect("entered");
+    let copy = s.game().state.object_to_permanent[clone].expect("entered");
     assert!(s.game().state.permanents[copy].as_ref().unwrap().tapped);
 
     let second = library_card(&s, 0, "Clone");
-    s.game_mut().move_card(second, ZoneType::Hand);
+    s.game_mut().move_object(second, ZoneType::Hand);
     cast_card(&mut s, second);
     spend_colorless(&mut s);
     resolve_top(&mut s);
@@ -280,5 +279,5 @@ fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
         s.game().state.zones.zone_of(second),
         Some(ZoneType::Graveyard)
     );
-    assert_eq!(s.game().state.cards[second].name, "Clone");
+    assert_eq!(s.game().state.objects[second].name, "Clone");
 }
