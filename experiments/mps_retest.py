@@ -600,11 +600,12 @@ def _reference(
     metadata: dict[str, Any],
     arrays: dict[str, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
-    """Save CPU arrays when supplied, then read only a matching reference."""
+    """Retain CPU arrays, or load a reference with matching provenance."""
     if arrays is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(path, **arrays)
         path.with_suffix(".json").write_text(json.dumps(metadata))
+        return arrays
     if json.loads(path.with_suffix(".json").read_text()) != metadata:
         raise ValueError("CPU reference provenance differs")
     return _read(path)
@@ -963,13 +964,12 @@ def matrix(args: argparse.Namespace) -> None:
 def replays(args: argparse.Namespace) -> None:
     # Interleave arms by repetition to reduce temporal drift. All four arm
     # families are required, and both half dtypes are attempted.
+    metadata = _provenance(args.capture, args.laptop)
     for width in args.widths:
         for arm in ARMS:
             if not any(
                 r["status"] == "ok"
-                for r in _latest_parity(
-                    args.out, _provenance(args.capture, args.laptop), width, arm
-                ).values()
+                for r in _latest_parity(args.out, metadata, width, arm).values()
             ):
                 _quiet(args.laptop)
                 _child(args, "parity", width, arm, size=64)

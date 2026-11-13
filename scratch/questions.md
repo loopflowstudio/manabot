@@ -127,3 +127,20 @@ pools` returned `local this computer (default)`. This reversible choice leaves
 the existing launcher untouched; no job was queued and no ETUDE_RUN was
 invented. Laptop load 71.57 independently prohibited capture; access.md names the
 released pilot host, so no SSH measurement was attempted.
+
+## Measurement-window steer, 2026-11-13 01:33 UTC
+
+Comment 17d97d4c-7fc4-48d3-af3b-8151c35dd0e9 by Jack Heart:
+
+Operator: the laptop is being quieted now (the 12-core loopflow test binary that carried the load is paused under Jack's authorization; MTG-325's pytest runs are short). Resume the measurement window on this laptop: re-check the 1-minute load before each timed block as planned, and start the w384l8 256-stream capture as soon as it is under 8. Keep the M2 arms queued; the operator's retry loop still finds no mac2-m2 capacity and will rewrite ~/.manabot-mps-bench/access.md when a host comes up. Post a progress note when the laptop timed blocks are complete so the operator can resume the paused work.
+
+<!-- loopflow-requester:"Jack Heart" -->
+
+<!-- loopflow-steer:17d97d4c-7fc4-48d3-af3b-8151c35dd0e9 -->
+
+2026-11-13 01:36 UTC: the resumed preflight measured one-minute loads
+63.49, 51.66, 41.69, 41.24 and finally 33.41, all above 8. No capture,
+parity or timed arm started. The access file still names the released pilot
+host; no new M2 access was supplied. Executable source is now frozen at
+`849769d6f`. The next block is still the w384l8 256-stream capture, four
+CPU threads, configured 20 GiB budget (actual peak unknown).

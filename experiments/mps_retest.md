@@ -216,6 +216,11 @@ At 01:17 UTC load was 105.66, still above the limit. An isolated Etude local
 home at `.runs/mps-etude` is prepared; its local pool is available and no job
 is queued. The default launcher's incompatible database was left untouched.
 
+**2026-11-13 resumed measurement window:** executable source was frozen at
+`849769d6f`. Between 01:34 and 01:36 UTC, one-minute load fell from 63.49 to
+33.41 but remained above 8; no capture or timed arm started. New M2 access
+was still pending.
+
 **Cost:** no rental was launched by this Task. The operator's cost receipt is
 pending; this report will cite it once supplied.
 

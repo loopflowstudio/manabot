@@ -64,12 +64,12 @@ Ruff passed for `mps_retest.py` and the pilot (one empty section header removed)
 
 ## Remaining execution and acceptance
 
-1. Freeze executable changes before launching real captures with an Etude run
-   identity (`main` refuses dirty executable source). Begin with w384l8 at 256
-   streams: four capture threads, configured 20 GiB budget, peak unmeasured.
-   Parity, per-call timing and triple replays follow at selected widths. The
-   last measured load was 105.66 at 01:17 UTC, so the next capture still needs
-   a quiet window. Launcher preparation and access observations are preserved
+1. Checkpoint the compression diff after `849769d6f` before real captures;
+   use an Etude run identity (`main` refuses dirty executable source). Begin with
+   w384l8 at 256 streams: four capture threads, configured 20 GiB budget, peak
+   unmeasured. Parity, per-call timing and triple replays follow at selected
+   widths. The resumed preflight at 01:36 UTC measured load 33.41, so the next
+   capture still needs a quiet window. Launcher preparation and access observations are preserved
    in `questions.md`; they are not measurement receipts.
 2. Establish whether a complete width/stream group fits the one-hour window.
    `replays` runs serially: five working arms require 15 replay processes,
@@ -121,3 +121,24 @@ requirement to both hosts. `uv run --no-sync python .runs/mps-simplify-check.py`
 passed injected admission, dispatch, timeout/failure, triple-replay and M2/M4
 window checks; existing compress and laptop fixtures passed too. Compilation,
 Ruff and `git diff --check` passed. No models, games or measurements ran.
+
+## Delete — do not maintain
+
+Removed the reference writer's immediate disk reread and repeated host/capture
+probes during replay admission. Workers still record their own provenance.
+No further deletion is planned. The shared capture owner remains
+`manabot/backends/capture.py`; preserve prior evidence and the production
+off-CUDA refusals. No alternate capture or rental implementation.
+
+2026-11-13 resumed preflight: `git diff --check` passed and pending source/report
+changes were checkpointed as `849769d6f`. No code changed after the previously
+passing focused checks, so they were not repeated. No measurement process was
+started; load remained above 8. Measurements and acceptance remain open.
+
+2026-11-13 compress: `_reference` returns the CPU arrays it just retained;
+readers still validate provenance before loading. `replays` reads admission
+metadata once, keeping fresh parity-ledger reads and all worker load checks.
+`uv run --no-sync python .runs/mps-reference-check.py` passed exact array/dtype
+round-trip, provenance refusal, no writer reread and two-width replay ordering;
+`.runs/mps-simplify-check.py` also passed. Compilation, Ruff check/format and
+`git diff --check` passed. Only controlled fixtures ran, no models or games.
