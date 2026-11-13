@@ -34,3 +34,14 @@
   positive availability read, using a named cohort under the same $4 cap.
   If admission still refuses capacity, do not retry or queue: restore the kept
   implementation and record the unavailable comparison under the keep rule.
+
+- Decision pass 2 retains the same hypothesis: two admission failures supply
+  no candidate performance rejection. Recover the frozen files without changing
+  acceptance bounds. The next measurement step gets one availability read and,
+  only if positive, at most one named-cohort launch under the $4 cap; no queue,
+  polling or within-step capacity retries. No new availability is assumed here.
+
+- Measurement pass 3 used the unchanged freeze after one positive availability
+  read and made one named-cohort launch under $4. Admission again refused L4
+  capacity; restore the kept implementation, retain the missing comparison,
+  and stop without a retry, GPU substitution or queue.

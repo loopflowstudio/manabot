@@ -8,8 +8,8 @@ body{font:16px/1.55 system-ui,sans-serif;color:#182536;background:#f6f7f9;max-wi
 </style>
 <h1>PPO on CUDA: comparison unavailable</h1>
 <p class="verdict"><strong>Latest verdict: inconclusive; candidate reverted.</strong>
-L4 availability said “rentable now” at 2026-11-13 11:08:05 UTC, but the second
-authenticated admission failed for no capacity at 11:10:12 UTC.
+L4 availability said “rentable now” at 2026-11-13 11:16:14 UTC, but the third
+authenticated admission failed for no capacity at 11:17:14 UTC.
 No paired sample or CUDA audit ran; candidate rate and range
 are unavailable. The runtime and candidate-motivated tests/harness are restored
 to the kept baseline. Candidate source remains recoverable at <code>02c202956</code>.</p>
@@ -46,7 +46,16 @@ with CPU bitwise equivalence and bounded CUDA rounding.</td>
 <td>Availability reported rentable at 11:08:05 UTC; admission db4502e2006a failed
 at 11:10:12 UTC for no L4 capacity. Requested run 4bacd2187ed1 was not recorded;
 no command started, no rental allocated and no queue created. All paired
-correctness, timing and profile runs remain missing.</td></tr></tbody>
+correctness, timing and profile runs remain missing.</td></tr>
+<tr><td><code>02c202956</code><br><small>Recovery pass 3; restored runtime to 734f2cd5c</small></td>
+<td>Unavailable<br><small>No completed paired samples; rate and range unavailable</small></td>
+<td>Inconclusive<br><small>Candidate reverted; hypothesis still untested</small></td>
+<td>Same frozen CUDA embedding candidate: at least 20% lower median update time,
+with CPU bitwise equivalence and bounded CUDA rounding.</td>
+<td>Availability reported rentable at 11:16:14 UTC; admission 797c99576241 failed
+at 11:17:14 UTC for no L4 capacity. Requested run 3ca9e26b83a0 was not recorded;
+no command started, no rental allocated, no queue or retry. CPU/CUDA audits,
+alternating timing and candidate profile remain unrun.</td></tr></tbody>
 </table></div>
 <p>Collection took 28.257 s once. Collection + median update is 88.777 s.
 Even eliminating all backward and clipping bounds improvement at 4.161× for
@@ -58,7 +67,7 @@ candidate/harness and run CPU equivalence, bounded CUDA comparisons and five
 alternating measurements per arm when an L4 is available under the $4 cap.</p>
 <p><small>Clean Etude run: 4a289dc30a82. Profile: e9e5a6bd4649.
 Baseline artifacts are published; all prior rentals are closed. Requested comparison
-4e50a037bd12 and recovery request 4bacd2187ed1 failed admission;
+4e50a037bd12 and recovery requests 4bacd2187ed1 and 3ca9e26b83a0 failed admission;
 no new rental or queued work remains.
 Full methods, limitations and receipts: <a href="../experiments/ppo_cuda.md">PPO CUDA report</a>.</small></p>
 </html>

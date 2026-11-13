@@ -47,3 +47,17 @@
   no paired data or CUDA correctness evidence. Restored the eight candidate/
   harness paths to `734f2cd5c` again. A rentable availability response alone
   does not guarantee admission. Capped launch commands require `--cohort NAME`.
+
+- Implementation pass 3 restored the same eight files byte for byte from
+  `02c202956`. Focused lookup tests: 8 passed, 8 CUDA skips, 2 deselected
+  (5.98 s). Ruff, compilation and both generated shell commands passed.
+  No availability read, launch or equivalence/performance run occurred.
+
+- Measurement pass 3: all eight candidate paths matched `02c202956`. Availability
+  at 2026-11-13 11:16:14 UTC said “available”, “0 of 1 in use”, “rentable now”.
+  One launch (cohort `mtg338-paired-pass3`, cap $4) requested `3ca9e26b83a0`;
+  admission `797c99576241` failed at 11:17:14.552355 UTC: “provider reports no
+  available machines”. Receipt: “job command not started”, “no run recorded”.
+  Cohort status found no run. No retry, rental or queue; all paired checks remain
+  unrun. Restored all eight candidate/harness paths to `734f2cd5c` under the
+  measure keep rule; source remains recoverable from `02c202956`.
