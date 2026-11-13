@@ -1364,6 +1364,7 @@ impl Game {
 
     /// The action space for the pending mid-resolution decision, if any.
     pub(crate) fn suspended_decision_action_space(&self) -> Option<ActionSpace> {
+        let _payments = self.payment_scan();
         let suspended = self.state.suspended_decision.as_ref()?;
         let source_focus = suspended
             .frame
@@ -1458,17 +1459,17 @@ impl Game {
                 let mut actions = self.mana_ability_actions(player, None);
                 if let PaymentCost::Waterbend { generic } = payment.remaining {
                     if generic > 0 {
-                        for permanent in self.waterbend_candidates(player) {
-                            let rest =
-                                crate::state::mana::ManaCost::default().with_generic(generic - 1);
-                            if self.waterbend_payment_after_taps(
-                                player,
-                                &rest,
-                                generic - 1,
-                                std::iter::once(permanent),
-                            ) {
-                                actions.push(Action::WaterbendTap { player, permanent });
-                            }
+                        let rest =
+                            crate::state::mana::ManaCost::default().with_generic(generic - 1);
+                        // Only offer taps that keep the rest of the cost payable.
+                        for permanent in self.waterbend_taps_keeping_payable(
+                            player,
+                            &rest,
+                            generic - 1,
+                            self.waterbend_candidates(player),
+                            None,
+                        ) {
+                            actions.push(Action::WaterbendTap { player, permanent });
                         }
                     }
                 }
