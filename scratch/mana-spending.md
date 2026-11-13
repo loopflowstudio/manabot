@@ -64,14 +64,63 @@ PaymentModel authority, source/action behavior, frozen pilot revision and switch
 
 ## Review direction and product choices
 
-Concept review at `9dbe3f78df` identified redundant taps counted as choices in
-part 3 but attributed as defects in part 2. The iteration adds both counting
-rules, corrects C-vs-D decision costs and leaves three questions unanswered:
-allow deliberate surplus tapping; source equivalence (identity vs definition and
-state); accept the price of a payment entry or explore earlier override intent.
-The automatic plan depends on MTG-342's fix; learning effects remain MTG-265's.
-The complete review text is in git `ce074e9d37`; final measurements and questions
-are in the report, not a separate protocol.
+Concept review at `9dbe3f78df` found redundant taps counted as choices in part 3
+but attributed as defects in part 2; that iteration added both counting rules
+(text in git `ce074e9d37`).
+
+Concept review at `1530995a9e` (2026-11-13), page `scratch/concept-review.html`.
+Report text only: no code, run, artifact or evidence change.
+
+Next implement direction:
+
+1. **One payment decision, automatic plan first; no separate entry.** The report
+   defines C as entry + outcome choice, so "C followed by D" names C twice. Its own
+   paired table shows the entry buys nothing where the menu fits: C's
+   always-automatic bound equals D (Elemental heuristic 317.39 both) and every
+   override costs one more decision (C up to 321.69), while non-redundant
+   capability D is 2 / 4-7 / exact max 22 offers. Recommend one native
+   payment-outcome decision whose first offer is the bound automatic plan,
+   identified as automation. Where permitted outcomes exceed the action capacity,
+   the remaining offers are native balanced groups and only an outcome commits
+   (the `Decision::NameCard` / `NAME_BRANCHING` precedent). The entry step is that
+   grouping's degenerate case, not a concept of its own. Keep the measured C
+   columns as evidence; rewrite the recommendation, its quoted costs (D's, with
+   C's as the price of an entry) and question 3 to match.
+2. **Give question 3 both sides in numbers.** Override intent at cast selection
+   ("cast X" / "cast X, choosing payment") is bounded by published columns
+   without a run: decisions/game lie between E (never override) and D (always);
+   a priority window gains at most one offer per cast offer (measured maximum 13
+   offers per window). State its price beside it: the automatic path commits
+   before modes, targets, X, the cost and therefore the plan are known, so the
+   plan is not inspectable when chosen. Label these as arithmetic bounds, not a
+   measured shape.
+3. **Question 1 asks where surplus lives, not only whether.** The non-redundant
+   menu is the set of minimal payments, the same set MTG-342's fixed tapper picks
+   from. Deliberate floating is a different act (tapping for mana with priority,
+   CR 605.3a), and putting it in the payment menu is what produces the 422 casts
+   above 64. Present the options as: not offered; a tap-for-mana action at
+   priority (uncounted here); or in the payment chooser (measured, needs groups).
+   This is a proposal inside the question, not an answer.
+4. **Lead with the decision.** Order: summary, recommended design, the three
+   numbered questions, then evidence, limits. Move commands' output details,
+   launch history, cost receipts and warning-log notes to a collapsed appendix.
+   Retitle for the design question (file name unchanged).
+
+Unchanged on purpose: `MANAGYM_EXPERIMENT_AUTOSPEND` and its README note stay as
+written; the report already says the follow-up replaces the switch.
+
+Open product choices, for the report's review (nobody has answered them; they do
+not block this Task, whose outcome is the report that asks them):
+
+1. Deliberate surplus tapping: not offered, a priority action, or in the chooser?
+   Decides whether the flat menu suffices (exact max 22) or groups are required.
+2. Which sources are the same choice: exact identity (493 non-redundant casts
+   above 64, mostly identical basics) or equal definition and state (needs a
+   rules argument; capability alone merges a land with a mana creature)?
+3. Where the player opts out of automation: a decision at each payment whose
+   outcomes differ (+2.5-7.0% decisions/game non-redundant capability, plan
+   visible) or intent at cast selection (no added decisions unless used, plan
+   not visible). Learning effects stay with MTG-265.
 
 ## Final implementation and results
 
@@ -92,7 +141,8 @@ are in the report, not a separate protocol.
 - Report names C followed by D, quotes entry/override costs, makes grouping
   conditional on reviewed surplus/equivalence choices, states MTG-342's
   dependency and ends with all three open review questions.
-- Remaining: gate/review and caller's delivery steps. No PR created here.
+- Remaining: the report-text iteration above, then gate/review and the caller's
+  delivery steps. No PR created here.
 
 ## Checks
 
