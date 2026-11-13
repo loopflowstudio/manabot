@@ -145,3 +145,10 @@ Scryfall facts and fixture assumptions remain at
 `22ed4a733484d27db2fd51274d1b4e23245a6741:scratch/questions.md`.
 The incoming token-card implementation is preserved without changing the
 execution cutover or its outstanding delivery obligations.
+
+## Concept review 11 — 2026-11-13
+
+Reversible, taken without asking: a local resume at a different source
+revision is documented, not refused (plan.md, review 11, item 2). Refusing
+would make a local bug fix start a new run; each checkpoint already names the
+revision that wrote it. Raise with the recovery loss at demo.

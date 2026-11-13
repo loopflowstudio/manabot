@@ -297,3 +297,30 @@ The original counterexample and direction are retained at
 `751deeb2fd0f6a2177217cbcefed803d05a2eec1:scratch/plan.md`. Open CLI-config/local-follower choices and SDK release/pin,
 installed-consumer, launcher/service, recovery review and retained replay
 obligations remain unchanged.
+
+## Concept review 11: next implement direction — 2026-11-13
+
+Proposals drawn from the design, not statements anyone made. Loop, recipes,
+CLI and guides were reread against local train/stop/resume/extend, a launched
+retry and a continuation; no reference to a deleted module remains outside
+frozen manifests. One mismatch, in the section that states the recovery loss
+for review (docs/training.md, "What resume does not promise"):
+
+1. "checkpoint provenance names every attempt" is false. A checkpoint's
+   `source` holds the commit, dirty flag and the one Etude run that wrote it
+   (`model/world.py::checkpoint_source`); attempts (writer, host, pod,
+   `resumed_at`) are in Etude's run record (EXP-56 `105abdd`,
+   `train/run.py` `Attempt`). Say that: the checkpoint names its revision and
+   run; the run record names the attempts and where each resumed.
+2. Same list, "A run executes one source revision for all its attempts" holds
+   for a launched run only. A local rerun after a code change resumes:
+   `load_state` compares world, seed and learner settings, not revision, and
+   each checkpoint names the revision that wrote it. Scope the sentence to
+   launched runs and state the local behavior. No refusal is added; that keeps
+   "run the same command again" as the one resume rule.
+
+Docs only; no code, test or parity rerun follows. Check the "provenance"
+sentence in "Schedules and clocks" (line ~476) still reads true afterwards.
+Open choices (questions.md: CLI recipe-config fields, local follower) and the
+SDK release/pin, installed-consumer, launcher/service, recovery review and
+retained replay obligations are unchanged.
