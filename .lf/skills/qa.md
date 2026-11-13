@@ -81,6 +81,14 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a New Game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
+  To play specific cards, open **Import decklist files**, check "Use imported
+  decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
+  textareas appear only then), fill both, press Check decklists, then New
+  Game; `POST /api/decklists/validate` answers the same check. During the
+  opponent's turn the offers stay rendered but disabled, so click only enabled
+  buttons, or every click times out while the bot plays on. Hover a card name
+  to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
+  usually wins before a slow card is used; give the opponent a light deck.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
