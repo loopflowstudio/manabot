@@ -3,7 +3,9 @@ use managym_state::{
         Ability, Effect, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
         TriggerCondition, TriggerSubject,
     },
-    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+    },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
 };
@@ -23,23 +25,26 @@ fn corrupt_court_official() -> CardDefinition {
     CardDefinition {
         key: "ptk.corrupt_court_official",
         scryfall_id: "9d3ba2e3-e680-47cd-81c5-555deea7d00f",
-        name: "Corrupt Court Official".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Advisor".into()],
-        power: Some(1),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Discard {
-                what: ObjectSelector::Target(TargetSpec::Opponent),
-                count: 1,
+        printed: PrintedCharacteristics {
+            name: "Corrupt Court Official".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Discard {
+                    what: ObjectSelector::Target(TargetSpec::Opponent),
+                    count: 1,
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -58,21 +63,24 @@ fn diaochan_artful_beauty() -> CardDefinition {
     CardDefinition {
         key: "ptk.diaochan_artful_beauty",
         scryfall_id: "6180c476-dadf-4c03-ab1e-639386bd4319",
-        name: "Diaochan, Artful Beauty".into(),
-        mana_cost: Some(ManaCost::parse("{3}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Human".into(), "Advisor".into()],
-        power: Some(1),
-        toughness: Some(1),
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            own_turn_only: true,
-            before_attackers: true,
-            effects: vec![destroy(false), destroy(true)],
+        printed: PrintedCharacteristics {
+            name: "Diaochan, Artful Beauty".into(),
+            mana_cost: Some(ManaCost::parse("{3}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(1),
+            toughness: Some(1),
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                own_turn_only: true,
+                before_attackers: true,
+                effects: vec![destroy(false), destroy(true)],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }
@@ -82,19 +90,22 @@ fn empty_city_ruse() -> CardDefinition {
     CardDefinition {
         key: "ptk.empty_city_ruse",
         scryfall_id: "4d37c84c-80e5-453d-bd2e-4f77ff864c89",
-        name: "Empty City Ruse".into(),
-        mana_cost: Some(ManaCost::parse("{W}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        targeting: vec![TargetRequirement::one(TargetSpec::Opponent)],
-        spell_effects: vec![Effect::ForPlayer {
-            player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
-            effects: vec![Effect::ApplyContinuous {
-                affected: ObjectSelector::You,
-                modification: Modification::SkipsCombatPhasesNextTurn,
-                duration: EffectDuration::Indefinite,
+        printed: PrintedCharacteristics {
+            name: "Empty City Ruse".into(),
+            mana_cost: Some(ManaCost::parse("{W}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            targeting: vec![TargetRequirement::one(TargetSpec::Opponent)],
+            spell_effects: vec![Effect::ForPlayer {
+                player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+                effects: vec![Effect::ApplyContinuous {
+                    affected: ObjectSelector::You,
+                    modification: Modification::SkipsCombatPhasesNextTurn,
+                    duration: EffectDuration::Indefinite,
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -104,16 +115,19 @@ fn taunting_challenge() -> CardDefinition {
     CardDefinition {
         key: "ptk.taunting_challenge",
         scryfall_id: "4620867c-a3a6-4c81-b923-24007367132e",
-        name: "Taunting Challenge".into(),
-        mana_cost: Some(ManaCost::parse("{1}{G}{G}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
-        spell_effects: vec![Effect::ApplyContinuous {
-            affected: ObjectSelector::Target(TargetSpec::Creature),
-            modification: Modification::MustBeBlockedByAllAble,
-            duration: EffectDuration::EndOfTurn,
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Taunting Challenge".into(),
+            mana_cost: Some(ManaCost::parse("{1}{G}{G}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+            spell_effects: vec![Effect::ApplyContinuous {
+                affected: ObjectSelector::Target(TargetSpec::Creature),
+                modification: Modification::MustBeBlockedByAllAble,
+                duration: EffectDuration::EndOfTurn,
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

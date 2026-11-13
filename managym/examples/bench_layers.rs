@@ -12,8 +12,8 @@ use managym::{
     state::{
         ability::Condition,
         card::{
-            Card, CardDefinition, CardType, CardTypes, StaticAbility, StaticLandType, StaticScope,
-            StaticTypeGrant,
+            Card, CardType, CardTypes, PrintedCharacteristics, StaticAbility, StaticLandType,
+            StaticScope, StaticTypeGrant,
         },
         game_object::PermanentId,
         mana::Mana,
@@ -36,7 +36,7 @@ fn root() -> (Env, PermanentId) {
     for (id, definition) in [
         (
             urborg,
-            CardDefinition {
+            PrintedCharacteristics {
                 name: "Urborg witness".into(),
                 types: CardTypes::new([CardType::Land]),
                 statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
@@ -53,7 +53,7 @@ fn root() -> (Env, PermanentId) {
         ),
         (
             moon,
-            CardDefinition {
+            PrintedCharacteristics {
                 name: "Moon witness".into(),
                 types: CardTypes::new([CardType::Enchantment]),
                 statics: vec![StaticAbility::SetsLandType(StaticLandType {
@@ -72,8 +72,13 @@ fn root() -> (Env, PermanentId) {
         let game = env.benchmark_game_mut();
         let card_id = game.state.permanents[id].as_ref().unwrap().card;
         let old = &game.state.cards[card_id];
-        let card =
-            Card::from_definition(old.id, old.owner, old.definition_id, Arc::new(definition));
+        let card = Card::from_definition(
+            old.id,
+            old.owner,
+            old.definition_id,
+            Arc::new(definition),
+            old.is_token,
+        );
         game.state.cards[card_id] = card;
     }
     env.scenario_refresh().unwrap();

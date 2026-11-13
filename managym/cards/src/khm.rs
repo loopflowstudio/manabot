@@ -3,7 +3,7 @@ use managym_state::{
     ability::{Ability, Actor, Effect, ObjectSelector, TargetSpec, TriggerCondition, TurnStep},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        SacrificeCost, StaticAbility,
+        PrintedCharacteristics, SacrificeCost, StaticAbility,
     },
     effect::{EffectDuration, Modification},
     mana::ManaCost,
@@ -33,37 +33,42 @@ fn koma_cosmos_serpent() -> CardDefinition {
     CardDefinition {
         key: "khm.koma_cosmos_serpent",
         scryfall_id: "2de25ea4-284a-4c16-b823-048ff00c6a03",
-        name: "Koma, Cosmos Serpent".into(),
-        mana_cost: Some(ManaCost::parse("{3}{G}{G}{U}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        supertypes: vec!["Legendary".into()],
-        subtypes: vec!["Serpent".into()],
-        power: Some(6),
-        toughness: Some(6),
-        statics: vec![StaticAbility::CantBeCountered],
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::AnyPlayer),
-            effects: vec![Effect::create_tokens("Koma's Coil", 1)],
-        }],
-        activated_abilities: vec![
-            mode(vec![
-                Effect::Tap {
-                    what: ObjectSelector::Target(target.clone()),
-                },
-                Effect::ApplyContinuous {
-                    affected: ObjectSelector::Target(target),
-                    modification: Modification::CantActivateAbilities,
+        printed: PrintedCharacteristics {
+            name: "Koma, Cosmos Serpent".into(),
+            mana_cost: Some(ManaCost::parse("{3}{G}{G}{U}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Serpent".into()],
+            power: Some(6),
+            toughness: Some(6),
+            statics: vec![StaticAbility::CantBeCountered],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::AnyPlayer),
+                effects: vec![Effect::create_tokens("token.komas_coil", 1)],
+            }],
+            activated_abilities: vec![
+                mode(vec![
+                    Effect::Tap {
+                        what: ObjectSelector::Target(target.clone()),
+                    },
+                    Effect::ApplyContinuous {
+                        affected: ObjectSelector::Target(target),
+                        modification: Modification::CantActivateAbilities,
+                        duration: EffectDuration::EndOfTurn,
+                    },
+                ]),
+                mode(vec![Effect::ApplyContinuous {
+                    affected: ObjectSelector::This,
+                    modification: Modification::AddKeywords(Keywords::of(&[
+                        Keyword::Indestructible,
+                    ])),
                     duration: EffectDuration::EndOfTurn,
-                },
-            ]),
-            mode(vec![Effect::ApplyContinuous {
-                affected: ObjectSelector::This,
-                modification: Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
-                duration: EffectDuration::EndOfTurn,
-            }]),
-        ],
-        text_box: text_box.into(),
+                }]),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

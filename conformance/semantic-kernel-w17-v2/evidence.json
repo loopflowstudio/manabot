@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "contract_id": "manabot.semantic-kernel-conformance.v1",
-  "content_digest": "ed2ee59ff619c63630841ad61efcc27ee5fc18dce4f0f90c89e148f94e8d1437",
+  "content_digest": "9508c560c39530c3f66e65020db3367896cde95138791f5092b141c7745cecf6",
   "reference": "reference/explicit-step-v1",
   "optimized": "optimized/skip-trivial-v1",
   "limitation": "Both executors share low-level rules/card primitives; this is not a second Comprehensive Rules engine.",
@@ -11,112 +11,112 @@
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 102,
       "outcome": "terminal",
-      "final_state_hash": "v16:b37d3b133991061bffb3984df71f90a0abec204fc7af9801b3afed4f8f6fff13",
-      "trace_sha256": "8e0025985ca1c930f322141df6b0d96a639310e402eb7f7cc7f9ef710da2f915"
+      "final_state_hash": "v16:00a9a076a07e0ad2dbc22c5687e11fcbae354720facd9d7f9a37a74b28396d26",
+      "trace_sha256": "6ccaf6ac041bd30ed9c0025fd34205ef1cb0e7e4c71a12b7e71e35049388c2cc"
     },
     {
       "case_id": "gw-vs-ur-5eee",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 48,
       "outcome": "terminal",
-      "final_state_hash": "v16:efafa788e9cc57dee20f2e1837f7136c0a7c8674dbfd64dccec46c53e80a6f55",
-      "trace_sha256": "c2e0054b211cecff2f6b0cb44da990e25f530c41618118f74a33c0fadc8bbfdf"
+      "final_state_hash": "v16:2ad8de1cdbdd60aa1f45d85b06e51ba0b4ff3f444d304c9fb787d84600dd2453",
+      "trace_sha256": "ec2dce306e63e88e9b609c3adff89ad3c2fb0bd17e5ec8cd736ab9e2f4f3b058"
     },
     {
       "case_id": "ur-vs-gw-5eef",
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 264,
       "outcome": "terminal",
-      "final_state_hash": "v16:c88826504c8c2c3af033aec25fc21372e37abdc1c44e04cc7a6e803d965451a2",
-      "trace_sha256": "11f08c04c714a1af1cf1cc971c3bdc251c997faafc084158017eb14139b46ef4"
+      "final_state_hash": "v16:ac912dc4210c0c7f2c8af6c0d0788b4c760045e85fd12cefdd7c9f11034ea819",
+      "trace_sha256": "80ae12fcefe768e1ebde21dfc8f67516c0ef6224e050f8a5652f69f32fc810d3"
     },
     {
       "case_id": "gw-vs-ur-5ef0",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 221,
       "outcome": "terminal",
-      "final_state_hash": "v16:7773b9460fba55ced34e3000ed34ee968b6da754ea05c8b8194daa8c610ea610",
-      "trace_sha256": "576c8f2604d0662b466e9ba9e561abab38839b5a2c34bde9506ceb7e76ef2a29"
+      "final_state_hash": "v16:e1ea46e7f83ec244ee8a8d48d7be6ecb0f8e0382ab9e2b8f4a857435fa6407fd",
+      "trace_sha256": "8becd6b828f01f7f5ea40026b17a1fa6a18db734b314c4144a4da60640c84452"
     },
     {
       "case_id": "elemental-161",
       "orientation": "elemental_left_vs_right",
       "commands": 129,
       "outcome": "terminal",
-      "final_state_hash": "v16:70f820129a1857fe32b1f51d20c8b46a8db019e7e41ef86bc679b200e9adee0d",
-      "trace_sha256": "776d24ec2831c102cf656149f6158da6550aff99430dcbff1537c97c5c22da77"
+      "final_state_hash": "v16:465e04eca103b419188501348c0e78b85ed51f34da6d29c1686ec562b1633033",
+      "trace_sha256": "cc80dfbf31e4a99bdd109588dc1336563ee55e6ce68e88c7dbab4eb7724adfec"
     },
     {
       "case_id": "elemental-162",
       "orientation": "elemental_right_vs_left",
       "commands": 83,
       "outcome": "terminal",
-      "final_state_hash": "v16:23dd9fa751537fd33bd92733454c34ce97916296e9b0609067e5f1558f1cbe7d",
-      "trace_sha256": "66d9516b951f9952962775dad440b33aff8925de505bc661ac2a87ec4918a605"
+      "final_state_hash": "v16:2308dff545e06e8fbb9f4cec67fd6422f67c96d071e6fba0ba641080d1dfe25f",
+      "trace_sha256": "674328972df874eaddf0bb677990a852fb3fa0de48fdfde965a98ca8a6f6e516"
     },
     {
       "case_id": "elemental-163",
       "orientation": "elemental_left_vs_right",
       "commands": 135,
       "outcome": "terminal",
-      "final_state_hash": "v16:5b3bd3b5ac825bf882fcc219843ec7dc2ab7f1086a3af00652f1b07ef8054049",
-      "trace_sha256": "9ff61b1970c12308088cf2ded1ee94c296d6fcfecabf59f5a64b4c91380e27ce"
+      "final_state_hash": "v16:af1de36a38f0f2508e9b785513364f3f7c7851b60f758bedb57b5a623f056a24",
+      "trace_sha256": "7a5ef6ad02c18442ec1292343391e715f78d2a2f70dc94486d252d7b6fe0a3a0"
     },
     {
       "case_id": "elemental-164",
       "orientation": "elemental_right_vs_left",
       "commands": 209,
       "outcome": "terminal",
-      "final_state_hash": "v16:fc642d916b4cf3e0058c54166ac15c95ca258a39e132029e6042265b2c773bf9",
-      "trace_sha256": "4c7505a364b000af51460c7e056d1c92fda13e2083e1b4feaed6b16e96b3b407"
+      "final_state_hash": "v16:105fe52e76264a599ca252b550b1b2085e388bb71e41d71e29d2654a8cfc2b9c",
+      "trace_sha256": "4ab7299fcd97475865c3795ee9e2ead50a32bb64b50c1ec89dd01f39dada111b"
     },
     {
       "case_id": "sacrifice-162",
       "orientation": "sacrifice_left_vs_right",
       "commands": 154,
       "outcome": "terminal",
-      "final_state_hash": "v16:ea5c6abce4e84c3dff2e9cdd376a4d6527bdf24c5913e6896f3f8692d5fa90c1",
-      "trace_sha256": "35ced0756905432bf65e5370b858c52a6d5cbce8a17bffcc9bb52901d495c753"
+      "final_state_hash": "v16:546d09b4d55f40261f6bab0a705a20bf061d9775784f0fc738b07bd2b0b71331",
+      "trace_sha256": "c4b463db1e432ba4ced4d684eebe9e1f91116f2dd57c1e3071b680dbee136b59"
     },
     {
       "case_id": "sacrifice-163",
       "orientation": "sacrifice_right_vs_left",
       "commands": 243,
       "outcome": "terminal",
-      "final_state_hash": "v16:a3d7f0f50d007e2906112856cb0d134ffda260d5b5a44b56ab28d5e1602d8306",
-      "trace_sha256": "7ef970f6e8b5ec18628caa738e98debd265106991f47f00e4c72c94d003e2bce"
+      "final_state_hash": "v16:95e97f1f0946879efe5937ccbd5e80b602df4de68982a501ee2f8ea18445d397",
+      "trace_sha256": "49b030521ed5e07dfbd0b2d8b6c727830bccef8e6ef0bf5840c227609de0296d"
     },
     {
       "case_id": "temur-163",
       "orientation": "temur_left_vs_right",
       "commands": 606,
       "outcome": "terminal",
-      "final_state_hash": "v16:b7c9aaabd58493e864339f2feeadc346796d678f47de73a39a11721c54c2c9a3",
-      "trace_sha256": "0e32f38269061772ce8171fe12b9a3724d1c836336b8fa65e87f0ef10cfe0105"
+      "final_state_hash": "v16:d0530fc1e316381c2ca25198e23f7ea3b50c86910a25172049d581e15c29406e",
+      "trace_sha256": "34b201e2058f7ff2bfb3cae90fb60d64ea20a7dac6de4155d4b8ceaa28bc10d9"
     },
     {
       "case_id": "temur-164",
       "orientation": "temur_right_vs_left",
       "commands": 934,
       "outcome": "terminal",
-      "final_state_hash": "v16:0ebc617f1468effa48625d843f2e6688609c6ac992f0067e78a79aad75756ec3",
-      "trace_sha256": "69b2f5560ef514986f844aa5c75180b223eb4574ac613577edcef6519fa5f31b"
+      "final_state_hash": "v16:be508e1e491a36c6f2cffb68da17cb11be1a23beba890c8e989a88d60df1cdd0",
+      "trace_sha256": "16e3a7094253e8d4ab844ec1db0eaf719ab444aaa059f689427c0c0a4b32709f"
     },
     {
       "case_id": "elemental-world-gr_vs_ug",
       "orientation": "elemental_world_gr_vs_ug",
       "commands": 282,
       "outcome": "terminal",
-      "final_state_hash": "v16:53954d8b0a887fb232f2f7ee6ed2421f54e9f2bd0cdd1d6d033413df225df5a5",
-      "trace_sha256": "a108dafd40fe6108d104c0dca857b3846c18a54f29327d38a4c2654c9e9653e8"
+      "final_state_hash": "v16:c3266eebdcbd57b195cd49ad6253fa92c0beabd6eaca5520d03bd3e865c14f44",
+      "trace_sha256": "4fdc9d6f0496a7a316f5a1271874d7691a6274702b3f29eb526e6cf5d8fc3781"
     },
     {
       "case_id": "elemental-world-ug_vs_gr",
       "orientation": "elemental_world_ug_vs_gr",
       "commands": 146,
       "outcome": "terminal",
-      "final_state_hash": "v16:a94db69fe05c639c0b54a5094e6d9c2b5e2f4d5ea52e122fcef87e6883713b9c",
-      "trace_sha256": "6344c70954f5cf98110110bba3e1364108b72d20b38442e3857ae4b50a04c2a8"
+      "final_state_hash": "v16:4e27d4be6d539bff24591864213a1f7c4bfa877a4fa9f5dcc02c886e186ff4e6",
+      "trace_sha256": "dded751a0082b585305dbdd11dfe9c4e4a811b5c0486b6ad2a7774b707797d12"
     }
   ],
   "exercised_prompt_kinds": [

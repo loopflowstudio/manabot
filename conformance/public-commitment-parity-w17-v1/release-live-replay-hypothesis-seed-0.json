@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "9b33ece0de5b479c709793a20a7fffd0f5596564be32a944ad3b8b996959030a",
+    "authority_receipt_sha256": "28ed11cc5241466791bdd3b0240585dbc0dd4aa0e0c2005e6c519abd2bb96c4f",
     "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "9b33ece0de5b479c709793a20a7fffd0f5596564be32a944ad3b8b996959030a"
+          "sha256": "28ed11cc5241466791bdd3b0240585dbc0dd4aa0e0c2005e6c519abd2bb96c4f"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "7f633496381c13bd164d1d278c67d73f6886dc655245529dca386d087902001a"
+          "sha256": "6a148c68b975af5ab381a1e056c7a297f39ebc543b783ec74b7564c74572ef48"
         },
         {
           "path": "academy/server.py",
@@ -73,7 +73,7 @@
         },
         {
           "path": "managym/__init__.pyi",
-          "sha256": "8341bc1b44ef855a4a9464317eba59ff4b950e8bc60fe50c27cbce7af23cab5c"
+          "sha256": "b7a3e9684c9115bfe86e1efb8367c872698c52aeb3198f5e2d9fb3c05f77311f"
         },
         {
           "path": "managym/decision.py",
@@ -85,7 +85,7 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "8b8447c5256af1d14b6a36667c2496a7c64d40f0d7c28bafc0825752039e4a9f"
+          "sha256": "e786920a8cae5e02afba91300f81dc9825ccbd059e30b6706f5feb74dc01c51c"
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
@@ -101,7 +101,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "c782faae6a22f54875723209d43d59301120c7c8dddca8e2dc04d3fd5c31afbe"
+          "sha256": "0ed7fc19e962ffa45a992806afcc50f91b3d646c98cb42aca8dd8271b05e6a41"
         },
         {
           "path": "managym/cards/tests/cards/stx.rs",
@@ -128,7 +128,7 @@
           "sha256": "fe7203833b223d1efa2024782cb8ff2a666e981f12c402b9e54a1acfea49db9a"
         }
       ],
-      "sha256": "c886cae4a3204c5500106f2a24d7ce0d7ae96c56b42a4713d74d36f89e4cc342"
+      "sha256": "fb1386cfb7f03486370964c217c5ddb6ab65981bb2d851773f5d81ca4659bf0b"
     },
     "seed": 0,
     "semantic_decision_version": 8

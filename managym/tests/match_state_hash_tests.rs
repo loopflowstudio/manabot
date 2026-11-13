@@ -6,7 +6,7 @@ use rand_chacha::ChaCha8Rng;
 use managym::{
     cards::content_pack::{default_content_pack, ContentPack},
     state::{
-        card::{CardDefId, CardDefinition, Keyword, Keywords},
+        card::{CardDefId, CardDefinition, Keyword, Keywords, PrintedCharacteristics},
         game_object::{CardId, ObjectId, PlayerId},
         permanent::{CounterKind, Counters},
         stack_object::{SpellOnStack, StackObject},
@@ -203,7 +203,10 @@ fn content_schema_and_content_change_the_hash() {
 
     let mut content_pack = default_content_pack().clone();
     content_pack.register_card(CardDefinition {
-        name: "State Hash Test Definition".to_string(),
+        printed: PrintedCharacteristics {
+            name: "State Hash Test Definition".to_string(),
+            ..Default::default()
+        },
         ..Default::default()
     });
     assert_ne!(baseline, game.state.deterministic_hash_over(&content_pack));

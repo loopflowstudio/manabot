@@ -19,15 +19,15 @@
 // Sanctioned shell deviations (documented in
 // experiments/milestone-1-two-deck-slice.md) are allowlisted explicitly below.
 //
-// Cards that are NOT real Magic cards are either registered with
-// `is_token: true` (token definitions) or listed in NOT_REAL_CARDS and
+// Rows that are NOT real Magic cards are either tokens (`TokenDefinition`s,
+// registered with token status) or listed in NOT_REAL_CARDS and
 // marked `// not a real card` at their registration site; everything else
 // without a fixture entry fails this test.
 
 use std::collections::{BTreeSet, HashMap};
 
 use managym::cards::content_pack::default_content_pack;
-use managym::state::card::{AdditionalCost, CardDefinition, CardType, Keyword};
+use managym::state::card::{AdditionalCost, CardType, Keyword, PrintedCharacteristics};
 use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
@@ -100,7 +100,7 @@ fn canonical_cost(cost: &str) -> Vec<String> {
     tokens
 }
 
-fn render_type_line(def: &CardDefinition) -> String {
+fn render_type_line(def: &PrintedCharacteristics) -> String {
     let mut words: Vec<String> = def
         .supertypes
         .iter()
@@ -209,7 +209,7 @@ fn every_registered_real_card_matches_scryfall() {
                 "{name}: no Scryfall fixture entry. New card registrations must be \
                  snapshotted: run `uv run scripts/refresh_card_fixture.py`. If the card \
                  is invented, mark it `// not a real card` and add it to NOT_REAL_CARDS \
-                 in conformance_tests.rs; token definitions must set `is_token: true`."
+                 in conformance_tests.rs; tokens are TokenDefinitions in `cards/src/tokens.rs`."
             ));
             continue;
         };
