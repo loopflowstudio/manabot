@@ -2,8 +2,10 @@
 
 Policy baseline: `ef28f3a58` (PR #501 merged). Comparison baseline for every
 receipt below: `105e7e2aa` (MTG-297 mana spending), merged as `9db3f1373`.
-`origin/main` has since moved to `f4e1822fa` (#510, training precision:
-`manabot/training/{execution,regime}.py`, no policy or engine file); unmerged.
+`f4e1822fa` (#510, training precision: `manabot/training/{execution,regime}.py`,
+no policy or engine file) is merged at `070da04ed`; `origin/main` had nothing
+further at 2026-11-13 realign. That merge changes no `manabot/` policy code, so
+no capture is repeated for it.
 One PR. Earlier full plan with every receipt: `1f634d89b:scratch/mtg333-plan.md`;
 MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
@@ -350,3 +352,9 @@ Etude. Frozen combined measurement source is `c150d5f25`; benchmark code and
 its three alternating processes per arm were not changed. The generated patch
 files were removed from the final diff; their bytes remain in that source
 commit. Retry the combined job only when rental admission works.
+
+Realign, 2026-11-13 (after `070da04ed`): `etude status 4b091160edbf` still
+reports `renting, ~$0.32, machine mtg333-a6000-b2d4123a77e0`, source
+`c150d5f25`, `last loop: never`. Reconciling that request through Etude is the
+next action before any speed launch; slices 7 (speed) and 8 (optimize) and the
+gate remain.

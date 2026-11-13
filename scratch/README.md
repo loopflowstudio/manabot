@@ -4,7 +4,9 @@
   oracle: 3,410 tensors and five update cases exact. A6000 CUDA outputs exact,
   gradients ≤3.73e-9 but above the repeat floor. Speed/optimization remain
   incomplete after rental API refusals; see the latest retry receipt.
-- `questions.md`: reversible assumptions.
+- `questions.md`: reversible assumptions. MTG-324's `plan.md`, `qa.html` and
+  questions section arrived with main's #510 merge and were removed here; they
+  remain at `f4e1822fa`.
 - `mtg325-torch-backend-verification.md`: inherited baseline evidence and limits.
 - `equivalence/`: shared CPU/CUDA oracle and launcher. Current captures are in
   `/tmp/mtg333/mana-*.pt`; CUDA run `047fa57e0e5e` retains its full captures.
