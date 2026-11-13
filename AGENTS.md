@@ -426,6 +426,20 @@ or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve
 the colors in `five_color_setup`; tests of color, restriction, rider or expiry
 choices select their intended native offer.
 
+An `ObjectId` names one appearance of a card, token or copy in one zone (CR
+109) and goes stale when that object changes zones (CR 400.7), stack to
+battlefield included; a `CardId` names the physical `Card` (CR 108: owner and
+definition) for the whole game. `GameState::object_of(card)` and
+`card_of(object)` are the only bridges; a token or spell copy has no card.
+Hold an `ObjectId` for "that creature", a target or an event subject, a
+`CardId` for ownership or "that card", and read what a departed object was
+from `ObjectLkiLog`. A zone move is the one place an object is made from
+another and returns the new id. A fact crosses a zone change only as a
+`CarryOver` field citing its CR 400.7 sub-rule, never as a field copied by
+hand or an id that keeps working. Slots are private storage: never build an
+`ObjectId` from a number, in tests included
+([objects and zones](docs/engine.md#objects-and-zones)).
+
 A permanent's characteristics after continuous effects (name, types, colors,
 keywords, static/triggered/activated abilities, power/toughness) are one view,
 `Game::characteristics(id)`, which applies static abilities and effect records

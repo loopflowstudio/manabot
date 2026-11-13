@@ -190,6 +190,8 @@ impl<'a> CanonicalMatchState<'a> {
         // Keep this exhaustive: adding a mutable GameState field must break the
         // build until its canonical representation is deliberately chosen.
         let GameState {
+            // Immutable roster facts already occur in the v16 object rows.
+            cards: _,
             objects,
             permanents,
             object_to_permanent,

@@ -1,7 +1,8 @@
 //! Runtime objects, checked card ids, and exact identities across zone changes.
 //!
-//! `ObjectVec` owns rows; `CardId` narrows a row by kind, while `ObjectRef`
-//! binds its incarnation. `PublicId` joins observations and orders timestamps.
+//! `CardVec` owns the immutable physical-card roster; `ObjectVec` owns runtime
+//! rows. `ObjectRef` binds an appearance. `PublicId` joins observations and
+//! orders timestamps.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -35,6 +36,53 @@ impl AsRef<ObjectId> for CardId {
 impl From<CardId> for ObjectId {
     fn from(card: CardId) -> Self {
         card.0
+    }
+}
+
+/// A physical Magic card (CR 108), retained independently of its appearances.
+/// The immutable roster is built at setup, including outside-game cards.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Card {
+    pub owner: PlayerId,
+    pub definition: CardDefId,
+    pub public_id: PublicId,
+}
+
+impl Card {
+    /// The physical card a freshly instantiated card object stands for.
+    pub fn of(object: &Object) -> Self {
+        Self {
+            owner: object.owner,
+            definition: object.definition_id,
+            public_id: object.id,
+        }
+    }
+}
+
+/// Flat physical-card roster, frozen after setup. Tokens and copies belong
+/// solely to the object store.
+#[derive(Clone, Debug, Default)]
+pub struct CardVec(Vec<Card>);
+
+impl CardVec {
+    pub fn new(cards: Vec<Card>) -> Self {
+        Self(cards)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl std::ops::Index<CardId> for CardVec {
+    type Output = Card;
+
+    fn index(&self, card: CardId) -> &Card {
+        &self.0[card.0 .0]
     }
 }
 

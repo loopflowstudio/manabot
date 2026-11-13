@@ -143,11 +143,22 @@ pub enum DelayedTriggerEvent {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
     pub source: ObjectRef,
-    #[serde(rename = "exiled_card")]
-    pub exiled_object: ObjectId,
+    /// The appearance found by the exiling effect (CR 400.7j), not any
+    /// later appearance of the same physical card.
+    #[serde(rename = "exiled_card", serialize_with = "serialize_exiled_object")]
+    pub exiled_object: ObjectRef,
     /// The card returns as the source leaves the battlefield.
     #[serde(skip_serializing_if = "is_true")]
     pub returns: bool,
+}
+
+// v16 retained a row here. Preserve those bytes while the rules use the
+// exact appearance; the next hash contract can include its incarnation.
+fn serialize_exiled_object<S: serde::Serializer>(
+    object: &ObjectRef,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serde::Serialize::serialize(&object.entity, serializer)
 }
 
 fn is_true(value: &bool) -> bool {

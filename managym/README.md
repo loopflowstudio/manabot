@@ -47,7 +47,9 @@ Each card is a function in the file of its first printing's set under
 with the same `PrintedCharacteristics`, keyed `token.*` and created by that
 key, with a Scryfall id unless it has no printing. The engine registers both
 as `ObjectDefinition` rows with token status. In a game every object has a kind
-(`ObjectKind::Card`, `Token` or `SpellCopy`): a token is never a card, and
+(`ObjectKind::Card`, `Token` or `SpellCopy`): a token is never a card, every
+zone change makes a new object with a new `ObjectId` while a `CardId` follows
+the physical card, and
 each zone holds only the objects the Comprehensive Rules allow it
 ([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values
 directly, and
@@ -73,7 +75,7 @@ absence from game zones. They are not part of the library or a new game zone.
 
 Viewer observations carry remaining owner copies in `agent_sideboard`, using
 private `candidate_id` values that join Learn action focus. These are outside-game
-descriptors, not `CardData` with a fabricated zone or in-game `ObjectRef`.
+descriptors, not `CardData` with a fabricated zone or in-game `ObjectId`.
 Both players expose definition-only initial and remaining sideboard counts;
 only the owner gets copy candidates. Python observation JSON and validation
 use the native Rust implementations so new visibility fields cannot drift.
@@ -82,7 +84,7 @@ The policy input factors resolved `EffectRecords` through `agent/shared_effects.
 before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
 source incarnation, timestamps, fixed affected sets and duplicate edges survive.
-Public object IDs are joins; private object storage IDs (`ObjectId`) do not enter this view.
+Public object IDs are joins; private object storage slots do not enter this view.
 Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
 active effects.
@@ -112,8 +114,8 @@ in one event batch. `ForEachTarget` instead runs a separate child program per
 slot, retaining its position across choices. Leaves from the Vine's simultaneous
 counter placement uses the former.
 Graveyard targets
-carry an exact `ObjectRef`, so continuations cannot follow a physical card into
-a later incarnation. Mutate permanents at their event authority;
+carry an exact `ObjectId`, so continuations cannot follow a physical card into
+the object it later becomes. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
 Delayed abilities compose event matching, frequency, expiry, captured subjects

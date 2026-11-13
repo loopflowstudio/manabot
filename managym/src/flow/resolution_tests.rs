@@ -2653,9 +2653,10 @@ fn retained_batch_linked_entry_suspends_actual_mana_cost_completion() {
         intervening_if: None,
     }];
     let returned = exiled_counter_entry(&mut game, player);
+    let returned_ref = game.current_object_ref(returned).unwrap();
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        exiled_object: returned,
+        exiled_object: returned_ref,
         returns: true,
     });
     game.state.players[player.0].mana_pool = Mana::parse("R");
@@ -2769,9 +2770,10 @@ fn retained_batch_state_based_departure_retains_linked_entry_and_lki() {
     let source_object = game.state.permanents[source].as_ref().unwrap().object;
     let source_ref = game.permanent_object_ref(source).unwrap();
     let returned = exiled_counter_entry(&mut game, player);
+    let returned_ref = game.current_object_ref(returned).unwrap();
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        exiled_object: returned,
+        exiled_object: returned_ref,
         returns: true,
     });
     game.state.permanents[source].as_mut().unwrap().damage = 2;
@@ -3180,11 +3182,12 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
     let source_ref = game.permanent_object_ref(merchant).unwrap();
     counter_replacement_drivers(&mut game, player);
     let returned = exiled_counter_entry(&mut game, player);
+    let returned_ref = game.current_object_ref(returned).unwrap();
     // The real Merchant program is the consumer; this constructed link isolates
     // a source departure whose consequent entry asks a replacement question.
     game.state.exile_links.push(ExileLink {
         source: source_ref,
-        exiled_object: returned,
+        exiled_object: returned_ref,
         returns: true,
     });
     let Ability::Triggered { effects, .. } = &game.state.objects[source].abilities[1];

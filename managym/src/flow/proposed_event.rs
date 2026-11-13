@@ -640,7 +640,7 @@ impl Game {
                         .exile_links
                         .push(crate::flow::trigger::ExileLink {
                             source,
-                            exiled_object: object_id,
+                            exiled_object: object,
                             returns,
                         });
                 }

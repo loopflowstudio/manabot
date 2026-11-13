@@ -1330,7 +1330,7 @@ impl Game {
                 .get(ability_index)
                 .cloned(),
             ActivationSource::Card(card) => {
-                let owner = self.state.objects[card].owner;
+                let owner = self.state.cards[card].owner;
                 self.card_ability_in_zone(owner, card, ability_index)
             }
         }

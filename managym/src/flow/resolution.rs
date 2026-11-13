@@ -1711,7 +1711,7 @@ impl Game {
                     .exile_links
                     .iter()
                     .filter(|link| link.source == source)
-                    .map(|link| link.exiled_object)
+                    .filter_map(|link| self.state.current_row(link.exiled_object))
                     .filter(|object_id| {
                         self.state.zones.zone_of(*object_id) == Some(ZoneType::Exile)
                             && predicate.matches_object(&self.state.objects[*object_id])

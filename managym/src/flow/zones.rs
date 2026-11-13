@@ -817,14 +817,13 @@ impl Game {
             ended
         };
         for link in ended.into_iter().filter(|link| link.returns) {
-            let owner = self.state.objects[link.exiled_object].owner;
-            if self
-                .state
-                .zones
-                .contains(link.exiled_object, ZoneType::Exile, owner)
-            {
+            let Some(exiled) = self.state.current_row(link.exiled_object) else {
+                continue;
+            };
+            let owner = self.state.objects[exiled].owner;
+            if self.state.zones.contains(exiled, ZoneType::Exile, owner) {
                 followups.push(self.zone_move_proposal(
-                    link.exiled_object,
+                    exiled,
                     ZoneType::Battlefield,
                     ZoneEntry::default(),
                 ));

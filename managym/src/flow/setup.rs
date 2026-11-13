@@ -13,7 +13,9 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        game_object::{IdGenerator, Incarnation, ObjectId, ObjectVec, PermanentVec, PlayerId},
+        game_object::{
+            Card, CardVec, IdGenerator, Incarnation, ObjectId, ObjectVec, PermanentVec, PlayerId,
+        },
         player::{Player, PlayerConfig},
         zone::{ZoneManager, ZoneType},
     },
@@ -52,6 +54,7 @@ impl Game {
             Player::new(id_gen.next_id(), 1, player_configs[1].name.clone()),
         ];
 
+        let mut cards = Vec::new();
         let mut objects = ObjectVec::default();
         let mut object_to_permanent = ObjectVec::default();
         let mut object_incarnations = ObjectVec::default();
@@ -65,6 +68,7 @@ impl Game {
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
                         .unwrap_or_else(|| panic!("unknown card in decklist: {name}"));
                     let object_id = ObjectId(objects.len());
+                    cards.push(Card::of(&object));
                     objects.push(object);
                     let card_id = objects
                         .card_id(object_id)
@@ -95,6 +99,7 @@ impl Game {
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
                         .expect("validated sideboard definition");
                     let object_id = ObjectId(objects.len());
+                    cards.push(Card::of(&object));
                     objects.push(object);
                     let card_id = objects
                         .card_id(object_id)
@@ -127,6 +132,7 @@ impl Game {
             derived: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {
+                cards: CardVec::new(cards),
                 objects,
                 permanents: PermanentVec::default(),
                 object_to_permanent,

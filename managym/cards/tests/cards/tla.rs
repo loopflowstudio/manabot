@@ -3288,6 +3288,36 @@ fn jailer_exiles_and_returns_on_leaving() {
     assert!(s.game().state.exile_links.is_empty());
 }
 
+/// CR 400.7j lets the original effect find only the appearance it exiled.
+#[test]
+fn jailer_does_not_return_a_card_that_left_exile_and_was_exiled_again() {
+    let mut s = jailer_scenario(316);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let object = permanent(&s, ogre).object;
+    s.advance_to_active_step(0, StepKind::Main);
+    cast_and_resolve(&mut s);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    let exiled = s.game().current_object_ref(object).unwrap();
+    assert_eq!(s.game().state.exile_links[0].exiled_object, exiled);
+    // Retained v16 link bytes still name the old numeric row.
+    let link = serde_json::to_value(&s.game().state.exile_links[0]).unwrap();
+    assert_eq!(link["exiled_card"], serde_json::to_value(object).unwrap());
+
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Exile);
+    assert_ne!(s.game().current_object_ref(object), Some(exiled));
+    let jailer = s.battlefield_permanents_named(0, "Earth Kingdom Jailer")[0];
+    let source = permanent(&s, jailer).object;
+    s.game_mut().move_object(source, ZoneType::Graveyard);
+
+    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
+    assert!(s.game().state.exile_links.is_empty());
+}
+
 #[test]
 fn jailer_target_is_up_to_one_and_mv_gated() {
     let mut s = jailer_scenario(312);

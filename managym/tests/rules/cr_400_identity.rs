@@ -405,3 +405,110 @@ fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
     assert_eq!(zones.zone_of(ObjectId(1)), None);
     assert_eq!(zones.zone_of(ObjectId(3)), None);
 }
+
+/// A physical card retains its identity and printing while its appearances
+/// change; the current-object bridge rejects departed appearances.
+#[test]
+fn cr_400_7_physical_card_survives_appearances_and_copy_effects() {
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
+        deck(&[("Island", 40)]),
+        400_712,
+    );
+    let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let object = s.game().state.permanents[permanent]
+        .as_ref()
+        .unwrap()
+        .object;
+    let appearance = s.game().current_object_ref(object).unwrap();
+    let card = s.game().state.card_of(appearance).unwrap();
+    let physical = s.game().state.cards[card];
+    assert_eq!(physical.owner, PlayerId(0));
+    assert_eq!(
+        physical.definition,
+        s.game().state.objects[object].definition_id
+    );
+    assert_eq!(physical.public_id, s.game().state.objects[object].id);
+    assert_eq!(s.game().state.object_of(card), Some(appearance));
+
+    let other = owned_card(&s, 1, "Island");
+    let template = s.game().state.objects[other].clone();
+    s.game_mut().state.objects[object].become_copy_of(&template, &[]);
+    assert_ne!(
+        s.game().state.objects[object].definition_id,
+        physical.definition
+    );
+    assert_eq!(s.game().state.cards[card], physical);
+    assert_eq!(s.game().state.card_of(appearance), Some(card));
+
+    s.game_mut().move_object(object, ZoneType::Exile);
+    let exiled = s.game().state.object_of(card).unwrap();
+    assert_ne!(exiled, appearance);
+    assert_eq!(s.game().state.card_of(appearance), None);
+    assert_eq!(s.game().state.card_of(exiled), Some(card));
+    assert_eq!(s.game().state.cards[card], physical);
+    assert_eq!(
+        s.game().state.objects[object].definition_id,
+        physical.definition
+    );
+
+    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let returned = s.game().state.object_of(card).unwrap();
+    assert_ne!(returned, exiled);
+    assert_eq!(s.game().state.card_of(exiled), None);
+    assert_eq!(s.game().state.card_of(returned), Some(card));
+    let fork = s.game().clone();
+    assert_eq!(fork.state.cards[card], physical);
+    assert_eq!(fork.state.object_of(card), Some(returned));
+}
+
+#[test]
+fn cr_400_7_token_creation_does_not_add_a_physical_card() {
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 400_713);
+    let roster_size = s.game().state.cards.len();
+    let permanent = s
+        .game_mut()
+        .create_token("token.spirit", PlayerId(0), false)
+        .unwrap();
+    let object = s.game().state.permanents[permanent]
+        .as_ref()
+        .unwrap()
+        .object;
+    let appearance = s.game().current_object_ref(object).unwrap();
+    assert_eq!(s.game().state.card_of(appearance), None);
+    assert_eq!(s.game().state.cards.len(), roster_size);
+    s.game_mut().move_object(object, ZoneType::Graveyard);
+    assert_eq!(s.game().state.card_of(appearance), None);
+    assert_eq!(
+        s.game()
+            .state
+            .card_of(s.game().current_object_ref(object).unwrap()),
+        None
+    );
+    assert_eq!(s.game().state.cards.len(), roster_size);
+}
+
+#[test]
+fn cr_400_7_outside_card_has_no_appearance_until_it_enters_the_game() {
+    let mut s = Scenario::with_sideboards(
+        deck(&[("Mountain", 40)]),
+        deck(&[("Island", 40)]),
+        deck(&[("Gray Ogre", 2)]),
+        deck(&[("Forest", 1)]),
+        400_714,
+    );
+    assert_eq!(s.game().state.cards.len(), 83);
+    let card = s.game().state.players[0].sideboard[0];
+    let physical = s.game().state.cards[card];
+    assert_eq!(physical.owner, PlayerId(0));
+    assert_eq!(s.game().state.object_of(card), None);
+    assert_eq!(
+        s.game().state.cards[s.game().state.players[1].sideboard[0]].owner,
+        PlayerId(1)
+    );
+    s.game_mut().move_object(card, ZoneType::Hand);
+    let appearance = s.game().state.object_of(card).unwrap();
+    assert_eq!(s.game().state.card_of(appearance), Some(card));
+    assert_eq!(s.game().state.cards[card], physical);
+    assert_eq!(s.game().state.cards.len(), 83);
+}

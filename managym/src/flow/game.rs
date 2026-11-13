@@ -25,8 +25,8 @@ use crate::{
     state::{
         card::ActivatedAbilityDefinition,
         game_object::{
-            CardId, IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef, ObjectVec,
-            PermanentId, PermanentVec, PlayerId, Target,
+            CardId, CardVec, IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef,
+            ObjectVec, PermanentId, PermanentVec, PlayerId, Target,
         },
         mana::Mana,
         permanent::{CounterKind, Permanent},
@@ -37,6 +37,8 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
+    /// Immutable physical cards, in deal order, including both sideboards.
+    pub cards: CardVec,
     /// Every object a game has made: its cards, tokens and copies of spells,
     /// told apart by `Object::kind` (CR 109.1).
     pub objects: ObjectVec<crate::state::game_object::Object>,
@@ -92,6 +94,30 @@ impl GameState {
     ) {
         self.zones
             .reassign_hidden(&self.objects, player, hand, library);
+    }
+
+    /// The current appearance of a physical card; outside-game cards have none.
+    pub fn object_of(&self, card: CardId) -> Option<ObjectRef> {
+        let object = ObjectId::from(card);
+        self.zones.zone_of(object)?;
+        Some(ObjectRef {
+            entity: object.into(),
+            incarnation: *self.object_incarnations.get(object.0)?,
+        })
+    }
+
+    /// The physical card behind an exact appearance; stale objects, tokens
+    /// and spell copies have no card.
+    pub fn card_of(&self, object: ObjectRef) -> Option<CardId> {
+        self.objects.card_id(self.current_row(object)?)
+    }
+
+    /// The row of an exact appearance, while it is still that appearance.
+    pub(crate) fn current_row(&self, object: ObjectRef) -> Option<ObjectId> {
+        let row = ObjectId::from(object.entity);
+        (self.object_incarnations.get(row.0) == Some(&object.incarnation)
+            && self.zones.zone_of(row).is_some())
+        .then_some(row)
     }
 
     /// A card keeps its kind across moves, transformations and copy effects.

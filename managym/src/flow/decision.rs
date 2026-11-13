@@ -2922,7 +2922,7 @@ impl Game {
     fn eligible_lesson(&self, player: PlayerId, card: CardId) -> bool {
         self.decision_controller(player) == player
             && self.state.players[player.0].sideboard.contains(&card)
-            && self.state.objects[card].owner == player
+            && self.state.cards[card].owner == player
             && self.state.zones.zone_of(card).is_none()
             && self.state.objects[card]
                 .subtypes
@@ -3023,7 +3023,7 @@ impl Game {
                 .exile_links
                 .iter()
                 .filter(|link| link.source == *source)
-                .filter_map(|link| self.state.card_id(link.exiled_object))
+                .filter_map(|link| self.state.card_of(link.exiled_object))
                 .filter(|card| {
                     let definition = &self.state.objects[*card];
                     self.state.zones.contains(*card, ZoneType::Exile, *player)

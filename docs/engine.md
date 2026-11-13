@@ -608,38 +608,61 @@ card, its back face's `PrintedCharacteristics` (`back_face`; the outer
 ## Objects and zones
 
 The engine's runtime types and their names come from the Comprehensive Rules.
-A definition says what something is; an object is one instance of it in a
-game, and a zone says where that object is. Take one Spirit token through a
+A definition says what something is; a card is the physical card a player
+brought to the game (CR 108); an object is one appearance of a card, token or
+copy in one zone (CR 109); and a zone says where that object is. An object
+that changes zones becomes a new object with no memory of the old one (CR
+400.7), so the engine has two ids: `ObjectId` names one appearance and stops
+working when the object moves, and `CardId` names the card and follows it for
+the whole game.
+
+Flicker a Gray Ogre (exile it, then return it to the battlefield):
+
+```rust
+let ogre = game.state.permanents[permanent].as_ref().unwrap().object; // ObjectId
+let card = game.state.card_of(ogre).unwrap();                         // CardId
+
+let exiled = game.move_object(ogre, ZoneType::Exile).unwrap();
+let returned = game.move_object(exiled, ZoneType::Battlefield).unwrap();
+
+// The object that left is gone. Nothing that held its id can follow it.
+assert_eq!(game.state.object(ogre).err(), Some(ObjectLookupError::Stale));
+assert_eq!(game.lookup_current_permanent(ogre), Err(ObjectLookupError::Stale));
+assert_ne!(returned, ogre);
+
+// The card is the same card, and names the object it is now.
+assert_eq!(game.state.object_of(card), Some(returned));
+assert_eq!(game.state.cards[card].owner, PlayerId(0));
+
+// What the old object was is last known information (CR 608.2h).
+assert_eq!(game.object_lki(ogre).unwrap().from_zone, ZoneType::Battlefield);
+```
+
+The returned Ogre has no damage, no counters, no Auras and no "until end of
+turn" effects, and anything that targeted the old Ogre no longer has a target.
+None of that is cleanup code; the new object never had them.
+
+A token is an object with no card behind it. Take one Spirit token through a
 turn:
 
 | Step | What the rules say | What the engine holds |
 | --- | --- | --- |
 | `Effect::create_tokens("token.spirit", 1)` resolves | A token enters the battlefield under its creator's control (CR 111.2); it is a permanent (CR 110.1) | an object of kind `ObjectKind::Token` from `TokenDefinition` `token.spirit`, with a `Permanent` for its battlefield state |
-| The Spirit is destroyed | It is put into its owner's graveyard and dies (CR 700.4); it is still a token | the same token, now in the graveyard; death triggers read its last known information |
-| State-based actions are checked | A token in a zone other than the battlefield ceases to exist (CR 111.7, 704.5d) | the token leaves every zone and no longer exists |
+| The Spirit is destroyed | It is put into its owner's graveyard and dies (CR 700.4); it is still a token | a new token object in the graveyard; death triggers read the battlefield object's last known information |
+| State-based actions are checked | A token in a zone other than the battlefield ceases to exist (CR 111.7, 704.5d) | the token leaves every zone; its id is stale and nothing replaces it |
 
 At no point is the Spirit a card. An effect that says "card" (return target
 creature card from your graveyard) never sees it, because "card" means only a
 Magic card (CR 108.2). The types say the same thing: the Spirit has an
-`ObjectId` and can never have a `CardId`.
+`ObjectId` and `card_of` returns `None` for it.
 
 ```rust
 // "Return target creature card from your graveyard to your hand."
-let Some(card) = game.state.card_id(object_id) else {
-    return; // a token or a copy of a spell: an object, not a card
+let Some(card) = game.state.card_of(object) else {
+    return; // a token, a copy of a spell, or an object that has since moved
 };
-let name = &game.state.objects[card].name; // a CardId indexes the same store
-
-// Every card is an object, so what takes any object takes the card as it is.
-let zone = game.state.zones.zone_of(card);
-let reference = game.current_object_ref(card);
+let owner = game.state.cards[card].owner;
 ```
-
-`GameState::card_id` is the one checked conversion from an object to a card;
-it returns `None` for a token or a copy. Object APIs accept a `CardId` or an
-`ObjectId` directly.
-A `CardId` stays valid for the whole game, because an object never becomes a
-card or stops being one.
 
 ### Objects
 
@@ -648,110 +671,158 @@ it:
 
 | Rules term | Rule | Engine type | Holds |
 | --- | --- | --- | --- |
-| Card | CR 108 | `Object` with `ObjectKind::Card`, named by `CardId` (a separate `Card` store is [planned](#planned-split)) | the physical card: owner and definition, for the whole game |
-| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one card, token or spell copy, kept across zone changes ([What is built](#what-is-built)): owner, definition, copy effect and `ObjectKind` |
+| Card | CR 108 | `Card` in `GameState::cards`, named by `CardId` | the physical card: owner and definition, for the whole game |
+| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one appearance in one zone: its characteristics as printed or copied, its copy effect and its `ObjectKind` |
 | Token | CR 111 | `Object` with `ObjectKind::Token`, from a `TokenDefinition` or a copy effect | no card |
 | Copy of a spell | CR 707.10 | `Object` with `ObjectKind::SpellCopy`, made on the stack | no card |
 | Copy of a card | CR 707.12 | none yet; no defined card casts a copy of a card | no card |
 | Permanent | CR 110 | `Permanent`, named by `PermanentId`, beside the object it is | battlefield state: tapped, damage, attachment |
 | Spell | CR 112 | `StackObject::Spell`, beside the object it is | cast choices: targets, X, modes, kicker |
-| Ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` | source, effects and choices; not an `Object` row |
+| Ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` | source, effects and choices; not an `Object` |
 | Emblem | CR 114 | none yet; no defined card creates one | no card |
 
-An object keeps its kind for its whole life. The one change of kind is a copy
-of a permanent spell, which becomes a token as it resolves (CR 111.12,
-608.3f). A definition's `is_token` says only that its catalog row is a token
-definition's; an object's kind is the authority for what it is.
+`Card` is a small `Copy` value written once at setup: `owner`, `definition`
+and the `PublicId` observations show for it. `GameState::cards` holds both
+main decks and both sideboards and never grows.
+
+An object's kind is fixed when the object is made. A copy of a permanent spell
+resolves into a token (CR 111.12, 608.3f): the permanent is a new object of
+kind `Token`, and neither it nor the copy has a `CardId`. A definition's
+`is_token` says only that its catalog row is a token definition's; an object's
+kind is the authority for what it is.
+
+A Clone is still a card. A copy effect changes an object's copiable values
+(CR 707.2) and is recorded on that object (`copy`); it does not make a copy
+object, and it does not survive the object leaving its zone.
+
+### Identity
+
+| Id | Names | Valid | Get it from |
+| --- | --- | --- | --- |
+| `ObjectId` | one appearance of a card, token or copy in one zone | until that object changes zones or ceases to exist | a zone list, a permanent, a spell, a target, an event, or the move that made the object |
+| `CardId` | a physical card | the whole game | a decklist, sideboard, library or hand entry, or `card_of` |
+| `PermanentId` | an object's battlefield state | while it is on the battlefield | the battlefield |
+| `PublicId` | the match-unique number observations show for players, objects and abilities, also used to order timestamps | the whole game | `Card::public_id`, or the token or copy |
+
+Two functions connect cards and objects, and both read current state:
+
+```rust
+/// The object this card currently is; `None` while the card is in no zone.
+pub fn object_of(&self, card: CardId) -> Option<ObjectId>
+
+/// The card behind this object; `None` for a token, a copy or a stale id.
+pub fn card_of(&self, object: ObjectId) -> Option<CardId>
+```
+
+Every lookup by `ObjectId` checks that the id is current:
+
+| `ObjectLookupError` | Meaning |
+| --- | --- |
+| `Stale` | the object changed zones or ceased to exist; ask last known information or the card instead |
+| `WrongZone` | the object exists but is not where the caller requires (`lookup_current_permanent` on an object in hand) |
+| `Missing` | no object ever had this id |
+
+A stale id is an ordinary outcome, not a bug: a spell whose target left fizzles
+on it, and a delayed trigger watching one creature retires on it. Code picks
+the id for what its rules text means:
+
+- **"That creature", a target, an attacker, a source of damage** is an
+  `ObjectId`. If the object left, the effect does nothing to its successor.
+- **"That card", an owner, a decklist entry, "return it to its owner's hand"
+  after it has already moved** is a `CardId`; `object_of` finds where it is.
+- **What something was when it left** (power when it died, its controller,
+  its counters) is `Game::object_lki(old_id)`, the `ObjectLkiLog` entry
+  recorded as the object departs.
+
+An `ObjectId` is opaque. It cannot be built from a number, and tests take ids
+from the game (a permanent's `object`, a zone list, a move's return value)
+rather than writing literals. There is no conversion from `CardId` to
+`ObjectId` other than `object_of`, because the answer changes during the game.
+
+### Zone changes
+
+`Game::move_object` and the `ProposedEvent::ZoneMove` it submits are the only
+way an object comes from another. The move retires the old id, builds the new
+object from its base (the card's printing, or a token's or copy's copiable
+values) and returns the new `ObjectId`. Everything else about the old object
+is dropped: damage, counters, attachments, copy effects, a transformed face,
+continuous effects that named it, and every id held elsewhere.
+
+What the rules let the new object know arrives in one `CarryOver` value, built
+by whatever caused the move. A fact crosses a zone change only as a field of
+it, with the rule that allows it:
+
+| Rule | What crosses | How |
+| --- | --- | --- |
+| CR 400.7d | a permanent knows how its spell was cast: that it was cast, the value of X and the mana spent | `CarryOver::cast` |
+| CR 400.7e, f | a zone-change trigger (dies, leaves the battlefield, an Aura put into the graveyard) finds the object in the public zone it moved to | the committed event's `became: Option<ObjectId>` |
+| CR 400.7g, h | a permission to cast a card, and the effect that granted it, find the spell on the stack | casting returns the spell's `ObjectId`; `CarryOver::cast_from` |
+| CR 400.7i | an effect that lets a land be played finds the land on the battlefield | playing returns the permanent's `ObjectId` |
+| CR 400.7j | an effect or cost that moves an object to a public zone finds it there ("exile it, then return it", "if you do") | the move's returned `ObjectId`, held by the effect frame (`Moved`, `CreatedThisWay`) or the exile link |
+| CR 111.12, 608.3f | a copy of a permanent spell becomes a token | the new object's kind |
+
+CR 400.7a to c (effects and prevention applied to a permanent spell continuing
+on the permanent) carry nothing, because no supported effect applies to a
+spell. Madness and stickers (CR 400.7k, m) are not modeled.
+
+Each id handed across is itself an `ObjectId` and goes stale on the next move.
+A creature exiled "until this leaves the battlefield" that leaves exile and is
+exiled again by something else is a different object, so it stays in exile
+when the first source leaves.
+
+Card tests see the same rule. `force_permanent_on_battlefield` and
+`enter_and_settle` return the id of the object they placed; after moving it,
+use the id the move returned or go through the card.
 
 #### Names
 
-A runtime id binding's name says which id it holds:
+A binding's name says which id it holds:
 
 | Name | Holds | Use it for |
 | --- | --- | --- |
-| `card`, `card_id`, `cards` | `CardId` | card-only zone readers, decklists, sideboards, and effects whose text says "card" |
-| `object`, `object_id`, `objects` | `ObjectId` | mixed zone lists, spells, permanents, targets, events and last known information |
+| `card`, `card_id`, `cards` | `CardId` | card-only zone readers, decklists, sideboards, ownership, and effects whose text says "card" |
+| `object`, `object_id`, `objects` | `ObjectId` | zone lists, spells, permanents, targets, events and last known information |
 
 The parameter type says which of the two a function works on:
 
 ```rust
-// Works on any object: callers pass a CardId or an ObjectId.
-pub fn zone_of(&self, object: impl Into<ObjectId>) -> Option<ZoneType>
+// Works on one object, wherever it is; rejects a stale id.
+pub fn zone_of(&self, object: ObjectId) -> Option<ZoneType>
 
 // Works on cards alone: a token or a spell copy cannot be passed.
-pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError>
+pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<ObjectId, AgentError>
 ```
 
-- **Any object** takes `impl Into<ObjectId>` and converts once, or hands the
-  id on to the object function it wraps. Zone lookups and membership, object
-  references, public ids, predicates and moves are written this way, so a
-  caller holding a `CardId` passes it without `.into()` or `ObjectId::from`.
-- **Cards alone** takes `CardId` and needs no `is_card()` check. No function
-  accepts an `ObjectId` where a card is required. A caller holding an
-  `ObjectId` narrows once with `card_id`, then passes that `CardId` on.
-- **A plain `ObjectId` parameter** remains where a generic does not fit: a
-  trait-object or function-pointer signature, a serialized field, a PyO3
-  binding, or a hot path where the generic measurably costs. A caller holding
-  a `CardId` writes `card.into()` there. Explicit widening also remains when
-  storing a card in an `ObjectId` field or collection (an `Action` or event
-  field, a mixed list), returning it as an `ObjectId`, comparing mixed ids,
-  or implementing the checked indexing traits. Private test command builders
-  can retain their concrete transport signature. A function does not widen a
-  card into an `ObjectId` local only to call object functions with it; it
-  passes the `CardId`.
-
+A caller holding an `ObjectId` narrows once with `card_of` and passes the
+`CardId` on; a caller holding a `CardId` that needs the object asks
+`object_of` at the point of use and does not keep the answer across a move.
 `Object::is_card()` remains for code that only asks the question.
 
 Names that do not bind runtime ids keep `card`: definitions
 (`CardDefinition`, `CardDefId`, `card.rs`, which describe a card rather than
 name an object in a game), card-name strings, and the published observation
-and Python names
-(`CardData`, `StackTargetData.card_id`, serialized `card` fields), which keep
-their spelling for recorded evidence.
+and Python names (`CardData`, `StackTargetData.card_id`, serialized `card`
+fields, `source_incarnation`, `target_incarnation`), which keep their spelling
+and values for recorded evidence.
 
-#### What is built
+#### Storage and recorded bytes
 
-The engine stores one `Object` row per card, token or spell copy and keeps
-it across zone changes:
+A new object does not get a new storage row. Each card, token or copy has one
+slot in `GameState::objects`, a flat vector, and a zone change rebuilds the
+object in that slot and advances the slot's generation. An `ObjectId` is the
+slot and the generation it was issued for (8 bytes, `Copy`); a lookup compares
+generations and reads the vector, with no hash map. The store grows only when
+a token or copy is created, and a zone change allocates nothing.
 
-- `ObjectId` is the row's index and outlives a zone change. `ObjectRef`
-  (`EntityId` plus `Incarnation`) is the appearance: its incarnation advances
-  on every zone change (CR 400.7). Callers compare it with
-  `Game::current_object_ref`; `lookup_current_permanent` rejects a stale
-  reference. Last known information is the `ObjectLkiLog`, keyed by `ObjectRef`.
-- `CardId` names a row whose kind is `ObjectKind::Card` and has the same
-  index as that row's `ObjectId`. Setup uses the same checked store conversion
-  as `GameState::card_id` after inserting each deck or sideboard object.
-- `PublicId` is the match-unique number observations show for players,
-  objects and abilities, also used to order timestamps; it is not a storage
-  index.
-
-A Clone is still a card. A copy effect changes a card's or token's copiable
-values (CR 707.2) and is recorded on that object (`copy`); it does not make a
-copy object.
-
-#### Planned split
-
-Not built in this change; the split below is separate follow-up work.
-The rules make a new object on every zone change (CR 400.7), stack
-to battlefield included (CR 608.3a). The plan is to store that directly: a
-`Card` store for the physical card and an `Object` store with one row per
-appearance, so `ObjectId` would name one appearance and go stale when the
-object moves, as `ObjectRef` does today, and `CardId` would index the `Card`
-store instead of sharing the object's row. Code that means "which object" (a
-target, "that creature", last known information) would name the appearance;
-code that means "which card" (ownership, a decklist, "return that card") would
-name the card, as its `CardId` already does. Nothing else would cross a zone
-change: the only bridge from
-the old object to the new one would be a carry-over record holding what
-CR 400.7's sub-rules let the new object know (whether it was cast or kicked,
-and linked effects finding the object they moved).
-
-The split must keep `Card` small and `Copy` (owner, definition id, current
-`ObjectId`), keep both stores flat id-indexed vectors with no hash map on hot
-paths (search clones `Game` constantly), check an object-to-card conversion
-once and assert kinds in debug builds, and measure whether a new id per zone
-change adds layer-view or `TriggerIndex` invalidation before relying on it.
+Slots are private to the store, the zone lists and the match-state hash. Cards
+take the first slots in setup order (main decks, then sideboards), followed by
+tokens and copies in creation order, which is the numbering recorded states
+already use. The match-state hash stays at version 16 and its bytes do not
+change: a field recorded as a row number writes its slot, and a field recorded
+as `{"entity", "incarnation"}` writes slot and generation under those keys.
+Version 16 therefore cannot tell a current id from a stale one in the fields
+that used to hold a bare row; the next hash version writes whole ids.
+Observations, replays and the Python API are unchanged.
 
 ### Zones
 
@@ -779,6 +850,8 @@ for card in game.state.zone_cards(ZoneType::Hand, player) {
 for object in game.state.zones.zone_objects(ZoneType::Graveyard, player).iter() {
     // object: &ObjectId; a token that just died may be here
 }
+// One card, wherever it is now:
+let zone = game.state.object_of(card).and_then(|object| game.state.zones.zone_of(object));
 ```
 
 A token or copy that leaves the battlefield or stack is briefly in another
@@ -792,8 +865,10 @@ over `Zone`, `TargetPlayersZone` or `CardsThisWay`) offers cards alone; a
 selection over other objects, such as the token an effect just created
 (`CreatedThisWay`), still offers that token.
 
-Library and hand store each card as a checked `CardId`, alongside explicit
-`Transient(ObjectId)` entries for non-cards awaiting state-based actions. The
+Library and hand store each card as a `CardId`, alongside explicit
+`Transient(ObjectId)` entries for non-cards awaiting state-based actions. A
+card entry stays valid however the card got there; `object_of` gives the
+object it is in that zone. The
 single entry sequence owns membership and order; there is no parallel list to
 synchronize. `GameState::zone_cards` delegates to the borrowed view's `cards`
 iterator, which reads stored card ids and skips visitors. Other zones keep
@@ -802,8 +877,8 @@ mixed `ObjectId` lists and narrow at that same boundary.
 `zone_objects` borrows an ordered view of the underlying object ids without
 allocating. Size, top, shuffles, hidden-world reassignment and observations
 include visitors at their original positions. Reordering moves the typed entry;
-it cannot insert an unchecked id. Both entry variants serialize as their numeric
-id, preserving the old zone bytes and match-state hash. Shuffles operate on the
+it cannot insert an unchecked id. Both entry variants serialize as their slot
+number, preserving the old zone bytes and match-state hash. Shuffles operate on the
 whole entry sequence, preserving RNG consumption. This matters even at decisions:
 a Treasure sacrificed for mana remains in the graveyard during its color choice,
 before state-based actions run.
@@ -839,13 +914,13 @@ authority before priority is published: collect triggers from committed events,
 commit one simultaneous batch of state-based actions, repeat until none fire,
 put waiting triggers on the stack in APNAP order, and publish priority only
 when nothing remains. State-based actions discovered together share one
-pre-batch trigger snapshot and commit in `ObjectRef` order; a stale incarnation
+pre-batch trigger snapshot and commit in `ObjectId` order; a stale id
 is rejected rather than followed after a zone change.
 
 **Proposed events.** Damage, life change, destruction, counter change and zone
 movement are submitted as a typed `ProposedEvent` before any state mutates.
 Replacement and prevention definitions from the immutable card definitions
-apply once each in `(source ObjectRef, definition index)` order; the surviving
+apply once each in `(source ObjectId, definition index)` order; the surviving
 event commits and emits the ordinary facts, so triggers, observations and
 presentation consume only committed events. Supported replacements are
 prevent N damage, double damage, enters tapped and enters with counters. The
