@@ -89,8 +89,8 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 Full recheck history is retained at
 `9eb98a6aaee9f9eeaabea17ec40dd56717b63f22:scratch/plan.md`.
-Eighth recheck: Etude PR #103 remains open at `105abdd`, pins remain 0.2.16,
-and origin/main has nothing new. Main `f4e1822fa` (#510) was merged; it is
+Ninth recheck (after review 9's implementation, `a716c16ce`): Etude PR #103
+remains open at `105abdd`, pins remain 0.2.16, and origin/main has nothing new. Main `f4e1822fa` (#510) was merged; it is
 an ancestor of HEAD and owns the frozen-execution reference. Frozen precision
 ladder execution refuses; its retained digest and report remain. Live SelfPlay
 keeps explicit float32 (main's auto also resolves to float32). After that sync,
