@@ -87,6 +87,11 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
+Fifth recheck (after review 4 implementation): PR #103 still open at
+`105abdd`; origin/main still `105e7e2aa`; pins still 0.2.16. Code matches
+the review-4 section (loop phase/resource rows, `training_seconds`, the
+benchmark calling `self_play`, `FROZEN_EXECUTION_REVISION` in regime.py). No
+tests rerun.
 Fourth recheck (after review 3 implementation): PR #103 unchanged, open at
 `105abdd`; main has not moved past `105e7e2aa`; nothing new to merge.
 Third realign recheck: Etude PR #103 is still OPEN at
