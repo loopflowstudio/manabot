@@ -15843,13 +15843,7 @@ fn sozins_comet_foretell_spending_choices_preserve_color_and_private_identity() 
     crate::support::inspect::assert_choice_contract(&s);
     assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Hand));
     for color in ["{W}", "{U}"] {
-        let frame = s.game().semantic_decision_frame().unwrap();
-        let index = frame
-            .offers
-            .iter()
-            .position(|offer| offer.label.contains(color))
-            .unwrap();
-        s.step_action(index);
+        spend_named(&mut s, |label| label.contains(color));
     }
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("1"));
     assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));

@@ -20,8 +20,10 @@ v9/v10. No new input shape, model kind or automatic payment preference was added
 The corpus admits 998/1,000 events, including all three Heartbeat events. Only
 the two Lita events fail; `docs/engine.md` matches. Frozen evidence is unchanged.
 Main's MTG-242 pool types, #504 search bounds, #506 sharding, CPU CI selection
-and v0.2.3 preparation are incorporated. The unrelated CI receipts in
-`ci-under-8-minutes.md` do not certify this mana change. No Wave is selected.
+and v0.2.3 preparation are incorporated. The unrelated CI receipts at
+`3cb9cc70a:scratch/ci-under-8-minutes.md` do not certify this mana change.
+The superseded intermediate payment diagnostic is retained at
+`3cb9cc70a:scratch/payment-fixture-investigation.md`. No Wave is selected.
 
 Earlier stable affected debug coverage passed 643 tests; Clippy, native/Python
 shared input, current-world arena/monitoring, model/belief, protocol and frontend
@@ -139,6 +141,26 @@ Raw samples, aggregation, CPU/scheduling data, provenance and comparison:
 `.cache/engine-budget-mtg297-autoreset/`; log `/tmp/mtg297-budget-sample.log`.
 The local recording is not a hosted PR artifact for baseline adoption.
 
+## Compression (2026-11-12, after `3cb9cc70a`)
+
+`PaymentModel::witness` now answers a fully pooled final payment with
+`Mana::can_pay`: no saved caller consumes its hypothetical remainder. Earlier
+payments still search unit assignments, and execution still offers the native
+spending choices. The zero-state regression covers hybrid backtracking, rider
+and combat mana under all source policies. The existing class-bound witness now
+has two obligations so it continues exercising that bound. Foretell reuses
+`spend_named` instead of duplicating offer selection.
+
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 -E 'test(flow::mana::tests::) or test(tla::sozins_comet_foretell_spending_choices_preserve_color_and_private_identity) or test(chk::) or test(tle::) or test(roe::)'` — **79 passed**, 7.339s; `/tmp/mtg297-compress-debug.log`.
+- Separate `--lib --test-threads 1 -E 'test(=<exact name>)'` runs — original masked autoreset **passed, 6.274s**; original restored-seed stride **passed, 4.040s**. Both retain 1,000 steps and the CI watchdog; `/tmp/mtg297-compress-{masked,restored}.log`.
+- `cargo clippy --manifest-path managym/Cargo.toml --jobs 2 --all-targets --all-features -- -D warnings` — passed; `/tmp/mtg297-compress-clippy.log`.
+- Root `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 arm64 extension installed atomically, bytes checked against the wheel, native import passed; `/tmp/mtg297-compress-wheel.log`.
+- `uv run --extra dev pytest tests/semantic/test_pooled_mana_classes_input.py -q` — **4 passed**, 0.54s; `/tmp/mtg297-compress-parity.log`.
+- Workspace `cargo fmt --all --check` and `git diff --check` — passed. `lf context` — scratch below both configured limits.
+
+Removed the superseded diagnostic and unrelated inherited CI plan from active
+scratch; their exact history references are above. No human demo occurred.
+
 ## Remaining
 
 Implementation/debug fixture gaps are repaired. The performance gate remains
@@ -147,3 +169,6 @@ decision-digest changes through the documented PR-run reference process before
 shipping. Review and delivery belong to the caller; no publication, landing,
 Task completion or human approval is implied. Do not treat the noisy local
 comparison or unrelated CI receipts as performance acceptance.
+The compression changes search execution, so the older Engine Budget timing is
+not a measurement of this revision. Gate owns the affected suites and dedicated
+performance comparison.

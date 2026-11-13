@@ -401,6 +401,14 @@ impl PaymentModel {
         if state.obligations.is_empty() {
             return Some(Vec::new());
         }
+        // No saved caller reads the final remainder. Exact affordability is
+        // enough here; only a payment with later obligations needs to search
+        // unit assignments. Execution still offers the native spending choices.
+        if let [Obligation::Pay { cost, .. }] = state.obligations.as_slice() {
+            if state.pool.can_pay(cost) {
+                return Some(vec![PaymentStep::Spend]);
+            }
+        }
         // Presence and untapped resources only decrease during payment. Once
         // any saved counted tap lacks candidates, no production or spending
         // order can restore it. Reject before exploring the earlier costs;
@@ -2287,8 +2295,8 @@ mod tests {
     /// Compare full concrete witnesses with the identity-keyed DFS on small
     /// boards; on large boards fail during exploration, before a stall can grow.
     /// A search holds up to `GROWTH` identity states before it classifies its
-    /// sources, so a smaller limit binds from there; zero still asserts that
-    /// the root is rejected.
+    /// sources, so a smaller limit binds from there; zero asserts that the
+    /// answer needs no state expansion.
     fn bounded_search(
         model: &PaymentModel,
         state: PaymentSearchState,
@@ -2667,8 +2675,37 @@ mod tests {
             life: 20,
         };
         assert!(model
-            .plan(pool, vec![pay("UR")], SourcePolicy::All)
+            .plan(pool, vec![pay("U"), pay("R")], SourcePolicy::All)
             .is_some());
+    }
+
+    #[test]
+    fn funded_final_payment_needs_no_unit_search() {
+        let model = forests(1);
+        let mut pool = Mana::parse("U");
+        pool.add_combat(&Mana::parse("R"));
+        pool.add(&Mana::of_class(
+            SpendEffect::CreatureEntersWithPlusOneCounter {
+                without_subtype: "Human".into(),
+            }
+            .into(),
+            [2, 0, 0, 0, 0, 0],
+        ));
+        // Hybrid assignment must backtrack (R for U/R leaves U for U/B),
+        // while the generic pip can use the rider. No source needs tapping.
+        for policy in [
+            SourcePolicy::All,
+            SourcePolicy::FixedOnly,
+            SourcePolicy::AutomaticPrefix,
+        ] {
+            let mut state = search_state(&model, vec![pay("{1}{U/R}{U/B}")]);
+            state.pool = pool.clone();
+            state.prefix = Some(0);
+            assert_eq!(
+                bounded_search(&model, state, policy, 0, false),
+                Some(vec![PaymentStep::Spend])
+            );
+        }
     }
 
     /// Restricted mana can finance a future activation even when it cannot

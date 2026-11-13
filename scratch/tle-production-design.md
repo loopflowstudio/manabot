@@ -122,6 +122,11 @@ Explicit test payments use `support/play.rs::spend_named`; the TLE-local
 selector and repeated offer-selection loops are removed. Heartbeat fixtures
 use the shared `permanent_named`/`card_of` lookup. Forced-payment feasibility
 stops after its first valid ordering instead of collecting discarded choices.
+The funded final `PaymentModel` obligation uses `Mana::can_pay` directly:
+without a saved caller, no witness consumes its hypothetical remainder. Unit
+search remains for earlier obligations, and execution still offers every
+distinct native spending choice. The foretell witness uses `spend_named`
+instead of its own offer-selection loop.
 
 ## Pooled-mana presentation decision (concept review, 2026-11-12)
 
