@@ -11,14 +11,10 @@ from torch import nn
 
 from manabot.policy.prepare import Prepared
 
-# One-based object joins of a relation row (0: none).
-_OBJECT_COLUMNS = (6, 24)
-
 
 class ContinuationEncoder(nn.Module):
     def __init__(self, width: int, relation_dim: int) -> None:
         super().__init__()
-        self.relation_dim = relation_dim
         self.projection = nn.Sequential(
             nn.Linear(relation_dim - 5 + 4 * width, width),
             nn.Tanh(),

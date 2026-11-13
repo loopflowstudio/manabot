@@ -3,11 +3,8 @@
 import pytest
 import torch
 
-from manabot.backends.torch.policy import (
-    OBJECT_VALIDITY_KEYS,
-    ActorCritic,
-    PolicyInference,
-)
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
 from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 

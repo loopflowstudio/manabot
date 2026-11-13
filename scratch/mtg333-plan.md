@@ -1,8 +1,9 @@
 # MTG-333 plan: torch forward over `Prepared`, container saves, backend rule
 
-Policy baseline: `ef28f3a58` (PR #501 merged). Upstream `6ce618b8a` is merged
-in (`0c43cc16e`). `origin/main` moved to `105e7e2aa` (MTG-297 mana spending) at
-2026-11-13 12:21 UTC and is merged locally as `9db3f1373`: slice 6b validation is in progress.
+Policy baseline: `ef28f3a58` (PR #501 merged). Comparison baseline for every
+receipt below: `105e7e2aa` (MTG-297 mana spending), merged as `9db3f1373`.
+`origin/main` has since moved to `f4e1822fa` (#510, training precision:
+`manabot/training/{execution,regime}.py`, no policy or engine file); unmerged.
 One PR. Earlier full plan with every receipt: `1f634d89b:scratch/mtg333-plan.md`;
 MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
@@ -39,7 +40,7 @@ orchestrations, and `save_checkpoint` wrote a format only torch reads.
 ```
 uv run python scratch/equivalence/run.py /tmp/mtg333/head.pt
 uv run python scratch/equivalence/compare.py /tmp/mtg333/integrated-base.pt /tmp/mtg333/head.pt
-  -> tensors N ... differing 0   (3,248 before the 105e7e2aa engine)
+  -> tensors 3410 ... differing 0
 ```
 
 ```python
@@ -81,24 +82,14 @@ Slices 1–6 are implemented and pass their focused checks:
    `load_policy` returns `(policy, space)`. No unreleased release-notes section exists; the release note
    must replace v0.2.3's `admit_observation` advice with `policy.prepare`.
 
-Last receipts (laptop, one native build from the integrated source in both
-arms; base `manabot/` extracted to `/tmp/mtg333-integrated-base`):
-- CPU oracle after the compress pass: `compress.pt` vs `integrated-base.pt`
-  → **3,248 tensors, 0 differing**; `updates-compress.json` byte-identical to
-  `updates-base.json` (five PPO/damped cases).
-- Torch/MLX parity on the frozen capture passes (`injected-parity.json`):
-  post-Adam weights 7.5e-9 / 1.2e-7, MLX logits 5.4e-9, values 3.9e-7.
-- Focused suites: inference/container/prepare/protocol/value 63 passed; MLX 8;
-  loader/injection 32; Academy catalog/admission/play 6.
-- No file under `manabot/` changed after those captures except annotations
-  and the compress edits they cover. Gate's broader suites, Python 3.12 and
-  installed-wheel checks have not been run.
+Receipts at the `105e7e2aa` engine are under "Receipts" below; the earlier
+3,248-tensor captures belong to the previous engine. Gate's broader suites,
+Python 3.12 and installed-wheel checks have not been run.
 
-Those receipts are at the pre-`105e7e2aa` engine; slice 6b replaces them.
 Captures in `/tmp/mtg333/` are temporary. If gone, or after any change to
 `manabot/` or the engine: rebuild the extension per `AGENTS.md`, extract the
-base `manabot/` (`git archive 105e7e2aa manabot` once merged), and capture
-base, base-repeat and head together.
+base `manabot/` (`git archive 105e7e2aa manabot`), and capture base,
+base-repeat and head together.
 
 ## Constraints the remaining work must keep
 
@@ -134,8 +125,18 @@ base, base-repeat and head together.
 - Changed seeded games, replays, serving protocol or checkpoint meaning.
 - A speed or equivalence claim taken from the CPU smoke or MTG-325's receipts.
 
-Deleted predecessors are not restored; the list is in
-`1f634d89b:scratch/mtg333-plan.md` ("Delete — do not maintain").
+## Delete — do not maintain
+
+Deleted predecessors are not restored; the cutover's list is in
+`1f634d89b:scratch/mtg333-plan.md`. Removed by the 2026-11-13 compress pass:
+`_semantic_cards.RecordNamespace`/`NUMBER_TOKEN_KINDS`/`record_key` and
+admission's private `_key`/`_word` and fact-kind tuples (one owner:
+`manabot.policy.prepare`), `policy.OBJECT_VALIDITY_KEYS` (now in `prepare`),
+`rollout.observation_tensors`, `FactEncoder(max_facts=)` and its
+`buckets`/`bucketed` attributes, `SharedEffectEncoder.detail_rows`,
+`ContinuationEncoder.relation_dim`, `ActorCritic.turn_state`/`_link_columns`/
+`_numeric_permanent_columns` (read `policy.checkpoint.layout`), `pack(order=)`
+(takes `order_lengths`).
 
 ## Remaining slices
 
@@ -145,77 +146,39 @@ Deleted predecessors are not restored; the list is in
    queued run `4b091160edbf` at `c150d5f25`, blocked so far by rental API refusals.
 8. **Optimize pass pending** speed/profile output; no optimization claim yet.
 
-### Slice 6b: upstream `105e7e2aa` (read 2026-11-13 12:23–12:27 UTC)
+### Slice 6b facts that still bind
 
-What it changes for this Task:
-- Engine rules: native unit/class mana spending adds decisions (step digest
-  moved, 102,209 steps instead of 101,650 over the budget's 512 games). The
-  oracle's seeded games therefore differ; every capture in `/tmp/mtg333/` and
-  the count 3,248 belong to the old engine.
-- Policy input: a player's pooled mana classes become `FACT_EFFECT_PROGRAM`
-  rows on the player's object row, id `token("PooledMana")`
-  (`manabot/env/observation.py`, native `observation_encoder::POOLED_MANA`,
-  listed in `agent/record_vocabulary.rs`). No model file changed upstream.
-  `prepare._facts`/`_fact_programs` route programs by row, not by object
-  kind, and resolve the id through `Tables.names`, so no code change is
-  expected; this is unproven until the checks below run.
-- Under `manabot/`, `ef28f3a58..105e7e2aa` differs only in
-  `env/observation.py` and `semantic/text_observation.py`; neither upstream
-  file nor its changed tests name anything this branch deleted.
-- `git merge-tree HEAD origin/main` → one conflict, `manabot/env/observation.py`:
-  both sides moved the `managym.enums` import below the local imports. Keep
-  upstream's order plus this branch's `Mapping` import and
-  `ObservationBuffers` alias.
-- `docs/development.md` now requires
+- `105e7e2aa` changes seeded games (102,209 steps over the budget's 512
+  games, was 101,650) and adds pooled-mana `FACT_EFFECT_PROGRAM` rows on the
+  player's object row, id `token("PooledMana")`. `prepare` needed no change;
+  the oracle carries a synthetic pooled-mana case built as
+  `tests/semantic/test_pooled_mana_classes_input.py::_observation`.
+- `docs/development.md` requires
   `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after a
   rebuild for record-vocabulary changes.
-
-Work: merge, rebuild the extension per `AGENTS.md`, extract the base
-`manabot/` from `105e7e2aa`, and add one case to `scratch/equivalence/run.py`
-built as `tests/semantic/test_pooled_mana_classes_input.py::_observation`
-builds it (a pooled class with a three-token program on each seat), since the
-seeded games may never pool restricted mana. The case must import only names
-present in both arms.
-
-Acceptance:
-- `compare.py integrated-base.pt head.pt` → equal tensor counts in both arms
-  (the new count replaces 3,248 everywhere in this plan), `differing 0`,
-  including the pooled-mana case's logits, values and gradients.
-- `updates.py` output `cmp`-identical between arms.
-- `uv run --extra dev pytest tests/model/test_record_coverage.py tests/semantic/test_pooled_mana_classes_input.py tests/semantic/test_text_observation.py tests/belief/test_state.py tests/model/test_prepare_rows.py tests/model/test_inference.py tests/test_package_boundaries.py -q`
-  → all pass.
 - A difference in the pooled-mana case is a `prepare` defect to fix on the
-  host (row routing or id lookup), never a torch-side special case.
+  host, never a torch-side special case.
 
-### Card: L4, else A40 (probed 2026-11-13 12:19–12:20 UTC)
+### Card
 
-- `etude availability mtg333-l4` → "none available … not rentable now"
-  (quote $0.69/hour, ceiling $0.75); `mtg333-vast-l4` the same.
-  `runpodctl gpu list` did not list an L4 at all.
-- `mtg333-a40` (added to the isolated launcher; RunPod "NVIDIA A40", ≥6 vCPUs,
-  48 GB, same image digest and storage, ceiling $0.75) → "$0.59/hour …
-  rentable now". Also in low stock: RTX A6000 $0.69, RTX PRO 4500 $0.72.
-- `runpodctl pod list` → `[]`; total Task rental spend **$0.00**. The launcher
-  still shows phantom `mtg333-l4-4b3f1e50f0a1` "rented until 13:26 UTC, $0.00"
-  from refused run `4d6117d0b975`; no pod exists.
-
-Decision: ask L4 availability once at launch; if it is not rentable, run on
-`mtg333-a40`. Both checks compare base and head on the same machine, so the
-card does not change the question; it is a dated line in the PR body, and
-MTG-325's L4 numbers stay a reference, not the baseline. Same cohort caps.
-Recorded in `questions.md`. Equivalence, speed and the optimize pass all use
-one card.
+The brief names L4. L4 was not rentable at any launch attempt (probes
+2026-11-13 12:19 and 16:00–16:10 UTC; quotes $0.69/hour refused for stock);
+A40 creation failed HTTP 400; the equivalence ran on **RTX A6000**
+(`mtg333-a6000`, $0.69/hour, ceiling $0.75, same image/storage). Base and
+head run on one machine, so the card does not change the question; it is a
+dated line in the PR body and MTG-325's L4 numbers stay a reference. Speed
+and the optimize pass use the same card type.
 
 ### Mechanics
 
 Launch files: `scratch/equivalence/mtg333_cuda_equivalence.py`,
-`scratch/speed/mtg333_speed.py` with `--rent <template>` (their docstrings
-say L4; make them name the template's card). Frozen comparison source
-`a222dc9df` holds both patches (equivalence applies `base.patch` reversed,
-`git diff BASE HEAD -- manabot`; speed applies `git diff HEAD BASE -- manabot`
-forward). The compress commit `8c65474c6` and the `105e7e2aa` merge changed
-`manabot/` after that freeze: regenerate both patches at the launch commit
-with BASE = `105e7e2aa`, track them only in that commit, and launch from it. `run.py` and `bench.py` run under both arms.
+`scratch/speed/mtg333_speed.py` with `--rent <template>`. Each launch commit
+tracks its own patches (equivalence applies `git diff BASE HEAD -- manabot`
+reversed; speed applies `git diff HEAD BASE -- manabot` forward) with BASE =
+`105e7e2aa`: `296c90f33` (equivalence) and `c150d5f25` (combined
+equivalence/speed/profile). The compress pass after `c150d5f25` changed
+`manabot/` (no numeric change; CPU oracle exact): regenerate the patches at
+the next launch commit. `run.py` and `bench.py` run under both arms.
 
 Control: `ETUDE_HOME=/tmp/mtg333/launcher`, overlay
 `uv run --with 'etude-sdk[s3,eval]==0.2.15' etude …`, nested
@@ -258,8 +221,8 @@ USD 25 without asking.
 
 ## Acceptance at gate
 
-- CPU oracle: `compare.py integrated-base.pt head.pt` → slice 6b's tensor
-  count in both arms, `differing 0`, on the final commit.
+- CPU oracle: `compare.py mana-base.pt head.pt` → 3,410 tensors in both
+  arms, `differing 0`, on the final commit.
 - `uv run python scratch/equivalence/updates.py OUT` → `cmp`-identical to the
   base capture.
 - `uv run --extra dev --extra mlx --extra artifacts pytest tests/test_package_boundaries.py tests/model/test_prepare_rows.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_policy_container.py tests/model/test_inference.py tests/model/test_admission.py tests/model/test_bucketed_shapes.py tests/model/test_live_tokens.py tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/training/test_minimal_loop.py tests/sim/test_puct_compatibility.py tests/sim/test_local_update.py -q`
@@ -284,8 +247,8 @@ USD 25 without asking.
   the captures. Merge once before the CUDA launch, launch from that commit,
   and merge again only at gate; a later engine change repeats slice 6b's CPU
   capture, not the rented runs, unless it touches `manabot/` policy code.
-- A40 stock is "Low" and can vanish at creation as L4 did: queue and wait
-  under the cohort cap; A6000 is the next template at the same ceiling.
+- Rental stock can vanish at creation (L4, A40 and A6000 each did): queue
+  and wait under the cohort cap.
 - Host preparation on a 6–9 vCPU pod may bound collection: it is measured as
   its own section and is the optimize pass's first target.
 - CUDA gradient order through `index_put`/`embedding` backward may exceed
@@ -308,34 +271,24 @@ backend; training writes `.safetensors` policies that sim, eval and Academy
 load beside old `.pt` files; the CPU oracle and CUDA checks hold; the speed
 table and the optimize pass's before/after are in the PR body.
 
-## Retry receipt, 2026-11-13
+## Receipts, 2026-11-13
 
-Jack Heart: “retry after implement agent fix”. `lf sync 105e7e2aa --manual`
-and `lf sync --continue` completed as `9db3f1373`, preserving
-`ObservationBuffers` at the only conflict. Pooled-mana oracle case added.
-Native release rebuild succeeded (3m54s); cp313 extension replaced atomically.
-Slice 6b focused checks: 142 passed, two generic-helper boundary failures
-from the runtime `ParameterArrays` import. Moved that annotation-only import
-under `TYPE_CHECKING`; `pytest tests/test_package_boundaries.py -k generic_learning`
-then passed both tests (3.72s). Ruff passed for the two changed modules.
-Fresh CPU captures against `/tmp/mtg333-mana-base`: base vs base-repeat and
-base vs head each **3,410 tensors, differing 0**. `updates-mana-base.json`
-and `updates-mana-head.json` are `cmp`-identical (five PPO/damped cases).
-Launch commit `296c90f33` freezes patches with baseline `105e7e2aa`.
-The L4 launch quote was refused for lack of stock; trying the planned A40 fallback. L4 availability at
-16:00 UTC: rentable at $0.69/hour under the $0.75 template ceiling.
+Jack Heart: “retry after implement agent fix”. `105e7e2aa` merged as
+`9db3f1373` (one conflict, `manabot/env/observation.py`; `ObservationBuffers`
+kept). Native release rebuild 3m54s; cp313 extension replaced atomically.
+Slice 6b focused checks: 142 passed, then two generic-helper boundary
+failures from a runtime `ParameterArrays` import, fixed by moving it under
+`TYPE_CHECKING`. Fresh CPU captures against `/tmp/mtg333-mana-base`: base vs
+base-repeat and base vs head each **3,410 tensors, differing 0**;
+`updates-mana-{base,head}.json` `cmp`-identical (five PPO/damped cases).
 
-### Rental retry evidence, 2026-11-13 16:10 UTC
+Rentals: L4 quote refused (“provider reports no available machines”); A40
+admission `eb5ed2c1dabd` failed “ProviderUnavailable: POST pods: status 400”
+before any command, $0.00.
 
-- L4 quote refused: “provider reports no available machines”.
-- A40 admission `eb5ed2c1dabd` / requested run `c49b77a1cacc` failed:
-  “ProviderUnavailable: POST pods: status 400”; job command never started.
-  `runpodctl pod list` returned `[]`; `etude terminate mtg333-a40-8038868aa363`
-  returned successfully. Launcher retained $0.00 for the refused rental.
-- A6000 template `mtg333-a6000` copies A40 image/storage/CPU/memory and
-  $0.75/hour ceiling. Quote $0.69/hour, rentable at 16:11 UTC. Launch succeeded: run `047fa57e0e5e`, machine
-  `mtg333-a6000-3a2a673ba16f`, source `296c90f33`; setting up.
-  Equivalence, speed and optimization use this A6000, not the L4 reference.
+Compress pass (after `c150d5f25`, dead names and duplicate tables only):
+`compare.py mana-base.pt compress2-head.pt` → **3,410 tensors, differing 0**;
+`cmp updates-mana-base.json updates-compress2.json` identical.
 
 ### CUDA equivalence: `047fa57e0e5e` (A6000)
 

@@ -232,7 +232,7 @@ def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
 @pytest.mark.parametrize("capacity", [256, 512])
 def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) -> None:
     torch.manual_seed(213)
-    old, larger = FactEncoder(4, 128), FactEncoder(4, capacity)
+    old, larger = FactEncoder(4), FactEncoder(4)
     # Nonzero learned weights make numerical drift and dropped facts observable.
     with torch.no_grad():
         old.output.weight.fill_(0.25)
@@ -261,7 +261,7 @@ def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) ->
     with pytest.raises(ValueError, match="expected"):
         admission.facts(
             (facts).detach().cpu().numpy(),
-            old.max_facts,
+            128,
             objects.shape[1],
             record_vocabulary(None),
         )

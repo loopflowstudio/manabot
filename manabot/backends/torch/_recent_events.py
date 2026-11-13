@@ -13,9 +13,6 @@ import torch.nn.functional as F
 
 from manabot.policy.prepare import EventRows
 
-# Each event carries two references: definition, owner, zone, focus, status.
-_REFERENCE_STARTS = (2, 7)
-
 
 class RecentEventEncoder(nn.Module):
     """Order-sensitive shared context; no memory survives a forward call."""

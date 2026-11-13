@@ -39,8 +39,6 @@ from manabot.backends.torch.arrays import _array_fields, device_of, on_device, t
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import (
-    PERMANENT_DEFINITION_INDEX,
-    PERMANENT_LINK_INDEXES,
     TURN_STATE_DIM,
     ObservationBuffers,
     ObservationSpace,
@@ -57,16 +55,6 @@ import managym
 
 if TYPE_CHECKING:
     from manabot.belief.encoding import BeliefCheckpointBinding
-
-# Validity of the visible object table, in its concatenation order.
-OBJECT_VALIDITY_KEYS = (
-    "agent_player_valid",
-    "opponent_player_valid",
-    "agent_cards_valid",
-    "opponent_cards_valid",
-    "agent_permanents_valid",
-    "opponent_permanents_valid",
-)
 
 
 @dataclass
@@ -158,18 +146,13 @@ class ActorCritic(nn.Module):
         card_dim = enc.card_dim
         # Input v10 appends each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
-        self.turn_state = enc.config.policy_input_version == 10
-        if self.turn_state:
+        if enc.config.policy_input_version == 10:
             player_dim += TURN_STATE_DIM
             card_dim += 1
         # Definition IDs and permanent links are categorical joins, never
         # numeric permanent features.
-        self._link_columns = PERMANENT_LINK_INDEXES
-        join_columns = (PERMANENT_DEFINITION_INDEX, *self._link_columns)
-        self._numeric_permanent_columns = [
-            column for column in range(enc.permanent_dim) if column not in join_columns
-        ]
-        perm_dim = len(self._numeric_permanent_columns)
+        columns = layout(observation_space)
+        perm_dim = len(columns.numeric_permanent_columns)
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
@@ -327,7 +310,7 @@ class ActorCritic(nn.Module):
         # weights start additive; skip_init draws no RNG.
         self.link_from_target = nn.ModuleList()
         self.link_to_target = nn.ModuleList()
-        for _ in self._link_columns:
+        for _ in columns.link_columns:
             for layers in (self.link_from_target, self.link_to_target):
                 layer = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
                 nn.init.zeros_(layer.weight)
@@ -340,9 +323,7 @@ class ActorCritic(nn.Module):
         record_vocabulary: RecordVocabulary = (
             "catalog" if config.catalog_records() else "hashed"
         )
-        self.facts = FactEncoder(
-            embed_dim, enc.config.max_facts, vocabulary=record_vocabulary
-        )
+        self.facts = FactEncoder(embed_dim, vocabulary=record_vocabulary)
         self.shared_effects = SharedEffectEncoder(
             embed_dim, vocabulary=record_vocabulary
         )
@@ -358,7 +339,6 @@ class ActorCritic(nn.Module):
         # parameter, buffer or configuration field records it.
         self.bucketed_shapes = bucketed_shapes
         self.live_tokens = live_tokens
-        self.facts.bucketed = self.bucketed_shapes
         self.name_candidates.bucketed = self.bucketed_shapes
 
         # Built last: every other parameter keeps the masked-mean arm's draws

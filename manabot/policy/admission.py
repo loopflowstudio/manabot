@@ -1,10 +1,9 @@
 """Host validation shared by policy backends before preparing observation indexes.
 
 The checks here own definition/vocabulary joins, fact programs, effect partitions,
-continuation rows and legal-action references. Torch's component admission APIs
-adapt tensors to these NumPy checks; MLX checks raw rollout rows before `prepare`
-turns validity into booleans or performs lookups. Padding keeps the same meaning
-in both paths: ignored where a validity column owns it, checked otherwise.
+continuation rows and legal-action references. Every backend runs `check` on raw
+NumPy rows before `prepare` turns validity into booleans or performs lookups.
+Padding is ignored where a validity column owns it and checked otherwise.
 """
 
 from dataclasses import dataclass
@@ -13,21 +12,15 @@ import numpy as np
 
 from manabot.env.observation import (
     FACT_COMBAT_RESTRICTION,
-    FACT_CONTINUATION_PROGRAM,
-    FACT_COPY_EXCEPTION,
     FACT_DETAIL_INDEX,
     FACT_DIM,
     FACT_DURATION_INDEX,
-    FACT_EFFECT,
-    FACT_EFFECT_PROGRAM,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_KINDS,
     FACT_OBJECT_INDEX,
     FACT_SET_NAME,
     FACT_SOURCE_INDEX,
-    FACT_TRANSFORMS,
-    FACT_USED_ABILITY,
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
     PERMANENT_DEFINITION_INDEX,
@@ -46,7 +39,16 @@ from manabot.env.shared_effects import (
     MEMBER_ROWS,
 )
 from manabot.infra.config import ModelConfig
-from manabot.policy.prepare import Tables
+from manabot.policy.prepare import (
+    NAMED_DETAIL_KINDS,
+    NUMBER_TOKEN_KINDS,
+    ORDINAL_ID_KINDS,
+    PROGRAM_KINDS,
+    RecordNamespace,
+    Tables,
+    record_key,
+    record_word,
+)
 
 
 def binding(model: ModelConfig, space: ObservationSpace) -> str:
@@ -150,12 +152,6 @@ def definition_ids(
     return rows
 
 
-def _key(high: np.ndarray | int, low: np.ndarray) -> np.ndarray:
-    return (np.asarray(high, dtype=np.int64) << 32) | (
-        low.astype(np.int64) & 0xFFFFFFFF
-    )
-
-
 def _require_keys(keys: np.ndarray, query: np.ndarray, message: str) -> None:
     if query.size == 0:
         return
@@ -175,26 +171,20 @@ class Catalog:
     def require_names(self, namespace: np.ndarray | int, words: np.ndarray) -> None:
         _require_keys(
             self.names,
-            _key(namespace, words).reshape(-1),
+            record_key(namespace, words).reshape(-1),
             "policy received an id outside the record vocabulary",
         )
 
     def require_tokens(self, kinds: np.ndarray, words: np.ndarray) -> None:
         kinds, words = kinds.astype(np.int64).reshape(-1), words.reshape(-1)
-        number = (kinds == 4) | (kinds == 5)
+        number = np.isin(kinds, NUMBER_TOKEN_KINDS)
         if ((kinds < 1) | (kinds > 9)).any():
             raise ValueError("policy received an invalid program token kind")
         _require_keys(
             self.tokens,
-            _key(kinds[~number], words[~number]),
+            record_key(kinds[~number], words[~number]),
             "policy received a program token outside the vocabulary",
         )
-
-
-def _word(rows: np.ndarray, column: int) -> np.ndarray:
-    return (rows[..., column].astype(np.int64) << 16) | rows[..., column + 1].astype(
-        np.int64
-    )
 
 
 def facts(
@@ -212,29 +202,27 @@ def facts(
         raise ValueError("invalid fact object reference")
     if not ((kinds == np.floor(kinds)) & (kinds >= 0) & (kinds <= FACT_KINDS)).all():
         raise ValueError("invalid fact kind")
-    program = np.isin(kinds, (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM))
+    program = np.isin(kinds, PROGRAM_KINDS)
     if catalog is not None:
-        ident, detail = _word(rows, FACT_ID_INDEX), _word(rows, FACT_DETAIL_INDEX)
-        named = (kinds > 0) & ~np.isin(
-            kinds,
-            (
-                FACT_TRANSFORMS,
-                FACT_USED_ABILITY,
-                FACT_CONTINUATION_PROGRAM,
-                FACT_COMBAT_RESTRICTION,
-            ),
+        ident, detail = (
+            record_word(rows, FACT_ID_INDEX),
+            record_word(rows, FACT_DETAIL_INDEX),
         )
+        named = (kinds > 0) & ~np.isin(kinds, ORDINAL_ID_KINDS)
         restriction = kinds == FACT_COMBAT_RESTRICTION
         named_detail = (
-            np.isin(kinds, (FACT_EFFECT, FACT_COPY_EXCEPTION)) & (detail != 0)
+            np.isin(kinds, NAMED_DETAIL_KINDS) & (detail != 0)
         ) | restriction
         if (~(program | named_detail) & (detail != 0)).any():
             raise ValueError("fact kind carries no detail")
+        spaces = RecordNamespace
         catalog.require_names(
-            np.where(kinds == FACT_SET_NAME, 2, 1)[named], ident[named]
+            np.where(kinds == FACT_SET_NAME, spaces.NAME, spaces.TOKEN)[named],
+            ident[named],
         )
         catalog.require_names(
-            np.where(restriction, 3, 1)[named_detail], detail[named_detail]
+            np.where(restriction, spaces.RESTRICTION, spaces.TOKEN)[named_detail],
+            detail[named_detail],
         )
         catalog.require_tokens(rows[..., FACT_VALUE_INDEX][program], detail[program])
         definition_ids(
@@ -342,10 +330,12 @@ def shared_effects(
     if len(np.unique(global_orders)) != len(global_orders):
         raise ValueError("duplicate effect membership order")
     if catalog is not None:
-        catalog.require_names(1, (halves[:, 0] << 16) | halves[:, 1])
+        catalog.require_names(
+            RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
+        )
         definition_ids(source, len(catalog.definitions), catalog.definitions)
         unsigned, program = (ids[:, 0] << 16) | ids[:, 1], kinds > 10
-        catalog.require_names(1, unsigned[~program])
+        catalog.require_names(RecordNamespace.TOKEN, unsigned[~program])
         catalog.require_tokens(kinds[program] - 10, unsigned[program])
 
 

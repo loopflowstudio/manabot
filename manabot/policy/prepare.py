@@ -1,11 +1,12 @@
 """Host-side index preparation shared by every framework backend.
 
-The PyTorch forward mixes float arithmetic with integer bookkeeping it does on
-tensors: definition-row lookups, record-vocabulary `searchsorted`, legal-action
-coordinates, packed GRU schedules and shared-effect CSR routes. Here that
-bookkeeping runs once per batch in numpy (`prepare`), producing a `Prepared`
-batch of float features and integer indexes, so a backend's graph (for example
-`manabot.backends.mlx.policy`) holds only gathers, scatters and arithmetic.
+A policy forward needs integer bookkeeping beside its float arithmetic:
+definition-row lookups, record-vocabulary `searchsorted`, legal-action
+coordinates, packed GRU schedules and shared-effect CSR routes. That
+bookkeeping runs once per batch in NumPy (`prepare`), producing a `Prepared`
+batch of float features and integer indexes, so a backend's graph
+(`manabot.backends.torch.policy`, `manabot.backends.mlx.policy`) holds only
+gathers, scatters and arithmetic.
 
 `Tables` holds the checkpoint's lookup buffers (catalog programs, record
 vocabulary, naming joins, ownership template) and the observation layout; it is
@@ -13,11 +14,12 @@ read from the checkpoint container (`manabot.policy.checkpoint`), never from
 the running engine. This module imports NumPy only.
 
 Inputs must already be admitted (`manabot.policy.admission`): nothing here
-validates ids or partitions, exactly as the PyTorch forward does not.
+validates ids or partitions.
 """
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from enum import IntEnum
 from functools import cached_property
 
 import numpy as np
@@ -51,21 +53,31 @@ from manabot.policy.buckets import has_history_events
 
 Array = np.ndarray
 
-# Record namespaces (`manabot.backends.torch._semantic_cards.RecordNamespace`).
-_TOKEN, _NAME, _RESTRICTION = 1, 2, 3
-_NUMBER_KINDS = (4, 5)
-_ORDINAL_ID_KINDS = (
+
+class RecordNamespace(IntEnum):
+    """Id column families of fact and shared-effect rows (native namespaces)."""
+
+    TOKEN = 1
+    NAME = 2
+    RESTRICTION = 3
+
+
+# Learning token kinds whose value is a number, not an id.
+NUMBER_TOKEN_KINDS = (4, 5)
+# Fact kinds by how admission and preparation read their id and detail words.
+ORDINAL_ID_KINDS = (
     FACT_TRANSFORMS,
     FACT_USED_ABILITY,
     FACT_CONTINUATION_PROGRAM,
     FACT_COMBAT_RESTRICTION,
 )
-_PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
-_NAMED_DETAIL_KINDS = (FACT_EFFECT, FACT_COPY_EXCEPTION)
+PROGRAM_KINDS = (FACT_EFFECT_PROGRAM, FACT_CONTINUATION_PROGRAM)
+NAMED_DETAIL_KINDS = (FACT_EFFECT, FACT_COPY_EXCEPTION)
 # One-based object joins of a relation row.
 _RELATION_OBJECT_COLUMNS = (6, 24)
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
-_VALID_KEYS = (
+# Validity of the visible object table, in its concatenation order.
+OBJECT_VALIDITY_KEYS = (
     "agent_player_valid",
     "opponent_player_valid",
     "agent_cards_valid",
@@ -190,9 +202,7 @@ class Tables:
         if not self.catalog_records:
             return words.astype(np.int64) % self.record_buckets
         return _lookup(
-            self.record_name_keys,
-            self.record_name_rows,
-            _key(np.broadcast_to(np.asarray(namespace), words.shape), words),
+            self.record_name_keys, self.record_name_rows, record_key(namespace, words)
         )
 
     def tokens(self, kinds: Array, words: Array) -> Array:
@@ -200,13 +210,13 @@ class Tables:
         if not self.catalog_records:
             return words.astype(np.int64) % self.record_buckets
         kinds = kinds.astype(np.int64)
-        number = np.isin(kinds, _NUMBER_KINDS)
+        number = np.isin(kinds, NUMBER_TOKEN_KINDS)
         rows = self.record_number_rows[kinds.clip(0, 5)].copy()
         if (~number).any():
             rows[~number] = _lookup(
                 self.record_token_keys,
                 self.record_token_rows,
-                _key(kinds[~number], words[~number]),
+                record_key(kinds[~number], words[~number]),
             )
         return rows
 
@@ -215,8 +225,11 @@ class Tables:
         return self.record_name_keys.size > 0
 
 
-def _key(high: Array, low: Array) -> Array:
-    return (high.astype(np.int64) << 32) | (low.astype(np.int64) & 0xFFFFFFFF)
+def record_key(high: Array | int, low: Array) -> Array:
+    """One int64 key from a family (namespace or token kind) and a u32 word."""
+    return (np.asarray(high, dtype=np.int64) << 32) | (
+        low.astype(np.int64) & 0xFFFFFFFF
+    )
 
 
 def _lookup(keys: Array, rows: Array, query: Array) -> Array:
@@ -225,8 +238,8 @@ def _lookup(keys: Array, rows: Array, query: Array) -> Array:
     return rows[np.searchsorted(keys, query).clip(max=len(keys) - 1)]
 
 
-def _word(rows: Array, index: int) -> Array:
-    """The u32 id at `index` (two 16-bit halves)."""
+def record_word(rows: Array, index: int) -> Array:
+    """The u32 id at columns `index`, `index + 1` (two 16-bit halves)."""
     return (rows[..., index].astype(np.int64) << 16) | rows[..., index + 1].astype(
         np.int64
     )
@@ -254,12 +267,18 @@ class Packed[A]:
 
 
 def pack(
-    lengths: Sequence[int] | Array, *, order: Array | None = None
+    lengths: Sequence[int] | Array,
+    order_lengths: Callable[[Array], Array] | None = None,
 ) -> Packed[Array]:
+    """Schedule sequences of `lengths`; `order_lengths` returns a descending
+    order when a backend's tie order differs from the stable default."""
     lengths = np.asarray(lengths, dtype=np.int64)
     offsets = np.concatenate(([0], np.cumsum(lengths)[:-1]))
-    if order is None:
-        order = np.argsort(-lengths, kind="stable")
+    order = (
+        np.argsort(-lengths, kind="stable")
+        if order_lengths is None
+        else order_lengths(lengths)
+    )
     ordered = lengths[order]
     sizes: list[int] = []
     gather: list[Array] = []
@@ -294,10 +313,7 @@ def catalog_programs(
     if rows is None:
         rows = np.arange(1, len(lengths) + 1, dtype=np.int64)
     selected_lengths = lengths[rows - 1]
-    schedule = pack(
-        selected_lengths,
-        order=None if order_lengths is None else order_lengths(selected_lengths),
-    )
+    schedule = pack(selected_lengths, order_lengths)
     if len(rows):
         flat = np.concatenate(
             [
@@ -472,7 +488,7 @@ def prepare(
     facts = obs["facts"]
     if inference and not bucketed:
         facts = facts[:, (facts[..., FACT_VALID_INDEX] == 1).any(0)]
-    validity = np.concatenate([obs[key] for key in _VALID_KEYS], 1)
+    validity = np.concatenate([obs[key] for key in OBJECT_VALIDITY_KEYS], 1)
     belief = _belief(obs)
     if belief is not None:
         validity = np.concatenate(
@@ -661,8 +677,11 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
     facts = np.where(valid[..., None], facts, 0)
     kinds = facts[..., FACT_KIND_INDEX].astype(np.int64)
     duration = facts[..., FACT_DURATION_INDEX]
-    ident, detail = _word(facts, FACT_ID_INDEX), _word(facts, FACT_DETAIL_INDEX)
-    ordinal = np.isin(kinds, _ORDINAL_ID_KINDS)
+    ident, detail = (
+        record_word(facts, FACT_ID_INDEX),
+        record_word(facts, FACT_DETAIL_INDEX),
+    )
+    ordinal = np.isin(kinds, ORDINAL_ID_KINDS)
     scale = np.float32(FACT_TIMESTAMP_SCALE)
     columns = np.stack(
         [
@@ -676,11 +695,15 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         -1,
     ).astype(np.float32)
     named = (kinds > 0) & ~ordinal
-    program = np.isin(kinds, _PROGRAM_KINDS)
+    program = np.isin(kinds, PROGRAM_KINDS)
     restriction = kinds == FACT_COMBAT_RESTRICTION
-    named_detail = (np.isin(kinds, _NAMED_DETAIL_KINDS) & (detail != 0)) | restriction
-    id_space = np.where(kinds == FACT_SET_NAME, _NAME, _TOKEN)
-    detail_space = np.where(restriction, _RESTRICTION, _TOKEN)
+    named_detail = (np.isin(kinds, NAMED_DETAIL_KINDS) & (detail != 0)) | restriction
+    id_space = np.where(
+        kinds == FACT_SET_NAME, RecordNamespace.NAME, RecordNamespace.TOKEN
+    )
+    detail_space = np.where(
+        restriction, RecordNamespace.RESTRICTION, RecordNamespace.TOKEN
+    )
 
     token_kind = facts[..., FACT_VALUE_INDEX].astype(np.int64)
     token_rows = np.zeros(kinds.shape, np.int64)
@@ -729,7 +752,7 @@ def _fact_programs(
     program_facts = facts.reshape(-1, facts.shape[-1])[rows]
     starts = np.nonzero(program_facts[:, FACT_VALUE_INDEX + 1] == 0)[0]
     lengths = np.diff(np.append(starts, len(rows)))
-    word = _word(program_facts, FACT_DETAIL_INDEX)
+    word = record_word(program_facts, FACT_DETAIL_INDEX)
     signed = np.where(word >= 2**31, word - 2**32, word).astype(np.float32)
     kind = program_facts[:, FACT_VALUE_INDEX]
     numbers = np.where((kind == 4) | (kind == 5), signed, 0)
@@ -740,9 +763,7 @@ def _fact_programs(
         numbers=numbers,
         positions=positions,
         mask=flat,
-        schedule=pack(
-            lengths, order=None if order_lengths is None else order_lengths(lengths)
-        ),
+        schedule=pack(lengths, order_lengths),
     )
 
 
@@ -787,7 +808,9 @@ def _effects(
     program = kinds > 10
     detail_embedding_rows = np.zeros(len(kinds), dtype=np.int64)
     if (~program).any():
-        detail_embedding_rows[~program] = tables.names(_TOKEN, unsigned[~program])
+        detail_embedding_rows[~program] = tables.names(
+            RecordNamespace.TOKEN, unsigned[~program]
+        )
     if program.any():
         detail_embedding_rows[program] = tables.tokens(
             kinds[program] - 10, unsigned[program]
@@ -799,7 +822,9 @@ def _effects(
         controller_mask=(links[:, 0] > 0).astype(np.float32),
         source_object=base + (links[:, 1] - 1).clip(min=0),
         source_object_mask=(links[:, 1] > 0).astype(np.float32),
-        modification_rows=tables.names(_TOKEN, (halves[:, 0] << 16) | halves[:, 1]),
+        modification_rows=tables.names(
+            RecordNamespace.TOKEN, (halves[:, 0] << 16) | halves[:, 1]
+        ),
         source_rows=tables.rows(source)
         if tables.catalog_records
         else source % tables.record_buckets,

@@ -18,16 +18,6 @@ from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
 
 
-def observation_tensors(obs: dict[str, NDArray[np.generic]]) -> dict[str, torch.Tensor]:
-    """CPU tensors in native dtypes, except the floating action-focus input."""
-    return {
-        key: torch.as_tensor(value).float()
-        if key == "action_focus"
-        else torch.as_tensor(value)
-        for key, value in obs.items()
-    }
-
-
 class AdmittedRollout:
     """A rollout batch whose observations are admitted once for one policy.
 

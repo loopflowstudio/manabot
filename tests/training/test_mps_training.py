@@ -326,7 +326,7 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
                 continue
             word = managym.catalog_token_value(name) & 0xFFFFFFFF
             row[column : column + 2] = torch.tensor([word >> 16, word & 0xFFFF])
-    encoder = FactEncoder(4, 4, vocabulary="catalog")
+    encoder = FactEncoder(4, vocabulary="catalog")
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(4))
     original = torch.nn.ModuleList([cards, encoder])

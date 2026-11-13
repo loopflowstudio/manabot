@@ -9,31 +9,20 @@ the vocabulary fails loudly.
 """
 
 from dataclasses import dataclass
-from enum import IntEnum
 
+import numpy as np
 import torch
 from torch import nn
 
-from manabot.policy.prepare import CatalogPrograms, Prepared
+from manabot.policy.prepare import (
+    NUMBER_TOKEN_KINDS,
+    CatalogPrograms,
+    Prepared,
+    RecordNamespace,
+    record_key,
+)
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
-
-
-class RecordNamespace(IntEnum):
-    """Id column families of fact and shared-effect rows (native namespaces)."""
-
-    TOKEN = 1
-    NAME = 2
-    RESTRICTION = 3
-
-
-# Learning token kinds whose value is a number, not an id.
-NUMBER_TOKEN_KINDS = (4, 5)
-
-
-def record_key(high: torch.Tensor, low: torch.Tensor) -> torch.Tensor:
-    """One int64 key from a family (namespace or token kind) and a u32 word."""
-    return (high.long() << 32) | (low.long() & 0xFFFFFFFF)
 
 
 @dataclass(frozen=True)
@@ -78,8 +67,8 @@ def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
 def _sorted_keys(
     table: dict[tuple[int, int], int],
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    pairs = torch.tensor(list(table), dtype=torch.long)
-    keys = record_key(pairs[:, 0], pairs[:, 1])
+    pairs = np.array(list(table), dtype=np.int64)
+    keys = torch.from_numpy(record_key(pairs[:, 0], pairs[:, 1]))
     order = keys.argsort()
     return keys[order], torch.tensor(list(table.values()))[order]
 

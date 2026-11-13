@@ -12,7 +12,6 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
-from manabot.backends.torch.rollout import observation_tensors
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -110,12 +109,10 @@ def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     rows = batch.observations()
     obs = device_input(
         agent,
-        observation_tensors(
-            {
-                key: value.reshape((-1,) + value.shape[2:])
-                for key, value in rows.observation.items()
-            }
-        ),
+        {
+            key: value.reshape((-1,) + value.shape[2:])
+            for key, value in rows.observation.items()
+        },
     )
     with torch.no_grad():
         logits, values = agent(obs)

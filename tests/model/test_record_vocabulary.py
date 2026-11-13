@@ -8,10 +8,7 @@ import pytest
 import torch
 
 from manabot.backends.torch._facts import FactEncoder
-from manabot.backends.torch._semantic_cards import (
-    RecordNamespace,
-    SemanticCardEncoder,
-)
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
@@ -29,6 +26,7 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig
 from manabot.model.architecture import architecture_identity
 from manabot.policy import admission
+from manabot.policy.prepare import RecordNamespace
 from manabot.verify.representation import kellan_upgrade_root
 import managym
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
@@ -75,7 +73,7 @@ def _granted_keyword(name: str, source: int = 0) -> torch.Tensor:
 
 
 def _fact_encoder() -> FactEncoder:
-    encoder = FactEncoder(WIDTH, 4, vocabulary="catalog")
+    encoder = FactEncoder(WIDTH, vocabulary="catalog")
     # A fresh fact output is zero; expose the representation and its gradients.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(WIDTH))

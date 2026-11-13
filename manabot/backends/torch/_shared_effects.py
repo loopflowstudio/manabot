@@ -19,13 +19,7 @@ from torch import nn
 
 from manabot.backends.torch._facts import RecordVocabulary
 from manabot.backends.torch._numerics import embedding_rows
-from manabot.backends.torch._records import (
-    RecordReducer,
-    program_number,
-)
-from manabot.env.shared_effects import (
-    DETAIL_ROWS,
-)
+from manabot.backends.torch._records import RecordReducer, program_number
 from manabot.policy.prepare import EffectRoutes
 
 
@@ -41,7 +35,6 @@ class SharedEffectEncoder(nn.Module):
         if vocabulary == "hashed":
             self.modification = nn.Embedding(4096, width)
             self.detail = nn.Embedding(4096, width)
-        self.detail_rows = DETAIL_ROWS
         self.detail_kind = nn.Embedding(20, width)
         self.detail_number = nn.Linear(1, width)
         if vocabulary == "hashed":

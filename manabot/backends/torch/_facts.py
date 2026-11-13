@@ -32,9 +32,7 @@ from torch.nn.utils.rnn import PackedSequence
 
 from manabot.backends.torch._numerics import embedding_rows
 from manabot.backends.torch._records import program_number
-from manabot.env.observation import (
-    FACT_KINDS,
-)
+from manabot.env.observation import FACT_KINDS
 from manabot.policy.prepare import FactRoutes
 
 RecordVocabulary = Literal["hashed", "catalog"]
@@ -44,14 +42,11 @@ class FactEncoder(nn.Module):
     def __init__(
         self,
         width: int,
-        max_facts: int,
-        buckets: int = 4096,
         *,
+        buckets: int = 4096,
         vocabulary: RecordVocabulary = "hashed",
     ) -> None:
         super().__init__()
-        self.buckets = buckets
-        self.max_facts = max_facts
         self.vocabulary = vocabulary
         self.kind = nn.Embedding(FACT_KINDS + 1, width)
         if vocabulary == "hashed":
@@ -66,9 +61,6 @@ class FactEncoder(nn.Module):
         self.output = nn.Linear(width, width)
         nn.init.zeros_(self.output.weight)
         nn.init.zeros_(self.output.bias)
-        # Bucketed shapes look ids up at the fact axis's shape instead of
-        # selecting live rows, and keep every slot on CPU inference.
-        self.bucketed = False
 
     def forward(
         self,
