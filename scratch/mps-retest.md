@@ -8,21 +8,20 @@ and deliverables; `questions.md` preserves the exact steers. Torch is the
 incumbent. Recommend from measurements, without an adoption rule or defaults
 change. No performance or real-MPS correctness conclusion exists yet.
 
-Main evidence requires a fresh M2 rental under the USD25 total cap, with
-launcher identity, cost and release. Each width/stream group needs three
-replays per arm on one host within one hour. Only demonstrated M2 overflow
-belongs on the quiet M4 Max, with capture and replay phases labelled separately.
+The operator owns the USD25 rental cap, allocation, release and cost receipt.
+The newest steer permits captures and all fitting arms on the quiet laptop
+while M2 capacity is pending. Use separate host evidence; require load <8
+before laptop blocks. Each width/stream group still needs three replays per
+arm within one hour. If M2 never arrives within 12 hours, report laptop-only
+measurements with M2 explicitly unmeasured (deadline in `questions.md`).
 
 ## Delete — do not maintain
 
-No replacement subsystem is planned. The shared capture owner replaces the
-pilot's inline capture implementation (already removed). Preserve capture
-format, production learner hooks and the pilot's callers. In reporting, replace
-success-only plots in place; keep one report path and retain raw failed attempts.
-The duplicated per-call/update coverage rules and chart-owned summary mutations
-are removed. `experiments/mps_retest.py::_host_report` now selects evidence once
-into `HostReport`; `_missing_arms` owns coverage, and the chart/table functions
-only render it. No further deletion target remains in this pass.
+Remove the obsolete laptop capture/small-width refusals in the harness and
+its overflow-only documentation. Preserve the load guard, eight-thread replay
+limit, four-thread capture, receipt provenance and separated host charts.
+The shared capture owner has already replaced the pilot's inline capture;
+`HostReport` is the one selection path. No rental subsystem is planned.
 
 ## Implemented and checked
 
@@ -60,28 +59,39 @@ matched the pre-compress bytes exactly, with equivalent JSON after sorting
 missing-cell labels. These checks use synthetic receipts only. Compilation and
 Ruff passed for `mps_retest.py` and the pilot (one empty section header removed).
 
-## Remaining execution
+## Remaining execution and acceptance
 
-1. Supply a verified capped AWS allocation/release path. The access notes and
-   their release script were read; AWS confirms the old host was released.
-   Etude SSH cost/expiry cannot release an externally allocated Dedicated Host.
-   Read-only AWS automation checks found no existing release controller in
-   us-east-1. The exact investigation and sources are in `questions.md`.
-   No allocation, new run, paid operation or external configuration was made.
-2. Freeze source, capture the three real updates, attempt both MPS half dtypes,
-   run correctness and the per-call matrix, then interleaved triple replays.
-   Fix implementation failures rather than labelling them unsupported. Check
-   same-hour feasibility from measured durations before scheduling the expanded
-   groups; keep the rule unless a person changes it.
-3. Select overflow cells from actual M2 OOM evidence, not just width guards.
-   Before laptop timing report the block and known memory need, check load <8,
-   and leave it unmeasured for the operator if busy. Do not wait indefinitely.
-4. Publish captures, receipts, tables and actual charts with `manabot.data`.
-   Embed `full_context.png` in the report and link it first in the eventual PR.
-   Write the measured answer, limits and recommendation; update backend README.
+1. The laptop environment is prepared. Next is a real w384l8 capture at 256
+   streams (four threads, configured 20 GiB budget; peak unmeasured), then
+   parity, per-call timing and triple replays at selected widths. The 01:14
+   UTC load was 71.57, so no measurement started. Return the timing block to
+   the operator when busy; do not wait indefinitely or touch other Tasks.
+2. Launch through the prepared isolated local Etude home
+   (`ETUDE_HOME="$PWD/.runs/mps-etude"`) for a real run identity. Its local
+   pool read succeeded; the incompatible default DB was left intact. No
+   jobs are queued. Operator-owned AWS capacity is pending and access.md
+   still names the released pilot.
+3. Capture 512/1024 streams; attempt both MPS half dtypes and the full matrix.
+   Preserve errors; fix implementation failures. Schedule three replays within
+   an hour using observed durations. A 900-second timeout is failure, not OOM.
+4. Run the M2 comparison when the operator supplies access; cite its cost
+   receipt. Keep per-host captures/charts separate. If no M2 arrives before
+   the deadline, report laptop measurements and M2 not run.
+5. Publish captures, receipts, tables and actual charts with `manabot.data`;
+   embed the named full-context chart and explain measured results/limits and
+   recommendation in the report and backend README. No default changes.
 
-Gate owns affected Python checks (`test_inference.py`, `test_mlx_backend.py`,
-experiment discovery, package boundaries and preparation coverage), real
-capture/MPS acceptance and final report review. No Wave is bound. Publication
-and Task movement belong to later Graph steps. Rental execution is blocked;
-implementation checks do not complete this experiment.
+The inherited CI Task notes were removed from scratch; their complete record
+is in `0ed4f2cb1:scratch/ci-under-8-minutes.md` (already landed work, no MPS
+acceptance).
+
+Gate owns affected suites and final acceptance. No Wave is bound. Publication
+and Task movement belong to later Graph steps. Implementation checks do not
+complete this experiment.
+
+2026-11-12 sanity check: `uv run --no-sync python
+.runs/mps-laptop-check/check.py` passed quiet-capture provenance, refusal at
+loads 8/90 before output creation, and five laptop CLI paths including small
+widths, with execution replaced by controlled fixtures. Ruff check/format
+and `git diff --check` passed. No model/game ran. Final 01:17 UTC load was
+105.66; the 256-stream capture is ready for the operator's quiet window.

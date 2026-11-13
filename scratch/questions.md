@@ -12,44 +12,12 @@ Implementation choices (reversible, not quotes):
 - MPS driver peak is sampled every 50 ms and labelled a lower bound.
 - Per-call comparisons use the 256-stream capture. All three captures feed
   whole-update replays and their own parity blocks.
-- Overflow reporting will retain the shared M2 engine component and name its
-  origin beside the M4 replay phases; it cannot claim an M4-only wall time.
-  Receipts/captions now implement this; controlled rendering is checked.
+- Cross-host replays retain and label their capture engine origin. The new
+  direction also permits independent same-host laptop captures and all widths.
 
-Unresolved execution: installed Etude SDK 0.2.16 declares rental providers
-`runpod`, `vast`, `lium` (`etude/launch/records.py::Provider.kind`), no AWS Mac
-provider. The requested USD25 capped AWS allocation/release path has not been
-identified. No host was allocated, no paid experiment launched, no timing
-performed. The follow-up below verified AWS read access without exposing secrets.
-
-2026-11-12 allocation/release investigation:
-- Read `~/.manabot-mps-bench/access.md` and `release.sh`. The script runs a
-  local sleep/retry loop, terminates the instance after 24 hours plus five
-  minutes, then retries host release every 15 minutes. It has no budget
-  admission, cost receipt or durable remote controller. Its retained log shows
-  an occupied-host refusal at 23:52:07Z followed by release at 23:57:51Z.
-- AWS `describe-hosts` independently returned `released` for the prior
-  h-0f052e6c1cd31bb22, ReleaseTime `2026-11-12T23:57:51+00:00`.
-  The historical SSH key was neither read nor printed.
-- `etude machine add --help` provides `--cost-usd` for already-committed cost
-  and `--expires-at` for removing SSH capacity from a pool. SDK `Machine`
-  documentation permits deletion only for rented machines; an externally
-  allocated AWS host registered as SSH is not released by expiry. `etude rent
-  --max-usd` applies to supported provider rentals, not that external host.
-- Read-only AWS `scheduler list-schedules`, `events list-rules` and
-  `lambda list-functions` returned empty lists in us-east-1. No existing AWS
-  release controller was found through those surfaces. This does not prove
-  every possible external solution unavailable; it establishes that the
-  documented local path and current Etude SSH path do not enforce the required
-  capped rental lifecycle. No services, policies, schedules or hosts were created.
-- AWS documentation confirms billing is at the Dedicated Host, allocation
-  cannot end before 24 hours, and stopping the instance alone does not end host
-  billing: [EC2 Mac](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-mac-instances.html),
-  [release](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/dedicated-hosts-releasing.html).
-  A verified launcher owning allocation, total-cap admission, durable release
-  retries and the cost receipt is still missing. Do not infer that an ordinary
-  SSH launch or copying the old local loop supplies it. No uncapped allocation
-  or laptop replacement for the main M2 comparison was made.
+The earlier rental-lifecycle investigation is superseded by the operator's
+explicit ownership below. Its observations remain in commit 0ed4f2cb1; no
+rental tooling should be built. No Task-owned allocation occurred.
 
 Reversible report choice: readable comparisons are generated Markdown beside
 the PNGs (`comparisons.md`, hostname suffix for supplemental hosts), with all
@@ -130,3 +98,28 @@ Jack: drop the pre-registered decision rule from the brief; it was backwards and
 <!-- loopflow-requester:"Jack Heart" -->
 
 <!-- loopflow-steer:22c452b8-9bc9-4d39-aa24-fe1f21716a24 -->
+
+## Operator rental ownership and laptop execution
+
+Comment d2be0c51-82be-44c7-8adc-2ef13bfcf107 by Jack Heart:
+
+Operator answer to the missing input: the rental and release path is the operator's, not the Task's. The operator allocates the mac2-m2 host with the AWS CLI, launches the instance, writes ~/.manabot-mps-bench/access.md (host, instance, SSH command, machine facts), and releases it with the 24 h guard in ~/.manabot-mps-bench/release.sh; the cost receipt is the allocation and release timestamps plus the 24 h minimum (about USD 21), which the operator records and you cite in the report's cost section. No capped-lifecycle tooling is needed and none should be built. Right now AWS has no mac2-m2 capacity in any US zone (InsufficientHostCapacity in us-east-1b/c, us-east-2b/c, us-west-2a/b/c at 01:20 UTC); the operator's retry loop tries every 10 minutes and will rewrite access.md when a host comes up. Meanwhile continue: this laptop (M4 Max, 128 GiB) is an allowed measurement host under the load rule, and its load is expected to fall over the next 1-2 hours. Prepare the laptop venv (torch 2.15, mlx), run the capture and the arms that fit here when the 1-minute load is under 8, and keep the M2 arms queued for the host. If the host never arrives within 12 hours, report the laptop measurements with their provenance and say the M2 arms were not run.
+
+<!-- loopflow-requester:"Jack Heart" -->
+
+<!-- loopflow-steer:d2be0c51-82be-44c7-8adc-2ef13bfcf107 -->
+
+Reversible execution choice: retain this checkout's prepared CPython 3.13
+venv for laptop runs; the M2 still requires its fresh Python 3.12 venv.
+Use separate per-host capture/ledger directories so the M2 comparison can
+proceed independently. Interpret the 12-hour window from comment creation
+2026-11-13T01:12:38.971Z (deadline 13:12:38.971Z); it has not elapsed.
+
+2026-11-13 01:14 UTC preflight: `etude pools` could not read the default
+launcher: `/Users/jack/.etude/launcher.db was written by another version of
+etude`. The existing DB was not changed. An isolated local
+launcher was then prepared with `ETUDE_HOME="$PWD/.runs/mps-etude"`: `etude
+pools` returned `local this computer (default)`. This reversible choice leaves
+the existing launcher untouched; no job was queued and no ETUDE_RUN was
+invented. Laptop load 71.57 independently prohibited capture; access.md names the
+released pilot host, so no SSH measurement was attempted.

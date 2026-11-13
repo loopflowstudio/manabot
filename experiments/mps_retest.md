@@ -10,8 +10,8 @@ results and their limits after the measurements exist.
 
 ## Answer
 
-**Not measured yet.** The harness and controlled correctness checks are in
-place. The rented-M2 comparison, overflow measurements, evidence publication
+**Not measured yet.** The harness and controlled implementation checks are in
+place. The rented-M2 and quiet-laptop comparisons, evidence publication
 and final recommendation remain outstanding. No speed or backend-adoption
 conclusion follows from the implementation checks.
 
@@ -23,13 +23,13 @@ capture host and its thread count. These outputs have been checked with
 synthetic receipts, not performance evidence. Receipt completeness is not a
 correctness verdict; the numerical differences must be interpreted separately.
 
-The installed Etude 0.2.16 launcher exposes RunPod, Vast and Lium rental
-providers, not an AWS dedicated-Mac provider. A capped AWS launch/release path
-is still needed for the requested fresh M2 rental. AWS access and the prior
-host's release were verified. The access notes' local release loop has no
-budget admission or durable release guarantee; registering SSH in Etude only
-records already-committed cost. No host was allocated by this implementation
-step. This is a launch limitation, not missing credentials.
+The operator owns AWS allocation, access notes, release after the 24-hour
+minimum and the cost receipt. No rental lifecycle tooling is part of this
+Task. The operator reported no mac2-m2 capacity in the checked US zones at
+2026-11-13 01:20 UTC and is retrying. The quiet M4 Max may run captures and
+all arms that fit while M2 capacity is pending. If no host arrives within
+12 hours of that direction, report the laptop evidence and mark M2 unmeasured.
+The laptop still requires one-minute load below 8 before each measured block.
 
 ## Named deliverable: full context
 
@@ -132,22 +132,32 @@ never chooses a backend automatically.
 <details>
 <summary>Method, process and evidence</summary>
 
-**Main host:** fresh AWS mac2-m2, Apple M2, 24 GiB, Python 3.12, pinned torch
-2.15 and the locked MLX version. All main bars use this host. Rental uses the
-launcher's USD 25 cap and must include release after the 24-hour minimum.
+**M2 host:** fresh AWS mac2-m2, Apple M2, 24 GiB, Python 3.12, pinned torch
+2.15 and the locked MLX version. The operator allocates it through AWS, writes
+`~/.manabot-mps-bench/access.md`, and releases it using the 24-hour guard in
+`release.sh`. Cite the operator's allocation/release timestamps and cost receipt
+(24-hour minimum, about USD 21) against the USD 25 Task cap.
 
-**Overflow host:** Apple M4 Max, 128 GiB, at most eight CPU threads. Only
-wider shapes or largest minibatches the M2 cannot hold belong here. Every
+**Laptop host:** Apple M4 Max, 128 GiB, at most eight CPU threads. The full
+matrix and real captures are allowed here while M2 capacity is pending. Every
 measured block checks the one-minute load is below 8. Otherwise the command
 stops without timing; the operator must quiet the host before retrying. There
-is no indefinite wait and no artificial load generation.
-The replay path reuses the M2 capture's engine component even on the overflow
-host. Receipts, captions and tables identify its M2 origin and capture threads;
-the chart title labels a cross-host phase sum. This is not an independently
-measured M4-only whole update. Missing capture provenance leaves coverage
-incomplete; conflicting provenance is refused.
+is no indefinite wait and no artificial load generation. Captures record
+before/after load and use four CPU threads; replays use eight.
 
-**Commands** inside the frozen source environment on the M2:
+Keep each host's captures and ledgers in separate directories. Capture locally
+for a same-host whole-update comparison. A replay of another host's capture
+retains that capture's engine component: receipts, captions and tables identify
+its origin and threads, and the chart title labels a cross-host phase sum.
+Missing capture provenance leaves coverage incomplete; conflicting provenance
+is refused.
+
+**Commands** inside the frozen source environment with a real Etude launcher
+run identity. The operator supplies M2 access when available. These are
+measurement commands, not rental commands. Start with a selected width to
+establish replay durations before scheduling the full matrix; the default
+worker timeout is 900 seconds and a timeout is a failed attempt, not OOM.
+The three-replay, same-hour requirement remains unchanged.
 
 ```sh
 uv run --extra mlx python experiments/mps_retest.py capture capture-256 --streams 256
@@ -164,9 +174,8 @@ One cell can be rerun with `bench bench --capture capture-256 --phase learner
 --width 384 --rows 256 --arm mps-bf16`; its same-source, same-host parity receipt
 must exist first. `--phase parity` writes that receipt. The full matrix tries
 both half dtypes. `replays` checks parity for each width/arm before its replay
-blocks. `--widths` selects shapes for a partial run. Laptop overflow commands
-must include `--laptop`; matrices and whole-update replays there also require
-explicit wide `--widths`. No M2 measurement is claimed for a laptop run.
+blocks. `--widths` selects shapes for a partial run. Laptop measurement commands
+must include `--laptop`, including `capture`; every width is allowed. No M2 measurement is claimed for a laptop run.
 
 `bench.jsonl` and `updates.jsonl` retain failures, timeout/OOM distinctions,
 source, capture identity, hardware, versions, dtype and before/after load.
@@ -186,7 +195,17 @@ arms, whole-update phase stacks and a separate quiet-laptop overflow path.
 Controlled checks exercised MLX bucket trimming and the harness on tiny fixed
 inputs; they are implementation validation, not performance evidence.
 
-**Cost:** no rental was launched in this step; a launcher's actual cost receipt
-is still required. No cost is reconstructed from wall time.
+**2026-11-12 laptop preparation:** locked sync completed in this checkout's
+existing Python 3.13 environment; torch 2.15.0 reports MPS available and MLX
+0.32.4 imports. Native world is w17. At 2026-11-13 01:14:42 UTC, one-minute
+load was 71.57, so no capture or timing started. The next block is w384l8 at
+256 streams, four CPU threads, configured 20 GiB memory budget; actual peak
+memory is unmeasured. This budget is not a measured memory requirement.
+At 01:17 UTC load was 105.66, still above the limit. An isolated Etude local
+home at `.runs/mps-etude` is prepared; its local pool is available and no job
+is queued. The default launcher's incompatible database was left untouched.
+
+**Cost:** no rental was launched by this Task. The operator's cost receipt is
+pending; this report will cite it once supplied.
 
 </details>

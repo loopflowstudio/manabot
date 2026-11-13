@@ -1,6 +1,6 @@
 """Bucketed MPS retest: real capture, isolated arm measurements and report.
 
-Run `capture` on the rented M2, then `matrix` for isolated correctness and
+Run `capture` on the rented M2 or quiet laptop, then `matrix` for correctness and
 per-call blocks, and `replays` for the three whole-update repetitions. `report`
 keeps incomplete matrices and unsupported arms visible. Every worker records its
 host, source revision, capture, dtype and load. Backend recommendations belong
@@ -852,7 +852,7 @@ def update(
         _emit(out / "updates.jsonl", row)
 
 
-def capture(out: Path, streams: int) -> None:
+def capture(out: Path, streams: int, laptop: bool) -> None:
     from experiments.tla_frontier import frozen
     from manabot.backends.capture import capture as record
     from manabot.training.regime import TrainingRegime
@@ -877,6 +877,8 @@ def capture(out: Path, streams: int) -> None:
         "capture_id": str(uuid.uuid4()),
         "capture_threads": 4,
         "etude_run": os.environ.get("ETUDE_RUN"),
+        "laptop": laptop,
+        "load_before": _quiet(laptop),
     }
     record(
         out,
@@ -884,6 +886,7 @@ def capture(out: Path, streams: int) -> None:
         protocol.training_seed,
         experiment="mps_retest",
     )
+    provenance["load_after"] = os.getloadavg()[0]
     (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
 
 
@@ -1693,36 +1696,13 @@ def main() -> None:
         parser.error("this experiment measures Apple hosts")
     if not os.environ.get("ETUDE_RUN"):
         parser.error("measurements require the launcher's ETUDE_RUN identity")
-    if args.laptop and args.command == "capture":
-        parser.error(
-            "main captures and whole-update comparisons belong on the rented M2"
-        )
-    if (
-        args.laptop
-        and args.command == "bench"
-        and args.width < 512
-        and args.rows < 2048
-    ):
-        parser.error("laptop is only for wider/larger overflow arms")
     if getattr(args, "repeats", 3) < 1:
         parser.error("at least one measured repeat is required")
     host = _host()
     if host["chip"] != "Apple M2" and not args.laptop:
-        parser.error(
-            "main measurements require Apple M2; M4 overflow runs require --laptop"
-        )
+        parser.error("measurements require Apple M2; laptop runs require --laptop")
     if not args.laptop and platform.python_version_tuple()[:2] != ("3", "12"):
         parser.error("the rented M2 requires a fresh Python 3.12 environment")
-    if (
-        args.laptop
-        and args.command in ("matrix", "replays")
-        and any(w < 512 for w in args.widths)
-    ):
-        parser.error(
-            "laptop matrices/replays require explicit --widths 512 768 1024 (or a subset)"
-        )
-    if args.laptop and args.command == "update" and args.width < 512:
-        parser.error("laptop whole updates are only for widths the M2 cannot hold")
     if (
         args.command == "bench"
         and args.phase == "collection"
@@ -1767,7 +1747,7 @@ def main() -> None:
                 "error", message=".*autocast.*", category=UserWarning
             )
             if args.command == "capture":
-                capture(args.out, args.streams)
+                capture(args.out, args.streams, args.laptop)
             elif args.command == "bench":
                 bench(
                     args.out,
