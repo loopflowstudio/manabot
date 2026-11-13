@@ -1,0 +1,20 @@
+   Compiling managym v0.2.2 (/Users/jack/src/manabot.ryan-bug/managym)
+    Finished `test` profile [optimized + debuginfo] target(s) in 16.22s
+     Running unittests src/lib.rs (managym/target/debug/deps/managym-729434bc68fa2010)
+
+running 12 tests
+test flow::mana::tests::payment_bound_counts_restricted_mana_for_each_pending_purpose ... ok
+test flow::mana::tests::payment_bound_allows_restricted_mana_to_fund_a_filter ... ok
+test flow::mana::tests::payment_bound_keeps_non_tapping_production_after_a_tap ... ok
+test flow::mana::tests::payment_bound_does_not_search_subsets_of_alternative_taps ... ok
+test flow::mana::tests::payment_search_bounds_counted_taps_competing_with_mana ... ok
+test flow::mana::tests::payment_search_bounds_identical_land_subsets_in_automatic_prefixes ... ok
+test flow::mana::tests::payment_search_bounds_modal_and_restricted_bottlenecks ... ok
+test flow::mana::tests::payment_search_bounds_seedless_nested_filters ... ok
+test flow::mana::tests::payment_search_keeps_future_tap_membership_and_limited_uses ... ok
+test flow::mana::tests::payment_search_bounds_repeat_activations_sharing_counted_taps ... ok
+test flow::mana::tests::registered_mana_activations_consume_finite_payment_resources ... ok
+test flow::mana::tests::payment_search_preserves_witnesses_and_counted_tap_membership ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 196 filtered out; finished in 0.03s
+

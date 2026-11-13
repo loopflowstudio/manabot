@@ -1,0 +1,9 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.06s
+────────────
+ Nextest run ID 67343643-1299-432f-8626-7277431c2936 with nextest profile: ci
+    Starting 3 tests across 25 binaries (1183 tests skipped)
+        PASS [   0.061s] (1/3) managym-cards::cards tle::merchant_cannot_reuse_the_food_reserved_for_its_own_activation
+        PASS [   0.009s] (2/3) managym-cards::cards tle::merchant_three_foods_fund_only_one_activation
+        PASS [   0.078s] (3/3) managym-cards::cards tle::merchant_repeats_with_four_foods_and_preserves_exact_tap_commands
+────────────
+     Summary [   0.078s] 3 tests run: 3 passed, 1183 skipped
