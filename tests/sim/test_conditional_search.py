@@ -64,7 +64,7 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
 
 builtins.__import__ = guarded
 import manabot.sim.search.conditional
-assert 'manabot.training.execution' not in sys.modules
+assert 'manabot.training.loops.self_play' not in sys.modules
 assert 'manabot.backends.torch.rollout' not in sys.modules
 assert 'manabot.sim.search.flat_mc' not in sys.modules
 """

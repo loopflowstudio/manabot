@@ -196,7 +196,7 @@ with local_launch(out=".runs/elemental", experiment="elemental"):
 
 `self_play` (`manabot.training.loops.self_play`) is the loop every current
 recipe uses. Read it as the template for your own; its body is the loop you
-would write (shown without its game-error ledger, failure capture, initial checkpoint and outcome
+would write (shown without its game-error ledger, failure capture and outcome
 table):
 
 ```python
@@ -206,6 +206,9 @@ def self_play(
     state = load_state(out / "state.pt", settings, seed) or new_state(settings, seed)
     if state.update >= updates:
         return record_checkpoint(out, state, run)  # covers a crash before recording
+    if is_checkpoint(settings, state.update):
+        save_state(out / "state.pt", state)
+        record_checkpoint(out, state, run)  # repair a saved milestone before training on
     base = state.counts  # earlier attempts' work; this collector's totals add to it
     rng = np.random.default_rng(seed + MINIBATCH_SEED + state.update)
     collector = self_play_collector(settings, seed=seed, start=state.update)
@@ -240,7 +243,7 @@ The pieces it uses:
 | `load_state(path, settings, seed)` | The saved learner, or `None` when `path` does not exist. Refuses a state written for other settings, another seed or another world, naming what differs. `device`, `workers` and `threads` may change between attempts. The target `updates` is not part of the state, so a later target carries on; a schedule's horizon is a learning setting, so a changed horizon is refused. |
 | `save_state(path, state)` | Writes raw weights, EMA, Adam, the update count and the source revision to a temporary file, then renames it over `path`. A crash leaves the previous state whole. |
 | `save_checkpoint(directory, state)` | World-bound raw and EMA policies at this update (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`; returns the EMA path when the learning record keeps an EMA and the raw path otherwise. A file is written once: when it already exists for this update the path is returned and nothing is rewritten, because Etude records a checkpoint inside `run.out` where it is and readers verify its digest. |
-| `record_checkpoint(out, state, run)` | `save_checkpoint` into `out / "checkpoints"`, then `run.checkpoint(path, **clocks(state))`. The loop adds no `final` tag: Etude's `TrainingRun.final` is the last checkpoint of a finished run. |
+| `record_checkpoint(out, state, run)` | `save_checkpoint` into `out / "checkpoints"`, then `run.checkpoint(path, **clocks(state))`. Recording an update again keeps its file and its one record at that coordinate. The loop adds no `final` tag: Etude's `TrainingRun.final` is the last checkpoint of a finished run. |
 | `self_play_collector(settings, seed=, start=)` | A `Collector` (`open_collector` in `manabot.training.rollout.collection`) whose streams are seeded from the run seed and the update it starts at, so a resumed loop plays fresh, reproducible games. Sampling (`seed_random`) and minibatch order are reseeded the same way. With `start=0` these use the retired executor's seed offsets. A two-update CPU comparison against the retired executor after the backend merge produced bitwise-equal raw and EMA weights for PPO and damped policy (seed 197, two streams); this does not promise uninterrupted equivalence after resume. |
 | `clocks(state)` | Both coordinates of this update: `updates` and `training_seconds`, the completed updates' active collection and learning time. Pass all declared clocks to metrics, tables and checkpoints. |
 | `step(state, collector, rng, base=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `LoopState` (update and counts replaced; the learner, Adam and EMA are updated in place) with its metric row. |
@@ -682,10 +685,13 @@ checkpoint at absolute updates 0, n, 2n, … and record it with
 `run.checkpoint`; the loop always writes its last update. Etude derives
 `TrainingRun.final` as the last checkpoint of a finished run, including after
 extension. 1000 is the usual grid,
-an authoring default rather than an hourly estimate. The grid is absolute, so a
-run continued from 26,000 with `checkpoint_every=1000` first writes at 27,000. A milestone checkpoint carries raw and EMA weights only; `state.pt`
-carries what resuming needs. A failed write fails the update rather than
-leaving a silent gap.
+an authoring default rather than an hourly estimate. The grid is absolute, and
+an attempt that starts on it records that update before collecting: a run
+continued from 26,000 with `checkpoint_every=1000` records 26,000, then
+27,000. That also repairs an attempt lost after saving state but before
+publishing the milestone. A milestone checkpoint carries raw and EMA weights
+only; `state.pt` carries what resuming needs. A failed write fails the update
+rather than leaving a silent gap.
 
 ### Checkpoint evaluation
 

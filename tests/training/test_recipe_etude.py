@@ -10,7 +10,8 @@ from types import ModuleType
 from etude.experiment import observe
 from etude.jobs import training
 from etude.train.read import read
-from etude.train.run import local_launch
+from etude.train.records import Step, Time
+from etude.train.run import local_launch, track
 from pydantic import BaseModel
 import pytest
 from typer.testing import CliRunner
@@ -20,6 +21,7 @@ from manabot.cli import app, experiment_recipe
 from manabot.recipes.belief_sampler import BeliefConfig, train
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.recipes.local import LocalConfig, train as train_local
+from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import new_state, root_match, save_checkpoint
 from manabot.training.regime import SelectionGameSpec
 from manabot.training.rollout.selection_data import SelectionDataset, collect_selection
@@ -100,6 +102,60 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     assert data.reached["training_seconds"] == after.final.clocks["training_seconds"]
     assert before.final in after.checkpoints
     assert all("final" not in checkpoint.tags for checkpoint in after.checkpoints)
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_resume_repairs_a_saved_milestone_before_training_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, published: bool
+) -> None:
+    settings = gray_ogre_self_play(horizon=3).model_copy(update={"checkpoint_every": 2})
+    record_checkpoint = loop.record_checkpoint
+
+    def lose_attempt(
+        out: Path, state: loop.LoopState, run: loop.Tracker | None
+    ) -> Path:
+        if state.update != 2:
+            return record_checkpoint(out, state, run)
+        saved = loop.load_state(out / "state.pt", settings, 197)
+        assert saved is not None and saved.update == 2
+        if published:
+            record_checkpoint(out, state, run)
+        raise RuntimeError("lost attempt after saving milestone")
+
+    def train() -> None:
+        with local_launch(out=tmp_path, experiment="milestone"):
+            with track(
+                clocks=[
+                    Step("updates", "collection/update iterations"),
+                    Time("training_seconds", "active collection and learning seconds"),
+                ],
+                seed=197,
+            ) as run:
+                loop.self_play(settings, run.out, seed=197, updates=3, run=run)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(loop, "record_checkpoint", lose_attempt)
+        with pytest.raises(RuntimeError, match="lost attempt"):
+            train()
+    milestone = tmp_path / "checkpoints/00000002-raw.pt"
+    assert milestone.exists() == published
+    earlier = {
+        path: path.read_bytes() for path in (tmp_path / "checkpoints").glob("*.pt")
+    }
+    saved = loop.load_state(tmp_path / "state.pt", settings, 197)
+    assert saved is not None and saved.update == 2
+    coordinate = loop.clocks(saved)
+
+    train()
+
+    assert milestone.exists()
+    for path, payload in earlier.items():
+        assert path.read_bytes() == payload
+    recorded = observe(tmp_path / "etude", "milestone").run(tmp_path.name)
+    milestones = [cp for cp in recorded.checkpoints if cp.clocks["updates"] == 2]
+    assert len(milestones) == 1
+    assert milestones[0].clocks == coordinate
+    assert recorded.final is not None and recorded.final.clocks["updates"] == 3
 
 
 def test_belief_extension_has_new_policy_histories_and_sampler(

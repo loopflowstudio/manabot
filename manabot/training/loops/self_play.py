@@ -774,6 +774,11 @@ def self_play(
             # Records again in case an earlier attempt saved state but crashed
             # before recording; the file is written once and Etude derives `final`.
             return record_checkpoint(out, state, run)
+        if is_checkpoint(settings, state.update):
+            # Update 0 of a fresh run, or a milestone whose attempt was lost
+            # after saving state and before recording.
+            save_state(out / "state.pt", state)
+            record_checkpoint(out, state, run)
 
         # Only the learner is durable. Each attempt starts fresh random streams
         # and adds its collector's totals to the counts saved before it.
@@ -802,9 +807,6 @@ def self_play(
         seed_random(seed + state.update)
         try:
             with capture_scope(failures):
-                if state.update == 0 and is_checkpoint(settings, 0):
-                    save_state(out / "state.pt", state)
-                    record_checkpoint(out, state, run)
                 while state.update < updates and not (run and run.stopping()):
                     state, row = step(state, collector, rng, base=base, out=out)
                     if run:
