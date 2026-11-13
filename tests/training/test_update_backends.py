@@ -190,6 +190,18 @@ def test_parity_requires_a_matching_optimizer_step() -> None:
     assert "clipped Adam weights" in report.failures()
 
 
+def test_float32_parity_requires_every_tensor_gradient_to_agree() -> None:
+    report = Report(
+        step_checked=True,
+        gradient_cosine=1.0,
+        gradient_min_cosine=0.98,
+        gradient_worst="policy_head.0.bias",
+    )
+    assert report.failures() == ["gradient policy_head.0.bias"]
+    report.gradient_min_cosine = 1.0
+    assert report.failures() == []
+
+
 @pytest.mark.parametrize("precision", ["bfloat16", "float16"])
 def test_half_damped_update_after_cached_inference(
     precision: Precision, captured: tuple[PolicyCheckpoint, RolloutBatch]

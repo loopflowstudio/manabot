@@ -48,7 +48,7 @@ import json
 from pathlib import Path
 import sys
 from types import ModuleType
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 import torch
@@ -87,22 +87,23 @@ class Tolerances:
     values: float
     loss: float
     cosine: float
+    cosine_scope: Literal["per_tensor", "full_gradient"]
     step: float | None
 
 
 # Half bars cover the retained w384/w768 real-input checks at 140eec28d.
-# Full-gradient cosine gates half; tensor cosines and Adam deltas remain visible.
-# Float32 retains its stricter per-tensor and one-step contracts unchanged.
+# Where half has no gate (tensor cosines, Adam deltas) the value is still reported.
 TOLERANCES: dict[Precision, Tolerances] = {
     "float32": Tolerances(
         LOGIT_TOLERANCE,
         LOGIT_TOLERANCE,
         LOSS_TOLERANCE,
         COSINE_TOLERANCE,
+        "per_tensor",
         STEP_PARAMETER_TOLERANCE,
     ),
-    "bfloat16": Tolerances(1e-3, 1e-2, 1e-2, 0.99, None),
-    "float16": Tolerances(1e-4, 2e-3, 2e-3, 0.999, None),
+    "bfloat16": Tolerances(1e-3, 1e-2, 1e-2, 0.99, "full_gradient", None),
+    "float16": Tolerances(1e-4, 2e-3, 2e-3, 0.999, "full_gradient", None),
 }
 
 
@@ -237,7 +238,7 @@ class Report:
             ("learner loss", self.loss_relative, tolerance.loss),
         ):
             checks.append((name, f"Δ {value:.3g} (tol {limit:g})", value <= limit))
-        if self.precision == "float32":
+        if tolerance.cosine_scope == "per_tensor":
             checks.append(
                 (
                     f"gradient {self.gradient_worst}",
