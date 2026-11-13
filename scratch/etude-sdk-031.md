@@ -177,8 +177,32 @@ in `tests/training/test_report_helpers.py`; the docs and the dated line in
 2. Remaining: gate acceptance below, then land. The Demo build passed (see
    State).
    The `--with "etude-sdk[s3,eval]==0.2.15" etude status` line in
-   `docs/experiments.md` is the form `experiments/cuda_precision.py` uses; it
-   was not run here, to stay off the live `launcher.db`.
+   `docs/experiments.md` was run from this checkout against a throwaway
+   `ETUDE_HOME` (concept review, 2026-11-13): exit 0, "last loop: never", and
+   it wrote `launcher.db`; `uv run etude status` on the same home then wrote
+   `launcher-17.db` beside it. The live `~/.etude/launcher.db` was not opened.
+
+## Concept review (2026-11-13, de9fae44c8): nothing to change
+
+What a report author does after this change: tag seatings in `eval(state)`,
+select them by tag for per-job lines, or by recorded name for a one-line
+head-to-head. Followed through the helper, the frontier file, the docs and the
+recovery paths (name nothing holds → page note; report away from the launcher
+→ `LOST_RUNS` or a loud error; older runs → the 0.2.15 overlay, checked
+above). No implement direction comes out of it.
+
+- `against_fixed` and `against_earlier_self` have one body and stay two
+  names: the name is the chart's question, and `against_earlier_self`'s doc
+  row carries a caveat (the earlier partner's games count too) that
+  `against_fixed` does not have.
+- The frozen name tuples repeat partners `comparison_schedule` derives from
+  state. That is a record of what was played, like `LOST_RUNS`, and the name
+  formatters are shared, so the two cannot spell a pair differently.
+- The relative-seat paragraph in `docs/experiments.md` (`Aligned`, `Earlier`,
+  `Fraction`) names fields the installed 0.3.2 records have; no manabot file
+  uses them yet. It stays as the route for the next unfinished experiment.
+- No open product choice. The empty `launcher-17.db` (below) is setup outside
+  this Task, not a choice about it.
 
 ## Alternatives
 
