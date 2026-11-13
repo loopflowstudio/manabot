@@ -48,6 +48,25 @@ The typed sequence replaces the earlier ordered-ObjectId fallback. Iteration
 feedback: "The current Vec<ObjectId> fallback is not an accepted replacement
 for that requirement; duplication concerns do not establish impossibility."
 
+## Concept review (2026-11-12, headless)
+
+No implement direction. Read against the steer: `CardId` construction is
+private and checked; sampled `objects[card]` sites in `flow/` and `agent/` bind
+`CardId`; a grep for `card: ObjectId` / `object: CardId` style bindings in
+`managym/src` and `managym/state/src` found none. `docs/engine.md` claimed every
+zone list "is typed for what can be in it"; that sentence now says what is built.
+
+Kept on purpose, for the reviewer: graveyard and exile hold the same contents
+as library and hand (cards plus transient non-cards) but store plain
+`ObjectId`, so `ZoneObjects` has two backing shapes and `zone_cards` narrows
+graveyard/exile per read. The Task brief quotes "plenty of places that should
+hold cards ... like decks, graveyards" and "basically anything but stack and
+battlefield"; steer f81d37a0, the latest scope, names "Library, hand,
+decklists/sideboards and effects that say \"card\"". This change follows the
+steer. Typing graveyard/exile entries would make the four card zones one shape
+and remove `mixed_objects_mut`'s unreachable arm, at twice the entry width in
+state that search clones; nobody has said to do it here.
+
 ## Delete — do not maintain
 
 Completed: runtime `Card`/`CardVec`, definition-owned runtime token flags,
@@ -71,23 +90,43 @@ keep card names rather than acquiring runtime-object terminology.
 ## Validation and remaining work
 
 Compression passed 31 focused debug tests, workspace Clippy, formatting,
-whitespace checks, and the matching extension rebuild/import (receipts below).
+whitespace checks, and the matching extension rebuild/import before the latest
+main merge (receipts below).
 Tests cover numeric zone bytes, checked scans, visitors, draw ordering, ordinary and
 canonical shuffle RNG, retained inspections, scry/surveil, projections and
 card-definition observability. The first compile found one multiline `for`
 caller in `agent/env.rs` missing `.iter()` after the view cutover; it is fixed.
 
-Gate still owns affected suites/conformance, seeded final-head before/after QA,
-Engine Budget and authored reviews. Paired QA must put both engines on the same
-upstream payment implementation; the MTG-298 comparison alone cannot establish
-compatibility after the merge. A clean Academy game to completion remains. The
+The typed-zone and projection work is checkpointed in c76f01f02. Head 96d3aa14e
+then merged b531853a5, including main's 6ce618b8a payment fast paths and shared
+`PaymentScan` sources (`flow/mana.rs`, `flow/action.rs`, `flow/decision.rs`).
+Realignment found one newly merged test fixture still constructing
+`ManaSource { card: CardId(index), .. }`; it now uses `object: ObjectId(index)`.
+The earlier four fixture repairs remain intact. No production mismatch was
+found in the inspected merge or projection/zone boundaries.
+
+Gate still owns current-head affected suites/conformance, seeded before/after
+QA, Engine Budget and authored reviews. The paired reference is main 6ce618b8a
+(the remote main tip read during realignment), which includes both payment
+optimizations; the MTG-298 comparison alone cannot establish compatibility.
+The merged `.lf/skills/qa.md` adds authored setups plus TLA pool human builds
+for waterbend/Treasure/any-color coverage, explicit extension-path confirmation
+and matching retained errors. Keep both-viewer observations and full state
+digests in this task's comparison. A clean Academy game to completion remains. The
 historical table stall's cause is unknown; the payment-search merge is not proof
 of a fix. Card-only filtering deliberately rejects transient tokens in
 constructed choices; seeded comparisons must establish observation/state-byte
 compatibility in real games.
 
-Delivery: refresh CI and the PR draft, preserve its Task context block, publish
-through the caller's delivery step, and stop at review with auto-merge disabled.
+Current-head CI 43375879983 failed its Rust job at `flow/mana.rs:2268` with
+E0560/E0425 for that fixture (job 131722179161); semantic conformance, Python
+unit tests, Academy integration and Clean-machine Play passed. Other jobs and
+package run 43375879939 were still running at readback. They cover 96d3aa14e,
+not the subsequent repair. Record final-head Engine Budget search/step numbers
+and unchanged digests in the PR body.
+
+Delivery: publish the fixture repair and refreshed PR draft through the caller's
+delivery step, preserving its Task context block. Stop at review with auto-merge disabled.
 No Wave is bound. No evidence was regenerated for the rename.
 
 ## Run receipts before this compression pass
@@ -106,7 +145,9 @@ history: `df58f2bff:scratch/mtg-320-plan.md`; typed ids were checkpointed in
   2026-11-13 00:05 UTC. CI 43369147820 failed compilation in four merged payment
   fixtures still using `card: CardId(...)`; production was unaffected. Semantic
   Kernel Conformance, Python Unit Tests, Academy Integration and Clean-machine
-  Play passed. Engine Budget and part of package run 43369147921 were pending.
+  Play passed. At realignment readback, Engine Budget and all Integration groups
+  had passed; package run 43369147921 completed successfully. These remain
+  evidence for 8e5e8e62b, not the later typed-zone work or payment merge.
 - Fixture repair: `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path
   managym/Cargo.toml --lib --profile ci --test-threads 2 -E
   'test(flow::mana::tests)'`: 15 passed, 214 skipped, zero failures (4.430 s;
@@ -149,4 +190,40 @@ history: `df58f2bff:scratch/mtg-320-plan.md`; typed ids were checkpointed in
   (7m 40s), cp313/arm64 0.2.3 wheel. Extracted the interpreter's exact
   `EXT_SUFFIX` member, installed with `os.replace`, and verified
   `uv run --no-sync python -c 'import managym._managym'` in a fresh process.
-  Changes remain local; no publication, merge or auto-merge action was taken.
+  These changes were subsequently checkpointed in c76f01f02 and published with
+  merge head 96d3aa14e. PR #491 readback during realignment: open at that head,
+  no GitHub reviews/comments, auto-merge null.
+
+## Realignment validation (2026-11-12)
+
+- The existing 31-test JUnit receipt was confirmed before running new tests.
+  No zone/projection suite was repeated for this documentation reconciliation.
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml
+  --lib --profile ci --test-threads 2 -E 'test(flow::mana::tests)'`: 19 passed,
+  214 skipped, zero failures (1.791 s; build 2m 52s), JUnit
+  `67eccb69-a1b8-4bda-bf3a-0924779ef581`. This includes the newly merged direct
+  payment/search equivalence fixture and shared-source scan lifecycle test.
+- Workspace all-target/all-feature Clippy with warnings denied passed (1m 05s),
+  using the command above. Rustfmt and `git diff --check` passed.
+- The release build command above rebuilt the cp313/arm64 0.2.3 wheel (1m 59s).
+  Its exact `EXT_SUFFIX` member was installed with `os.replace`; a fresh
+  `uv run --no-sync python -c 'import managym._managym'` succeeded.
+  This rebuild includes the merged payment implementation.
+- Scratch remains below both configured limits. The fixture, documentation and
+  context edits are local; this pass did not publish or change auto-merge.
+
+## Final-head QA (2026-11-13)
+
+Seeded before/after comparison against main 6ce618b8a found a regression:
+`Effect::SelectCards` kept only `ObjectKind::Card` candidates for every
+selector, so Kyoshi Battle Fan never attached to its `CreatedThisWay` Ally
+token (33 of 120 TLA pool games diverged; authored and Azula games matched).
+Fixed in `flow/resolution.rs`: card-only narrowing applies to `Zone`,
+`TargetPlayersZone` and `CardsThisWay` selectors; other selectors match any
+object, as on main. The two existing Battle Fan card tests fail without the fix.
+After it, 538 seeded games (108 authored, 30 Azula, 400 TLA pools; 118,781
+decisions) are byte-identical, including 4 matching `PyAgentError` endings.
+Two Academy games reached Game Over. Debug suite: 1195/1199 passed; the four
+`vector_env` timeouts were load contention and pass alone. Clippy, fmt pass.
+Receipts: `scratch/qa.html`. The fix and release extension are local, not
+committed or published.

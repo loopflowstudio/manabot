@@ -170,7 +170,12 @@ publish, land or choose the next Graph step from here.
   hash of both seats' `toJSON()` plus `env.state_digest()`; `cmp` the files.
   Use `random.Random(seed).randrange(env.action_count())` for actions.
   `managym.authored_deck_keys(pack)` / `authored_deck_setup(pack, key)` give
-  the authored decks. Remove the worktree afterwards.
+  the authored decks. Remove the worktree afterwards. Include the TLA pool
+  human builds too: in MTG-320, 138 authored and Azula games matched while 33
+  of 120 pool games exposed a regression (Kyoshi Battle Fan's token attach).
+  When games diverge, replay one to the first differing decision on both
+  engines and diff the parsed `toJSON()`; permanents' `attached_to`, `power`
+  and the cast action's `focus` names locate the card.
 - Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
   QA observed both at load averages around 300, but did not establish a cause.
   Repeat on an idle host before attributing a stall to the change or to load.

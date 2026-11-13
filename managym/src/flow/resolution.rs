@@ -955,15 +955,23 @@ impl Game {
                 effects,
                 if_declined,
             } => {
+                // A selection from a zone or from milled cards chooses cards, so
+                // a transient token there is not a candidate. Other selectors
+                // name objects: "create a token, then attach this to it" selects
+                // the token through `CreatedThisWay`.
+                let cards_only = matches!(
+                    from,
+                    ObjectSelector::Zone(_)
+                        | ObjectSelector::TargetPlayersZone { .. }
+                        | ObjectSelector::CardsThisWay
+                );
                 let candidates: Vec<_> = self
                     .select(from, frame)
                     .into_iter()
                     .filter(|object| {
-                        self.state
-                            .card_id(object.entity.into())
-                            .is_some_and(|card| {
-                                self.object_matches_predicate(card.into(), predicate)
-                            })
+                        let object = ObjectId::from(object.entity);
+                        (!cards_only || self.state.card_id(object).is_some())
+                            && self.object_matches_predicate(object, predicate)
                     })
                     .collect();
                 let max = self.effect_value(max, frame).max(0) as usize;

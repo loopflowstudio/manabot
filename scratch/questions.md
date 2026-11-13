@@ -22,3 +22,6 @@
 - Compression choice (2026-11-12): keep `ZoneObjects` as a borrowed collection
   with explicit `iter()` and `cards()` scans. No separate cursor or
   card-zone-only reader; stored entry kinds, bytes and order remain authoritative.
+- Concept review (2026-11-12, headless): graveyard/exile stay `Vec<ObjectId>`
+  per steer f81d37a0's zone list, although the Task brief's quotes name
+  graveyards. Assumed the steer governs; flagged in the PR body for the reviewer.

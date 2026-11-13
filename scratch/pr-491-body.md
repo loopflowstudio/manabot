@@ -16,13 +16,19 @@ This builds on [MTG-298 · Give tokens their own `TokenDefinition` type](https:/
 ## Decisions a reviewer should check
 
 - **Library and hand store checked cards plus explicit visitors.** One ordered `CardZoneEntry` sequence stores `Card(CardId)` or `Transient(ObjectId)`. Tokens and spell copies retain their position until state-based actions; there is no parallel membership or ordering list. Borrowed reads and serialization project the original numeric ids, while card-only reads use stored checked ids. Reordering preserves entry kinds, and shuffling the full sequence preserves RNG consumption. This replaces the earlier all-ObjectId fallback.
+- **Graveyard and exile still store `ObjectId`.** They hold the same contents as library and hand (cards plus transient non-cards), but only library and hand record the kind per entry; card-only readers of graveyard and exile narrow through `GameState::zone_cards` on each read. Typing them the same way would give the four card zones one shape, at twice the entry width in state that search clones. Not done here.
 - **Byte compatibility remains an acceptance requirement.** Serde keeps the old field names (`#[serde(rename = "card")]`). Observation `is_token` is `!is_card()`, and the match-state hash records a non-card object with `is_token: true`, as before. The earlier rename reproduced `semantic-kernel-w17-v2`; Semantic Kernel Conformance passed on 8e5e8e62b; final seeded QA remains. `Debug` output of the renamed types does change.
-- **Card-only choices.** Transient tokens stay visible in their zones but are excluded from card-only play, activation, discard and search choices. Direct card-only commands reject them too. Generic movement, inspection and draw ordering still include them. Predicate `token` filters match only `ObjectKind::Token`; spell copies used to match, though no defined card filters spells by token status.
+- **Card-only choices.** Transient tokens stay visible in their zones but are excluded from card-only play, activation, discard and search choices. `SelectCards` narrows to cards only when it reads a zone or milled cards; `CreatedThisWay` still selects the new token (Kyoshi Battle Fan). Direct card-only commands reject them too. Generic movement, inspection and draw ordering still include them. Predicate `token` filters match only `ObjectKind::Token`; spell copies used to match, though no defined card filters spells by token status.
 - **No emblem or copy-of-a-card kind.** No defined card creates either; the docs say "none yet".
+
+## Final-head QA
+
+538 seeded random games (authored setups, Fire Lord Azula copies, 400 TLA pool human builds; 118,781 decisions) produce byte-identical observations for both seats and identical state digests on this branch and main 6ce618b8a, including four matching `PyAgentError` endings. That comparison first caught a regression in Kyoshi Battle Fan's token attach, fixed here. Two Academy games played to Game Over. Details: `scratch/qa.html` (not published).
 
 ## Remaining before review
 
-Seeded final-head QA, Engine Budget and authored reviews remain. The private
+Current-head suites/conformance, seeded final-head QA, Engine Budget, a clean
+Academy game to completion and authored reviews remain. The private
 projection renames and typed library/hand storage are implemented; focused
 validation is recorded in `scratch/mtg-320-plan.md`.
 
@@ -51,15 +57,29 @@ covering numeric bytes, checked scans, transient tokens/spell copies, shuffle
 RNG, hidden reassignment, draws, ordering and projection. Workspace Clippy passed;
 the cp313 release wheel rebuilt, was installed atomically, and passed a fresh
 import. Rustfmt and whitespace checks passed. Four merged payment fixtures were
-also repaired and all 15 focused payment tests passed. These changes remain local.
+also repaired and all 15 focused payment tests passed. These checks predate
+the subsequent merge of main's payment fast paths (6ce618b8a).
+
+The implementation and compression were checkpointed in c76f01f02 and published
+with merge head 96d3aa14e. Realignment found one more newly merged payment fixture
+using the removed `card: CardId(index)` field; it is corrected locally to
+`object: ObjectId(index)`. All 19 focused debug payment tests and workspace
+Clippy passed; the current cp313/arm64 extension rebuilt, was installed
+atomically, and passed a fresh import. Current-head
+[CI](https://github.com/loopflowstudio/manabot/actions/runs/43375879983) confirms
+that fixture caused its Rust compile failure; semantic conformance, Python
+unit tests, Academy integration and Clean-machine Play passed. Other jobs and
+[package checks](https://github.com/loopflowstudio/manabot/actions/runs/43375879939)
+were still running at readback and do not include this repair.
 
 [CI run 43369147820](https://github.com/loopflowstudio/manabot/actions/runs/43369147820)
 on 8e5e8e62b passed Semantic Kernel Conformance, Python Unit Tests, Academy
 Integration and Clean-machine Play; Rust Tests failed to compile the four
-fixtures repaired locally. Engine Budget and part of
+fixtures since repaired. Engine Budget and all Integration groups passed;
 [package run 43369147921](https://github.com/loopflowstudio/manabot/actions/runs/43369147921)
-were pending when last inspected. That merge added payment-search changes and
-package 0.2.3: final paired QA must compare engines with the same upstream changes.
+completed successfully. These results cover 8e5e8e62b only. Final paired QA
+must compare with main 6ce618b8a so both engines include the two upstream
+payment optimizations; include TLA pool builds as well as authored setups.
 
 Earlier evidence, **not validation of typed ids or compression**:
 

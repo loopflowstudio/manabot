@@ -2265,7 +2265,7 @@ mod tests {
                         let untapped = rng.gen_bool(0.85);
                         ManaSource {
                             permanent: PermanentId(index),
-                            card: CardId(index),
+                            object: ObjectId(index),
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
                             abilities: Vec::new(),

@@ -703,7 +703,8 @@ copy object.
 
 #### Planned split
 
-Not built. The rules make a new object on every zone change (CR 400.7), stack
+Not built in this change; the split below is separate follow-up work.
+The rules make a new object on every zone change (CR 400.7), stack
 to battlefield included (CR 608.3a). The plan is to store that directly: a
 `Card` store for the physical card and an `Object` store with one row per
 appearance, so `ObjectId` would name one appearance and go stale when the
@@ -726,7 +727,9 @@ change adds layer-view or `TriggerIndex` invalidation before relying on it.
 ### Zones
 
 CR 400.1 names seven zones (ante aside). Each holds only the objects its rule
-allows, and each engine list is typed for what can be in it:
+allows. Library and hand entries record which occupants are cards; the other
+lists hold `ObjectId`s, and card-only readers narrow them through
+`GameState::zone_cards`:
 
 | Zone | Rule | Holds | Engine list |
 | --- | --- | --- | --- |
