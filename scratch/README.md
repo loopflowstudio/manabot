@@ -2,11 +2,12 @@
 
 - `mtg333-plan.md`: state, binding facts, open review findings and receipts.
   Prepared cutover, shared saves and #513/#514 integration are implemented.
-  Fresh CPU oracle: 3,410 tensors and five updates exact. Two measured host
-  optimizations retained; metadata attempt discarded. PPO remains 7.2% slower
-  in the final same-card check against main `de39d601fb`; per-epoch host
-  re-preparation is the next optimize target. Strict CUDA repeat floor and
-  the order-dependent test timeout remain for review. Broader checks are at gate.
+  Fresh CPU oracle: 3,410 tensors and five updates exact. Bounded PPO host
+  prefetch improves median throughput 10.5% over parent and 1.7% over main
+  `de39d601fb` on one RTX 5090, three processes per arm; main/head ranges
+  overlap. Rental terminated. Strict CUDA repeat floor, host preparation/load
+  costs, threaded profile limits and the order-dependent timeout remain for
+  review; broader checks are at gate.
 - `speed/mtg333-results.txt`: full A40 and 5090 speed tables.
 - `questions.md`: reversible assumptions taken without asking.
 - `mtg325-torch-backend-verification.md`: inherited baseline evidence; not

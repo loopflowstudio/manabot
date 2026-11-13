@@ -84,9 +84,12 @@ optimize pass's before/after.
 ## State
 
 Slices 1–8 are implemented. The post-#514 CPU oracle and updates are exact.
-All CUDA jobs have ended; the successful rental was terminated and provider
-inventory confirms both allocations absent. Two host optimizations are retained;
-the metadata experiment was discarded. **PPO's no-slower-median condition is still unmet** (below).
+All CUDA jobs have ended; the successful rentals were terminated. Provider
+inventory confirms the final rental absent. The host optimizations and bounded
+PPO preparation pipeline are retained;
+the metadata experiment was discarded. The final three-process CUDA check
+clears PPO's no-slower-median condition; ranges overlap main, so no reliable
+speedup over main is claimed (PPO prefetch iteration).
 
 1. `prepare` covers every torch configuration on the host (`Prepared[A]`,
    catalog-free and hashed-record `Tables`, NumPy trimming, belief/event
@@ -111,28 +114,18 @@ the metadata experiment was discarded. **PPO's no-slower-median condition is sti
    for trimmed ownership; `MLXBackend(precision=)` reaches file loads.
 8. CUDA equivalence, speed, profile and the optimize pass are measured
    (Receipts), and repeated against main `de39d601fb` after #514
-   ("Post-#514 refresh"). The optimize pass kept one change: `arrays.array_fields` and
-   `_replace_arrays` skip scalar-only tuples.
+   ("Post-#514 refresh"). The initial optimize pass made `arrays.array_fields`
+   and `_replace_arrays` skip scalar-only tuples.
+
+The final PPO prefetch check clears the no-slower-median condition:
+main 1.354 [1.338, 1.355], parent 1.245 [1.234, 1.246], head
+1.376 [1.298, 1.433] steps/s (three process medians per arm). Head is
+10.5% faster than parent and 1.7% above main; main/head ranges overlap,
+so this is not a reliable speedup over main. The prior 7.2% regression and
+discarded metadata attempt remain in the historical receipts below.
 
 **Open for review, not waived:**
 
-- Post-#514 PPO was 20.2% slower in the initial three-process check.
-  Skipping unused catalog scans and preparing only live fact rows (restoring
-  identical padding before the forward) improved PPO 8.6% vs pre-optimization
-  in a three-process same-card check; head remained 9.6% below main, within
-  process spread. The final same-card check's retained arm is **7.2% slower**:
-  1.218910 [1.217755, 1.232932] vs main 1.313957 [1.298227, 1.319119]
-  steps/s (one process each, three timed repeats). Forward/loss is still
-  8.468 vs 5.842 s; backward 2.091 vs 3.541 s. No speed acceptance is
-  claimed; the brief's optimize direction keeps this as implementation work
-  (Next actions), not a waiver.
-  Observed in code: PPO's "Forward and loss" section includes
-  `AdmittedRollout.rows` → `ActorCritic.prepare_admitted` (trim, `prepare`,
-  `on_device`) for every minibatch of every epoch (`ppo.py` minibatch loop;
-  `epochs` defaults to 4), so the host repeats each row's preparation per
-  epoch. Untested inference: that serial host work, which main did as
-  asynchronous device integer work, is most of the +2.6 s. Host-only metadata yielded only 0.2% PPO
-  gain and lowered damped median 3.9%; it was discarded.
 - CUDA gradients meet the Task bar (≤1e-8) but exceed the head-vs-head repeat
   floor the plan also asked for.
 - With `tests/eval/test_batched_eval.py` earlier in the same pytest process,
@@ -140,6 +133,14 @@ the metadata experiment was discarded. **PPO's no-slower-median condition is sti
   hit the 300 s limit twice (16 s alone). Serving backlog followed by restored
   collection alone passed (2 passed, 58.64 s); the full-file order is
   undiagnosed.
+- Latest host inference preparation is 13.85 vs main 12.59 ms (+10.0%),
+  and checkpoint load 78.15 vs 69.20 ms (+12.9%); parent is 13.41 / 79.37 ms.
+  The PPO pipeline does not run on either path. Full ranges are in the speed
+  table; no blanket no-regression claim.
+- The untimed threaded cProfile pass has inconsistent self/cumulative times
+  (`actions.unpack`: 1.293 s self, 1.016 s cumulative) and overlapping counts.
+  Do not use its function breakdown quantitatively. Timed total rates and
+  main-thread phase timers are the performance evidence.
 - Gate's broader suites, Python 3.12 and installed-wheel checks have not run.
 
 Captures in `/tmp/mtg333/` are temporary. If gone, or after a change to
@@ -233,10 +234,11 @@ CUDA base (the CPU oracle keeps `105e7e2aa`, since #514 is CPU-bitwise); its
 `manabot/` lacks `Prepared`, so the speed patch is `git diff HEAD de39d601fb
 -- manabot`, and `bench.py` must still run on both arms.
 
-Control: `ETUDE_HOME=/tmp/mtg333/launcher`, overlay
-`uv run --with 'etude-sdk[s3,eval]==0.2.15' etude …` (both launch files pin
-it; main now requires `etude-sdk>=0.3.2`, and whether 0.3.2 reads that
-schema-13 launcher database is unchecked — check before the next launch), nested
+Control: `ETUDE_HOME=/tmp/mtg333/launcher`, `uv run --extra artifacts etude …`
+(SDK 0.3.2). It opens a new schema-specific database beside the older
+`launcher.db`; the current rental template was registered through the CLI.
+Earlier runs remain with their frozen 0.2.15 source. Never downgrade the
+current launcher. Credentials are injected with nested
 `doppler run -p etude -c prd -- doppler run -p manabot -c prd
 --preserve-env=RUNPOD_API_KEY --`. Base and head run on one card in one
 rental; one Task rental at a time; USD 10 per speed cohort, USD 25 for the
@@ -255,11 +257,10 @@ rental deadline, then settled **lost (create_unconfirmed), $0.00**: SDK 0.2.15
 ignores `cancel_requested_at`; `terminate` refuses unfinished allocations.
 That is an Etude fix outside this Task; never edit the launcher database.
 
-Optimize candidates not tried (unmeasured): prepare the next PPO minibatch
-on the host while the device runs the current one, or reuse each admitted
-row's prepared integer work across epochs (both keep host values and
-summation order, so the CPU oracle stays bitwise); vectorize `prepare._effects`'
-per-record loop; int32 index arrays; `Packed.gather` for fact programs; host
+The retained PPO pipeline prepares the next minibatch on the host while the
+device runs the current one. Unmeasured candidates left for later work:
+reuse each admitted row's prepared integer work across epochs; vectorize
+`prepare._effects`' per-record loop; int32 index arrays; `Packed.gather` for fact programs; host
 compaction on CUDA inference (summation order: tolerance, not bitwise); avoid
 full-capacity temporaries before trimming. Each kept change reruns the CPU
 oracle, the update comparison and one same-card speed pass.
@@ -408,22 +409,30 @@ A separate profiler section measures preparation wait plus transfer; it was
 previously inside Forward and loss, so those sections are not directly comparable.
 
 First update comparison: five cases byte-identical to post-#514 base.
-Focused prefetch/contract checks: 4 passed (30.88 s); final cleanup/profile
-changes still need their focused recheck. CPU forward oracle is running;
-CUDA run will compare main `de39d601fb`, prefetch parent `53a705735b`, and head
-on one RTX 5090 rental, three processes each, USD 10 cohort cap.
-Current SDK 0.3.2 opens a new schema-specific database beside the old one;
-register its existing template via CLI. Do not downgrade the launcher.
-
+Final focused prefetch/contract checks: 4 passed (18.97 s).
+`compare.py post514-base.pt overlap-head.pt` → 3,410 tensors, differing 0;
+`cmp updates-post514-base.json updates-overlap-final.json` → identical.
+CUDA run `d0a1ec0dfb75`, source `fdc42e7371`: main `de39d601fb`, prefetch
+parent `53a705735b`, and head on one RTX 5090 rental, three processes each,
+USD 10 cohort cap. CUDA oracle: outputs/losses/CPU-trained weights exact;
+52 gradients differ, max 2.3283064365386963e-9; head repeat: seven gradients,
+max 1.862645149230957e-9. Meets the Task bar; the stricter floor finding stays.
+Speed comparison complete: PPO medians main 1.354, parent 1.245, head
+1.376 steps/s; head improves 10.5% vs parent and clears the no-slower-median
+condition vs main (+1.7%, overlapping ranges). All arms have 55,391 learner
+rows, 217 damped and 16 PPO steps. Head's preparation wait + transfer is
+5.551 s and forward/loss 1.093 s; parent forward/loss (including preparation)
+8.205 s. Backward stays 2.111→2.112 s. The untimed profile completed but its
+threaded call breakdown is not used quantitatively (review finding above). The run succeeded; its complete,
+digest-verified output files are in `/tmp/mtg333/prefetch-results` and retained
+in Etude. Full tables and launcher cost are in `scratch/speed/mtg333-results.txt`.
+The rental was terminated; provider inventory confirms `etude-f482ab7677e1`
+is absent. Generated patches were removed from the final tree.
 ## Next actions
 
-1. PPO median regression (7.2%): profile one PPO update on CPU to confirm
-   how much of "Forward and loss" is per-epoch `prepare_admitted`; implement
-   the cheaper of overlap or cross-epoch reuse; rerun the CPU oracle and
-   update comparison; then one capped same-card CUDA check against
-   `de39d601fb` (USD 10 cohort, one rental). If it is still slower, report the
-   residual with the profile for a review decision.
-2. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
-   exceed the head-vs-head floor).
-3. Gate: broader suites, installed wheel, Python 3.12 and the full-file test order
+1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
+   exceed the head-vs-head floor), host preparation/load costs, and the threaded
+   profile limitation. PPO's no-slower-median condition now clears; main/head
+   ranges overlap.
+2. Gate: broader suites, installed wheel, Python 3.12 and the full-file test order
    that timed out (State). Publication and landing are the caller's steps.

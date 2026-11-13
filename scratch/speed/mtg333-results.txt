@@ -217,3 +217,55 @@ Retained final code is exactly the preceding run's head and this run's before ar
 Final retained PPO 1.218910 [1.217755, 1.232932] vs main 1.313957 [1.298227, 1.319119] steps/s: 7.2% slower.
 Metadata's PPO gain was only 0.2%, with damped median 3.9% lower than before; discarded.
 No no-slower-median pass is claimed. Both earlier three-process CUDA captures retain the strict repeat-floor finding for review.
+
+PPO host prefetch: RTX 5090, one rental; source fdc42e7371; Etude d0a1ec0dfb75; launcher cost ~$0.31.
+base=de39d601fb; before=53a705735b; head=a265014fad (bounded PPO host preparation).
+Three processes per arm, interleaved base/before/head; three timed inner repeats in each process.
+base: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+before: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+head: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+base: forward sync warnings [24, 24, 24]
+before: forward sync warnings [1, 1, 1]
+head: forward sync warnings [1, 1, 1]
+damped steps/s     base 16.6 [15.95, 16.85]  before 18.38 [18.2, 18.87]  before/base 1.107  within spread
+damped steps/s     base 16.6 [15.95, 16.85]  head 18.39 [18.28, 18.47]  head/base 1.108  within spread
+ppo steps/s        base 1.354 [1.338, 1.355]  before 1.245 [1.234, 1.246]  before/base 0.920  within spread
+ppo steps/s        base 1.354 [1.338, 1.355]  head 1.376 [1.298, 1.433]  head/base 1.017  within spread
+inference obs/s    base 9623 [9557, 9651]  before 1.01e+04 [1.005e+04, 1.042e+04]  before/base 1.049  within spread
+inference obs/s    base 9623 [9557, 9651]  head 9963 [9825, 1.012e+04]  head/base 1.035  within spread
+host preparation s base 0.01259 [0.01252, 0.01296]  before 0.01341 [0.01326, 0.01427]  before/base 1.065  within spread
+host preparation s base 0.01259 [0.01252, 0.01296]  head 0.01385 [0.01351, 0.01424]  head/base 1.100  REGRESSION
+save s             base 0.0202 [0.01871, 0.02208]  before 0.01825 [0.01812, 0.01933]  before/base 0.904  within spread
+save s             base 0.0202 [0.01871, 0.02208]  head 0.01845 [0.01807, 0.01929]  head/base 0.913  within spread
+load s             base 0.0692 [0.06682, 0.07242]  before 0.07937 [0.07535, 0.08362]  before/base 1.147  REGRESSION
+load s             base 0.0692 [0.06682, 0.07242]  head 0.07815 [0.07775, 0.0788]  head/base 1.129  REGRESSION
+collection s       base 25.57 [23.41, 31.52]  before 22.41 [22.34, 22.64]  before/base 0.876  within spread
+collection s       base 25.57 [23.41, 31.52]  head 23.02 [22.47, 23.02]  head/base 0.900  within spread
+damped Batch transfer and behavior checks                      base 0.748  before 0.706  head 0.716
+damped Minibatches                                             base 12.801  before 11.140  head 11.404
+damped Minibatches/Backward and gradient clipping              base 5.475  before 4.861  head 4.979
+damped Minibatches/Forward and loss                            base 5.889  before 5.152  head 5.079
+damped Minibatches/Minibatch diagnostics                       base 0.129  before 0.124  head 0.125
+damped Minibatches/Optimizer step                              base 0.253  before 0.248  head 0.262
+damped Selection and health diagnostics                        base 0.021  before 0.020  head 0.021
+damped Targets                                                 base 0.029  before 0.029  head 0.031
+ppo Batch transfer, targets and behavior checks             base 0.745  before 0.771  head 0.758
+ppo Minibatches                                             base 10.869  before 12.158  head 10.580
+ppo Minibatches/Backward and gradient clipping              base 3.476  before 2.111  head 2.112
+ppo Minibatches/Forward and loss                            base 5.500  before 8.205  head 1.093
+ppo Minibatches/Minibatch diagnostics                       base 0.008  before 0.006  head 0.007
+ppo Minibatches/Optimizer step                              base 0.039  before 0.025  head 0.028
+ppo Minibatches/Preparation wait and transfer               base -  before -  head 5.551
+ppo Selection and health diagnostics                        base 0.022  before 0.022  head 0.021
+base ppo process medians: [1.3551074372300733, 1.3383859544539023, 1.3535170032483337]; median 1.3535170032483337; range [1.3383859544539023, 1.3551074372300733]
+base damped process medians: [16.851603613321316, 16.600345124652222, 15.953117452467362]; median 16.600345124652222; range [15.953117452467362, 16.851603613321316]
+before ppo process medians: [1.233577543966817, 1.2446803726138171, 1.2456162672484532]; median 1.2446803726138171; range [1.233577543966817, 1.2456162672484532]
+before damped process medians: [18.37904757265523, 18.198237500802083, 18.874416979822588]; median 18.37904757265523; range [18.198237500802083, 18.874416979822588]
+head ppo process medians: [1.4332081851515097, 1.2984899736757305, 1.3759848047294398]; median 1.3759848047294398; range [1.2984899736757305, 1.4332081851515097]
+head damped process medians: [18.47213780696439, 18.386329770005613, 18.280748415129008]; median 18.386329770005613; range [18.280748415129008, 18.47213780696439]
+Head PPO +10.55% vs parent; +1.66% vs main. Main/head ranges overlap; no reliable speedup over main claimed.
+All nine processes: 55,391 learner rows; 217 damped and 16 PPO steps per update.
+CUDA oracle: outputs/losses/CPU-trained weights exact; 52 gradients differ, max 2.3283064365386963e-9. Repeat: seven gradients, max 1.862645149230957e-9. Strict repeat-floor finding remains.
+Host inference preparation +10.0% vs main (13.85 vs 12.59 ms), load +12.9% (78.15 vs 69.20 ms); parent already 13.41 ms / 79.37 ms. These are not PPO pipeline paths. No blanket no-regression claim.
+Untimed threaded cProfile breakdown is not used quantitatively: overlapping/recursive counts and inconsistent self/cumulative times (actions.unpack: 1.293 s self, 1.016 s cumulative). Use timed end-to-end rates and main-thread section timers above.
+Raw files retained in Etude; verified local fetches /tmp/mtg333/prefetch-results. Rental terminated; Vast named etude-f482ab7677e1 absent.

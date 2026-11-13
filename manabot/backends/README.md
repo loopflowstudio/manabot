@@ -151,6 +151,10 @@ backend against them:
   `Prepared` batches on the learner's device (`rows`, `next_observation`),
   their legal mask (`legal`) and the arrays a rejected step retains
   (`evidence`: the prepared batch's arrays by field name, in NumPy).
+  PPO additionally consumes `minibatches(order, size, device)` as a context
+  manager: Torch prepares one host batch ahead, yields batches in the supplied
+  order, and joins its worker when the context exits. Device transfers and
+  all model and optimizer work run on the caller.
 
 An update writes its minibatch loss as a closure over the policy forward and
 hands it to the learner, because a functional framework differentiates a
