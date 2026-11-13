@@ -187,6 +187,7 @@ def _restore_metadata(
     binding = None
     if agent.belief_count_buckets > 0:
         binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
+    agent.belief_binding = binding
     if checkpoint.get("architecture") is not None:
         validate_architecture_receipt(
             agent.architecture_receipt(), checkpoint["architecture"]
@@ -310,6 +311,22 @@ def save_checkpoint(
 
 class _Torch:
     name = "torch"
+
+    @staticmethod
+    def load_policy(
+        path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+    ) -> tuple[ActorCritic, ObservationSpace]:
+        return load_checkpoint(
+            path, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+        )
+
+    @staticmethod
+    def metadata(path: str) -> dict[str, Any]:
+        return load_metadata(path)
+
+    @staticmethod
+    def seed(seed: int) -> None:
+        torch.manual_seed(seed)
 
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[ActorCritic, Learner]:
         agent = assemble(checkpoint)

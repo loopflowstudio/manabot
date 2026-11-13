@@ -74,24 +74,23 @@ One head scores every kind of decision, from casting and targeting to blocking
 and paying costs. The action's own features are concatenated with the
 post-attention embeddings of the objects it names.
 
-From `_add_focus` in
+From `_gather_informed_actions` in
 [`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py):
 
 ```python
-focus_embeds = torch.gather(post_attention_focus_objects, 2, focus_indices)
-focus_embeds = focus_embeds * valid_mask
-focus_flat = focus_embeds.reshape(B, max_actions, -1)
+focused = post_attention_objects.flatten(0, 1)[obs.focus]
+focused = focused * obs.focus_mask.unsqueeze(-1)
+return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
 ```
 
-From `forward_distribution` in the same module:
+`obs` is a device `Prepared` batch. Its host preparation has already resolved
+focus indexes and selected the legal action rows. `forward_distribution`
+restores their scores to the published action capacity:
 
 ```python
-logits_before_mask = self.policy_head(informed_actions).squeeze(-1)
-if self.debug:
-    # Save raw logits for offline diagnosis (scripts/diagnose_*).
-    self.last_raw_logits = logits_before_mask.detach().cpu()
-logits = logits_before_mask.masked_fill(obs["actions_valid"] == 0, -1e8)
-return logits, self._value_from_objects(encoded, validity)
+scores = self.policy_head(informed_actions).squeeze(-1)
+logits = scores.new_full(capacity, -1e8)
+logits = logits.index_put((batches, slots), scores.to(logits.dtype))
 ```
 
 - A focus slot of −1 means the action names fewer than two objects; its

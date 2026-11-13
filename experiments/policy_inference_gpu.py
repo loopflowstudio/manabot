@@ -18,6 +18,7 @@ from etude.launch.records import Job
 from pydantic import BaseModel, Field
 
 from experiments import inference_baseline as baseline, qwen_mtg183 as inputs
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.local import checkpoint_request
 from manabot.infra.artifacts import verify_file
 from manabot.sim.execution import EvalAllocation
@@ -53,6 +54,7 @@ def prepare(root: Path, checkpoint: Path, config: Campaign) -> baseline.Recipe:
             authored_matchup=matchup,
             game_seconds=120,
             max_commands=10_000,
+            backend=TORCH_BACKEND,
         )
         path = root / f"{name}-request.json"
         baseline._write(path, request)

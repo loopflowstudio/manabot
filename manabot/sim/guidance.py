@@ -10,13 +10,10 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
-from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.backends.torch.policy import ActorCritic
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.identity import file_sha256
+from manabot.policy.protocol import Backend, BackendPolicy
 from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.search import local_update
@@ -32,12 +29,10 @@ from manabot.sim.search.puct import (
 class PolicyPriorRandomLeafEvaluator:
     """Use checkpoint logits only for priors and random terminal leaf values."""
 
-    def __init__(self, agent: ActorCritic, observation_space: ObservationSpace) -> None:
-        try:
-            device = next(agent.parameters()).device
-        except StopIteration as exc:  # pragma: no cover - ActorCritic has parameters
-            raise ValueError("policy-prior evaluator requires a model") from exc
-        if device.type != "cpu":
+    def __init__(
+        self, agent: BackendPolicy, observation_space: ObservationSpace
+    ) -> None:
+        if agent.device_type != "cpu":
             raise ValueError("policy-prior evaluator requires a CPU model")
         self.agent = agent.eval()
         self.observation_space = observation_space
@@ -45,7 +40,7 @@ class PolicyPriorRandomLeafEvaluator:
         self.last_root_priors: np.ndarray | None = None
 
     def _priors(
-        self, observation: Any | Mapping[str, np.ndarray], *, action_count: int
+        self, observation: Any | ObservationBuffers, *, action_count: int
     ) -> np.ndarray:
         if action_count < 1:
             raise RuntimeError("policy-prior node has no legal actions")
@@ -54,30 +49,18 @@ class PolicyPriorRandomLeafEvaluator:
             if isinstance(observation, Mapping)
             else self.observation_space.encode(observation)
         )
-        tensor_obs = on_device(
-            self.agent.prepare(
-                {
-                    key: to_numpy(value)
-                    for key, value in (
-                        {
-                            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(
-                                0
-                            )
-                            for key, value in encoded.items()
-                        }
-                    ).items()
-                },
-                inference=True,
-            ),
-            device_of(self.agent),
+        batch = self.agent.prepare(
+            {
+                key: np.asarray(value, dtype=np.float32)[None]
+                for key, value in encoded.items()
+            },
+            inference=True,
         )
-        with torch.inference_mode():
-            logits, _discarded_value = self.agent(tensor_obs)
-            legal_logits = logits[0, :action_count]
-            if not torch.isfinite(legal_logits).all():
-                raise RuntimeError("checkpoint returned nonfinite legal logits")
-            priors = torch.softmax(legal_logits, dim=-1)
-        result = priors.detach().cpu().numpy().astype(np.float64)
+        logits, _discarded_value = self.agent.evaluate(batch)
+        legal_logits = logits[0, :action_count]
+        if not np.isfinite(legal_logits).all():
+            raise RuntimeError("checkpoint returned nonfinite legal logits")
+        result = self.agent.normalize_logits(legal_logits).astype(np.float64)
         if result.shape != (action_count,) or not np.isclose(result.sum(), 1.0):
             raise RuntimeError("checkpoint returned invalid legal-action priors")
         return result
@@ -118,7 +101,11 @@ class PolicyPriorRandomLeafEvaluator:
 
 
 def build_registered_player(
-    registration: PlayerRegistration, *, seed: int, checkpoint_path: str | None = None
+    registration: PlayerRegistration,
+    *,
+    seed: int,
+    checkpoint_path: str | None = None,
+    backend: Backend | None = None,
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
     """Resolve the additive prior-only candidate or delegate unchanged kinds."""
 
@@ -127,13 +114,15 @@ def build_registered_player(
         return build_code_player(registration, seed=seed), None
     if spec.get("kind") != "policy_prior_puct":
         return _build_policy_player(
-            registration, seed=seed, checkpoint_path=checkpoint_path
+            registration, seed=seed, checkpoint_path=checkpoint_path, backend=backend
         )
     if checkpoint_path is None:
         raise FileNotFoundError("checkpoint candidate bytes are unavailable")
     if spec["implementation_source_sha256"] != file_sha256(Path(__file__)):
         raise RuntimeError("policy-prior PUCT implementation source drift")
-    agent, observation_space = load_checkpoint(checkpoint_path)
+    if backend is None:
+        raise ValueError("a checkpoint player requires an injected backend")
+    agent, observation_space = backend.load_policy(checkpoint_path)
     evaluator = PolicyPriorRandomLeafEvaluator(agent, observation_space)
     player = DeterminizedPuctPlayer(
         int(spec["sims"]),
@@ -160,7 +149,11 @@ def build_registered_player(
 
 
 def _build_policy_player(
-    registration: PlayerRegistration, *, seed: int, checkpoint_path: str | None = None
+    registration: PlayerRegistration,
+    *,
+    seed: int,
+    checkpoint_path: str | None = None,
+    backend: Backend | None = None,
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
     spec = dict(registration.player_spec)
     if registration.runner_kind == "checkpoint":
@@ -189,7 +182,7 @@ def _build_policy_player(
             spec["config"] = local_update.LocalSearchConfig.from_recorded(
                 spec["config"]
             ).model_dump()
-    player, obs_space = make_player(spec, seed=seed)
+    player, obs_space = make_player(spec, seed=seed, backend=backend)
     attribute_names = {
         "sims": "simulations"
         if spec["kind"] in {"determinized_puct", "agent_puct"}
@@ -217,9 +210,6 @@ def _build_policy_player(
     if spec["kind"] == "agent_puct":
         if player.evaluator.value_mode != spec["value_mode"]:
             raise RuntimeError("constructed player did not echo value_mode")
-        if (
-            sum(p.numel() for p in player.evaluator.agent.parameters())
-            != registration.parameter_count
-        ):
+        if player.evaluator.agent.parameter_count != registration.parameter_count:
             raise ValueError("agent PUCT checkpoint parameter count drift")
     return player, obs_space

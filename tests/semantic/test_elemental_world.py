@@ -13,7 +13,11 @@ import torch
 
 from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from academy.server import GameSession, _parse_game_config
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -157,7 +161,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     assert not info["action_space_truncated"]
     path = tmp_path / "elemental.pt"
     save_checkpoint(agent, space, path, player_configs=env.match.to_rust())
-    summary = inspect_checkpoint(path)
+    summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
     assert summary.compatible
     assert len(summary.setups) == 10
     restored, _ = load_checkpoint(str(path))

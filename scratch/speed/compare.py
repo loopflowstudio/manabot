@@ -13,6 +13,7 @@ METRICS = [
     ("damped steps/s", lambda r: r["damped"]["steps_per_second"]["median"], True),
     ("ppo steps/s", lambda r: r["ppo"]["steps_per_second"]["median"], True),
     ("inference obs/s", lambda r: r["inference_obs_per_second"]["median"], True),
+    ("host preparation s", lambda r: r["host_preparation_seconds"]["median"], False),
     ("save s", lambda r: r["save_seconds"]["median"], False),
     ("load s", lambda r: r["load_seconds"]["median"], False),
     ("collection s", lambda r: r["collection_seconds"], False),
@@ -28,6 +29,10 @@ for arm, results in arms.items():
     rows = {r["learner_rows"] for r in results}
     steps = {tuple(r["damped"]["steps"]) for r in results}
     print(f"{arm}: {len(results)} processes, learner rows {rows}, damped steps {steps}")
+for arm, results in arms.items():
+    print(
+        f"{arm}: forward sync warnings {[r.get('forward_sync_warning_count') for r in results]}"
+    )
 lines = []
 for label, read, larger in METRICS:
     values = {arm: [read(r) for r in results] for arm, results in arms.items()}
@@ -49,12 +54,20 @@ for label, read, larger in METRICS:
         print(line)
 # Learner sections (seconds per update, medians over processes).
 for kind in ("damped", "ppo"):
-    labels = sorted({k for rs in arms.values() for r in rs for k in r[kind].get("sections", {})})
+    labels = sorted(
+        {k for rs in arms.values() for r in rs for k in r[kind].get("sections", {})}
+    )
     for label in labels:
         cells = []
         for arm, results in arms.items():
-            totals = [r[kind]["sections"][label]["total_time"] for r in results if label in r[kind].get("sections", {})]
-            cells.append(f"{arm} {statistics.median(totals):.3f}" if totals else f"{arm} -")
+            totals = [
+                r[kind]["sections"][label]["total_time"]
+                for r in results
+                if label in r[kind].get("sections", {})
+            ]
+            cells.append(
+                f"{arm} {statistics.median(totals):.3f}" if totals else f"{arm} -"
+            )
         line = f"{kind} {label:55s} " + "  ".join(cells)
         lines.append(line)
         print(line)

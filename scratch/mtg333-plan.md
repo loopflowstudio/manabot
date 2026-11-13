@@ -73,7 +73,7 @@ logits, values = policy.evaluate(batch)  # NumPy out
 
 ## Current implementation and cutover points
 
-Slice 1 and the arithmetic part of slice 2 are implemented. Torch's action,
+The Prepared forward, host program schedules and general container saves are implemented. Torch's action,
 object/card/belief, link, fact, effect, continuation and history encoders now
 read device `Prepared` rows. Admission uses shared `Spec/check`; host trimming,
 compaction and live-token routes are consumed. `arrays.on_device` batches
@@ -94,12 +94,11 @@ precomputed routes. No catalog lengths are read back from the device in forward.
 
 General container saves and metadata readers, policy fixture mutation and new
 export suffixes are implemented. The docs describe the full PR; backend
-injection, aliases, L4 and optimize work are still incomplete.
+injection and alias changes are under focused verification; L4 and optimize remain.
 
 The backend-selection rule is written in `AGENTS.md` (`CLAUDE.md` links to
-it) and `backends/README.md`, and its lazy resolver is implemented. The import guard and sim/eval injection
-remain. `tests/test_package_boundaries.py` currently guards framework
-imports and update injection, not the new composition-root rule.
+it) and `backends/README.md`, and its lazy resolver is implemented. The import guard and sim/eval injection are implemented and under focused
+verification. It names CLI/child roots and exactly lists the deferred imports.
 `ParameterArrays`, header-only metadata reads and general container support are
 implemented. Parameters come from `named_parameters` with float32 required;
 all other state entries remain buffers. MLX checks support at its own load.
@@ -253,7 +252,7 @@ sequence-length fields, the fact-route kwargs dictionary and redundant masks.
 `FactPrograms | None` owns its indexes together; `Packed` owns lengths. Existing
 program-boundary and effect-padding tests follow these surviving types.
 
-Remaining for the Torch cutover (do not polish these predecessors):
+Removed by the Torch cutover (do not restore these predecessors):
 
 `manabot/model/admission.py`, `manabot/model/inference.py` (scope and
 transfer move to the backend), `AdmittedObservation`,
@@ -261,8 +260,8 @@ transfer move to the backend), `AdmittedObservation`,
 `require_record_*`, `RecordEmbeddings`, `records.masked_record_rows`/
 `join_record_rows`/`admit_record_rows`/`record_indexes`, the torch
 `admit_*` wrappers,
-`parity`'s torch-against-itself
-reference path, `convert`'s refusal of unsupported configurations.
+the old dictionary-based parity reference path (the current canonical-container
+round-trip still compares against Torch), `convert`'s refusal of unsupported configurations.
 Survives: every admission message tests assert; `PolicyInference` scope
 semantics (`tests/model/test_inference.py`); legacy `.pt` loading; registered
 lookup buffers and state-dict names.
@@ -285,12 +284,11 @@ leave fixture generation, seeds, losses and output keys unchanged.
    selected joins, action features, live indexes, ownership and fact widths;
    it does not establish equivalence of every field or a Torch forward.
    Completed checks and MLX parity are recorded below.
-2. **Arithmetic migrated; finish the input boundary.** The admitted carrier now
+2. **Completed; receipts below.** The admitted carrier now
    holds `Prepared`; actions/focus, links, relations/events, facts, shared
    effects, cards/known/decklists and belief consume it. `on_device` exists.
-   Remaining: drop the dictionary/carriers, move `PolicyInference` to the
-   backend (using the policy cache), and remove catalog length reads from the
-   device forward.
+   The dictionary/carriers and device catalog-length reads are deleted;
+   PolicyInference uses the backend policy cache.
    Cover nonempty event, relation, naming and fact-program routes as their
    consumers move, retain malformed-input refusal tests, and compare CPU
    outputs/gradients rather than treating host row tests as forward evidence.
@@ -310,33 +308,13 @@ leave fixture generation, seeds, losses and output keys unchanged.
 7. L4 equivalence and speed (below).
 8. Optimize pass (below); delivery clears added scratch through `lf`.
 
-## Implementation receipt — host preparation (2026-11-13)
+## Earlier checks
 
-Slice 1 is implemented; slices 2–8 remain. Torch's forward, its admission
-wrappers and checkpoint writes are still the baseline. The end-state docs
-remain the specification for those slices, not a claim that they are shipped.
-`ObservationBuffers` is introduced at its owner and used by host preparation;
-the wider alias sweep remains in slice 6. MLX uses the shared `Spec`/`check`
-and refuses a batch bound to another model/observation configuration.
-
-Checks (all through the locked CPython 3.13 environment, no skips):
-- `uv run --no-sync pytest tests/model/test_prepare_rows.py -q -x` → 21 passed;
-  added effect/program cases → 3 passed; v10 trimming and MLX binding cases
-  → 2 passed. Host coverage is now 25 cases, plus the MLX binding case.
-- `uv run --no-sync pytest tests/model/test_policy_container.py tests/model/test_mlx_backend.py tests/model/test_bucketed_shapes.py -q`
-  → 20 passed. Shared-policy import and backend isolation checks → 2 passed.
-- `uv run --no-sync python -m manabot.backends.parity /tmp/mtg325-gate-capture/initial.pt --capture /tmp/mtg325-gate-capture --json /tmp/mtg333/prepare-parity.json`
-  → `parity: pass (torch, mlx)`. Torch/MLX post-clipped-Adam max absolute
-  weight differences: 7.5e-9 / 1.2e-7 (bar 1e-6); MLX max logits 6.0e-9,
-  values 3.9e-7, relative loss 0.0008%. This is tolerance evidence for the
-  changed MLX arithmetic, not a new Torch forward-equivalence receipt.
-- Changed Python files pass Ruff check/format; `git diff --check` is clean.
-
-The host trim also slices v10 `card_turn_state` with its card axis and counts
-its nonzero rows when choosing buckets. The old tensor trim lacks that slice;
-the v10 object-bucket case is a focused regression on the surviving host path.
-When migrating Torch, verify padded/bucketed v10 with masked-mean as well as
-this plan's existing historical-mean v10 oracle configuration.
+The full host/MLX and arithmetic receipts are retained at
+`65e8f5cb:scratch/mtg333-plan.md`. Host preparation, v10 masked-mean routes,
+nonempty fact/effect/program paths, container configurations, legacy loading,
+and warm-start/Academy consumers passed their focused checks. Exact CPU and
+update results and layout hazards are retained below.
 
 ## Acceptance at gate
 
@@ -375,8 +353,8 @@ this plan's existing historical-mean v10 oracle configuration.
 
 ## L4 mechanics
 
-Launch files are `scratch/equivalence/mtg325_cuda_equivalence.py` and
-`scratch/speed/mtg325_speed.py` (rename the stems to `mtg333_*`: Etude names
+Launch files are `scratch/equivalence/mtg333_cuda_equivalence.py` and
+`scratch/speed/mtg333_speed.py` (rename the stems to `mtg333_*`: Etude names
 the experiment after the stem). Regenerate patches at the launch commit and
 track them only there: equivalence applies `base.patch` reversed
 (`git diff BASE HEAD -- manabot`); speed applies it forward
@@ -450,36 +428,12 @@ After moving encoders, replace the directory links in
 `docs/observation-and-model.md` with exact files. Re-copy its “Scoring legal
 actions” and `docs/learning.md`'s “Value” excerpts from the final forward.
 
-## Compress (2026-11-13)
+## Earlier host simplification
 
-Scope is the implemented host/MLX slice. Torch's old admission, forward and
-inference objects remain deletion targets for slices 2–3; none was repaired.
-`FactPrograms | None` replaces mutually dependent optional arrays and allows
-one typed `FactRoutes` construction. `Packed.lengths` is the sole owner of
-sequence boundaries needed by the future Torch `pack_sequence` path.
-Referenced-definition collection has its own helper; no-world preparation
-returns before building that subset. Belief and history constructors name
-fields. History detection reuses `buckets.has_history_events`. Effect routes
-select live headers before numeric casts, avoiding a full padded-table copy
-and leaving arbitrary padding untouched. `Prepared.is_agent` is required:
-every configuration supplies ownership.
-
-Initial focused check: `uv run --no-sync pytest tests/model/test_prepare_rows.py tests/model/test_mlx_backend.py -q` → 31 passed in 2.91s.
-`uv run --no-sync pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_prepare_rows.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`
-→ **63 passed**, one existing Torch nested-tensor warning, 12.82s; no skips.
-Ruff check/format on the four touched Python files and `git diff --check` pass.
-`uv run --no-sync python -m manabot.backends.parity /tmp/mtg325-gate-capture/initial.pt --capture /tmp/mtg325-gate-capture --json /tmp/mtg333/compress-parity.json`
-→ **parity: pass (torch, mlx)**. Eight learner minibatches and eight collection
-calls per backend; post-clipped-Adam max absolute weight differences 7.5e-9 /
-1.2e-7 (bar 1e-6). MLX logits 5.9e-9, values 3.9e-7, relative loss 0.0009%
-(bar 0.1%); gradient cosines pass 0.999. The -1 update-direction cosine is
-still a diagnostic, not the gate. This tests the changed host/MLX path; it is
-not a completed Torch cutover or a fresh L4 receipt.
-
-Original uncommitted notes were copied to `/tmp/mtg333-compress-before/`
-before trimming. The curated notes and receipts before realign are committed
-at `b015041bd:scratch/`.
-
+`FactPrograms` groups its optional routes; `Packed.lengths` owns boundaries.
+Effect preparation selects live headers before numeric conversion, preserving
+padding tolerance. Host/MLX checks: 63 passed, no skips; parity passed on the
+frozen capture. Full measurements and earlier notes: `65e8f5cb:scratch/`.
 
 ## Torch arithmetic receipt (2026-11-13 UTC)
 
@@ -589,3 +543,37 @@ Record/layer/MLX/container checks reached **37 passed**, then the container test
 incorrectly counted new nonpersistent routes as saved state. It now compares
 state-dict buffers; all **7 general policy configurations passed**. The five update cases are byte-identical to baseline (`updates-schedules.json`);
 changed-file Ruff check/format pass.
+
+
+Backend-injection progress (2026-11-13 UTC): simulation players, batched
+sampling, PUCT/prior search, value scoring, serving, checkpoint discovery and
+registration now receive BackendPolicy or Backend. CLI/child roots resolve
+Torch; code-only children stay lazy. A shared inference scope reports NumPy
+logits and batched input transfer counters. Seeded scalar/multinomial sampling
+stays in Torch; MLX has the same public surface. Remaining verification and
+L4/optimize work are still required.
+Seeded sampler/prior/PUCT checks: 11 passed; latest serving residency, row
+sampling, bucketed input and native registration checks: 6 passed. No L4 spend.
+
+Deferred backend dependencies filed as local Task `c2ef4a` (`task_c2ef4a5da9cb437b921cca1ef40e94a1`), not started. Linear synchronization is pending.
+
+Latest loader/injection check: `pytest tests/model/test_catalog.py
+tests/sim/test_tracking.py tests/eval/test_evaluation_models.py
+tests/eval/test_local_evaluation.py -q -x` → **32 passed in 515.94s**.
+The process then stayed in pytest numbered-temp-directory cleanup; a native
+sample showed `atexit` file removal, and SIGINT interrupted that cleanup only
+(exit 0, traceback in pytest/shutil). Subsequent checks use a dedicated
+`--basetemp` to avoid unrelated old test-directory cleanup.
+
+Injection receipt: `/tmp/mtg333/injected-policy.pt` matches the integrated
+baseline: **3,248 tensors, zero differences**. MLX scoped inference, seeded
+sampling, closed/changed-policy refusals and the framework boundary checks
+passed (8 checks before a stale parity allowlist entry; corrected guard and
+update protocols: 7 passed). Checkpoint capability routing, native card facts
+and monitoring registration/refusal: **4 passed** with the evaluation extra.
+
+The five PPO/damped update cases remain byte-identical (`updates-injected.json`).
+Torch/MLX captured parity passes (`injected-parity.json`): post-clipped-Adam
+weights max 7.5e-9 / 1.2e-7; MLX logits 5.4e-9, values 3.9e-7, relative loss
+0.0004%. The first updates invocation omitted its output argument and was
+rerun correctly; no data or harness changes followed that invocation error.

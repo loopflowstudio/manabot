@@ -12,7 +12,11 @@ from pydantic import ValidationError
 import pytest
 
 from academy.villain import CheckpointVillain
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -110,7 +114,7 @@ def test_checkpoint_of_another_input_is_rejected_before_loading(
     reason = checkpoint_incompatibility(payload)
     assert reason is not None
     _assert_names_the_recording_revision(reason, recorded)
-    summary = inspect_checkpoint(path)
+    summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
     assert not summary.compatible and summary.incompatibility == reason
     with pytest.raises(UnsupportedPolicyInput):
         CheckpointVillain(str(path), player_configs=_match().to_rust())

@@ -7,7 +7,11 @@ from typing import Any
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -217,10 +221,14 @@ def test_registered_puct_completes_games_and_replays(tmp_path: Path) -> None:
         }
     )
     with pytest.raises(ValueError, match="source drift"):
-        build_registered_player(drift, seed=1, checkpoint_path=str(path))
+        build_registered_player(
+            drift, seed=1, checkpoint_path=str(path), backend=TORCH_BACKEND
+        )
     wrong_bytes = candidate.model_copy(update={"checkpoint_sha256": identity})
     with pytest.raises(ValueError, match="byte identity drift"):
-        build_registered_player(wrong_bytes, seed=1, checkpoint_path=str(path))
+        build_registered_player(
+            wrong_bytes, seed=1, checkpoint_path=str(path), backend=TORCH_BACKEND
+        )
     opponent = PlayerRegistration(
         **common,
         player_id="random-fixture",
@@ -246,7 +254,12 @@ def test_registered_puct_completes_games_and_replays(tmp_path: Path) -> None:
         )
         messages: list[tuple[str, object]] = []
         execute_game(
-            game, registrations, {candidate.player_id: str(path)}, 1000, messages.append
+            game,
+            registrations,
+            {candidate.player_id: str(path)},
+            1000,
+            messages.append,
+            backend_factory=lambda: TORCH_BACKEND,
         )
         assert game.get("terminated"), game.get("failure")
         assert all(v == 0 for v in game["integrity"].values())

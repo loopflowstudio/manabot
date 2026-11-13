@@ -28,10 +28,7 @@ import managym._managym as native
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
-import torch
 
-from manabot.backends.torch.arrays import device_of, on_device
-from manabot.backends.torch.checkpoint import load_metadata
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
@@ -507,15 +504,13 @@ class LocalUpdateTeacher:
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
-        metadata = load_metadata(checkpoint)
         if (
             self.agent.config.value_kind != "categorical_wdl"
-            and metadata.get("bc", {}).get("value_semantic") != "signed_outcome"
+            and self.agent.value_semantic != "signed_outcome"
         ):
             raise ValueError(
                 "scalar local-search checkpoint must declare signed_outcome values"
             )
-        self.agent.requires_grad_(False)
         self.space = self.likelihood.obs_space
         # Native frontier encoding reuses these teacher-owned buffers across
         # forwards, so one teacher serves one search at a time.
@@ -576,15 +571,16 @@ class LocalUpdateTeacher:
             encodings, counts = self._encode_native(engines)
         else:
             encodings, counts = self._encode_rows(engines)
-        tensors = on_device(
-            self.agent.prepare(encodings, inference=True), device_of(self.agent)
+        logits, values = self.agent.evaluate(
+            self.agent.prepare(encodings, inference=True)
         )
-        with torch.inference_mode():
-            logits, values = self.agent(tensors)
-            predictions = [
-                (logits[i, :count].double().softmax(-1).numpy(), float(values[i]))
-                for i, count in enumerate(counts)
-            ]
+        predictions = [
+            (
+                self.agent.normalize_logits(logits[i, :count], double=True),
+                float(values[i]),
+            )
+            for i, count in enumerate(counts)
+        ]
         if any(not np.isfinite(value) for _, value in predictions):
             raise ValueError("nonfinite leaf value")
         # Scalar PPO heads are unconstrained; retain their actual signed estimate.

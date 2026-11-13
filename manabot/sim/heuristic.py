@@ -57,12 +57,11 @@ from pathlib import Path
 import re
 from typing import Any, Literal, cast
 
-from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
-import numpy as np
-
 from manabot.env.env import Env
+from manabot.env.observation import ObservationBuffers
 from manabot.sim.anchors import ScriptedGreedyPlayer
 import managym
+from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 
 Polarity = Literal["harmful", "beneficial"]
 
@@ -662,7 +661,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         self._block_plan: dict[int, int] | None = None
         self._trick_reserved = False
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         board = _Board(env.last_raw_obs)
         # Restrict candidates before every rule and fallback. Prefix indices
         # remain original native indices; the authoritative observation is intact.

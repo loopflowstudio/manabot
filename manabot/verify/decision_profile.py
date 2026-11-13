@@ -38,7 +38,7 @@ import torch
 from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
 from manabot.verify.games import (
     INTERACTIVE_DECK,
@@ -101,7 +101,7 @@ def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
 
 
 def _agent_policy(agent) -> Callable[[dict[str, np.ndarray]], int]:
-    def policy(obs: dict[str, np.ndarray]) -> int:
+    def policy(obs: ObservationBuffers) -> int:
         tensor_obs = on_device(
             agent.prepare(
                 {

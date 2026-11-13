@@ -130,7 +130,7 @@ checkpoints or experiment evidence.
 - Library code receives a framework backend (the module for an update, a
   `BackendPolicy` for simulation and evaluation) and never imports
   `manabot.backends.*`. Only composition roots choose one: `experiments/`,
-  `scripts/`, recipe entry points and the CLI, `academy/villain.py` and the
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `academy/villain.py` and the
   backends' tests, by import or `manabot.backends.resolve("torch")`.
   `tests/test_package_boundaries.py` lists the remaining exceptions by name;
   that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).

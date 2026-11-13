@@ -16,8 +16,8 @@ import pytest
 import torch
 
 from manabot.backends.torch.arrays import _array_fields, on_device
-from manabot.backends.torch.checkpoint import save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic, sample_rows
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.eval.admission import register_checkpoint
@@ -39,7 +39,6 @@ from manabot.sim.serving import (
     _infer,
     _PendingRequest,
     _record_dispatch,
-    sample_rows,
 )
 from manabot.sim.serving_protocol import (
     DecisionRequest,
@@ -139,15 +138,19 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
     logits = torch.tensor([[1.0, 2.0, -1e8], [3.0, 4.0, -1e8]])
     masks = torch.tensor([[1.0, 1.0, 0.0], [1.0, 1.0, 0.0]])
     before = torch.random.get_rng_state()
-    batched = sample_rows(logits, masks, [5, 7], False)
+    batched = sample_rows((logits).numpy(), (masks).numpy(), [5, 7], False)
     assert batched == [
-        sample_rows(logits[i : i + 1], masks[i : i + 1], [seed], False)[0]
+        sample_rows(
+            (logits[i : i + 1]).numpy(), (masks[i : i + 1]).numpy(), [seed], False
+        )[0]
         for i, seed in enumerate([5, 7])
     ]
     assert torch.equal(before, torch.random.get_rng_state())
-    assert batched[::-1] == sample_rows(logits.flip(0), masks.flip(0), [7, 5], False)
+    assert batched[::-1] == sample_rows(
+        (logits.flip(0)).numpy(), (masks.flip(0)).numpy(), [7, 5], False
+    )
     with pytest.raises(ValueError, match="invalid legal"):
-        sample_rows(logits, torch.zeros_like(masks), [5, 7], False)
+        sample_rows((logits).numpy(), (torch.zeros_like(masks)).numpy(), [5, 7], False)
 
 
 def test_served_checkpoint_records_its_input_version(tmp_path: Path) -> None:
@@ -178,7 +181,7 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
     execution = EvalExecution(deadline_unix=time.time() + 120)
     _, (player,) = bind_execution(key, (player,), execution)
     perf = EvalPerformance("test")
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     store.admit(PolicyAdmission(player, str(path), (selected_match(),)))
     requests = [request_for(player, execution, seed) for seed in (5, 7)]
     replies = _infer(store, requests, "batch")
@@ -205,7 +208,7 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
         )
     torch.testing.assert_close(batched, scalar, rtol=1e-5, atol=1e-5)
     assert [r.action for r in replies] == sample_rows(
-        scalar, tensor["actions_valid"], [5, 7], False
+        (scalar).numpy(), (tensor["actions_valid"]).numpy(), [5, 7], False
     )
     _, second, _, second_path = fixture_policy(tmp_path, 84)
     _, (second,) = bind_execution(key, (second,), execution)
@@ -251,12 +254,13 @@ def test_registered_non_default_checkpoint_is_admitted_by_serving(
         content_suite=SELECTED_SUITE,
         player_id="non-default",
         display_name="Non-default space",
+        backend=TORCH_BACKEND,
     ).registration
     fresh = runtime_fingerprints(match_config=selected_match())
     assert player.observation_abi_sha256 != fresh["observation_abi_sha256"]
     execution = EvalExecution(deadline_unix=time.time() + 120)
     _, (player,) = bind_execution(key, (player,), execution)
-    store = PolicyStore(execution, EvalPerformance("test"))
+    store = PolicyStore(execution, EvalPerformance("test"), backend=TORCH_BACKEND)
     try:
         assert store.admit(PolicyAdmission(player, str(path), (selected_match(),))) == (
             space.encoder.config
@@ -267,7 +271,7 @@ def test_registered_non_default_checkpoint_is_admitted_by_serving(
     drifted = player.model_copy(
         update={"observation_abi_sha256": fresh["observation_abi_sha256"]}
     )
-    store = PolicyStore(execution, EvalPerformance("test"))
+    store = PolicyStore(execution, EvalPerformance("test"), backend=TORCH_BACKEND)
     try:
         with pytest.raises(ValueError, match="checkpoint observation ABI drift"):
             store.admit(PolicyAdmission(drifted, str(path), (selected_match(),)))
@@ -303,7 +307,7 @@ def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
         PolicyKey.from_registration(other, execution)
     )
     perf = EvalPerformance("test")
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     store.admit(PolicyAdmission(player, str(path), (selected_match(),)))
     store.admit(PolicyAdmission(other, str(path), (mirror,)))
     assert perf.counters["model_loads"] == 1
@@ -455,7 +459,7 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
     execution = EvalExecution(deadline_unix=time.time() + 60)
     _, (player,) = bind_execution(key, (player,), execution)
     perf = EvalPerformance("controlled", started=0)
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     store.admissions[PolicyKey.from_registration(player, execution)] = PolicyAdmission(
         player, str(path), (selected_match(),)
     )
@@ -810,7 +814,9 @@ def test_served_bucketed_policy_matches_the_padded_path(tmp_path: Path) -> None:
             deadline_unix=time.time() + 120, bucketed_shapes=bucketed
         )
         _, (bound,) = bind_execution(key, (player,), execution)
-        store = PolicyStore(execution, EvalPerformance(str(bucketed)))
+        store = PolicyStore(
+            execution, EvalPerformance(str(bucketed)), backend=TORCH_BACKEND
+        )
         store.admit(PolicyAdmission(bound, str(path), (selected_match(),)))
         request = request_for(bound, execution)
         policy = store.get(request.policy)
@@ -832,7 +838,7 @@ def test_cuda_retained_input_parity(tmp_path: Path) -> None:
     for device in ("cpu", "cuda"):
         execution = EvalExecution(device=device, deadline_unix=time.time() + 120)
         _, (bound,) = bind_execution(key, (player,), execution)
-        store = PolicyStore(execution, EvalPerformance(device))
+        store = PolicyStore(execution, EvalPerformance(device), backend=TORCH_BACKEND)
         store.admit(PolicyAdmission(bound, str(path), (selected_match(),)))
         request = request_for(bound, execution)
         policy = store.get(request.policy)

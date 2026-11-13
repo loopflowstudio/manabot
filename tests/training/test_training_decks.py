@@ -13,7 +13,11 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.env.match import Match, Reward
@@ -300,7 +304,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "naming_vocabulary",
     }
     assert binding["world"] == managym.WORLD_VERSION
-    assert inspect_checkpoint(target).compatible
+    assert inspect_checkpoint(target, backend=TORCH_BACKEND).compatible
     policy, _ = load_checkpoint(str(target))
 
     unseen = Deck({"Swamp": 10, "Forest": 4, "Accumulate Wisdom": 1}).player()

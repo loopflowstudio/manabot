@@ -38,7 +38,12 @@ from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
+from manabot.env.observation import (
+    ACTION_TYPE_DIM,
+    ActionEnum,
+    ObservationBuffers,
+    ObservationSpace,
+)
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.policy.buckets import AXES
@@ -102,7 +107,7 @@ class _ObservationRows:
     """
 
     def __init__(
-        self, buffers: dict[str, np.ndarray], keys: list[str], capacity: int
+        self, buffers: ObservationBuffers, keys: list[str], capacity: int
     ) -> None:
         self._buffers = buffers
         self._keys = keys
@@ -225,7 +230,7 @@ class RolloutBatch:
     rewards: np.ndarray
     dones: np.ndarray
     values: np.ndarray
-    next_obs: dict[str, np.ndarray]
+    next_obs: ObservationBuffers
     next_done: np.ndarray
     action_data: PackedActions
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
@@ -256,7 +261,7 @@ class RolloutBatch:
             )
         return rows
 
-    def ordered_obs(self) -> dict[str, np.ndarray]:
+    def ordered_obs(self) -> ObservationBuffers:
         """Non-action fields gathered into [time, trajectory, ...] order."""
         return self.recorded.ordered(self.actions.shape)
 

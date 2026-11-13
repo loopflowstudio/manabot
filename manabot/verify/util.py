@@ -5,14 +5,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-import numpy as np
 from pydantic import Field
 import torch
 
 from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.config.load import deep_merge
 from manabot.env.env import Env
-from manabot.env.observation import ActionEnum
+from manabot.env.observation import ActionEnum, ObservationBuffers
 from manabot.infra.config import (
     BaseConfig,
     MatchConfig,
@@ -47,7 +46,7 @@ def build_verification_config(**overrides: object) -> VerificationConfig:
 
 
 def _tensor_observation(
-    agent: ActorCritic, obs: dict[str, np.ndarray]
+    agent: ActorCritic, obs: ObservationBuffers
 ) -> Prepared[torch.Tensor]:
     """One encoded decision, admitted for `agent` on its device."""
     return on_device(
@@ -68,7 +67,7 @@ def _tensor_observation(
 
 
 def _select_agent_action(
-    agent: ActorCritic, obs: dict[str, np.ndarray], deterministic: bool
+    agent: ActorCritic, obs: ObservationBuffers, deterministic: bool
 ) -> int:
     action, _, _, _ = agent.get_action_and_value(
         _tensor_observation(agent, obs),

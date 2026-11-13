@@ -4,7 +4,7 @@
   `questions.md`: reversible assumptions. `mtg325-torch-backend-verification.md`:
   baseline evidence and limits; MTG-325 merged as `ef28f3a58` (PR #501).
 - `equivalence/`: MTG-325's CPU oracle (`run.py`, 3,248 tensors;
-  `compare.py`; `updates.py`) and L4 launcher, restored from
+  `compare.py`; `updates.py`) and MTG-333 L4 launcher, restored from
   `65fa8c7aa:scratch/`. Captures/patches are MTG-325's; regenerate for this Task.
 - `speed/`: MTG-325's L4 harness and four receipts (`run*/compare.txt`).
   Patches are MTG-325's; script paths may name its checkout and need updating.

@@ -126,9 +126,12 @@ def runs_directory() -> Path:
 
 
 def _discover() -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
+    from academy.villain import checkpoint_backend
     from manabot.model.catalog import discover_checkpoints
 
-    return discover_checkpoints(checkpoint_sources(), runs_dir=runs_directory())
+    return discover_checkpoints(
+        checkpoint_sources(), backend=checkpoint_backend(), runs_dir=runs_directory()
+    )
 
 
 def opponent_catalog() -> dict:

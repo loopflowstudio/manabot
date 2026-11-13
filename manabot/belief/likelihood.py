@@ -14,6 +14,7 @@ import torch
 
 from manabot.backends.torch.arrays import device_of, on_device
 from manabot.belief.range import BeliefState
+from manabot.env.observation import ObservationBuffers
 from manabot.infra.identity import file_sha256
 from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 
@@ -143,7 +144,7 @@ class FrozenPolicyLikelihood:
         matching_counts = np.zeros(belief.support_size, dtype=np.int64)
 
         def infer_batch(
-            encoded_batch: list[dict[str, np.ndarray]],
+            encoded_batch: list[ObservationBuffers],
             matching_batch: list[list[int]],
             legal_batch: list[int],
             row_batch: list[int],

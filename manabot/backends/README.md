@@ -54,11 +54,13 @@ imports another backend (`tests/test_package_boundaries.py` enforces it).
 
 Library code receives a backend; it does not import one. An update takes the
 backend module as its first argument, and simulation and evaluation take a
-policy that satisfies `BackendPolicy`. Only the code that starts a program
+policy that satisfies `BackendPolicy`. Checkpoint discovery and registration
+receive `Backend` for loading and metadata reads; they never resolve it themselves.
+Only the code that starts a program
 chooses:
 
 - `experiments/` and `scripts/`;
-- recipe entry points and the CLI;
+- recipe entry points, the CLI and child-process entry points;
 - Academy's opponent loader (`academy/villain.py`);
 - the backends' own tests.
 
@@ -70,6 +72,13 @@ import manabot.backends
 backend = manabot.backends.resolve("torch")  # the module manabot.backends.torch
 learner = backend.learner.Learner(policy, "cpu", minibatch_rows=64)
 ```
+
+A loader uses `backend.checkpoint.BACKEND.load_policy(path)`. The resulting
+policy supplies host `prepare`/`evaluate`, action sampling and guarded
+`inference_scope()` calls. Sampling stays in the backend so moving a caller
+preserves its seeded action stream. The serving child chooses Torch when it
+starts; a game child resolves it lazily only for an in-child checkpoint player.
+Code players and replay children keep importing no framework.
 
 `resolve` imports the framework on first use. A backend whose optional extra
 is not installed raises `ImportError` naming the extra; an unknown name raises

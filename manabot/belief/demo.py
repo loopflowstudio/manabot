@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentStep
 from manabot.belief.encoding import (
@@ -24,7 +24,7 @@ from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.sim.search.flat_mc import make_player
 from manabot.verify.games import INTERACTIVE_DECK
@@ -79,7 +79,7 @@ def _schema_and_agent(
 
 def _run_swapped_world(
     engine: Any,
-    observation: dict[str, np.ndarray],
+    observation: ObservationBuffers,
     viewer: int,
     policy_value: ActorCritic,
     schema: BeliefEncodingSchema,
@@ -108,7 +108,9 @@ def run_demo() -> dict[str, Any]:
             player_configs=env.match.to_rust(),
         )
         player, _ = make_player(
-            {"kind": "checkpoint", "path": str(checkpoint_path)}, seed=19
+            {"kind": "checkpoint", "path": str(checkpoint_path)},
+            seed=19,
+            backend=TORCH_BACKEND,
         )
     if not isinstance(player, ManabotPlayer):
         raise RuntimeError("belief checkpoint did not load as a ManabotPlayer")

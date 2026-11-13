@@ -15,8 +15,10 @@ for gradients. Three layouts differ:
 Every canonical parameter maps to MLX arrays or loading fails, naming the key.
 """
 
+import json
 from pathlib import Path
 import re
+from typing import Any
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
@@ -33,6 +35,7 @@ from manabot.policy.checkpoint import (
     PolicyCheckpoint,
     UnsupportedPolicy,
     read_container,
+    read_metadata,
 )
 
 
@@ -133,13 +136,38 @@ def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
 def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]:
     """Load a checkpoint container, validating its world binding."""
     checkpoint = read_container(path)
-    return assemble(checkpoint), checkpoint.space
+    policy = assemble(checkpoint)
+    # read_container has already validated the world. Keep it on the loaded
+    # policy so simulation's common deck admission cannot silently bypass it.
+    policy.world_binding = json.loads(checkpoint.metadata["world_binding"])
+    record = json.loads(checkpoint.metadata.get("bc", "{}"))
+    semantic = record.get("value_semantic")
+    if semantic not in (None, "signed_outcome", "win_logit"):
+        raise ValueError("unsupported checkpoint value semantic")
+    policy.value_semantic = semantic
+    return policy, checkpoint.space
 
 
 class _MLX:
     """`manabot.policy.protocol.Backend` for MLX."""
 
     name = "mlx"
+
+    @staticmethod
+    def load_policy(
+        path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+    ) -> tuple[MLXActorCritic, ObservationSpace]:
+        if bucketed_shapes or live_tokens:
+            raise ValueError("MLX does not support bucketed or live-token inference")
+        return load_mlx_policy(path)
+
+    @staticmethod
+    def metadata(path: str) -> dict[str, Any]:
+        return read_metadata(path)
+
+    @staticmethod
+    def seed(seed: int) -> None:
+        mx.random.seed(seed)
 
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
         policy = assemble(checkpoint)

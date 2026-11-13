@@ -44,6 +44,7 @@ from typing import Any, TypedDict
 import torch
 
 from experiments import l4_step_profile as profile
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.backends.torch.policy import PolicyInference
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -182,7 +183,11 @@ def evaluation_pass(
     from manabot.sim.execution import EvalExecution
 
     request = checkpoint_request(
-        policy, opponent=policy, deal_seeds=DEALS[:deals], game_seconds=600
+        policy,
+        opponent=policy,
+        deal_seeds=DEALS[:deals],
+        game_seconds=600,
+        backend=TORCH_BACKEND,
     )
     on = arm == "layout"
     execution = EvalExecution(

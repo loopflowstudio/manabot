@@ -1,14 +1,14 @@
-"""MTG-325 Remaining 4: the equivalence capture on one rented L4.
+"""MTG-333: the equivalence capture on one rented L4.
 
 One machine, one venv and one native build run `run.py` three times under
-`EQUIV_DEVICE=cuda` (TF32 allowed): with `manabot/` as at 05c1203e9 (this
+`EQUIV_DEVICE=cuda` (TF32 allowed): with `manabot/` as at ef28f3a58 (this
 revision's tree with `base.patch` reversed), with this revision's `manabot/`,
 and with this revision's again (the run-to-run floor on CUDA). Each arm is a
 directory holding its own `manabot/` beside symlinks to every other entry of
 the checkout, so only `manabot/` differs between the arms.
 
     uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
-        scratch/equivalence/mtg325_cuda_equivalence.py --rent l4 --revision COMMIT
+        scratch/equivalence/mtg333_cuda_equivalence.py --rent l4 --revision COMMIT
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ echo "== head vs head repeat"; uv run --locked python {_HERE}/compare.py "$out/h
 def runs(revision: str, hours: float = 1.0, usd: float = 2.5) -> list[Run]:
     """The one L4 job at `revision`."""
     return Job(
-        name="mtg325-cuda-equivalence",
+        name="mtg333-cuda-equivalence",
         setup=machine_setup(""),
         command=_COMMAND,
         repo=str(ROOT),

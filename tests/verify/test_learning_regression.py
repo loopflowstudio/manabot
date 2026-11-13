@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -137,6 +137,7 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
                     stage_id="self-play", updates=0, training_seconds=0
                 ),
                 plan.evaluation,
+                backend=TORCH_BACKEND,
             )
             assert admitted.expected_games == 96
             # An authored-setup case, so its card IDs are the policy's pack.

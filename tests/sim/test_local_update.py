@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import collect_frozen_policy
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
@@ -278,6 +278,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
             {candidate.player_id: str(teacher.likelihood.checkpoint)},
             1000,
             messages.append,
+            backend_factory=lambda: TORCH_BACKEND,
         )
         assert game.get("terminated"), game.get("failure")
         assert any("local_update_receipt" in decision for decision in game["decisions"])

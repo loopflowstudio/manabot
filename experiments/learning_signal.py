@@ -42,6 +42,7 @@ from pydantic import BaseModel, ConfigDict
 import torch
 
 from experiments.elemental_grid import DECKS, PACK as ELEMENTAL_PACK
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.benchmark import evaluation_tables
 from manabot.eval.evaluation import EvaluationRequest, evaluate
@@ -336,6 +337,7 @@ def _registration(
         role=role,
         artifact_prefix=arena,
         allow_deck_repetition=True,
+        backend=TORCH_BACKEND,
     )
     return admission.registration, path
 

@@ -325,7 +325,7 @@ class ObservationEncoder:
             for key, shape in self.shapes.items()
         }
 
-    def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
+    def encode(self, obs: managym.Observation) -> ObservationBuffers:
         # Native selection owns the optional policy prefix; authority stays complete.
         retained = managym.policy_action_count(
             len(obs.action_space.actions), self.max_actions, self.config.action_overflow
@@ -1152,13 +1152,13 @@ class ObservationSpace(gym.spaces.Space):
     def sample(self, mask=None) -> Dict[str, np.ndarray]:
         return {name: space.sample() for name, space in self.spaces.items()}
 
-    def contains(self, x: Dict[str, np.ndarray]) -> bool:
+    def contains(self, x: ObservationBuffers) -> bool:
         return all(
             name in x and x[name].shape == self.shapes[name]
             for name in self.spaces.keys()
         )
 
-    def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
+    def encode(self, obs: managym.Observation) -> ObservationBuffers:
         return self.encoder.encode(obs)
 
     @property

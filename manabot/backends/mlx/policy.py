@@ -18,11 +18,15 @@ are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`
 (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
+from types import TracebackType
+from typing import Literal
 
 import mlx.core as mx
 import mlx.nn as nn
+from mlx.utils import tree_flatten
 import numpy as np
 
 from manabot.backends.mlx.arrays import to_numpy
@@ -37,6 +41,7 @@ from manabot.policy.prepare import (
     Tables,
     prepare,
 )
+from manabot.policy.protocol import InferenceResult
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -252,6 +257,7 @@ class MLXActorCritic(nn.Module):
         # The model configuration the weights were trained under, as the
         # torch policy carries it; the updates read its `value_kind`.
         self.config = config
+        self.value_semantic: Literal["signed_outcome", "win_logit"] | None = None
         hidden = dims.hidden
         self.semantic_cards = SemanticCards(dims)
         self.player_embedding = Projection(dims.player, hidden)
@@ -301,6 +307,116 @@ class MLXActorCritic(nn.Module):
                 space,
             ),
         )
+
+    @property
+    def device_type(self) -> str:
+        return (
+            "cpu"
+            if getattr(self, "_inference_device", mx.default_device()) == mx.cpu
+            else "mps"
+        )
+
+    @property
+    def parameter_count(self) -> int:
+        return sum(value.size for _, value in tree_flatten(self.parameters()))
+
+    @property
+    def belief_count_buckets(self) -> int:
+        return self.config.belief_count_buckets
+
+    @staticmethod
+    def normalize_logits(logits: np.ndarray, *, double: bool = False) -> np.ndarray:
+        if double:
+            # MLX has no float64; search's host-only normalization retains it.
+            values = np.asarray(logits, np.float64)
+            weights = np.exp(values - values.max(axis=-1, keepdims=True))
+            return weights / weights.sum(axis=-1, keepdims=True)
+        return to_numpy(mx.softmax(mx.array(logits), axis=-1))
+
+    @staticmethod
+    def probability_from_logit(value: float) -> float:
+        return float(1.0 / (1.0 + np.exp(-np.float64(value))))
+
+    @property
+    def resident_bytes(self) -> int:
+        tables = self._static.tables
+        buffers = [getattr(tables, name) for name in Tables.BUFFERS]
+        return (
+            sum(value.nbytes for _, value in tree_flatten(self.parameters()))
+            + sum(value.nbytes for value in buffers if value is not None)
+            + (len(tables.catalog_lengths) + 1) * self.dims.hidden * 4
+        )
+
+    @property
+    def has_programs(self) -> bool:
+        return True
+
+    def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
+        return PolicyInference(self, cache_catalog=cache_catalog)
+
+    @staticmethod
+    def sample_rows(
+        logits: np.ndarray, masks: np.ndarray, seeds: list[int], deterministic: bool
+    ) -> list[int]:
+        valid = masks != 0
+        if (
+            logits.shape != masks.shape
+            or not valid.any(1).all()
+            or not np.isfinite(logits[valid]).all()
+        ):
+            raise ValueError("invalid legal logits or empty action support")
+        actions = []
+        for row, seed in enumerate(seeds):
+            values = mx.array(logits[row])
+            action = (
+                int(mx.argmax(values))
+                if deterministic
+                else int(mx.random.categorical(values, key=mx.random.key(seed)))
+            )
+            if not valid[row, action]:
+                raise ValueError("policy selected a masked offer")
+            actions.append(action)
+        return actions
+
+    @property
+    def observation_space(self) -> ObservationSpace:
+        return self._static.space
+
+    def to(self, device: str) -> "MLXActorCritic":
+        """Select the inference stream on MLX's shared-memory devices."""
+        if device not in {"cpu", "mps", "gpu"}:
+            raise ValueError(f"MLX does not support device {device!r}")
+        object.__setattr__(
+            self, "_inference_device", mx.cpu if device == "cpu" else mx.gpu
+        )
+        return self
+
+    def sample(
+        self,
+        batch: Prepared[np.ndarray],
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray:
+        if not batch.legal_support:
+            raise ValueError("No valid actions available")
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            logits, _ = self(batch)
+            actions = (
+                mx.argmax(logits, axis=-1)
+                if deterministic
+                else mx.random.categorical(logits / temperature)
+            )
+            mx.eval(actions)
+        return to_numpy(actions).astype(np.int64)
+
+    def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            _, values = self(batch)
+            probabilities = mx.sigmoid(values[:, 0])
+            mx.eval(probabilities)
+        return to_numpy(probabilities)
 
     def prepare(
         self, obs: ObservationBuffers, *, inference: bool = False
@@ -362,8 +478,9 @@ class MLXActorCritic(nn.Module):
 
     def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         """Evaluated logits [B,A] and values [B] as NumPy (`BackendPolicy.evaluate`)."""
-        logits, values = self(batch)
-        mx.eval(logits, values)
+        with mx.stream(getattr(self, "_inference_device", mx.default_device())):
+            logits, values = self(batch)
+            mx.eval(logits, values)
         return to_numpy(logits), to_numpy(values)[:, 0]
 
     def forward_distribution(
@@ -701,3 +818,65 @@ class MLXActorCritic(nn.Module):
 def _program_number(value: mx.array) -> mx.array:
     """Signed log magnitude in the framework graph, matching Torch's order."""
     return mx.sign(value) * mx.log1p(mx.abs(value)) / 10
+
+
+class PolicyInference:
+    """An unchanged inference policy and its optional weight-only program cache."""
+
+    def __init__(self, agent: MLXActorCritic, *, cache_catalog: bool = True) -> None:
+        self.agent = agent
+        self.cache_catalog = cache_catalog
+        self._closed = False
+        self._weights = tuple(
+            id(value) for _, value in tree_flatten(agent.parameters())
+        )
+        self._binding = agent.config.model_dump_json()
+        agent.clear_cache()
+
+    def _check(self) -> None:
+        if self._closed:
+            raise RuntimeError("inference scope is closed")
+        if (
+            self._binding != self.agent.config.model_dump_json()
+            or self._weights
+            != tuple(id(value) for _, value in tree_flatten(self.agent.parameters()))
+        ):
+            raise RuntimeError("inference policy changed within its scope")
+
+    def cache_programs(self) -> None:
+        self._check()
+        if self.cache_catalog and "programs" not in self.agent._static.cache:
+            self.agent.cache_programs()
+
+    def __enter__(self) -> "PolicyInference":
+        self._check()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self._closed = True
+        self.agent.clear_cache()
+
+    def infer(
+        self,
+        obs: ObservationBuffers,
+        *,
+        span: Callable[[str], AbstractContextManager[object]] | None = None,
+    ) -> InferenceResult:
+        self._check()
+        measure = span or (lambda name: nullcontext())
+        with measure("input_admission_and_transfer_host"):
+            batch = self.agent.prepare(obs, inference=True)
+        with (
+            measure("forward_host"),
+            mx.stream(getattr(self.agent, "_inference_device", mx.default_device())),
+        ):
+            self.cache_programs()
+            logits, _ = self.agent(batch)
+            mx.eval(logits)
+        with measure("output_transfer_host"):
+            return InferenceResult(to_numpy(logits))

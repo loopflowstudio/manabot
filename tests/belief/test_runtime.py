@@ -5,7 +5,11 @@ import json
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.encoding import belief_schema_from_engine
 from manabot.belief.range import BeliefError
@@ -158,7 +162,9 @@ def test_serialized_belief_checkpoint_binds_exact_runtime_schema(tmp_path) -> No
         payload["belief_content_manifest_identity"] == schema.content_manifest_identity
     )
     player, _ = make_player(
-        {"kind": "checkpoint", "path": str(checkpoint_path)}, seed=1
+        {"kind": "checkpoint", "path": str(checkpoint_path)},
+        seed=1,
+        backend=TORCH_BACKEND,
     )
     assert isinstance(player, ManabotPlayer)
     player.start_game(engine, 0)

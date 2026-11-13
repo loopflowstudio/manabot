@@ -23,16 +23,14 @@ import time
 from typing import Any
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.arrays import device_of, on_device
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import BackendPolicy
 from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     GameRecord,
@@ -54,7 +52,7 @@ class BatchedSampler:
 
     def __init__(
         self,
-        agent: ActorCritic,
+        agent: BackendPolicy,
         *,
         deterministic: bool = False,
         temperature: float = 1.0,
@@ -67,34 +65,24 @@ class BatchedSampler:
         self.deterministic = deterministic
         self.temperature = temperature
         self.epsilon = epsilon
-        self.device = torch.device(device)
+        self.device = device
         self._rng = np.random.default_rng(seed)
         self.forward_calls = 0
         self.obs_selected = 0
 
-    def select(self, buffers: dict[str, np.ndarray], rows: np.ndarray) -> np.ndarray:
+    def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
         """Actions (len(rows),) for the given rows of the observation buffers."""
 
-        obs = on_device(
-            self.agent.prepare(
-                {
-                    key: buffers[key][rows]
-                    for key in self.agent.observation_space.shapes
-                },
-                inference=True,
-            ),
-            device_of(self.agent),
+        obs = self.agent.prepare(
+            {key: buffers[key][rows] for key in self.agent.observation_space.shapes},
+            inference=True,
         )
-        with torch.inference_mode():
-            logits, _ = self.agent.forward(obs)
-            if self.deterministic:
-                actions = logits.argmax(dim=-1)
-            else:
-                if self.temperature != 1.0:
-                    logits = logits / self.temperature
-                probs = torch.softmax(logits, dim=-1)
-                actions = torch.multinomial(probs, 1).squeeze(-1)
-        actions = actions.cpu().numpy().astype(np.int64)
+        actions = self.agent.sample(
+            obs,
+            deterministic=self.deterministic,
+            temperature=self.temperature,
+            sampling="multinomial",
+        )
 
         if self.epsilon > 0.0:
             explore = self._rng.random(len(rows)) < self.epsilon
@@ -118,7 +106,7 @@ class RandomBatchController:
     def __init__(self, seed: int = 0):
         self._rng = np.random.default_rng(seed)
 
-    def select(self, buffers: dict[str, np.ndarray], rows: np.ndarray) -> np.ndarray:
+    def select(self, buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
         valid = buffers["actions_valid"][rows] > 0
         weights = valid.astype(np.float64)
         totals = weights.sum(axis=1, keepdims=True)
@@ -315,7 +303,7 @@ class PolicyRolloutMCPlayer:
         )
         self._buffers = _allocate_buffers(self._obs_space, self._capacity)
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         validate_agent_setup(getattr(self.sampler, "agent", None), env.match.to_rust())
         del obs  # search reads the raw engine state, not the encoding
         self._calls += 1
@@ -362,7 +350,7 @@ class PolicyRolloutMCPlayer:
 _straggler_rng = np.random.default_rng(0xC7)
 
 
-def _straggler_random(buffers: dict[str, np.ndarray], rows: np.ndarray) -> np.ndarray:
+def _straggler_random(buffers: ObservationBuffers, rows: np.ndarray) -> np.ndarray:
     valid = buffers["actions_valid"][rows] > 0
     weights = valid.astype(np.float64)
     totals = weights.sum(axis=1, keepdims=True)

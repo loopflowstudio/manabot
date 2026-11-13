@@ -2,46 +2,36 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import torch
 
-from manabot.sim import guidance as guidance_module
 from manabot.sim.guidance import PolicyPriorRandomLeafEvaluator
 from manabot.sim.search.puct import LeafEvaluation
 
 
-@pytest.fixture(autouse=True)
-def _synthetic_policy_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    move = guidance_module.on_device
+class _PolicyOnlyAgent:
+    device_type = "cpu"
 
-    def on_device(batch: object, device: torch.device) -> object:
-        return (
-            {key: torch.as_tensor(value, device=device) for key, value in batch.items()}
-            if isinstance(batch, dict)
-            else move(batch, device)
-        )
-
-    monkeypatch.setattr(guidance_module, "on_device", on_device)
-
-
-class _PolicyOnlyAgent(torch.nn.Module):
-    def __init__(self, logits: list[float], value: float):
-        super().__init__()
-        self.anchor = torch.nn.Parameter(torch.zeros(()))
-        self.logits = torch.tensor(logits, dtype=torch.float32)
+    def __init__(self, logits: list[float], value: float) -> None:
+        self.logits = np.asarray(logits, dtype=np.float32)
         self.value = value
+
+    def eval(self) -> "_PolicyOnlyAgent":
+        return self
 
     def prepare(
         self, obs: dict[str, np.ndarray], *, inference: bool = False
     ) -> dict[str, np.ndarray]:
         return obs
 
-    def forward(
-        self, observation: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        batch_size = next(iter(observation.values())).shape[0]
-        logits = self.logits.unsqueeze(0).repeat(batch_size, 1) + self.anchor * 0
-        values = torch.full((batch_size,), self.value) + self.anchor * 0
-        return logits, values
+    def evaluate(
+        self, observation: dict[str, np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
+        size = len(next(iter(observation.values())))
+        return np.tile(self.logits, (size, 1)), np.full(size, self.value, np.float32)
+
+    @staticmethod
+    def normalize_logits(logits: np.ndarray, *, double: bool = False) -> np.ndarray:
+        weights = np.exp(logits - logits.max())
+        return weights / weights.sum()
 
 
 class _UnusedObservationSpace:

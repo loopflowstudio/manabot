@@ -23,6 +23,7 @@ from torch import Tensor, nn
 
 from manabot.backends.torch.rl import NumericalError, require
 from manabot.infra.profiler import Profiler
+from manabot.policy.checkpoint import ParameterArrays
 
 if TYPE_CHECKING:
     # Annotations only: the update step and EMA serve any model, so importing
@@ -270,7 +271,7 @@ class Learner:
             loss, self.agent, self.optimizer, max_grad_norm, recorder=recorder
         )
 
-    def gradients(self, loss: Tensor) -> dict[str, np.ndarray]:
+    def gradients(self, loss: Tensor) -> ParameterArrays:
         """Unclipped gradients of `loss` by parameter name, without stepping
         (zero where none flowed)."""
         self.optimizer.zero_grad(set_to_none=True)
@@ -286,7 +287,7 @@ class Learner:
         self.optimizer.zero_grad(set_to_none=True)
         return gradients
 
-    def parameters(self) -> dict[str, np.ndarray]:
+    def parameters(self) -> ParameterArrays:
         """A host copy of every parameter by name."""
         return {
             name: parameter.detach().cpu().numpy().copy()

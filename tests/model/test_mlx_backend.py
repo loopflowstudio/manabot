@@ -194,3 +194,47 @@ def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
     batch = policy.prepare({key: value[None] for key, value in obs.items()})
     with pytest.raises(ValueError, match="another policy configuration"):
         policy(replace(batch, binding="another model"))
+
+
+@pytest.mark.parametrize("cache_catalog", [False, True])
+def test_mlx_policy_serves_and_samples_through_the_shared_interface(
+    tmp_path: Path, cache_catalog: bool
+) -> None:
+    _, target, _ = _converted(tmp_path)
+    policy, space = load_mlx_policy(target)
+    policy.to("cpu").eval()
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    obs = space.encode(env.observation_for_player(env.current_agent_index()))
+    inputs = {key: value[None] for key, value in obs.items()}
+    batch = policy.prepare(inputs, inference=True)
+    logits, values = policy.evaluate(batch)
+    assert policy.device_type == "cpu"
+    assert policy.parameter_count > 0
+    assert policy.resident_bytes > 4 * policy.parameter_count
+    assert policy.world_binding
+    np.testing.assert_allclose(
+        policy.win_probabilities(batch), 1 / (1 + np.exp(-values)), atol=1e-7
+    )
+    with policy.inference_scope(cache_catalog=cache_catalog) as scope:
+        result = scope.infer(inputs)
+        np.testing.assert_array_equal(result.logits, logits)
+        assert result.transfers == 0
+        assert result.transfer_bytes == 0
+        action = policy.sample_rows(result.logits, inputs["actions_valid"], [13], False)
+        assert action == policy.sample_rows(
+            logits, inputs["actions_valid"], [13], False
+        )
+        assert inputs["actions_valid"][0, action[0]]
+        assert (
+            policy.sample(batch, deterministic=True).tolist()
+            == logits.argmax(-1).tolist()
+        )
+    with pytest.raises(RuntimeError, match="closed"):
+        scope.infer(inputs)
+    with policy.inference_scope() as changed:
+        policy.player_embedding.projection.layers[0].weight = (
+            policy.player_embedding.projection.layers[0].weight + 1
+        )
+        with pytest.raises(RuntimeError, match="changed"):
+            changed.infer(inputs)

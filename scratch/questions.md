@@ -47,3 +47,12 @@ targets. Original uncommitted notes were copied to
   Torch uses its CPU sort for the existing packed-GRU tie order. This keeps
   integer work in the one host preparation without changing accumulation order.
   The 3,248-tensor oracle is exact after catalog and fact packing moved.
+
+- **Child entry points.** A game worker and serving worker are composition roots,
+  like a CLI: they select the backend inside the child, then inject it into
+  library code. Game selection remains lazy so code players and replay do not
+  import Torch. The boundary guard lists these roots explicitly.
+- **Executor follow-up boundary.** The executor's coupled collection, minimal
+  loop, numerical-health and experiment-launch helpers remain with its deferred
+  backend selection. sim/eval forward, sampling and checkpoint consumers move
+  here. Selection reporting uses the existing shared NumPy helpers.

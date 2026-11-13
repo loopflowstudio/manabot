@@ -7,7 +7,11 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -190,7 +194,7 @@ def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
     path = tmp_path / "player.pt"
     save_checkpoint(agent, space, path, player_configs=_match().to_rust())
     player, loaded_space = make_player(
-        {"kind": "checkpoint", "path": str(path)}, seed=111
+        {"kind": "checkpoint", "path": str(path)}, seed=111, backend=TORCH_BACKEND
     )
     assert isinstance(player, AgentMatchupPlayer) and loaded_space is not None
     env = Env(_match(), loaded_space, Reward(RewardConfig()), seed=111)

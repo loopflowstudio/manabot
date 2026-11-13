@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.likelihood import (
     FrozenPolicyLikelihood,
@@ -271,6 +272,7 @@ def test_tiny_matchup_records_calibration_replay_and_system_cost(
         seed=157,
         hero_deck=tiny_deck,
         villain_deck=tiny_deck,
+        backend=TORCH_BACKEND,
     )
 
     assert len(result.records) == 1

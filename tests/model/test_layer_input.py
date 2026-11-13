@@ -10,7 +10,11 @@ import torch
 
 from manabot.backends.torch._facts import FactEncoder
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
@@ -72,8 +76,11 @@ def test_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> N
             content_suite="layer-input-fixture",
             player_id="layer-fixture",
             display_name="layer fixture",
+            backend=TORCH_BACKEND,
         )
-        paths, selected = validate_registered_player(admitted.registration, path)
+        paths, selected = validate_registered_player(
+            admitted.registration, path, backend=TORCH_BACKEND
+        )
         assert paths["layer-fixture"] == str(path)
         assert selected is not None and selected.encoder.config == recipe.observation
     finally:

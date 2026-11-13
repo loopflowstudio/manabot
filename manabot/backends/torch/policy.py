@@ -14,9 +14,11 @@ over the batch's valid objects packed into one sequence; either setting
 composes with the other and neither changes the model.
 """
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from types import TracebackType
-from typing import Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Literal, Optional, Tuple
 
 import numpy as np
 import torch
@@ -50,7 +52,11 @@ from manabot.policy import admission
 from manabot.policy.buckets import row_needs, sizes_of, trim_observation
 from manabot.policy.checkpoint import layout
 from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
+from manabot.policy.protocol import InferenceResult
 import managym
+
+if TYPE_CHECKING:
+    from manabot.belief.encoding import BeliefCheckpointBinding
 
 # Validity of the visible object table, in its concatenation order.
 OBJECT_VALIDITY_KEYS = (
@@ -74,6 +80,32 @@ class EmbeddedObservation:
     frame_context: torch.Tensor
     # Raw executable programs; object inputs separately add public name identity.
     programs: torch.Tensor | None
+
+
+def sample_rows(
+    logits: np.ndarray, masks: np.ndarray, seeds: list[int], deterministic: bool
+) -> list[int]:
+    """Preserve scalar Categorical draws independently of arrival/batch order."""
+    values, valid = torch.from_numpy(logits), torch.from_numpy(masks) != 0
+    if valid.shape != values.shape:
+        raise ValueError("sampling requires matching CPU logits and masks")
+    if not valid.any(1).all() or not torch.isfinite(values[valid]).all():
+        raise ValueError("invalid legal logits or empty action support")
+    actions: list[int] = []
+    for row, seed in enumerate(seeds):
+        with torch.random.fork_rng(devices=[]):
+            torch.random.default_generator.manual_seed(seed)
+            logits_row = values[row : row + 1]
+            action = (
+                logits_row.argmax(-1)
+                if deterministic
+                else torch.distributions.Categorical(logits=logits_row).sample()
+            )
+            selected = int(action.item())
+        if not valid[row, selected]:
+            raise ValueError("policy selected a masked offer")
+        actions.append(selected)
+    return actions
 
 
 def _catalog_order(lengths: np.ndarray) -> np.ndarray:
@@ -102,6 +134,7 @@ class ActorCritic(nn.Module):
         live_tokens: bool = False,
     ) -> None:
         super().__init__()
+        self.belief_binding: BeliefCheckpointBinding | None = None
         self.observation_space = observation_space
         self.config = config
         # Scalar heads need the checkpoint's training-target declaration. WDL
@@ -450,6 +483,78 @@ class ActorCritic(nn.Module):
         self.eval()
         logits, values = self(on_device(batch, device_of(self)))
         return to_numpy(logits), to_numpy(values)
+
+    @property
+    def device_type(self) -> str:
+        return device_of(self).type
+
+    @property
+    def parameter_count(self) -> int:
+        return sum(parameter.numel() for parameter in self.parameters())
+
+    @property
+    def resident_bytes(self) -> int:
+        size = sum(
+            value.numel() * value.element_size()
+            for value in (*self.parameters(), *self.buffers())
+        )
+        if self.semantic_cards is not None:
+            size += (
+                self.semantic_cards.definition_rows.numel() * self.config.hidden_dim * 4
+            )
+        return size
+
+    @property
+    def has_programs(self) -> bool:
+        return self.semantic_cards is not None
+
+    def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
+        return PolicyInference(self, cache_catalog=cache_catalog)
+
+    sample_rows = staticmethod(sample_rows)
+
+    @staticmethod
+    def normalize_logits(logits: np.ndarray, *, double: bool = False) -> np.ndarray:
+        tensor = torch.from_numpy(logits)
+        if double:
+            tensor = tensor.double()
+        return to_numpy(torch.softmax(tensor, dim=-1))
+
+    @staticmethod
+    def probability_from_logit(value: float) -> float:
+        return float(torch.sigmoid(torch.tensor(value, dtype=torch.float64)))
+
+    @torch.no_grad()
+    def sample(
+        self,
+        batch: Prepared[np.ndarray],
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray:
+        """Retain Torch RNG and categorical/multinomial rounding at the boundary."""
+        prepared = on_device(batch, device_of(self))
+        if sampling == "categorical" and temperature == 1.0:
+            actions, _, _, _ = self.get_action_and_value(
+                prepared, deterministic=deterministic
+            )
+        else:
+            logits, _ = self(prepared)
+            if deterministic:
+                actions = logits.argmax(-1)
+            else:
+                if temperature != 1.0:
+                    logits = logits / temperature
+                actions = torch.multinomial(torch.softmax(logits, dim=-1), 1).squeeze(
+                    -1
+                )
+        return to_numpy(actions).astype(np.int64)
+
+    @torch.no_grad()
+    def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
+        _, values = self(on_device(batch, device_of(self)))
+        return to_numpy(torch.sigmoid(values).float())
 
     def _parameter_versions(self) -> tuple[tuple[int, int], ...]:
         return tuple(
@@ -855,14 +960,16 @@ class PolicyInference:
     The policy owns its lazy catalog cache; neither cache nor guard is serialized.
     """
 
-    def __init__(self, agent: ActorCritic) -> None:
+    def __init__(self, agent: ActorCritic, *, cache_catalog: bool = True) -> None:
         self.agent = agent
+        self.cache_catalog = cache_catalog
         self.device = device_of(agent)
         self._closed = False
         self._versions = agent._parameter_versions()
         self._modes = tuple(module.training for module in agent.modules())
         self._binding = agent._binding()
         self.transfers = 0
+        self.transfer_bytes = 0
         agent.clear_cache()
 
     def check(self, agent: object) -> None:
@@ -888,7 +995,7 @@ class PolicyInference:
     def cache_programs(self) -> None:
         """Prepare the fixed policy catalog, checking the serving lifetime first."""
         self.check(self.agent)
-        if not self.agent._cache_versions:
+        if self.cache_catalog and not self.agent._cache_versions:
             self.agent.cache_programs()
 
     def __enter__(self) -> "PolicyInference":
@@ -905,11 +1012,37 @@ class PolicyInference:
         self.agent.clear_cache()
 
     @torch.no_grad()
+    def infer(
+        self,
+        obs: ObservationBuffers,
+        *,
+        span: Callable[[str], AbstractContextManager[object]] | None = None,
+    ) -> InferenceResult:
+        measure = span or (lambda name: nullcontext())
+        with measure("input_admission_and_transfer_host"):
+            prepared = self.prepare(obs)
+        with measure("forward_host"):
+            logits, values = self.agent(prepared)
+        with measure("output_transfer_host"):
+            return InferenceResult(
+                to_numpy(logits), self.transfer_bytes, self.transfers
+            )
+
+    @torch.no_grad()
     def prepare(self, obs: ObservationBuffers) -> Prepared[torch.Tensor]:
         self.check(self.agent)
         if any(not isinstance(value, np.ndarray) for value in obs.values()):
             raise TypeError("inference preparation requires NumPy observation buffers")
-        batch = replace(self.agent.prepare(obs, inference=True), programs=None)
+        batch = self.agent.prepare(obs, inference=True)
+        if self.cache_catalog:
+            batch = replace(batch, programs=None)
+        self.transfer_bytes = (
+            0
+            if self.device.type == "cpu"
+            else sum(
+                array.nbytes for array in _array_fields(batch, np.ndarray).values()
+            )
+        )
         self.transfers = (
             0
             if self.device.type == "cpu"

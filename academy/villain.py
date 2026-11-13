@@ -22,6 +22,7 @@ from collections.abc import Sequence
 import random
 from typing import TYPE_CHECKING, Callable
 
+from manabot.policy.protocol import Backend
 from manabot.sim.search.flat import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
 
 # Local imports
@@ -36,6 +37,13 @@ if TYPE_CHECKING:
 VillainPolicy = Callable[[managym.Env, managym.Observation], int]
 
 MAX_SEARCH_SIMS = 4096
+
+
+def checkpoint_backend() -> Backend:
+    """Select Academy's policy runtime only when checkpoint operations need it."""
+    from manabot.backends import resolve
+
+    return resolve("torch").checkpoint.BACKEND
 
 
 def passive_policy(env: managym.Env, obs: managym.Observation) -> int:

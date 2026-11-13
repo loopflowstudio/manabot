@@ -30,6 +30,7 @@ from manabot.eval.evaluation import (
 from manabot.eval.models import EvaluationKey
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
+from manabot.policy.protocol import Backend
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 
@@ -37,6 +38,7 @@ from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 def checkpoint_request(
     checkpoint: Path,
     *,
+    backend: Backend,
     opponent: Path | AnchorKind = "heuristic",
     deal_seeds: tuple[int, ...] = (101,),
     authored_matchup: AuthoredMatchup | None = None,
@@ -54,6 +56,7 @@ def checkpoint_request(
     suite = authored_matchup.content_suite if authored_matchup else SELECTED_SUITE
     candidate = register_checkpoint(
         checkpoint,
+        backend=backend,
         match=match,
         content_suite=suite,
         player_id="local-candidate",
@@ -64,6 +67,7 @@ def checkpoint_request(
     if isinstance(opponent, Path):
         other = register_checkpoint(
             opponent,
+            backend=backend,
             match=match,
             content_suite=suite,
             player_id="local-opponent",
@@ -109,9 +113,12 @@ def _prepare(
     max_commands: int,
 ) -> None:
     try:
+        from manabot.backends import resolve
+
         torch.set_num_threads(1)
         request = checkpoint_request(
             checkpoint,
+            backend=resolve("torch").checkpoint.BACKEND,
             opponent=opponent,
             deal_seeds=seeds,
             authored_matchup=matchup,

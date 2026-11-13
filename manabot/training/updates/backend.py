@@ -28,7 +28,9 @@ from typing import Any, Literal, Protocol, runtime_checkable
 import numpy as np
 from numpy.typing import NDArray
 
+from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendLearner
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
@@ -38,7 +40,7 @@ from manabot.training.rollout.collection import RolloutBatch
 # backend that produced a device or observation batch reads it.
 type Array = Any
 type Device = Any
-type Observations = Any
+type Observations = Prepared[Array]
 
 type FilterKind = Literal["top_count", "quantile"]
 
@@ -223,6 +225,10 @@ class Policy(Protocol):
 
     @property
     def config(self) -> PolicyConfig: ...
+
+    def prepare(
+        self, obs: ObservationBuffers, *, inference: bool = False
+    ) -> Prepared[np.ndarray]: ...
 
     def forward_distribution(self, obs: Observations, /) -> tuple[Array, Array]: ...
 

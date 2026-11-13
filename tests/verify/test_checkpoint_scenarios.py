@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -117,6 +117,7 @@ def test_hidden_hand_swap_preserves_checkpoint_inputs_and_decision(
     player, space = make_player(
         {"kind": "checkpoint", "path": str(path), "deterministic": True},
         seed=2,
+        backend=TORCH_BACKEND,
     )
     env, observation, _ = build_scenario_env(SCENARIOS[name], space, 2)
     try:

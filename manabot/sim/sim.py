@@ -11,24 +11,25 @@ from enum import Enum
 import logging
 import os
 from pathlib import Path
+import tempfile
 import threading
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from etude.train.records import Step
+from etude.train.records import CheckpointRecord, Step
 from etude.train.run import track
 import numpy as np
-
-from manabot.backends.torch.checkpoint import load_checkpoint, load_etude_checkpoint
 
 # Local imports
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.infra.artifacts import fetch_etude_checkpoint
 from manabot.infra.config import RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.infra.runtime import seed_random
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import Backend
 from manabot.sim.player import (
     DefaultPlayer,
     ModelPlayer,
@@ -641,18 +642,25 @@ def _simulate_game(
     return outcome, turn_count, duration, profiler_data, behavior_data
 
 
-def load_player(model_str: str) -> Player:
+def load_player(model_str: str, *, backend: Backend | None = None) -> Player:
     model_name = model_str.lower()
     if model_name == "random":
         return RandomPlayer("RandomPlayer")
     if model_name == "default":
         return DefaultPlayer("DefaultPlayer")
 
+    if backend is None:
+        raise ValueError("a checkpoint player requires an injected backend")
     path = Path(model_str).expanduser()
     if path.suffix == ".json":
-        agent, _ = load_etude_checkpoint(path)
+        record = CheckpointRecord.model_validate_json(path.read_bytes())
+        with tempfile.TemporaryDirectory(prefix="manabot-policy-") as directory:
+            policy_path = fetch_etude_checkpoint(
+                record.artifact, Path(directory) / "policy.pt"
+            )
+            agent, _ = backend.load_policy(str(policy_path))
     else:
-        agent, _ = load_checkpoint(str(path))
+        agent, _ = backend.load_policy(str(path))
     return ModelPlayer(f"Model_{path.stem}", agent)
 
 
@@ -661,7 +669,12 @@ def load_player(model_str: str) -> Player:
 # -----------------------------------------------------------------------------
 
 
-def run_simulation(sim_config: SimulationConfig, runtime_config: RuntimeConfig) -> None:
+def run_simulation(
+    sim_config: SimulationConfig,
+    runtime_config: RuntimeConfig,
+    *,
+    backend: Backend | None = None,
+) -> None:
     """Run a simulation sweep for hero/villain model specs."""
     setGlobalLogLevel(getattr(logging, runtime_config.log_level.upper(), logging.INFO))
     seed_random(
@@ -687,8 +700,8 @@ def run_simulation(sim_config: SimulationConfig, runtime_config: RuntimeConfig) 
 
         logger.info(f"Loading hero model: {sim_config.hero}")
         logger.info(f"Loading villain model: {sim_config.villain}")
-        hero_player = load_player(sim_config.hero)
-        villain_player = load_player(sim_config.villain)
+        hero_player = load_player(sim_config.hero, backend=backend)
+        villain_player = load_player(sim_config.villain, backend=backend)
 
         stats = simulate_models(hero_player, villain_player, sim_config)
         for index, game in enumerate(stats.games, start=1):
@@ -721,7 +734,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     sim_config, runtime_config = load_sim_config(
         preset=args.preset, set_overrides=args.set_values
     )
-    run_simulation(sim_config, runtime_config)
+    from manabot.backends import resolve
+
+    run_simulation(
+        sim_config, runtime_config, backend=resolve("torch").checkpoint.BACKEND
+    )
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from pathlib import Path
 from pydantic import ValidationError
 import pytest
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.guidance import build_registered_player
@@ -68,7 +69,9 @@ def test_dpuct_registration_and_factory_echo_frozen_semantics() -> None:
     candidate = PlayerRegistration.model_validate(
         json.loads((ROOT / "tests/fixtures/int-6-dpuct-32-w4-v1.json").read_text())
     )
-    player, observation_space = build_registered_player(candidate, seed=7)
+    player, observation_space = build_registered_player(
+        candidate, seed=7, backend=TORCH_BACKEND
+    )
     assert observation_space is None
     assert player.simulations == 32
     assert player.worlds == 4
@@ -106,4 +109,4 @@ def test_checkpoint_candidate_missing_bytes_fails_closed() -> None:
         player_seed_derivation_id="arena-pair-deal-player-v1",
     )
     with pytest.raises(FileNotFoundError, match="unavailable"):
-        build_registered_player(registration, seed=1)
+        build_registered_player(registration, seed=1, backend=TORCH_BACKEND)

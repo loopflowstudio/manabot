@@ -1,4 +1,4 @@
-"""MTG-325 speed check (steer 449b1a8e): one arm's torch timings, base or head.
+"""MTG-333 speed check: one arm's torch timings, base or head.
 
     uv run python scratch/speed/bench.py OUT.json [--device cuda] [--streams 256]
 
@@ -25,6 +25,7 @@ from pathlib import Path
 import statistics
 import tempfile
 import time
+import warnings
 
 import numpy as np
 import torch
@@ -148,7 +149,7 @@ def main() -> None:
 
     regime = validate_regime(
         TrainingRegime.model_validate_json(RECIPE.read_bytes()).model_copy(
-            update={"id": "mtg325-speed", "world": managym.WORLD_VERSION}
+            update={"id": "mtg333-speed", "world": managym.WORLD_VERSION}
         )
     )
     stage = regime.stages[0]
@@ -257,6 +258,43 @@ def main() -> None:
             if repeat >= 5:
                 rates.append(len(rows) / elapsed)
     result["inference_obs_per_second"] = _summary(rates)
+
+    # Host-only preparation is distinct from the timed device forward above.
+    # Baseline leaves trimming/packing for forward; head does them here.
+    host = {
+        key: np.asarray(value[rows], np.float32)
+        for key, value in collector._buffers.items()
+    }
+    preparation = []
+    if not PREPARED_INPUT:
+        from manabot.model.admission import admit_observation
+
+        host_tensors = {key: torch.from_numpy(value) for key, value in host.items()}
+    for repeat in range(15):
+        tick = time.perf_counter()
+        with torch.no_grad():
+            if PREPARED_INPUT:
+                agent.prepare(host, inference=True)
+            else:
+                admit_observation(agent, host_tensors)
+        if repeat >= 5:
+            preparation.append(time.perf_counter() - tick)
+    result["host_preparation_seconds"] = _summary(preparation)
+    if device.type == "cuda":
+        # Diagnostic only: warning instrumentation is outside timing samples.
+        with PolicyInference(agent) as inference, torch.inference_mode():
+            obs = collector._slice_obs_tensors(rows, inference)
+            agent(obs)
+            _sync(device)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                torch.cuda.set_sync_debug_mode("warn")
+                try:
+                    agent(obs)
+                finally:
+                    torch.cuda.set_sync_debug_mode("default")
+            result["forward_sync_warnings"] = [str(item.message) for item in caught]
+            result["forward_sync_warning_count"] = len(caught)
 
     saves, loads = [], []
     with tempfile.TemporaryDirectory() as folder:

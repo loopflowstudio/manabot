@@ -26,9 +26,6 @@ import traceback
 from typing import Any
 from uuid import uuid4
 
-from managym.decision import Command, DecisionFrame
-from managym.experience import UNVERSIONED_CONTENT_HASH
-
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
@@ -37,6 +34,7 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     source_bundle_sha256,
 )
+from manabot.policy.protocol import Backend
 from manabot.sim.execution import EvalExecution
 from manabot.sim.frames import build_command, build_viewer_frame
 from manabot.sim.performance import EvalPerformance
@@ -52,6 +50,8 @@ from manabot.sim.serving_protocol import (
 )
 from manabot.sim.supervision import _failure, _infrastructure_failure
 from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded
+from managym.decision import Command, DecisionFrame
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class _InChildPlayers:
@@ -65,8 +65,9 @@ class _InChildPlayers:
     always have.
     """
 
-    def __init__(self) -> None:
-        self._torch: Any = None
+    def __init__(self, backend_factory: Callable[[], Backend] | None) -> None:
+        self._backend_factory = backend_factory
+        self._backend: Backend | None = None
         self._game_trackers: tuple[type, ...] = ()
         self._step_observers: tuple[type, ...] = ()
 
@@ -79,20 +80,24 @@ class _InChildPlayers:
     ) -> tuple[Any, ObservationSpace | None]:
         if registration.player_spec["kind"] in CODE_PLAYER_KINDS:
             return build_code_player(registration, seed=seed), None
-        if self._torch is None:
-            import torch
-
+        if self._backend is None:
+            if self._backend_factory is None:
+                raise ValueError(
+                    "in-child checkpoint players require an injected backend"
+                )
             from manabot.sim.search.local_update import LocalUpdatePlayer
             from manabot.sim.search.puct import DeterminizedPuctPlayer
 
-            torch.set_num_threads(1)
-            self._torch = torch
+            self._backend = self._backend_factory()
             self._game_trackers = (LocalUpdatePlayer, DeterminizedPuctPlayer)
             self._step_observers = (LocalUpdatePlayer,)
         from manabot.sim.guidance import build_registered_player
 
         return build_registered_player(
-            registration, seed=seed, checkpoint_path=checkpoint_path
+            registration,
+            seed=seed,
+            checkpoint_path=checkpoint_path,
+            backend=self._backend,
         )
 
     def starts_game(self, player: Any) -> bool:
@@ -103,7 +108,8 @@ class _InChildPlayers:
 
     def seed(self, seed: int) -> None:
         """Seed Torch's global generator before a checkpoint-guided search decision."""
-        self._torch.manual_seed(seed)
+        assert self._backend is not None
+        self._backend.seed(seed)
 
 
 def _census(game: dict[str, Any]) -> None:
@@ -121,6 +127,8 @@ def execute_game(
     max_commands: int,
     send: Callable[[tuple[str, Any]], None],
     infer: Callable[[DecisionRequest], DecisionReply] | None = None,
+    *,
+    backend_factory: Callable[[], Backend] | None = None,
 ) -> None:
     """Play one game, sending phase, pending and decision events, then its result.
 
@@ -142,7 +150,7 @@ def execute_game(
             else None
         )
         policies: dict[str, PolicyKey] = {}
-        in_child = _InChildPlayers()
+        in_child = _InChildPlayers(backend_factory)
         if "match_hypers" in game:
             require_open_decklists(
                 MatchConfig.model_validate(game["match_hypers"]).decklists,
@@ -384,6 +392,16 @@ def game_worker(
     deadline is clamped to `deadline_unix`. An inference failure is reported to
     the supervisor before the game settles, so it fails the allocation.
     """
+
+    def backend_factory() -> Backend:
+        # Child composition root: code/served games never invoke this loader.
+        import torch
+
+        from manabot.backends import resolve
+
+        torch.set_num_threads(1)
+        return resolve("torch").checkpoint.BACKEND
+
     client = None if inference is None else InferenceClient(inference)
 
     def send(event: tuple[str, Any]) -> None:
@@ -414,6 +432,7 @@ def game_worker(
             max_commands,
             send,
             None if client is None else infer,
+            backend_factory=backend_factory,
         )
     finally:
         if client is not None:
