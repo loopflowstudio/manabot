@@ -20,6 +20,7 @@ fn release_to_memory_exiles_only_the_opponents_graveyard_and_counts_creatures() 
     let ogre = plant_in_graveyard(&mut s, 1, "Gray Ogre");
     let elf = plant_in_graveyard(&mut s, 1, "Llanowar Elves");
     let land = plant_in_graveyard(&mut s, 1, "Forest");
+    s.set_player_mana_pool(0, "3W");
     cast(&mut s, "Release to Memory");
     if s.action_space().kind == ActionSpaceKind::ChooseTarget {
         assert_eq!(offered_targets(&s), vec![Target::Player(PlayerId(1))]);
@@ -44,6 +45,7 @@ fn release_to_memory_exiles_only_the_opponents_graveyard_and_counts_creatures() 
 fn release_to_memory_counts_the_graveyard_at_resolution_and_not_preexisting_exile() {
     let mut s = five_color_setup(&["Release to Memory", "Gray Ogre", "Llanowar Elves"]);
     let ogre = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    s.set_player_mana_pool(0, "3W");
     cast(&mut s, "Release to Memory");
     // A response removes one creature and puts a different one in the graveyard.
     s.game_mut().move_card(ogre, ZoneType::Exile);
@@ -60,6 +62,7 @@ fn release_to_memory_accepts_an_empty_or_noncreature_graveyard_without_tokens() 
         if noncreature {
             plant_in_graveyard(&mut s, 1, "Forest");
         }
+        s.set_player_mana_pool(0, "3W");
         cast(&mut s, "Release to Memory");
         settle_targeting_opponent(&mut s);
         assert_eq!(s.zone_size(1, ZoneType::Graveyard), 0);

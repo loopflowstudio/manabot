@@ -719,7 +719,10 @@ checks `development-v1` admission, not Limited construction or booster
 contents; use a complete deck for play.
 
 All bonus-sheet cards now have definitions, including Heartbeat of Spring,
-Release to Memory and Lita, Mechanical Engineer.
+Release to Memory and Lita, Mechanical Engineer. Re-admitting the first 1,000
+TLA PremierDraft trophy decks in the retained MTG-213 corpus admits all 1,000.
+This check reparses each retained deck's original source against the current
+world, preserving the corpus and its historical diagnostics.
 
 Two bonus-sheet cards create tokens that need care when reading a board.
 Release to Memory makes plain 1/1 colorless Spirits, which block and are
