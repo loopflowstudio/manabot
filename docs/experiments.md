@@ -369,9 +369,10 @@ A Curve panel names seating 'w160l8 u1200 vs w64 u1200', which nothing holds.
 ```
 
 and the chart is missing that point: correct the name, or drop it if the pair
-was never played. Renaming a seating in `eval(state)` changes its match keys,
-so `etude eval` would ask for the games again; change the report, never the
-stored name.
+was never played. Renaming a seating in `eval(state)` changes its tournament
+definition and the name reports select; the match keys still depend on the
+players, groups, conditions and game count. For a finished experiment, correct
+the report selection and preserve the recorded seating names.
 
 A seating can also follow a job without listing pairs: an `Inference` first
 seat for each held checkpoint to fill and a relative second seat, such as

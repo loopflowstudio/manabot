@@ -56,7 +56,8 @@ uv sync --locked --python 3.13 --extra dev --extra artifacts
 ```
 
 Commit the lock change before preparing a new experiment. When raising a public
-minimum, update every requirement for that dependency and commit the metadata
+minimum, update every requirement for that dependency, including consumer
+install commands in `.github/workflows/release.yml`, and commit the metadata
 with the lock. An Etude release that changes the launcher schema starts a new,
 empty `~/.etude/launcher-<schema>.db` beside the older file and leaves that
 file alone; runs launched by an older client stay with it. See
