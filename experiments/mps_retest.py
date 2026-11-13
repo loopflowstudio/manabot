@@ -27,7 +27,7 @@ import sys
 import textwrap
 import threading
 import time
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
 import uuid
 import warnings
 
@@ -430,11 +430,12 @@ class MLXRunner:
         from manabot.backends.mlx.checkpoint import build
         from manabot.policy.protocol import Precision
 
-        precision: Precision = {
-            "mlx-f32": "float32",
-            "mlx-bf16": "bfloat16",
-            "mlx-f16": "float16",
-        }[arm]
+        # The backend no longer offers float16: that arm is refused as an
+        # unsupported precision, which the ledger records as `unsupported`.
+        precision = cast(
+            Precision,
+            {"mlx-f32": "float32", "mlx-bf16": "bfloat16", "mlx-f16": "float16"}[arm],
+        )
         self.encoder = agent.observation_space.encoder
         self.policy, _ = build(
             agent.config,
