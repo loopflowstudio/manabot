@@ -18,7 +18,7 @@ validates ids or partitions.
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import cached_property
 
@@ -260,10 +260,10 @@ class Packed[A]:
     """
 
     gather: A
-    sizes: tuple[int, ...]
+    sizes: tuple[int, ...] = field(metadata={"host_only": True})
     unpack: A
     restore: A
-    lengths: tuple[int, ...]
+    lengths: tuple[int, ...] = field(metadata={"host_only": True})
 
 
 def pack(
@@ -461,7 +461,9 @@ class Prepared[A]:
     legal_support: bool = True  # every observation has a legal action
     # A serving scope may bound this batch's lifetime without changing its rows.
     guard: Callable[[object], None] | None = None
-    bucket_needs: tuple[tuple[int, ...], ...] | None = None
+    bucket_needs: tuple[tuple[int, ...], ...] | None = field(
+        default=None, metadata={"host_only": True}
+    )
 
 
 def prepare(

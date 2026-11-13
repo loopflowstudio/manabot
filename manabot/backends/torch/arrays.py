@@ -48,11 +48,15 @@ def device_of(module: nn.Module) -> torch.device:
 
 
 def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str, A]:
-    """Flatten the dataclass tree; tuples preserve their field coordinates."""
+    """Flatten array fields, skipping host-only metadata; tuples keep coordinates."""
     if isinstance(value, leaf):
         return {prefix: value}
     if is_dataclass(value) and not isinstance(value, type):
-        children = ((f.name, getattr(value, f.name)) for f in fields(value))
+        children = (
+            (f.name, getattr(value, f.name))
+            for f in fields(value)
+            if not f.metadata.get("host_only", False)
+        )
     elif isinstance(value, tuple):
         if _host_scalars(value):
             return {}
@@ -77,6 +81,7 @@ def _replace_arrays(value: Any, moved: dict[str, Tensor], prefix: str = "") -> A
                     getattr(value, f.name), moved, f"{prefix}/{f.name}"
                 )
                 for f in fields(value)
+                if not f.metadata.get("host_only", False)
             },
         )
     if isinstance(value, tuple):
