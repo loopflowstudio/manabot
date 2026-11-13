@@ -13,6 +13,7 @@ from enum import IntEnum
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from manabot.backends.torch.arrays import to_numpy
 from manabot.model.numerics import buffer_on, embedding_rows
@@ -411,7 +412,17 @@ class SemanticCardEncoder(nn.Module):
         self, ids: torch.Tensor, definitions: torch.Tensor
     ) -> torch.Tensor:
         """Join admitted card or permanent IDs to their card programs."""
-        return definitions[self._rows(ids)]
+        rows = self._rows(ids)
+        if (
+            definitions.is_cuda
+            and torch.is_grad_enabled()
+            and definitions.requires_grad
+        ):
+            # Embedding backward groups repeated IDs before accumulating into
+            # the differentiable program table. Row 0 still receives gradients;
+            # no padding suppression or frequency normalization applies here.
+            return F.embedding(rows, definitions)
+        return definitions[rows]
 
     def forward(
         self,

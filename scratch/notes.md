@@ -10,7 +10,7 @@
 - First measure completed: `experiments/ppo_cuda.md` and `scratch/measure.html`.
   Clean Etude `4a289dc30a82`, source `2202ad632cb5`: median 0.26437 optimizer
   steps/s, range 0.26366–0.26474, five repeats; 16 steps/update, zero rejected
-  or skipped steps. No runtime candidate exists yet.
+  or skipped steps. This predates the CUDA lookup candidate.
 - Profile `e9e5a6bd4649`: indexed definition-table gradient accumulation takes
   78.3% of recorded first-step GPU kernel duration. Fact-source and continuation
   definition joins dominate. Explore a repeated-ID reduction; preserve CPU
