@@ -128,6 +128,10 @@ closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
+Changes to retained execution or its record vocabulary also require
+`uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
+the native extension. This bounded sweep checks that emitted execution tokens
+have catalog rows, including decisions reached through changed game paths.
 
 **Local-update search.** Run `tests/sim/test_local_update.py`,
 `tests/sim/test_local_update_sampling.py` and

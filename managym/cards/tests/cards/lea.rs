@@ -222,6 +222,13 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
         .collect();
     assert_eq!(offered.len(), 2);
     assert!(offered.contains(&ogre) && offered.contains(&villager));
+    // Project the pending choice too: its entering card and copy candidates
+    // must have registered execution labels before a policy can choose.
+    let pending = Observation::for_player(s.game(), PlayerId(0));
+    assert!(pending
+        .continuation
+        .iter()
+        .any(|frame| !frame.effect_execution.is_empty()));
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
 

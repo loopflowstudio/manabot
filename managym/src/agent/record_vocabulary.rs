@@ -167,6 +167,9 @@ fn execution_names(out: &mut Vec<RecordName>) {
             &["Scried", "Surveilled", "LibrarySearched"][..],
         ),
         ("LibraryEnd", &["Top", "Bottom"][..]),
+        // Retained execution can refer to a spell already on the stack;
+        // printed card programs do not supply this zone's token.
+        ("ZoneType", &["Stack"][..]),
         (
             "ReplacementEffect",
             &["PreventDamageToController", "DoubleDamageToController"][..],
