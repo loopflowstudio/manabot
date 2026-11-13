@@ -8,7 +8,7 @@ and build, demonstrated on the PR revision. Preserve test coverage and the
 same-runner change/reference comparison and is exempt; the macOS nightly is
 outside this budget.
 
-## Fix-forward plan (2026-11-12, after #506)
+## Implemented fix-forward (2026-11-12, after #506)
 
 PR #506 merged at `60664d149`; its exact push run `43341403551` failed
 the live experiment/notebook fixture with `training resource wall deadline
@@ -16,24 +16,27 @@ exceeded` (129 passed, one failed). All ordinary jobs stayed below 480 s.
 The earlier green PR does not supersede this failure. Full evidence is in
 `scratch/ci-post-merge-verification.md`.
 
-Bound the fixture's four real training attempts to one update of eight
-one-seat learner transitions on each of two streams using `exact-quota`.
-Give each training stage/regime a 120-second resource allowance for startup
-and parallel scheduling. These are failure guards, not work targets; the
-300-second pytest watchdog and job budget stay unchanged. Retain all four
-complete live evaluation cohorts, overlap, accounting, notebook edits and
-outputs, and resume assertions. Assert each saved training record contains
-one update and 16 learner transitions.
+`tests/training/test_experiment_runner.py::demo_declaration` now bounds each
+of four real training attempts to one update of eight one-seat learner
+transitions on each of two streams using `exact-quota`. Stage and regime
+resource allowances are 120 seconds. The comparison test reads every saved
+`TrainingRun` and asserts one stage, one update and 16 learner transitions.
+All four live complete-game evaluation cohorts, overlap, accounting, notebook
+edits/outputs and resume assertions remain.
 
-**Delete — do not maintain:** the inherited full-game training closure and
-30/60-second guards have been replaced. Compression removes the singleton
-stage loop and pins its one-update workload locally; its stage deadline reads
-the regime allowance. No remaining deletion targets. Production paths, the
-shared baseline, frozen evidence and existing assertions/selections stay intact.
+`manabot/training/regime.py::TrainSelfPlay` explains why the previous eight
+transitions were only a floor under `complete-games`; `exact-quota` pauses at
+that many learner rows per stream and requires one learning seat. This is an
+orchestration fixture, so complete-game training is unnecessary (the assumption
+is retained in `scratch/questions.md`). Production defaults and the shared WDL
+baseline are unchanged. The 120-second allowances guard failure, not expected
+work duration; they do not establish that four attempts plus monitoring fit
+the unchanged 300-second watchdog or 480-second job budget.
 
-Remaining: affected file/report validation and Ubuntu CI timing in gate;
-publish a fix-forward PR in this Task through
-the existing delivery steps, preserving #506 as history.
+The merged-run error came from `manabot/training/execution.py`'s resource
+`check()`. Its log does not identify which clock expired or prove how much time
+was collection versus scheduling. Bounding collection addresses the unbounded
+workload; Ubuntu CI must still establish the repaired fixture's reliability.
 
 Sanity checks:
 
@@ -99,12 +102,84 @@ Detailed prior measurements, command results and gate history remain at
 `937f4f152:scratch/ci-under-8-minutes.md`. This plan keeps the current repair
 and the evidence that still constrains it.
 
+## Concept review (2026-11-12, headless)
+
+No change to implement and no open product choice. The fixture now keeps two
+ideas apart that #506's version ran together: how much work an attempt does
+(one update, 16 learner rows, asserted from every saved `TrainingRun`) and how
+long it may take before it is called hung (120 s). A regression to
+`complete-games` fails the row assertion rather than reappearing as a slow run.
+`transitions` still means a floor under `complete-games` and a quota under
+`exact-quota`; it is a serialized key, explained beside `batch_closure`, and
+keeps its spelling.
+
+Recovery direction if the Ubuntu gate fails this fixture again with
+`training resource wall deadline exceeded`: do not raise the allowance.
+`execution.py::remaining()` takes the minimum of three clocks (the launch
+`deadline`, the regime's charged wall and the stage's charged wall) and
+`check()` reports none of them, so a second failure would be as undiagnosable
+as the first. The next change is then to have the error name the expired clock
+with charged and allowed seconds. It is deferred, not part of this PR: the text
+appears in `tests/training/test_learning_state.py:332` as a retained failure
+payload, so changing it needs that reader checked, and a green Ubuntu run makes
+it unnecessary for this Task.
+
 ## Remaining delivery
 
-Gate must validate the affected file/report suites and obtain Ubuntu timing
-with its debug extension; local release-extension results do not certify CI.
-Publish the fixture-only fix-forward PR in Task 38ef25, retaining #506 as
+QA established the fixture repair on Ubuntu and passed the companion report
+tests, but found the installation gap below. Gate must measure the cache repair
+on Ubuntu: record the first miss/save and a subsequent hit/restore, including
+Setup uv, Install dependencies, Post Setup uv and total job seconds. Confirm
+the warm install avoids Torch/nvidia downloads, all selected tests pass with
+debug assertions, and ordinary jobs finish below 480 s. A cold run alone cannot
+validate retention; a warm run alone cannot establish initial save overhead.
+No hosted measurement of the cache repair is recorded yet.
+
+Publish the fixture and cache fix-forward PR in Task 38ef25, retaining #506 as
 history. Existing `scratch/pr-body.md`, `scratch/pr-title.txt` and
 `scratch/.pr-copy-ref` describe #506 and must be rewritten at delivery.
-The historical QA page's gate reference points to the archived plan above.
-The Task stays open until post-merge verification succeeds.
+PR-event timing and post-merge verification remain necessary; the Task stays
+open until post-merge verification succeeds.
+
+## QA of the fix-forward (2026-11-12)
+
+Dispatch [43345024882](https://github.com/loopflowstudio/manabot/actions/runs/43345024882)
+at `4db5cd64b`: every job succeeded. The repaired comparison test took 151.70 s on
+Ubuntu debug/xdist (176.21 s and failing on the merged push). The experiment job took
+**549 s**, over budget: install 181 s (peers 17–18 s; slow CUDA/nvidia wheel download
+after a pruned uv-cache hit), build 66 s, tests 284 s. Every other ordinary job ≤ 430 s.
+Locally: CI's experiment group 130 passed in 80.87 s; `test_experiment_report.py`
+17 passed. Reverting the fixture to `complete-games`/both seats failed the new
+assertion (`610 == 16`). The cache choice is resolved below and in `questions.md`;
+details in `qa.html`.
+
+## Cache retention repair (2026-11-12)
+
+Keep the existing Torch build and dependency selection. Disable setup-uv's
+pruning in `manabot-integration.yml`; every group restores the resulting cache,
+and `model` alone saves it because all six groups install the same extras.
+This avoids six compressions/uploads on a miss. `docs/development.md` explains
+the cold-key limitation and includes restore/save overhead in timing comparisons.
+
+Delete — do not maintain: remove Integration's implicit pruned-cache behavior.
+No files, symbols or tests are deletion targets. Keep the bounded four-attempt
+fixture, all test selections, native debug build, 300-second watchdog, dependency
+groups and lockfile. Keep one cache owner (setup-uv), without a separate
+actions/cache step, CPU Torch alternative or per-group cache copies.
+
+External fact checked against setup-uv v6 on 2026-11-12: `prune-cache` defaults
+to true and calls `uv cache prune --ci`; false removes the `-pruned` key component,
+so the old immutable cache is not reused. The key also includes architecture,
+platform, Python and dependency-manifest hash. `save-cache: false` skips saving;
+an exact hit skips both pruning and saving. Sources:
+[inputs](https://github.com/astral-sh/setup-uv/blob/v6/action.yml),
+[restore](https://github.com/astral-sh/setup-uv/blob/v6/src/cache/restore-cache.ts),
+[save](https://github.com/astral-sh/setup-uv/blob/v6/src/save-cache.ts).
+
+Sanity checks: `actionlint .github/workflows/manabot-integration.yml` — passed;
+`uv run --no-sync pytest tests/infra/test_ci_selection.py::test_workflow_test_files_exist -q`
+— 1 passed; `git diff --check` — passed. A read-only comparison to HEAD confirmed
+that removing the four cache lines reproduces the prior workflow exactly,
+including every install/build/test command. `lf context` is within both limits.
+Hosted cold/warm timing is pending at gate; no under-budget claim follows from
+static validation.
