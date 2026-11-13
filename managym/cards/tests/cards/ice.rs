@@ -3,7 +3,7 @@
 use crate::support::{
     game::{deck, deck_of, five_color_setup, force_lands, Scenario},
     inspect::{counters_of, hand},
-    play::{cast, choose, choose_mode, pass_until, settle},
+    play::{cast, choose, choose_mode, pass_until, settle, spend_colorless},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind, ActionType},
@@ -64,11 +64,13 @@ fn mystic_remora_draws_unless_the_caster_pays_four() {
         settle(&mut s);
         assert_eq!(hand(&s, 1).len(), before);
         cast(&mut s, "Pyroclasm");
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::PayOrNot);
         assert_eq!(s.action_space().player.unwrap().0, 0, "the caster decides");
         let pool = s.game().state.players[0].mana_pool.total();
         if pay {
             choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+            spend_colorless(&mut s);
             assert_eq!(s.game().state.players[0].mana_pool.total(), pool - 4);
         } else {
             choose(&mut s, |a| matches!(a, Action::Decline { .. }));

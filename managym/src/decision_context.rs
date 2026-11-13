@@ -350,6 +350,8 @@ impl Game {
                 Decision::EnterAsCopy { .. } => ("resolution_choice", "Choose a creature for the entering permanent to enter as a copy of, or decline so it enters as itself."),
                 Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => ("tap_payment", "Choose an untapped permanent to pay the ability's tap cost. Each selection commits a tap; the continuation records the unpaid count."),
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
+                Decision::ManaChoice { production: crate::flow::decision::ManaProduction::Bonus { .. }, .. } => ("mana_color", "Choose the type of mana the source's triggered mana ability adds, one of the types the tapped permanent's mana ability produced. The tapping player chooses; the produced mana is already in the pool and this does not open priority."),
+                Decision::ManaSpend { .. } => ("mana_spend", "Choose one unit of mana to spend. Its color, restriction, spend effect and expiry are retained. Each offered choice can complete every saved payment; spent units cannot be undone."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
                 Decision::ChooseObject { .. } => ("resolution_choice", "Choose a permanent you control for the resolving instruction (sacrifice, tap, ...), not as an announcement cost."),
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),

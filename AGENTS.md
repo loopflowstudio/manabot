@@ -430,6 +430,11 @@ observation. `force_permanent_on_battlefield` places a permanent without an
 entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
+Funded fixtures must finish native spending decisions before passing priority
+or inspecting a newly cast spell. Call `spend_colorless` explicitly to preserve
+the colors in `five_color_setup`; tests of color, restriction, rider or expiry
+choices select their intended native offer.
+
 A permanent's characteristics after continuous effects (name, types, colors,
 keywords, static/triggered/activated abilities, power/toughness) are one view,
 `Game::characteristics(id)`, which applies static abilities and effect records

@@ -174,6 +174,10 @@ pub struct Permanent {
     /// entering-the-battlefield triggers; 0 otherwise.
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub cast_x: u8,
+    /// The mana spent to cast that spell (CR 601.2h), read by its own
+    /// entering-the-battlefield triggers; empty otherwise.
+    #[serde(skip_serializing_if = "crate::mana::ManaSpent::is_empty")]
+    pub cast_spent: crate::mana::ManaSpent,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -226,6 +230,7 @@ impl Permanent {
             attacking: false,
             was_cast: false,
             cast_x: 0,
+            cast_spent: Default::default(),
             attached_to: None,
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),

@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::five_color_setup,
-    play::{cast, settle},
+    play::{cast, settle, spend_colorless},
 };
 use managym::{
     agent::action::Action,
@@ -21,6 +21,7 @@ fn spectral_sailor_draw_ability_survives_the_sources_destruction() {
         .position(|a| matches!(a,Action::ActivateAbility{permanent,..} if *permanent==sailor))
         .unwrap();
     s.step_action(index);
+    spend_colorless(&mut s);
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(sailor)));
     settle(&mut s);
@@ -39,6 +40,7 @@ fn agent_of_treachery_steals_and_draws_three_with_three_unowned_permanents() {
         .collect();
     for (stolen, ogre) in ogres.iter().enumerate() {
         cast(&mut s, "Agent of Treachery");
+        spend_colorless(&mut s);
         settle_until_target(&mut s, Target::Permanent(*ogre));
         assert_eq!(permanent(&s, *ogre).controller, PlayerId(0));
         assert_eq!(
@@ -62,6 +64,7 @@ fn agent_of_treachery_draws_nothing_with_two_unowned_permanents() {
     for _ in 0..2 {
         let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
         cast(&mut s, "Agent of Treachery");
+        spend_colorless(&mut s);
         settle_until_target(&mut s, Target::Permanent(ogre));
     }
     let hand = s.zone_size(0, ZoneType::Hand);
