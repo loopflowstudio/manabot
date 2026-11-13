@@ -8,7 +8,7 @@ Earlier numbered questions and prototype transcripts are retained in git at
 Jack Heart, on the list including collector snapshot/restore: "do em all in
 this diff". Current-game recovery, exact uninterrupted equivalence and in-run
 source repair are gone. Saved regime fields remain readable; execution names
-revision 105e7e2aa269b1af3946827dd6f4ab29af01f312. Older exact collector
+revision f4e1822faf46bbc9cdc43909293f8cbc8de4a300. Older exact collector
 snapshots require revision 439379869. Frozen recovery declarations include
 Elemental long-183, two-seat-181, uniform-174, ur-gw-186 and TLA c5fba4-w64.
 Review still needs to assess that loss; no frozen run was rebound or rerun here.
@@ -132,7 +132,7 @@ Keep the cutover's executor and exclusive bucketed-execution test deletions.
 Main's automatic precision resolution survives in retained regime records;
 live SelfPlay keeps explicit float32 defaults. Preserve the BF16 rejection
 report and artifact manifest. The newly merged frozen precision-ladder launcher
-refuses with pinned main revision `2f00cbbf6d484b8d5275f65376a52ae0d4376be6`,
+refuses with pinned main revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`,
 which contains its executor and original builder. Its report/evaluation readers
 remain. This follows the existing frozen-workflow cutover rather than adapting
 the scored experiment to a different loop. Branch scratch plans stay the active

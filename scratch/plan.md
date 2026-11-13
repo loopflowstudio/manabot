@@ -101,6 +101,14 @@ in an origin/main worktree (main's own test hashed the launched job's regime,
 `precision="float32"`; at `f4e1822fa` `auto` also resolves to float32
 (`ladder_precision`), so no behavior is lost.
 
+Post-sync focused check (compress, after `da2ef4e3e`; origin/main still
+`f4e1822fa`, ancestry check exit 0): `precision_ladder.runs` now refuses
+directly like the other frozen launchers; its arm builder, single-axis check
+and launch-only constants are deleted (the report keeps seeds, horizon and
+cost). `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_precision.py tests/training/test_attack_execution.py tests/training/test_recipe_etude.py tests/training/test_regimes.py tests/eval/test_experiment_files.py -q`: 39 passed (23.18s); Ruff clean.
+SDK release/pin, installed-consumer checks and launcher/service proofs remain
+pending.
+
 Fifth recheck (after review 4 implementation): PR #103 still open at
 `105abdd`; origin/main still `105e7e2aa`; pins still 0.2.16. Code matches
 the review-4 section (loop phase/resource rows, `training_seconds`, the

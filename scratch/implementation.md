@@ -27,7 +27,7 @@ old and new report input paths share the same paired calculation, inspection and
 renderer. MLX pilot capture instruments the surviving loop.
 
 Frozen regime launch/continuation functions refuse with revision
-`105e7e2aa269b1af3946827dd6f4ab29af01f312`. This includes seat comparison,
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. This includes seat comparison,
 TLA frontier/vocabulary, value-readout segments, old Elemental continuations,
 learning-signal training and the old CUDA/profile capture drivers. Their data,
 evaluation and report functions remain. They were not translated to the new
