@@ -431,7 +431,7 @@ impl Env {
         let action = if policy == PlayerPolicy::Agent {
             action
         } else {
-            if action >= 0 {
+            if action != -1 {
                 return Err(AgentError(
                     "built-in chooser requires action=None (vector: -1)".into(),
                 ));
@@ -440,8 +440,16 @@ impl Env {
             obs.recent_events.clone_from(&self.heuristic_events);
             policy.select_action(self, &obs)?
         };
-        let (obs, reward, terminated, truncated, info) = self.step_once(action)?;
-        self.settle_players(obs, reward, terminated, truncated, info, Some(chooser))
+        let reward_seat = match self.player_policies {
+            [PlayerPolicy::Agent, other] if other != PlayerPolicy::Agent => 0,
+            [other, PlayerPolicy::Agent] if other != PlayerPolicy::Agent => 1,
+            _ => chooser,
+        };
+        let (obs, mut reward, terminated, truncated, info) = self.step_once(action)?;
+        if reward_seat != chooser {
+            reward = -reward;
+        }
+        self.settle_players(obs, reward, terminated, truncated, info, Some(reward_seat))
     }
 
     fn settle_players(

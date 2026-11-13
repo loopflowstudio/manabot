@@ -247,7 +247,7 @@ isolated capacity recovery are explicit opt-ins.
 
 `player_policies=("agent", "agent")` (the default) surfaces both seats' decisions to the
 caller. `player_policies=("agent", "random")` plays the opponent's decisions natively and
-returns seat 0's next decision. These are the only built-in vector policies;
+returns seat 0's next decision. Each seat can also use the heuristic described below;
 `"passive"` is removed and raises an unsupported-policy `ValueError`, including
 through CapturedVector and Torch. Retained failure evidence keeps its original
 policy name, but replaying a passive-policy receipt requires its original source.
@@ -264,7 +264,7 @@ search/decision digest, fails.
 Use `player_policies=("agent", "heuristic")` to step a batch against the rule-based opponent:
 
 ```python
-from manabot import managym
+import managym
 
 games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "heuristic"))
 players = [
@@ -293,8 +293,8 @@ published chooser selects the seat, including under control effects; built-ins
 receive only that chooser's live viewer observation. Game/deck configuration
 and world identities are independent of this controller configuration.
 
-With one external seat, reset and positional step advance built-ins until the external
-chooser or a terminal state. A scalar terminal must be explicitly reset; vector
+With one external seat, reset and positional step advance built-ins until the
+external chooser or a terminal state. A scalar terminal must be explicitly reset; vector
 steps auto-reset finished slots. Terminal rewards belong to the acting external
 seat, including when a built-in finishes the game. Reset never silently starts
 a second game if a built-in wins before an external choice.
@@ -432,7 +432,7 @@ Read authoritative hand contents for explicit native seats at the current
 read boundary in scalar or batched games. This is an opt-in hidden-information API:
 
 ```python
-from manabot import managym
+import managym
 from manabot.env.match import Match
 
 games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))

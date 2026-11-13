@@ -1038,7 +1038,7 @@ pub(crate) fn parse_player_policies(
             )));
         }
         Python::with_gil(|py| -> PyResult<()> {
-            py.import("warnings")?.call_method1("warn", ("opponent_policy is deprecated; use player_policies=('agent', '<policy>'); removal in 0.3.0", py.get_type::<pyo3::exceptions::PyDeprecationWarning>(), 2))?;
+            py.import_bound("warnings")?.call_method1("warn", ("opponent_policy is deprecated; use player_policies=('agent', '<policy>'); removal in 0.3.0", py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(), 2))?;
             Ok(())
         })?;
         vec![

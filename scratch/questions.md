@@ -324,8 +324,32 @@ removal in 0.3.0; retained receipt spellings remain readable.
 Two built-ins reset without playing, then advance one decision per step
 (scalar None; vector -1). Mixed games settle to the external chooser with a
 10,000-decision error bound and never loop resets. Vector terminal autoreset
-remains one replacement, and reward belongs to the originating chooser.
+remains one replacement. Mixed rewards belong to the external seat; two-built-in
+rewards belong to the originating chooser.
 
-Remaining: finish binding/caller migration, directed debug checks, matching
-release rebuild, focused installed API/parity checks. Delivery follows the
-existing Graph after implementation.
+Implementation and focused validation are complete. Continue the existing
+Graph through gate and authorized delivery; no further API/demo approval.
+Gate still owns affected suites/full debug Rust checks, clippy, normal Engine
+Budget, release training smoke and the consumer interpreter matrix. Preserve
+these results when preparing the PR, then delete scratch in the pre-land commit.
+
+Session eb0b316fe3df4c8eae1c561f49cd9d8f relayed Jack Heart's reply on
+2026-11-13, after confirming `player_policies` defaults to `(agent, agent)`:
+"lg2m, approved". Steer a0c2b822 authorizes remaining validation, publication,
+gate, merge and post-merge verification without another API/demo approval;
+delete scratch in the pre-land commit and preserve frozen evidence.
+
+Final native debug check: `CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib heuristic -- --test-threads 2` — 17 passed (5.86 s test execution). Includes 256 live Elemental decisions against independent selectors, scalar/vector terminal parity and both seats' memory lifecycle. Unused-policy cost remains for Engine Budget.
+Release build initially caught use of pre-Bound PyO3 methods in the deprecation warning; corrected to the repository's `import_bound` / `get_type_bound`. The corrected required release build passed; matching cp313 extension replaced atomically and all 96 packaged Rust sources matched checkout bytes.
+
+- `uv run --no-sync pytest tests/env/test_native_player_policies.py tests/sim/test_heuristic.py tests/env/test_captured_vector_bookkeeping.py tests/env/test_opponents.py tests/semantic/test_player_control.py tests/training/test_action_cutoff.py::test_heuristic_scores_only_retained_legal_offers -q` — 70 passed in 13.41 s; 15 expected legacy-argument deprecation warnings.
+- Fresh standalone copy-installed wheel outside the checkout, PYTHONPATH unset, 120-second subprocess deadline — all nine scalar/vector controller pairs, terminal rewards, fork/reset, 256-decision live Elemental parity and deprecation passed; manabot and Torch absent. Temporary venv removed. This is engine-only API proof, not the full release training smoke or a CPython 3.12 proof.
+- Workspace Rust fmt, focused Ruff lint/format and `git diff --check` passed. No servers, watchers or paid jobs were started.
+
+Positional mixed stepping settles built-ins to the external chooser. Atomic
+Command/structured submissions retain their one-command receipts; if the next
+chooser is built-in, `Env.step()` continues native play. Mixed terminal rewards
+always use the external seat, including this continuation; two built-ins use
+the acting chooser. Fixed-player projections omit events, so built-in stepping
+retains the previous live projection's combat events, copied on forks and
+replaced on reset. The native independent-selector parity test exercises this.

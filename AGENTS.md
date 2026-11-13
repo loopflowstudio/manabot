@@ -252,6 +252,10 @@ Native heuristic selection consumes the live viewer `Observation`, including
 `action_space.focus` (source identity for target/cost decisions). Canonical viewer
 JSON omits that focus; a `toJSON`/`from_json` round trip is not an equivalent
 selector input. Parity fixtures replay decisions to retain the live projection.
+`Observation::for_player` omits presentation events; built-in stepping retains
+the last live projection's events so combat history survives scalar calls and
+exact forks. Controller policies belong to Env/VectorEnv chooser seats, separate
+from rules/deck PlayerConfig and world identity.
 
 ## Forced decisions
 

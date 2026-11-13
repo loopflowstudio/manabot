@@ -17,10 +17,9 @@ def players() -> list[managym.PlayerConfig]:
 @pytest.mark.parametrize(
     "policies",
     [
-        ("agent", "heuristic"),
-        ("heuristic", "agent"),
-        ("random", "heuristic"),
-        ("heuristic", "heuristic"),
+        (first, second)
+        for first in ("agent", "random", "heuristic")
+        for second in ("agent", "random", "heuristic")
     ],
 )
 def test_scalar_vector_players_finish_with_same_rewards(
