@@ -29,6 +29,14 @@ The A/B arm explicitly retains `live_tokens=False`.
   handling lives in `manabot/backends/torch/learner.py`.
 - Preserve explicit choices, saved hashes, runtime guards and authored rebuilds.
 - Removed the unverified docs assertion that BF16 passed the learning A/B.
+- Removed `_precisions` and the duplicate precision-only override test. The
+  parameterized test in `tests/training/test_bucketed_execution.py` covers
+  assignment/copy overrides for all three automatic fields, including the
+  untouched fields' authoring defaults. Precision cases independently cover
+  each explicit value, saved round trips and width changes.
+- The experiment module introduction now describes its entry points; the
+  report owns the prediction, measurements and launch history. No remaining
+  deletion targets in the production resolution path.
 
 ## Direction retained
 
@@ -51,3 +59,7 @@ Task cap is now USD 35 total.” Earlier plan/history: git `e181224e7`.
 ## Validation
 
 `uv run --extra dev --extra artifacts pytest tests/training/test_precision.py tests/training/test_bucketed_execution.py -q`: 35 passed; corrected the one failing fresh-default fixture, then its focused rerun plus `tests/eval/test_experiment_files.py` passed (5 tests). Artifact tracking check: 1 passed. Ruff and `git diff --check` passed. No repeated passing suite; broader acceptance belongs to gate.
+
+Compress: 12 focused precision cases passed. The consolidated override test
+initially expected disabled layouts to be present in dumps; corrected the test
+to respect their omission. `uv run --extra dev --extra artifacts pytest tests/training/test_bucketed_execution.py::test_builder_keeps_explicit_edits_after_auto_resolution -q`: 10 passed. Ruff check/format and `git diff --check` passed. No runtime changes or paid runs.

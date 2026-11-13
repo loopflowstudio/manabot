@@ -41,23 +41,20 @@ def test_float32_regimes_keep_their_bytes() -> None:
     assert batched_baseline().stages[0].execution.precision == "float32"
 
 
-def _precisions(regime: TrainingRegime) -> list[str]:
-    return [stage.execution.precision for stage in regime.stages]
-
-
 def _at_width(regime: TrainingRegime, width: int) -> TrainingRegime:
     return with_capacity(regime, id=f"w{width}", width=width, depth=8, heads=8)
 
 
-def test_rejected_learning_gate_keeps_float32_on_both_sides_of_threshold() -> None:
+@pytest.mark.parametrize("width", [BF16_MIN_HIDDEN_DIM - 8, BF16_MIN_HIDDEN_DIM, 384])
+def test_rejected_learning_gate_keeps_float32_on_both_sides_of_threshold(
+    width: int,
+) -> None:
     base = batched_baseline()
     assert base.stages[0].execution.device == "cuda"
-    assert _precisions(_at_width(base, BF16_MIN_HIDDEN_DIM)) == ["float32"]
-    assert _precisions(_at_width(base, 384)) == ["float32"]
-    assert _precisions(_at_width(base, BF16_MIN_HIDDEN_DIM - 8)) == ["float32"]
+    wide = _at_width(base, width)
+    assert wide.stages[0].execution.resolved_precision == "float32"
     # A narrower rebuild of a wide regime resolves the ladder again.
-    wide = _at_width(base, BF16_MIN_HIDDEN_DIM)
-    assert _precisions(_at_width(wide, 128)) == ["float32"]
+    assert _at_width(wide, 128).stages[0].execution.resolved_precision == "float32"
 
 
 @pytest.mark.parametrize("device", ["cpu", "mps"])
@@ -66,7 +63,8 @@ def test_ladder_is_float32_off_cuda(device: str) -> None:
     stages = data["stages"]
     assert isinstance(stages, list)
     stages[0]["execution"]["device"] = device
-    assert _precisions(TrainingRegime.model_validate(data)) == ["float32"]
+    restored = TrainingRegime.model_validate(data)
+    assert restored.stages[0].execution.resolved_precision == "float32"
 
 
 def test_regimes_serialize_the_resolved_precision() -> None:
@@ -80,45 +78,18 @@ def test_regimes_serialize_the_resolved_precision() -> None:
         Execution().resolved_precision
 
 
-def test_explicit_and_saved_precisions_are_kept() -> None:
-    base = batched_baseline()
-    data = base.model_dump()
-    data["stages"][0]["execution"]["precision"] = "float32"
-    # A saved regime names its precision; changing the model keeps it.
-    saved = TrainingRegime.model_validate(data)
-    assert _precisions(_at_width(saved, BF16_MIN_HIDDEN_DIM)) == ["float32"]
-    data["stages"][0]["execution"]["precision"] = "bf16"
-    wide = TrainingRegime.model_validate(data)
-    assert _precisions(_at_width(wide, 128)) == ["bf16"]
-    # Written in code, float32 is kept at any width.
-    stage = base.stages[0].model_copy(
-        update={"execution": Execution(device="cuda", precision="float32")}
-    )
-    explicit = base.model_copy(update={"stages": [stage]})
-    assert _precisions(_at_width(explicit, BF16_MIN_HIDDEN_DIM)) == ["float32"]
-    # A saved stage from before the field existed trained in float32.
-    del data["stages"][0]["execution"]["precision"]
-    data["agent"]["hidden_dim"] = BF16_MIN_HIDDEN_DIM
-    data["agent"]["num_attention_heads"] = 8
-    assert _precisions(TrainingRegime.model_validate(data)) == ["float32"]
-
-
-@pytest.mark.parametrize("copy", [False, True])
+@pytest.mark.parametrize("saved", [False, True])
 @pytest.mark.parametrize("declared", ["float32", "tf32", "bf16"])
-def test_builder_keeps_precision_edits_after_auto_resolution(
-    declared: Precision, copy: bool
+def test_explicit_and_saved_precisions_are_kept(
+    declared: Precision, saved: bool
 ) -> None:
-    regime = batched_baseline()
-    stage = regime.stages[0]
-    if copy:
-        stage.execution = stage.execution.model_copy(update={"precision": declared})
-    else:
-        stage.execution.precision = declared
-    rebuilt = _at_width(regime, 384)
-    assert _precisions(rebuilt) == [declared]
-    stages = rebuilt.authored_dump()["stages"]
-    assert isinstance(stages, list)
-    assert stages[0]["execution"]["precision"] == declared
+    base = batched_baseline()
+    base.stages[0].execution = Execution(device="cuda", precision=declared)
+    if saved:
+        base = TrainingRegime.model_validate(base.model_dump(mode="json"))
+    wide = _at_width(base, BF16_MIN_HIDDEN_DIM)
+    assert wide.stages[0].execution.resolved_precision == declared
+    assert _at_width(wide, 128).stages[0].execution.resolved_precision == declared
 
 
 def test_precision_and_layout_share_authored_and_saved_resolution() -> None:

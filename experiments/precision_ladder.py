@@ -1,26 +1,10 @@
-"""Does BF16 learn the same as float32 at w384l8? The gate on the precision ladder (MTG-324).
+"""The BF16 learning gate at w384l8 (MTG-324).
 
-The proposed BF16 default starts at `BF16_MIN_HIDDEN_DIM` (256); the
-learning gate rejected it, so `auto` currently resolves to float32 everywhere. MTG-317 (`experiments/cuda_precision.md`)
-measured BF16 2–2.7× faster than float32 at w384l8 on an L4, but its 200-step
-replay could not tell same from different learning. This experiment trains the
-frontier recipe twice from the same seeds, once in each precision, and compares
-playing strength at matched updates plus the learning trajectories. The
-pre-registered question, prediction and refutation open
-`experiments/precision_ladder.md`.
-
-Arms (`arm`): `sampled_self_play` over the ten-deck Elemental roster (two-seat
-damped self-play, 256 streams, four producers) at w384l8 (8 heads, the model's
-default feed-forward, as MTG-317 measured), bucketed shapes on, and the
-precision written explicitly so the ladder does not choose it. The damping
-horizon is `UPDATES` in both arms, so learning rate and τ stand at the same
-point at every matched update. Only `id` and `execution.precision` differ
-(`require_single_axis`).
-
-Evaluation (`eval`): each run's checkpoints at updates 20, 40, 75 and 150 and at its end
-against the frozen heuristic over 07c490's fifty held-out Elemental pairings
-(`learning_signal.ELEMENTAL_PAIRS`, four cross legs each), and each BF16 run
-against each float32 run at the last update both checkpointed.
+`arm` builds float32 and BF16 self-play regimes with the same damping horizon;
+`runs` pairs their seeds. `eval` schedules heuristic and head-to-head matches
+at retained checkpoints; `report` displays scores and learning trajectories.
+The numerical gate rejected BF16 before evaluation. The frozen prediction,
+measurements, costs and launch history are in `experiments/precision_ladder.md`.
 
     uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
         experiments/precision_ladder.py --rent mtg324-l4-ab --parallel 4 \\
