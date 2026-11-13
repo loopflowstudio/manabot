@@ -1,7 +1,7 @@
 # scratch
 
-- `mtg333-plan.md`: active plan, receipts and remaining work; next is slice 6b
-  (`105e7e2aa` merged as `9db3f1373`; recapture the CPU baseline), then the CUDA checks.
+- `mtg333-plan.md`: active plan, receipts and remaining work; slice 6b is complete
+  (`105e7e2aa` merged; 3,410 CPU tensors and five updates exact). Next: CUDA checks.
   `questions.md`: reversible assumptions. `mtg325-torch-backend-verification.md`:
   baseline evidence and limits; MTG-325 merged as `ef28f3a58` (PR #501).
 - `equivalence/`: MTG-325's CPU oracle (`run.py`, 3,248 tensors;

@@ -139,9 +139,9 @@ Deleted predecessors are not restored; the list is in
 
 ## Remaining slices
 
-6b. **This slice — `105e7e2aa` merged; rebuild and re-establish the CPU baseline.**
-7. **CUDA equivalence and speed**, launched from the merged commit. Blocked
-   since 12:12 UTC on L4 stock; the card route below unblocks it.
+6b. **Complete** — `105e7e2aa` merged, rebuilt; fresh CPU oracle and updates exact.
+7. **CUDA equivalence and speed**, launch source `296c90f33`; A40 fallback
+   after L4 stock disappeared at quote.
 8. **Optimize pass**, on the card the speed check used.
 
 ### Slice 6b: upstream `105e7e2aa` (read 2026-11-13 12:23–12:27 UTC)
@@ -317,5 +317,21 @@ Slice 6b focused checks: 142 passed, two generic-helper boundary failures
 from the runtime `ParameterArrays` import. Moved that annotation-only import
 under `TYPE_CHECKING`; `pytest tests/test_package_boundaries.py -k generic_learning`
 then passed both tests (3.72s). Ruff passed for the two changed modules.
-Fresh CPU captures are in progress against `/tmp/mtg333-mana-base`. L4 availability at
+Fresh CPU captures against `/tmp/mtg333-mana-base`: base vs base-repeat and
+base vs head each **3,410 tensors, differing 0**. `updates-mana-base.json`
+and `updates-mana-head.json` are `cmp`-identical (five PPO/damped cases).
+Launch commit `296c90f33` freezes patches with baseline `105e7e2aa`.
+The L4 launch quote was refused for lack of stock; trying the planned A40 fallback. L4 availability at
 16:00 UTC: rentable at $0.69/hour under the $0.75 template ceiling.
+
+### Rental retry evidence, 2026-11-13 16:10 UTC
+
+- L4 quote refused: “provider reports no available machines”.
+- A40 admission `eb5ed2c1dabd` / requested run `c49b77a1cacc` failed:
+  “ProviderUnavailable: POST pods: status 400”; job command never started.
+  `runpodctl pod list` returned `[]`; `etude terminate mtg333-a40-8038868aa363`
+  returned successfully. Launcher retained $0.00 for the refused rental.
+- A6000 template `mtg333-a6000` copies A40 image/storage/CPU/memory and
+  $0.75/hour ceiling. Quote $0.69/hour, rentable at 16:11 UTC. Launch succeeded: run `047fa57e0e5e`, machine
+  `mtg333-a6000-3a2a673ba16f`, source `296c90f33`; setting up.
+  Equivalence, speed and optimization use this A6000, not the L4 reference.

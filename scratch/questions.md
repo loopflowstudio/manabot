@@ -77,5 +77,5 @@ targets. Original uncommitted notes were copied to
   not repeated for later engine-only merges.
 
 - **Retry, 2026-11-13.** L4 became rentable at 16:00 UTC under the existing
-  Task ceiling, so retain the original L4 comparison rather than the A40
+  Task ceiling, but disappeared at launch quote; use the already planned A40
   fallback. No change to cohort or total spend caps.
