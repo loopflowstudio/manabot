@@ -271,3 +271,7 @@ Activated abilities stay outside this boundary; record their presence. Validate
 saved obligations using PaymentModel. Record exact-source identity counts beside
 capability counts because equal outputs need not mean strategically equal cards.
 Cast payments are labeled natively, separately from other payment purposes.
+
+Checks: debug `fixed_outcomes` — 3 passed (cap/identity collapse, receipt
+colors, saved-obligation refusal); experiment discovery — 1 passed; Ruff passed.
+No measurement results or learning costs have yet been added by this slice.

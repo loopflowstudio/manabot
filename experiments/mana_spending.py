@@ -2,7 +2,8 @@
 
 `count` writes exact decks and per-game stage/offer counts. Payment attribution
 comes from the engine, never from Python mana arithmetic. This exploratory
-frequency slice rents nothing and does not implement alternative decision shapes.
+replays enumerate bounded fixed-source counterfactuals. Etude runs compare
+today's unit spending with first-feasible automatic spending.
 """
 
 from __future__ import annotations
@@ -255,7 +256,7 @@ def eval(state: ExperimentState) -> list[Job]:
             for matchup in scheduled_matchups(run, ELEMENTAL_PAIRS)
         )
         for job in benchmark_jobs(
-            matchups, f"mana-spending-{arm}", ELEMENTAL_PAIRS, hours=1.5, usd=2
+            matchups, f"mana-spending-{arm}", ELEMENTAL_PAIRS, hours=1.5, usd=4
         ):
             jobs.append(
                 job.model_copy(

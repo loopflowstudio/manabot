@@ -127,7 +127,7 @@ Planned after the frequency and shape slices: one small run on the Elemental
 recipe compares today's per-unit decisions with automatic spending: seeds
 34701 and 34702 per arm, 32 matched updates, scored against the heuristic,
 launched under the aggregate USD25 authorization. Each training job allows at
-most USD3 and one attempt; the launch uses `--max-usd 21`, reserving up to USD4
+most USD3 and one attempt; the launch uses `--max-usd 17`, reserving up to USD8
 for evaluation. The native `MANAGYM_EXPERIMENT_AUTOSPEND=1` switch takes the
 first feasible unit; A explicitly sets it to 0. Source selection stays the same.
 Evaluation uses the same switch as training, on the shared 50-pair Elemental
