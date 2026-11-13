@@ -15,6 +15,10 @@ reports it CPU-bitwise and a CUDA summation reorder; its L4 PPO update fell
 69.97→32.23 s, mostly backward. The merge also changes the engine. Fresh
 post-merge CPU captures match all 3,410 tensors and five update cases exactly
 (2026-11-13). The post-#514 comparison below now isolates this Task.
+The later main merge `54a55684e1` (Etude SDK 0.3.2) changes only eval,
+report and update-metrics readers, `pyproject.toml` and `uv.lock`; no
+`prepare`, backend, model, update or engine file, so the post-#514 CPU and
+CUDA receipts still describe this tree.
 
 ## Problem
 
@@ -106,7 +110,8 @@ the metadata experiment was discarded. **PPO's no-slower-median condition is sti
    initial policy captures are `.safetensors`; MLX reads `Prepared.is_agent`
    for trimmed ownership; `MLXBackend(precision=)` reaches file loads.
 8. CUDA equivalence, speed, profile and the optimize pass are measured
-   (Receipts) on the pre-#514 tree. The optimize pass kept one change: `arrays.array_fields` and
+   (Receipts), and repeated against main `de39d601fb` after #514
+   ("Post-#514 refresh"). The optimize pass kept one change: `arrays.array_fields` and
    `_replace_arrays` skip scalar-only tuples.
 
 **Open for review, not waived:**
@@ -118,8 +123,15 @@ the metadata experiment was discarded. **PPO's no-slower-median condition is sti
   process spread. The final same-card check's retained arm is **7.2% slower**:
   1.218910 [1.217755, 1.232932] vs main 1.313957 [1.298227, 1.319119]
   steps/s (one process each, three timed repeats). Forward/loss is still
-  8.468 vs 5.842 s; backward 2.091 vs 3.541 s. This needs a review decision;
-  no speed acceptance is claimed. Host-only metadata yielded only 0.2% PPO
+  8.468 vs 5.842 s; backward 2.091 vs 3.541 s. No speed acceptance is
+  claimed; the brief's optimize direction keeps this as implementation work
+  (Next actions), not a waiver.
+  Observed in code: PPO's "Forward and loss" section includes
+  `AdmittedRollout.rows` → `ActorCritic.prepare_admitted` (trim, `prepare`,
+  `on_device`) for every minibatch of every epoch (`ppo.py` minibatch loop;
+  `epochs` defaults to 4), so the host repeats each row's preparation per
+  epoch. Untested inference: that serial host work, which main did as
+  asynchronous device integer work, is most of the +2.6 s. Host-only metadata yielded only 0.2% PPO
   gain and lowered damped median 3.9%; it was discarded.
 - CUDA gradients meet the Task bar (≤1e-8) but exceed the head-vs-head repeat
   floor the plan also asked for.
@@ -130,8 +142,8 @@ the metadata experiment was discarded. **PPO's no-slower-median condition is sti
   undiagnosed.
 - Gate's broader suites, Python 3.12 and installed-wheel checks have not run.
 
-Captures in `/tmp/mtg333/` are temporary. If gone, or after any change to
-`manabot/` or the engine: rebuild the extension per `AGENTS.md`, extract the
+Captures in `/tmp/mtg333/` are temporary. If gone, or after a change to
+`prepare`, `backends/torch/`, the model, the updates or the engine: rebuild the extension per `AGENTS.md`, extract the
 base `manabot/` (`git archive 105e7e2aa manabot`), and capture base and head
 with one retained belief corpus (`EQUIV_BELIEF_INPUT`; see Receipts).
 
@@ -222,7 +234,9 @@ CUDA base (the CPU oracle keeps `105e7e2aa`, since #514 is CPU-bitwise); its
 -- manabot`, and `bench.py` must still run on both arms.
 
 Control: `ETUDE_HOME=/tmp/mtg333/launcher`, overlay
-`uv run --with 'etude-sdk[s3,eval]==0.2.15' etude …`, nested
+`uv run --with 'etude-sdk[s3,eval]==0.2.15' etude …` (both launch files pin
+it; main now requires `etude-sdk>=0.3.2`, and whether 0.3.2 reads that
+schema-13 launcher database is unchecked — check before the next launch), nested
 `doppler run -p etude -c prd -- doppler run -p manabot -c prd
 --preserve-env=RUNPOD_API_KEY --`. Base and head run on one card in one
 rental; one Task rental at a time; USD 10 per speed cohort, USD 25 for the
@@ -241,7 +255,10 @@ rental deadline, then settled **lost (create_unconfirmed), $0.00**: SDK 0.2.15
 ignores `cancel_requested_at`; `terminate` refuses unfinished allocations.
 That is an Etude fix outside this Task; never edit the launcher database.
 
-Optimize candidates not tried (unmeasured): vectorize `prepare._effects`'
+Optimize candidates not tried (unmeasured): prepare the next PPO minibatch
+on the host while the device runs the current one, or reuse each admitted
+row's prepared integer work across epochs (both keep host values and
+summation order, so the CPU oracle stays bitwise); vectorize `prepare._effects`'
 per-record loop; int32 index arrays; `Packed.gather` for fact programs; host
 compaction on CUDA inference (summation order: tolerance, not bitwise); avoid
 full-capacity temporaries before trimming. Each kept change reruns the CPU
@@ -374,7 +391,13 @@ Generated patches remain only in frozen launch commits, removed from the final t
 
 ## Next actions
 
-1. Review the remaining PPO median regression and the CUDA repeat-floor finding.
-   The scoped host optimizations helped, but do not meet the accepted speed bar.
-2. Gate: broader suites, installed wheel, Python 3.12 and the full-file test order
+1. PPO median regression (7.2%): profile one PPO update on CPU to confirm
+   how much of "Forward and loss" is per-epoch `prepare_admitted`; implement
+   the cheaper of overlap or cross-epoch reuse; rerun the CPU oracle and
+   update comparison; then one capped same-card CUDA check against
+   `de39d601fb` (USD 10 cohort, one rental). If it is still slower, report the
+   residual with the profile for a review decision.
+2. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
+   exceed the head-vs-head floor).
+3. Gate: broader suites, installed wheel, Python 3.12 and the full-file test order
    that timed out (State). Publication and landing are the caller's steps.

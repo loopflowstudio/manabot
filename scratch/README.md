@@ -4,7 +4,8 @@
   Prepared cutover, shared saves and #513/#514 integration are implemented.
   Fresh CPU oracle: 3,410 tensors and five updates exact. Two measured host
   optimizations retained; metadata attempt discarded. PPO remains 7.2% slower
-  in the final same-card check; speed acceptance, strict CUDA repeat floor and
+  in the final same-card check against main `de39d601fb`; per-epoch host
+  re-preparation is the next optimize target. Strict CUDA repeat floor and
   the order-dependent test timeout remain for review. Broader checks are at gate.
 - `speed/mtg333-results.txt`: full A40 and 5090 speed tables.
 - `questions.md`: reversible assumptions taken without asking.
