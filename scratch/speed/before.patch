@@ -1,0 +1,299 @@
+diff --git a/manabot/backends/torch/rollout.py b/manabot/backends/torch/rollout.py
+index 9c74c43e73..309e7d9512 100644
+--- a/manabot/backends/torch/rollout.py
++++ b/manabot/backends/torch/rollout.py
+@@ -6,10 +6,6 @@ The updates reach it as `backend.rollout.AdmittedRollout`; every backend has
+ one with these methods over its own policy input.
+ """
+ 
+-from collections.abc import Iterator
+-from concurrent.futures import ThreadPoolExecutor
+-from contextlib import contextmanager
+-
+ import numpy as np
+ from numpy.typing import NDArray
+ import torch
+@@ -80,12 +76,6 @@ class AdmittedRollout:
+     ) -> tuple[Prepared[torch.Tensor], ActionRows]:
+         """Admitted observations of flat rollout `indexes` on `device`, with
+         their behavior distributions."""
+-        prepared, rows = self._prepare_rows(indexes, not torch.is_grad_enabled())
+-        return on_device(prepared, device), rows
+-
+-    def _prepare_rows(
+-        self, indexes: NDArray[np.int64], inference: bool
+-    ) -> tuple[Prepared[np.ndarray], ActionRows]:
+         if not self._admitted[indexes].all():
+             raise ValueError("rollout rows were not admitted")
+         rows = self.batch.observations(indexes)
+@@ -94,55 +84,10 @@ class AdmittedRollout:
+             if self._needs is not None and self._measured[indexes].all()
+             else None
+         )
+-        # Grad mode is thread-local. Preserve the caller's packing/compaction
+-        # choice when preparation runs on the prefetch worker.
+-        with torch.set_grad_enabled(not inference):
+-            prepared = self.agent.prepare_admitted(
+-                rows.observation, needs=needs, inference=inference
+-            )
+-        return prepared, rows
+-
+-    @contextmanager
+-    def minibatches(
+-        self, order: NDArray[np.int64], size: int, device: torch.device
+-    ) -> Iterator[
+-        Iterator[tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]]
+-    ]:
+-        """Prepare one batch ahead while the caller trains the current batch.
+-
+-        Only immutable host input is read on the worker. Transfers and all
+-        model/optimizer work stay on the caller's device stream. At most two
+-        host minibatches are live; exiting joins the worker even on failure.
+-        """
+-        if size < 1:
+-            raise ValueError("minibatch size must be positive")
+-        inference = not torch.is_grad_enabled()
+-        with ThreadPoolExecutor(
+-            max_workers=1, thread_name_prefix="ppo-prepare"
+-        ) as worker:
+-
+-            def batches() -> Iterator[
+-                tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]
+-            ]:
+-                indexes = order[:size]
+-                if not len(indexes):
+-                    return
+-                pending = worker.submit(self._prepare_rows, indexes, inference)
+-                for start in range(0, len(order), size):
+-                    prepared, rows = pending.result()
+-                    indexes = order[start : start + size]
+-                    following = order[start + size : start + 2 * size]
+-                    if len(following):
+-                        pending = worker.submit(
+-                            self._prepare_rows, following, inference
+-                        )
+-                    yield indexes, on_device(prepared, device), rows
+-
+-            iterator = batches()
+-            try:
+-                yield iterator
+-            finally:
+-                iterator.close()
++        prepared = self.agent.prepare_admitted(
++            rows.observation, needs=needs, inference=not torch.is_grad_enabled()
++        )
++        return on_device(prepared, device), rows
+ 
+     def legal(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
+         """The 0/1 legal-action input [B,A] of rows this rollout returned."""
+diff --git a/manabot/training/updates/backend.py b/manabot/training/updates/backend.py
+index 0be6d8958c..1253249499 100644
+--- a/manabot/training/updates/backend.py
++++ b/manabot/training/updates/backend.py
+@@ -21,7 +21,7 @@ indexing and reductions on it and reads it through `arrays.to_numpy` or
+ only handed back to it.
+ """
+ 
+-from collections.abc import Callable, Iterator, Mapping
++from collections.abc import Callable, Mapping
+ from contextlib import AbstractContextManager
+ from typing import Any, Literal, Protocol, runtime_checkable
+ 
+@@ -211,21 +211,6 @@ class RolloutFile(Protocol):
+     def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], AdmittedRollout]: ...
+ 
+ 
+-class PPOAdmittedRollout(AdmittedRollout, Protocol):
+-    def minibatches(
+-        self, order: NDArray[np.int64], size: int, device: Device
+-    ) -> AbstractContextManager[
+-        Iterator[tuple[NDArray[np.int64], Observations, ActionRows]]
+-    ]:
+-        """Ordered minibatches; exit releases any preparation worker."""
+-        ...
+-
+-
+-class PPORolloutFile(RolloutFile, Protocol):
+-    @property
+-    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], PPOAdmittedRollout]: ...
+-
+-
+ # -- policy and learner --------------------------------------------------------
+ 
+ 
+@@ -309,6 +294,3 @@ class Backend(Protocol):
+ class PPOBackend(Backend, Protocol):
+     @property
+     def rl(self) -> PPORL: ...
+-
+-    @property
+-    def rollout(self) -> PPORolloutFile: ...
+diff --git a/manabot/training/updates/ppo.py b/manabot/training/updates/ppo.py
+index 98a1cec9c8..bffdf317a6 100644
+--- a/manabot/training/updates/ppo.py
++++ b/manabot/training/updates/ppo.py
+@@ -153,91 +153,80 @@ def update_iteration(
+         admitted.admit_rows(training_rows, size)
+         for _ in range(learning.epochs):
+             order = training_rows[rng.permutation(len(training_rows))]
+-            with admitted.minibatches(order, size, dev) as minibatches:
+-                for _ in range(0, len(order), size):
+-                    with track("Preparation wait and transfer"):
+-                        rows_host, obs, rows = next(minibatches)
+-                    indices = to_device(rows_host, dev)
+-                    with track("Forward and loss"):
+-                        valid = rl.legal_mask(admitted.legal(obs))
+-                        behavior_logs = to_device(rows.log_probabilities, dev)
+-                        reference = to_device(
+-                            reference_distribution(
+-                                rows.observation, learning.reference
+-                            ),
+-                            dev,
+-                        )
+-                        with learner.forward_precision():
+-                            logits, value = learner.agent(obs)
+-                        logits, value = logits.float(), value.float()
+-                        logs = rl.policy_logs(logits, valid)
+-                        log_ratio = (
+-                            rl.action_logs(logs, actions[indices]) - old_logs[indices]
+-                        )
+-                        actor_mask = mask[indices]
+-                        policy = rl.selected_mean(
+-                            rl.clipped_surrogate(
+-                                log_ratio, advantages[indices], learning.clip
+-                            ),
+-                            actor_mask,
+-                        )
+-                        kl_ref = rl.selected_mean(
+-                            rl.reverse_kl(
+-                                logs, rl.reference_logs(reference, valid), valid
+-                            ),
+-                            actor_mask,
+-                        )
+-                        kl_behavior = rl.selected_mean(
+-                            rl.reverse_kl(logs, behavior_logs, valid),
+-                            actor_mask,
+-                        )
+-                        value_loss = (
+-                            0.5 * rl.squared_value_loss(value, returns[indices]).mean()
+-                        )
+-                        loss = (
+-                            policy
+-                            + learning.value_weight * rl.float64_operand(value_loss)
+-                            + diagnostics["tau"] * kl_ref
+-                            + learning.collection_kl * kl_behavior
+-                        )
++            for start in range(0, len(order), size):
++                rows_host = order[start : start + size]
++                indices = to_device(rows_host, dev)
++                with track("Forward and loss"):
++                    obs, rows = admitted.rows(rows_host, dev)
++                    valid = rl.legal_mask(admitted.legal(obs))
++                    behavior_logs = to_device(rows.log_probabilities, dev)
++                    reference = to_device(
++                        reference_distribution(rows.observation, learning.reference),
++                        dev,
++                    )
++                    with learner.forward_precision():
++                        logits, value = learner.agent(obs)
++                    logits, value = logits.float(), value.float()
++                    logs = rl.policy_logs(logits, valid)
++                    log_ratio = (
++                        rl.action_logs(logs, actions[indices]) - old_logs[indices]
++                    )
++                    actor_mask = mask[indices]
++                    policy = rl.selected_mean(
++                        rl.clipped_surrogate(
++                            log_ratio, advantages[indices], learning.clip
++                        ),
++                        actor_mask,
++                    )
++                    kl_ref = rl.selected_mean(
++                        rl.reverse_kl(logs, rl.reference_logs(reference, valid), valid),
++                        actor_mask,
++                    )
++                    kl_behavior = rl.selected_mean(
++                        rl.reverse_kl(logs, behavior_logs, valid),
++                        actor_mask,
++                    )
++                    value_loss = (
++                        0.5 * rl.squared_value_loss(value, returns[indices]).mean()
++                    )
++                    loss = (
++                        policy
++                        + learning.value_weight * rl.float64_operand(value_loss)
++                        + diagnostics["tau"] * kl_ref
++                        + learning.collection_kl * kl_behavior
++                    )
+ 
+-                        def _failure() -> dict[str, Array]:
+-                            return minibatch_tensors(
+-                                logits=rl.constant(logits),
+-                                value_logits=rl.constant(value),
+-                                valid=valid,
+-                                actions=actions[indices],
+-                                behavior_logs=behavior_logs,
+-                                reference=reference,
+-                                advantages=advantages[indices],
+-                                value_targets=returns[indices],
+-                                actor_selected=actor_mask,
+-                                indexes=indices,
+-                                obs=admitted.evidence(obs),
+-                            )
++                    def _failure() -> dict[str, Array]:
++                        return minibatch_tensors(
++                            logits=rl.constant(logits),
++                            value_logits=rl.constant(value),
++                            valid=valid,
++                            actions=actions[indices],
++                            behavior_logs=behavior_logs,
++                            reference=reference,
++                            advantages=advantages[indices],
++                            value_targets=returns[indices],
++                            actor_selected=actor_mask,
++                            indexes=indices,
++                            obs=admitted.evidence(obs),
++                        )
+ 
+-                        with failure_tensors(_failure, rl.NumericalError):
+-                            observer.check(loss)
+                     with failure_tensors(_failure, rl.NumericalError):
+-                        norm = learner.step(
+-                            loss, learning.max_grad_norm, recorder=observer
+-                        )
+-                    with track("Minibatch diagnostics"):
+-                        health["clip_fraction"] = rl.clip_fraction(
+-                            log_ratio, learning.clip
+-                        )
+-                        diagnostics["optimizer_exposures"] += len(rows_host)
+-                        diagnostics["actor_exposures"] += int(
+-                            actor_rows[rows_host].sum()
+-                        )
+-                        diagnostics["critic_exposures"] += len(rows_host)
+-                        diagnostics.update(
+-                            loss=float(loss.detach()),
+-                            policy_loss=float(policy.detach()),
+-                            value_loss=float(value_loss.detach()),
+-                            entropy=float(rl.entropy(logs, valid).mean().detach()),
+-                            gradient_norm=float(norm),
+-                            reference_kl=float(kl_ref.detach()),
+-                            collection_kl=float(kl_behavior.detach()),
+-                        )
++                        observer.check(loss)
++                with failure_tensors(_failure, rl.NumericalError):
++                    norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
++                with track("Minibatch diagnostics"):
++                    health["clip_fraction"] = rl.clip_fraction(log_ratio, learning.clip)
++                    diagnostics["optimizer_exposures"] += len(rows_host)
++                    diagnostics["actor_exposures"] += int(actor_rows[rows_host].sum())
++                    diagnostics["critic_exposures"] += len(rows_host)
++                    diagnostics.update(
++                        loss=float(loss.detach()),
++                        policy_loss=float(policy.detach()),
++                        value_loss=float(value_loss.detach()),
++                        entropy=float(rl.entropy(logs, valid).mean().detach()),
++                        gradient_norm=float(norm),
++                        reference_kl=float(kl_ref.detach()),
++                        collection_kl=float(kl_behavior.detach()),
++                    )
+     return diagnostics
