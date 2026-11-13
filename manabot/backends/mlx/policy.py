@@ -12,20 +12,26 @@ only the rows a batch references; the others never reach the loss, so their
 outputs receive no gradient either way. GRU input and recurrent biases remain
 separate parameters, preserving Adam state and global gradient-norm clipping.
 
+Compute precision is policy-owned and defaults to float32. Optional half
+forwards cast weights differentiably and restore float32 masters; inference
+and learning therefore use the same dtype. Outputs remain float32.
+
 Parameter paths equal the PyTorch state-dict names except where MLX containers
 differ: `nn.Sequential` children live under `layers`, attention in-projections
 are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`, `hidden_bias`
 (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 import mlx.core as mx
 import mlx.nn as nn
+from mlx.utils import tree_map
 import numpy as np
 
-from manabot.backends.mlx.arrays import to_numpy
+from manabot.backends.mlx.arrays import precision_dtype, to_numpy
 from manabot.backends.mlx.rl import legal_mask
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig
@@ -38,6 +44,7 @@ from manabot.policy.prepare import (
     catalog_schedule,
     prepare,
 )
+from manabot.policy.protocol import Precision
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -246,8 +253,12 @@ class MLXActorCritic(nn.Module):
         tables: Tables,
         config: ModelConfig,
         space: ObservationSpace,
+        *,
+        precision: Precision = "float32",
     ) -> None:
         super().__init__()
+        precision_dtype(precision)
+        object.__setattr__(self, "_precision", precision)
         self.dims = dims
         # The model configuration the weights were trained under, as the
         # torch policy carries it; the updates read its `value_kind`.
@@ -298,6 +309,38 @@ class MLXActorCritic(nn.Module):
                 space,
             ),
         )
+
+    @property
+    def precision(self) -> Precision:
+        return self._precision
+
+    def set_precision(self, precision: Precision) -> None:
+        """Select compute precision without changing stored master weights."""
+        precision_dtype(precision)
+        if self.semantic_cards.token_embedding.weight.dtype != mx.float32:
+            raise ValueError("change precision outside the forward precision scope")
+        if precision != self.precision:
+            self.clear_cache()
+            object.__setattr__(self, "_precision", precision)
+
+    @contextmanager
+    def forward_precision(self) -> Iterator[None]:
+        """Differentiable compute casts, restoring float32 masters on exit.
+
+        A fixed-weight inference loop may hold this scope across calls to reuse
+        cast weights. Close it before differentiating or updating the policy.
+        Public forwards enter it automatically; nested scopes reuse the casts.
+        """
+        dtype = precision_dtype(self.precision)
+        if self.semantic_cards.token_embedding.weight.dtype == dtype:
+            yield
+            return
+        masters = self.parameters()
+        self.update(tree_map(lambda p: p.astype(dtype), masters))
+        try:
+            yield
+        finally:
+            self.update(masters)
 
     def prepare(
         self, obs: Mapping[str, np.ndarray], *, inference: bool = False
@@ -369,13 +412,16 @@ class MLXActorCritic(nn.Module):
 
     def programs(self) -> mx.array:
         """Encode the catalog into [definitions + 1, D]; row 0 is zero padding."""
-        static: _Static = self._static
-        cards = self.semantic_cards
-        _, finished = cards.encoder.run(
-            cards.token_embedding.weight, static.catalog_steps
-        )
-        encoded = _take(finished, mx.array(static.catalog.restore))
-        return mx.concatenate([mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded])
+        with self.forward_precision():
+            static: _Static = self._static
+            cards = self.semantic_cards
+            _, finished = cards.encoder.run(
+                cards.token_embedding.weight, static.catalog_steps
+            )
+            encoded = _take(finished, mx.array(static.catalog.restore))
+            return mx.concatenate(
+                [mx.zeros((1, encoded.shape[1]), encoded.dtype), encoded]
+            )
 
     def cache_programs(self) -> None:
         """Encode the catalog once for inference with fixed weights (collection)."""
@@ -410,6 +456,10 @@ class MLXActorCritic(nn.Module):
 
     def __call__(self, batch: Prepared) -> tuple[mx.array, mx.array]:
         """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
+        with self.forward_precision():
+            return self._forward(batch)
+
+    def _forward(self, batch: Prepared) -> tuple[mx.array, mx.array]:
         static: _Static = self._static
         dims = self.dims
         hidden = dims.hidden

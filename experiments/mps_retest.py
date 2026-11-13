@@ -24,6 +24,7 @@ import select
 import statistics
 import subprocess
 import sys
+import textwrap
 import threading
 import time
 from typing import TYPE_CHECKING, Any, Literal, Protocol
@@ -430,13 +431,19 @@ class MLXRunner:
         import mlx.core as mx
 
         from manabot.backends.mlx.checkpoint import build
+        from manabot.policy.protocol import Precision
 
-        self.dtype = {"mlx-bf16": mx.bfloat16, "mlx-f16": mx.float16}.get(arm)
+        precision: Precision = {
+            "mlx-f32": "float32",
+            "mlx-bf16": "bfloat16",
+            "mlx-f16": "float16",
+        }[arm]
         self.encoder = agent.observation_space.encoder
         self.policy, _ = build(
             agent.config,
             self.encoder.config,
             {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()},
+            precision=precision,
         )
         self.initial = self.policy.parameters()
         mx.eval(self.initial)
@@ -447,14 +454,10 @@ class MLXRunner:
         self.policy.clear_cache()
 
     def reset(self) -> None:
-        from manabot.backends.mlx.learner import Learner, MixedPrecisionLearner
+        from manabot.backends.mlx.learner import Learner
 
         self.policy.update(self.initial)
-        self.learner = (
-            Learner(self.policy, minibatch_rows=1)
-            if self.dtype is None
-            else MixedPrecisionLearner(self.policy, dtype=self.dtype, minibatch_rows=1)
-        )
+        self.learner = Learner(self.policy, minibatch_rows=1)
 
     def parameters(self) -> dict[str, np.ndarray]:
         return self.learner.parameters()
@@ -490,8 +493,7 @@ class MLXRunner:
         trimmed = self._trim(batch)
         assert trimmed.targets is not None and trimmed.settings is not None
         prepared = self.policy.prepare_admitted(trimmed.observations)
-        with self.learner.forward_precision():
-            logits, values = self.policy.evaluate(prepared)
+        logits, values = self.policy.evaluate(prepared)
         import manabot.backends.mlx as backend
         from manabot.backends.parity import minibatch_loss
 
@@ -537,7 +539,7 @@ class MLXRunner:
 
     @contextmanager
     def collection(self) -> Iterator[Collect]:
-        with self.learner.forward_precision():
+        with self.policy.forward_precision():
             try:
                 self.policy.cache_programs()
                 self.sync()
@@ -907,7 +909,7 @@ def update(
 
 def capture(out: Path, streams: int, laptop: bool) -> None:
     from experiments.tla_frontier import frozen
-    from manabot.backends.capture import capture as record
+    from manabot.backends.torch.capture import capture as record
     from manabot.training.regime import TrainingRegime
 
     regimes, protocol = frozen()
@@ -1836,7 +1838,12 @@ def _host_report(
                 complete = [
                     r
                     for r in groups[(width, streams, arm)]
-                    if r and r["status"] == "ok"
+                    if r
+                    and r["status"] == "ok"
+                    and not (
+                        r.get("load_retry_required")
+                        and not r.get("load_retry_complete")
+                    )
                 ]
                 valid_replays.extend(complete)
                 if len(complete) == 3:
@@ -1958,14 +1965,15 @@ def _update_chart(out: Path, suffix: str, hosts: list[HostReport]) -> None:
         ("collection_policy", "Collection policy", "#539caf"),
         ("learning", "Learning", "#db9250"),
     )
-    fig = plt.figure(figsize=(5.5 * len(panels), 7.5), facecolor="white")
+    figure_width = max(8.5, 5.5 * len(panels))
+    fig = plt.figure(figsize=(figure_width, 7.5), facecolor="white")
     grid = fig.add_gridspec(
         2,
         len(panels),
         height_ratios=(3, 1),
         hspace=0.15,
         wspace=0.35,
-        bottom=0.28,
+        bottom=0.30,
         top=0.84,
     )
     for index, (data, width, streams) in enumerate(panels):
@@ -2062,7 +2070,7 @@ def _update_chart(out: Path, suffix: str, hosts: list[HostReport]) -> None:
         for r in data.summary["whole_updates"]
     )
     caption += (
-        "\nThree CPU-paired replays per accelerator; CPU is the median of three means across its six paired references. "
+        "\nThree CPU-paired replays per accelerator; CPU = median of three six-reference means. "
         if paired
         else "\nMedian of three interleaved replays; phase stack from the median-total replay. "
     )
@@ -2071,13 +2079,17 @@ def _update_chart(out: Path, suffix: str, hosts: list[HostReport]) -> None:
         if same
         else "Sampled decisions differ; see report."
     )
-    caption += "\nHalf: MPS autocast; MLX half forwards with f32 masters/Adam. Float16 uses scaling. "
+    caption += "\nHalf has dtype-specific gates; post-step deltas exceed 1e-6. Training equivalence is unmeasured. "
     caption += (
         "Cross-host engine component; see report."
         if cross_host
         else "Engine component from same-host capture."
     )
-    caption += "\nOnly measured cells shown. Full coverage, paging, loads, gradients and memory: experiments/mps_retest.md."
+    caption += "\nShared host. Loads, memory, gradients and missing cells: experiments/mps_retest.md."
+    caption = "\n".join(
+        textwrap.fill(line, width=int(figure_width * 13))
+        for line in caption.splitlines()
+    )
     fig.suptitle("Whole training update · measured cells", fontsize=18, y=0.97)
     fig.legend(
         handles=[Patch(facecolor=color, label=label) for _, label, color in phases],

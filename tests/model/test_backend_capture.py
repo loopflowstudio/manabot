@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from manabot.backends.capture import capture
 from manabot.backends.parity import backend, backend_module, minibatch_loss, minibatches
+from manabot.backends.torch.capture import capture
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.policy.checkpoint import from_torch_state

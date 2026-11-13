@@ -1,110 +1,214 @@
 # Torch MPS and MLX in a whole training update — MTG-335 partial results
 
-Does torch MPS close the gap with MLX when both use bucketed shapes, MPS also
-uses half precision, and training runs larger batches and models? Torch is
-the incumbent. Keeping one backend is simpler; the additional MLX backend
-needs a clear advantage where the current training recipe spends its time.
-This is an exploratory measurement, with a USD 25 total rental cap. There is
-no pre-registered adoption threshold. The recommendation below interprets the completed measurements and their limits.
+Does torch MPS close the gap with MLX when both use bucketed shapes and half
+precision, and training runs larger batches and models? Torch is the incumbent.
+Keeping one backend is simpler; MLX needs an advantage where the training recipe
+spends its time. This is exploratory measurement under a USD 25 rental cap,
+with no pre-registered adoption threshold.
 
 ## Answer
 
-**The answer depends on model shape. MPS beat CPU at w384l8 on the M4 Max,
-but lost to CPU at w64l2 on both measured hosts. MLX was fastest in all three
-completed host/shape groups.** At w384l8 / 256 streams on the M4 Max,
-median whole-update time across three interleaved replays was 703 s on CPU4, 521 s on MPS float32, 478 s on MPS
-bfloat16, 442 s on MPS float16 and 402 s on MLX float32. MPS float16 was
-about 10% slower than MLX and used 37% less time than CPU; float32 MPS was about
-30% slower than MLX. These are one busy host's replay measurements, not a
-training-quality result or a crossover curve across model sizes.
+**At w384l8 / 256 streams, float32 MPS is close to float32 MLX, but MLX half
+is faster than MPS half.** On the shared M4 Max with a four-thread CPU reference,
+three CPU-paired replays at `140eec28d` give medians of 277 s for MPS float32,
+263 s for MLX float32, 261–267 s for MPS half and 203–208 s for MLX half.
+MLX uses about 20–24% less update time than the matching MPS half dtype here.
+MPS float32 uses about 5% more time than MLX float32; shared-host variation
+limits interpretation of that smaller difference.
 
 | Arm | Whole update, s | Collection policy, s | Learning, s | Learner decisions/s |
 |---|---:|---:|---:|---:|
-| PyTorch CPU4 float32 | 703.20 | 218.12 | 429.10 | 68.35 |
-| MPS float32 | 521.22 | 107.83 | 357.40 | 92.21 |
-| MPS bfloat16 | 478.42 | 99.35 | 323.09 | 100.46 |
-| MPS float16 + scaler | 442.03 | 99.08 | 286.97 | 108.73 |
-| MLX float32 | 402.22 | 84.68 | 261.56 | 119.50 |
+| PyTorch CPU · float32 | 674.76 | 208.36 | 410.42 | 71.23 |
+| PyTorch MPS · float32 | 277.32 | 102.16 | 119.18 | 173.31 |
+| MLX · float32 | 263.20 | 72.97 | 134.25 | 182.61 |
+| PyTorch MPS · bfloat16 | 261.04 | 86.33 | 118.73 | 184.13 |
+| MLX · bfloat16 | 207.58 | 55.75 | 95.85 | 231.54 |
+| PyTorch MPS · float16 | 266.53 | 86.68 | 123.87 | 180.33 |
+| MLX · float16 | 203.41 | 54.76 | 92.66 | 236.29 |
 
-Each phase row belongs to its arm's median-total replay. The shared
-engine/host component is 55.98 s. All 48,064 sampled collection choices
-matched CPU in every replay. The three blocks ran back to back over
-6,870.95 s, with endpoint loads 119.12→57.56, 60.47→30.57 and 30.98→47.43;
-none required a retry. Individual totals ranged from 691–705 s for CPU,
-507–528 s for MPS float32, 451–482 s for bfloat16, 438–473 s for float16,
-and 401–413 s for MLX.
+The shared engine/host component is 55.98 s, retained from the same laptop's
+`99210bf8d` capture. The executable replay uses the current shared update and
+independent MLX GRU biases. These are reconstructed phase sums, not end-to-end
+on-policy training wall times. Collection includes catalog setup and first
+calls; loading captured arrays and common-uniform choice verification are
+outside the replay timers. Non-policy collection host work is retained in
+the captured engine/host component.
 
-**Recommendation:** keep PyTorch as the production backend and retain MLX
-as an experimental Apple backend for now. At this measured shape, MLX's
-float32 path saves about 23% of whole-update time versus float32 MPS and
-about 9% versus float16 MPS. The half path narrows the performance case for
-an extra backend, but its gradient differences remain unresolved and the
-wider/batched comparison is incomplete. This evidence supports neither
-removing MLX nor adopting MPS half precision in production. Defaults and
-off-CUDA precision refusals are unchanged.
+Only CPU and one accelerator are resident in each pair. Every repetition runs
+all six pairs. Each accelerator bar is its own three-replay median; the CPU bar
+is the median of three means across six paired CPU references. Its phase stack
+is an aggregate, not one observed replay. Each accelerator's contemporaneous
+CPU reference, loads and memory scopes remain in the detailed table. CPU ratios
+help describe the comparisons but do not correct every shared-host effect.
 
-The M2 w384 series was stopped because five resident arms sustained paging on
-its 24 GiB host. Its capture and parity checks remain evidence, but no
-complete M2 w384 replay exists. Further scaling needs a comparison design
-that fits the host. The full matrix is not complete. The laptop window ended
-at 06:17 UTC;
-its already-running final retry finished at 06:19:45 UTC. No further
-measurements are running on either host.
+All 48,064 sampled collection choices matched CPU in every selected replay.
+There were four load retries: every MPS bfloat16 repetition and the final MLX
+float16 repetition. Both attempts remain in the ledger; lower mean endpoint
+load selects the entire pair. Endpoint load includes the benchmark itself and
+does not measure background activity throughout the block.
 
-No independent warmed per-call matrix completed. The collection and learning
-numbers above are whole-replay phase totals, including their first-call costs;
-they do not establish a batch-size crossover. Generated per-call charts mark
-those cells unmeasured. The [M2 table](data/mps_retest/comparisons.md) and
-[M4 Max table](data/mps_retest/comparisons-Jacks-MacBook-Pro-2.local.md) retain
-all selected repetitions, loads, timing/memory scopes and parity metrics.
-Coverage is separate from correctness.
+**Recommendation:** keep PyTorch in production and retain MLX as an experimental
+Apple backend. Float32 MPS has narrowed the performance case for a second
+float32 backend at this shape. MLX's half paths retain a larger measured speed
+advantage, which supports further accuracy work rather than removing MLX.
+Every accelerator, including float32, exceeded the 1e-6 one-step parameter
+check on these real inputs. Matching sampled choices does not establish
+matching optimization or playing strength. Defaults and off-CUDA precision
+refusals remain unchanged.
 
-The operator owns AWS allocation, access notes, release and the rental cost
-receipt. The M2 became available on 2026-11-13 at 02:56 UTC; its Python 3.12
-capture and the laptop's Python 3.13 capture are separate evidence. Both use
-Torch 2.15.0 and MLX 0.32.4. The laptop has no load threshold and uses four
-CPU threads; M2 uses eight for replay and four for capture. Comparisons
-interleave all arms call by call and step by step. Three replays run back to
-back on each host, with wall-clock and load endpoints retained and no one-hour
-cap. The laptop window prioritised w384 at 256/512/1024 streams, then
-w768/w1024 at 256, then smaller widths. Wider three-replay series could not
-fit the remaining window. w64l2 completed; w96l4, w160l8, w512l8, w768l8 and
-w1024l8 remain unmeasured, as do all 512/1024-stream replay cells. Further
-M2 scaling needs review of resident memory and the capture budget.
+This result does not answer whether larger batches close the gap: the renewed
+512-stream capture again stopped at the unchanged 20 GiB process-tree guard
+before learning. No replayable 512/1024-stream capture exists. The w768/64-row
+correctness probe executed all seven arms, but provides no whole-update timing;
+its accelerator steps also exceeded the float32 bound. The w64 rerun stopped
+on the wrap-up direction after one complete six-pair repetition: no median
+is reported. No w160, new 512-stream block or 1024-stream block started.
 
-Larger-stream capture attempts hit the configured 20 GiB process-tree
-budget: 512 streams stopped after 143.94 s (load 30.95→37.03), and 1,024
-streams after 164.44 s (load 22.51→19.88). Neither reached learning or
-produced a replayable capture. These are explicit capture-budget failures,
-not backend OOMs or the laptop's hardware memory limit. Their whole-update
-replay cells remain unmeasured.
+The renewed M2 w64 and w160 attempts stopped during isolated CPU parity on
+small swap-in counter increases. They are literal paging-guard stops, not
+evidence of sustained pressure or standalone backend capacity failures. No
+new M2 whole-update result exists. The operator says the instance is terminated and the host releases tomorrow
+(2026-11-14); its exact release timestamp remains pending. Historical results below belong to
+`fa23fc364`, before the shared update and independent MLX GRU biases, and are
+not pooled with the current measurements.
 
-## Named deliverable: full context
+No independent warmed per-call matrix completed. Whole-replay phase totals
+include first-call costs and do not establish a batch-size crossover. Torch
+2.15.0 and MLX 0.32.4 were used on both hosts; the laptop uses Python 3.13 and
+four CPU threads, while M2 uses Python 3.12 and eight replay threads.
 
-`experiments/data/mps_retest/full_context.png` is the shareable counterpart to
-a forward-only policy-call benchmark. It shows **seconds per whole update**,
-stacked into engine/host work, collection policy calls and learning, with
-**collected learner decisions per whole-update wall-second** alongside.
+## Enlarged-arm correctness at the current replay source
 
-There is one panel per model shape and a group per 256, 512 and 1,024 streams.
-Every group includes CPU float32 (four threads on the laptop, eight on M2), MPS float32, each supported MPS half dtype,
-and MLX float32. Bars show the median-total replay of three repetitions and
-its component times, so their stacks sum to the median total. Each group must
-run back to back on the same host, with no elapsed-time cap. Does-not-fit, unsupported and
-not-measured cells stay visible. Captions identify hardware, framework
-versions, half dtype and parity evidence. The chart uses an opaque light
-background for sharing in either light or dark interfaces.
+These checks used source `140eec28d` on the M4 Max, 64 learner rows from the
+original 256-stream capture. They check one initial minibatch; completed timing does not establish
+equivalent optimization trajectories. Both MLX half dtypes executed. All
+accelerators exceeded the shared 1e-6 absolute one-step parameter tolerance,
+including float32 arms whose logits and gradients otherwise nearly matched.
+The supported MLX API now defaults to float32 and offers both half dtypes
+explicitly. Its dtype-specific gates cover logits, values, relative loss and
+full-gradient cosine; finite clipped steps are required, while step deltas and
+tensor minima remain diagnostics. The retained measurements were made before
+that API promotion and are not rewritten as a new-source run.
+A separate bounded check of the supported API on two real learner rows passes
+float32 and float16, but bfloat16's relative loss difference is **1.07%**, above
+its unchanged **1%** gate; its other gates pass. The
+[validation receipts](data/mps_retest/laptop/paired-update/validation/README.md)
+retain that counterexample. Use the parity command on the intended checkpoint
+and capture before relying on a half-precision configuration.
 
-The named chart below retains all requested groups, including unmeasured
-cells. M2 and M4 results are separate; their engine components come from
-independent captures at different host loads and must not be compared as
-hardware speedups. No optional L4 arm ran.
+| Arm | Legal logit Δ | Value Δ | Relative loss Δ | Global gradient cosine | Minimum tensor cosine | One-step parameter Δ | Choice mismatches |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| PyTorch CPU · float32 | 0 | 0 | 0 | 1 | 1 | 0 | 0 |
+| PyTorch MPS · float32 | 7.217749953e-09 | 4.321336746e-07 | 1.162997701e-07 | 0.9999999974 | 0.9999999561 | 9.932555258e-06 | 0 |
+| MLX · float32 | 8.381903172e-09 | 4.172325134e-07 | 2.809461134e-07 | 0.9999999981 | 0.9999999711 | 5.504116416e-06 | 0 |
+| PyTorch MPS · bfloat16 | 5.927821621e-05 | 0.003815792501 | 0.00206529002 | 0.9990542327 | 0.9630805262 | 0.0001747384667 | 0 |
+| MLX · bfloat16 | 7.632025518e-05 | 0.003880620003 | 0.0003955238141 | 0.9975223392 | -1 | 0.0001899059862 | 0 |
+| PyTorch MPS · float16 | 6.433983799e-06 | 0.0005453228951 | 0.0001111444506 | 0.9993675361 | -1 | 0.0001827236265 | 0 |
+| MLX · float16 | 9.342562407e-06 | 0.0007421076298 | 0.0001016489573 | 0.9998640781 | -1 | 0.0001506153494 | 0 |
 
-![Full context — Apple M2, partial matrix](data/mps_retest/full_context.png)
+Tensor minima include tiny gradients; the exact score-bias gradient is zero.
+That does not erase observed one-step differences. Timing remains diagnostic,
+not evidence of equivalent learning trajectories.
 
-![Full context — Apple M4 Max, partial matrix](data/mps_retest/full_context-Jacks-MacBook-Pro-2.local.png)
+## Full context: completed seven-arm comparison
 
-## Small models change the ordering
+![M4 Max w384l8, 256 streams: measured phase stacks and decisions per second](data/mps_retest/full_context.png)
+
+[Shareable PNG](data/mps_retest/full_context.png) ·
+[all paired references, loads and memory](data/mps_retest/laptop/paired-update/report/comparisons.md) ·
+[machine-readable summary](data/mps_retest/laptop/paired-update/report/summary.json).
+
+Data bytes live in the team's authenticated artifact store, not GitHub. Restore
+the PNG and the detailed evidence from the committed manifest:
+
+```sh
+uv run --extra artifacts python -m manabot.data fetch experiments/data/mps_retest/full_context.png experiments/data/mps_retest/laptop/paired-update
+```
+
+
+The primary chart includes only the completed current-source panel. Each bar
+stacks engine/host work, collection policy and learning; the strip divides
+48,064 learner decisions by the whole-update phase sum. The CPU aggregation
+is labelled. Half precision has its own numerical tolerances and is not
+trajectory-equivalence evidence. Hosts never share an axis. The earlier
+[source-fa23fc364 chart](data/mps_retest/full_context-fa23fc364.png) is historical;
+its older update implementation and different host conditions preclude pooling.
+
+### Whole-update coverage after the final stop
+
+Every requested host/width/stream/arm is listed. **Measured** means three
+selected complete replays at `140eec28d`, not that float32 parity passed.
+**Failed: capture memory** identifies the shared 512-stream prerequisite at
+`7924086ad`: a 20 GiB process-tree guard, not a backend allocation failure.
+Peak sampled process-tree RSS was 21,598,879,744 bytes; 169 collection calls,
+no learner minibatches. The later 96 GiB laptop allowance was never exercised:
+the wrap-up direction arrived before a new larger-stream block started.
+**Failed: paging guard** identifies isolated CPU parity at `7b07ee0ab`, with
+small swap-ins and no new swap-outs; it does not prove sustained pressure.
+**Not reached** means no completed three-replay result. M4 w64/256 has one
+repetition; w768/256 has correctness only. Neither becomes a timing bar.
+Older results and failures at `fa23fc364` stay in the historical sections.
+
+<!-- coverage:start -->
+| Host | Model | Streams | CPU f32 | MPS f32 | MLX f32 | MPS bf16 | MLX bf16 | MPS f16 | MLX f16 |
+|---|---|---:|---|---|---|---|---|---|---|
+| M4 Max | w64l2 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w64l2 | 512 | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory |
+| M4 Max | w64l2 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w96l4 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w96l4 | 512 | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory |
+| M4 Max | w96l4 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w160l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w160l8 | 512 | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory |
+| M4 Max | w160l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w384l8 | 256 | Measured | Measured | Measured | Measured | Measured | Measured | Measured |
+| M4 Max | w384l8 | 512 | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory |
+| M4 Max | w384l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w512l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w512l8 | 512 | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory |
+| M4 Max | w512l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w768l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w768l8 | 512 | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory |
+| M4 Max | w768l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w1024l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M4 Max | w1024l8 | 512 | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory | Failed: capture memory |
+| M4 Max | w1024l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w64l2 | 256 | Failed: paging guard | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w64l2 | 512 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w64l2 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w96l4 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w96l4 | 512 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w96l4 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w160l8 | 256 | Failed: paging guard | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w160l8 | 512 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w160l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w384l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w384l8 | 512 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w384l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w512l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w512l8 | 512 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w512l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w768l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w768l8 | 512 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w768l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w1024l8 | 256 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w1024l8 | 512 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+| M2 | w1024l8 | 1024 | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached | Not reached |
+<!-- coverage:end -->
+
+## Historical w384 comparison at `fa23fc364`
+
+The earlier five-resident-arm M4 w384/256 group measured 703.20 s on CPU4,
+521.22 s on MPS float32, 478.42 s on MPS bfloat16, 442.03 s on MPS float16
+and 402.22 s on MLX float32. The three blocks spanned 6,870.95 s; endpoint
+loads were 119.12→57.56, 60.47→30.57 and 30.98→47.43, with no retries.
+All sampled choices matched CPU. These older source and residency conditions
+prevent attributing the difference from the renewed timings to any one code
+change. The [historical M2 table](data/mps_retest/comparisons.md) and
+[historical M4 table](data/mps_retest/comparisons-Jacks-MacBook-Pro-2.local.md)
+retain their receipts and numerical checks.
+
+## Historical small models change the ordering
 
 At w64l2 and 256 streams, CPU beat every MPS precision on both hosts. Half
 precision did not provide the large-shape advantage seen at w384l8. These
@@ -135,7 +239,7 @@ while used swap ended near 257 MiB. These host counters include the setup
 and cleanup interval; they cannot assign paging cost to an arm. Treat the
 M2 values as this shared-residency comparison, not isolated-backend timing.
 
-## Numerical agreement and memory at the measured shape
+## Historical numerical agreement and memory
 
 The initial 64-row gradient check used the w384l8 model and each host's own
 256-stream capture. Both MPS half dtypes executed; neither silently fell back
@@ -186,14 +290,17 @@ every 50 ms is a lower bound. All five arm processes were resident together.
 | PyTorch MPS half | bfloat16 autocast |
 | PyTorch MPS half | float16 autocast with a gradient scaler |
 | MLX | float32 |
+| MLX half (new runs) | bfloat16; float16 with fixed loss scale 128 |
 
 The harness attempts both MPS half dtypes at every selected shape. An unsupported dtype is
 recorded with its error; the other half arm remains required. Autocast warnings
 that would silently run float32 are errors. Nonfinite gradients are errors,
-not fast optimizer steps. MLX's current backend explicitly owns float32
-arithmetic; adding its own mixed-precision implementation is outside this
-retest. Regime defaults, live-token refusal off CUDA and reduced-precision
-refusal off CUDA are unchanged. Autocast exists only in the harness.
+not fast optimizer steps. The new required MLX bfloat16 arm and executable float16 arm use half
+weights and activations in each forward, with float32 master weights, loss
+and Adam state. Float16 uses a fixed loss scale of 128; overflow refuses the
+step. This has the same state-precision split as MPS autocast, not an
+identical operator-by-operator autocast policy. Regime defaults stay float32. Live-token and reduced-precision refusals off
+CUDA are unchanged. MPS autocast is selected only in the harness.
 
 | Axis | Points |
 |---|---|
@@ -227,13 +334,14 @@ host preparation, device transfer where needed and synchronized completion.
   logits return to the host. Catalog setup and first-call time are separate.
 - **Memory:** process lifetime peak RSS; MLX allocator peak; MPS driver peak
   sampled every 50 ms. The sampled peak is a lower bound, not an exact allocator
-  high-water mark. Each arm/shape/phase runs in a fresh process. During a comparison all
-  arm models remain resident, although only one process computes at a time.
-  An allocation failure is a limit of this interleaved setup, not proof that
-  the arm cannot fit alone.
-- **Correctness:** legal-logit and value differences, full-gradient cosine,
-  minimum tensor cosine and worst tensor against CPU float32. MLX comparisons
-  use its independent parameter layout (including folded GRU biases). Tiny
+  high-water mark. Each arm/shape/phase runs in a fresh process. Historical comparisons kept all
+  arm models resident. The new paired comparison keeps CPU and one accelerator
+  resident; only one process computes at a time. Allocation or paging limits
+  describe that comparison setup, not an isolated arm.
+- **Correctness at the measured revision:** legal-logit and value differences, full-gradient cosine,
+  minimum tensor cosine and worst tensor against CPU float32. Historical MLX comparisons
+  used folded GRU biases; the current source preserves independent GRU biases
+  and also compares loss and the clipped one-step parameter update. Tiny
   tensors use the existing parity check's global-norm floor. Common-uniform
   sampling comparisons report disagreements separately; near-identical logits
   do not establish identical decisions.
@@ -247,7 +355,8 @@ host preparation, device transfer where needed and synchronized completion.
 
 ## Limits
 
-This is one capture per stream count on one main host, not a population estimate.
+Only one 256-stream capture completed on each of two hosts; there is no
+replayable 512/1024-stream capture and no population estimate.
 The whole update is a replay with a shared engine component, not on-policy
 training with each backend in the loop. Changed weights at other widths do not
 change recorded actions or targets. Gradient agreement at initialization does
@@ -265,7 +374,9 @@ paging with an allocation failure or label an unattempted arm “does not fit.�
 At 05:29 UTC used swap was 10,518.25 MiB, with no complete replay after about
 105 minutes. The series was cancelled and workers exited. Pairwise
 interleaving would change the all-arm comparison and its single CPU reference;
-it was not substituted without reviewing that design change.
+it was not substituted in that series. Later direction authorized pairwise
+replay; the new source and its explicit CPU aggregation preserve that change
+in method rather than pooling both series.
 
 <details>
 <summary>Method, process and evidence</summary>
@@ -273,13 +384,14 @@ it was not substituted without reviewing that design change.
 **M2 host:** fresh AWS mac2-m2, Apple M2, 24 GiB, Python 3.12, pinned torch
 2.15 and the locked MLX version. The operator allocates it through AWS, writes
 `~/.manabot-mps-bench/access.md`, and releases it using the 24-hour guard in
-`release.sh`. Cite the operator's allocation/release timestamps and cost receipt
-(24-hour minimum, about USD 21) against the USD 25 Task cap.
+`release.sh`. Allocation is 2026-11-13T02:56:06Z; exact release remains pending
+as recorded in Cost below (24-hour minimum, about USD 21; USD 25 cap).
 
 **Laptop host:** Apple M4 Max, 128 GiB, four CPU threads for capture and the
 CPU reference. Start captures and comparison blocks regardless of load,
-recording the one-minute load at both endpoints. A comparison block is all arms at one width and per-call size/phase, or one
-whole-update repetition. Resident isolated processes advance one collection
+recording the one-minute load at both endpoints. A historical comparison block is all arms at one width and per-call size/phase,
+or one whole-update repetition. Under `--pairwise`, each CPU/accelerator pair
+is one whole-update block, with its own retry and retained reference. Resident isolated processes advance one collection
 call or learner step per arm in order. The start and end loads belong to the
 entire comparison; there is no mid-block load refusal that would selectively
 truncate slower arms.
@@ -290,8 +402,8 @@ without a load threshold. Keep the attempt with the lower arithmetic mean
 of endpoint loads; a tie keeps the first. Retain both attempts and select all
 arms together. An unavailable repeat leaves coverage incomplete. Per-call blocks on both hosts and laptop captures also retain and repeat
 load increases over 2×, keeping unused captures beside the selected one.
-Every table row and chart point/bar carries the block's endpoint loads;
-whole-update captions also give the reused engine capture's loads. Repeated
+Tables carry the block and capture endpoint loads; the measured-only chart
+keeps a short source caption. Repeated
 blocks are identified. This reduces shared-host drift; it does not make a busy
 laptop equivalent to a dedicated host. No artificial load is generated.
 
@@ -302,8 +414,9 @@ its origin and threads, and the chart title labels a cross-host phase sum.
 Missing capture provenance leaves coverage incomplete; conflicting provenance
 is refused.
 
-**Commands** inside the frozen source environment with a real Etude launcher
-run identity. The operator supplies M2 access when available. These are
+**Reproduction commands** inside the measured `fa23fc364` source environment
+with a real Etude launcher run identity. The ported checkout uses the same
+commands but its seven-arm results belong to a new source group. These are
 measurement commands, not rental commands. Prepare the M2 environment with
 `uv sync --locked --python 3.12 --extra play --extra mlx --extra reports
 --extra artifacts` and build its matching native extension. Explicit interpreter
@@ -312,7 +425,8 @@ establish replay durations before scheduling the full matrix; the default
 worker timeout is 900 seconds and a timeout is a failed attempt, not OOM.
 Three interleaved replays run back to back on the same host, without a
 one-hour admission or reporting limit. Each repetition
-interleaves all executable arms call by call and step by step. Their total
+interleaves all executable arms call by call and step by step, or runs all six
+CPU/accelerator pairs in order when `--pairwise` is selected. Their total
 elapsed span, including the gaps spent running the other arms, determines the
 recorded window; phase sums exclude those gaps. The timeout applies to an
 individual worker call, not a complete update.
@@ -353,8 +467,8 @@ count on one host. New attempts supersede the corresponding cell in summaries;
 raw receipts remain intact. Load retries retain both attempts and append an
 explicit selection of the quieter whole block. Captures retain `selection.json`
 and each attempt’s `provenance.json`; publish the unused attempt too. Parity labels use the latest attempts for that
-stream count. A sole host uses `full_context.png`; in a combined report the M2
-uses that name and other hosts have a hostname suffix. Host identity remains
+stream count. The combined measured-only chart uses `full_context.png`; supplemental
+host renderings keep their hostname suffix. Host identity remains
 in every chart and table regardless of filename.
 
 **2026-11-12:** The decision threshold was removed before any experiment run.
@@ -450,9 +564,69 @@ the named paths, then unpack the tar archives at the repository root to replay
 from the measured source. These are partial results: the missing matrix
 cells and the M2 memory-design problem remain open.
 
+**2026-11-13 shared-update port and MLX half:** source `7924086ad` repaired
+capture and replay against the shared update contract. The bounded both-seat
+capture replay test passed; source `7b07ee0ab` added measurement-only MLX half
+forwards with float32 master weights, loss and Adam state. Both bfloat16 and
+float16 executed gradients and a clipped step in the controlled fixture; the
+float16 path uses fixed loss scaling at 128. This is not numerical-equivalence
+evidence for the real training shapes. The seven-resident-arm w384/256 laptop attempt `d85c036cb749` retained the
+original `99210bf8d` capture inputs and engine component, but was cancelled
+before a complete replay when laptop swap grew substantially. At 11:11:45 UTC
+used swap was 14,474.12 MiB; at 11:15:23 it was 35,306.00 MiB, with
+20.8 GiB of new swap-outs. This is a residency limit of the shared host
+comparison, not a standalone backend capacity result. Its parity receipts
+and cancellation evidence remain separate. CPU-paired replay is authorized
+and now implemented at `140eec28d`: only CPU and one accelerator are resident,
+with calls and steps alternating. Each of three repetitions contains all six
+pairs. The CPU bar is the median of three means across its six paired CPU
+references; every individual CPU timing and load is retained in the table.
+Accelerator bars remain medians of their own three replays.
+
+**New 512-stream capture failure:** `05d01891989a` at `7924086ad` again hit
+the unchanged 20 GiB process-tree guard before learning: 169 retained collection
+calls, 331.50 s, load 340.41→300.78. Chunked learner admission does not solve
+the collector's full-capacity observation storage. Its partial arrays and
+receipt are retained under `laptop/shared-update/`. The subsequent direction
+authorized 75% of laptop RAM, but the final stop arrived before that work began.
+No later capture or 512-stream replay ran; this is not a backend OOM.
+
+**New M2 stops:** `d475968d4499` (w64) and `ec717373d298` (w160), both at
+`7b07ee0ab`, stopped during isolated CPU parity. Swap-ins rose by 27 and 4
+pages respectively; swap-outs remained 20,676,478. These are literal
+paging-guard stops, not evidence of sustained pressure or seven-arm allocation
+failure. Pairwise replay would not reduce below the single resident arm at
+that boundary. No w384 retry started under the no-paging condition. The raw
+counters and failures are published as `m2-shared-update-7b07ee0ab.tar.gz`.
+The operator was notified that M2 blocks are stopped and workers have exited.
+
+
+**Current paired completion and final stop:** `6b7892940c26` completed the
+w384/256 seven-arm comparison at source `140eec28d`, with all 18 selected
+CPU/accelerator blocks and four retained retries. The selected receipt span
+is 17,202.69 s; actual execution includes the unselected attempts and lasted
+about five hours. `f11d5fa70f69` completed seven-arm w768/64-row correctness
+only. `4c3b4b17a851` was cancelled at 16:44 UTC after one full w64 repetition
+on the explicit wrap-up direction. Neither an uncompleted repetition nor the
+correctness-only probe is used in a median. Raw ledgers, reference arrays,
+launcher sources and terminal Etude receipts remain under
+`laptop/paired-update/`. No larger-stream or CUDA block started.
+
+**Supported MLX precision:** the final implementation replaces the temporary
+mixed-precision subclass with one policy-owned precision option shared by
+inference and the learner, defaulting to float32. The
+[backend guide](../manabot/backends/mlx.md#compute-precision) states loss scaling,
+float32 probability normalization and the half-specific numerical gates.
+The gates were calibrated from the retained w384/w768 diagnostics; this is
+not an independent validation population. Training quality and trajectories
+remain unmeasured. Torch defaults and precision refusals are unchanged.
+
 **Cost:** the operator reports allocation at 2026-11-13T02:56:06Z, with a
-24-hour minimum of about USD 21 under the USD 25 cap. Release time is pending
-and remains operator-owned. Etude local-job USD 0.00 receipts exclude this
+24-hour minimum of about USD 21 under the USD 25 cap. At 16:43 UTC on
+2026-11-13 the operator said, “the instance is terminated; the host releases
+tomorrow.” Exact host release time remains operator-owned and unverified. No
+new M2 work or rental was launched after that direction.
+Etude local-job USD 0.00 receipts exclude this
 operator-managed rental; they are not the whole experiment cost.
 
 </details>

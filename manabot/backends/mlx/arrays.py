@@ -12,7 +12,21 @@ import mlx.core as mx
 from mlx.utils import tree_flatten
 import numpy as np
 
+from manabot.policy.protocol import Precision
+
 FLOAT = mx.float32
+
+
+def precision_dtype(precision: Precision) -> mx.Dtype:
+    """The compute dtype; parameters and optimizer state remain float32."""
+    try:
+        return {
+            "float32": mx.float32,
+            "bfloat16": mx.bfloat16,
+            "float16": mx.float16,
+        }[precision]
+    except KeyError as error:
+        raise ValueError(f"unsupported MLX precision: {precision}") from error
 
 
 def to_mlx(array: np.ndarray) -> mx.array:

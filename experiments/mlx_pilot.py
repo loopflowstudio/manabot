@@ -69,7 +69,7 @@ def _host() -> dict[str, Any]:
 def capture(out: Path) -> None:
     """Run the pilot's one-update capture using the shared recorder."""
     from experiments.tla_frontier import frozen
-    from manabot.backends.capture import capture as record
+    from manabot.backends.torch.capture import capture as record
     from manabot.training.regime import TrainingRegime
 
     regimes, protocol = frozen()

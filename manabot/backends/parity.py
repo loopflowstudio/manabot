@@ -31,6 +31,12 @@ backend, writes
 `--json` (one report per backend) when given, and exits 1 naming each failing
 backend's worst components if any check fails; it exits 2 when the checkpoint
 or capture is missing, the checkpoint is refused or no backend is installed.
+
+Use `--backend mlx --precision bfloat16` (or `float16`) for explicit half
+precision. Half uses its measured logit/value, loss and full-gradient cosine
+bars in `TOLERANCES`; every tensor cosine and the one-step difference remain
+diagnostics. Float32 retains all the stricter checks above. Passing half's
+numerical gates does not establish equivalent optimization or playing strength.
 """
 
 import argparse
@@ -59,6 +65,7 @@ from manabot.policy.protocol import (
     Backend,
     BackendLearner,
     BackendPolicy,
+    Precision,
     Settings,
     Targets,
 )
@@ -70,6 +77,34 @@ LOSS_TOLERANCE = 1e-3
 COSINE_TOLERANCE = 0.999
 STEP_PARAMETER_TOLERANCE = 1e-6
 ZERO_GRADIENT = 1e-6  # of the global gradient norm
+
+
+@dataclass(frozen=True)
+class Tolerances:
+    """Numerical acceptance for a compute dtype, not a learning-quality claim."""
+
+    logits: float
+    values: float
+    loss: float
+    cosine: float
+    step: float | None
+
+
+# Half bars cover the retained w384/w768 real-input checks at 140eec28d.
+# Full-gradient cosine gates half; tensor cosines and Adam deltas remain visible.
+# Float32 retains its stricter per-tensor and one-step contracts unchanged.
+TOLERANCES: dict[Precision, Tolerances] = {
+    "float32": Tolerances(
+        LOGIT_TOLERANCE,
+        LOGIT_TOLERANCE,
+        LOSS_TOLERANCE,
+        COSINE_TOLERANCE,
+        STEP_PARAMETER_TOLERANCE,
+    ),
+    "bfloat16": Tolerances(1e-3, 1e-2, 1e-2, 0.99, None),
+    "float16": Tolerances(1e-4, 2e-3, 2e-3, 0.999, None),
+}
+
 
 # Backend name -> the framework it needs; each provides
 # `manabot.backends.<name>.checkpoint.BACKEND`.
@@ -89,8 +124,14 @@ def backend_module(name: str) -> ModuleType:
     return importlib.import_module(f"manabot.backends.{name}")
 
 
-def backend(name: str) -> Backend:
-    return cast(Backend, backend_module(name).checkpoint.BACKEND)
+def backend(name: str, *, precision: Precision = "float32") -> Backend:
+    """Select explicit MLX compute precision; Torch remains the float32 reference."""
+    module = backend_module(name)
+    if precision == "float32":
+        return cast(Backend, module.checkpoint.BACKEND)
+    if name != "mlx":
+        raise ValueError("half-precision parity is supported only for the MLX backend")
+    return cast(Backend, module.checkpoint.MLXBackend(precision=precision))
 
 
 def minibatch_loss(
@@ -138,6 +179,8 @@ def minibatch_loss(
 
 @dataclass
 class Report:
+    precision: Precision = "float32"
+    gradient_cosine: float = 1.0
     forward_logits: float = 0.0
     forward_logits_relative: float = 0.0
     forward_values: float = 0.0
@@ -157,46 +200,63 @@ class Report:
     minibatches: list[dict[str, Any]] = field(default_factory=list)
 
     def checks(self) -> list[tuple[str, str, bool]]:
-        """(component, measured against its bar, passed) for every gated check."""
-        return [
+        """(component, measured against its dtype's bar, passed)."""
+        tolerance = TOLERANCES[self.precision]
+        finite_step = self.step_checked and bool(
+            np.isfinite(
+                [
+                    self.step_parameter_max_abs,
+                    self.step_reference_norm,
+                    self.step_backend_norm,
+                ]
+            ).all()
+        )
+        checks = [
             (
-                "clipped Adam weights",
-                f"max |Δ| {self.step_parameter_max_abs:.1e} (tol 1e-6)",
-                self.step_checked
-                and self.step_parameter_max_abs <= STEP_PARAMETER_TOLERANCE,
-            ),
-            (
-                "forward logits",
-                f"max |Δ| {self.forward_logits:.1e} (tol 1e-4)",
-                self.forward_logits <= LOGIT_TOLERANCE,
-            ),
-            (
-                "forward values",
-                f"max |Δ| {self.forward_values:.1e} (tol 1e-4)",
-                self.forward_values <= LOGIT_TOLERANCE,
-            ),
-            (
-                "collection logits",
-                f"max |Δ| {self.collection_logits:.1e} (tol 1e-4)",
-                self.collection_logits <= LOGIT_TOLERANCE,
-            ),
-            (
-                "collection values",
-                f"max |Δ| {self.collection_values:.1e} (tol 1e-4)",
-                self.collection_values <= LOGIT_TOLERANCE,
-            ),
-            (
-                "learner loss",
-                f"rel Δ {100 * self.loss_relative:.4f}% (tol 0.1%)",
-                self.loss_relative <= LOSS_TOLERANCE,
-            ),
-            (
-                f"gradient {self.gradient_worst}",
-                f"min cosine {self.gradient_min_cosine:.6f} over "
-                f"{self.gradient_tensors} tensors (tol 0.999)",
-                self.gradient_min_cosine >= COSINE_TOLERANCE,
+                "clipped Adam weights"
+                if tolerance.step is not None
+                else "finite clipped Adam step",
+                f"max |Δ| {self.step_parameter_max_abs:.1e} "
+                + (
+                    f"(tol {tolerance.step:g})"
+                    if tolerance.step is not None
+                    else "(diagnostic; no float32 step bound)"
+                ),
+                finite_step
+                and (
+                    tolerance.step is None
+                    or self.step_parameter_max_abs <= tolerance.step
+                ),
             ),
         ]
+        for name, value, limit in (
+            ("forward logits", self.forward_logits, tolerance.logits),
+            ("forward values", self.forward_values, tolerance.values),
+            ("collection logits", self.collection_logits, tolerance.logits),
+            ("collection values", self.collection_values, tolerance.values),
+            ("learner loss", self.loss_relative, tolerance.loss),
+        ):
+            checks.append((name, f"Δ {value:.3g} (tol {limit:g})", value <= limit))
+        if self.precision == "float32":
+            checks.append(
+                (
+                    f"gradient {self.gradient_worst}",
+                    f"min cosine {self.gradient_min_cosine:.6f} over "
+                    f"{self.gradient_tensors} tensors (tol {tolerance.cosine:g})",
+                    self.gradient_min_cosine >= tolerance.cosine,
+                )
+            )
+        else:
+            checks.append(
+                (
+                    "full gradient",
+                    f"cosine {self.gradient_cosine:.6f} "
+                    f"(tol {tolerance.cosine:g}); tensor minimum "
+                    f"{self.gradient_min_cosine:.6f} ({self.gradient_worst}, diagnostic)",
+                    self.gradient_cosine >= tolerance.cosine,
+                )
+            )
+        return checks
 
     def failures(self) -> list[str]:
         return [name for name, _, passed in self.checks() if not passed]
@@ -258,6 +318,7 @@ def check(
     collection_count: int = 8,
     *,
     backend_name: str,
+    precision: Precision = "float32",
 ) -> Report:
     """Compare one backend against the PyTorch reference."""
     torch.set_num_threads(8)
@@ -265,12 +326,12 @@ def check(
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
     weights = from_torch_state(agent.config, space.encoder.config, state)
     module = backend_module(backend_name)
-    port = backend(backend_name)
+    port = backend(backend_name, precision=precision)
     policy, learner = port.load(weights)
     # The reference: the same loss over the torch backend, on the loaded agent.
     reference_policy = torch_backend.checkpoint.TorchPolicy(agent, weights)
     reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
-    report = Report()
+    report = Report(precision=precision)
     for index, (obs, targets, settings, meta) in enumerate(
         minibatches(capture, minibatch_count)
     ):
@@ -308,13 +369,29 @@ def check(
                 sum(np.square(g.astype(np.float64)).sum() for g in expected.values())
             )
         )
+        dot = actual_square = expected_square = 0.0
+        if grads.keys() != expected.keys():
+            raise ValueError("backend gradient parameter sets differ")
         for name, grad in grads.items():
-            cosine = _cosine(grad, expected[name], floor)
+            actual = grad.astype(np.float64).ravel()
+            wanted = expected[name].astype(np.float64).ravel()
+            if not np.isfinite(actual).all() or not np.isfinite(wanted).all():
+                raise ValueError(f"nonfinite gradient: {name}")
+            dot += float(actual @ wanted)
+            actual_square += float(actual @ actual)
+            expected_square += float(wanted @ wanted)
+            cosine = _cosine(actual, wanted, floor)
             if cosine is None:
                 both_zero += 1
             else:
                 cosines[name] = cosine
-        worst = min(cosines, key=cosines.__getitem__)
+        worst = min(cosines, key=cosines.__getitem__) if cosines else ""
+        worst_cosine = cosines.get(worst, 1.0)
+        global_cosine = (
+            dot / np.sqrt(actual_square * expected_square)
+            if actual_square * expected_square
+            else float(actual_square == expected_square == 0)
+        )
         row = {
             "index": meta["index"],
             "B": int(len(targets.actions)),
@@ -324,7 +401,8 @@ def check(
             "loss_torch": reference_loss,
             "loss_backend": loss_value,
             "loss_relative": loss_relative,
-            "gradient_min_cosine": cosines[worst],
+            "gradient_cosine": float(global_cosine),
+            "gradient_min_cosine": worst_cosine,
             "gradient_worst": worst,
         }
         report.minibatches.append(row)
@@ -334,8 +412,9 @@ def check(
         report.loss_relative = max(report.loss_relative, loss_relative)
         report.gradient_tensors = len(cosines) + both_zero
         report.gradient_both_zero = max(report.gradient_both_zero, both_zero)
-        if cosines[worst] < report.gradient_min_cosine:
-            report.gradient_min_cosine = cosines[worst]
+        report.gradient_cosine = min(report.gradient_cosine, float(global_cosine))
+        if worst_cosine < report.gradient_min_cosine:
+            report.gradient_min_cosine = worst_cosine
             report.gradient_worst = worst
         if index == 0:
             reference_loss_again = minibatch_loss(
@@ -363,7 +442,7 @@ def check(
         print(
             f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
-            f"min cosine {cosines[worst]:.6f} ({worst})",
+            f"min cosine {worst_cosine:.6f} ({worst})",
             flush=True,
         )
     _collection(agent, policy, capture, collection_count, report)
@@ -439,7 +518,7 @@ def _collection(
         report.collection_logits = max(report.collection_logits, absolute)
         report.collection_values = max(
             report.collection_values,
-            float(np.abs(port_values - values.numpy()).max()),
+            float(np.abs(port_values.reshape(-1) - values.numpy().reshape(-1)).max()),
         )
     policy.clear_cache()
 
@@ -463,8 +542,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--minibatches", type=int, default=8)
     parser.add_argument("--collection", type=int, default=8)
     parser.add_argument("--json", type=Path)
+    parser.add_argument("--backend", choices=tuple(BACKENDS))
+    parser.add_argument("--precision", choices=tuple(TOLERANCES), default="float32")
     args = parser.parse_args(argv)
-    names = installed_backends()
+    if args.precision != "float32" and args.backend != "mlx":
+        parser.error("half precision requires --backend mlx; Torch stays float32")
+    names = [args.backend] if args.backend else installed_backends()
+    if any(name not in installed_backends() for name in names):
+        parser.error("the selected backend's framework is not installed")
     if not names:
         parser.error("no framework backend is installed (" + ", ".join(BACKENDS) + ")")
     reports: dict[str, Report] = {}
@@ -476,6 +561,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.minibatches,
                 args.collection,
                 backend_name=name,
+                precision=args.precision,
             )
     except (FileNotFoundError, ValueError) as error:
         parser.error(str(error))  # exits 2; 1 means the models disagree
@@ -486,7 +572,11 @@ def main(argv: list[str] | None = None) -> int:
         args.json.write_text(
             json.dumps(
                 {
-                    name: asdict(report) | {"failures": failures[name]}
+                    name: asdict(report)
+                    | {
+                        "tolerances": asdict(TOLERANCES[report.precision]),
+                        "failures": failures[name],
+                    }
                     for name, report in reports.items()
                 },
                 indent=2,

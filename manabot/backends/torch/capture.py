@@ -1,4 +1,4 @@
-"""Capture real policy calls and learner inputs for backend comparisons.
+"""Capture real Torch policy calls and learner inputs for backend comparisons.
 
 `capture` runs a supplied one-update regime, retaining the initial checkpoint,
 full-capacity observation arrays, selected targets and per-minibatch settings.

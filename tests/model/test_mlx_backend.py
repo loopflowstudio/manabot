@@ -37,6 +37,7 @@ from manabot.policy.checkpoint import (  # noqa: E402
     write_safetensors,
 )
 from manabot.policy.prepare import Tables, pack  # noqa: E402
+from manabot.policy.protocol import Precision  # noqa: E402
 
 
 def _mlx_names(torch_named: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -241,14 +242,15 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         )
 
 
-@pytest.mark.parametrize("dtype", [mx.bfloat16, mx.float16])
+@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
 def test_mixed_precision_preserves_master_updates(
-    tmp_path: Path, dtype: mx.Dtype
+    tmp_path: Path, precision: Precision
 ) -> None:
     """Half forwards preserve small updates in float32 masters and Adam state."""
     import manabot.backends.mlx as backend
+    from manabot.backends.mlx.arrays import precision_dtype
     from manabot.backends.mlx.checkpoint import build
-    from manabot.backends.mlx.learner import MixedPrecisionLearner
+    from manabot.backends.mlx.learner import Learner
     from manabot.backends.parity import minibatch_loss
     from manabot.policy.protocol import Settings, Targets
 
@@ -263,7 +265,11 @@ def test_mixed_precision_preserves_master_updates(
         encoder.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
     )
-    learner = MixedPrecisionLearner(policy, dtype=dtype, minibatch_rows=2)
+    assert policy.precision == "float32"
+    learner = Learner(policy, precision=precision, minibatch_rows=2)
+    dtype = precision_dtype(precision)
+    assert learner.precision == policy.precision == precision
+    assert learner.loss_scale == (128 if precision == "float16" else 1)
     batch = policy.prepare(obs)
     settings = Settings(1e-5, 0.2, 0.1, 0.05, 0.01)
     targets = Targets(
@@ -277,6 +283,12 @@ def test_mixed_precision_preserves_master_updates(
     with learner.forward_precision():
         assert policy.programs().dtype == dtype
         assert all(p.dtype == dtype for _, p in tree_flatten(policy.parameters()))
+    policy.cache_programs()
+    inference_logits, inference_values = policy.evaluate(batch)
+    logits, values = policy.forward_distribution(batch)
+    assert logits.dtype == values.dtype == mx.float32
+    np.testing.assert_array_equal(inference_logits, np.array(logits))
+    np.testing.assert_array_equal(inference_values, np.array(values).reshape(-1))
     before = learner.parameters()
     loss = minibatch_loss(backend, policy, learner, batch, targets, settings)
     assert loss.dtype == mx.float32 and bool(mx.isfinite(loss))
@@ -301,3 +313,57 @@ def test_mixed_precision_preserves_master_updates(
         for _, p in tree_flatten(learner.optimizer.state)
         if isinstance(p, mx.array) and mx.issubdtype(p.dtype, mx.floating)
     )
+
+
+@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
+def test_half_policy_loading_and_float32_action_logs(
+    tmp_path: Path, precision: Precision
+) -> None:
+    from manabot.backends.mlx.arrays import precision_dtype
+    from manabot.backends.mlx.rl import action_logs, policy_logs
+
+    _, path, _ = _converted(tmp_path)
+    policy, _ = load_mlx_policy(str(path), precision=precision)
+    assert policy.precision == precision
+    assert policy.programs().dtype == precision_dtype(precision)
+    policy.cache_programs()
+    policy.set_precision("float32")
+    assert policy.programs().dtype == mx.float32
+    assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
+
+    logits = mx.array(
+        [[0.123, 0.124, 20], [-3, 2, 0]], dtype=precision_dtype(precision)
+    )
+    valid = mx.array([[True, True, False], [True, True, True]])
+    logs = policy_logs(logits, valid)
+    expected = policy_logs(logits.astype(mx.float32), valid)
+    assert logs.dtype == mx.float32
+    np.testing.assert_array_equal(np.array(logs), np.array(expected))
+    actions = mx.array([1, 2])
+    selected = action_logs(logs, actions)
+    assert selected.dtype == mx.float32
+    np.testing.assert_array_equal(np.array(selected), np.array(logs)[[0, 1], [1, 2]])
+    np.testing.assert_allclose(np.array(mx.exp(logs).sum(-1)), 1, atol=1e-7)
+
+
+def test_half_overflow_refuses_update(tmp_path: Path) -> None:
+    from manabot.backends.mlx.learner import Learner
+    from manabot.backends.mlx.rl import NumericalError
+
+    _, path, _ = _converted(tmp_path)
+    policy, _ = load_mlx_policy(str(path), precision="float16")
+    learner = Learner(policy, minibatch_rows=1)
+    before = learner.parameters()
+
+    def overflow() -> tuple[mx.array, ...]:
+        with learner.forward_precision():
+            return (
+                policy.semantic_cards.token_embedding.weight.sum() * mx.array(mx.inf),
+            )
+
+    loss = learner.loss(overflow)[0]
+    with pytest.raises(NumericalError, match="nonfinite_objective"):
+        learner.step(loss, 0.1)
+    for key, value in learner.parameters().items():
+        np.testing.assert_array_equal(value, before[key])
+    assert int(learner.optimizer.step) == 0
