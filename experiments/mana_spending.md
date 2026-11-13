@@ -88,8 +88,10 @@ mana. Activated abilities remain explicit native decisions outside this automati
 boundary; their presence is recorded, and these are not counts of every possible
 mana-ability strategy.
 
-Separate columns count untapped-source capabilities, floating pools, rule-visible
-receipts and their joint outcomes. Exact source identity counts expose the
+Separate columns count untapped-source capabilities, floating pools, native
+receipts and their joint outcomes. Receipts retain all six spent amounts and
+entry counters; this conservatively distinguishes more than a particular spell
+may read. Distinct remainders are retained regardless of receipt relevance. Exact source identity counts expose the
 additional distinctions lost by grouping producers with equal output. Such a
 grouping is a measurement definition, not permission to hide object choices.
 The per-payment cap counts source-subset and receipt traversal visits. A cap hit

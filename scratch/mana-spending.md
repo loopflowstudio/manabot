@@ -280,3 +280,9 @@ source is `00ee188998`; launcher request uses `mtg347-mana-learning`, two L4s
 at once, `--max-usd 17`. Quote: USD2.24 per first-wave run, USD4.48 first wave,
 USD12 job/cohort rental budget. This is a quote, not incurred cost; run IDs and
 actual launcher cost remain to be recorded.
+
+Launch `518a4948ea80` failed admission: the second L4 was unavailable. Run IDs
+`f2f5adec2478`, `cfff739d2db5`, `5e0ed566acd9`, `2f6bd7e98142`; no job command
+started. Launcher reported machine `mtg347-l4-71b326e7fb82` confirmed deleted,
+`mtg347-l4-620f4314c806` not acquired. Finish shapes before retrying with one
+rental at a time; retain this failed admission and its launcher cost if exposed.
