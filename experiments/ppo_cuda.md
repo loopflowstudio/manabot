@@ -26,3 +26,14 @@ and verify behavior; this baseline alone cannot establish a speedup.
 - The local launcher database refuses SDK 0.2.16 as a different writer
   version. Launcher commands use its existing 0.2.15; workers retain the
   repository's locked SDK. The database is unchanged.
+- Run `8f56c7ef9fe9`, revision `5853054ab`, was cancelled after roughly nine
+  minutes of worker execution without a completed timing sample. The launcher
+  reported approximately $0.12. Direct inspection found an active Python
+  process and 14,066 MiB of L4 memory allocated; the provider summary incorrectly
+  reported zero GPU memory. External stack inspection was refused because the
+  container lacks `SYS_PTRACE`; no stack was obtained. These are missing
+  measurements, not zero-throughput observations.
+- The next baseline starts afresh: progress markers identify collection and
+  each update, and a separate diagnostic invocation enables periodic internal
+  stack dumps plus the operator profile. The five timing repeats run in a
+  separate process without either profiler or traceback timer.

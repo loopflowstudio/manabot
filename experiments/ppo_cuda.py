@@ -19,9 +19,10 @@ def runs(revision: str) -> list[Run]:
     command = f"""{TOOLCHAIN_ENV}
 set -eu
 out="$ETUDE_OUTPUT_DIR"
-uv run --locked python scratch/speed/bench.py "$out/baseline.json" --ppo-only --repeats 5 --profile "$out/profile"
+uv run --locked python scratch/speed/bench.py "$out/diagnostic.json" --ppo-only --repeats 1 --profile "$out/profile"
+uv run --locked python scratch/speed/bench.py "$out/baseline.json" --ppo-only --repeats 5
 uv run --locked python scratch/speed/bench.py "$out/easier.json" --ppo-only --streams 8 --transitions 8 --repeats 1
-tar -czf "$out/measurement.tar.gz" -C "$out" baseline.json easier.json profile.ppo profile.ppo.txt profile.ppo.trace.json
+tar -czf "$out/measurement.tar.gz" -C "$out" baseline.json diagnostic.json easier.json profile.ppo profile.ppo.txt profile.ppo.trace.json
 """
     return Job(
         name="ppo-cuda-baseline",

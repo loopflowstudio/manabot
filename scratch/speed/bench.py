@@ -20,6 +20,7 @@ import argparse
 from collections.abc import Callable
 from copy import deepcopy
 import cProfile
+import faulthandler
 import hashlib
 import importlib
 import importlib.util
@@ -140,6 +141,8 @@ def main() -> None:
     parser.add_argument("--profile", type=Path, help="cProfile one update of each kind")
     parser.add_argument("--ppo-only", action="store_true")
     args = parser.parse_args()
+    if args.profile is not None:
+        faulthandler.dump_traceback_later(120, repeat=True)
     device = torch.device(args.device)
     precision = "tf32" if device.type == "cuda" else "float32"
     apply_matmul_precision(precision)
@@ -175,8 +178,13 @@ def main() -> None:
         precision=precision,
     )
     tick = time.perf_counter()
+    print("collection started", flush=True)
     batch = collector.collect(agent, args.transitions)
     collection_seconds = time.perf_counter() - tick
+    print(
+        f"collection seconds={collection_seconds:.3f} rows={batch.rewards.size}",
+        flush=True,
+    )
     result: dict[str, object] = {
         "arm": ARM,
         "manabot": str(Path(manabot.__file__).parent),
@@ -201,6 +209,7 @@ def main() -> None:
         reference_weights: dict[str, torch.Tensor] | None = None
         sections_by_repeat: list[object] = []
         for repeat in range(args.repeats + 1 + int(args.profile is not None)):
+            print(f"{name} starting repeat={repeat}", flush=True)
             agent.load_state_dict(initial)
             learner = Learner(
                 agent, device, minibatch_rows=args.streams, precision=precision
@@ -302,6 +311,8 @@ def main() -> None:
         ),
     )
     if args.ppo_only:
+        if args.profile is not None:
+            faulthandler.cancel_dump_traceback_later()
         collector.close()
         args.out.write_text(json.dumps(result, indent=1))
         print(
