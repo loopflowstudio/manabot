@@ -201,8 +201,9 @@ host-only metadata markers were discarded, not shipped.
 
 Concept cleanup: delete `_slice_obs_tensors` and its optional tensor-dictionary
 return branch; `_slice_obs_rows` retains host values and the action-focus cast.
-Delete the grad-mode read in `prepare_admitted` and the worker's grad-mode
-context; caller-selected preparation purpose and exact learning results survive.
+Delete the grad-mode read in `prepare_admitted`, the worker's grad-mode
+context, and rollout's captured inference flag/`_prepare_rows(inference)`
+parameter; explicit preparation purpose and exact learning results survive.
 
 ## Facts that still bind
 
@@ -446,79 +447,29 @@ on batch i (previously after), so overlap can only start earlier; preparation
 order and batch contents are unchanged. An early caller exit leaves at most one
 submitted batch for the executor exit to join.
 
-## Concept review, 2026-11-13 (after PPO prefetch; both directions implemented)
+## First concept cleanup, 2026-11-13
 
-The three concepts hold in docs and code: `Prepared` is the one policy input,
-the container is the one policy file, composition roots choose the backend.
-Two leftovers contradicted the first; both are implemented and their receipts are below.
-No product choice is open.
+Both directions are implemented: the collector slices host observation rows,
+retaining the float32 action-focus cast and collection-entry device check;
+`prepare_admitted` chooses catalog coverage from `inference` and bucketed
+shapes alone, and the worker no longer sets grad mode. The backend README
+states catalog coverage, CPU compaction and default learner purpose.
 
-1. **The collector still builds a tensor dictionary.**
-   `RolloutCollector._slice_obs_tensors` (`training/rollout/collection.py`)
-   wraps host buffers in torch tensors, then unwraps them with `.numpy()` for
-   `inference.prepare`; its `dict[str, torch.Tensor]` return branch has no
-   production caller (both pass `inference`), only
-   `tests/model/test_inference.py` and `test_semantic_card_precision.py`,
-   which convert it back with `host_inputs`. Slice host rows
-   (`ObservationBuffers`, `action_focus` cast to float32 in NumPy as now) and
-   hand them to `inference.prepare`; one return type, a name that says host
-   rows, and the two tests read host rows. Values are unchanged, so the CPU
-   oracle and update comparison must stay exact and no CUDA rerun follows.
-2. **What a batch is prepared for is decided twice.** Callers pass
-   `inference=not torch.is_grad_enabled()` (rollout, verify, selection data,
-   parity), and `ActorCritic.prepare_admitted` reads the thread-local grad
-   mode again to choose referenced-versus-full catalog programs. Host
-   preparation therefore depends on ambient state: the prefetch worker has to
-   copy the caller's grad mode, and `backends/README.md` describes
-   `inference=True` only as column compaction. Make the argument the only
-   statement of purpose: learner rows (`inference=False`) select referenced
-   programs unless bucketed; inference rows do not; `prepare_admitted` reads
-   no grad mode and `_prepare_rows` drops `set_grad_enabled`. The one path
-   whose result changes is `prepare(obs)` with the default under `no_grad`
-   (full catalog today). Adopt only if the 3,410-tensor oracle, the update
-   comparison and the focused suite stay exact; if any moves, keep the code
-   and state the present rule in `backends/README.md` instead. Either way the
-   README says what `inference` selects besides compaction.
+Checks with the retained post-#514 belief corpus and base:
+`run.py /tmp/mtg333/concept-head.pt` + `compare.py` → **3,410 tensors,
+differing 0**; `updates.py /tmp/mtg333/updates-concept.json` + `cmp` →
+five cases identical; the focused five-file suite below → **63 passed, 2 CUDA
+cases deselected (103.30 s)**. Compress repeated these on the unchanged tree
+(`compress-head.pt`, `updates-compress.json`): exact, exact, 63 passed
+(88.20 s). No CUDA rerun followed. Full directions, commands and receipts:
+`c7c6a43994:scratch/mtg333-plan.md`.
 
-Noted, not directed:
+Not directed: unifying damped's serial `rows` with PPO's prefetched
+`minibatches` needs a same-card speed pass; it remains an optimization
+candidate. MLX's published loader name and `Prepared.guard`/`bucket_needs`
+stay as recorded in `questions.md`.
 
-- Damped walks minibatches with serial `rows`; PPO with prefetching
-  `minibatches`, behind a PPO-only `PPOAdmittedRollout` protocol. One walk
-  for both updates (taking the index chunks, synchronous on MLX) would merge
-  the protocols and extend the overlap to the damped update. It is an
-  unmeasured optimization: by this plan's rule it needs a same-card CUDA
-  pass, so it joins the candidates under "Launching again".
-- `load_mlx_policy` beside torch's `load_checkpoint` predates this Task
-  (main, `mlx.md`); renaming a published name is not this PR's.
-- `Prepared.guard` and `bucket_needs` are torch serving/collection facts on
-  the shared type; kept, per the assumptions in `questions.md`.
-
-## Concept cleanup implementation, 2026-11-13
-
-The collector slices `ObservationBuffers` directly, retaining the float32
-`action_focus` cast, and both production callers pass them to
-`inference.prepare`. Its device agreement check runs once at collection entry
-for both behavior scopes. The two test consumers now read host rows.
-`prepare_admitted` chooses referenced programs from `inference` and bucketed
-shapes only; the prefetch worker no longer sets grad mode. The backend README
-states catalog coverage, CPU compaction and default learner purpose explicitly.
-`EQUIV_BELIEF_INPUT=/tmp/mtg333/post514-belief.pt uv run python scratch/equivalence/run.py /tmp/mtg333/concept-head.pt`
-then `uv run python scratch/equivalence/compare.py /tmp/mtg333/post514-base.pt /tmp/mtg333/concept-head.pt`
-→ **3,410 tensors, differing 0**. `uv run python scratch/equivalence/updates.py /tmp/mtg333/updates-concept.json`
-then `cmp /tmp/mtg333/updates-post514-base.json /tmp/mtg333/updates-concept.json`
-→ identical across five update cases.
-`uv run --extra dev --extra mlx --extra artifacts pytest tests/model/test_inference.py tests/model/test_torch_backend_protocol.py tests/model/test_prepare_rows.py tests/model/test_semantic_card_precision.py tests/training/test_update_backend_protocols.py -k 'not cuda_semantic_policy_admission' --basetemp /tmp/mtg333/concept-tests -q`
-→ **63 passed, 2 CUDA cases deselected (103.30 s)**. This includes four explicit
-preparation-purpose cases across grad modes and buckets, seeded collection and
-restored continuation, plus synchronous/prefetched row equivalence. Ruff
-check/format passed for all seven changed Python files. The purpose change is
-retained because all three required checks hold. Compress found nothing further
-to reduce and reran the same three commands on the unchanged tree
-(`/tmp/mtg333/compress-head.pt`, `updates-compress.json`): 3,410 tensors
-differing 0, updates identical, 63 passed (88.20 s). No CUDA rerun is required by
-this cleanup's direction; existing CUDA review findings stay open.
-
-## Concept review 2, 2026-11-13 (after the concept cleanup; direction for implement)
+## Concept review 2, 2026-11-13 (implemented)
 
 The earlier two directions are in the code: the collector slices host rows and
 `prepare_admitted` reads no grad mode. No product choice is open. One leftover
@@ -565,11 +516,35 @@ describe the forward, not preparation.
 
 ## Next actions
 
-0. Implement "Concept review 2": purpose by role in the torch rollout, literal
-   purpose inside explicit `no_grad` blocks; rerun the three exactness checks.
+0. New steer: check the order-dependent timeout on main, then determinize;
+   delete only if redundant. Role-based preparation cleanup is exact (below).
 1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
    exceed the head-vs-head floor), host preparation/load costs, and the threaded
    profile limitation. PPO's no-slower-median condition now clears; main/head
    ranges overlap.
 2. Gate: broader suites, installed wheel, Python 3.12 and the full-file test order
    that timed out (State). Publication and landing are the caller's steps.
+
+## Role-based preparation receipt, 2026-11-13
+
+Torch rollout now always prepares bootstrap rows for inference and update rows
+for learning, including prefetch. No rollout grad-mode read or purpose parameter
+remains. Explicit no-grad/inference-mode blocks and decorators in parity,
+record coverage, frozen-policy inspection, selection collection and the
+breakdown script pass `inference=True`. Preparation outside those contexts in
+`verify/llm_game.py` and `decision_profile.py` retains its existing rule;
+changing them would change production values. Frozen experiments and the
+oracle are untouched. Docs and the existing two-grad-mode rollout test now
+state and check the role contract against explicit policy preparation.
+
+- `EQUIV_BELIEF_INPUT=/tmp/mtg333/post514-belief.pt uv run python scratch/equivalence/run.py /tmp/mtg333/role-head.pt && uv run python scratch/equivalence/compare.py /tmp/mtg333/post514-base.pt /tmp/mtg333/role-head.pt` → **3,410 tensors, differing 0**.
+- `uv run python scratch/equivalence/updates.py /tmp/mtg333/updates-role.json && cmp /tmp/mtg333/updates-post514-base.json /tmp/mtg333/updates-role.json` → five cases byte-identical.
+- `uv run --extra dev --extra mlx --extra artifacts pytest tests/model/test_inference.py tests/model/test_torch_backend_protocol.py tests/model/test_prepare_rows.py tests/model/test_semantic_card_precision.py tests/training/test_update_backend_protocols.py -k 'not cuda_semantic_policy_admission' --basetemp /tmp/mtg333/role-tests -q` → **63 passed, 2 deselected (99.99 s)**. Ruff check/format and diff whitespace checks passed.
+
+## New direction, 2026-11-13
+
+Task comments 6987a723 and 8370e331, relayed for Jack Heart:
+- Policy suffix: "ok, yes to safetensors." Settled; legacy `.pt` still loads.
+- Timeout: "delete or determinized flaky tests", then "and detemrinze or delete".
+  Check the same order on main first; find leaked state and determinize.
+  Delete only if redundant; a head-only hang is a regression to fix.

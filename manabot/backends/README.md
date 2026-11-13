@@ -257,7 +257,9 @@ compaction changes floating-point summation order, so learner rows use the
 default `inference=False`: they retain those columns and select only referenced
 catalog programs unless bucketed shapes require the full schedule. The argument
 chooses preparation purpose independently of autograd mode; `no_grad` does not
-change a default learner batch into an inference batch.
+change a default learner batch into an inference batch. Torch rollout `rows`
+and `minibatches` always prepare learner rows; `next_observation` always
+prepares inference rows for bootstrapping.
 
 `BACKEND` is torch's `manabot.policy.protocol.Backend`: `load` returns an
 `ActorCritic` and a `Learner`, whose parameters and gradients keep torch's

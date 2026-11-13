@@ -19,7 +19,7 @@ import torch
 
 from manabot.backends import resolve
 from manabot.backends.parity import BACKENDS, installed_backends
-from manabot.backends.torch.arrays import array_fields
+from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rollout import AdmittedRollout as TorchRollout
 from manabot.env.match import Match, Reward
@@ -207,17 +207,39 @@ def test_prefetched_minibatches_preserve_order_and_policy_input(
     admitted.admit_rows(order, 2)
     device = torch.device("cpu")
     with torch.set_grad_enabled(grad_enabled):
+        bootstrap = admitted.next_observation(device)
+        expected_bootstrap = on_device(
+            agent.prepare(captured[1].next_obs, inference=True), device
+        )
+        for name, value in array_fields(bootstrap, torch.Tensor).items():
+            torch.testing.assert_close(
+                value,
+                array_fields(expected_bootstrap, torch.Tensor)[name],
+                rtol=0,
+                atol=0,
+            )
         with admitted.minibatches(order, 2, device) as batches:
             for start, (indexes, prepared, rows) in zip((0, 2), batches, strict=True):
                 expected_indexes = order[start : start + 2]
                 np.testing.assert_array_equal(indexes, expected_indexes)
                 expected, expected_rows = admitted.rows(expected_indexes, device)
+                learner = on_device(
+                    agent.prepare(expected_rows.observation, inference=False), device
+                )
+                learner_fields = array_fields(learner, torch.Tensor)
                 actual_fields = array_fields(prepared, torch.Tensor)
                 expected_fields = array_fields(expected, torch.Tensor)
-                assert actual_fields.keys() == expected_fields.keys()
+                assert (
+                    actual_fields.keys()
+                    == expected_fields.keys()
+                    == learner_fields.keys()
+                )
                 for name, value in actual_fields.items():
                     torch.testing.assert_close(
                         value, expected_fields[name], rtol=0, atol=0
+                    )
+                    torch.testing.assert_close(
+                        value, learner_fields[name], rtol=0, atol=0
                     )
                 np.testing.assert_array_equal(
                     rows.log_probabilities, expected_rows.log_probabilities

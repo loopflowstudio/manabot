@@ -180,7 +180,7 @@ def _embed(
                 on_device(
                     model.prepare(
                         {key: to_numpy(value) for key, value in (batch).items()},
-                        inference=not torch.is_grad_enabled(),
+                        inference=True,
                     ),
                     device_of(model),
                 )

@@ -10,9 +10,12 @@
   review; broader checks are at gate. Concept cleanup (2026-11-13) now passes host rows from the collector
   and uses `inference` as the only statement of preparation purpose. The fresh
   3,410-tensor CPU oracle and five-case update comparison remain exact; focused
-  tests passed (63; two CUDA cases deselected). Concept review 2 directs one
-  more cleanup, not yet implemented: the torch rollout and callers inside
-  `no_grad` state preparation purpose literally instead of from grad mode.
+  tests passed (63; two CUDA cases deselected). Concept review 2 cleanup is implemented: the torch rollout states
+  preparation purpose by role, and callers already under explicit `no_grad`
+  or `inference_mode` use literal inference purpose. Fresh role-cleanup CPU
+  oracle and five-case update comparison are exact; 63 focused tests passed
+  (two CUDA cases deselected). New steer directs the order-timeout investigation
+  now: compare main first, then determinize, delete only if redundant.
 - `speed/mtg333-results.txt`: full A40 and 5090 speed tables.
 - `questions.md`: reversible assumptions taken without asking.
 - `mtg325-torch-backend-verification.md`: inherited baseline evidence; not

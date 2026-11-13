@@ -69,7 +69,7 @@ def run_breakdown(
                                             key: to_numpy(value)
                                             for key, value in (obs).items()
                                         },
-                                        inference=not torch.is_grad_enabled(),
+                                        inference=True,
                                     ),
                                     device_of(agent),
                                 )

@@ -548,7 +548,7 @@ def _collection(
         with torch.no_grad():
             logits, values = agent(
                 on_device(
-                    agent.prepare(obs, inference=not torch.is_grad_enabled()),
+                    agent.prepare(obs, inference=True),
                     device_of(agent),
                 )
             )

@@ -8,7 +8,8 @@ Upstream card/token source facts and decisions remain at
 
 Kickoff, 2026-11-12. Nobody was asked; each is the simpler safe option.
 
-- **Policy file suffix.** New policy files written by `save_checkpoint` are
+- **Policy file suffix (settled).** Jack Heart, 2026-11-13, comment
+  6987a723: "ok, yes to safetensors." New policy files written by `save_checkpoint` are
   named `.safetensors`; old `.pt` files keep their names and load;
   `load_checkpoint` chooses by bytes, and suffix-based finders accept both.
   The alternative (container bytes under the existing `.pt` names) renames
@@ -94,8 +95,9 @@ per arm. Keep the final inner ranges; do not call them process spread.
 
 2026-11-13 PPO optimization: choose bounded one-minibatch host prefetch over
 cross-epoch caching: trimming, selected catalog programs and packed GRU order
-are batch-dependent. Keep transfers/model/optimizer on the caller; propagate
-caller preparation purpose to the worker and join it at epoch exit, including failures.
+are batch-dependent. Keep transfers/model/optimizer on the caller; learner preparation runs on
+the worker, joined at epoch exit including failures (role-based purpose per
+concept review 2).
 Use current Etude 0.3.2 with a new schema-specific launcher database; register
 the existing rental template through CLI, leaving the older database untouched.
 

@@ -67,24 +67,22 @@ class AdmittedRollout:
             self._measured[chunk] = True
 
     def next_observation(self, device: torch.device) -> Prepared[torch.Tensor]:
-        """Bootstrap observations [trajectory, ...] on `device`."""
+        """Inference-prepared bootstrap observations [trajectory, ...] on `device`."""
         return on_device(
-            self.agent.prepare_admitted(
-                self.batch.next_obs, inference=not torch.is_grad_enabled()
-            ),
+            self.agent.prepare_admitted(self.batch.next_obs, inference=True),
             device,
         )
 
     def rows(
         self, indexes: NDArray[np.int64], device: torch.device
     ) -> tuple[Prepared[torch.Tensor], ActionRows]:
-        """Admitted observations of flat rollout `indexes` on `device`, with
-        their behavior distributions."""
-        prepared, rows = self._prepare_rows(indexes, not torch.is_grad_enabled())
+        """Learner-prepared observations of flat rollout `indexes` on `device`,
+        with their behavior distributions, independent of autograd mode."""
+        prepared, rows = self._prepare_rows(indexes)
         return on_device(prepared, device), rows
 
     def _prepare_rows(
-        self, indexes: NDArray[np.int64], inference: bool
+        self, indexes: NDArray[np.int64]
     ) -> tuple[Prepared[np.ndarray], ActionRows]:
         if not self._admitted[indexes].all():
             raise ValueError("rollout rows were not admitted")
@@ -95,7 +93,7 @@ class AdmittedRollout:
             else None
         )
         prepared = self.agent.prepare_admitted(
-            rows.observation, needs=needs, inference=inference
+            rows.observation, needs=needs, inference=False
         )
         return prepared, rows
 
@@ -105,7 +103,7 @@ class AdmittedRollout:
     ) -> Iterator[
         Iterator[tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]]
     ]:
-        """Prepare one batch ahead while the caller trains the current batch.
+        """Prepare learner rows one batch ahead, independent of autograd mode.
 
         Only immutable host input is read on the worker. Transfers and all
         model/optimizer work stay on the caller's device stream. At most two
@@ -113,7 +111,6 @@ class AdmittedRollout:
         """
         if size < 1:
             raise ValueError("minibatch size must be positive")
-        inference = not torch.is_grad_enabled()
         chunks = [order[start : start + size] for start in range(0, len(order), size)]
         with ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="ppo-prepare"
@@ -125,8 +122,7 @@ class AdmittedRollout:
                 # Lazy submission: the worker holds the batch being awaited
                 # and at most the one after it.
                 submitted = (
-                    worker.submit(self._prepare_rows, chunk, inference)
-                    for chunk in chunks
+                    worker.submit(self._prepare_rows, chunk) for chunk in chunks
                 )
                 pending = next(submitted, None)
                 for chunk in chunks:

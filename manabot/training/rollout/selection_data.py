@@ -150,7 +150,7 @@ def collect_selection_game(
                             }
                         ).items()
                     },
-                    inference=not torch.is_grad_enabled(),
+                    inference=True,
                 ),
                 device_of(agent),
             )

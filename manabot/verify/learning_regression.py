@@ -159,7 +159,7 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
                     }
                 ).items()
             },
-            inference=not torch.is_grad_enabled(),
+            inference=True,
         ),
         device_of(agent),
     )
@@ -180,7 +180,7 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
             on_device(
                 agent.prepare(
                     {key: to_numpy(value) for key, value in (obs).items()},
-                    inference=not torch.is_grad_enabled(),
+                    inference=True,
                 ),
                 device_of(agent),
             )
@@ -195,7 +195,7 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
                         key: to_numpy(value)
                         for key, value in (reorder_offers(obs, order)).items()
                     },
-                    inference=not torch.is_grad_enabled(),
+                    inference=True,
                 ),
                 device_of(agent),
             )
@@ -207,7 +207,7 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
                         key: to_numpy(value)
                         for key, value in (reorder_objects(obs)).items()
                     },
-                    inference=not torch.is_grad_enabled(),
+                    inference=True,
                 ),
                 device_of(agent),
             )
