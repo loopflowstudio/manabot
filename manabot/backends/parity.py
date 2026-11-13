@@ -40,7 +40,7 @@ numerical gates does not establish equivalent optimization or playing strength.
 """
 
 import argparse
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import asdict, dataclass, field
 import importlib
 import importlib.util
@@ -303,6 +303,58 @@ def _cosine(a: np.ndarray, b: np.ndarray, floor: float = 0.0) -> float | None:
     return float(a @ b / (na * nb))
 
 
+@dataclass(frozen=True)
+class GradientAgreement:
+    """Cosines between a backend's gradients and the reference's."""
+
+    cosine: float  # all parameters as one vector
+    tensors: dict[str, float]  # each tensor above the zero-gradient floor
+    both_zero: int  # tensors below the floor on both sides, never compared
+
+    @property
+    def worst(self) -> str:
+        return min(self.tensors, key=self.tensors.__getitem__) if self.tensors else ""
+
+    @property
+    def min_cosine(self) -> float:
+        return self.tensors.get(self.worst, 1.0)
+
+
+def gradient_agreement(
+    actual: Mapping[str, np.ndarray], expected: Mapping[str, np.ndarray]
+) -> GradientAgreement:
+    """Compare gradients held in one parameter layout.
+
+    A tensor whose norm is below `ZERO_GRADIENT` of the reference's global
+    norm on both sides holds rounding noise and has no per-tensor cosine; the
+    full-vector cosine still includes it.
+    """
+    if actual.keys() != expected.keys():
+        raise ValueError("backend gradient parameter sets differ")
+    flat = {
+        name: (
+            actual[name].astype(np.float64).ravel(),
+            wanted.astype(np.float64).ravel(),
+        )
+        for name, wanted in expected.items()
+    }
+    for name, (a, b) in flat.items():
+        if a.shape != b.shape or not np.isfinite(a).all() or not np.isfinite(b).all():
+            raise ValueError(f"invalid gradient: {name}")
+    dot = sum(float(a @ b) for a, b in flat.values())
+    actual_square = sum(float(a @ a) for a, _ in flat.values())
+    expected_square = sum(float(b @ b) for _, b in flat.values())
+    floor = ZERO_GRADIENT * float(np.sqrt(expected_square))
+    cosines = {name: _cosine(a, b, floor) for name, (a, b) in flat.items()}
+    return GradientAgreement(
+        float(dot / np.sqrt(actual_square * expected_square))
+        if actual_square * expected_square
+        else float(actual_square == expected_square == 0),
+        {name: cosine for name, cosine in cosines.items() if cosine is not None},
+        sum(cosine is None for cosine in cosines.values()),
+    )
+
+
 def _legal_difference(
     logits: np.ndarray, torch_logits: np.ndarray, legal: np.ndarray
 ) -> tuple[float, float]:
@@ -362,36 +414,7 @@ def check(
         loss_relative = abs(loss_value - reference_loss) / max(
             abs(reference_loss), 1e-12
         )
-        cosines: dict[str, float] = {}
-        both_zero = 0
-        floor = ZERO_GRADIENT * float(
-            np.sqrt(
-                sum(np.square(g.astype(np.float64)).sum() for g in expected.values())
-            )
-        )
-        dot = actual_square = expected_square = 0.0
-        if grads.keys() != expected.keys():
-            raise ValueError("backend gradient parameter sets differ")
-        for name, grad in grads.items():
-            actual = grad.astype(np.float64).ravel()
-            wanted = expected[name].astype(np.float64).ravel()
-            if not np.isfinite(actual).all() or not np.isfinite(wanted).all():
-                raise ValueError(f"nonfinite gradient: {name}")
-            dot += float(actual @ wanted)
-            actual_square += float(actual @ actual)
-            expected_square += float(wanted @ wanted)
-            cosine = _cosine(actual, wanted, floor)
-            if cosine is None:
-                both_zero += 1
-            else:
-                cosines[name] = cosine
-        worst = min(cosines, key=cosines.__getitem__) if cosines else ""
-        worst_cosine = cosines.get(worst, 1.0)
-        global_cosine = (
-            dot / np.sqrt(actual_square * expected_square)
-            if actual_square * expected_square
-            else float(actual_square == expected_square == 0)
-        )
+        agreement = gradient_agreement(grads, expected)
         row = {
             "index": meta["index"],
             "B": int(len(targets.actions)),
@@ -401,21 +424,21 @@ def check(
             "loss_torch": reference_loss,
             "loss_backend": loss_value,
             "loss_relative": loss_relative,
-            "gradient_cosine": float(global_cosine),
-            "gradient_min_cosine": worst_cosine,
-            "gradient_worst": worst,
+            "gradient_cosine": agreement.cosine,
+            "gradient_min_cosine": agreement.min_cosine,
+            "gradient_worst": agreement.worst,
         }
         report.minibatches.append(row)
         report.forward_logits = max(report.forward_logits, absolute)
         report.forward_logits_relative = max(report.forward_logits_relative, relative)
         report.forward_values = max(report.forward_values, value_difference)
         report.loss_relative = max(report.loss_relative, loss_relative)
-        report.gradient_tensors = len(cosines) + both_zero
-        report.gradient_both_zero = max(report.gradient_both_zero, both_zero)
-        report.gradient_cosine = min(report.gradient_cosine, float(global_cosine))
-        if worst_cosine < report.gradient_min_cosine:
-            report.gradient_min_cosine = worst_cosine
-            report.gradient_worst = worst
+        report.gradient_tensors = len(grads)
+        report.gradient_both_zero = max(report.gradient_both_zero, agreement.both_zero)
+        report.gradient_cosine = min(report.gradient_cosine, agreement.cosine)
+        if agreement.min_cosine < report.gradient_min_cosine:
+            report.gradient_min_cosine = agreement.min_cosine
+            report.gradient_worst = agreement.worst
         if index == 0:
             reference_loss_again = minibatch_loss(
                 torch_backend,
@@ -442,7 +465,7 @@ def check(
         print(
             f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
-            f"min cosine {worst_cosine:.6f} ({worst})",
+            f"min cosine {agreement.min_cosine:.6f} ({agreement.worst})",
             flush=True,
         )
     _collection(agent, policy, capture, collection_count, report)

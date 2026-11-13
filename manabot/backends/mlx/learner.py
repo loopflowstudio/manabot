@@ -74,10 +74,9 @@ class Learner:
             raise ValueError("minibatch_rows must be positive")
         if precision is not None:
             agent.set_precision(precision)
-        if any(p.dtype != mx.float32 for _, p in tree_flatten(agent.parameters())):
-            raise ValueError("the MLX learner requires float32 master parameters")
-        self.device = device
         self.agent = agent
+        self._require_masters("the MLX learner requires float32 master parameters")
+        self.device = device
         # Cached programs are constants of the weights they were encoded from.
         agent.clear_cache()
         self.minibatch_rows = minibatch_rows
@@ -87,6 +86,12 @@ class Learner:
         self.profiler = Profiler()
         # The loss `loss` last returned and its parameter gradients.
         self._pending: tuple[mx.array, dict[str, object]] | None = None
+
+    def _require_masters(self, message: str) -> None:
+        """Gradients and Adam apply to float32 masters; inside
+        `forward_precision` the policy holds compute-dtype casts instead."""
+        if self.agent.compute_dtype != mx.float32:
+            raise ValueError(message)
 
     @property
     def precision(self) -> Precision:
@@ -110,8 +115,7 @@ class Learner:
         """Evaluate `objective`, a closure over this policy's forward whose
         first result is the loss, with the loss's parameter gradients; return
         its results. `step` and `gradients` take that loss."""
-        if any(p.dtype != mx.float32 for _, p in tree_flatten(self.agent.parameters())):
-            raise ValueError("close the inference precision scope before learning")
+        self._require_masters("close the inference precision scope before learning")
         # Cached inference programs have no gradient path to the current weights.
         self.agent.clear_cache()
         scale = self.loss_scale
@@ -146,8 +150,7 @@ class Learner:
         and optimizer are then unchanged. Raises after stepping if a parameter
         became nonfinite.
         """
-        if any(p.dtype != mx.float32 for _, p in tree_flatten(self.agent.parameters())):
-            raise ValueError("close the inference precision scope before stepping")
+        self._require_masters("close the inference precision scope before stepping")
         gradients = self._gradients(loss)
         self._pending = None
         track = recorder.track if recorder is not None else _untracked

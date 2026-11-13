@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     import torch
 
     from manabot.backends.torch.policy import ActorCritic
+    from manabot.policy.prepare import Prepared
     from manabot.policy.protocol import Settings, Targets
 
 Arm = Literal["cpu", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32", "mlx-bf16", "mlx-f16"]
@@ -58,6 +59,8 @@ WIDTHS = (64, 96, 160, 384, 512, 768, 1024)
 STREAMS = (256, 512, 1024)
 LAYERS = {64: 2, 96: 4, 160: 8, 384: 8, 512: 8, 768: 8, 1024: 8}
 SIZES = {"learner": (64, 256, 512, 1024, 2048), "collection": (64, 256, 512)}
+# Parity and per-call receipts share one ledger; whole-update replays have their own.
+LEDGERS = {"bench": "bench.jsonl", "update": "updates.jsonl"}
 LABELS = {
     "cpu": "PyTorch CPU · float32",
     "mps-f32": "PyTorch MPS · float32",
@@ -100,11 +103,6 @@ class Runner(Protocol):
     def sync(self) -> None: ...
     def memory(self) -> dict[str, int]: ...
     def close(self) -> None: ...
-
-
-def _read(path: Path) -> dict[str, np.ndarray]:
-    with np.load(path, allow_pickle=False) as arrays:
-        return {k: arrays[k] for k in arrays.files}
 
 
 def _emit(path: Path, row: dict[str, Any]) -> None:
@@ -171,14 +169,14 @@ def _agent(capture: Path, width: int) -> ActorCritic:
 
 
 def _batches(capture: Path, phase: str) -> Iterator[Batch]:
-    from manabot.backends.parity import minibatches
+    from manabot.backends.parity import minibatches, read_npz
 
     if phase == "learner":
         for obs, targets, settings, _ in minibatches(capture, None):
             yield Batch(obs, targets, settings)
     else:
         for path in sorted((capture / "collection").glob("*.npz")):
-            yield Batch(_read(path))
+            yield Batch(read_npz(path))
 
 
 def _batch(capture: Path, phase: str, rows: int) -> Batch:
@@ -328,7 +326,6 @@ class TorchRunner:
         return loss, logits, values
 
     def _backward(self, loss: torch.Tensor) -> None:
-
         from manabot.backends.torch.learner import check_objective
 
         check_objective(loss)
@@ -489,46 +486,36 @@ class MLXRunner:
             )
         return Batch(trimmed, targets, batch.settings)
 
-    def evaluate(self, batch: Batch) -> Evaluation:
-        trimmed = self._trim(batch)
-        assert trimmed.targets is not None and trimmed.settings is not None
-        prepared = self.policy.prepare_admitted(trimmed.observations)
-        logits, values = self.policy.evaluate(prepared)
+    def _loss(self, batch: Batch) -> tuple[Any, Prepared]:
+        """The shared update's loss on a trimmed batch, with its gradients pending."""
         import manabot.backends.mlx as backend
         from manabot.backends.parity import minibatch_loss
 
+        assert batch.targets is not None and batch.settings is not None
+        prepared = self.policy.prepare_admitted(batch.observations)
         loss = minibatch_loss(
-            backend,
-            self.policy,
-            self.learner,
-            prepared,
-            trimmed.targets,
-            trimmed.settings,
+            backend, self.policy, self.learner, prepared, batch.targets, batch.settings
         )
-        gradients = self.learner.gradients(loss)
+        return loss, prepared
+
+    def evaluate(self, batch: Batch) -> Evaluation:
+        loss, prepared = self._loss(self._trim(batch))
+        logits, values = self.policy.evaluate(prepared)
         return Evaluation(
-            _pad(logits, batch), values.reshape(-1, 1), float(loss), gradients
+            _pad(logits, batch),
+            values.reshape(-1, 1),
+            float(loss),
+            self.learner.gradients(loss),
         )
 
     def step(self, batch: Batch) -> float:
         import mlx.core as mx
         from mlx.utils import tree_flatten
 
-        trimmed = self._trim(batch)
-        assert trimmed.targets is not None and trimmed.settings is not None
-        import manabot.backends.mlx as backend
-        from manabot.backends.parity import minibatch_loss
-
-        loss = minibatch_loss(
-            backend,
-            self.policy,
-            self.learner,
-            self.policy.prepare_admitted(trimmed.observations),
-            trimmed.targets,
-            trimmed.settings,
-        )
-        self.learner.set_learning_rate(trimmed.settings.learning_rate)
-        norm = self.learner.step(loss, trimmed.settings.max_grad_norm)
+        assert batch.settings is not None
+        loss, _ = self._loss(self._trim(batch))
+        self.learner.set_learning_rate(batch.settings.learning_rate)
+        norm = self.learner.step(loss, batch.settings.max_grad_norm)
         self.sync()
         parameters = [p.reshape(-1) for _, p in tree_flatten(self.policy.parameters())]
         if not np.isfinite([loss, norm]).all() or not bool(
@@ -587,34 +574,14 @@ def _runner(capture: Path, width: int, arm: Arm) -> Iterator[Runner]:
 def _compare(
     actual: Evaluation, reference: Evaluation, legal: np.ndarray, arm: Arm
 ) -> dict[str, Any]:
+    from manabot.backends.parity import gradient_agreement
+
     expected = reference.gradients
     if arm.startswith("mlx-"):
         from manabot.backends.mlx.checkpoint import mlx_gradients
 
         expected = mlx_gradients(expected)
-    if expected.keys() != actual.gradients.keys():
-        raise ValueError("gradient parameter sets differ")
-    dot = left = right = 0.0
-    norms = {
-        k: float(np.linalg.norm(v.astype(np.float64))) for k, v in expected.items()
-    }
-    floor = 1e-6 * np.sqrt(sum(n * n for n in norms.values()))
-    cosines: dict[str, float] = {}
-    for key, want in expected.items():
-        a, b = (
-            actual.gradients[key].astype(np.float64).ravel(),
-            want.astype(np.float64).ravel(),
-        )
-        if a.shape != b.shape or not np.isfinite(a).all() or not np.isfinite(b).all():
-            raise ValueError(f"invalid gradient: {key}")
-        aa, bb, ab = float(a @ a), float(b @ b), float(a @ b)
-        left += aa
-        right += bb
-        dot += ab
-        if max(np.sqrt(aa), np.sqrt(bb)) > floor:
-            cosines[key] = ab / np.sqrt(aa * bb) if aa * bb else 0.0
-    cosine = dot / np.sqrt(left * right) if left * right else 0.0
-    worst = min(cosines, key=cosines.__getitem__)
+    agreement = gradient_agreement(actual.gradients, expected)
     return {
         "logits_max_abs": float(
             np.abs(actual.logits[legal] - reference.logits[legal]).max()
@@ -624,10 +591,10 @@ def _compare(
         "reference_loss": reference.loss,
         "loss_relative": abs(actual.loss - reference.loss)
         / max(abs(reference.loss), 1e-12),
-        "gradient_cosine": float(cosine),
-        "gradient_min_cosine": cosines[worst],
-        "gradient_worst": worst,
-        "passes_gradient": bool(cosine > 0.999),
+        "gradient_cosine": agreement.cosine,
+        "gradient_min_cosine": agreement.min_cosine,
+        "gradient_worst": agreement.worst,
+        "passes_gradient": agreement.cosine > 0.999,
     }
 
 
@@ -656,6 +623,8 @@ def _reference(
     arrays: dict[str, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
     """Retain CPU arrays, or load a reference with matching provenance."""
+    from manabot.backends.parity import read_npz
+
     if arrays is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         np.savez(path, **arrays)
@@ -663,7 +632,7 @@ def _reference(
         return arrays
     if json.loads(path.with_suffix(".json").read_text()) != metadata:
         raise ValueError("CPU reference provenance differs")
-    return _read(path)
+    return read_npz(path)
 
 
 def _provenance(capture: Path, laptop: bool) -> dict[str, Any]:
@@ -696,7 +665,7 @@ def _latest_parity(
 ) -> dict[Arm, dict[int, dict[str, Any]]]:
     """Read all arms once; latest failures supersede earlier successes too."""
     latest: dict[Arm, dict[int, dict[str, Any]]] = {arm: {} for arm in ARMS}
-    for row in _rows(out / "bench.jsonl"):
+    for row in _rows(out / LEDGERS["bench"]):
         if (
             row["event"] == "parity"
             and row["width"] == width
@@ -706,6 +675,80 @@ def _latest_parity(
         ):
             latest[row["arm"]][row["rows"]] = row
     return latest
+
+
+def _parity_receipt(
+    runner: Runner,
+    out: Path,
+    capture: Path,
+    metadata: dict[str, Any],
+    width: int,
+    size: int,
+    arm: Arm,
+    batch: Batch,
+) -> dict[str, Any]:
+    """Gradients, one clipped step and collection logits against CPU float32.
+
+    The CPU arm retains the reference arrays every other arm compares with, so
+    it runs first for each host, capture, width and row count.
+    """
+    assert batch.settings is not None
+    result = runner.evaluate(batch)
+    runner.reset()
+    runner.step(batch)
+    parameters = runner.parameters()
+    collection = _batch(capture, "collection", size)
+    runner.reset()
+    with runner.collection() as collect:
+        collection_logits = collect(collection)
+    arrays = _reference(
+        _reference_path(out, metadata, width, size),
+        metadata,
+        {
+            "collection_logits": collection_logits,
+            "logits": result.logits,
+            "values": result.values,
+            "loss": np.asarray(result.loss),
+            **{f"grad/{k}": v for k, v in result.gradients.items()},
+            **{f"step/{k}": v for k, v in parameters.items()},
+        }
+        if arm == "cpu"
+        else None,
+    )
+
+    def stored(prefix: str) -> dict[str, np.ndarray]:
+        return {k[len(prefix) :]: v for k, v in arrays.items() if k.startswith(prefix)}
+
+    expected_parameters = stored("step/")
+    if arm.startswith("mlx-"):
+        from manabot.backends.mlx.checkpoint import mlx_parameters
+
+        expected_parameters = mlx_parameters(expected_parameters)
+    if parameters.keys() != expected_parameters.keys():
+        raise ValueError("one-step parameter sets differ")
+    step_difference = max(
+        float(np.abs(value - expected_parameters[name]).max())
+        for name, value in parameters.items()
+    )
+    legal = collection.observations["actions_valid"] > 0
+    reference = Evaluation(
+        arrays["logits"], arrays["values"], float(arrays["loss"]), stored("grad/")
+    )
+    return {
+        "step_parameter_max_abs": step_difference,
+        "step_max_grad_norm": batch.settings.max_grad_norm,
+        "passes_step": step_difference <= 1e-6,
+        "collection_logits_max_abs": float(
+            np.abs(collection_logits[legal] - arrays["collection_logits"][legal]).max()
+        ),
+        "sample_disagreements": int(
+            np.count_nonzero(
+                _choices(collection_logits, legal, 21501)
+                != _choices(arrays["collection_logits"], legal, 21501)
+            )
+        ),
+        **_compare(result, reference, batch.observations["actions_valid"] > 0, arm),
+    }
 
 
 def bench(
@@ -735,68 +778,8 @@ def bench(
     with _runner(capture, width, arm) as runner:
         yield None  # All workers allocate before the coordinator admits the block.
         if phase == "parity":
-            result = runner.evaluate(batch)
-            runner.reset()
-            runner.step(batch)
-            parameters = runner.parameters()
-            path = _reference_path(out, metadata, width, size)
-            collection = _batch(capture, "collection", size)
-            runner.reset()
-            with runner.collection() as collect:
-                collection_logits = collect(collection)
-            arrays = _reference(
-                path,
-                metadata,
-                {
-                    "collection_logits": collection_logits,
-                    "logits": result.logits,
-                    "values": result.values,
-                    "loss": np.asarray(result.loss),
-                    **{f"grad/{k}": v for k, v in result.gradients.items()},
-                    **{f"step/{k}": v for k, v in parameters.items()},
-                }
-                if arm == "cpu"
-                else None,
-            )
-            expected_parameters = {
-                k[5:]: v for k, v in arrays.items() if k.startswith("step/")
-            }
-            if arm.startswith("mlx-"):
-                from manabot.backends.mlx.checkpoint import mlx_parameters
-
-                expected_parameters = mlx_parameters(expected_parameters)
-            if parameters.keys() != expected_parameters.keys():
-                raise ValueError("one-step parameter sets differ")
-            row["step_parameter_max_abs"] = max(
-                float(np.abs(value - expected_parameters[name]).max())
-                for name, value in parameters.items()
-            )
-            row["step_max_grad_norm"] = batch.settings.max_grad_norm
-            row["passes_step"] = row["step_parameter_max_abs"] <= 1e-6
-            collection_reference = arrays["collection_logits"]
-            legal_collection = collection.observations["actions_valid"] > 0
-            row["collection_logits_max_abs"] = float(
-                np.abs(
-                    collection_logits[legal_collection]
-                    - collection_reference[legal_collection]
-                ).max()
-            )
-            row["sample_disagreements"] = int(
-                np.count_nonzero(
-                    _choices(collection_logits, legal_collection, 21501)
-                    != _choices(collection_reference, legal_collection, 21501)
-                )
-            )
-            reference = Evaluation(
-                arrays["logits"],
-                arrays["values"],
-                float(arrays["loss"]),
-                {k[5:]: v for k, v in arrays.items() if k.startswith("grad/")},
-            )
             row.update(
-                _compare(
-                    result, reference, batch.observations["actions_valid"] > 0, arm
-                )
+                _parity_receipt(runner, out, capture, metadata, width, size, arm, batch)
             )
         else:
             times: list[float] = []
@@ -907,7 +890,8 @@ def update(
     yield row
 
 
-def capture(out: Path, streams: int, laptop: bool) -> None:
+def capture(args: argparse.Namespace) -> None:
+    out, streams, laptop = args.out, args.streams, args.laptop
     from experiments.tla_frontier import frozen
     from manabot.backends.torch.capture import capture as record
     from manabot.training.regime import TrainingRegime
@@ -993,9 +977,7 @@ def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:
         # Use the same replies and cleanup as timing, but finish this arm
         # before allocating the next. The timeout covers the whole parity run.
         deadline = time.monotonic() + args.timeout
-        paging = (
-            None if args.laptop else PagingGuard(args.out / "host-observations.jsonl")
-        )
+        paging = _paging_guard(args)
         with closing(CallWorker(args, "parity", width, arm, size, 0)) as worker:
             worker.paging = paging
             worker.timeout = max(0, deadline - time.monotonic())
@@ -1012,13 +994,18 @@ def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:
             **_failure(error, arm),
             **_provenance(args.capture, args.laptop),
         }
-    _emit(args.out / "bench.jsonl", row)
+    _emit(args.out / LEDGERS["bench"], row)
     if row["status"] == "paging":
         raise PagingDetected(row["error"])
 
 
 def _unstable(before: float, after: float) -> bool:
     return after > 2 * before
+
+
+def _retry_pending(row: dict[str, Any]) -> bool:
+    """A block whose load doubled and whose repeat has not been selected yet."""
+    return bool(row.get("load_retry_required") and not row.get("load_retry_complete"))
 
 
 def _failure(error: Exception, arm: Arm) -> dict[str, str]:
@@ -1083,6 +1070,11 @@ class PagingGuard:
             self.initial = (counts[0], counts[1])
         elif any(n > old for n, old in zip(counts, self.initial, strict=True)):
             raise PagingDetected(f"swap pages {self.initial} → {counts}; cell stopped")
+
+
+def _paging_guard(args: argparse.Namespace) -> PagingGuard | None:
+    """The dedicated M2 stops a cell on new swap; the shared laptop only labels load."""
+    return None if args.laptop else PagingGuard(args.out / "host-observations.jsonl")
 
 
 class CallWorker:
@@ -1168,6 +1160,17 @@ class CallWorker:
                 pipe.close()
 
 
+def _admitted(parity: dict[int, dict[str, Any]], size: int) -> dict[str, Any] | None:
+    """The parity cell that admits a timed one: its row count for per-call
+    timing; for a whole update any executed cell, else any failure to report."""
+    if size:
+        return parity.get(size)
+    return next(
+        (r for r in parity.values() if r["status"] == "ok"),
+        next(iter(parity.values()), None),
+    )
+
+
 def _interleaved(
     args: argparse.Namespace,
     phase: str,
@@ -1189,15 +1192,13 @@ def _interleaved(
     # model. Both retry attempts use the same parity evidence for every arm.
     parities = _latest_parity(args.out, metadata, width)
     attempts: list[list[dict[str, Any]]] = []
-    ledger = args.out / ("updates.jsonl" if phase == "update" else "bench.jsonl")
+    ledger = args.out / LEDGERS["update" if phase == "update" else "bench"]
     for attempt in range(2):
         block = str(uuid.uuid4())
         workers: dict[Arm, CallWorker] = {}
         rows: dict[Arm, dict[str, Any]] = {}
         before, started = os.getloadavg()[0], time.time()
-        paging = (
-            None if args.laptop else PagingGuard(args.out / "host-observations.jsonl")
-        )
+        paging = _paging_guard(args)
         paging_error: PagingDetected | None = None
         try:
             for arm in arms:
@@ -1219,15 +1220,7 @@ def _interleaved(
                     "comparison": "paired" if paired_arm else "resident",
                     "paired_arm": paired_arm,
                 }
-                parity = parities[arm]
-                admitted = (
-                    parity.get(size)
-                    if size
-                    else next(
-                        (r for r in parity.values() if r["status"] == "ok"),
-                        next(iter(parity.values()), None),
-                    )
-                )
+                admitted = _admitted(parities[arm], size)
                 if admitted is None or admitted["status"] != "ok":
                     rows[arm].update(
                         status=admitted["status"] if admitted else "failed",
@@ -1746,10 +1739,7 @@ def _host_report(
         # The CPU bar represents the arithmetic mean of those six references;
         # the report retains every paired CPU timing, not only this aggregate.
         if {r["paired_arm"] for r in matching} != set(ARMS[1:]) or any(
-            r["status"] != "ok"
-            or r.get("load_retry_required")
-            and not r.get("load_retry_complete")
-            for r in matching
+            r["status"] != "ok" or _retry_pending(r) for r in matching
         ):
             return None
         if len({r["learner_decisions"] for r in matching}) != 1:
@@ -1777,7 +1767,7 @@ def _host_report(
     missing: list[str] = [
         f"{r['event']}/w{r['width']}/{r['arm']}/load retry pending"
         for r in [*latest.values(), *replay_latest.values()]
-        if r.get("load_retry_required") and not r.get("load_retry_complete")
+        if _retry_pending(r)
     ]
     captures: list[dict[str, Any]] = []
     for streams in STREAMS:
@@ -1838,12 +1828,7 @@ def _host_report(
                 complete = [
                     r
                     for r in groups[(width, streams, arm)]
-                    if r
-                    and r["status"] == "ok"
-                    and not (
-                        r.get("load_retry_required")
-                        and not r.get("load_retry_complete")
-                    )
+                    if r and r["status"] == "ok" and not _retry_pending(r)
                 ]
                 valid_replays.extend(complete)
                 if len(complete) == 3:
@@ -2114,31 +2099,21 @@ def report(bench_dir: Path, out: Path) -> None:
 
     matplotlib.use("Agg")
 
-    rows = _rows(bench_dir / "bench.jsonl")
-    updates = _rows(bench_dir / "updates.jsonl")
+    rows = _rows(bench_dir / LEDGERS["bench"])
+    updates = _rows(bench_dir / LEDGERS["update"])
     out.mkdir(parents=True, exist_ok=True)
-    hosts = sorted({r["host"]["hostname"] for r in rows + updates})
+    chips = {r["host"]["hostname"]: r["host"]["chip"] for r in rows + updates}
+    hosts = sorted(chips)
     if not hosts:
         raise ValueError("no measurement receipts; refusing an empty report")
-    if (
-        len(
-            {
-                r["host"]["hostname"]
-                for r in rows + updates
-                if r["host"]["chip"] == "Apple M2"
-            }
-        )
-        > 1
-    ):
+    if list(chips.values()).count("Apple M2") > 1:
         raise ValueError("multiple main M2 hosts; use separate report directories")
-    summaries: list[dict[str, Any]] = []
     reports: list[HostReport] = []
     for hostname in hosts:
         data = _host_report(
             [r for r in rows if r["host"]["hostname"] == hostname],
             [r for r in updates if r["host"]["hostname"] == hostname],
         )
-        summaries.append(data.summary)
         reports.append(data)
         suffix = (
             ""
@@ -2146,12 +2121,18 @@ def report(bench_dir: Path, out: Path) -> None:
             else "-" + hostname.replace("/", "_")
         )
         _call_charts(out, suffix, data)
-        _update_chart(out, suffix, [data])
+        if suffix:
+            _update_chart(out, suffix, [data])
         _details(out, suffix, data)
+    # The unsuffixed chart holds every host's measured panels, never one axis.
     _update_chart(out, "", reports)
     (out / "summary.json").write_text(
         json.dumps(
-            {"hosts": summaries, "measurements": rows, "updates": updates},
+            {
+                "hosts": [data.summary for data in reports],
+                "measurements": rows,
+                "updates": updates,
+            },
             indent=2,
             allow_nan=False,
         )
@@ -2260,77 +2241,63 @@ def main() -> None:
             parser.error(
                 "commit experiment and executable source before capture or scoring"
             )
+    if args.command not in ("bench", "update"):
+        {"capture": capture, "matrix": matrix, "replays": replays}[args.command](args)
+        return
+    ledger = args.out / LEDGERS[args.command]
+
+    def reply(row: dict[str, Any] | None) -> None:
+        """Workers answer the coordinator; a direct parity cell owns its receipt."""
+        if args.worker:
+            print("MPS_REPLY " + json.dumps(row, allow_nan=False), flush=True)
+        elif row is not None:
+            _emit(ledger, row)
+
     try:
         with warnings.catch_warnings():
             # Unsupported autocast often warns and silently becomes float32.
             warnings.filterwarnings(
                 "error", message=".*autocast.*", category=UserWarning
             )
-            if args.command == "capture":
-                capture(args.out, args.streams, args.laptop)
-            elif args.command in ("bench", "update"):
-                work = (
-                    bench(
-                        args.out,
-                        args.capture,
-                        args.phase,
-                        args.width,
-                        args.rows,
-                        args.arm,
-                        args.laptop,
-                        args.repeats,
-                    )
-                    if args.command == "bench"
-                    else update(
-                        args.out,
-                        args.capture,
-                        args.width,
-                        args.arm,
-                        args.laptop,
-                        args.rep,
-                    )
+            work = (
+                bench(
+                    args.out,
+                    args.capture,
+                    args.phase,
+                    args.width,
+                    args.rows,
+                    args.arm,
+                    args.laptop,
+                    args.repeats,
                 )
-                ledger = args.out / (
-                    "bench.jsonl" if args.command == "bench" else "updates.jsonl"
+                if args.command == "bench"
+                else update(
+                    args.out, args.capture, args.width, args.arm, args.laptop, args.rep
                 )
-                try:
-                    for row in work:
-                        if args.worker:
-                            print(
-                                "MPS_REPLY " + json.dumps(row, allow_nan=False),
-                                flush=True,
-                            )
-                            if row is None and sys.stdin.readline().strip() != "next":
-                                break
-                        elif row is not None:
-                            _emit(ledger, row)
-                finally:
-                    work.close()
-            elif args.command == "matrix":
-                matrix(args)
-            else:
-                replays(args)
-    except Exception as error:
-        if args.command not in ("bench", "update"):
-            raise
-        row = {
-            "event": getattr(args, "phase", "update"),
-            "width": args.width,
-            "rows": getattr(args, "rows", 0),
-            "arm": args.arm,
-            "rep": getattr(args, "rep", 0),
-            **_failure(error, args.arm),
-            "load_after": os.getloadavg()[0],
-            **_provenance(args.capture, args.laptop),
-        }
-        if args.worker:
-            print("MPS_REPLY " + json.dumps(row, allow_nan=False), flush=True)
-        else:
-            _emit(
-                args.out
-                / ("bench.jsonl" if args.command == "bench" else "updates.jsonl"),
-                row,
             )
+            with closing(work):
+                for row in work:
+                    reply(row)
+                    # Each `None` is a pause; the coordinator admits the next call.
+                    if (
+                        args.worker
+                        and row is None
+                        and sys.stdin.readline().strip() != "next"
+                    ):
+                        break
+    except Exception as error:
+        reply(
+            {
+                "event": getattr(args, "phase", "update"),
+                "width": args.width,
+                "rows": getattr(args, "rows", 0),
+                "arm": args.arm,
+                "rep": getattr(args, "rep", 0),
+                **_failure(error, args.arm),
+                "load_after": os.getloadavg()[0],
+                **_provenance(args.capture, args.laptop),
+            }
+        )
         raise SystemExit(1) from error
 
 

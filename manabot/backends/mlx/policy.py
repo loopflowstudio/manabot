@@ -314,10 +314,16 @@ class MLXActorCritic(nn.Module):
     def precision(self) -> Precision:
         return self._precision
 
+    @property
+    def compute_dtype(self) -> mx.Dtype:
+        """The dtype the weights hold now: float32 masters, or the selected
+        precision's casts inside `forward_precision`."""
+        return self.semantic_cards.token_embedding.weight.dtype
+
     def set_precision(self, precision: Precision) -> None:
         """Select compute precision without changing stored master weights."""
         precision_dtype(precision)
-        if self.semantic_cards.token_embedding.weight.dtype != mx.float32:
+        if self.compute_dtype != mx.float32:
             raise ValueError("change precision outside the forward precision scope")
         if precision != self.precision:
             self.clear_cache()
@@ -332,7 +338,7 @@ class MLXActorCritic(nn.Module):
         Public forwards enter it automatically; nested scopes reuse the casts.
         """
         dtype = precision_dtype(self.precision)
-        if self.semantic_cards.token_embedding.weight.dtype == dtype:
+        if self.compute_dtype == dtype:
             yield
             return
         masters = self.parameters()
@@ -452,7 +458,7 @@ class MLXActorCritic(nn.Module):
 
     def _floating(self, values: np.ndarray) -> mx.array:
         """Features and masks follow compute weights, never promote half activations."""
-        return mx.array(values).astype(self.semantic_cards.token_embedding.weight.dtype)
+        return mx.array(values).astype(self.compute_dtype)
 
     def __call__(self, batch: Prepared) -> tuple[mx.array, mx.array]:
         """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
