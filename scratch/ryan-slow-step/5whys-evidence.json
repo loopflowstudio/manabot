@@ -1,0 +1,200 @@
+{
+  "observed_date": "2026-11-12",
+  "checkout_head_at_start": "5e8eebbd395535d27052db523bbc16c2641d91b4",
+  "pr469": {
+    "title": "Define 58 of the 61 TLE bonus-sheet cards so TLA Limited decks can be imported",
+    "mergedAt": "2026-11-12T13:35:28Z",
+    "mergeCommit": {
+      "oid": "306612865f1ab22a614fedfb630fced9c61544e2"
+    },
+    "reviews": [],
+    "comments": []
+  },
+  "pr469_body_excerpts": [
+    "- **Engine cost.** The new mana-payment, casting, proposed-event and trigger paths slow headless `bench_steps` by 9.2% on unchanged decks: 12,880 \u2192 11,694 steps/s on AMD EPYC 7763. Both candidate samples were slower than both reference samples, and user CPU tracked wall time, so this is engine cost rather than runner noise. It is adopted as an accepted cost from [CI run 43221435403](https://github.com/loopflowstudio/manabot/actions/runs/43221435403); search stayed within budget.",
+    "- **Not yet tried after merge.** No v10 training run has been made yet. A short v10 pilot over decks containing the three v10 cards would be a useful next check: training should finish without encoder refusals, and `player_turn_state` / `card_turn_state` should be non-zero in positions where those cards matter."
+  ],
+  "pr469_final_checks": [
+    {
+      "name": "Detect Changes",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206772198"
+    },
+    {
+      "name": "preflight",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131206603826"
+    },
+    {
+      "name": "Rust Tests",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206827818"
+    },
+    {
+      "name": "package (3.12, ubuntu-latest, x86_64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131206805294"
+    },
+    {
+      "name": "package (3.12, macos-15, aarch64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131206805348"
+    },
+    {
+      "name": "package (3.13, ubuntu-latest, x86_64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131206805298"
+    },
+    {
+      "name": "package (3.13, macos-15, aarch64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131206805317"
+    },
+    {
+      "name": "Python Unit Tests",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206827929"
+    },
+    {
+      "name": "install (3.12, ubuntu-latest, x86_64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131208557147"
+    },
+    {
+      "name": "install (3.12, macos-15, aarch64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131208557070"
+    },
+    {
+      "name": "install (3.13, ubuntu-latest, x86_64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131208557308"
+    },
+    {
+      "name": "install (3.13, macos-15, aarch64)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131208556990"
+    },
+    {
+      "name": "Integration / Integration (ubuntu-latest, core)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206828047"
+    },
+    {
+      "name": "artifacts",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131211213408"
+    },
+    {
+      "name": "Integration / Integration (ubuntu-latest, evaluation)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206828120"
+    },
+    {
+      "name": "Integration / Integration (ubuntu-latest, long)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206828036"
+    },
+    {
+      "name": "publish",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131211337189"
+    },
+    {
+      "name": "Academy Integration / Academy Integration (ubuntu-latest)",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206828054"
+    },
+    {
+      "name": "github-release",
+      "conclusion": "SKIPPED",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222341/job/131211337626"
+    },
+    {
+      "name": "Protocol v1 Conformance",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206827824"
+    },
+    {
+      "name": "Semantic Kernel Conformance",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206827812"
+    },
+    {
+      "name": "Academy UI",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206827803"
+    },
+    {
+      "name": "Clean-machine Play",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206827850"
+    },
+    {
+      "name": "Engine Budget / Engine Budget",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131206828042"
+    },
+    {
+      "name": "Tests Result",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/loopflowstudio/manabot/actions/runs/43225222476/job/131218402156"
+    }
+  ],
+  "pr469_initial_budget_log_excerpt": [
+    "2026-11-12T13:04:23.5196902Z | search worst reply | 4.913 s | 4.944 s | ok |",
+    "2026-11-12T13:04:23.5197427Z | search total | 167.486 s | 169.186 s | ok |",
+    "2026-11-12T13:04:23.5198006Z | steps throughput | 12880.0/s | 11693.6/s | under 11709.1/s (-10%) |",
+    "2026-11-12T13:04:23.5200167Z FAIL: 1 check(s) outside the budget. A deliberate change adopts this run as the reference: `gh run download <run-id> --name engine-budget --dir .cache/engine-budget`, then `uv run scripts/engine_budget.py record --reason \"<why>\"` and commit managym/perf/baseline.json (docs/development.md, Engine performance budget)."
+  ],
+  "v022_release_run": {
+    "conclusion": "success",
+    "headSha": "92560a1e04ebcafcb9f820cdfb4cc3e9cef84987",
+    "url": "https://github.com/loopflowstudio/manabot/actions/runs/43161774626"
+  },
+  "release_publication": [
+    {
+      "publishedAt": "2026-11-12T01:22:10Z",
+      "tagName": "v0.2.1",
+      "targetCommitish": "4c041d6cefe829c5b1b52273ba19991d663ee26b"
+    },
+    {
+      "publishedAt": "2026-11-12T10:05:40Z",
+      "tagName": "v0.2.2",
+      "targetCommitish": "92560a1e04ebcafcb9f820cdfb4cc3e9cef84987"
+    }
+  ],
+  "other_checkout_measurement": {
+    "source": "/Users/jack/src/manabot.payment-search-opt/scratch/payment-baseline/bench_steps.jsonl",
+    "identity_from_measure_html": "e8f7bde51 + counters (uncommitted); before memo canonicalization",
+    "rows": [
+      {
+        "games": 512,
+        "capped": 0,
+        "steps": 101650,
+        "elapsed_s": 3.466191,
+        "steps_per_s": 29326.1,
+        "digest": 15843333459759757527
+      },
+      {
+        "payment_metrics": {
+          "calls": 1287779,
+          "max_plan_calls": 11,
+          "max_sources": 37,
+          "plans": 522421,
+          "plans_over_1k": 0,
+          "states": 793333
+        }
+      }
+    ]
+  },
+  "injected_timing_check": {
+    "fixture": "999 calls of 0.004 seconds, then one of 35 seconds, supplied to TimingNode.add and EvalPerformance.record(end=seconds); no games, sleep or load",
+    "training_calls": 1000,
+    "training_total_seconds": 38.996,
+    "training_sample_max_seconds": 0.004,
+    "training_retained_samples": 100,
+    "eval_maximum_seconds": 35.0,
+    "eval_retained_spans": 1
+  }
+}
