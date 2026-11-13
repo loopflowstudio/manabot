@@ -667,8 +667,8 @@ cargo run --release --features benchmark --example bench_payment \
 (The output also lists the five heaviest steps, their times and a digest.)
 Do not edit the indices to make a later engine accept them: nothing in the
 file says which action an index meant. A board shape from that game that
-should stay measured is a constructed stress state (`counted-tap`, `diverse-mana`), which names its cards and
-survives engine changes.
+should stay measured is a constructed stress state (`counted-tap`,
+`diverse-mana`), which names its cards and survives engine changes.
 
 ## Releases
 
