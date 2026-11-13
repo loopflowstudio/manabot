@@ -15,3 +15,9 @@
 - The branch was fast-forwarded to main after PR #510 merged. Main carried
   MTG-324's `scratch/plan.md`, `qa.html` and `questions.md`; they are removed
   here (history: `f4e1822fa`).
+
+- L4 availability on 2026-11-13 is USD 0.69/h (the USD 0.60 pool refuses
+  it). Use the existing `mtg324-l4-ab` USD 0.70/h ceiling, 7.1 rental hours
+  and job/cohort USD 5 caps. Preserve the 300-update schedule and use the
+  ordinary wall-bound stop (~193 updates at the failing run's pace), rather
+  than changing the schedule to force exactly 200 updates.

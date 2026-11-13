@@ -586,7 +586,8 @@ the speed crossover therefore remains inactive. Playing strength was not
 scored, and the failure does not establish a strength difference. Its cause
 was independent of precision: a check then compared collection's device
 `exp` of a subnormal legal probability with the host's, which the
-[sampling contract](#sampling-contract) no longer stores or compares. The A/B
+[sampling contract](#sampling-contract) no longer stores or compares
+([cause and proof](../experiments/bf16_behavior_logs.md)). The A/B
 used bucketed shapes without live-token attention; their combination with
 BF16 has no learning admission from this run. TF32 remains explicit too.
 
