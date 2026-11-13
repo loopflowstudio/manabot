@@ -14,10 +14,10 @@ from starlette.testclient import TestClient
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     (tmp_path / "index.html").write_text("<html>Academy</html>")
     monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(tmp_path))
-    server = ModuleType("academy.server")
+    server = ModuleType("managym.academy.server")
     app = FastAPI()
     server.app = app  # type: ignore[attr-defined]  # Substitute only the engine boundary.
-    monkeypatch.setitem(sys.modules, "academy.server", server)
+    monkeypatch.setitem(sys.modules, "managym.academy.server", server)
 
     @app.websocket("/ws/play")
     async def play(socket: WebSocket) -> None:

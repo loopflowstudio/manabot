@@ -32,9 +32,9 @@ from manabot.sim.guidance import build_registered_player
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.search.flat import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS
 from managym import WORLD_VERSION
+from managym.bots import DEFAULT_ROLLOUTS_PER_WORLD, DEFAULT_SEARCH_SIMS
 
 
 class EvaluationError(RuntimeError):
@@ -88,7 +88,7 @@ def evaluation_runtime_fingerprints(**kwargs) -> dict[str, Any]:
 def registration_source_paths(registration: PlayerRegistration) -> list[str]:
     kind = registration.player_spec["kind"]
     if kind == "demo_search":
-        return ["manabot/sim/search/flat.py", "manabot/sim/players.py"]
+        return ["managym/bots.py", "manabot/sim/players.py"]
     if kind in {"scripted_greedy", "random"}:
         return ["manabot/sim/anchors.py"]
     if kind == "heuristic":
@@ -271,7 +271,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             "max_steps": DEFAULT_MAX_PLAYOUT_STEPS,
         },
         source_sha256=source_digest(
-            ["manabot/sim/search/flat.py", "manabot/sim/players.py"]
+            ["managym/bots.py", "manabot/sim/players.py"]
         ),
     )
     candidate = (

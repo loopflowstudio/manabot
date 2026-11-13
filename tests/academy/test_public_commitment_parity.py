@@ -4,13 +4,13 @@ import json
 
 import pytest
 
-from academy import public_commitment_parity
-from academy.public_commitment_parity import (
+from conformance.public_commitment_parity import (
     AUTHORITY_RECEIPT_SHA256,
     INT12_FIXTURE_SHA256,
     RUL9_MEASUREMENT_ARTIFACT_SHA256,
     verify_receipt,
 )
+from managym.academy import public_commitment_parity
 
 
 @pytest.mark.experiment_data(

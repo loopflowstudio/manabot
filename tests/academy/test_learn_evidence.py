@@ -5,15 +5,15 @@ import random
 
 import pytest
 
-from academy.authored_match_receipt import (
+from conformance.authored_match_receipt import (
     DeterministicServerOfferPolicy,
     UnsupportedAuthorityPrompt,
 )
-from academy.learn_lesson_evidence import attempt, verify_attempt
-from academy.server import GameSession
+from conformance.learn_lesson_evidence import attempt, verify_attempt
 from manabot.semantic.decision_contract import SemanticDecisionContract
-from manabot.sim.search.flat import FlatSearchPolicy
 import managym
+from managym.academy.server import GameSession
+from managym.bots import FlatSearchPolicy
 
 
 @pytest.mark.parametrize("reverse", [False, True])

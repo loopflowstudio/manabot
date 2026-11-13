@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import torch
 
-from academy.villain import CheckpointVillain
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -14,6 +13,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.source import source_commit
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
+from managym.academy.villain import CheckpointVillain
 
 
 def selected_match():

@@ -2,13 +2,13 @@
 
 from pathlib import Path
 
-from managym.experience import Command, ExperienceFrame
 import pytest
 
-from academy import villain
-from academy.bot_decision import BotDecision
-from academy.server import GameSession
 import managym
+from managym.academy import villain
+from managym.academy.server import GameSession
+from managym.bots import BotDecision
+from managym.experience import Command, ExperienceFrame
 
 
 @pytest.mark.parametrize("auto_pass", [True, False])

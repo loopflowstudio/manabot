@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from academy import server
-from academy.curated_pack import (
+from managym.academy import server
+from managym.academy.curated_pack import (
     CURATED_PACK,
     JEONG_INCREMENT_MANIFEST_PATH,
     JEONG_INCREMENT_PACK,

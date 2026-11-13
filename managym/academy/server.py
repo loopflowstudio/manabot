@@ -28,6 +28,10 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse, Response
+from pydantic import ValidationError
+
+import managym
+from managym.bots import BotDecision, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
     SemanticTransition,
@@ -55,19 +59,16 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
-from pydantic import ValidationError
-
-import managym
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
     AdviceRequest,
+    AdvisorUnavailable,
     advice_meta,
     request_advice,
     request_versioned_fixture_advice,
 )
 from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
-from .bot_decision import BotDecision
 from .curated_pack import (
     CURATED_PACK,
     CURATED_PACK_CATALOG,
@@ -1546,7 +1547,7 @@ class GameSession:
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
                 try:
-                    self._bot_decision = villain_module.choose_bot(
+                    self._bot_decision = choose_bot(
                         self.villain_policy, self.env, self.obs
                     )
                     action_index = self._bot_decision.action
@@ -2723,7 +2724,12 @@ def _author_belief(
     participant: ParticipantLease,
     scenario_id: str,
 ) -> dict[str, Any]:
-    meta = advice_meta().model_dump(mode="json")
+    try:
+        meta = advice_meta().model_dump(mode="json")
+    except AdvisorUnavailable as exc:
+        raise TableDispatchError(
+            "not_found", "Advice fixtures are unavailable."
+        ) from exc
     scenarios = {
         str(scenario["landmark_id"]): scenario for scenario in meta["scenarios"]
     }
@@ -3479,7 +3485,10 @@ async def get_advice_meta() -> dict[str, Any]:
     Returns the compatibility bootstrap plus the checked advice-v1 comparison
     request consumed by both live play and Study.
     """
-    return advice_meta().model_dump(mode="json")
+    try:
+        return advice_meta().model_dump(mode="json")
+    except AdvisorUnavailable as exc:
+        raise HTTPException(404, "advice_unavailable") from exc
 
 
 @app.post("/api/advice", response_model=None)

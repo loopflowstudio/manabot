@@ -8,8 +8,8 @@ import json
 from fastapi.testclient import TestClient
 
 # Local imports
-from academy import trace as trace_store
-from academy.server import app
+from managym.academy import trace as trace_store
+from managym.academy.server import app
 
 
 def _write_trace(path, trace_id: str, timestamp: str) -> None:
@@ -109,7 +109,7 @@ def test_trace_api_rejects_invalid_trace_id(monkeypatch, tmp_path):
 
 
 def test_trace_listing_ignores_unrelated_json(tmp_path):
-    from academy.trace import list_trace_summaries
+    from managym.academy.trace import list_trace_summaries
 
     (tmp_path / "summary.json").write_text('[{"id":"not-a-game"}]')
     (tmp_path / "receipt.json").write_text('{"status":"complete"}')

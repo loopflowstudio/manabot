@@ -37,6 +37,7 @@
   } from '$lib/study-runtime';
   import type {
     GameLogEntry,
+    OpponentCatalog,
     InteractionOffer,
     Trace,
     TraceSummary,
@@ -66,6 +67,13 @@
 
   async function loadAdviceMeta(): Promise<void> {
     try {
+      const response = await fetch('/api/opponents');
+      if (!response.ok) throw new Error('Capabilities could not be loaded.');
+      const capabilities: OpponentCatalog = await response.json();
+      if (!capabilities.advice_available) {
+        adviceStatus = 'unavailable';
+        return;
+      }
       const meta = await fetchAdviceMeta();
       adviceMetaState = meta;
       adviceSelectedScenario = meta.scenarios[0]?.landmark_id ?? '';
@@ -682,7 +690,7 @@
             {#if studyStore.branchObservation}<DecisionContext observation={studyStore.branchObservation} actor={studyStore.branchObservation.decision_context?.actor ?? null} />{/if}
             <PresentationHistory player={presentationPlayer} />
 
-            {#if studyStore.phase === 'score'}
+            {#if studyStore.phase === 'score' && adviceMetaState}
               <div class="mt-3 border-t border-line pt-4">
                 <DecisionAdvice
                   mode="study"
@@ -699,7 +707,7 @@
                   onSelectScenario={(id) => void loadAdvice(id)}
                 />
               </div>
-            {:else if studyStore.restored}
+            {:else if studyStore.phase !== 'score' && studyStore.restored}
               <StudyPanel
                 phase={studyStore.phase}
                 restored={studyStore.restored}

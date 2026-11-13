@@ -38,7 +38,7 @@ FRONTEND_REQUIRED_PATHS = (
     FRONTEND / "node_modules" / ".bin" / "vite",
     FRONTEND / "node_modules" / "@playwright" / "test" / "package.json",
 )
-PACK_DIR = FRONTEND / "src" / "lib" / "packs" / "tla-ur-lessons-vs-gw-allies" / "v2"
+PACK_DIR = ROOT / "managym" / "academy" / "packs" / "tla-ur-lessons-vs-gw-allies" / "v2"
 PACK_MANIFEST = PACK_DIR / "manifest.json"
 PACK_NOTICE = PACK_DIR / "NOTICE.md"
 ERROR_MARKER_ENV = "ACADEMY_PLAY_ERROR_MARKER"
@@ -58,7 +58,7 @@ UV_RUNTIME = [
 ]
 # The checkpoint opponent's modules load lazily, only when a game selects it.
 RUNTIME_IMPORTS = (
-    "academy.server",
+    "managym.academy.server",
     "manabot.model.world",
     "manabot.sim.search.flat_mc",
     "manabot.verify.util",
@@ -214,7 +214,7 @@ def validate_pack() -> Any:
     if not PACK_NOTICE.is_file():
         raise PlayError("pack.notice", "the installed curated-pack notice is missing")
     try:
-        from academy.curated_pack import load_curated_pack
+        from managym.academy.curated_pack import load_curated_pack
 
         return load_curated_pack(PACK_MANIFEST)
     except (OSError, RuntimeError, ValueError) as error:
@@ -463,7 +463,7 @@ def start_processes(
                 [
                     *UV_RUNTIME,
                     "uvicorn",
-                    "academy.server:app",
+                    "managym.academy.server:app",
                     "--host",
                     "127.0.0.1",
                     "--port",

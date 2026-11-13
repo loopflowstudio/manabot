@@ -20,6 +20,10 @@ installs without Torch, Gymnasium, Etude or the training CLI. NumPy supports
 native observation buffers; Pydantic supports the structured decision API.
 No Rust compiler is needed when installing a wheel.
 
+To play in the browser instead of from Python, install the `academy` extra and
+run `managym academy` ([running Academy](academy.md#running-academy)); it adds
+FastAPI and Uvicorn and still needs no manabot or Torch.
+
 Supported wheels target ordinary CPython 3.12 and 3.13 on Linux x86-64 with
 glibc 2.28+ and Apple Silicon macOS 14+. To use 3.12, change the environment
 creation command to `uv venv --python 3.12`. Free-threaded Python, Windows,

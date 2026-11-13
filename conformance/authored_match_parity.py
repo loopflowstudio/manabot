@@ -12,7 +12,14 @@ from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
 
+from conformance.authored_match_receipt import DEFAULT_RECEIPT_PATH
 import managym
+from managym.academy.curated_pack import load_curated_pack
+from managym.academy.replay_index import (
+    CanonicalReplayV1,
+    DecisionNotFoundError,
+    project_replay,
+)
 from managym.decision import (
     Command as SemanticCommand,
     SemanticContractError,
@@ -20,13 +27,6 @@ from managym.decision import (
 )
 
 from . import server, trace as trace_store
-from .authored_match_receipt import DEFAULT_RECEIPT_PATH
-from .curated_pack import load_curated_pack
-from .replay_index import (
-    CanonicalReplayV1,
-    DecisionNotFoundError,
-    project_replay,
-)
 
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
@@ -617,16 +617,16 @@ def _source_manifest() -> dict[str, Any]:
     paths = {
         "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/current/setups.json",
-        "academy/curated_pack.py",
-        "academy/authored_match_parity.py",
-        "academy/authored_match_receipt.py",
+        "managym/academy/curated_pack.py",
+        "conformance/authored_match_parity.py",
+        "conformance/authored_match_receipt.py",
         "managym/experience.py",
         "managym/experience_projection.py",
-        "academy/presentation.py",
-        "academy/replay_index.py",
-        "academy/semantic_boundary.py",
-        "academy/server.py",
-        "academy/trace.py",
+        "managym/academy/presentation.py",
+        "managym/academy/replay_index.py",
+        "managym/academy/semantic_boundary.py",
+        "managym/academy/server.py",
+        "managym/academy/trace.py",
         "manabot/semantic/decision_contract.py",
         "managym/Cargo.lock",
         "managym/Cargo.toml",

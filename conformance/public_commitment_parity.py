@@ -13,6 +13,7 @@ from typing import Any, Mapping
 from fastapi.testclient import TestClient
 import numpy as np
 
+from conformance.authored_match_receipt import DEFAULT_RECEIPT_PATH
 from manabot.belief.likelihood import (
     LikelihoodResult,
     RulesProviderGap,
@@ -21,6 +22,8 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.tracker import BeliefTracker
 import managym
+from managym.academy.curated_pack import load_curated_pack
+from managym.academy.replay_index import CanonicalReplayV1
 from managym.decision import (
     SEMANTIC_DECISION_VERSION,
     Command,
@@ -31,9 +34,6 @@ from managym.decision import (
 from managym.possible_worlds import PossibleWorldSpace
 
 from . import server, trace as trace_store
-from .authored_match_receipt import DEFAULT_RECEIPT_PATH
-from .curated_pack import load_curated_pack
-from .replay_index import CanonicalReplayV1
 
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
@@ -492,8 +492,8 @@ def _materialized_discard_proof(root: managym.Env) -> dict[str, Any]:
 def _source_manifest() -> dict[str, Any]:
     paths = (
         "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
-        "academy/public_commitment_parity.py",
-        "academy/server.py",
+        "conformance/public_commitment_parity.py",
+        "managym/academy/server.py",
         "managym/experience_projection.py",
         "experiments/contracts/int-9-exact-range-v1.json",
         "manabot/belief/likelihood.py",

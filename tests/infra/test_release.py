@@ -1,5 +1,6 @@
 """Release projects must retain runtime data and rebuild without the checkout."""
 
+import ast
 import hashlib
 import importlib.util
 import io
@@ -30,8 +31,11 @@ def _load(name: str) -> ModuleType:
 def test_release_projects_preserve_native_paths_and_runtime_data(
     tmp_path: Path,
 ) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy fixture")
     stage = tmp_path / "stage"
-    _load("prepare").prepare(stage)
+    _load("prepare").prepare(stage, site)
     config = tomllib.loads((stage / "pyproject.toml").read_text())
     for name in ("LICENSE", "protocol/experience-v1.schema.json"):
         assert (stage / name).read_bytes() == (ROOT / name).read_bytes(), name
@@ -60,9 +64,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (stage / "manabot/arena").exists()
     assert not (engine / "managym/libmanagym.dylib.dSYM").exists()
     assert (stage / "content/semantic/current/setups.json").is_file()
-    assert (
-        stage / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json"
-    ).is_file()
+    assert (engine / "managym/academy/packs/elemental-world/v2/manifest.json").is_file()
     assert (stage / "manabot/reports/time_cohort.html").is_file()
     assert not (stage / "academy/ui/node_modules").exists()
     assert not (stage / "experiments").exists()
@@ -76,7 +78,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
 
     with pytest.raises(FileExistsError):
-        _load("prepare").prepare(stage)
+        _load("prepare").prepare(stage, site)
 
 
 def test_current_release_metadata_is_consistent() -> None:
@@ -118,6 +120,8 @@ def _artifacts(directory: Path) -> None:
         if project == "managym":
             metadata += (
                 "Requires-Dist: numpy>=1.24.0\nRequires-Dist: pydantic>=2.12.0\n"
+                "Requires-Dist: fastapi>=0.116.0; extra == 'academy'\n"
+                "Requires-Dist: uvicorn[standard]>=0.34.0; extra == 'academy'\n"
             )
             tags = [
                 f"cp{python}-cp{python}-{target}"
@@ -140,15 +144,32 @@ def _artifacts(directory: Path) -> None:
                 if project == "managym":
                     archive.writestr("managym/_managym.cpython.so", b"native fixture")
                     archive.writestr("managym/Cargo.lock", "# lockfile fixture\n")
+                    archive.writestr(
+                        "managym/academy/site/index.html", "Academy fixture"
+                    )
+                    archive.writestr(
+                        "managym/academy/packs/elemental-world/v2/manifest.json", "{}"
+                    )
                 else:
                     archive.writestr(
                         "content/semantic/current/learning_schema.json", "{}"
                     )
         with tarfile.open(directory / f"{project}-0.2.0.tar.gz", "w:gz") as archive:
-            for name, data in (
+            contents = [
                 ("PKG-INFO", metadata),
                 ("content/semantic/current/learning_schema.json", "{}"),
-            ):
+            ]
+            if project == "managym":
+                contents.extend(
+                    [
+                        ("managym/academy/site/index.html", "Academy fixture"),
+                        (
+                            "managym/academy/packs/elemental-world/v2/manifest.json",
+                            "{}",
+                        ),
+                    ]
+                )
+            for name, data in contents:
                 info = tarfile.TarInfo(f"{project}-0.2.0/{name}")
                 info.size = len(data.encode())
                 archive.addfile(info, io.BytesIO(data.encode()))
@@ -449,3 +470,29 @@ def test_post_upload_checks_fail_once_the_wait_expires(
     )
     with pytest.raises(ValueError, match="engine publication is missing"):
         module.main()
+
+
+def test_release_staging_requires_built_frontend(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="index.html"):
+        _load("prepare").prepare(tmp_path / "stage", tmp_path / "missing")
+    assert not (tmp_path / "stage").exists()
+
+
+def test_launch_docs_match_installed_wheel_commands() -> None:
+    # Read constants without importing consumer-only websocket dependencies.
+    tree = ast.parse((ROOT / "scripts/release/academy_smoke.py").read_text())
+    constants = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+    }
+    for name in (
+        "README.md",
+        "academy/README.md",
+        "managym/README.md",
+        "docs/academy.md",
+        "managym/academy/README.md",
+    ):
+        text = (ROOT / name).read_text()
+        assert constants["INSTALL_COMMAND"] + "\n" + constants["LAUNCH_COMMAND"] in text
+    assert constants["DEFAULT_URL"] in (ROOT / "docs/academy.md").read_text()

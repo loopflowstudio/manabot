@@ -19,8 +19,9 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from .extensions import CheckpointSummary, bot_extension
+
 if TYPE_CHECKING:
-    from manabot.model.catalog import CheckpointSummary, UnavailableEntry
     import managym
 
 OpponentSource = Literal["path", "runs", "tournament"]
@@ -125,12 +126,6 @@ def runs_directory() -> Path:
     return Path(os.environ.get("MANABOT_RUNS_DIR") or Path.cwd() / ".runs")
 
 
-def _discover() -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
-    from manabot.model.catalog import discover_checkpoints
-
-    return discover_checkpoints(checkpoint_sources(), runs_dir=runs_directory())
-
-
 def opponent_catalog() -> dict:
     """Every trained opponent this server can name.
 
@@ -138,10 +133,23 @@ def opponent_catalog() -> dict:
     example, a play-only install without Torch).
     """
 
+    from .advice import FIXTURE_PATH
+
+    extension = bot_extension()
+    capabilities = {
+        "advice_available": FIXTURE_PATH.is_file(),
+        "extension": extension.name if extension else None,
+        "watch_players": list(extension.watch_players)
+        if extension
+        else ["random", "search"],
+    }
+    if extension is None:
+        return {**capabilities, "opponents": [], "catalog_error": None}
     try:
-        found, missing = _discover()
+        found, missing = extension.discover(checkpoint_sources(), runs_directory())
     except (ImportError, OSError, ValueError) as error:
         return {
+            **capabilities,
             "opponents": [],
             "catalog_error": f"Checkpoints could not be listed: {error}",
         }
@@ -157,7 +165,11 @@ def opponent_catalog() -> dict:
         )
         for entry in missing
     )
-    return {"opponents": [asdict(entry) for entry in entries], "catalog_error": None}
+    return {
+        **capabilities,
+        "opponents": [asdict(entry) for entry in entries],
+        "catalog_error": None,
+    }
 
 
 def catalog_opponent(sha256: str) -> Opponent | None:
@@ -168,8 +180,11 @@ def catalog_opponent(sha256: str) -> Opponent | None:
     with the running engine or its bytes changed since listing.
     """
 
+    extension = bot_extension()
+    if extension is None:
+        return None
     try:
-        found, _ = _discover()
+        found, _ = extension.discover(checkpoint_sources(), runs_directory())
     except ImportError as error:
         raise ValueError(
             "Trained checkpoints need the training dependencies on this server."

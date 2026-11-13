@@ -1,12 +1,30 @@
 # managym
 
 The deterministic Magic: The Gathering rules engine and training environment
-behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
-and `academy` (the optional play UI). Install the `managym` distribution for
-`import managym` without the training stack. `manabot` depends on the exact
-same version and keeps `manabot.managym` as a compatibility alias. Rust sources
-stay in this directory. Start with the
-[Python installation example](../docs/engine-python.md).
+behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent).
+Install the `managym` distribution for `import managym` without the training
+stack. `manabot` depends on the exact same version and keeps `manabot.managym`
+as a compatibility alias. Rust sources stay in this directory. Start with the
+[Python installation example](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md).
+
+## Play in the browser
+
+The distribution includes Academy, a browser table for playing a game against
+the engine's built-in opponents and stepping through recorded games:
+
+```bash
+pip install 'managym[academy]'
+managym academy
+```
+
+This starts a local server and opens `http://127.0.0.1:8000` with a game
+ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
+manabot, Torch, Node or Rust. Finished and unfinished games are listed under
+**Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
+command, and `managym academy --help` lists the port, host and storage
+options. Installing `manabot` in the same environment adds trained opponents.
+The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
+covers playing, replays, trained bots and launch troubleshooting.
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
 `CardPool` holds the cards available, `format.Limited` holds the rules, and a

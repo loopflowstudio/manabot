@@ -216,7 +216,7 @@ does not stop semantic beat timers.
 
 **Shared game history.** Exercise `game-history.spec.ts` against an isolated
 built SPA/ASGI instance
-([Academy isolated browser validation](../academy/README.md#isolated-browser-validation)),
+([Academy isolated browser validation](../managym/academy/README.md#isolated-browser-validation)),
 including empty results, visible request errors and retry, shared/private
 replay and feedback. Permission or replay-projection changes add the relevant
 history, replay and shared-table cases; match terminal traces by the live
@@ -322,8 +322,8 @@ neither skipped nor succeeded.
 | Curated packs and UI fixtures | All but Python unit |
 | UI dependency, build config, scripts, static assets, card art | UI, clean-machine |
 | Other Academy UI | UI |
-| Academy server, presentation, demo, pack or villain modules, `academy/fixtures/` | Academy integration, protocol, UI |
-| Other `academy/`, `tests/academy/` | Academy integration, protocol |
+| Academy server, presentation, demo, pack or villain modules, `managym/academy/fixtures/` | Academy integration, protocol, UI |
+| Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
 | Launcher, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
 | Other `manabot/`, training/eval/sim tests, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
@@ -593,7 +593,7 @@ Choose extras for the features you use:
 
 | Extra | Use |
 |---|---|
-| `academy` | Academy backend; use `./scripts/play` from a checkout for the browser |
+| `academy` | The same as `managym[academy]`: the server dependencies for `managym academy`, the [browser UI](academy.md#running-academy) that the engine wheel carries |
 | `evaluation` | Etude evaluation and plots |
 | `reports` | Reports and Etude S3 report sources |
 | `artifacts` | Artifact-store access |
@@ -624,7 +624,9 @@ From a clean checkout, with a fresh staging path and empty output directory:
 
 ```bash
 uv run --no-project python scripts/release/check.py
-uv run --no-project python scripts/release/prepare.py .runs/release/staging
+npm --prefix academy/ui ci
+ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
+uv run --no-project python scripts/release/prepare.py .runs/release/staging --site academy/ui/build
 uv build --no-sources .runs/release/staging/managym --out-dir dist
 uv build --no-sources .runs/release/staging --out-dir dist
 uv run --no-project python scripts/release/validate.py dist
@@ -793,7 +795,7 @@ takes a legal action, records the session and a canonical visible-state
 signature, reloads, and requires the same session, pack, matchup, state and
 pack-only treatments, then a second action. Installation itself may use package
 registries. The pack authority is
-`academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json`; launcher
+`managym/academy/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json`; launcher
 and receipt derive `{id, version, manifest_sha256}` from its installed bytes. The
 launcher never fetches card data or art.
 
@@ -845,7 +847,7 @@ holds older semantic-kernel corpora, superseded authored-match receipts, older
 Learn cohorts, Jeong replays, Elemental w10 evidence and structural-kata inputs.
 
 Retained in source for current consumers: the four w17 corpora in
-[`conformance/`](../conformance/README.md); `academy/learn_lesson_evidence.py`
+[`conformance/`](../conformance/README.md); `conformance/learn_lesson_evidence.py`
 (its `register`/`run`/`verify` modes record new Learn cohorts); `.lf/config.yaml`,
 `.lf/wave/` (formerly top-level `wave/`) and referenced `.lf/chapters/` planning
 evidence; protocol and model fixtures, the rules
