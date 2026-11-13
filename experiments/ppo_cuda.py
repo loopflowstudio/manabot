@@ -1,9 +1,11 @@
-"""Exploratory PPO baseline and profile using the restored MTG-325 harness.
+"""PPO CUDA update measurements for MTG-338 (report: experiments/ppo_cuda.md).
 
-uv run etude launch experiments/ppo_cuda.py --revision COMMIT --rent mtg338-l4 --max-usd 4
-The production-size batch has five unprofiled repeats; eight streams exercise
-the harness on an easier real workload. `diagnostic=True` adds a separate
-profile process before timing. The paired mode compares the kept lookup and the CUDA embedding candidate.
+uv run etude launch experiments/ppo_cuda.py --revision 9268966e1 --paired --rent mtg338-l4
+The harness lives in the launch revision's scratch/ (speed/, equivalence/), so
+launch at 9268966e1. The default mode times five unprofiled baseline repeats
+and an easier eight-stream workload; `diagnostic=True` adds a profile process.
+`paired=True` runs the CUDA tests, the CPU equivalence harness, five
+alternating kept/changed lookup pairs and a candidate profile.
 """
 
 from decimal import Decimal
