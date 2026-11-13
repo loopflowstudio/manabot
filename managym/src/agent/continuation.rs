@@ -1315,6 +1315,14 @@ mod tests {
             },
         };
         let player = PlayerId(0);
+        let game = Game::new(
+            vec![
+                crate::state::player::PlayerConfig::new("a", [("Forest".into(), 40)].into()),
+                crate::state::player::PlayerConfig::new("b", [("Forest".into(), 40)].into()),
+            ],
+            23,
+            false,
+        );
         let predicate = CardPredicate::default();
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.

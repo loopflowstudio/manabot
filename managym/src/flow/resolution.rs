@@ -61,7 +61,7 @@ impl Game {
                 .into_iter()
                 .filter(|object| {
                     predicate.as_ref().is_none_or(|predicate| {
-                        self.card_matches_predicate(CardId::from(object.entity), predicate)
+                        self.object_matches_predicate(ObjectId::from(object.entity), predicate)
                     })
                 })
                 .count() as i32,

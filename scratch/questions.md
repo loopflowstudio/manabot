@@ -73,3 +73,11 @@ history through that supported integration rather than raw git rebase.
   specifies. Reopening BF16 admission needs another learning result.
 - Earlier A/B choices and launch history remain in git `e181224e7` and the
   experiment report. No new rental, experiment, or numerical-guard change.
+
+## MTG-320 sync resolution (2026-11-13)
+
+Preserve MTG-320's QA page at `scratch/qa.html`; the incoming MTG-313 page
+is recoverable from target `22ed4a733484d27db2fd51274d1b4e23245a6741`.
+Keep incoming source facts above as historical context. Combine the runtime
+object rename with main's explicit mana-spending fixtures, receipts and
+triggered production. Foretell completion retains checked `CardId`.

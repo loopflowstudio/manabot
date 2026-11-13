@@ -558,10 +558,10 @@ fn prism_upfront_pools_the_whole_fee_before_spending_any_unit() {
     enter_and_settle(&mut s, "Prophetic Prism");
     enter_and_settle(&mut s, "Forest");
     let prism = permanent_named(&s, "Prophetic Prism");
-    let card = s.game().state.permanents[prism].as_ref().unwrap().card;
+    let card = s.game().state.permanents[prism].as_ref().unwrap().object;
     // A two-mana filter fee distinguishes full-cost production from a
     // witness that spends one pooled unit before producing the rest.
-    s.game_mut().state.cards[card].activated_abilities[0].mana_cost =
+    s.game_mut().state.objects[card].activated_abilities[0].mana_cost =
         managym::state::mana::ManaCost::parse("2");
     s.set_player_mana_pool(0, "U");
     activate_named(&mut s, "Prophetic Prism", 0);
