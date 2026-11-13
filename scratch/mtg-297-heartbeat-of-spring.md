@@ -119,6 +119,37 @@ QA also noted verbose expiry/rider labels; no wording change was selected.
 Spending the only usable rider units automatically is forced payment, consistent
 with the shared trivial-decision rule, not an omitted strategic choice.
 
+## Publication blocker (2026-11-12)
+
+`lf sync` completed cleanly. Publication review compared the change with
+`origin/main`; only QA-report trailing whitespace was changed, in `fc0574eec`.
+The earlier selected debug run does not cover the full authored-rules check.
+
+At `fc0574eec`, this command compiled successfully, then hit two five-minute
+timeouts:
+
+```sh
+cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2
+```
+
+- `agent::vector_env::tests::masked_mixed_setups_preserve_scalar_autoreset`:
+  300.044 seconds.
+- `agent::vector_env::tests::restored_game_seeds_preserve_future_autoreset_stride`:
+  300.032 seconds.
+
+Log: `/tmp/mtg297-publish-debug.log`. Both fixtures compare vector/scalar
+execution over 1,000 steps. This run does not isolate a runtime regression
+from fixture cost; no baseline comparison or performance acceptance occurred.
+The remaining run was interrupted after the blockers were established;
+nextest exited 100 and reaped its two running tests. Summary: 44 passed,
+2 timed out, 2 interrupted; 1,171 of 1,219 tests not run, plus 2 excluded tests.
+The interrupted tests were `shards_preserve_global_seeds_through_autoreset_and_restore`
+and `terminal_step_returns_post_reset_observation`; they were not timeouts.
+
+No PR was published. Diagnose and fix or split the timeout fixtures without
+raising the watchdog or weakening their contracts, then finish debug coverage
+before retrying publication. Same-runner Engine Budget remains unverified.
+
 ## Upstream and remaining work
 
 Main's MTG-242 pool types, #504 search bounds, #506 sharding and v0.2.3
