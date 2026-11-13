@@ -254,3 +254,48 @@ JSON keys, buffer fields/keys, token vocabulary and evidence as listed above.
   `managym/state/src/stack_object.rs::StackObject::source_card_registry_key()`
   (serialized key frozen by `match_state_hash_tests.rs:250`). Its source may be a
   token, so it is a candidate for the alias-removal Task or an engine rename.
+
+## Concept review (2026-11-13): next implement direction
+
+The published surface matches the rename table: one record (`ObjectData` /
+`managym.Object`), three warning aliases, frozen JSON and buffer keys. No second
+representation, and `manabot.managym` is the same module object, so the class
+alias reaches it too. Nothing in the model changes.
+
+One rule above is not yet applied: "only functions and parameters that take the
+records are renamed". These signatures take `managym.Object` / `ObjectData` rows
+under a card name; rename the parameter (and the locals bound from it) to
+`row`/`rows` or `obj`/`objects`, never the builtin `object`:
+
+- `managym/experience_projection.py`: `_serialize_object(card)` L83, the
+  `card: managym.Object | None` parameter L118, `cards: list[managym.Object]`
+  L229 and L472, `battlefield_cards` L241. Emitted dictionary keys are wire
+  spellings and stay.
+- `manabot/env/match.py`: `_count_battlefield_lands(cards)` L204,
+  `_count_battlefield_creatures(cards)` L213.
+- `manabot/semantic/text_observation.py`: the `card` loop variable over
+  `agent_objects + opponent_objects` in `_Renderer.__init__` (~L433) and
+  `_objects_lines` (~L808). Output text unchanged; `C<n>` labels stay.
+- `managym/src/agent/observation_encoder.rs` L1999: test helper `make_card`
+  returns `ObjectData` -> `make_object`.
+
+Left as card, because the value is a card where it is used:
+`manabot/sim/heuristic.py` `can_kick`, `_timely`, `_worth_casting` (hand cards
+considered for casting); `observation.rs::card_event_data` (writes
+`EventEntityKind::Card`); encoder `cards_len` / `card_turn_state_len` (buffer
+lengths under frozen keys).
+
+No bytes move, so the check is the existing one: the alias, text-field-guard
+and named-layout tests with `-W error::DeprecationWarning`, and the digest
+(`14c102e4...100a`) after the rebuild already owed at the merged HEAD.
+
+Constraint for the alias-removal Task filed at landing: `v0.2.3` is the latest
+tag and already carries the `learning_*` aliases; these three first ship in the
+release after it. If that release is 0.3.0 itself, removing them there publishes
+no release that warns. The removal Task should state that a 0.2.x release
+carrying these warnings precedes it (questions.md 2 holds the alternative,
+naming 0.4.0).
+
+Not a naming gap in this Task: `is_token` is true for copies of spells and the
+text observation prints it as "token yes". The column and JSON key are frozen
+and `docs/engine.md` states the meaning ("not a card").
