@@ -90,4 +90,10 @@ MTG-242 (PR #496) merged 2026-11-12T21:37Z; main is merged into this branch
 - Production half (before the merge): cards 694, rules_tests 169, engine lib
   197 passed in debug; corpus first 1,000 decks 998 admit (the two failures
   list Lita).
-- After the merge and spending: see the last line below.
+- After the merge and spending (debug): cards 707, engine lib 197,
+  rules_tests 170, match_state_hash 11, search_state_contract 6,
+  canonical_replay 6, experience_protocol 5, conformance 2, content_pack 3,
+  state 15 passed. Python: academy parity/authority/fixture, semantic text and
+  mana input, env observation and layout, belief state, authored matchup
+  pass after re-recording w17 evidence (authored-match receipt 66d51605…,
+  terminal state db1a0bbb…, belief v3 receipts).

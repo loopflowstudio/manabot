@@ -584,6 +584,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "extra_turns": "extra turn",
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
+        "spend_effect_mana": "Mana that puts",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
     },
