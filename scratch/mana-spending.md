@@ -236,15 +236,12 @@ Completed in this slice:
 
 Remaining:
 
-1. Finish the 32-update, two-seed A/B pilot and heuristic scores. The first launch
-   failed admission after the second L4 was refused; acquired machine deletion
-   was confirmed. Retry `mtg347-mana-learning-serial` is in progress, one L4 at a
-   time, source `00ee188998`, `--max-usd 17`. Runs: `8a03411493cd`,
-   `b4dbac29bda4`, `56c051d5616a`, `773f339dd238`, machine
-   `mtg347-l4-b0805de6f0f4`. Training job caps total USD12;
-   evaluation caps total USD8, within the Task’s USD25 authorization.
-2. Retain launcher cost once, publish pilot receipts/results, finish the report
-   and update this remaining work. Gate/review/publication belong to later steps.
+1. All four 32-update training jobs succeeded. A evaluation
+   `mana-spending-A-303f5f0a6a59` completed 100 matches / 400 valid replay-checked
+   games (seed scores 26.0%, 28.5%). B evaluation remains, using only the two B
+   final checkpoints and the same 50 paired deals, max USD4.
+2. Retain final launcher cost once, publish pilot receipts/results, finish the
+   report and update this remaining work. Gate/review/publication belong later.
 
 ## Done when
 

@@ -4,9 +4,9 @@ Exploratory. A cast taps its lands automatically; when the pool then holds more
 usable mana than the cost needs, the player chooses which pooled unit pays each
 pip (`mana_spend` decisions). This report counts those decisions on the decks
 people train on, separates the ones caused by automatic tapping taking more
-sources than the cost needs (MTG-342) from other payments. This first slice
-measures frequency and bounded replacement shapes; the exploratory learning pilot is
-recorded separately below. It makes no claim about learning; the comparison of compound
+sources than the cost needs (MTG-342) from other payments. This experiment
+measures frequency, bounded replacement shapes and a small exploratory learning
+pilot. It makes no claim about learning; the comparison of compound
 and sequential decisions is MTG-265's.
 
 ## Run it
@@ -147,7 +147,10 @@ identity. The published summary retains the SQL, query plan and timing.
 
 The pilot asks only whether removing pool-spending decisions visibly changes
 early scores or decisions per game on this recipe. Updates are matched;
-completed games and learner transitions need not be. Trajectories differ once
+completed games and learner transitions need not be. The training decision/game
+ratio divides all recorded environment decisions by completed games, including
+decisions from unfinished or failed episodes; it is not mean completed-game length.
+Trajectories differ once
 the policies differ, so their decision ratios cannot isolate saved prompts.
 Two training seeds and a recipe with roughly 0.2% pool prompts do not establish
 an improvement, equivalence or a compound-decision learning result. This pilot
