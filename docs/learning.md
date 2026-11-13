@@ -348,7 +348,10 @@ update and declare $S$ as the updates the wall reaches at that cost
 absolute iteration.
 
 The PPO-style `Learning` rule remains as a control. It normalizes advantages
-and shuffles minibatches, and may take several epochs.
+and shuffles minibatches, and may take several epochs. Its learning rate and
+damping decay with the fraction of a declared `horizon` completed
+(`Learning(horizon=64)`), never with the update a run happens to stop at
+([schedules and clocks](training.md#schedules-and-clocks)).
 
 ## Weights, checkpoints and evaluation
 

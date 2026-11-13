@@ -116,15 +116,16 @@ whose body shows what runs. It declares its run with Etude's `track`, reads
 its run directory and target from the run, and calls a loop. Nothing wraps it;
 the command line and a launched job both simply call it. The config holds only
 what varies between runs of the recipe. Everything else is code in the
-function. This is the Elemental recipe (shown without its optional CUDA
-numerics gate):
+function. This is the Elemental recipe (abridged: its optional CUDA numerics
+gate, `validate_numerics`, is left out):
 
 ```python
 # manabot/recipes/elemental.py
-from pydantic import BaseModel
+from typing import Literal
 
 from etude.train.records import Step
 from etude.train.run import track
+from pydantic import BaseModel, Field
 
 from manabot.recipes.builders import elemental_self_play
 from manabot.training.loops.self_play import self_play
@@ -132,18 +133,27 @@ from manabot.training.loops.self_play import self_play
 
 class ElementalConfig(BaseModel):
     seed: int = 197
-    updates: int = 3200
+    updates: int = Field(default=3200, ge=1)
+    device: Literal["cpu", "mps", "cuda"] = "cpu"
+    streams: int = Field(default=256, ge=2)
 
 
 def train(config: ElementalConfig) -> None:
+    settings = elemental_self_play().model_copy(
+        update={"device": config.device, "streams": config.streams}
+    )
     with track(
-        clocks=[Step("updates", "optimizer updates")],
+        clocks=[Step("updates", "collection/update iterations")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:
         updates = int(run.until("updates", default=config.updates))
-        self_play(elemental_self_play(), run.out, seed=config.seed, updates=updates, run=run)
+        self_play(settings, run.out, seed=config.seed, updates=updates, run=run)
 ```
+
+The `updates` clock counts collection/update iterations: one batch collected
+and learned from. It is not a count of `optimizer.step()` calls, which a run
+logs separately ([costs and counters](#costs-and-counters)).
 
 Etude supplies the parts that are true of any training run, and the function
 asks for them where it uses them:
@@ -194,7 +204,7 @@ def self_play(
     seed_random(seed + state.update)
     try:
         while state.update < updates and not (run and run.stopping()):
-            state, row = step(state, collector, rng, updates=updates, base=base)
+            state, row = step(state, collector, rng, base=base)
             if run:
                 run.log(row, updates=state.update)
             checkpoint_due = state.update < updates and is_checkpoint(settings, state.update)
@@ -224,12 +234,12 @@ The pieces it uses:
 | --- | --- |
 | `SelfPlay` | The loop's settings: match and decks, model and observation configs, the update and its learning record, streams, transitions, learning seats, batch closure, game-error policy, workers, device, precision, `save_every` and `checkpoint_every`. A Pydantic model holding data only; everything the loop does with it is a function. A recipe builds one in its body (`elemental_self_play()`); its digest is saved in `state.pt`. |
 | `new_state(settings, seed)` | Fresh weights from `seed`, EMA as a copy, a fresh Adam, update 0. |
-| `load_state(path, settings, seed)` | The saved learner, or `None` when `path` does not exist. Refuses a state written for other settings, another seed or another world, naming what differs. `device`, `workers` and `threads` may change between attempts; `updates` is not part of the state, so a later target carries on. |
+| `load_state(path, settings, seed)` | The saved learner, or `None` when `path` does not exist. Refuses a state written for other settings, another seed or another world, naming what differs. `device`, `workers` and `threads` may change between attempts. The target `updates` is not part of the state, so a later target carries on; a schedule's horizon is a learning setting, so a changed horizon is refused. |
 | `save_state(path, state)` | Writes raw weights, EMA, Adam, the update count and the source revision to a temporary file, then renames it over `path`. A crash leaves the previous state whole. |
 | `save_checkpoint(directory, state)` | World-bound raw and EMA policies at this update (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`; returns the EMA path when the learning record keeps an EMA and the raw path otherwise. A file is written once: when it already exists for this update the path is returned and nothing is rewritten, because Etude records a checkpoint inside `run.out` where it is and readers verify its digest. |
 | `self_play_collector(settings, seed=, start=)` | A `Collector` (`open_collector` in `manabot.training.rollout.collection`) whose streams are seeded from the run seed and the update it starts at, so a resumed loop plays fresh, reproducible games. Sampling (`seed_random`) and minibatch order are reseeded the same way. With `start=0` these use the retired executor's seed offsets. A two-update CPU comparison against the retired executor after the backend merge produced bitwise-equal raw and EMA weights for PPO and damped policy (seed 197, two streams); this does not promise uninterrupted equivalence after resume. |
-| `step(state, collector, rng, updates=, base=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `LoopState` (update and counts replaced; the learner, Adam and EMA are updated in place) with its metric row. |
-| `learn(state, batch, rng, updates=)` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Damped-policy schedules read the absolute iteration; PPO schedules read `state.update / updates`. |
+| `step(state, collector, rng, base=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `LoopState` (update and counts replaced; the learner, Adam and EMA are updated in place) with its metric row. |
+| `learn(state, batch, rng)` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the state alone: damped-policy schedules read the absolute iteration, PPO schedules read `state.update / horizon`, and neither reads the target ([schedules and clocks](#schedules-and-clocks)). |
 | `Tracker` | What a loop asks of a tracker: `log(values, **clocks)`, `log_table(name, rows, **clocks)`, `checkpoint(path, **clocks)` and `stopping()`. Etude's `Run` is one; pass `None` to train with no tracking. |
 | `Stopped` | Etude's planned-stop exception (`etude.stopping.Stopped`); the loop raises it after saving, short of its target. |
 
@@ -262,30 +272,64 @@ hidden-hand histories with it and fits a sampler:
 ```python
 # manabot/recipes/belief_sampler.py
 class BeliefConfig(BaseModel):
-    seed: int = 421
-    updates: int = 64
-    games: int = 256
+    seed: int = 197
+    updates: int = Field(default=1, ge=1)
+    device: Literal["cpu", "mps", "cuda"] = "cpu"
+    games: int = Field(default=3, ge=3)
+    max_steps: int = Field(default=1000, ge=1)
+    sampler: SamplerConfig = SamplerConfig(
+        steps=4, batch_size=8, hidden_size=16, evaluation_samples=4
+    )
 
 
 def train(config: BeliefConfig) -> None:
-    settings = gray_ogre_self_play()
-    with track(clocks=[Step("updates", "optimizer updates")],
-               seed=config.seed, config=config.model_dump(mode="json")) as run:
+    settings = gray_ogre_self_play(horizon=config.updates).model_copy(
+        update={"device": config.device}
+    )
+    with track(
+        clocks=[Step("updates", "collection/update iterations")],
+        seed=config.seed,
+        config=config.model_dump(mode="json"),
+    ) as run:
         updates = int(run.until("updates", default=config.updates))
-        policy = self_play(settings, run.out / "policy", seed=config.seed,
-                           updates=updates, run=run)   # policy/checkpoints/00000064-raw.pt
-        histories = collect_belief(policy, run.out / f"histories-{policy.stem}.json",
-                                   match=root_match(settings), games=config.games,
-                                   seed=config.seed)
-        sampler = train_belief(histories, run.out / f"belief-{policy.stem}.pt",
-                               sampler_config(), seed=config.seed)
-        run.checkpoint(sampler, updates=updates, tags=("belief",))
+        policy = self_play(
+            settings, run.out / "policy", seed=config.seed, updates=updates, run=run
+        )  # policy/checkpoints/00000001-raw.pt
+        histories = collect_belief(
+            policy,
+            run.out / f"histories-{policy.stem}.json",
+            match=root_match(settings),
+            games=config.games,
+            seed=config.seed,
+            max_steps=config.max_steps,
+        )
+        sampler = train_belief(
+            histories, run.out / f"belief-{policy.stem}.pt", config.sampler, seed=config.seed
+        )
+        run.checkpoint(sampler, tags=("belief",), updates=updates)
 ```
 
-Run to 64 updates and then to 128, the directory holds
-`histories-00000064-raw.json` and `histories-00000128-raw.json`, each with its
-own sampler; nothing made from the earlier policy is overwritten or mistaken
-for the later one's.
+Its defaults are a pilot's: one update, three games and a small sampler, enough
+to exercise every step in seconds.
+
+```bash
+uv run manabot train --recipe belief --out .runs/belief
+uv run manabot train --recipe belief --out .runs/belief --updates 2
+```
+
+```text
+.runs/belief/
+  policy/checkpoints/00000001-raw.pt   policy/checkpoints/00000002-raw.pt
+  histories-00000001-raw.json          histories-00000002-raw.json
+  belief-00000001-raw.pt               belief-00000002-raw.pt
+```
+
+The second command trains the same learner one update further and runs the
+later steps again for the new policy; nothing made from the earlier policy is
+overwritten or mistaken for the later one's. This recipe's policy learns with
+PPO, whose rates follow a horizon the recipe states (`horizon=config.updates`),
+so the first update is the same whether the run stops there or is extended
+([schedules and clocks](#schedules-and-clocks)).
 
 `collect_belief` (`manabot.belief.collect`) plays `games` complete games with a
 frozen policy and writes each viewer's history with its private hand label;
@@ -327,10 +371,34 @@ evaluation output with its own clock. The selection rule is
 
 ### Schedules and clocks
 
-Damped-policy (Ataraxos) schedules use their absolute iteration formulas, so
-moving `updates` changes only where training stops. PPO (`Learning`) schedules
-read the fraction of `updates` completed, so for PPO the target also sets the
-rates.
+The target (`updates`, `--updates`, `etude continue --until`) says where
+training stops and nothing else. Rates are set by the learning record, so the
+updates a run has already made are the same whatever target it is later given:
+
+```python
+# PPO: progress is update / 64.
+Learning(horizon=64)
+# Damped policy: the absolute iteration, here rescaled onto 3200 updates.
+DampedPolicyLearning(gradient="damped_policy", iteration_schedule=IterationSchedule(steps=3200))
+```
+
+| Learning record | What its rates read | Past the horizon |
+| --- | --- | --- |
+| `DampedPolicyLearning` | The absolute iteration, or that iteration mapped onto `iteration_schedule.steps` when a schedule is declared ([step sizes](learning.md#4-update)) | The mapped iteration stays at its last value |
+| `Learning` (PPO) | `update / horizon`, the fraction of the declared horizon completed | The rates stay at their final values |
+
+`Learning.horizon` is required for self-play: `SelfPlay` refuses a PPO record
+without one, naming the field, because there is no target-independent default.
+A recipe sets it from its own update count
+(`gray_ogre_self_play(horizon=config.updates)`). The horizon is part of the
+learner's settings in `state.pt`, so resuming with a different one is refused
+like any other changed setting; to train under another horizon, start a new
+run. Extending a run past its horizon is allowed and trains on at the final
+rates. An unset `horizon` is omitted from serialization, so saved regimes that
+hold a `Learning` record keep their bytes; their stages took progress from the
+stage's own length and run only from the revision
+[saved regimes](#saved-regimes) names.
+
 Evaluation is outside training and does not consume the training clock. Saved
 regimes with `schedule_clock="run_elapsed_budget"` divided elapsed wall time by
 a budget; they run only from the revision [saved regimes](#saved-regimes) names.
@@ -798,7 +866,8 @@ A run continued with `etude continue --run RUN --until updates=N` starts from a
 copy of its parent's `run.out`, so from its `state.pt` with Adam and EMA: it is
 the same learner trained further. The child runs the parent's config and
 seed; its target comes from `run.until`, and only that target and the machine
-may change. A state written for other settings is refused. A parent at 26,000
+may change. A state written for other settings is refused. Rates do not move
+with the target ([schedules and clocks](#schedules-and-clocks)). A parent at 26,000
 updates can produce a child ending at 63,000 and then one ending at 100,000;
 damped-policy rates keep their absolute formulas (update 26,001 uses LR
 `6.957944302072213e-6`, tau `0.0023684978179155515` under the default

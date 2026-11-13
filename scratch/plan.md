@@ -161,3 +161,21 @@ are proposals drawn from the design, not statements anyone made.
 Left alone on purpose: `training/state/` (game errors and incidents) keeps
 its name; the CLI's local/baseline-only flags wait on the open question in
 questions.md (should the CLI set any field of a recipe's config).
+
+## Docs for concept review 2 — 2026-11-13
+
+Changed doc paths: `docs/training.md` (Elemental and belief excerpts match the
+recipe files; loop excerpt and piece table drop `updates=` from `step`/`learn`;
+"Schedules and clocks" states the fixed PPO horizon; belief extension example
+uses the real defaults, `--updates 2`) and `docs/learning.md` (PPO paragraph).
+These describe intended behavior; the code is not yet changed. The docs fix
+three details the plan left to implement: the builder call is
+`gray_ogre_self_play(horizon=config.updates)`; a run extended past its horizon
+trains on at the final rates (what `Schedule.at` and `IterationSchedule.at`
+already do by clamping) rather than refusing; a changed horizon is refused on
+resume as a learner setting. `SelfPlay.learning` defaults to `Learning()`, so
+"refuses PPO without a horizon" makes that default unusable: implement must
+either drop the default or accept that a bare `SelfPlay(...)` refuses.
+The loop docstring (`learn`: "for PPO the target matters") and questions.md's
+"PPO rates still depend on the requested update count" line still need the
+implement step's edit (questions.md line done).
