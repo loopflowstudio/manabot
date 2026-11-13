@@ -293,12 +293,12 @@ impl PaymentSearchState {
     /// add already overestimate what converting restricted mana could buy.
     fn usable(&self, mana: &Mana) -> [u64; 6] {
         let mut usable = mana.mana.map(u64::from);
-        for (restriction, restricted) in mana.restricted() {
+        for (class, amounts) in mana.classes() {
             if self.obligations.iter().any(|obligation| {
                 matches!(obligation, Obligation::Pay { cost, .. }
-                    if restriction.allows(&cost.purpose))
+                    if class.allows(&cost.purpose))
             }) {
-                for (amount, more) in usable.iter_mut().zip(restricted) {
+                for (amount, more) in usable.iter_mut().zip(amounts) {
                     *amount += u64::from(*more);
                 }
             }
@@ -360,7 +360,7 @@ impl PaymentModel {
         // finite-resource limits below.
         let mut uses = self
             .tap_candidates(resources, &ability.tap_candidates)
-            .len()
+            .count()
             .checked_div(ability.tap_count)
             .unwrap_or(usize::MAX);
         if ability.tap_source || ability.sacrifice_source || ability.limited {
@@ -374,11 +374,11 @@ impl PaymentModel {
         uses
     }
 
-    fn tap_candidates(
-        &self,
-        resources: &PaymentResources,
-        candidates: &[PermanentId],
-    ) -> Vec<usize> {
+    fn tap_candidates<'a>(
+        &'a self,
+        resources: &'a PaymentResources,
+        candidates: &'a [PermanentId],
+    ) -> impl Iterator<Item = usize> + 'a {
         self.sources
             .iter()
             .enumerate()
@@ -388,7 +388,6 @@ impl PaymentModel {
                     && candidates.contains(&source.permanent))
                 .then_some(index)
             })
-            .collect()
     }
 
     fn witness(
@@ -401,6 +400,16 @@ impl PaymentModel {
         crate::benchmark_payments::call();
         if state.obligations.is_empty() {
             return Some(Vec::new());
+        }
+        // Presence and untapped resources only decrease during payment. Once
+        // any saved counted tap lacks candidates, no production or spending
+        // order can restore it. Reject before exploring the earlier costs;
+        // checking only when that tap becomes first repeats doomed payments.
+        if state.obligations.iter().any(|obligation| {
+            matches!(obligation, Obligation::Tap { candidates, remaining }
+                if self.tap_candidates(&state.resources, candidates).take(*remaining).count() < *remaining)
+        }) {
+            return None;
         }
         // Bound the whole pending payment, not just its first obligation:
         // otherwise an impossible later cost retries every way to fund an
@@ -479,11 +488,7 @@ impl PaymentModel {
                         visited,
                     );
                 }
-                let candidates_now = self.tap_candidates(&state.resources, &candidates);
-                if candidates_now.len() < remaining {
-                    return None;
-                }
-                for index in candidates_now {
+                for index in self.tap_candidates(&state.resources, &candidates) {
                     let mut next = state.clone();
                     next.resources.untapped[index] = false;
                     next.obligations[0] = Obligation::Tap {
@@ -681,7 +686,7 @@ impl PaymentModel {
     /// abilities and pending outputs add their best choice. Unlike the
     /// per-cost check, each use contributes one output choice, not the union
     /// of its modes, so one "U or R" source cannot cover {U}{R}. Mana is never
-    /// spent as another color during payment (`Mana::payment_remainders`), so
+    /// spent as another color during payment (`Mana::spending_choices`), so
     /// a failed set has no witness and pruning it keeps the first witness.
     fn colors_coverable(&self, state: &PaymentSearchState, search: &PaymentSearch) -> bool {
         #[cfg(test)]
@@ -848,7 +853,6 @@ impl PaymentModel {
         let mut resources = self.resources();
         let index = self
             .tap_candidates(&resources, candidates)
-            .into_iter()
             .find(|index| self.sources[*index].permanent == permanent)?;
         *remaining = remaining.checked_sub(1)?;
         resources.untapped[index] = false;
@@ -2225,7 +2229,7 @@ mod tests {
     use crate::cards::content_pack::ContentPack;
     use crate::state::{
         game_object::{CardId, PermanentId},
-        mana::{Mana, ManaCost, ManaRestriction, SpendingContext},
+        mana::{Mana, ManaCost, ManaRestriction, SpendEffect, SpendingContext},
     };
 
     fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
@@ -2590,7 +2594,7 @@ mod tests {
         for (index, step) in path[..4].iter().enumerate() {
             assert!(matches!(step, PaymentStep::Fixed(id) if *id == PermanentId(index)));
         }
-        assert!(matches!(&path[4], PaymentStep::Spend(pool) if pool.total() == 0));
+        assert!(matches!(path[4], PaymentStep::Spend));
     }
 
     /// Tapping and then sacrificing one object are independent resources.
@@ -2647,6 +2651,25 @@ mod tests {
         assert!(model.plan(pool, obligations, SourcePolicy::All).is_some());
     }
 
+    #[test]
+    fn payment_bound_counts_spend_effect_and_combat_classes() {
+        let mut pool = Mana::of_class(
+            SpendEffect::CreatureEntersWithPlusOneCounter {
+                without_subtype: "Human".into(),
+            }
+            .into(),
+            [0, 1, 0, 0, 0, 0],
+        );
+        pool.add_combat(&Mana::parse("R"));
+        let model = PaymentModel {
+            sources: Vec::new(),
+            life: 20,
+        };
+        assert!(model
+            .plan(pool, vec![pay("UR")], SourcePolicy::All)
+            .is_some());
+    }
+
     /// Restricted mana can finance a future activation even when it cannot
     /// pay the current debt. That activation's output covers the debt instead.
     #[test]
@@ -2672,7 +2695,7 @@ mod tests {
             )
             .unwrap();
         assert!(matches!(path[0], PaymentStep::Activate(PermanentId(0), 0)));
-        assert!(matches!(path[1], PaymentStep::Spend(_)));
+        assert!(matches!(path[1], PaymentStep::Spend));
         assert!(matches!(path[2], PaymentStep::Output(0)));
     }
 

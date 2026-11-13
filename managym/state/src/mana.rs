@@ -812,6 +812,23 @@ impl Mana {
     /// One unit of one class pays the next colored/hybrid/generic pip. The
     /// caller checks the remaining obligations before offering any selection.
     pub fn spending_choices(&self, cost: &ManaCost) -> Vec<ManaSpendChoice> {
+        // Every eligible unit pays the same next pip, so the remaining cost
+        // is independent of its color and class.
+        let mut remaining = cost.clone();
+        let allowed: [bool; 6] = if let Some(pip) = remaining.cost[..6].iter().position(|n| *n > 0)
+        {
+            remaining.cost[pip] -= 1;
+            std::array::from_fn(|color| color == pip)
+        } else if !remaining.hybrid.is_empty() {
+            let pip = remaining.hybrid.remove(0);
+            std::array::from_fn(|color| pip.iter().any(|c| *c as usize == color))
+        } else if remaining.generic() > 0 {
+            remaining.cost[6] -= 1;
+            [true; 6]
+        } else {
+            return Vec::new();
+        };
+        remaining.update_mana_value();
         let mut result = Vec::new();
         for (class, amounts) in std::iter::once((None, &self.mana)).chain(
             self.classes()
@@ -820,26 +837,9 @@ impl Mana {
                 .map(|(class, amounts)| (Some(class), amounts)),
         ) {
             for (color, amount) in amounts.iter().enumerate() {
-                if *amount == 0 {
+                if *amount == 0 || !allowed[color] {
                     continue;
                 }
-                let mut remaining = cost.clone();
-                if let Some(pip) = remaining.cost[..6].iter().position(|n| *n > 0) {
-                    if pip != color {
-                        continue;
-                    }
-                    remaining.cost[pip] -= 1;
-                } else if let Some(pip) = remaining.hybrid.first() {
-                    if !pip.iter().any(|c| *c as usize == color) {
-                        continue;
-                    }
-                    remaining.hybrid.remove(0);
-                } else if remaining.generic() > 0 {
-                    remaining.cost[6] -= 1;
-                } else {
-                    continue;
-                }
-                remaining.update_mana_value();
                 let mut amounts = [0; 6];
                 amounts[color] = 1;
                 let unit = match class {
@@ -849,7 +849,10 @@ impl Mana {
                         ..Self::default()
                     },
                 };
-                result.push(ManaSpendChoice { unit, remaining });
+                result.push(ManaSpendChoice {
+                    unit,
+                    remaining: remaining.clone(),
+                });
             }
         }
         result

@@ -58,6 +58,15 @@ witnesses use the same pool semantics. Automatic production pools the complete
 current cost before a spending choice starts; nested output and parent costs
 remain in feasibility throughout that choice.
 
+The merged `flow/mana.rs::PaymentSearch` may group interchangeable production
+resources and prune impossible supply with total/color bounds. Every saved
+counted-tap cost must still have enough present, untapped candidates; reject a
+branch as soon as it cannot meet that cost. Pool class and expiry remain in
+every search key; `PaymentSearchState::usable` counts allowed
+classes, including unrestricted riders and combat mana. A feasibility witness
+stops automatic production at `PaymentStep::Spend`; the native decision then
+chooses units, rather than committing the witness's hypothetical remainder.
+
 ## Shared observation
 
 Review superseded the proposed new v10 block, fact kinds and v1–v9 rejection.
@@ -101,6 +110,6 @@ Completed with spending choices: `Mana::pay`, `payment_options`,
 `apply_payment_remainder`, automatic class ordering, `Game::spend_mana` and
 `spend_mana_to_remainder`. Ordinary/restricted/hybrid and combat behavior use
 one unit transition model and the shared decision surface.
-Compression also removes the unused `Mana::set_class` remainder writer and
+Compression also removed the unused `Mana::set_class` remainder writer and
 the single-use `ManaClass::effect_applies` forwarding method. No deletion
 target remains open.

@@ -853,6 +853,16 @@ fn badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana() {
     let mut s = five_color_setup(&["Badgermole Cub", "Hermitic Herbalist"]);
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Badgermole Cub");
+    // The generic pip is an explicit spending choice from this mixed pool.
+    assert_choice_contract(&s);
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let colorless = frame
+        .offers
+        .iter()
+        .position(|offer| offer.label.contains("{C}"))
+        .expect("colorless mana can pay the generic pip");
+    s.step_action(colorless);
+    assert_eq!(*pool(&s), Mana::parse("19WWWWUUUUBBBBRRRRGGG"));
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
@@ -9166,6 +9176,7 @@ fn merchant_search_returns_the_exact_source_even_on_failure_to_find() {
         let mut s = five_color_setup(&["Unlucky Cabbage Merchant"]);
         let merchant = play_and_settle(&mut s, "Unlucky Cabbage Merchant");
         let food = permanent_named(&s, "Food");
+        s.set_player_mana_pool(0, "2");
         activate_first(&mut s, food);
         pass_until(&mut s, ActionSpaceKind::Modal);
         choose(
@@ -9211,6 +9222,7 @@ fn merchant_returns_to_its_owners_bottom_while_its_controller_shuffles() {
         .controller = PlayerId(0);
     s.game_mut().create_token("token.food", PlayerId(0), false);
     let food = permanent_named(&s, "Food");
+    s.set_player_mana_pool(0, "2");
     activate_first(&mut s, food);
     pass_until(&mut s, ActionSpaceKind::Modal);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
@@ -9234,6 +9246,7 @@ fn merchant_successful_search_is_optional_and_returns_source_before_shuffle() {
     let merchant = permanent_named(&s, "Unlucky Cabbage Merchant");
     let merchant_card = s.game().state.permanents[merchant].as_ref().unwrap().card;
     let food = permanent_named(&s, "Food");
+    s.set_player_mana_pool(0, "2");
     activate(&mut s, food, 0);
     pass_until(&mut s, ActionSpaceKind::Modal);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
@@ -9832,6 +9845,7 @@ fn waterbend_and_mana_taps_have_distinct_bonus_accounting() {
                 predicate: CardPredicate::creature(),
                 output: TriggeredManaOutput::Fixed(Mana::parse("G")),
             });
+        s.set_player_mana_pool(0, "3U");
         cast(&mut s, "Waterbending Lesson");
         if s.action_space().kind == ActionSpaceKind::PayOrNot {
             choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
