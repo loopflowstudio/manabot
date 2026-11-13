@@ -71,6 +71,7 @@ ARMS: tuple[ArmName, ...] = (
 CANDIDATES: tuple[Precision, ...] = ("tf32", "bf16")
 SIZES: dict[str, dict[str, int]] = {
     "w160l8": {},
+    "w256l8": {"hidden_dim": 256, "attention_layers": 8, "num_attention_heads": 8},
     "w384l8": {"hidden_dim": 384, "attention_layers": 8, "num_attention_heads": 8},
 }
 # Trajectory metrics the rule compares, as recorded per optimizer step.
@@ -857,11 +858,18 @@ def measure(probe: Probe) -> None:
     )
 
 
-def runs(revision: str, hours: float = 1.5, usd: float = 1.5) -> list[Run]:
-    """The one L4 job at `revision`."""
-    probe = Probe(source_bundle=bundle_at(ROOT, revision))
+def runs(
+    revision: str, hours: float = 1.5, usd: float = 1.5, sizes: str = ""
+) -> list[Run]:
+    """The one L4 job at `revision`; `sizes` (comma-separated `SIZES` keys)
+    replaces the default pair, as MTG-324's w256l8 step run does."""
+    chosen = tuple(s for s in sizes.split(",") if s) or Probe().sizes
+    unknown = set(chosen) - SIZES.keys()
+    if unknown:
+        raise ValueError(f"unknown sizes {sorted(unknown)}; known {sorted(SIZES)}")
+    probe = Probe(source_bundle=bundle_at(ROOT, revision), sizes=chosen)
     return Job(
-        name="mtg317-cuda-precision",
+        name="mtg317-cuda-precision" + ("" if not sizes else "-" + "-".join(chosen)),
         setup=machine_setup(""),
         command=f"{TOOLCHAIN_ENV}\nuv run --locked python -m etude.call "
         "--function experiments.cuda_precision:measure",
