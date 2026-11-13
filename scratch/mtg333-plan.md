@@ -336,8 +336,15 @@ lost, $0.00). No Task rental is live.
   `/tmp/mtg333/post514-belief.pt` → **3,410 tensors, differing 0**, five
   update cases byte-identical. Retained optimizations also pass:
   `compare.py post514-base.pt post514-facts-head.pt` → same;
-  `cmp updates-post514-{base,facts}.json` → identical. Final `manabot/` is exactly
-  `e98109b8f8` (confirmed by an empty diff after discarding metadata).
+  `cmp updates-post514-{base,facts}.json` → identical. Final `manabot/` was exactly
+  `e98109b8f8` before the compress pass below (empty diff after discarding metadata).
+- Compress pass, 21:52 UTC (`_facts` names its live rows and sets hashed-record
+  masks directly; the referenced-definition scan is inline in `prepare`;
+  `scratch/equivalence/probe.py` removed, last at `a26be160ee`):
+  `compare.py post514-base.pt compress5-head.pt` → **3,410 tensors, differing
+  0**; `cmp updates-post514-base.json updates-compress5.json` → identical;
+  `test_prepare_rows.py test_torch_backend_protocol.py` → 32 passed. No CUDA
+  rerun: host values are unchanged, so the speed numbers below predate it.
 - Focused checks: `test_prepare_rows.py` → 27 passed; packed transfer and
   `test_torch_backend_protocol.py` → 6 passed, repeated after discarding the
   metadata change. Ruff check/format passed. Broader validation stays at gate.

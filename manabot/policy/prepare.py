@@ -581,9 +581,6 @@ def prepare(
     present = validity != 0
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
-    referenced = (
-        _referenced_definitions(obs, tables, candidates) if select_programs else None
-    )
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
@@ -628,7 +625,12 @@ def prepare(
         attention_columns=columns,
         binding=binding,
         is_agent=ownership,
-        programs=tables.programs(referenced if select_programs else None)
+        # Full-catalog preparation skips the scan for referenced definitions.
+        programs=tables.programs(
+            _referenced_definitions(obs, tables, candidates)
+            if select_programs
+            else None
+        )
         if tables.definition_rows is not None
         else None,
         belief=belief,
@@ -642,10 +644,8 @@ def prepare(
 
 def _referenced_definitions(
     obs: ObservationBuffers, tables: Tables, candidates: Array
-) -> Array | None:
+) -> Array:
     """Catalog subset read by learning, in sorted row order (zero is padding)."""
-    if tables.definition_rows is None:
-        return None
     references = [
         obs["semantic_cards"],
         *(obs[key][..., PERMANENT_DEFINITION_INDEX] for key in _PERMANENT_KEYS),
@@ -676,32 +676,31 @@ def _referenced_definitions(
 def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
     batch = len(facts)
     valid = facts[..., FACT_VALID_INDEX] == 1
-    source = facts
     # Index only live facts on the host. Restore padding before the forward:
     # its matrix shapes and gradient reduction order must remain unchanged.
-    facts = facts[valid]
+    live = facts[valid]
 
-    def padded(values: Array, fill: int = 0) -> Array:
+    def padded(values: Array) -> Array:
         shape = (*valid.shape, *values.shape[1:])
-        result = np.full(shape, fill, dtype=values.dtype)
+        result = np.zeros(shape, dtype=values.dtype)
         result[valid] = values
         return result
 
-    kinds = facts[..., FACT_KIND_INDEX].astype(np.int64)
-    duration = facts[..., FACT_DURATION_INDEX]
+    kinds = live[..., FACT_KIND_INDEX].astype(np.int64)
+    duration = live[..., FACT_DURATION_INDEX]
     ident, detail = (
-        record_word(facts, FACT_ID_INDEX),
-        record_word(facts, FACT_DETAIL_INDEX),
+        record_word(live, FACT_ID_INDEX),
+        record_word(live, FACT_DETAIL_INDEX),
     )
     ordinal = np.isin(kinds, ORDINAL_ID_KINDS)
     scale = np.float32(FACT_TIMESTAMP_SCALE)
     columns = np.stack(
         [
-            facts[..., FACT_VALUE_INDEX],
-            facts[..., FACT_VALUE_INDEX + 1],
+            live[..., FACT_VALUE_INDEX],
+            live[..., FACT_VALUE_INDEX + 1],
             (duration == 1).astype(np.float32),
             (duration == 2).astype(np.float32),
-            facts[..., FACT_ORDER_INDEX] / scale,
+            live[..., FACT_ORDER_INDEX] / scale,
             np.where(ordinal, ident, 0).astype(np.float32) / scale,
         ],
         -1,
@@ -717,7 +716,7 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         restriction, RecordNamespace.RESTRICTION, RecordNamespace.TOKEN
     )
 
-    token_kind = facts[..., FACT_VALUE_INDEX].astype(np.int64)
+    token_kind = live[..., FACT_VALUE_INDEX].astype(np.int64)
     token_rows = np.zeros(kinds.shape, np.int64)
     if tables.catalog_records:
         id_rows = np.zeros(kinds.shape, np.int64)
@@ -727,32 +726,34 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
             detail_space[named_detail], detail[named_detail]
         )
         token_rows[program] = tables.tokens(token_kind[program], detail[program])
-        sources = tables.rows(facts[..., FACT_SOURCE_INDEX])
+        sources = tables.rows(live[..., FACT_SOURCE_INDEX])
+        id_mask = padded(named.astype(np.float32))
+        detail_mask = padded(named_detail.astype(np.float32))
     else:
         # Torch linear chooses a different accumulation path for strided inputs.
         columns = np.ascontiguousarray(columns[..., :5])
         id_rows = ident % tables.record_buckets
         detail_rows = detail % tables.record_buckets
-        sources = facts[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets
-        named = named_detail = np.ones(kinds.shape, bool)
-    links = padded(facts[..., FACT_OBJECT_INDEX].astype(np.int64))
+        sources = live[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets
+        # Hashed records embed every row, padding included.
+        id_mask = np.ones(valid.shape, np.float32)
+        detail_mask = np.ones(valid.shape, np.float32)
+    links = padded(live[..., FACT_OBJECT_INDEX].astype(np.int64))
     base = np.arange(batch)[:, None] * objects
     all_programs = padded(program)
     return FactRoutes(
         kinds=padded(kinds),
         columns=padded(columns),
         id_rows=padded(id_rows),
-        id_mask=padded(named.astype(np.float32), int(not tables.catalog_records)),
+        id_mask=id_mask,
         detail_rows=padded(detail_rows),
-        detail_mask=padded(
-            named_detail.astype(np.float32), int(not tables.catalog_records)
-        ),
+        detail_mask=detail_mask,
         token_rows=padded(token_rows),
         token_mask=all_programs.astype(np.float32),
         source_rows=padded(sources),
         targets=(base + (links - 1).clip(min=0)).reshape(-1),
         linked=(valid & (links > 0)).astype(np.float32),
-        programs=_fact_programs(source, all_programs, tables.order_lengths),
+        programs=_fact_programs(facts, all_programs, tables.order_lengths),
     )
 
 
