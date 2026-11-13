@@ -891,7 +891,7 @@ struct TurnStateReads {
 }
 
 impl TurnStateReads {
-    fn of(definition: &crate::state::card::CardDefinition) -> Self {
+    fn of(definition: &crate::state::card::ObjectDefinition) -> Self {
         fn walk(value: &serde_json::Value, reads: &mut TurnStateReads) {
             match value {
                 serde_json::Value::Object(map) => {

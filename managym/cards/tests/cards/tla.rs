@@ -2240,7 +2240,7 @@ fn avatar_enthusiasts_does_not_count_itself() {
 fn avatar_enthusiasts_counts_token_allies() {
     let (mut s, enthusiasts) = enthusiasts_scenario();
 
-    s.game_mut().create_token("Ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
     resolve_until_priority(&mut s);
 
     assert_eq!(counters(&s, enthusiasts), 1);
@@ -2881,7 +2881,7 @@ fn farm_animals_destroy_an_artifact_without_targeting_a_creature() {
     let mut s = five_color_setup(&["Curious Farm Animals", "Callous Inspector"]);
     play_and_settle(&mut s, "Curious Farm Animals");
     play_and_settle(&mut s, "Callous Inspector");
-    s.game_mut().create_token("Food", PlayerId(0), false);
+    s.game_mut().create_token("token.food", PlayerId(0), false);
     let food = permanent_named(&s, "Food");
     let animal = permanent_named(&s, "Curious Farm Animals");
     let creature = permanent_named(&s, "Callous Inspector");
@@ -2981,7 +2981,8 @@ fn treasure_completes_an_announced_cost_without_a_priority_window() {
     let mut s = five_color_setup(&["Deadly Precision", "Callous Inspector"]);
     let victim = play_and_settle(&mut s, "Callous Inspector");
     let target = permanent_named(&s, "Callous Inspector");
-    s.game_mut().create_token("Treasure", PlayerId(0), false);
+    s.game_mut()
+        .create_token("token.treasure", PlayerId(0), false);
     s.set_player_mana_pool(0, "0");
     cast(&mut s, "Deadly Precision");
     choose(
@@ -3028,7 +3029,7 @@ fn deadly_precision_sacrifices_artifact_before_destroying_a_different_creature()
     let mut s = five_color_setup(&["Deadly Precision", "Gray Ogre"]);
     let victim = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let victim_card = s.game().state.permanents[victim].as_ref().unwrap().card;
-    s.game_mut().create_token("Clue", PlayerId(0), false);
+    s.game_mut().create_token("token.clue", PlayerId(0), false);
     let clue = permanent_named(&s, "Clue");
     let clue_card = s.game().state.permanents[clue].as_ref().unwrap().card;
     s.set_player_mana_pool(0, "B");
@@ -3120,9 +3121,12 @@ fn disciple_rechecks_power_and_its_effect_expires() {
 
 #[test]
 fn dragon_and_soldier_tokens_firebend_their_printed_amount() {
-    for (name, amount) in [("Dragon", 4), ("Soldier", 1)] {
+    for (key, name, amount) in [
+        ("token.dragon", "Dragon", 4),
+        ("token.soldier", "Soldier", 1),
+    ] {
         let mut s = five_color_setup(&[]);
-        s.game_mut().create_token(name, PlayerId(0), false);
+        s.game_mut().create_token(key, PlayerId(0), false);
         let token = permanent_named(&s, name);
         s.game_mut().state.permanents[token]
             .as_mut()
@@ -3831,7 +3835,8 @@ fn firebending_setup(seed: u64, mountains: usize) -> (Scenario, PermanentId) {
 fn treasure_is_available_when_announcing_a_kicker_cost() {
     let mut s = five_color_setup(&["Firebending Lesson", "Gnarled Professor"]);
     let victim = s.force_permanent_on_battlefield(1, "Gnarled Professor");
-    s.game_mut().create_token("Treasure", PlayerId(0), false);
+    s.game_mut()
+        .create_token("token.treasure", PlayerId(0), false);
     s.set_player_mana_pool(0, "3R");
     cast(&mut s, "Firebending Lesson");
     assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
@@ -5801,7 +5806,7 @@ fn toph_makes_your_nontoken_artifacts_lands_and_earthbends_at_your_end_step() {
     let theirs = s.force_permanent_on_battlefield(1, "White Lotus Tile");
     let clue = s
         .game_mut()
-        .create_token("Clue", PlayerId(0), false)
+        .create_token("token.clue", PlayerId(0), false)
         .expect("clue");
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     assert!(
@@ -7512,7 +7517,7 @@ fn joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature
 #[test]
 fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
     let (mut s, joo_dee) = joo_dee_setup();
-    s.game_mut().create_token("Clue", PlayerId(0), false);
+    s.game_mut().create_token("token.clue", PlayerId(0), false);
     let top = library_top(&s, 0);
     activate(&mut s, joo_dee, 0);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
@@ -7984,7 +7989,7 @@ fn origin_destroys_artifacts_or_protects_with_counter_and_indestructible() {
         "Power Word Kill",
         "Eyetwitch",
     ]);
-    s.game_mut().create_token("Clue", PlayerId(1), false);
+    s.game_mut().create_token("token.clue", PlayerId(1), false);
     let clue = s.battlefield_permanents_named(1, "Clue")[0];
     cast(&mut s, "Origin of Metalbending");
     choose_mode(&mut s, 0);
@@ -8170,7 +8175,7 @@ fn airships(s: &Scenario) -> Vec<PermanentId> {
 
 /// Sacrifice a fresh Clue for player 0 (its "{2}, Sacrifice: draw").
 fn sacrifice_a_clue(s: &mut Scenario) {
-    s.game_mut().create_token("Clue", PlayerId(0), false);
+    s.game_mut().create_token("token.clue", PlayerId(0), false);
     let clue = permanent_named(s, "Clue");
     s.set_player_mana_pool(0, "2");
     activate(s, clue, 0);
@@ -8187,7 +8192,7 @@ fn phoenix_fleet_airship_copies_itself_at_your_end_step_only_after_a_sacrifice()
 
     // The opponent's sacrifice and end step do not count.
     s.advance_to_active_step(1, StepKind::Main);
-    s.game_mut().create_token("Clue", PlayerId(1), false);
+    s.game_mut().create_token("token.clue", PlayerId(1), false);
     let clue = s.battlefield_permanents_named(1, "Clue")[0];
     s.set_player_mana_pool(1, "2");
     activate(&mut s, clue, 0);
@@ -8695,19 +8700,19 @@ fn south_pole_voyager_second_resolution_draws() {
     // First Ally entering this turn: gain 1 life, no draw.
     let hand_before = s.zone_size(0, ZoneType::Hand);
     let life_before = s.life(0);
-    s.game_mut().create_token("Ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
     resolve_until_priority(&mut s);
     assert_eq!(s.life(0), life_before + 1);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before);
 
     // Second time the ability resolves this turn: gain 1 life AND draw.
-    s.game_mut().create_token("Ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
     resolve_until_priority(&mut s);
     assert_eq!(s.life(0), life_before + 2);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before + 1);
 
     // Third time: life only.
-    s.game_mut().create_token("Ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
     resolve_until_priority(&mut s);
     assert_eq!(s.life(0), life_before + 3);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_before + 1);
@@ -8716,7 +8721,7 @@ fn south_pole_voyager_second_resolution_draws() {
     // does not draw.
     s.advance_to_active_step(1, StepKind::Main);
     let hand_now = s.zone_size(0, ZoneType::Hand);
-    s.game_mut().create_token("Ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
     resolve_until_priority(&mut s);
     assert_eq!(s.life(0), life_before + 4);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand_now);
@@ -8726,8 +8731,10 @@ fn south_pole_voyager_second_resolution_draws() {
 fn spirit_tokens_cannot_block_or_be_blocked_by_nonspirits() {
     for spirit_attacking in [false, true] {
         let mut s = five_color_setup(&["Gnarled Professor"]);
-        s.game_mut().create_token("Spirit", PlayerId(0), false);
-        s.game_mut().create_token("Spirit", PlayerId(1), false);
+        s.game_mut()
+            .create_token("token.spirit", PlayerId(0), false);
+        s.game_mut()
+            .create_token("token.spirit", PlayerId(1), false);
         let spirit = s.battlefield_permanents_named(0, "Spirit")[0];
         let defender = s.battlefield_permanents_named(1, "Spirit")[0];
         let ordinary = s.force_permanent_on_battlefield(0, "Gnarled Professor");
@@ -8985,7 +8992,7 @@ fn tolls_limits_triggers_while_mayhem_sees_opponent_sacrifices() {
     settle_targeting_opponent(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
     assert_eq!(s.game().state.players[1].life, 19);
-    s.game_mut().create_token("Clue", PlayerId(1), false);
+    s.game_mut().create_token("token.clue", PlayerId(1), false);
     let opponent_clue = s.battlefield_permanents_named(1, "Clue")[0];
     // Give the other player priority through the ordinary pass.
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -9003,7 +9010,7 @@ fn tolls_fires_once_in_a_turn_and_resets_on_the_next_turn() {
     let first = permanent_named(&s, "Clue");
     activate_first(&mut s, first);
     settle(&mut s);
-    s.game_mut().create_token("Clue", PlayerId(0), false);
+    s.game_mut().create_token("token.clue", PlayerId(0), false);
     let second = permanent_named(&s, "Clue");
     activate_first(&mut s, second);
     settle(&mut s);
@@ -9011,7 +9018,7 @@ fn tolls_fires_once_in_a_turn_and_resets_on_the_next_turn() {
     s.advance_to_active_step(1, managym::flow::turn::StepKind::Main);
     s.advance_to_active_step(0, managym::flow::turn::StepKind::Main);
     s.set_player_mana_pool(0, "2");
-    s.game_mut().create_token("Clue", PlayerId(0), false);
+    s.game_mut().create_token("token.clue", PlayerId(0), false);
     let third = permanent_named(&s, "Clue");
     activate_first(&mut s, third);
     settle(&mut s);
@@ -9202,7 +9209,7 @@ fn merchant_returns_to_its_owners_bottom_while_its_controller_shuffles() {
         .as_mut()
         .unwrap()
         .controller = PlayerId(0);
-    s.game_mut().create_token("Food", PlayerId(0), false);
+    s.game_mut().create_token("token.food", PlayerId(0), false);
     let food = permanent_named(&s, "Food");
     activate_first(&mut s, food);
     pass_until(&mut s, ActionSpaceKind::Modal);
@@ -9876,7 +9883,8 @@ fn committed_optional_payment_resumes_after_two_nested_mana_decisions() {
         ],
         "0",
     );
-    s.game_mut().create_token("Treasure", PlayerId(0), false);
+    s.game_mut()
+        .create_token("token.treasure", PlayerId(0), false);
     // Inject the extra resource before payment begins. The initial waterbend
     // offer is already legal from the creatures and Prism; its normal tap
     // transition publishes the offers that include this Treasure.
@@ -10403,16 +10411,16 @@ fn corrected_card_characteristics_match_oracle() {
 #[test]
 fn required_fixed_token_templates_have_the_printed_sizes_and_keyword_effects() {
     let mut s = five_color_setup(&["Abandon Attachments"]);
-    for (name, power, toughness, flying) in [
-        ("Ally", 1, 1, false),
-        ("Spirit", 1, 1, false),
-        ("Dragon", 4, 4, true),
-        ("Monk", 1, 1, false),
-        ("Soldier", 2, 2, false),
-        ("Bear", 4, 4, false),
-        ("Ballistic Boulder", 2, 1, true),
+    for (key, name, power, toughness, flying) in [
+        ("token.ally", "Ally", 1, 1, false),
+        ("token.spirit", "Spirit", 1, 1, false),
+        ("token.dragon", "Dragon", 4, 4, true),
+        ("token.monk", "Monk", 1, 1, false),
+        ("token.soldier", "Soldier", 2, 2, false),
+        ("token.bear", "Bear", 4, 4, false),
+        ("token.ballistic_boulder", "Ballistic Boulder", 2, 1, true),
     ] {
-        s.game_mut().create_token(name, PlayerId(0), false);
+        s.game_mut().create_token(key, PlayerId(0), false);
         let token = permanent_named(&s, name);
         assert_eq!(
             s.game().characteristics(token).pt(),
@@ -10508,7 +10516,7 @@ fn artifact_enchantment_removal_covers_both_types_and_excludes_lands() {
             let target = if enchantment {
                 s.force_permanent_on_battlefield(1, "Tolls of War")
             } else {
-                s.game_mut().create_token("Clue", PlayerId(1), false);
+                s.game_mut().create_token("token.clue", PlayerId(1), false);
                 s.battlefield_permanents_named(1, "Clue")[0]
             };
             let land = s.force_permanent_on_battlefield(1, "Forest");
@@ -12404,7 +12412,7 @@ fn sokka_tenacious_tactician_gives_allies_menace_and_prowess_and_makes_allies() 
     let mut s = five_color_setup(&["Sokka, Tenacious Tactician", "Yip Yip!", "Gray Ogre"]);
     let sokka = s.force_permanent_on_battlefield(0, "Sokka, Tenacious Tactician");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    s.game_mut().create_token("Ally", PlayerId(0), false);
+    s.game_mut().create_token("token.ally", PlayerId(0), false);
     let ally = s.battlefield_permanents_named(0, "Ally")[0];
     assert!(keywords(&s, sokka).has(Keyword::Menace));
     assert!(
@@ -12448,7 +12456,7 @@ fn katara_the_fearless_makes_ally_triggers_trigger_an_additional_time() {
     ]);
     let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
     let sokka = s.force_permanent_on_battlefield(0, "Sokka, Tenacious Tactician");
-    s.game_mut().create_token("Monk", PlayerId(0), false);
+    s.game_mut().create_token("token.monk", PlayerId(0), false);
     let monk = s.battlefield_permanents_named(0, "Monk")[0];
     cast(&mut s, "Yip Yip!");
     assert!(s.choose_target(Target::Permanent(katara)));
@@ -12928,7 +12936,7 @@ fn sandbender_scavengers_grows_on_sacrifice_and_reanimates_within_its_power() {
     let scavengers = s.force_permanent_on_battlefield(0, "Sandbender Scavengers");
     let clue = s
         .game_mut()
-        .create_token("Clue", PlayerId(0), false)
+        .create_token("token.clue", PlayerId(0), false)
         .unwrap();
     activate(&mut s, clue, 0);
     settle(&mut s);
@@ -13350,7 +13358,7 @@ fn boiling_rock_rioter_exiles_with_itself_and_casts_your_exiled_allies() {
     let rioter = s.force_permanent_on_battlefield(0, "Boiling Rock Rioter");
     let ally = s
         .game_mut()
-        .create_token("Ally", PlayerId(0), false)
+        .create_token("token.ally", PlayerId(0), false)
         .unwrap();
     let ty_lee = plant_in_graveyard(&mut s, 0, "Ty Lee, Chi Blocker");
     let theirs = plant_in_graveyard(&mut s, 1, "Gray Ogre");

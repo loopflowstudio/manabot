@@ -133,7 +133,11 @@ class PolicyStore:
         with self.perf.span("checkpoint_verification"):
             _verify_checkpoint_bytes(path, player)
         with self.perf.span("model_load"):
-            agent, space = load_checkpoint(str(path))
+            agent, space = load_checkpoint(
+                str(path),
+                bucketed_shapes=self.execution.bucketed_shapes,
+                live_tokens=self.execution.live_tokens,
+            )
             agent.eval()
             if agent.belief_count_buckets:
                 raise ValueError("shared inference rejects belief checkpoints")

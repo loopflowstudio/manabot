@@ -30,6 +30,7 @@ to copy.
 ```bash
 uv run manabot train                                   # --recipe local: bounded smoke
 uv run manabot train --recipe baseline --seed 197      # baseline-v3 with evaluation
+uv run manabot train --recipe baseline --seed 197 --padded-shapes  # CUDA comparison without bucketed shapes or live tokens
 uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
 uv run manabot train --regime regime.json --seed 197 --out .runs/example
 ```
@@ -37,17 +38,20 @@ uv run manabot train --regime regime.json --seed 197 --out .runs/example
 `--recipe local` (`manabot.recipes.local`) is a two-update production-path
 smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
-with initial and endpoint evaluation. `--steps`, `--seconds` and
-`--learning-seats`, `--device cpu|mps|cuda` and `--bucketed-shapes` apply only
+with initial and endpoint evaluation. `--steps`, `--seconds`,
+`--learning-seats`, `--device cpu|mps|cuda` and `--padded-shapes` apply only
 to these recipes; a regime sets the same choices in its stages' `Execution`.
 Without `--device`, both select CUDA when available; Apple MPS is used only
 when requested with `--device mps`. Baseline requires an accelerator and
 rejects CPU; use `--recipe local` on machines without CUDA. Local defaults to
 CPU otherwise, including on Apple Silicon, and accepts an explicit override.
 `--preset` and `--set` are
-retired and fail. `--bucketed-shapes` trains with
-[bucketed padding](observation-and-model.md#bucketed-padding-profiling), an
-opt-in way to compare accelerator cost; it is off by default.
+retired and fail. On CUDA the recipes train with
+[bucketed padding](observation-and-model.md#bucketed-padding) and
+[live-token attention](observation-and-model.md#live-token-attention), and
+record both in `run.json`; `--padded-shapes` turns both off to compare against
+the padded path. Off CUDA both stay off. `--bucketed-shapes` is a deprecated
+alias that warns, does nothing beyond the default, and is removed in 0.3.0.
 
 CPU is the default and recommended device on Apple Silicon. On a quiet Apple
 M2, MPS was slower than CPU for collection at every measured batch size, only
@@ -132,12 +136,16 @@ damping horizon fitted to the run's expected updates and `recover_capacity`.
 The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
-`execution.bucketed_shapes` (default `False`, serialized only when `True`)
-selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
-for the stage's collection and learner policies.
-`execution.live_tokens` (default `False`, serialized only when `True`) selects
-[live-token attention](observation-and-model.md#live-token-attention-profiling)
-for the same policies.
+`execution.bucketed_shapes` and `execution.live_tokens` select
+[bucketed padding](observation-and-model.md#bucketed-padding) and
+[live-token attention](observation-and-model.md#live-token-attention) for the
+stage's collection and learner policies. Both default to `auto`, which the
+regime resolves when it is built: on for a CUDA `train_self_play` stage, off
+otherwise. A stage serializes them only when on, and a saved stage that omits
+them reads as off, so saved regimes keep their identity and fresh CUDA regimes
+record `true`. An explicit `live_tokens=True` off CUDA fails validation
+(`live tokens require CUDA`). A continuation stage must resolve both to the
+same values as the stage it continues.
 
 Self-play `initial` continues the live collector, learner and optimizer of an
 earlier stage in the same execution. External checkpoints never act as
@@ -530,7 +538,7 @@ execution settings:
 ```python
 from manabot.training.regime import Execution
 
-execution = Execution(device="cuda", precision="tf32", bucketed_shapes=True)
+execution = Execution(device="cuda", precision="tf32")
 ```
 
 | `precision` | What changes |

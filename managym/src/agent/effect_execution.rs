@@ -22,8 +22,7 @@ use crate::{
         event::GameEvent,
         game::{ActivationSource, Game, Payment},
         proposed_event::{
-            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenDefinition,
-            ZoneEntry,
+            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
     },
     state::{
@@ -688,19 +687,19 @@ impl<'a> Projection<'a> {
                     self.field("create tokens", &(controller, count));
                     self.entry(entry);
                     match definition.as_ref() {
-                        TokenDefinition::Registered(name) => {
+                        TokenSource::Registered(key) => {
+                            let content = default_content_pack();
                             self.reference(
                                 "token definition",
                                 VisibleReference {
-                                    definition: default_content_pack()
-                                        .definition_id(name)
-                                        .map(|id| id.0),
+                                    definition: content.token_id(key).map(|id| id.0),
                                     ..Default::default()
                                 },
                             );
+                            let name = content.token_name(key);
                             self.summary(|| format!("Pending: create {count} {name} tokens."));
                         }
-                        TokenDefinition::Copy {
+                        TokenSource::Copy {
                             definition_id,
                             definition,
                             front,

@@ -416,7 +416,7 @@ mod tests {
         let content = default_content_pack();
         let back = content.definition_id("Forest").unwrap();
         game.state.cards[card]
-            .turn_back_face_up((back, Arc::new(content.definition(back).unwrap().clone())));
+            .turn_back_face_up((back, Arc::clone(&content.definition(back).unwrap().printed)));
         let after = snapshot(&game, card);
         assert_eq!(game.state.cards[card].name, "Forest");
         assert_eq!(after.name, before.name);

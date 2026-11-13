@@ -1113,11 +1113,13 @@ pub enum Effect {
         player: PlayerSelector,
         amount: EffectValue,
     },
-    /// Create `count` tokens from the registered token definition
-    /// `token_name`, under the resolving player's control, `count` read as
-    /// the instruction resolves.
+    /// Create `count` tokens from the token definition keyed `token`
+    /// (`token.<name>`), under the resolving player's control, `count` read
+    /// as the instruction resolves. Serialized as `token_name`, the learning
+    /// schema's field for the created token's definition reference.
     CreateToken {
-        token_name: String,
+        #[serde(rename = "token_name")]
+        token: String,
         count: EffectValue,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped_and_attacking: bool,
@@ -1230,11 +1232,11 @@ pub enum Effect {
     /// target (It'll Quench Ya!) or the trigger-context spell or ability
     /// (ward).
     /// Reports no target spec of its own — targeting is declared on the
-    /// card (`CardDefinition::targeting`) when a choice is required.
+    /// card (`PrintedCharacteristics::targeting`) when a choice is required.
     CounterUnlessPays { cost: PaymentCost },
     /// Allies at Last: all chosen targets except the last each deal damage
     /// equal to their power to the last target. Targeting is declared on
-    /// the card (`CardDefinition::targeting`).
+    /// the card (`PrintedCharacteristics::targeting`).
     TargetCreaturesDealPowerDamageToLastTarget,
     /// Earthbend N: each land `what` names becomes a 0/0
     /// creature with haste that's still a land; put `count` +1/+1 counters
@@ -1849,10 +1851,10 @@ impl Effect {
         }
     }
 
-    /// "Create [count] [token_name] tokens."
-    pub fn create_tokens(token_name: &str, count: impl Into<EffectValue>) -> Self {
+    /// "Create [count] [token] tokens", naming the token by its key.
+    pub fn create_tokens(token: &str, count: impl Into<EffectValue>) -> Self {
         Effect::CreateToken {
-            token_name: token_name.into(),
+            token: token.into(),
             count: count.into(),
             tapped_and_attacking: false,
             tapped: false,

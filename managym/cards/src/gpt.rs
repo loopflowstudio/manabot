@@ -1,7 +1,7 @@
 //! Guildpact.
 use managym_state::{
     ability::{Effect, ObjectSelector, TargetSpec},
-    card::{AdditionalCost, CardDefinition, CardType, CardTypes},
+    card::{AdditionalCost, CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -15,19 +15,22 @@ fn shattering_spree() -> CardDefinition {
     CardDefinition {
         key: "gpt.shattering_spree",
         scryfall_id: "d6dcff21-5900-43c4-a38b-cdc19c704ce4",
-        name: "Shattering Spree".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        additional_costs: vec![AdditionalCost::Replicate(ManaCost::parse("{R}"))],
-        spell_effects: vec![Effect::destroy(ObjectSelector::Target(
-            TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    card_types_any: vec![CardType::Artifact],
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Shattering Spree".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            additional_costs: vec![AdditionalCost::Replicate(ManaCost::parse("{R}"))],
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Artifact],
+                        ..Default::default()
+                    },
                 },
-            },
-        ))],
-        text_box: text_box.into(),
+            ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

@@ -33,7 +33,7 @@ are in the [README](../README.md#contracts-the-code-enforces).
    types (cards, zones, mana, effects), re-exported here as `managym::state`;
    **`src/state/`** adds players, decks and the canonical match-state hash
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
-   and their tests, reached by the engine only through `managym_cards::catalog()`;
+   and their tests, reached by the engine only through `managym_cards::catalog()` and `token_catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
 5. **`src/format/`**: Format construction rules and card selection;
    `limited.rs` adds Limited pool counts and deck size rules to world admission
@@ -41,11 +41,15 @@ are in the [README](../README.md#contracts-the-code-enforces).
 7. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
-`cards/src/`, returning the engine's own `CardDefinition` in its rules types
-(`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
+`cards/src/`, returning the engine's own `CardDefinition` (key, Scryfall id and
+`PrintedCharacteristics`) in its rules types (`Effect`, `Ability`, `TargetSpec`,
+…). Tokens are not cards: each is a `TokenDefinition` in `cards/src/tokens.rs`
+with the same `PrintedCharacteristics`, keyed `token.*` and created by that
+key, with a Scryfall id unless it has no printing. The engine registers both
+as `ObjectDefinition` rows with token status and runs them directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
-support check (defined non-token cards, excluding rules fixtures) and the set
+support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
 [the content contract](../content/semantic/README.md).
@@ -273,10 +277,22 @@ selected tap commits before the next selection and is unavailable to nested
 costs or waterbending. Pending tap
 counts use the continuation mode field; source and ability retain their usual
 joins. Single-object costs keep their serialized definition shape.
-Every registered mana ability must consume a finite resource. The total and
-spend-purpose bounds count repeatable outputs optimistically; every accepted
-payment still requires an identity-preserving witness with explicit tap choices.
-This is finite search, without a general large-board performance guarantee.
+Every registered mana ability must consume a finite resource. Search bounds
+count repeatable outputs optimistically; every accepted payment still requires
+an identity-preserving witness with explicit tap choices. The whole-payment
+bound counts only outputs a pending cost could spend and takes the maximum of
+competing uses of one tap; the color-set bound applies the same supply to every
+set of owed colors, so one "U or R" source cannot cover `{U}{R}`. Search
+memoization shares feasibility across interchangeable sources (including
+membership in every counted-tap set), while retaining source order and exact
+identities in the first witness. Repeated lands therefore contribute resource
+counts instead of all identity subsets. A search checks the color-set bound at
+its root and keeps identity keys until it has expanded 16 states; only then
+does it classify the sources and apply both to every state, so ordinary small
+payments pay nothing for them. Distinct
+source behaviors, overlapping tap sets, nested obligations and concrete pool
+remainders can still make exact search combinatorial; there is no general
+large-board work limit or truncation of legal payments.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's

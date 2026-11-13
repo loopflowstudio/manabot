@@ -50,7 +50,7 @@ validation of its own
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
-   [Live-token attention](#live-token-attention-profiling) attends over valid
+   [Live-token attention](#live-token-attention) attends over valid
    objects only; it replaced the pooled token stream
    ([token-stream report](../experiments/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
@@ -127,18 +127,18 @@ facts remain a separate sum. Neither path adds attention tokens.
 Complete shared records retain duration, timestamp, controller and exact source
 bindings that can change future behavior.
 
-### Bucketed padding (profiling)
+### Bucketed padding
 
 Each buffer arrives padded to its declared capacity, but a real batch uses
 little of it. Across 300 captured collection batches the median batch needed 59
-of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. By default
-the network still processes every slot, and skips lookups for an axis that is
-empty in the batch, so tensor shapes change from batch to batch.
+of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
+padded path the network still processes every slot, and skips lookups for an
+axis that is empty in the batch, so tensor shapes change from batch to batch.
 
-Bucketed padding is an opt-in alternative meant for comparing accelerator
-cost. After an observation is admitted, the network trims each variable axis
-(facts, effect headers, details and members, relations, actions, events, cards,
-permanents, known hands and decklists) to a bucket: the next power of two at or
+Bucketed padding, the default for CUDA training, avoids most of that. After an
+observation is admitted, the network trims each variable axis (facts, effect
+headers, details and members, relations, actions, events, cards, permanents,
+known hands and decklists) to a bucket: the next power of two at or
 above what the batch uses, at least 8 and at most the declared capacity. What a
 batch uses includes every row a reference can name, so trimming removes only
 empty rows nothing refers to. Trimming cards and permanents renumbers object
@@ -154,55 +154,69 @@ the definitions a batch references. Shared-effect routing, fact programs and
 legal-action selection keep their packed, data-dependent layouts. A forward
 therefore takes one of a few shapes per input axis instead of a new shape for
 nearly every batch, and does much less work than padding everything to
-capacity. The complete catalog is more work than the default path's
+capacity. The complete catalog is more work than the padded path's
 referenced definitions: captured Elemental learner batches referenced 65 to
 154 of 360 definitions, so learning encodes 2.3 to 5.8 times as many catalog
 tokens. On CPU, where the recurrent catalog encoder dominates learning, a
-learner forward and backward is therefore slower than on the default path,
+learner forward and backward is therefore slower than on the padded path,
 most of all for small decks.
 
-A training stage turns it on in its execution settings, next to the device:
+A training stage's execution settings choose it, with
+[live-token attention](#live-token-attention), from the device. Both default to
+`auto`, which the regime resolves when it is built: on for a CUDA
+`train_self_play` stage, off on CPU and MPS and for every other operation:
 
 ```python
-from manabot.training.regime import Execution
+from experiments.batched_baseline import batched_baseline
 
-execution = Execution(device="cuda", bucketed_shapes=True)
+regime = batched_baseline()  # one CUDA train_self_play stage, fields unset
+execution = regime.stages[0].execution
+execution.bucketed_shapes, execution.live_tokens  # (True, True)
 ```
 
-The stage's collection and learner policies, including a frozen opponent
-(`load_checkpoint(..., bucketed_shapes=True)`), then use bucketed shapes; its
-evaluation and search do not. `uv run manabot train --recipe baseline
---bucketed-shapes` sets it on the CLI recipes ([run training](training.md#run-training)),
-and code that builds a policy directly passes
-`ActorCritic(..., bucketed_shapes=True)`. An unset field is omitted from the
-serialized regime, so existing regime hashes are unchanged; a stage that sets
-it records `"bucketed_shapes": true` in the regime in `run.json`. To compare
-the two paths, run the same regime once with each setting.
+The regime keeps the resolved value: a stage that resolves on records both
+fields as `true` in `run.json`; one that resolves off omits them, so CPU and
+MPS regimes keep their hashes, and a saved regime that omits them reads as off
+([stage operations](training.md#stage-operations)). Builders that rebuild a
+regime (`with_capacity`, `with_agent`) resolve `auto` again and keep explicit
+values. To compare the paths on CUDA, write
+`Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
+`--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
+Bucketed shapes may still be written explicitly on CPU or MPS, where they are
+slower to learn, as described above.
+
+The stage's collection and learner policies, including a frozen opponent,
+use the resolved layout. Code that builds a policy outside a regime chooses it
+itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
+off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
+[Served evaluation](evaluation.md#shared-inference) accepts both switches and
+leaves them off: its batches are small, and the padded forward was the faster
+one there. Search players load their policies padded.
+
+Bucketed shapes are 2.4× faster per learner step than padding to capacity at
+w160l8 and 2.6× at w384l8 on an L4. Collection over full tables was faster at
+w160l8, 2.4 s against 2.9 s per pass with both settings on
+([live-token attention](../experiments/live_token_attention.md)). That is the
+known cost of the default at small widths; it stays on at every width.
 
 The setting changes how a forward is computed, not the model. It changes no
 `ModelConfig` field, checkpoint, world binding or policy input, so a checkpoint
 trained with either setting loads and runs with the other. On CPU,
-action probabilities, values, losses and gradients agree with the default path
+action probabilities, values, losses and gradients agree with the padded path
 up to the order of floating-point sums. A batch that references no card
 definition is the one difference in gradient support: the catalog encoder then
 receives exactly zero gradients instead of none. Capacity overflow and
 malformed inputs are rejected with the same error and message as on the
-default path.
+padded path.
 
-### Live-token attention (profiling)
+### Live-token attention
 
 Bucketed padding still attends over every slot in a bucket, and most of those
 slots are empty: a batch whose largest board holds 9 permanents pads every
 observation to 16 permanent slots, including those with two. Live-token
-attention is an opt-in layout that computes object attention and the
+attention, on by default for CUDA training, computes object attention and the
 per-object layers only for valid objects, so cost follows what the board holds
 rather than what the bucket allows.
-
-```python
-from manabot.training.regime import Execution
-
-execution = Execution(device="cuda", bucketed_shapes=True, live_tokens=True)
-```
 
 The forward packs the valid objects of every observation in the batch into one
 sequence and records where each observation's objects begin. Attention is
@@ -221,7 +235,12 @@ are still trimmed to buckets.
 Attention within each observation uses `scaled_dot_product_attention` on
 jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
 CPU it falls back to one attention call per observation, which is correct but
-slow, so the setting is meant for CUDA.
+slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
+padded on a laptop CPU
+([measurement](../experiments/eval_forward_layout.md)). A stage therefore uses
+live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
+`live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
+as a reduced precision does.
 
 Packing needs one host read per forward, the batch's total number of valid
 objects, to size the packed sequence. Collection measures it on the host while
@@ -229,17 +248,16 @@ preparing a batch, as it does for buckets, so the device forward reads nothing
 back; learning reads it once per forward. The layout adds no other
 data-dependent reads.
 
-The stage's collection and learner policies, including a frozen opponent
-(`load_checkpoint(..., live_tokens=True)`), use the layout; evaluation and
-search do not. Code that builds a policy directly passes
-`ActorCritic(..., live_tokens=True)`. Like `bucketed_shapes`, the field is
-serialized only when set. The setting changes how a forward is computed, not
-the model: no `ModelConfig` field, checkpoint, world binding or policy input
-changes, and a checkpoint trained with it loads and runs without it. Action
+The setting resolves, serializes and reaches policies exactly as
+[bucketed shapes](#bucketed-padding) do, and the two are independent: either
+may be on without the other. Code that builds a policy directly passes
+`ActorCritic(..., live_tokens=True)` and `load_checkpoint(..., live_tokens=True)`,
+which allow it on any device so CPU tests can compare the layouts. Like
+bucketed shapes, it changes no model, checkpoint or input contract. Action
 probabilities, values, losses and gradients agree with the padded path to
 within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
-shapes do. On an L4 at w384l8, live tokens over buckets take a learner step
-from 386 ms (bucketed shapes) to 202 ms
+shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster than bucketed shapes
+alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
 ([live-token attention](../experiments/live_token_attention.md)).
 
 ## Policy inputs
@@ -560,10 +578,10 @@ is not evidence for any of them:
 - No paired observation test shows a lost activated ability removing an action,
   or a source that leaves and re-enters as the same physical card. Those cases
   rest on rules anchors and reasoning.
-- Fixed padded capacity against packed variable length is open. Collection
-  batches use a small fraction of each capacity
-  ([bucketed padding](#bucketed-padding-profiling)); how that affects
-  accelerator cost has not been measured.
+- Bucketed shapes and live tokens are measured for speed and output equality
+  ([bucketed padding](#bucketed-padding)), not for learning: changed
+  accumulation order is assumed not to move strength, and no matched-seed
+  comparison has tested that.
 - Learned sums preserve multiplicity but are not injective; whether that loses
   decision-relevant distinctions in practice is unmeasured.
 - Sequence training changes collection, sampling and recovery, and that cost has
