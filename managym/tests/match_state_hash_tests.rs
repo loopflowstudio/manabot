@@ -172,8 +172,7 @@ fn meaningful_mutable_facts_change_the_hash() {
     library_order
         .state
         .zones
-        .zone_objects_mut(ZoneType::Library, PlayerId(0))
-        .swap(0, 1);
+        .swap(ZoneType::Library, PlayerId(0), 0, 1);
     assert_ne!(baseline, library_order.state.deterministic_hash());
 
     let mut definition = game.clone();

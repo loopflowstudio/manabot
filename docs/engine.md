@@ -682,8 +682,8 @@ their spelling for recorded evidence.
 
 #### What is built
 
-The engine stores one `Object` row per physical thing, card or token, and
-keeps it across zone changes:
+The engine stores one `Object` row per card, token or spell copy and keeps
+it across zone changes:
 
 - `ObjectId` is the row's index and outlives a zone change. `ObjectRef`
   (`EntityId` plus `Incarnation`) is the appearance: its incarnation advances
@@ -730,8 +730,8 @@ allows, and each engine list is typed for what can be in it:
 
 | Zone | Rule | Holds | Engine list |
 | --- | --- | --- | --- |
-| Library | CR 401 | cards, transient non-card objects | `ObjectId` |
-| Hand | CR 402 | cards, transient non-card objects | `ObjectId` |
+| Library | CR 401 | cards, transient non-card objects | ordered `CardZoneEntry::Card(CardId)` or `Transient(ObjectId)` |
+| Hand | CR 402 | cards, transient non-card objects | ordered `CardZoneEntry::Card(CardId)` or `Transient(ObjectId)` |
 | Graveyard | CR 404 | cards, transient non-card objects | `ObjectId` |
 | Exile | CR 406 | cards, transient non-card objects | `ObjectId` |
 | Battlefield | CR 403 | permanents: cards and tokens | `ObjectId` |
@@ -744,7 +744,7 @@ Decklists and sideboards are outside the game and hold cards alone.
 for card in game.state.zone_cards(ZoneType::Hand, player) {
     // card: CardId
 }
-for object in game.state.zones.zone_objects(ZoneType::Graveyard, player) {
+for object in game.state.zones.zone_objects(ZoneType::Graveyard, player).iter() {
     // object: &ObjectId; a token that just died may be here
 }
 ```
@@ -756,12 +756,20 @@ a copy of a card in any zone but the stack or battlefield (CR 704.5e). It keeps
 its kind there; such a token can't return to the battlefield (CR 111.8), exile
 grants and "card" selections skip it, and `flow/sba.rs` removes it by its kind.
 
-All zone lists retain ordered `ObjectId`s until that check, including library
-and hand. `zone_objects`, `size`, `top` and shuffles preserve transient occupants
-and their positions; observations and the match-state hash read the same lists.
-`GameState::zone_cards` narrows them for card-only consumers. There is no second
-card list or visitor store to synchronize. This matters even at decisions: a
-Treasure sacrificed for mana remains in the graveyard during its color choice,
+Library and hand store each card as a checked `CardId`, alongside explicit
+`Transient(ObjectId)` entries for non-cards awaiting state-based actions. The
+single entry sequence owns membership and order; there is no parallel list to
+synchronize. `GameState::zone_cards` delegates to the borrowed view's `cards`
+iterator, which reads stored card ids and skips visitors. Other zones keep
+mixed `ObjectId` lists and narrow at that same boundary.
+
+`zone_objects` borrows an ordered view of the underlying object ids without
+allocating. Size, top, shuffles, hidden-world reassignment and observations
+include visitors at their original positions. Reordering moves the typed entry;
+it cannot insert an unchecked id. Both entry variants serialize as their numeric
+id, preserving the old zone bytes and match-state hash. Shuffles operate on the
+whole entry sequence, preserving RNG consumption. This matters even at decisions:
+a Treasure sacrificed for mana remains in the graveyard during its color choice,
 before state-based actions run.
 
 Outside the game is not a zone (CR 400.11). Sideboards are fixed rosters held
@@ -774,6 +782,10 @@ zone.
 - **Shared zones are stored per player.** Battlefield, stack, exile and command
   are shared zones (CR 400.1); the engine keeps one list per player for each.
   Stack order is `GameState::stack_objects`.
+- **Drawing retains the existing mixed-zone behavior.** `Game::draw_cards`
+  moves the top library object to hand and increments draw history even when
+  that object is a transient token. Card-only selection skips that token, but
+  drawing does not skip ahead to another object.
 - **Ante is not modeled** (CR 407).
 - **Observations keep their names and columns.** The observation API's
   `CardData` rows cover cards, tokens and copies alike, and its `is_token`

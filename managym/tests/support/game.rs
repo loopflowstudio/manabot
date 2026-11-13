@@ -100,8 +100,7 @@ impl Scenario {
         let object = owned_card(self, player, card_name);
         self.game
             .state
-            .zones
-            .move_object(object, PlayerId(player), ZoneType::Hand);
+            .place_object(object, PlayerId(player), ZoneType::Hand);
     }
 
     pub fn force_cards_in_hand(&mut self, player: usize, card_name: &str, count: usize) {
@@ -151,8 +150,7 @@ impl Scenario {
         } else {
             self.game
                 .state
-                .zones
-                .move_object(object_id, PlayerId(player), ZoneType::Battlefield);
+                .place_object(object_id, PlayerId(player), ZoneType::Battlefield);
         }
 
         let permanent_id = PermanentId(self.game.state.permanents.len());
@@ -220,12 +218,11 @@ pub fn clear_hand(s: &mut Scenario, player: usize) {
         .state
         .zones
         .zone_objects(ZoneType::Hand, PlayerId(player))
-        .clone();
+        .to_vec();
     for object in hand {
         s.game_mut()
             .state
-            .zones
-            .move_object(object, PlayerId(player), ZoneType::Library);
+            .place_object(object, PlayerId(player), ZoneType::Library);
     }
 }
 
@@ -256,8 +253,7 @@ pub fn force_new_card_in_hand(s: &mut Scenario, player: usize, card_name: &str) 
         .unwrap_or_else(|| panic!("no library copy of {card_name} for player {player}"));
     s.game_mut()
         .state
-        .zones
-        .move_object(object, PlayerId(player), ZoneType::Hand);
+        .place_object(object, PlayerId(player), ZoneType::Hand);
     object
 }
 
@@ -275,8 +271,7 @@ pub fn force_from_library(s: &mut Scenario, player: usize, name: &str) -> Object
         .unwrap_or_else(|| panic!("no {name} in player {player}'s library"));
     s.game_mut()
         .state
-        .zones
-        .move_object(object_id, PlayerId(player), ZoneType::Hand);
+        .place_object(object_id, PlayerId(player), ZoneType::Hand);
     object_id
 }
 
@@ -296,13 +291,12 @@ pub fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<ObjectId> {
             .unwrap();
         objects.push(next);
     }
-    let library = s
-        .game_mut()
-        .state
-        .zones
-        .zone_objects_mut(ZoneType::Library, PlayerId(0));
-    library.retain(|id| !objects.contains(id));
-    library.extend(objects.iter().rev());
+    for object in objects.iter().rev() {
+        s.game_mut()
+            .state
+            .zones
+            .reposition(ZoneType::Library, PlayerId(0), *object, usize::MAX);
+    }
     objects
 }
 
@@ -320,8 +314,7 @@ pub fn plant_in_graveyard(s: &mut Scenario, player: usize, card_name: &str) -> O
     let object = find_owned_card(s, player, card_name);
     s.game_mut()
         .state
-        .zones
-        .move_object(object, PlayerId(player), ZoneType::Graveyard);
+        .place_object(object, PlayerId(player), ZoneType::Graveyard);
     object
 }
 

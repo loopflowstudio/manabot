@@ -21,7 +21,7 @@ use crate::{
 };
 
 impl Game {
-    fn decision_card(&self, object: ObjectId) -> Option<DecisionObjectView> {
+    fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
         let reference = self.current_object_ref(object)?;
         let display_id = self
             .state
@@ -56,17 +56,17 @@ impl Game {
             }),
             Target::Permanent(permanent) => {
                 let permanent = self.state.permanents[*permanent].as_ref()?;
-                let mut view = self.decision_card(permanent.object)?;
+                let mut view = self.decision_object(permanent.object)?;
                 view.display_id = permanent.id.0;
                 if let SubjectRef::Object { ref mut id } = view.subject {
                     id.entity = permanent.id.0;
                 }
                 Some(view)
             }
-            Target::StackSpell(object) => self.decision_card(*object),
-            Target::StackAbility(id) => self.decision_card(self.stack_ability_source(*id)?),
+            Target::StackSpell(object) => self.decision_object(*object),
+            Target::StackAbility(id) => self.decision_object(self.stack_ability_source(*id)?),
             Target::GraveyardCard(reference) => {
-                let mut view = self.decision_card(ObjectId::from(reference.entity))?;
+                let mut view = self.decision_object(ObjectId::from(reference.entity))?;
                 // Keep the announced incarnation even if the card later moved.
                 view.subject = SubjectRef::Object {
                     id: ObjectRenderId {
@@ -130,7 +130,7 @@ impl Game {
                                         .objects
                                         .iter()
                                         .position(|object| object.id == *id)
-                                        .and_then(|index| self.decision_card(ObjectId(index)))
+                                        .and_then(|index| self.decision_object(ObjectId(index)))
                                 })
                         }?;
                         let role = match action {
@@ -288,7 +288,7 @@ impl Game {
                     .iter()
                     .enumerate()
                     .find_map(|(index, _)| {
-                        self.decision_card(ObjectId(index))
+                        self.decision_object(ObjectId(index))
                             .filter(|view| view.display_id == display_id)
                     })
             };

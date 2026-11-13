@@ -1236,7 +1236,7 @@ fn condition_witnesses() -> Vec<Condition> {
 struct Witnessed {
     token: &'static str,
     seen: Seen,
-    object: &'static str,
+    card: &'static str,
     file: &'static str,
     test: &'static str,
 }
@@ -1244,14 +1244,14 @@ struct Witnessed {
 const fn witnessed(
     token: &'static str,
     seen: Seen,
-    object: &'static str,
+    card: &'static str,
     file: &'static str,
     test: &'static str,
 ) -> Witnessed {
     Witnessed {
         token,
         seen,
-        object,
+        card,
         file,
         test,
     }
@@ -2417,7 +2417,7 @@ fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
 fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
     let statics = static_witnesses().into_iter().map(|ability| {
         let row = static_seen(&ability);
-        let printed = card_definition(row.object)
+        let printed = card_definition(row.card)
             .statics
             .iter()
             .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&ability));
@@ -2425,29 +2425,29 @@ fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
     });
     let costs = cost_witnesses().into_iter().map(|cost| {
         let row = cost_seen(&cost);
-        let printed = card_definition(row.object)
+        let printed = card_definition(row.card)
             .additional_costs
             .iter()
             .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&cost));
         (row, printed)
     });
     for (row, printed) in statics.chain(costs) {
-        assert!(printed, "{} does not print {}", row.object, row.token);
+        assert!(printed, "{} does not print {}", row.card, row.token);
         let path = format!("{}/tests/cards/{}.rs", env!("CARGO_MANIFEST_DIR"), row.file);
         let source = std::fs::read_to_string(&path).unwrap();
         let body = function_body(&source, row.test)
             .unwrap_or_else(|| panic!("{path} has no test {}", row.test));
         // The test names the card itself or through a setup helper it calls.
-        let object = format!("{:?}", row.object);
-        let runs_card = body.contains(&object)
+        let card = format!("{:?}", row.card);
+        let runs_card = body.contains(&card)
             || source
                 .match_indices("\nfn ")
                 .filter_map(|(at, _)| source[at + 4..].split('(').next())
                 .any(|helper| {
                     body.contains(&format!("{helper}("))
-                        && function_body(&source, helper).is_some_and(|it| it.contains(&object))
+                        && function_body(&source, helper).is_some_and(|it| it.contains(&card))
                 });
-        assert!(runs_card, "{} does not run {}", row.test, row.object);
+        assert!(runs_card, "{} does not run {}", row.test, row.card);
         match row.seen {
             Seen::Permanent(column) => assert!(column < PERMANENT_DIM - 1, "{}", row.token),
             Seen::Card(column) => assert!(column < CARD_DIM, "{}", row.token),
@@ -2468,13 +2468,13 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
     let variant = |name: &str| (TokenKind::Variant, name_value(name));
     for ability in static_witnesses() {
         let row = static_seen(&ability);
-        let object = card_definition(row.object);
+        let card = card_definition(row.card);
         let mut names = vec![row.token];
         if let StaticAbility::BlockRestriction(restriction) = &ability {
             names.push(block_restriction_token(restriction));
         }
-        let tokens = tokens_of(&object);
-        let mut stripped = object.clone();
+        let tokens = tokens_of(&card);
+        let mut stripped = card.clone();
         let printed = Arc::make_mut(&mut stripped.printed);
         printed.statics.retain(|candidate| {
             std::mem::discriminant(candidate) != std::mem::discriminant(&ability)
@@ -2490,13 +2490,9 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
             }
         }
         let without = tokens_of(&stripped);
-        assert_ne!(tokens, without, "{}", row.object);
+        assert_ne!(tokens, without, "{}", row.card);
         for name in names {
-            assert!(
-                tokens.contains(&variant(name)),
-                "{} lacks {name}",
-                row.object
-            );
+            assert!(tokens.contains(&variant(name)), "{} lacks {name}", row.card);
             assert!(!without.contains(&variant(name)), "{name}");
         }
         // The token also appears for a bare definition with only this ability.
@@ -2512,15 +2508,15 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
     }
     for cost in cost_witnesses() {
         let row = cost_seen(&cost);
-        let object = card_definition(row.object);
-        let tokens = tokens_of(&object);
-        let mut stripped = object.clone();
+        let card = card_definition(row.card);
+        let tokens = tokens_of(&card);
+        let mut stripped = card.clone();
         Arc::make_mut(&mut stripped.printed)
             .additional_costs
             .retain(|candidate| std::mem::discriminant(candidate) != std::mem::discriminant(&cost));
         let without = tokens_of(&stripped);
-        assert_ne!(tokens, without, "{}", row.object);
-        assert!(tokens.contains(&variant(row.token)), "{}", row.object);
+        assert_ne!(tokens, without, "{}", row.card);
+        assert!(tokens.contains(&variant(row.token)), "{}", row.card);
         assert!(!without.contains(&variant(row.token)), "{}", row.token);
     }
 }

@@ -203,7 +203,7 @@ pub fn hand(s: &Scenario, player: usize) -> Vec<ObjectId> {
         .state
         .zones
         .zone_objects(ZoneType::Hand, PlayerId(player))
-        .clone()
+        .to_vec()
 }
 
 /// The library, bottom first.
@@ -212,7 +212,7 @@ pub fn library(s: &Scenario, player: usize) -> Vec<ObjectId> {
         .state
         .zones
         .zone_objects(ZoneType::Library, PlayerId(player))
-        .clone()
+        .to_vec()
 }
 
 pub fn library_top(s: &Scenario, player: usize) -> ObjectId {

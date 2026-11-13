@@ -120,7 +120,7 @@ fn cr_602_source_leaves_before_resolution_no_effect() {
         .as_ref()
         .expect("shivan should exist")
         .object;
-    s.game_mut().state.zones.move_object(
+    s.game_mut().state.place_object(
         shivan_card,
         managym::state::game_object::PlayerId(0),
         ZoneType::Graveyard,

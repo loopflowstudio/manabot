@@ -259,7 +259,8 @@ impl CardTypeData {
     }
 }
 
-/// A card in any zone. Every field that states a characteristic (name,
+/// An object in any zone, under the published `CardData` name. Every field
+/// that states a characteristic (name,
 /// power/toughness, types, supertypes, subtypes, keywords, ward) reads
 /// `Game::characteristics` while the card is on the battlefield and the
 /// printed card elsewhere; identity, token status and the costs paid when
@@ -1091,7 +1092,7 @@ impl Observation {
         obs
     }
 
-    /// Copies of each definition id among `cards`.
+    /// Copies of each definition id among `objects`.
     fn definition_counts(
         game: &Game,
         objects: impl IntoIterator<Item = ObjectId>,
@@ -1214,25 +1215,25 @@ impl Observation {
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
             if game.state.zones.zone_of((*card).into()).is_none() {
-                let card = &game.state.objects[*card];
+                let record = &game.state.objects[*card];
                 self.agent_sideboard.push(SideboardCardData {
-                    candidate_id: card.id.0 as i32,
+                    candidate_id: record.id.0 as i32,
                     owner_id: self.agent.id,
-                    registry_key: card.definition_id.0 as i32,
-                    name: card.name.clone(),
-                    text_box: card.text_box.clone(),
+                    registry_key: record.definition_id.0 as i32,
+                    name: record.name.clone(),
+                    text_box: record.text_box.clone(),
                 });
             }
         }
 
         // Inspection paths can overlap (hand, library top and a pending
-        // search). Emit each card once, retaining first-visible order.
+        // search). Emit each object once, retaining first-visible order.
         let mut seen = HashSet::new();
-        let mut add_card = |card: ObjectId, zone: ZoneType| {
-            if seen.insert(card) {
+        let mut add_object = |object_id: ObjectId, zone: ZoneType| {
+            if seen.insert(object_id) {
                 self.push_card(
-                    Self::card_data(game, card, zone),
-                    game.state.objects[card].owner,
+                    Self::card_data(game, object_id, zone),
+                    game.state.objects[object_id].owner,
                 );
             }
         };
@@ -1240,9 +1241,9 @@ impl Observation {
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
         for object in game.pending_public_entries() {
-            let card = ObjectId::from(object.entity);
-            if let Some(zone) = game.state.zones.zone_of(card) {
-                add_card(card, zone);
+            let object_id = ObjectId::from(object.entity);
+            if let Some(zone) = game.state.zones.zone_of(object_id) {
+                add_object(object_id, zone);
             }
         }
 
@@ -1250,35 +1251,40 @@ impl Observation {
             if !game.shares_information(agent_player, perspective) {
                 continue;
             }
-            for card in game.state.zones.zone_objects(ZoneType::Hand, perspective) {
-                add_card(*card, ZoneType::Hand);
+            for object_id in game
+                .state
+                .zones
+                .zone_objects(ZoneType::Hand, perspective)
+                .iter()
+            {
+                add_object(*object_id, ZoneType::Hand);
             }
 
             // A library top the viewer or controlled player may inspect (CR 401.2).
-            if let Some(card) = game
+            if let Some(object_id) = game
                 .state
                 .zones
                 .top(ZoneType::Library, perspective)
                 .filter(|_| game.looks_at_library_top(perspective))
             {
-                add_card(card, ZoneType::Library);
+                add_object(object_id, ZoneType::Library);
             }
 
-            // Library cards revealed to the agent by a pending mid-resolution
+            // Library objects revealed to the agent by a pending mid-resolution
             // decision. Search candidates are derived from the current library;
-            // scry/look choices retain their exact cards. Native information
+            // scry/look choices retain their exact objects. Native information
             // sharing admits the deciding player and their controller.
             let Some(suspended) = game.state.suspended_decision.as_ref() else {
                 continue;
             };
             for decision in suspended.decisions().filter(|d| d.player() == perspective) {
-                let cards = match decision {
+                let objects = match decision {
                     Decision::SearchNamed { owner, .. } => game
                         .named_search_objects(*owner)
-                        .filter(|card| {
-                            game.state.zones.zone_of(*card) == Some(ZoneType::Library)
-                                || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
-                                    && game.state.objects[*card].owner != perspective)
+                        .filter(|object_id| {
+                            game.state.zones.zone_of(*object_id) == Some(ZoneType::Library)
+                                || (game.state.zones.zone_of(*object_id) == Some(ZoneType::Hand)
+                                    && game.state.objects[*object_id].owner != perspective)
                         })
                         .collect(),
                     Decision::SelectCards {
@@ -1288,27 +1294,41 @@ impl Observation {
                         game.revealed_hand_objects(decision)
                     }
                     decision @ Decision::SearchDistinctNames { selected, .. } => {
-                        let mut cards = selected.clone();
-                        cards.extend(game.distinct_name_search_objects(decision));
-                        cards
+                        let mut objects = selected.clone();
+                        objects.extend(game.distinct_name_search_objects(decision));
+                        objects
                     }
                     decision => decision.revealed_objects().to_vec(),
                 };
-                for card in cards {
-                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
-                    add_card(card, zone);
+                for object_id in objects {
+                    let zone = game
+                        .state
+                        .zones
+                        .zone_of(object_id)
+                        .unwrap_or(ZoneType::Library);
+                    add_object(object_id, zone);
                 }
             }
         }
 
         for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
-            for card in game.state.zones.zone_objects(ZoneType::Graveyard, player) {
-                add_card(*card, ZoneType::Graveyard);
+            for object_id in game
+                .state
+                .zones
+                .zone_objects(ZoneType::Graveyard, player)
+                .iter()
+            {
+                add_object(*object_id, ZoneType::Graveyard);
             }
-            for card in game.state.zones.zone_objects(ZoneType::Exile, player) {
+            for object_id in game
+                .state
+                .zones
+                .zone_objects(ZoneType::Exile, player)
+                .iter()
+            {
                 // A foretold card is face down; inspection follows native control.
-                if game.shares_information(agent_player, player) || !game.is_foretold(*card) {
-                    add_card(*card, ZoneType::Exile);
+                if game.shares_information(agent_player, player) || !game.is_foretold(*object_id) {
+                    add_object(*object_id, ZoneType::Exile);
                 }
             }
         }

@@ -2061,12 +2061,18 @@ fn retained_search_permission_preserves_opponent_membership_until_caller_finishe
         );
         game.determinize(player, 242).unwrap();
         assert_eq!(
-            game.state.zones.zone_objects(ZoneType::Hand, opponent),
-            &hand
+            game.state
+                .zones
+                .zone_objects(ZoneType::Hand, opponent)
+                .to_vec(),
+            hand
         );
         assert_eq!(
-            game.state.zones.zone_objects(ZoneType::Library, opponent),
-            &library
+            game.state
+                .zones
+                .zone_objects(ZoneType::Library, opponent)
+                .to_vec(),
+            library
         );
         checked_command(
             &mut game,
@@ -3186,15 +3192,23 @@ fn hidden_selection_merchant_bottoms_source_before_linked_return_and_shuffles_af
     game.publish_action_space(game.suspended_decision_action_space().unwrap());
     checked_command(&mut game, Action::ChooseMode { player, mode: 0 });
     let mut expected_library = vec![source];
-    expected_library.extend(game.state.zones.zone_objects(ZoneType::Library, player));
+    expected_library.extend(
+        game.state
+            .zones
+            .zone_objects(ZoneType::Library, player)
+            .iter(),
+    );
     checked_command(&mut game, Action::Decline { player });
     assert!(matches!(
         game.state.suspended_decision.as_ref().unwrap().decision,
         Decision::OrderReplacement { .. }
     ));
     assert_eq!(
-        game.state.zones.zone_objects(ZoneType::Library, player),
-        &expected_library,
+        game.state
+            .zones
+            .zone_objects(ZoneType::Library, player)
+            .to_vec(),
+        expected_library,
         "bottom placement has committed; the shuffle must wait for linked entry"
     );
     assert_eq!(game.state.zones.zone_of(returned), Some(ZoneType::Exile));

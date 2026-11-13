@@ -244,14 +244,14 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
     }
 }
 
-/// Mixed zones keep their physical order and RNG consumption. Card-only
+/// Ordered zones keep their physical order and RNG consumption. Card-only
 /// readers exclude visitors, while observations and moves still see them.
 #[test]
 fn card_zone_readers_preserve_transient_token_occupants() {
     use managym::agent::observation::Observation;
     use managym::state::game_object::ObjectId;
     use rand::seq::SliceRandom;
-    use rand::SeedableRng;
+    use rand::{RngCore, SeedableRng};
     use rand_chacha::ChaCha8Rng;
 
     for zone in [
@@ -271,12 +271,15 @@ fn card_zone_readers_preserve_transient_token_occupants() {
             .unwrap()
             .object;
         s.game_mut().move_object(token, zone);
-        let before = s.game().state.zones.zone_objects(zone, player).clone();
+        let before = s.game().state.zones.zone_objects(zone, player).to_vec();
         assert_eq!(before.last(), Some(&token));
         let cards: Vec<_> = s.game().state.zone_cards(zone, player).collect();
         assert!(!cards.iter().any(|card| ObjectId::from(*card) == token));
         assert_eq!(cards.len() + 1, before.len());
-        assert_eq!(s.game().state.zones.zone_objects(zone, player), &before);
+        assert_eq!(
+            s.game().state.zones.zone_objects(zone, player).to_vec(),
+            before
+        );
         assert!(s.game().state.card_id(token).is_none());
         if zone == ZoneType::Hand {
             let observation = Observation::for_player(s.game(), player);
@@ -285,12 +288,120 @@ fn card_zone_readers_preserve_transient_token_occupants() {
                 .iter()
                 .any(|row| row.id == s.game().state.objects[token].id.0 as i32));
         }
+        if zone == ZoneType::Library {
+            let mut drawn = s.game().clone();
+            let history = drawn.state.turn.history[player.0].cards_drawn;
+            drawn.draw_cards(player, 1);
+            assert_eq!(drawn.state.zones.zone_of(token), Some(ZoneType::Hand));
+            assert_eq!(drawn.state.turn.history[player.0].cards_drawn, history + 1);
+            assert_eq!(
+                drawn.state.zones.size(ZoneType::Library, player),
+                before.len() - 1
+            );
+            assert_eq!(
+                drawn.state.zones.top(ZoneType::Library, player),
+                before.get(before.len() - 2).copied()
+            );
+            assert!(drawn
+                .state
+                .zone_cards(ZoneType::Hand, player)
+                .all(|card| ObjectId::from(card) != token));
+        }
         let mut expected = before;
-        expected.shuffle(&mut ChaCha8Rng::seed_from_u64(400_710));
+        let mut expected_rng = ChaCha8Rng::seed_from_u64(400_710);
+        let mut actual_rng = expected_rng.clone();
+        expected.shuffle(&mut expected_rng);
         s.game_mut()
             .state
             .zones
-            .shuffle(zone, player, &mut ChaCha8Rng::seed_from_u64(400_710));
-        assert_eq!(s.game().state.zones.zone_objects(zone, player), &expected);
+            .shuffle(zone, player, &mut actual_rng);
+        assert_eq!(actual_rng.next_u64(), expected_rng.next_u64());
+        assert_eq!(
+            s.game().state.zones.zone_objects(zone, player).to_vec(),
+            expected
+        );
     }
+}
+
+/// Typed occupants retain the old ordered numeric wire representation through
+/// placement, reorder, hidden-world assignment, and removal of visitors.
+#[test]
+fn typed_card_zones_preserve_wire_order_and_hidden_reassignment() {
+    use managym::state::game_object::{ObjectId, ObjectKind, ObjectVec};
+    use managym::state::zone::ZoneManager;
+    use rand::{seq::SliceRandom, RngCore, SeedableRng};
+    use rand_chacha::ChaCha8Rng;
+
+    let s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Island", 40)]), 400_711);
+    let template = s.game().state.objects[ObjectId(0)].clone();
+    let objects = ObjectVec(vec![
+        template.clone(),
+        template.clone().with_kind(ObjectKind::Token),
+        template.clone(),
+        template.with_kind(ObjectKind::SpellCopy),
+    ]);
+    let player = PlayerId(0);
+    let mut zones = ZoneManager::default();
+    let mut expected = vec![ObjectId(0), ObjectId(1), ObjectId(2), ObjectId(3)];
+    for object in &expected {
+        zones.move_object(&objects, *object, player, ZoneType::Library);
+    }
+    assert_eq!(
+        zones
+            .zone_objects(ZoneType::Library, player)
+            .cards(&objects)
+            .map(ObjectId::from)
+            .collect::<Vec<_>>(),
+        vec![ObjectId(0), ObjectId(2)]
+    );
+
+    // The legacy serializer emitted these fields, in this order, with raw ids.
+    assert_eq!(
+        String::from_utf8(serde_json::to_vec(&zones).unwrap()).unwrap(),
+        r#"{"library":[[0,1,2,3],[]],"hand":[[],[]],"battlefield":[[],[]],"graveyard":[[],[]],"stack":[[],[]],"exile":[[],[]],"command":[[],[]],"card_zones":["Library","Library","Library","Library"]}"#
+    );
+
+    zones.reposition(ZoneType::Library, player, ObjectId(1), 0);
+    expected.remove(1);
+    expected.insert(0, ObjectId(1));
+    assert_eq!(
+        zones.zone_objects(ZoneType::Library, player).to_vec(),
+        expected
+    );
+    let mut actual_rng = ChaCha8Rng::seed_from_u64(400_712);
+    let mut expected_rng = actual_rng.clone();
+    expected.sort_unstable_by_key(|object| object.0);
+    expected.shuffle(&mut expected_rng);
+    zones.shuffle_canonical(ZoneType::Library, player, &mut actual_rng);
+    assert_eq!(
+        zones.zone_objects(ZoneType::Library, player).to_vec(),
+        expected
+    );
+    assert_eq!(actual_rng.next_u64(), expected_rng.next_u64());
+
+    let new_hand = vec![ObjectId(3), ObjectId(0), ObjectId(1)];
+    zones.reassign_hidden(&objects, player, new_hand.clone(), vec![ObjectId(2)]);
+    assert_eq!(
+        zones.zone_objects(ZoneType::Hand, player).to_vec(),
+        new_hand
+    );
+    assert_eq!(
+        zones
+            .zone_objects(ZoneType::Hand, player)
+            .cards(&objects)
+            .map(ObjectId::from)
+            .collect::<Vec<_>>(),
+        vec![ObjectId(0)]
+    );
+    for object in new_hand {
+        assert_eq!(zones.zone_of(object), Some(ZoneType::Hand));
+    }
+    zones.remove_object(ObjectId(3));
+    zones.remove_object(ObjectId(1));
+    assert_eq!(
+        zones.zone_objects(ZoneType::Hand, player).to_vec(),
+        vec![ObjectId(0)]
+    );
+    assert_eq!(zones.zone_of(ObjectId(1)), None);
+    assert_eq!(zones.zone_of(ObjectId(3)), None);
 }

@@ -294,7 +294,11 @@ impl Game {
         })
     }
 
-    pub(crate) fn card_reference(&self, object_id: ObjectId, viewer: PlayerId) -> VisibleReference {
+    pub(crate) fn object_reference(
+        &self,
+        object_id: ObjectId,
+        viewer: PlayerId,
+    ) -> VisibleReference {
         self.current_object_ref(object_id)
             .map(|object| self.visible_reference(object, viewer))
             .unwrap_or_default()
@@ -305,7 +309,7 @@ impl Game {
             ActivationSource::Permanent(permanent) => {
                 self.target_reference(Target::Permanent(permanent), viewer)
             }
-            ActivationSource::Card(card) => self.card_reference(card.into(), viewer),
+            ActivationSource::Card(card) => self.object_reference(card.into(), viewer),
         }
     }
 
@@ -321,14 +325,14 @@ impl Game {
                 .unwrap_or_default(),
             Target::StackSpell(object_id) => {
                 if self.state.zones.zone_of(object_id) == Some(ZoneType::Stack) {
-                    self.card_reference(object_id, viewer)
+                    self.object_reference(object_id, viewer)
                 } else {
                     VisibleReference::default()
                 }
             }
             Target::StackAbility(id) => self
                 .stack_ability_source(id)
-                .map(|object_id| self.card_reference(object_id, viewer))
+                .map(|object_id| self.object_reference(object_id, viewer))
                 .unwrap_or_default(),
             Target::GraveyardCard(object) => self.visible_reference(object, viewer),
         }
@@ -595,7 +599,7 @@ impl Game {
         let clauses: &[usize] = match object {
             StackObject::Spell(spell) => {
                 frame.kind = 1;
-                frame.source = self.card_reference(spell.object, viewer);
+                frame.source = self.object_reference(spell.object, viewer);
                 frame.mode = spell.mode;
                 frame.kicked = spell.kicked;
                 frame.x = spell.x;
@@ -685,7 +689,7 @@ impl Game {
                 chosen_req_indices,
                 ..
             } => {
-                frame.source = self.card_reference(*object, viewer);
+                frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.x = cast.x;
                 frame.mode = *mode;
@@ -693,13 +697,13 @@ impl Game {
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
             }
             PendingChoice::SpellMode { object, cast, .. } => {
-                frame.source = self.card_reference(*object, viewer);
+                frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.x = cast.x;
             }
             PendingChoice::KickerChoice { object, .. }
             | PendingChoice::AnnounceX { object, .. } => {
-                frame.source = self.card_reference(*object, viewer)
+                frame.source = self.object_reference(*object, viewer)
             }
             PendingChoice::ActivatedTarget {
                 source,
@@ -805,7 +809,7 @@ impl Game {
                 .unwrap_or_else(|| {
                     effect
                         .source
-                        .map(|object| self.card_reference(object, viewer))
+                        .map(|object| self.object_reference(object, viewer))
                         .unwrap_or_default()
                 }),
             kicked: effect.kicked,
@@ -958,7 +962,7 @@ impl Game {
                 target_req_indices,
                 ..
             } => {
-                frame.source = self.card_reference(*object, viewer);
+                frame.source = self.object_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.x = cast.x;
                 frame.mode = *mode;
@@ -1213,7 +1217,10 @@ mod tests {
             .target_reference(Target::StackSpell(object_id), PlayerId(0))
             .object
             .is_none());
-        assert!(game.card_reference(object_id, PlayerId(1)).object.is_none());
+        assert!(game
+            .object_reference(object_id, PlayerId(1))
+            .object
+            .is_none());
     }
 
     #[test]

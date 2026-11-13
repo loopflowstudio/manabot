@@ -65,8 +65,7 @@ fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
     for island in islands {
         s.game_mut()
             .state
-            .zones
-            .move_object(island, PlayerId(0), ZoneType::Hand);
+            .place_object(island, PlayerId(0), ZoneType::Hand);
     }
     s.force_card_in_hand(0, "Man-o'-War");
     let _ = s.drain_events();

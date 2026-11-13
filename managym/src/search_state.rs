@@ -246,12 +246,11 @@ mod tests {
         assert_authority_change(&baseline, &allocation, "allocation watermark");
 
         let mut zone_order = game.clone();
-        let library = zone_order
+        let last = zone_order.state.zones.size(ZoneType::Library, PlayerId(0)) - 1;
+        zone_order
             .state
             .zones
-            .zone_objects_mut(ZoneType::Library, PlayerId(0));
-        let last = library.len() - 1;
-        library.swap(0, last);
+            .swap(ZoneType::Library, PlayerId(0), 0, last);
         assert_authority_change(&baseline, &zone_order, "zone order");
 
         let mut decision = game.clone();

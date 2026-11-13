@@ -63,7 +63,7 @@ fn public(zone: ZoneType) -> bool {
     )
 }
 
-fn card_reference(game: &Game, object: ObjectId) -> HistoryReference {
+fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
     let Some(zone) = game
         .state
         .zones
@@ -90,7 +90,7 @@ fn card_reference(game: &Game, object: ObjectId) -> HistoryReference {
 // causal source zone/incarnation remain unavailable.
 fn source_reference(game: &Game, source: Option<ObjectId>) -> HistoryReference {
     let mut reference = source
-        .map(|object| card_reference(game, object))
+        .map(|object| object_reference(game, object))
         .unwrap_or(HistoryReference::Unavailable);
     if let HistoryReference::Card {
         zone, context_id, ..
@@ -105,15 +105,15 @@ fn source_reference(game: &Game, source: Option<ObjectId>) -> HistoryReference {
 fn target_reference(game: &Game, target: Target) -> HistoryReference {
     match target {
         Target::Player(player) => HistoryReference::Player(player),
-        Target::StackSpell(object_id) => card_reference(game, object_id),
+        Target::StackSpell(object_id) => object_reference(game, object_id),
         Target::StackAbility(id) => game
             .stack_ability_source(id)
-            .map(|object_id| card_reference(game, object_id))
+            .map(|object_id| object_reference(game, object_id))
             .unwrap_or(HistoryReference::Unavailable),
-        Target::GraveyardCard(object) => card_reference(game, ObjectId::from(object.entity)),
+        Target::GraveyardCard(object) => object_reference(game, ObjectId::from(object.entity)),
         Target::Permanent(id) => game
             .permanent_object_ref(id)
-            .map(|exact| card_reference(game, ObjectId::from(exact.entity)))
+            .map(|exact| object_reference(game, ObjectId::from(exact.entity)))
             .unwrap_or(HistoryReference::Unavailable),
     }
 }
@@ -163,7 +163,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             let source = if *face_down {
                 unknown.clone()
             } else {
-                card_reference(game, *object)
+                object_reference(game, *object)
             };
             (Arrival, 0, source, vec![unknown])
         }
@@ -195,7 +195,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
         } => (
             Cast,
             0,
-            card_reference(game, *object),
+            object_reference(game, *object),
             if targets.is_empty() {
                 vec![unknown]
             } else {
@@ -206,7 +206,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             },
         ),
         GameEvent::SpellResolved { object_id: object } => {
-            (Resolved, 0, card_reference(game, *object), vec![unknown])
+            (Resolved, 0, object_reference(game, *object), vec![unknown])
         }
         GameEvent::SpellCountered {
             object_id: object,
@@ -215,7 +215,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             Countered,
             0,
             source_reference(game, *by),
-            vec![card_reference(game, *object)],
+            vec![object_reference(game, *object)],
         ),
         // The countered ability is gone; its source card stands for it.
         GameEvent::AbilityCountered {
@@ -406,8 +406,7 @@ mod tests {
         let before = encode(&projected, 32, 60);
         // Future hidden placement cannot rewrite a previously public identity.
         game.state
-            .zones
-            .move_object(object, PlayerId(0), ZoneType::Library);
+            .place_object(object, PlayerId(0), ZoneType::Library);
         assert_eq!(
             before,
             encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)

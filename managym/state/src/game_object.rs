@@ -26,15 +26,21 @@ pub struct ObjectId(pub usize);
 #[serde(transparent)]
 pub struct CardId(ObjectId);
 
+impl AsRef<ObjectId> for CardId {
+    fn as_ref(&self) -> &ObjectId {
+        &self.0
+    }
+}
+
 impl From<CardId> for ObjectId {
     fn from(card: CardId) -> Self {
         card.0
     }
 }
 
-/// Stable match-local identity of a physical card or token.
+/// Stable match-local identity of a card, token or spell copy.
 ///
-/// `ObjectId` is the current storage authority for physical cards. Keeping the
+/// `ObjectId` is the current storage authority for runtime objects. Keeping the
 /// rules identity in a distinct type prevents continuations from silently
 /// treating that storage index as the current rules object after a zone
 /// change. The adapter can move when the card-instance layout changes.

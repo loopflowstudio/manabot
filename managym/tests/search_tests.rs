@@ -63,15 +63,20 @@ fn advance_random(game: &mut Game, steps: usize, seed: u64) {
 }
 
 fn zone_snapshot(game: &Game, zone: ZoneType, player: PlayerId) -> Vec<ObjectId> {
-    game.state.zones.zone_objects(zone, player).clone()
+    game.state.zones.zone_objects(zone, player).to_vec()
 }
 
 fn hidden_pool(game: &Game, player: PlayerId) -> BTreeSet<usize> {
     let mut pool = BTreeSet::new();
-    for object in game.state.zones.zone_objects(ZoneType::Hand, player) {
+    for object in game.state.zones.zone_objects(ZoneType::Hand, player).iter() {
         pool.insert(object.0);
     }
-    for object in game.state.zones.zone_objects(ZoneType::Library, player) {
+    for object in game
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, player)
+        .iter()
+    {
         pool.insert(object.0);
     }
     pool
@@ -207,7 +212,7 @@ fn determinize_preserves_public_state_and_hand_sizes() {
         (ZoneType::Hand, hero),
         (ZoneType::Library, hero),
     ] {
-        for object in game.state.zones.zone_objects(zone, player) {
+        for object in game.state.zones.zone_objects(zone, player).iter() {
             assert_eq!(game.state.zones.zone_of(*object), Some(zone));
         }
     }

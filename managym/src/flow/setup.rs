@@ -111,14 +111,14 @@ impl Game {
         for player in [PlayerId(0), PlayerId(1)] {
             let deck = players[player.0].deck.clone();
             for card in deck {
-                zones.move_object(card.into(), player, ZoneType::Library);
+                zones.move_object(&objects, card.into(), player, ZoneType::Library);
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
             // CR 103.3, 103.5 — Shuffle, then draw the ordinary seven-card hand.
             // This setup does not offer the mulligan procedure in CR 103.5.
             for _ in 0..7 {
                 if let Some(object) = zones.top(ZoneType::Library, player) {
-                    zones.move_object(object, player, ZoneType::Hand);
+                    zones.move_object(&objects, object, player, ZoneType::Hand);
                 }
             }
         }

@@ -101,15 +101,12 @@ impl Game {
             .zone_objects(ZoneType::Hand, player)
             .to_vec();
         for object in hand {
-            self.state
-                .zones
-                .move_object(object, player, ZoneType::Library);
+            self.state.place_object(object, player, ZoneType::Library);
             // move_object pushes to the top (end); rotate to the bottom so the
             // cleared hand is not immediately drawn back.
-            let library = self.state.zones.zone_objects_mut(ZoneType::Library, player);
-            if let Some(top) = library.pop() {
-                library.insert(0, top);
-            }
+            self.state
+                .zones
+                .reposition(ZoneType::Library, player, object, 0);
         }
     }
 
@@ -130,7 +127,7 @@ impl Game {
                 .find(|object| self.state.objects[*object].name == name);
             if let Some(object) = found {
                 self.policy_history = Default::default();
-                self.state.zones.move_object(object, player, ZoneType::Hand);
+                self.state.place_object(object, player, ZoneType::Hand);
                 return Ok(());
             }
         }
@@ -169,8 +166,7 @@ impl Game {
 
         self.policy_history = Default::default();
         self.state
-            .zones
-            .move_object(object_id, player, ZoneType::Battlefield);
+            .place_object(object_id, player, ZoneType::Battlefield);
 
         let permanent_id = PermanentId(self.state.permanents.len());
         let mut permanent = Permanent::new(

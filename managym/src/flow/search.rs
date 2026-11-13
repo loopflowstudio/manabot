@@ -2,8 +2,6 @@
 // Determinized-search primitives on Game: hidden-information resampling and
 // uniformly-random playouts to terminal. Used by flat Monte Carlo search.
 
-use std::collections::BTreeSet;
-
 use rand::{seq::SliceRandom, Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
@@ -114,7 +112,7 @@ impl Game {
                     library.shuffle(&mut rng);
                 }
                 known.extend(residual);
-                self.state.zones.reassign_hidden(opponent, known, library);
+                self.state.reassign_hidden(opponent, known, library);
             }
         }
         self.shuffle_private_library(perspective, &mut rng);
@@ -174,9 +172,9 @@ impl Game {
             .zones
             .shuffle_canonical(ZoneType::Library, player, rng);
         if let Some(object) = known_top {
-            let library = self.state.zones.zone_objects_mut(ZoneType::Library, player);
-            library.retain(|other| *other != object);
-            library.push(object);
+            self.state
+                .zones
+                .reposition(ZoneType::Library, player, object, usize::MAX);
         }
     }
 
@@ -280,16 +278,10 @@ impl Game {
             .collect();
         for revealed in inspections {
             let player = self.state.objects[revealed[0]].owner;
-            for object in &revealed {
-                self.state
-                    .zones
-                    .move_object(*object, player, ZoneType::Library);
+            // Placement appends, so put revealed[0] on top (last).
+            for object in revealed.iter().rev() {
+                self.state.place_object(*object, player, ZoneType::Library);
             }
-            let revealed_set = revealed.iter().copied().collect::<BTreeSet<_>>();
-            let library = self.state.zones.zone_objects_mut(ZoneType::Library, player);
-            library.retain(|object| !revealed_set.contains(object));
-            // revealed[0] is the top of the library = last element.
-            library.extend(revealed.iter().rev());
         }
     }
 

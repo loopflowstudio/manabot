@@ -42,8 +42,11 @@ fn bottom(s: &Scenario, count: usize) -> Vec<ObjectId> {
         .game()
         .state
         .zones
-        .zone_objects(ZoneType::Library, PlayerId(0))[..count]
-        .to_vec();
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .iter()
+        .take(count)
+        .copied()
+        .collect::<Vec<_>>();
     objects.sort();
     objects
 }
@@ -105,11 +108,18 @@ fn volcanic_torrent_cascade_without_a_castable_hit_bottoms_everything() {
     let mut s = five_color_setup(&DECK);
     let torrent = move_to_hand(&mut s, "Volcanic Torrent");
     let kept = pin_top(&mut s, &["Island", "Volcanic Torrent"]);
-    s.game_mut()
+    let removed = s
+        .game()
         .state
         .zones
-        .zone_objects_mut(ZoneType::Library, PlayerId(0))
-        .retain(|object| kept.contains(object));
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .iter()
+        .copied()
+        .filter(|object| !kept.contains(object))
+        .collect::<Vec<_>>();
+    for object in removed {
+        s.game_mut().state.zones.remove_object(object);
+    }
     cast_card(&mut s, torrent);
     s.pass_priority();
     s.pass_priority();

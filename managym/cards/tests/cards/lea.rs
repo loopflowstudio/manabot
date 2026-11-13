@@ -72,8 +72,7 @@ fn ancestral_recall_decking_loses_game() {
     for object in library {
         s.game_mut()
             .state
-            .zones
-            .move_object(object, PlayerId(0), ZoneType::Graveyard);
+            .place_object(object, PlayerId(0), ZoneType::Graveyard);
     }
 
     assert!(s.take_action_by_type(ActionType::PriorityCastSpell));

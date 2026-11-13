@@ -42,7 +42,7 @@ pub struct GameState {
     pub objects: ObjectVec<crate::state::game_object::Object>,
     pub permanents: PermanentVec<Option<crate::state::permanent::Permanent>>,
     pub object_to_permanent: ObjectVec<Option<PermanentId>>,
-    /// Current CR 400.7 generation for each stable physical card entity.
+    /// Current CR 400.7 generation for each stored object.
     pub object_incarnations: ObjectVec<Incarnation>,
     /// Last-known battlefield facts keyed by the departed exact object.
     pub object_lki: ObjectLkiLog,
@@ -77,6 +77,23 @@ pub struct GameState {
 }
 
 impl GameState {
+    /// Update raw membership, certifying card-zone occupants. Callers own
+    /// rules events; ordinary play uses `Game::move_object`.
+    pub fn place_object(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
+        self.zones.move_object(&self.objects, object, holder, zone);
+    }
+
+    /// Materialize hidden-zone contents, retaining transient occupants and order.
+    pub fn reassign_hidden(
+        &mut self,
+        player: PlayerId,
+        hand: Vec<ObjectId>,
+        library: Vec<ObjectId>,
+    ) {
+        self.zones
+            .reassign_hidden(&self.objects, player, hand, library);
+    }
+
     /// A card keeps its kind across moves, transformations and copy effects.
     pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
         self.objects.card_id(object)
@@ -89,10 +106,7 @@ impl GameState {
         zone: ZoneType,
         player: PlayerId,
     ) -> impl Iterator<Item = CardId> + '_ {
-        self.zones
-            .zone_objects(zone, player)
-            .iter()
-            .filter_map(|object| self.card_id(*object))
+        self.zones.zone_objects(zone, player).cards(&self.objects)
     }
 }
 
@@ -508,7 +522,7 @@ impl TrackedState {
 
     // Zone changes feed the derivations that read the zones they touch.
 
-    /// Move `card` to `to_zone` under `holder`. Characteristics read the
+    /// Move `object` to `to_zone` under `holder`. Characteristics read the
     /// battlefield and graveyards; the trigger index reads the battlefield.
     pub(crate) fn move_object(&mut self, object: ObjectId, holder: PlayerId, to_zone: ZoneType) {
         let from_zone = self.state.zones.zone_of(object);
@@ -519,10 +533,12 @@ impl TrackedState {
         if to_zone == ZoneType::Battlefield || from_zone == Some(ZoneType::Battlefield) {
             self.revisions.triggers += 1;
         }
-        self.state.zones.move_object(object, holder, to_zone);
+        self.state
+            .zones
+            .move_object(&self.state.objects, object, holder, to_zone);
     }
 
-    /// Advance the card's CR 400.7 incarnation as it leaves `from_zone`.
+    /// Advance the object's CR 400.7 incarnation as it leaves `from_zone`.
     /// Only a battlefield object's exact identity reaches a cached derivation
     /// (through its effect records and static attachments).
     pub(crate) fn advance_incarnation(&mut self, object: ObjectId, from_zone: ZoneType) {

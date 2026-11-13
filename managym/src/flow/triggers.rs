@@ -843,7 +843,12 @@ impl Game {
                 | TargetSpec::CreatureOrSpell
         ) {
             for player in [PlayerId(0), PlayerId(1)] {
-                for object_id in self.state.zones.zone_objects(ZoneType::Battlefield, player) {
+                for object_id in self
+                    .state
+                    .zones
+                    .zone_objects(ZoneType::Battlefield, player)
+                    .iter()
+                {
                     if let Some(permanent_id) = self.state.object_to_permanent[object_id] {
                         candidates.push(Target::Permanent(permanent_id));
                     }
@@ -1454,7 +1459,12 @@ impl Game {
     fn graveyard_triggers(&mut self, event: &GameEvent) {
         let mut fired = Vec::new();
         for owner in [PlayerId(0), PlayerId(1)] {
-            for &object in self.state.zones.zone_objects(ZoneType::Graveyard, owner) {
+            for &object in self
+                .state
+                .zones
+                .zone_objects(ZoneType::Graveyard, owner)
+                .iter()
+            {
                 for (ability_index, ability) in
                     self.state.objects[object].abilities.iter().enumerate()
                 {

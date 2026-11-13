@@ -1319,10 +1319,14 @@ impl Game {
                     }
                     if second_from_top {
                         let owner = self.state.objects[object_id].owner;
-                        let library = self.state.zones.zone_objects_mut(ZoneType::Library, owner);
-                        library.retain(|candidate| *candidate != object_id);
-                        let below_top = library.len().saturating_sub(1);
-                        library.insert(below_top, object_id);
+                        let below_top = self
+                            .state
+                            .zones
+                            .size(ZoneType::Library, owner)
+                            .saturating_sub(2);
+                        self.state
+                            .zones
+                            .reposition(ZoneType::Library, owner, object_id, below_top);
                     } else {
                         self.put_on_bottom_of_library(object_id);
                     }
@@ -2240,7 +2244,7 @@ impl Game {
             (
                 Decision::Scry {
                     player,
-                    looked,
+                    looked: _,
                     remaining,
                     top,
                     bottom,
@@ -2265,15 +2269,12 @@ impl Game {
                     top.push(*object_id);
                 }
                 if remaining.is_empty() {
-                    let library = self
-                        .state
-                        .zones
-                        .zone_objects_mut(ZoneType::Library, *player);
-                    library.retain(|object_id| !looked.contains(object_id));
-                    for object_id in bottom.iter().rev() {
-                        library.insert(0, *object_id);
+                    for object in bottom.iter().rev() {
+                        self.state
+                            .zones
+                            .reposition(ZoneType::Library, *player, *object, 0);
                     }
-                    library.extend(top.iter().rev());
+                    self.put_on_top_of_library(*player, top);
                     self.run_frame(suspended.frame);
                 } else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -3085,9 +3086,11 @@ impl Game {
     /// Reorder inspected library cards, first to draw first. Their exact
     /// objects survive: placement within a zone emits no zone-change events.
     fn put_on_top_of_library(&mut self, player: PlayerId, objects: &[ObjectId]) {
-        let library = self.state.zones.zone_objects_mut(ZoneType::Library, player);
-        library.retain(|object| !objects.contains(object));
-        library.extend(objects.iter().rev());
+        for object in objects.iter().rev() {
+            self.state
+                .zones
+                .reposition(ZoneType::Library, player, *object, usize::MAX);
+        }
     }
 
     /// Put each of `cards` still in exile on the bottom of its owner's
@@ -3112,14 +3115,13 @@ impl Game {
     /// inverse applies. Index 0 is the bottom; the last card is the top.
     pub(crate) fn reorder_in_library(&mut self, object: ObjectId, end: LibraryEnd) {
         let owner = self.state.objects[object].owner;
-        let library = self.state.zones.zone_objects_mut(ZoneType::Library, owner);
-        if let Some(index) = library.iter().position(|c| *c == object) {
-            library.remove(index);
-            match end {
-                LibraryEnd::Bottom => library.insert(0, object),
-                LibraryEnd::Top => library.push(object),
-            }
-        }
+        let index = match end {
+            LibraryEnd::Bottom => 0,
+            LibraryEnd::Top => usize::MAX,
+        };
+        self.state
+            .zones
+            .reposition(ZoneType::Library, owner, object, index);
     }
 }
 
@@ -3217,7 +3219,7 @@ mod learn_tests {
                 .state
                 .zones
                 .zone_objects(ZoneType::Library, PlayerId(0))
-                .clone();
+                .to_vec();
             let hand_count = game.state.zones.size(ZoneType::Hand, PlayerId(0));
             let card_count = game.state.objects.len();
             let event_count = game.state.events.len();
@@ -3237,8 +3239,9 @@ mod learn_tests {
             assert_eq!(
                 game.state
                     .zones
-                    .zone_objects(ZoneType::Library, PlayerId(0)),
-                &library
+                    .zone_objects(ZoneType::Library, PlayerId(0))
+                    .to_vec(),
+                library
             );
             assert_eq!(
                 witness(&game).diagnostics.rng_probe,
@@ -3335,7 +3338,7 @@ mod learn_tests {
                 .state
                 .zones
                 .zone_objects(ZoneType::Hand, PlayerId(0))
-                .clone();
+                .to_vec();
             for object in hand {
                 game.move_object(object, ZoneType::Graveyard);
             }
@@ -3778,12 +3781,10 @@ mod learn_tests {
         // An identical main-deck physical copy can witness the known card.
         swapped
             .state
-            .zones
-            .move_object(retrieved.into(), PlayerId(0), ZoneType::Library);
+            .place_object(retrieved.into(), PlayerId(0), ZoneType::Library);
         swapped
             .state
-            .zones
-            .move_object(duplicate.into(), PlayerId(0), ZoneType::Hand);
+            .place_object(duplicate.into(), PlayerId(0), ZoneType::Hand);
         assert_eq!(
             crate::possible_worlds::viewer_observation(&swapped, PlayerId(1)),
             crate::possible_worlds::viewer_observation(&source, PlayerId(1))

@@ -46,14 +46,12 @@ fn cast_manowar_and_reach_target_choice(s: &mut Scenario) {
     for island in islands {
         s.game_mut()
             .state
-            .zones
-            .move_object(island, PlayerId(0), ZoneType::Hand);
+            .place_object(island, PlayerId(0), ZoneType::Hand);
     }
     let manowar = owned_card(s, 0, "Man-o'-War");
     s.game_mut()
         .state
-        .zones
-        .move_object(manowar, PlayerId(0), ZoneType::Hand);
+        .place_object(manowar, PlayerId(0), ZoneType::Hand);
 
     for land_drop in 0..3 {
         s.advance_to_active_step(0, StepKind::Main);

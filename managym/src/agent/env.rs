@@ -1056,13 +1056,14 @@ impl Env {
             return Err(AgentError("hand snapshot player must be 0 or 1".into()));
         }
         let mut counts = BTreeMap::new();
-        for card in game
+        for object in game
             .state
             .zones
             .zone_objects(ZoneType::Hand, PlayerId(player))
+            .iter()
         {
             *counts
-                .entry(game.state.objects[*card].name.clone())
+                .entry(game.state.objects[*object].name.clone())
                 .or_insert(0) += 1;
         }
         Ok(counts)

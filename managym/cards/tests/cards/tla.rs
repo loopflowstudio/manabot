@@ -295,8 +295,7 @@ fn accumulate_wisdom_with_three_lessons_takes_all_three_without_decision() {
             .expect("library should contain Accumulate Wisdom");
         s.game_mut()
             .state
-            .zones
-            .move_object(object, PlayerId(0), ZoneType::Graveyard);
+            .place_object(object, PlayerId(0), ZoneType::Graveyard);
     }
     s.force_card_in_hand(0, "Accumulate Wisdom");
     s.advance_to_active_step(0, StepKind::Main);
@@ -3920,8 +3919,7 @@ fn first_time_flyer_conditional_static_recomputes_on_read() {
     // ...and off again when it leaves (recomputed on read, no state).
     s.game_mut()
         .state
-        .zones
-        .move_object(lesson, PlayerId(0), ZoneType::Library);
+        .place_object(lesson, PlayerId(0), ZoneType::Library);
     assert_eq!(s.game().characteristics(flyer).pt(), (1, 2));
 }
 
@@ -4415,7 +4413,7 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
         let mut seen = BTreeMap::new();
         for player in [PlayerId(0), PlayerId(1)] {
             for zone in zones {
-                for &object_id in game.state.zones.zone_objects(zone, player) {
+                for &object_id in game.state.zones.zone_objects(zone, player).iter() {
                     assert_eq!(game.state.zones.zone_of(object_id), Some(zone));
                     *seen.entry(object_id.0).or_insert(0) += 1;
                 }
@@ -4428,7 +4426,7 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
             .state
             .zones
             .zone_objects(ZoneType::Exile, PlayerId(0))
-            .clone();
+            .to_vec();
         assert_eq!(foretold.len(), 2);
         let grants = &game.state.cast_permissions.exile_grants;
         assert_eq!(grants.iter().filter(|grant| grant.foretold).count(), 2);
@@ -6717,7 +6715,7 @@ fn possible_worlds_resample_an_opponents_foretold_card() {
             .state
             .zones
             .zone_objects(ZoneType::Exile, PlayerId(0))
-            .clone();
+            .to_vec();
         assert_eq!(exiled.len(), 1);
         let foretold = exiled[0];
         assert_eq!(branch.state.objects[foretold].name, "Sozin's Comet");
@@ -7817,7 +7815,10 @@ fn piandao_can_take_a_lesson_or_equipment_or_decline_without_revealing_remainder
                 u32::from(selection == Some(index))
             );
             if selection != Some(index) {
-                assert!(library[..4 - usize::from(selection.is_some())].contains(id));
+                assert!(library
+                    .iter()
+                    .take(4 - usize::from(selection.is_some()))
+                    .any(|object| object == id));
             }
         }
     }
@@ -9237,7 +9238,8 @@ fn merchant_returns_to_its_owners_bottom_while_its_controller_shuffles() {
             .state
             .zones
             .zone_objects(ZoneType::Library, PlayerId(1))
-            .first(),
+            .iter()
+            .next(),
         Some(&merchant)
     );
 }
@@ -9604,7 +9606,10 @@ fn rallier_reveals_only_the_selected_card_and_can_decline() {
             .zone_objects(ZoneType::Library, PlayerId(0));
         for id in &top {
             if !take || *id != top[1] {
-                assert!(library[..4 - usize::from(take)].contains(id));
+                assert!(library
+                    .iter()
+                    .take(4 - usize::from(take))
+                    .any(|object| object == id));
             }
         }
     }
@@ -13494,7 +13499,7 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
         .state
         .zones
         .zone_objects(ZoneType::Graveyard, PlayerId(0))
-        .clone()
+        .to_vec()
     {
         s.game_mut().move_object(object, ZoneType::Exile);
     }
@@ -14856,8 +14861,9 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
             materialized
                 .state
                 .zones
-                .zone_objects(ZoneType::Library, PlayerId(1)),
-            &library(&s, 1)
+                .zone_objects(ZoneType::Library, PlayerId(1))
+                .to_vec(),
+            library(&s, 1)
         );
         for &object in choices.iter().take(count) {
             select_card(&mut s, object);
@@ -15012,10 +15018,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         ZoneType::Graveyard,
         ZoneType::Exile,
     ] {
-        s.game_mut()
-            .state
-            .zones
-            .move_object(suki, PlayerId(0), zone);
+        s.game_mut().state.place_object(suki, PlayerId(0), zone);
         assert_eq!(s.game().object_power(suki), 2, "{zone:?}");
         if zone != ZoneType::Library {
             let obs = Observation::for_player(s.game(), PlayerId(0));
@@ -15029,8 +15032,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
     }
     s.game_mut()
         .state
-        .zones
-        .move_object(suki, PlayerId(0), ZoneType::Hand);
+        .place_object(suki, PlayerId(0), ZoneType::Hand);
     cast_card(&mut s, suki);
     assert_eq!(s.game().object_power(suki), 2);
     // A control-changing effect changes the spell's "you", not its owner.

@@ -2,7 +2,7 @@
 
 The engine marked tokens and copies of spells with one `is_token` flag stored on the object's definition, and called every runtime object a `Card`. Each game object now has a kind taken from the Comprehensive Rules (`ObjectKind::Card`, `Token` or `SpellCopy`), and the runtime record is named for what it is: `Object`, named by `ObjectId`. Card-only consumers narrow through `GameState::card_id` and carry `CardId`, so a token or a copy of a spell cannot enter those operations.
 
-This builds on [MTG-298 · Give tokens their own `TokenDefinition` type](https://github.com/loopflowstudio/manabot/pull/476), which split token definitions from card definitions and lands first.
+This builds on [MTG-298 · Give tokens their own `TokenDefinition` type](https://github.com/loopflowstudio/manabot/pull/476), which split token definitions from card definitions and has merged into main.
 
 ## What changes
 
@@ -15,10 +15,16 @@ This builds on [MTG-298 · Give tokens their own `TokenDefinition` type](https:/
 
 ## Decisions a reviewer should check
 
-- **Library and hand lists hold `ObjectId`s, not card ids.** A bounced or tucked token is in that zone until state-based actions are checked (CR 111.7-111.8, 704.5d), and a viewer can see it there: QA saw Treasures in a graveyard at the mana-choice decision right after they were sacrificed. Making those zones card-only would remove the token inside the move and change observations. Decklists and sideboards carry `CardId`; `GameState::zone_cards` narrows mixed zone lists for card-only consumers. Hidden sampling and observations still use the ordered object lists.
-- **Observations, wire names and evidence keep their bytes relative to MTG-298.** Serde keeps the old field names (`#[serde(rename = "card")]`). Observation `is_token` is `!is_card()`, and the match-state hash records a non-card object with `is_token: true`, as before. The earlier rename reproduced `semantic-kernel-w17-v2`; final-head conformance remains for gate. `Debug` output of the renamed types does change.
+- **Library and hand store checked cards plus explicit visitors.** One ordered `CardZoneEntry` sequence stores `Card(CardId)` or `Transient(ObjectId)`. Tokens and spell copies retain their position until state-based actions; there is no parallel membership or ordering list. Borrowed reads and serialization project the original numeric ids, while card-only reads use stored checked ids. Reordering preserves entry kinds, and shuffling the full sequence preserves RNG consumption. This replaces the earlier all-ObjectId fallback.
+- **Byte compatibility remains an acceptance requirement.** Serde keeps the old field names (`#[serde(rename = "card")]`). Observation `is_token` is `!is_card()`, and the match-state hash records a non-card object with `is_token: true`, as before. The earlier rename reproduced `semantic-kernel-w17-v2`; Semantic Kernel Conformance passed on 8e5e8e62b; final seeded QA remains. `Debug` output of the renamed types does change.
 - **Card-only choices.** Transient tokens stay visible in their zones but are excluded from card-only play, activation, discard and search choices. Direct card-only commands reject them too. Generic movement, inspection and draw ordering still include them. Predicate `token` filters match only `ObjectKind::Token`; spell copies used to match, though no defined card filters spells by token status.
 - **No emblem or copy-of-a-card kind.** No defined card creates either; the docs say "none yet".
+
+## Remaining before review
+
+Seeded final-head QA, Engine Budget and authored reviews remain. The private
+projection renames and typed library/hand storage are implemented; focused
+validation is recorded in `scratch/mtg-320-plan.md`.
 
 ## Left for later
 
@@ -32,13 +38,28 @@ Not in this PR:
 
 ## Checks
 
-After compression, 53 focused debug tests passed across checked ids, transient
-occupants, card choices, casting, capture and relevant card behavior. Workspace
-Clippy passed with every target and feature and warnings denied; rustfmt and
-whitespace checks passed. The CPython 3.13 release wheel built, its matching
-extension was installed atomically, and a fresh import passed. Exact commands and run receipts are in
-`scratch/mtg-320-plan.md`. Final-head conformance, seeded QA and Engine Budget
-remain for gate.
+Compression passed 31 focused debug tests, all-target/all-feature workspace
+Clippy with warnings denied, rustfmt and whitespace checks. The cp313/arm64
+release wheel rebuilt, its extension was installed atomically, and a fresh
+import passed. It removes the custom zone iterator and conditional card-scan
+chains, reuses scry ordering, and restores inspected libraries in one placement
+pass. Storage and serialized fields stay unchanged. Exact commands and receipts
+are in `scratch/mtg-320-plan.md`.
+
+Before compression, the typed-zone/projection pass passed 17 focused debug tests
+covering numeric bytes, checked scans, transient tokens/spell copies, shuffle
+RNG, hidden reassignment, draws, ordering and projection. Workspace Clippy passed;
+the cp313 release wheel rebuilt, was installed atomically, and passed a fresh
+import. Rustfmt and whitespace checks passed. Four merged payment fixtures were
+also repaired and all 15 focused payment tests passed. These changes remain local.
+
+[CI run 43369147820](https://github.com/loopflowstudio/manabot/actions/runs/43369147820)
+on 8e5e8e62b passed Semantic Kernel Conformance, Python Unit Tests, Academy
+Integration and Clean-machine Play; Rust Tests failed to compile the four
+fixtures repaired locally. Engine Budget and part of
+[package run 43369147921](https://github.com/loopflowstudio/manabot/actions/runs/43369147921)
+were pending when last inspected. That merge added payment-search changes and
+package 0.2.3: final paired QA must compare engines with the same upstream changes.
 
 Earlier evidence, **not validation of typed ids or compression**:
 

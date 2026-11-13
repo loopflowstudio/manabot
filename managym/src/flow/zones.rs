@@ -144,7 +144,7 @@ impl Game {
     /// same definition minima as revealing it, without a reveal event.
     pub(crate) fn remember_hand(&mut self, player: PlayerId) {
         let mut counts = std::collections::BTreeMap::new();
-        for object in self.state.zones.zone_objects(ZoneType::Hand, player) {
+        for object in self.state.zones.zone_objects(ZoneType::Hand, player).iter() {
             *counts
                 .entry(self.state.objects[*object].definition_id)
                 .or_insert(0_u32) += 1;
@@ -789,8 +789,7 @@ impl Game {
         permanent.summoning_sick = true;
         permanent.attacking = false;
         self.state
-            .zones
-            .move_object(object_id, controller, ZoneType::Battlefield);
+            .place_object(object_id, controller, ZoneType::Battlefield);
         self.invalidate_mana_cache(previous);
         self.invalidate_mana_cache(controller);
         if let Some(object) = self.permanent_object_ref(permanent_id) {

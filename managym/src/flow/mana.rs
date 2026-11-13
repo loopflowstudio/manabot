@@ -1824,7 +1824,7 @@ mod tests {
     };
     use crate::cards::content_pack::ContentPack;
     use crate::state::{
-        game_object::{CardId, PermanentId},
+        game_object::{ObjectId, PermanentId},
         mana::{Mana, ManaCost, ManaRestriction, SpendingContext},
     };
 
@@ -1845,7 +1845,7 @@ mod tests {
     fn source(index: usize, fixed: Option<&str>, abilities: Vec<ManaActivation>) -> ManaSource {
         ManaSource {
             permanent: PermanentId(index),
-            card: CardId(index),
+            object: ObjectId(index),
             untapped: true,
             fixed: fixed.map(Mana::parse),
             abilities,
@@ -1948,7 +1948,7 @@ mod tests {
             // One Herbalist-shaped source: any color, or two restricted mana.
             model.sources.push(ManaSource {
                 permanent: PermanentId(count),
-                card: CardId(count),
+                object: ObjectId(count),
                 untapped: true,
                 fixed: None,
                 waterbend: true,
@@ -2139,7 +2139,7 @@ mod tests {
         let sources = (0..4)
             .map(|index| ManaSource {
                 permanent: PermanentId(index),
-                card: CardId(index),
+                object: ObjectId(index),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![
@@ -2202,7 +2202,7 @@ mod tests {
         let model = PaymentModel {
             sources: vec![ManaSource {
                 permanent: PermanentId(0),
-                card: CardId(0),
+                object: ObjectId(0),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![sacrifice],

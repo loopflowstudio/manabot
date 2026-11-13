@@ -1,8 +1,12 @@
 # Decisions and assumptions
 
-- Accepted scope, exact steers and the ordered-zone fallback are in
-  `scratch/mtg-320-plan.md`. This step simplifies that implementation; it adds
-  no physical-card store, new zone identity or new object kind.
+- Accepted scope and exact steers are in `scratch/mtg-320-plan.md`.
+  The physical-card store and new zone identity remain excluded.
+- Reversible implementation choice (2026-11-12): library/hand use one ordered
+  `CardZoneEntry` sequence, with `Card(CardId)` and explicit
+  `Transient(ObjectId)` occupants. This stores checked cards and preserves
+  visitors without a second ordering authority. It replaces the unaccepted
+  all-ObjectId fallback; compatibility is checked at the wire and RNG boundaries.
 - Spell copies are internally `SpellCopy`; observation `is_token` remains true.
   Predicate token filters mean `ObjectKind::Token`. No defined card filters
   spells by token status (earlier MTG-320 inspection).
@@ -15,3 +19,6 @@
   to frozen evidence in this task. Full notes: `df58f2bff:scratch/questions.md`.
   Pre-compression uncommitted notes were moved to
   `/tmp/mtg320-context-before-compress/` before curation.
+- Compression choice (2026-11-12): keep `ZoneObjects` as a borrowed collection
+  with explicit `iter()` and `cards()` scans. No separate cursor or
+  card-zone-only reader; stored entry kinds, bytes and order remain authoritative.

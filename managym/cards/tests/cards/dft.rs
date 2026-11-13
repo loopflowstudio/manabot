@@ -19,7 +19,7 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
             .state
             .zones
             .zone_objects(ZoneType::Library, PlayerId(0))
-            .clone();
+            .to_vec();
         put_onto_battlefield(&mut s, 0, "Caradora, Heart of Alacria");
         pass_until(&mut s, ActionSpaceKind::Modal);
         choose_mode(&mut s, if search { 0 } else { 1 });
@@ -55,7 +55,7 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
                 .into_iter()
                 .filter(|object| after.contains(object))
                 .collect();
-            assert_eq!(&retained, after);
+            assert_eq!(retained, after.to_vec());
         }
     }
 }

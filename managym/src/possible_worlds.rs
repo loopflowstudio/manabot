@@ -589,7 +589,6 @@ impl HiddenHandConstraints {
 
             branch
                 .state
-                .zones
                 .reassign_hidden(opponent, new_hand, new_library);
         }
         if source.shares_information(self.viewer, opponent)

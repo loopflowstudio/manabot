@@ -181,11 +181,8 @@ impl Game {
                 self.state
                     .object_incarnations
                     .push(crate::state::game_object::Incarnation::INITIAL);
-                self.state.zones.move_object(
-                    copied,
-                    controller,
-                    crate::state::zone::ZoneType::Stack,
-                );
+                self.state
+                    .place_object(copied, controller, crate::state::zone::ZoneType::Stack);
                 spell.id = id;
                 spell.object = copied;
                 spell.controller = controller;
