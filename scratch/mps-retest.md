@@ -105,3 +105,20 @@ result table and the coverage matrix are byte-identical; the only table
 change drops the planned-axis grid (design, not evidence; the matrix owns the
 unreached cells) and renames "MLX half (new runs)" to "MLX half". Gate owns the backend suites and
 publication checks.
+
+## Concept review 2026-11-13 (second pass, at `d0d3308a7b`)
+
+Nothing to change. The QA follow-up keeps one owner per fact: the report's
+QA table holds the four small-capture cases, `mlx.md#compute-precision` says
+what "supported" means (the API executes the dtype; the gate decides per
+input) and links there, and the `precision_dtype` refusal names MLX's
+spellings, which covers the `bf16`/`bfloat16` difference without a mapping.
+
+Relative-loss floor: not needed for this Task, so not blocking. The design
+already says tolerances are preserved, and a floor would change no outcome
+here: it would clear only the w384 bfloat16 near-zero-loss case, while the
+w64 bfloat16 gradient cosine (0.9315) and w64 float16 failures stand, and the
+recommendation does not rest on half passing. Whether the gate should get an
+absolute floor is undecided and belongs with the half-precision accuracy work
+the report recommends, with its own evidence. (My reading; nobody has stated
+a preference.)

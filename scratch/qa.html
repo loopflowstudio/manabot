@@ -38,12 +38,26 @@ matrix with a dirty .py        → commit experiment and executable source befor
 <h2>4. QA skill</h2>
 <p><code>.lf/skills/qa.md</code> pointed MLX QA at the published pilot checkpoint, which no longer loads. It now gives the current-capture route and the parity flags. <code>scripts/check_loopflow_workflows.py</code>: valid.</p>
 
+<h2>5. Second pass at d0d3308a7b (after the QA follow-up)</h2>
+<p>Same day, load average about 207 from other work; no timing taken.</p>
+<ul>
+<li><b>Rendered on GitHub</b> (pushed branch, via the contents API's HTML view): the report has the anchor <code>later-small-capture-qa-2026-11-13</code> and <code>mlx.md</code> has <code>compute-precision</code>, so the guide's link to the QA table lands. A script resolved every relative link in <code>experiments/mps_retest.md</code>, <code>manabot/backends/mlx.md</code> and <code>manabot/backends/README.md</code> to a file or manifest entry, with each <code>.md</code> fragment matching a heading: 0 broken.</li>
+<li><b>New reader fetch</b>: fresh detached worktree at HEAD, empty <code>MANABOT_DATA_CACHE</code>, the report's own command: <pre>fetched 6 files; 0 already present; 0 digests from the cache, 5 downloaded (2054350 bytes)   # 49 s including env build</pre> This matches the report's “about 2 MB”. <code>full_context.png</code> is byte-identical to this checkout's. Looked at it: the bars, labels and footnotes match the Answer table; the cosmetic issues in item 2 below remain.</li>
+<li><b>Guide snippet</b> (<code>mlx.md#compute-precision</code>) on the converted QA w64l2 capture: <code>load_mlx_policy(..., precision="bfloat16")</code> loads, and <code>Learner(policy, minibatch_rows=64)</code> inherits <code>bfloat16</code>.</li>
+<li><b>Torch spelling typo <code>bf16</code></b>, at every entry point a user reaches:
+<pre>parity CLI --precision bf16 → exit 2: invalid choice: 'bf16' (choose from 'float32', 'bfloat16', 'float16')
+load_mlx_policy / Learner / policy.set_precision / MLXBackend →
+  ValueError: unsupported MLX precision: 'bf16'; expected one of float32, bfloat16, float16</pre></li>
+<li>The report's Answer, Enlarged-arm correctness and Limits sections now state the later QA failures; nothing still says “all three dtypes pass” without qualification. The CPU arm is labeled CPU4 in the chart; “Arms and inputs” explains four laptop threads versus eight on M2 (the brief asked for 8).</li>
+</ul>
+<p>Nothing needed fixing in this pass.</p>
+
 <h2>Result</h2>
-<p><b>Works:</b> the report reads correctly for a new reader, its evidence fetches and redraws byte for byte, the numbers match the receipts, the MLX precision API and guide snippet behave as documented, and the parity CLI and harness refuse clearly.</p>
-<p><b>Not reached:</b> any timing, because the host was heavily loaded and this step does not authorize measurement. I did not step a <code>VectorEnv</code> through the MLX policy; parity's collection calls cover the forward on real inputs. The M2 host was not checked.</p>
+<p><b>Works:</b> the report reads correctly for a new reader. Its links and anchors resolve, its ~2 MB fetch restores the chart, and the numbers match the receipts. The MLX precision API and guide snippet behave as documented, and both the parity CLI and the Python API refuse a mistyped precision clearly.</p>
+<p><b>Not reached:</b> any timing, because the host was heavily loaded and this step does not authorize measurement. I did not step a <code>VectorEnv</code> through the MLX policy; parity's collection calls cover the forward on real inputs. The M2 host was not checked. The 1.25 GB redraw was not repeated in the second pass because <code>experiments/mps_retest.py</code> is unchanged since the first pass's byte-for-byte redraw.</p>
 <p><b>Still wrong, worst first:</b></p>
 <ol>
-<li>Half-precision MLX failed its own gate on 3 of 4 fresh small real captures (bfloat16 at both widths, float16 at w64), and passed float16 at w384 by 0.003 percentage points. “Supported” rests on gates calibrated on the retained w384/w768 checks. This is consistent with the guide's preflight warning, but it is weaker than the report's “all three dtypes pass” after-sync line suggests. Whether the relative-loss gate should use an absolute floor near zero loss is a product decision; I left the thresholds unchanged.</li>
-<li>Chart cosmetics: the legend is tight against the subtitle, and there is a gap above the footnotes.</li>
+<li>Half-precision MLX fails its own gate on 3 of 4 fresh small real captures. The report and guide now say so plainly, and the recommendation does not rest on half passing. Whether the relative-loss gate needs an absolute floor near zero loss is still an open product decision (<code>scratch/questions.md</code>).</li>
+<li>Chart cosmetics: the legend sits tight against the panel subtitle, and there is a large gap above the footnotes. It is legible, and changing it would mean republishing the PNG and its manifest entry.</li>
 </ol>
 </body></html>
