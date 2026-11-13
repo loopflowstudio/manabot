@@ -735,7 +735,7 @@ class _Renderer:
                 )
             for pooled in player.pooled_mana_classes:
                 lines.append(
-                    "Pooled mana: "
+                    "Of the mana above: "
                     + ", ".join(
                         f"{symbol} {count}"
                         for symbol, count in zip("WUBRGC", pooled.mana, strict=True)

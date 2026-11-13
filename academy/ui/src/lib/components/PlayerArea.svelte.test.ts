@@ -41,9 +41,9 @@ it('shows pooled amounts before qualifiers without repeating combat expiry', () 
       }),
     },
   });
-  expect(body).toContain('2 {R}; expires at end of combat');
-  expect(body).toContain('1 {G} only for creature spells puts a +1/+1 counter on a non-Human creature spell it casts; expires at step end');
-  expect(body.match(/expires at end of combat/g)).toHaveLength(1);
+  expect(body).toContain('— including 2 {R}, expiring at end of combat');
+  expect(body).toContain('; 1 {G} only for creature spells that puts a +1/+1 counter on a non-Human creature spell it casts, expiring at step end');
+  expect(body.match(/at end of combat/g)).toHaveLength(1);
   expect(body).not.toContain('undefined');
 });
 

@@ -584,7 +584,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "extra_turns": "extra turn",
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
-        "pooled_mana_classes": "Pooled mana",
+        "pooled_mana_classes": "Of the mana above",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
     },
@@ -704,9 +704,9 @@ def test_pooled_mana_text_puts_amounts_before_optional_qualifiers() -> None:
         },
     ]
     text = render_decision(_redigest(payload)).text
-    assert "Pooled mana: R 2; expires at end of combat." in text
+    assert "Of the mana above: R 2; expires at end of combat." in text
     assert (
-        "Pooled mana: G 1; only for creature spells; puts a +1/+1 counter on a "
+        "Of the mana above: G 1; only for creature spells; puts a +1/+1 counter on a "
         "non-Human creature spell it casts; expires at step end."
     ) in text
     assert "Combat mana:" not in text

@@ -113,7 +113,7 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
     ]
     _assert_parity(env, obs)
     assert (
-        "Pooled mana: G 1; puts a +1/+1 counter on a non-Human creature spell it casts; expires at step end."
+        "Of the mana above: G 1; puts a +1/+1 counter on a non-Human creature spell it casts; expires at step end."
         in capture_text_decision(env).text
     )
 

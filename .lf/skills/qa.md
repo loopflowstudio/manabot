@@ -74,7 +74,13 @@ publish, land or choose the next Graph step from here.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
-  Stop with SIGINT to the `scripts/play.py` process; it stops both servers.
+  Stop with SIGINT to the `scripts/play.py` Python process (`pgrep -f
+  'scripts/play.py'`); SIGINT to the `./scripts/play` shell wrapper's PID
+  leaves both servers running. To play specific cards, open "Import decklist
+  files", check "Use imported decks for the next game", set both files
+  (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
+  "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
+  New Game; imported decks take any number of copies.
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (its `playwright` package and cached Chromium resolve there; delete the
   script afterwards). Click only `[data-testid=action-panel] button` offers:
