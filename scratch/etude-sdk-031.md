@@ -233,7 +233,10 @@ belong to the caller's later steps. No paid runs.
 Run each with `ETUDE_HOME` set to a fresh temporary directory.
 
 - Names gone: `git grep -nP "\bMatchup\b|HeadToHead|\bSchedulePoint\b|\.clocks\[|\bplaces\(" -- '*.py' ':!tests/fixtures'`
-  prints only `manabot.sim.matchup` names (`AuthoredMatchup`, `DeckMatchup`).
+  prints four lines, all prose about manabot's own deck matchups and none an
+  Etude name (run 2026-11-13 at ac50f9f5a6): `manabot/sim/search/flat_mc.py:407`,
+  `manabot/sim/serving_protocol.py:13`, `manabot/training/update_metrics.py:4`,
+  `tests/training/test_matchups.py:1`.
 - Imports: every `from etude... import` in tracked `.py` files resolves against
   the installed SDK (AST walk; 497 names, 0 missing).
 - Collection: `uv run pytest --collect-only -q tests` errors only in
