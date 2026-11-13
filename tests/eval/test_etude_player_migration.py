@@ -100,7 +100,7 @@ def _scheduled(case: str) -> tuple[str, str, list[Match]]:
     return (
         definition.name,
         "benchmark-fixture",
-        definition.matchups[0].matches(checkpoint),
+        definition.seatings[0].matches(checkpoint),
     )
 
 
