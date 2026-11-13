@@ -1,10 +1,17 @@
-# Assumptions and scope
+# MTG-345 assumptions
 
-- The numerical rejection at attempted update 141 is decisive under the frozen
-  rule. The paid strength evaluation was omitted because it cannot admit BF16;
-  the report states M = 75 and the absence of strength and trajectory comparisons.
-- Keep `BF16_MIN_HIDDEN_DIM = 256` as the measured speed crossover, with
-  `ladder_precision` returning float32 everywhere after rejection, as the Task
-  specifies. Reopening BF16 admission needs another learning result.
-- Earlier A/B choices and launch history remain in git `e181224e7` and the
-  experiment report. No new rental, experiment, or numerical-guard change.
+- The Task brief expects the fix to be "keep the policy head's logits,
+  log-softmax and action log-probability in float32 inside autocast". The
+  failing revision already did that; the retained incident shows a device-vs-host
+  `exp` rounding disagreement on a subnormal probability instead. The plan
+  fixes that cause (stop storing the device `exp` copy). Assumed in scope as
+  "fix it at the cause".
+- The brief says "keep float32's [tolerance] unchanged". The cause is
+  precision-independent, so the same change applies to float32. No remaining
+  tolerance is widened; one comparison is removed with its second operand.
+- The proof run uses the A/B's layout (bucketed, no live tokens) so it is the
+  same recipe that failed; bucketed + live tokens is covered by the on-pod
+  probe only, since USD 5 buys one run.
+- The branch was fast-forwarded to main after PR #510 merged. Main carried
+  MTG-324's `scratch/plan.md`, `qa.html` and `questions.md`; they are removed
+  here (history: `f4e1822fa`).

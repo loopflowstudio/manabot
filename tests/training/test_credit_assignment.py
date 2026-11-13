@@ -324,7 +324,7 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     assert markers(second)[0] == 3
     assert second.values[0, 0] == pytest.approx(-0.5)
     np.testing.assert_allclose(
-        second.observations().probabilities[0, 0, :2], [0.8, 0.2]
+        np.exp(second.observations().log_probabilities[0, 0, :2]), [0.8, 0.2]
     )
 
 

@@ -485,24 +485,37 @@ experiment report has a Numerical health section.
 
 For each legal offer, `log_softmax` gives normalized log probabilities after
 masking padding to negative infinity; legal logs must be finite. Collection
-samples with `torch.multinomial` on their exponentials and stores the weights,
-full logs and chosen-action log likelihood. Learners validate masks, nonempty
-support, zero illegal mass, normalization, agreement between weights and logs,
-legal sampled actions and the saved chosen log. Float32 `exp(-104)` can round
-to zero: a finite legal log with zero weight is accepted only when its own
-exponential rounds to zero. There is no epsilon, floor, mixture,
-renormalization repair or skipped corrupt batch; nonfinite values fail with a
-named invariant. A rounded-zero action cannot be sampled; underflow counts
-expose that limit. Reverse KL uses saved logs with padding removed, and ratios
-exponentiate in float64. The PPO-style learner uses the same contract (no
-`1e-12` KL clamp).
+samples with `torch.multinomial` on their exponentials and stores the full
+logs and the chosen-action log likelihood. The logs are the only stored
+behavior distribution; the sampling weights are not kept. Learners validate
+masks, nonempty support, negative-infinity padding, normalization of the logs,
+legal sampled actions and the saved chosen log. There is no epsilon, floor,
+mixture, renormalization repair or skipped corrupt batch; nonfinite values fail
+with a named invariant.
+
+A legal action may be arbitrarily unlikely. A row whose legal logs are
+
+```text
+max − {0, 6, 15, 93, 94.75}
+```
+
+is admitted: the last two probabilities are float32 subnormals (logs below
+−87.34), and a log below about −103.97 has a float32 probability of zero. An
+action whose weight rounds to zero on the collecting device cannot be sampled;
+the underflow count exposes that limit. No check compares an exponential
+computed on one device with one computed on another: two correct `exp`
+implementations can return neighbouring floats, and one float spacing of a
+subnormal is a relative difference no tolerance should absorb.
+
+Reverse KL uses saved logs with padding removed, and ratios exponentiate in
+float64. The PPO-style learner uses the same contract (no `1e-12` KL clamp).
 
 ### Metrics
 
 | Metric | Population and meaning |
 | --- | --- |
-| `legal_logit_gap_max`, `legal_probability_min` | All collected learner rows before filtering; minimum includes rounded zeros. |
-| `legal_underflow_count` | Legal entries with zero sampling weight and finite logs. A count, not proof of harmless exploration loss. |
+| `legal_logit_gap_max`, `legal_probability_min` | All collected learner rows before filtering. The minimum is the float32 exponential of the stored logs, computed on the host, and includes rounded zeros. |
+| `legal_underflow_count` | Legal entries whose finite log rounds to probability zero in float32. A count, not proof of harmless exploration loss. |
 | `nonfinite_count` | Zero in admitted batches; failures name their invariant. |
 | `actor_rows`, `critic_rows` | Unique selected rows before epoch reuse. Actor-only filtering can leave zero actor rows. |
 | `forced_rows`, `zero_advantage_rows`, `empty_actor_batch` | Forced decisions have zero policy gradient but critic/shared updates can still move parameters. |
@@ -570,7 +583,10 @@ at w384l8 ([measurement](../experiments/cuda_precision.md)). But in the
 after 140 completed updates with `behavior_log_probability_mismatch`.
 That terminal numerical failure rejects BF16 under the pre-registered rule;
 the speed crossover therefore remains inactive. Playing strength was not
-scored, and the failure does not establish a strength difference. The A/B
+scored, and the failure does not establish a strength difference. Its cause
+was independent of precision: a check then compared collection's device
+`exp` of a subnormal legal probability with the host's, which the
+[sampling contract](#sampling-contract) no longer stores or compares. The A/B
 used bucketed shapes without live-token attention; their combination with
 BF16 has no learning admission from this run. TF32 remains explicit too.
 
