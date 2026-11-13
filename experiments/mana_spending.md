@@ -9,8 +9,11 @@ pip (`mana_spend` decisions). Three measurements, on the decks people train on:
   source it did not need (MTG-342). [Results](#results).
 - **What other decision shapes would offer on the same deals.** The choice the
   prompt hides, which sources stay untapped, differs in 63–73% of completely
-  enumerated casts. One flat choice per cast exceeds the 64 policy slots, and
-  folding it into the cast action is larger still.
+  enumerated casts when redundant taps are included. The paired analysis below
+  separates those outcomes from non-redundant source sets; capacity also depends
+  on whether equal-output objects retain exact identity. Without redundant taps,
+  capability D has an exact maximum of 22 with no cast certified above 64; exact identity still
+  certifies 493 casts above 64. Incomplete enumerations remain explicit.
   [Matched payment-shape results](#matched-payment-shape-results).
 - **A small learning pilot**, per-unit prompts against automatic pool spending:
   two seeds per arm, about USD1.4 of rental, no resolved difference.
@@ -92,12 +95,17 @@ uv run python -m experiments.mana_spending shapes --source .runs/mana-spending-c
 uv run python -m experiments.mana_spending summary --source .runs/mana-spending-shapes
 ```
 
-This enumerates fixed-source subsets at every actual payment, then native unit
-spending to completion. Each final remainder must preserve saved payment
-obligations under `PaymentModel`. It includes deliberately producing surplus
-mana. Activated abilities remain explicit native decisions outside this automatic
-boundary; their presence is recorded, and these are not counts of every possible
-mana-ability strategy.
+This enumerates fixed-source subsets at every actual payment, then native unit spending
+to completion. Each final remainder must preserve saved payment obligations under
+`PaymentModel`. It includes deliberately producing surplus mana. The paired capture also
+counts capability and exact-identity outcomes only for non-redundant source sets:
+removing any selected source's whole output must make the current cost unpayable from
+the pool or saved callers infeasible on the post-tap board. This is the over-tap
+counter's criterion, not a ban on all floating mana. Indivisible surplus (Heartbeat) and
+pre-existing pool choices remain. All four counts share the same traversal and cap;
+capped counts are lower bounds, including a zero non-redundant count. Activated
+abilities remain explicit native decisions outside this automatic boundary; their
+presence is recorded, and these are not counts of every possible mana-ability strategy.
 
 Separate columns count untapped-source capabilities, floating pools, native
 receipts and their joint outcomes. Receipts retain all six spent amounts and
@@ -123,7 +131,7 @@ match the frequency run.
 | --- | --- |
 | A, per unit | which pooled unit pays each pip, after automatic tapping (today) |
 | B, automatic | nothing; the first feasible unit pays |
-| C, override | nothing, unless payments differ in outcome; then one choice per cast |
+| C, override | automatic/override entry when outcomes differ, followed by an outcome choice only for a nontrivial override |
 | D, outcome | one choice among distinct outcomes: what stays untapped or floating, and what the spell's receipt records (colors spent, spend effects) |
 | E, folded | the outcome is part of the cast action ("cast X, leaving Forest") |
 
@@ -202,7 +210,7 @@ there were no draws.
 B scored higher on these two early checkpoints. Two training seeds do not
 resolve a learning effect, especially on a recipe where pool prompts are rare;
 this does not establish that automatic spending improves learning. It supplies
-no comparison of the proposed grouped source chooser. Retain A's defaults for
+no comparison of the proposed automatic/override chooser. Retain A's defaults for
 now and take the source-control design to review. The offline aggregation's
 `EXPLAIN` uses scans and hash joins over only this fixed 800-game panel (1,600
 participant rows), taking 0.0029 seconds; it is not a growing application query.
@@ -310,7 +318,7 @@ does not assert that every outcome is strategically useful. Source and receipt
 percentages use only completely enumerated cast payments. Cap hits keep certified
 lower bounds and are included in the adjacent total denominator.
 
-| decks | policy | cast payments | capped | ≥2 joint outcomes, certified | ≥2 untapped-source outcomes, exact | ≥2 receipt variants, exact | identity collapse loses distinctions, exact |
+| decks | policy | cast payments | capped | ≥2 joint outcomes, certified | ≥2 untapped-source outcomes, exact | ≥2 receipt variants, exact | identity exceeds capability, exact (upper bound) |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | elemental | heuristic | 2062 | 99 | 1527/2062 (74.1%) | 1425/1963 (72.6%) | 874/1963 (44.5%) | 1380/1963 (70.3%) |
 | elemental | random | 2589 | 120 | 1932/2589 (74.6%) | 1805/2469 (73.1%) | 1132/2469 (45.8%) | 1708/2469 (69.2%) |
@@ -319,14 +327,17 @@ lower bounds and are included in the adjacent total denominator.
 | heartbeat | heuristic | 134 | 16 | 107/134 (79.9%) | 91/118 (77.1%) | 67/118 (56.8%) | 82/118 (69.5%) |
 | heartbeat | random | 164 | 36 | 143/164 (87.2%) | 107/128 (83.6%) | 73/128 (57.0%) | 93/128 (72.7%) |
 
-The hidden source choice is common: 63–73% of completely enumerated ordinary
-casts leave different fixed-source capabilities available. This contrasts with
-0.11–0.60% of all decisions being today’s pool prompts. Equal-output producers
-also conceal different exact objects in 60–70% of exact ordinary casts; output
-capability alone is not an approved equivalence rule. Activated sources were
-present at 212/18 Elemental and 492/53 TLA cast payments (heuristic/random);
-their activation strategies are outside these fixed-source counts. None of the
-observed cast payments retained a saved caller obligation.
+With redundant tapping allowed, 63–73% of completely enumerated ordinary casts leave
+different fixed-source capabilities available. This contrasts with 0.11–0.60% of all
+decisions being today’s pool prompts. Equal-output producers also conceal different
+exact objects in 60–70% of exact ordinary casts. This is an upper bound on strategically
+meaningful loss: it includes two otherwise identical basic Forests as well as a land and
+a mana creature. PaymentModel's capture contains resource transitions, not complete
+definitions and object state, so it cannot cheaply separate those cases. Output
+capability alone is not an approved equivalence rule. Activated sources were present at
+212/18 Elemental and 492/53 TLA cast payments (heuristic/random); their activation
+strategies are outside these fixed-source counts. None of the observed cast payments
+retained a saved caller obligation.
 
 Counterfactual **all decisions per game** on these A trajectories: B removes
 all spend prompts; C–E replace only cast-payment prompts. C’s range spans
@@ -358,12 +369,14 @@ A uses actual prompts. C is the always-override path
 | heartbeat | heuristic | 2 / 2 / 2 | 2 / 92 / 167 | 19 / 132 / 168 | 37 |
 | heartbeat | random | 2 / 2 / 2 | 2 / 77 / 158 | 19 / 105 / 159 | 49 |
 
-Flat D has completely enumerated casts with **712** capability outcomes.
-Heartbeat’s conditional p95 is 105–132; ordinary-deck conditional p95 is
-49–59. Because 420/9,089 cast enumerations hit the cap, these conditional
-quantiles are not a bound on the full population. There are 422 cast payments
-already certified above 64 outcomes, including capped rows. A 64-slot policy
-cannot use flat D everywhere, even with the optimistic capability collapse.
+Flat D has completely enumerated casts with **712** capability outcomes. Heartbeat’s
+conditional p95 is 105–132; ordinary-deck conditional p95 is 49–59. Because 420/9,089
+cast enumerations hit the cap, these conditional quantiles are not a bound on the full
+population. There are 422 cast payments already certified above 64 outcomes, including
+capped rows. With deliberate redundant tapping included, a 64-slot policy cannot use
+flat D everywhere, even with the optimistic capability collapse. This conclusion does
+not establish the capacity needed when redundant tapping is excluded; the paired
+measurement below addresses that question.
 
 E **full priority offers median / p95 / maximum**, only where every cast at
 that priority window reached an immediate, completely enumerated payment:
@@ -387,6 +400,100 @@ least one cast offer; other priority windows retain their baseline offers.
 Evidence: `current/decks.json`, `current/games.jsonl`, and
 `current/shapes/{metadata.json,shapes.jsonl,summary.json}` under the experiment’s
 artifact directory. The earlier empty failed shape attempt remains local only.
+
+### Paired counts without redundant taps
+
+2026-11-13, source `d18004357a`, rebuilt native SHA256
+`11f90b28c1fdf023cf842216b32f3426ef6b4851b1d5abc86fb46f6bf47c59af`. The paired run
+replayed the same **336 games, 14,775 payments and 9,089 cast payments** at the same
+16,384-visit cap, finishing in 421.48 seconds locally (USD0 rental). Every final digest,
+payment counter and observed spend offer matched the current baseline. A field-by-field
+comparison of all 336 rows also found **every original payment and folded-offer field
+unchanged**, including surplus-inclusive counts, work and cap hits. All fully enumerated
+payments have at least one non-redundant outcome.
+
+“Non-redundant” excludes removable whole-source outputs using the over-tap criterion
+above. It retains unavoidable surplus and existing pooled mana. None of the sampled cast
+payments has saved obligations; the saved-caller criterion is covered by a directed
+native fixture. Capability is the optimistic equal-output collapse; identity retains
+exact objects, including otherwise identical basics. Neither measures an approved
+definition/state equivalence.
+
+D offers below are median / p95 / maximum on fully enumerated casts with at least two
+outcomes **under the column's own definition**; the conditional samples therefore
+differ. Above-64 counts are certified lower bounds over all casts, including capped
+rows. All definitions share the same cap-hit flag: **420/9,089 casts remain
+incomplete**, even when a non-redundant lower bound is small.
+
+| decks | policy | source key | D including redundant taps | D non-redundant | casts >64, including / non-redundant | capped casts |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| elemental | heuristic | capability | 10 / 49 / 204 | 2 / 5 / 9 | 82 / 0 | 99 |
+| elemental | heuristic | identity | 37 / 1793 / 5825 | 6 / 64 / 252 | 648 / 111 | 99 |
+| elemental | random | capability | 10 / 52 / 193 | 2 / 4 / 7 | 79 / 0 | 120 |
+| elemental | random | identity | 37 / 2016 / 4064 | 7 / 56 / 252 | 873 / 119 | 120 |
+| tla | heuristic | capability | 10 / 59 / 712 | 2 / 5 / 22 | 91 / 0 | 111 |
+| tla | heuristic | identity | 37 / 1649 / 4412 | 9 / 84 / 252 | 594 / 163 | 111 |
+| tla | random | capability | 7 / 58 / 632 | 2 / 7 / 19 | 84 / 0 | 38 |
+| tla | random | identity | 23 / 1136 / 4004 | 8 / 70 / 252 | 475 / 98 | 38 |
+| heartbeat | heuristic | capability | 19 / 132 / 168 | 2 / 6 / 6 | 37 / 0 | 16 |
+| heartbeat | heuristic | identity | 91 / 3539 / 3968 | 6 / 36 / 78 | 65 / 2 | 16 |
+| heartbeat | random | capability | 19 / 105 / 159 | 2 / 5 / 6 | 49 / 0 | 36 |
+| heartbeat | random | identity | 97 / 2898 / 4032 | 5 / 27 / 49 | 91 / 0 | 36 |
+
+Non-redundant capability D has an **exact maximum of 22**, with **zero** casts certified
+above 64. Capped rows reach observed lower bounds of 30, not complete counts. Grouping
+is **not implied by these measured capability outcomes**. The 420 incomplete casts
+prevent a claim that all such outcomes fit 64. Retaining exact identity instead
+certifies **493** non-redundant casts above 64 (291 completely enumerated, 202 capped);
+its exact maximum is 252. That includes combinatorial subsets of identical lands. It
+establishes a capacity cost of exact identity, not the strategic value of every
+distinction.
+
+For E, quantiles use the same fully measured priority windows as the original E table;
+unresolved and capped probes remain excluded under both definitions. Above-64 counts
+here count **complete priority windows**, not cast payments. The last column counts
+capped cast probes in all observed windows; unresolved probe counts and complete-window
+denominators are unchanged from the table above.
+
+| decks | policy | source key | E including redundant taps | E non-redundant | complete windows >64, including / non-redundant | capped cast probes |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| elemental | heuristic | capability | 11 / 66 / 408 | 3 / 8 / 21 | 240 / 0 | 227 |
+| elemental | heuristic | identity | 27 / 1409 / 7827 | 7 / 56 / 196 | 1675 / 215 | 227 |
+| elemental | random | capability | 11 / 66 / 545 | 4 / 9 / 23 | 176 / 0 | 228 |
+| elemental | random | identity | 22 / 2125 / 14579 | 7 / 81 / 475 | 1253 / 218 | 228 |
+| tla | heuristic | capability | 6 / 55 / 459 | 4 / 10 / 25 | 54 / 0 | 127 |
+| tla | heuristic | identity | 8 / 888 / 7145 | 6 / 72 / 272 | 350 / 87 | 127 |
+| tla | random | capability | 8 / 112 / 1552 | 5 / 15 / 75 | 254 / 1 | 159 |
+| tla | random | identity | 11 / 1265 / 10622 | 7 / 117 / 552 | 741 / 278 | 159 |
+| heartbeat | heuristic | capability | 20 / 99 / 169 | 4 / 10 / 18 | 28 / 0 | 16 |
+| heartbeat | heuristic | identity | 48 / 2739 / 3969 | 8 / 37 / 89 | 82 / 4 | 16 |
+| heartbeat | random | capability | 32 / 136 / 242 | 4 / 11 / 22 | 72 / 0 | 112 |
+| heartbeat | random | identity | 93 / 3662 / 7845 | 8 / 41 / 90 | 143 / 7 | 112 |
+
+Even with non-redundant capability collapse, E reaches **75** in one complete TLA random
+window. Exact identity reaches 552. These measurements do not resolve announcements at
+the many unresolved windows; folding remains a separate design problem even where its
+menu fits.
+
+The corresponding **all decisions/game** without redundant tapping are below. D's
+interval reflects incomplete enumeration; C's interval also spans accepting automatic
+versus taking every nontrivial override. No group-navigation decisions are included.
+Exact identity and capability are alternative measurement keys, not two successive
+menus. Noncast payments retain their observed behavior.
+
+| decks | policy | D capability | C capability | D identity | C identity |
+| --- | --- | ---: | ---: | ---: | ---: |
+| elemental | heuristic | 317.39–317.54 | 317.39–321.69 | 323.51 | 323.51–339.54 |
+| elemental | random | 226.10–226.24 | 226.10–231.07 | 233.09 | 233.09–252.71 |
+| tla | heuristic | 448.86–449.06 | 448.86–454.96 | 453.09 | 453.09–467.96 |
+| tla | random | 227.35–227.36 | 227.35–232.46 | 231.93 | 231.93–245.96 |
+| heartbeat | heuristic | 83.00–84.25 | 83.00–89.12 | 87.25 | 87.25–98.12 |
+| heartbeat | random | 139.12–142.88 | 139.12–149.50 | 147.88–148.00 | 147.88–161.62 |
+
+Paired evidence is published separately as
+`current/non-redundant-shapes/{metadata.json,shapes.jsonl,summary.json}` in the artifact
+manifest. Original frequency, `current/` baseline and `current/shapes/` bytes are
+preserved. Restore it with the same artifact fetch command above.
 
 ## Prior art checked
 
@@ -413,46 +520,56 @@ measurements.
 
 ## Recommended design
 
-**Recommend a grouped native payment-outcome chooser at the fixed-source
-payment boundary (D), after the spell’s modes, targets, X and cost are known.**
-This is a design for review; implementing it is a separate Task. The learning
-pilot does not test this chooser.
+**Recommend an explicit automatic/override entry followed by a native payment-outcome
+choice (C followed by D), after the spell's modes, targets, X and cost are known.** This
+is a design for review; implementing it is a separate Task. The learning pilot does not
+test this chooser.
 
-Keep one automatic plan as an explicit, bound native choice, describing the
-sources and pool it leaves. Other complete outcomes remain reachable through
-native groups, with branching that fits the 64-slot default. A uniquely
-payable outcome skips as an ordinary trivial decision. An enumerator’s work cap
-must never truncate the real legal action space. Expand groups lazily through
-`PaymentModel`; retain exact source identities, restrictions, expiry, spend
-riders and saved obligations. Equal current mana output alone does not justify
-merging objects. Keep existing explicit mana-ability decisions at their real
-native boundaries; do not model their costs or effects as hypothetical UI steps.
+Keep one automatic plan as an explicit, bound native choice, describing the sources and
+pool it leaves. The paired results support a flat outcome choice on the measured
+non-redundant capability subset; they do not require a grouped chooser there. Exact
+identity or deliberate redundant tapping still produces large menus, so the review must
+settle which distinctions belong in the legal surface before choosing groups. The bound
+automatic plan presupposes MTG-342's fix: today's first-feasible witness over-taps in
+8–15% of ordinary payments and could present a stray float. Whether the override needs
+groups depends on the surplus and source-equivalence choices below. Any groups must be
+native, with branching that fits the 64-slot default and every permitted complete
+outcome reachable. A uniquely payable outcome skips as an ordinary trivial decision. An
+enumerator’s work cap must never truncate the real legal action space. Expand any
+required groups lazily through `PaymentModel`; retain restrictions, expiry, spend riders
+and saved obligations. Preserve exact source identity until an equivalence rule is
+reviewed. Equal current mana output alone does not justify merging a land with a mana
+creature; exact object identity alone can unnecessarily multiply identical-land choices.
+Keep existing explicit mana-ability decisions at their real native boundaries; do not
+model their costs or effects as hypothetical UI steps.
 
-For the **policy**, each group and outcome must have native action descriptors
-for what remains available, the floating pool and the relevant receipt. Keep
-the announced source available to observation and action joins throughout the
-pending choice. Carry
-pending choice state through the same observations, learning tokens and LLM
-text in the change that adds it. Respect the supplied observation capacities;
-never use first-legal truncation to fit this chooser. Grouping can add decisions
-beyond the flat D estimates, which already add roughly 16–24 decisions/game on
-ordinary decks. Whether that helps learning belongs to MTG-265’s study, not to
-these counts or the A-vs-B pilot.
+For the **policy**, each group and outcome must have native action descriptors for what
+remains available, the floating pool and the relevant receipt. Keep the announced source
+available to observation and action joins throughout the pending choice. Carry pending
+choice state through the same observations, learning tokens and LLM text in the change
+that adds it. Respect the supplied observation capacities; never use first-legal
+truncation to fit this chooser. This recommendation pays C's entry/override cost, not
+flat D's one-decision cost. With surplus included and capability collapse, C is
+324.69–341.57 versus A's 306.18 decisions/game on Elemental heuristic, and 235.06–256.07
+versus 211.36 on random; TLA is 453.84–468.94 versus 437.75 and 233.05–247.65 versus
+217.50. The lower end always accepts automatic; the upper end always selects a
+nontrivial override. Required grouping adds further decisions. These are trajectory
+counts, not a measured acceptance rate or learning cost. Learning effects belong to
+MTG-265's study; the A-vs-B pilot does not test this recommendation.
 
-For **Academy**, render those same groups and bound Commands. Labels can say
-“leave this Forest untapped”, “float {R}”, or “spend two colors”; use visible
-object joins to distinguish equal-output sources. Show the automatic plan and
-its automation identity explicitly. Preserve keyboard access, stale rejection,
-reconnect to the actual pending decision, and replay/fork identity. Commit the
-selected sources and receipt through native payment execution once. Group
-navigation supplies no cancellation or undo of already committed costs or
-revealed information.
+For **Academy**, render those same groups and bound Commands. Labels can say “leave this
+Forest untapped”, “float {R}”, or “spend two colors”; use visible object joins for
+distinctions retained by the reviewed equivalence rule. Do not infer that every subset
+of identical basics needs a separate visible offer. Show the automatic plan and its
+automation identity explicitly. Preserve keyboard access, stale rejection, reconnect to
+the actual pending decision, and replay/fork identity. Commit the selected sources and
+receipt through native payment execution once. Group navigation supplies no cancellation
+or undo of already committed costs or revealed information.
 
-Do not flatten outcome products into priority (E): its measured menus already
-exceed capacity, and many costs are not known at that boundary. Keeping A
-leaves the requested source choice hidden. B only removes pooled-unit prompts;
-it does not supply source control. A browser-only override would divide the
-shared policy/Academy contract.
+Do not flatten outcome products into priority (E): even non-redundant capability menus
+reach 75, and many costs are not known at that boundary. Keeping A leaves the requested
+source choice hidden. B only removes pooled-unit prompts; it does not supply source
+control. A browser-only override would divide the shared policy/Academy contract.
 
 The `MANAGYM_EXPERIMENT_AUTOSPEND` switch remains an explicit reproduction
 control for this experiment’s frozen A/B revision. The recommended production
@@ -473,3 +590,27 @@ code, default training behavior or production deployment is changed here.
 - No fixed-tapper run or trained-policy frequency run was performed. Native
   instrumentation attributes redundant output; it does not simulate removing
   a tap's events, other triggers or downstream strategic effects.
+
+## Open review questions
+
+1. **Does the chooser offer deliberate redundant tapping?** The engine has no
+   explicit action for it today. It is rules-legal and occasionally matters.
+   Surplus-inclusive D certifies 422 casts above 64 capability outcomes; the
+   paired non-redundant capability exact maximum is 22 with no cast certified
+   above 64, but 420 capped casts remain unknown. Grouping is not implied on that
+   measured subset. This choice helps determine whether a flat override can
+   suffice or needs groups.
+2. **Which sources count as the same choice?** Exact object identity, or equal
+   definition and state? The paired capability/identity counts bound the offer
+   cost, but neither proves a strategically safe equivalence. Identity includes
+   interchangeable basics; capability alone can merge a creature with a land.
+   Non-redundant exact identity certifies 493 casts above 64, versus zero for
+   capability; this includes identical basics. Definition/state equivalence
+   needs a rules argument before implementation.
+3. **Is the payment-entry cost acceptable?** With surplus included, source
+   capabilities differ at 63–73% of exact ordinary casts; C adds roughly 4–11%
+   decisions/game even when always answered automatic (policy/deck dependent),
+   and override paths add more. Without redundant taps, the capability-keyed
+   always-automatic lower bounds add about 2.5–7.0% on ordinary decks; caps add
+   uncertainty and exact identity raises the cost (see the paired table). Binding
+   override intent at cast selection is another, uncounted interaction design. Learning effects stay with MTG-265.

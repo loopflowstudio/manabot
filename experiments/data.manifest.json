@@ -5914,6 +5914,18 @@
    "sha256": "85d6e7afcc64aca88d94d29a44101073ff8a55c8e5747fc10a21a04ef55bac5b",
    "bytes": 487467
   },
+  "experiments/data/mana_spending/current/non-redundant-shapes/metadata.json": {
+   "sha256": "cb49ac28b39092d1a8f9cad952f118ffdd830005ac39a77480ba058b95b79c3b",
+   "bytes": 337
+  },
+  "experiments/data/mana_spending/current/non-redundant-shapes/shapes.jsonl": {
+   "sha256": "b52be1c50d3aa74adf6417abc2bba2f7b79a28a04997caedd79361aa07f73168",
+   "bytes": 10812516
+  },
+  "experiments/data/mana_spending/current/non-redundant-shapes/summary.json": {
+   "sha256": "7510ccb73278a5f9842587a7a6f15157449999c454d49e5a52d49368704a82f2",
+   "bytes": 21965
+  },
   "experiments/data/mana_spending/current/shapes/metadata.json": {
    "sha256": "cf5169fa2eabf8153a62b414d8f461a0a03d3d671a7e57d8e811d5f42543a80c",
    "bytes": 337
