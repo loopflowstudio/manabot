@@ -544,8 +544,8 @@ the harness runs every state. Defaults are 4, 8 and 16 copies. `restricted-filte
 and `distinct-restrictions` default to 2, 3 and 4: nested-filter search already
 grows sharply there, and the catalog has only four spending restrictions, so
 `distinct-restrictions` accepts no other size and cannot establish a growth
-rate in the number of restrictions. `recorded` has one size. `--sizes 8,16`
-overrides the other states' sizes (1–64), `--layers actions,step` selects
+rate in the number of restrictions. `--sizes 8,16` overrides the other states'
+sizes (1–64), `--layers actions,step` selects
 layers, and `--list` names the cards and known expensive shapes. Do not
 increase a known expensive cell just to make it run longer.
 
@@ -558,19 +558,13 @@ things (`diverse-mana`, `restricted-filter`, `distinct-restrictions`,
 `paid-filter`, `counted-tap`, `waterbend-x`, `triggers`, `zones`, `choices`,
 `names`). Combat states put
 creatures on both sides and measure the pass that resolves damage; payment
-states isolate one player. `recorded` replays the 426 reported actions of
-`managym/tests/fixtures/payment_search/manabot_slow_step.py`, kept byte for
-byte, to reach a board from real play. This requires the recording's action
-ordering: an incompatible engine fails with the step and action index rather
-than rewriting the recording or substituting a different board.
+states isolate one player. Every state is constructed; none replays a recorded
+game ([the reported game](#the-reported-game) says why).
 
 **Layers.** Every checkpoint runs through the same list. Action steps with no
 applicable action and characteristics reads without permanents print no row.
 Preparation reaches combat, cast choices, trigger ordering, a deep stack and
-naming through rules actions; it is outside the measured region. When replay
-completes, the recorded closed-decklist checkpoint reports search as unavailable:
-determinization requires open decklists, and the harness preserves the recording's
-disclosure.
+naming through rules actions; it is outside the measured region.
 
 | Layer | Measures | Work reported |
 |---|---|---|
@@ -633,9 +627,48 @@ already clear.
 
 The harness is not a CI job and asserts no ceiling. Nothing fails when a
 number grows; the table is read by whoever changes the code under it.
-`bench_payment` (`replay <script>` for per-step payment counts, `boards` for
-its source mixes) and `bench_layers` remain for attributing one layer in
-detail once a state has pointed at it.
+`bench_payment boards` (its source mixes) and `bench_layers` remain for
+attributing one layer in detail once a state has pointed at it.
+
+#### The reported game
+
+`managym/tests/fixtures/payment_search/manabot_slow_step.py` is the game that
+exposed slow payment search on large boards: a seed, two 40-card TLA decks and
+426 actions, kept byte for byte as it was reported (SHA-256
+`42c6bec5f6a94fbb189ef40a92c7f197489e75756d3e813eaff063bd996596fa`).
+`bench_payment replay <script>` plays such a script on a scalar `Env` and
+prints the payment work of its heaviest steps.
+
+The recording stores each action as an index into the legal-action list the
+engine offered at that step, so it replays only on an engine that offers the
+same actions in the same order: the v0.2.3-era engine it was recorded against.
+Rules and card changes since then alter those lists, and the current engine
+stops partway through:
+
+```text
+AgentError("Action index 2 out of bounds: 2")
+```
+
+That failure means the engine and the recording disagree about the game, not
+that payment search regressed. To replay the game, build the `v0.2.3` tag in
+its own worktree and give it the script:
+
+```bash
+git worktree add ../manabot-v0.2.3 v0.2.3
+cargo run --release --features benchmark --example bench_payment \
+  --manifest-path ../manabot-v0.2.3/managym/Cargo.toml -- \
+  replay managym/tests/fixtures/payment_search/manabot_slow_step.py
+```
+
+```json
+{"steps":426,"total":{"plans":2100,"calls":9382,"states":7167,"max_plan_calls":180,"max_sources":21,"plans_over_1k":0},"workload":"replay"}
+```
+
+(The output also lists the five heaviest steps, their times and a digest.)
+Do not edit the indices to make a later engine accept them: nothing in the
+file says which action an index meant. A board shape from that game that
+should stay measured is a constructed stress state (`counted-tap`, `diverse-mana`), which names its cards and
+survives engine changes.
 
 ## Releases
 

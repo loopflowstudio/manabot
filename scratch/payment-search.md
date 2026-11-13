@@ -196,18 +196,35 @@ Focused new-state debug check: `cargo run --features benchmark --example
 bench_states --manifest-path managym/Cargo.toml -- distinct-restrictions
 --layers actions` succeeds at all 2/3/4 sizes with debug invariants enabled.
 
+## Recorded-state decision (2026-11-13)
+
+Task comment `9f42783b`, for Jack Heart: "Decision on the recorded state: (b).
+Remove `recorded` from bench_states and its example test; document that the
+reporter recording replays only on its original engine (v0.2.3 era) because
+actions are stored as list indices. Keep the reporter fixture file
+byte-identical and `bench_payment replay` as is. Then gate, open the PR with
+the audit table, the optimisation, the named residual costs (nested-payment
+bound; cross-step payment reuse) and the replay finding, and land it. Shipping
+is approved."
+
+Docs written for it: `docs/development.md` (#stress-states no longer names
+`recorded`; new "The reported game" subsection). No other shipped doc or skill
+names the state. Run evidence: the fixture replays on the `v0.2.3` tag built
+from `git archive` (release, `benchmark`): 426 steps, 2,100 plans, 9,382
+calls, 7,167 states, max 180 calls in a plan, digest `16547847303527648701`.
+The Task brief's 9,371 / 7,161 / 169 are PR #504-era numbers, not this tag's.
+The tag's engine needs the repository's `content/` beside `managym/`.
+
 ## Remaining
 
-1. Decision needed: what `recorded` means now that main cannot replay it.
-   Exact choice: (a) keep the byte-identical fixture and pin the `recorded`
-   state / `bench_payment replay` to a named compatible historical revision,
-   (b) drop the `recorded` state from `bench_states` and say in docs that the
-   recording replays only on its original runtime, or (c) another Task builds
-   a semantic (non-index) recording. Until chosen, the local example test and
-   default all-state audits fail on `recorded`. Do not edit the fixture, skip
-   the test or remap indices without semantic evidence.
-2. Gate, review, PR body with the state x layer table and the optimization,
-   residual reasons (in `--list`) and the replay finding above. Shipping stays
-   held (comment `d55bd16b`); the text `announcement` gap is outside this Task.
+1. Code for (b): remove the `recorded` recipe, `RECORDING` include, its size
+   row and its branches from `managym/examples/bench_states.rs` (lines ~22,
+   41, 220, 230, 474, 825) and the Python script's handling if any; the
+   example construction test then passes. `bench_payment replay`,
+   `benchmark_payments::reporter_game`, the fixture and its Ruff exclusion stay.
+2. Gate, PR body with the state x layer table, the optimization, residual
+   reasons (in `--list`: nested-payment bound; cross-step payment reuse) and
+   the replay finding, then land. The text `announcement` gap is outside this
+   Task.
 
 Earlier replay CI implementation history is retained at `6691ed956:scratch/payment-search.md`.

@@ -18,8 +18,9 @@ docs, all reversible:
 - The audit table goes in the PR body, not a committed report; the docs keep
   only how to produce it.
 
-Shipping remains on hold from comment `d55bd16b`. The fresh-build replay
-compatibility issue below needs resolution before complete validation.
+Shipping was approved and the recorded-state choice settled as (b) in comment
+`9f42783b` (quoted in the plan); the hold from `d55bd16b` and the open issue
+at the end of this file are superseded by it.
 
 Implementation findings (2026-11-13):
 - The restricted-filter recipe uses three card-source spending restrictions
