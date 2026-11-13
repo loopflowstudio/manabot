@@ -17,7 +17,7 @@ launch, track and evaluate it, or bring your own.
 
 - [Run training](#run-training)
 - [Write a recipe](#write-a-recipe)
-- [Recipes with several steps](#recipes-with-several-steps)
+- [Recipes in stages](#recipes-in-stages)
 - [Self-play settings](#self-play-settings)
 - [Experiments](#experiments)
 - [Remote training](#remote-training)
@@ -32,80 +32,105 @@ launch, track and evaluate it, or bring your own.
 
 ## Run training
 
-This cutover requires the Etude run API in
-[Etude PR #103](https://github.com/loopflowstudio/etude/pull/103). SDK 0.2.16
-does not contain it; the release and dependency pin are pending before publication.
+A recipe is a file with a `train(config)` function, and
+[Etude](https://github.com/loopflowstudio/etude) runs it. Everything a run
+records is ordinary files in a directory you own.
 
 ```bash
-uv run manabot train                                         # local: a two-update smoke
-uv run manabot train --recipe elemental --seed 197 --out .runs/elemental
+uv run etude run manabot/recipes/local.py                                # a two-update smoke on CPU
+uv run etude run manabot/recipes/elemental.py --seed 197 --name elemental-197
 ```
 
-The second command trains the current Elemental recipe (damped-policy
-self-play on the ten Elemental decks, both seats learning) and leaves its run in
-the output directory:
+Each command starts a new run and prints its id. The second trains the current
+Elemental recipe (damped-policy self-play on the ten Elemental decks, both
+seats learning) as the run `elemental-197` of the experiment `elemental`, the
+recipe file's name. Local runs are written under `~/.etude/track` (moved by
+`ETUDE_HOME`):
 
 ```text
-.runs/elemental/
-  state.pt              raw weights, EMA, Adam and the update count, rewritten atomically
-  checkpoints/          world-bound raw and EMA policies, named by update and never rewritten
-  game-attempts/        append-only ledgers when game-error handling is configured
-  failures/             private replay evidence, created when a game fails
-  etude/                the Etude run record and its logged rows
+~/.etude/track/elemental/elemental-197/
+  run.json              the job, seed, config and clocks
+  ...                   logged rows and tables
+  out/
+    state/              what the next attempt loads; replaced whole at each save
+      state.json        where each clock stood, the seed, the commit, cumulative counts and the file names
+      learner.pt        raw weights (a `state_dict` written with `torch.save`)
+      optimizer.pt      Adam
+      ema.pt            EMA weights
+    policies/           world-bound raw and EMA policies, named by update and never rewritten
+    game-attempts/      append-only ledgers when game-error handling is configured
+    failures/           private replay evidence, created when a game fails
 ```
 
-The policy a run trained is its last checkpoint: `checkpoints/00003200-ema.pt`
-for a recipe that reached update 3200. Run the same command again to resume:
-the training function reads `state.pt` and carries on from the update it
-records. One that already reached its target does nothing and ends finished.
-`--steps` is a deprecated, hidden alias for `--updates` and will be removed in
-Manabot 0.3.0.
+The policy a run trained is its last checkpoint: `out/policies/00003200-ema.pt`
+for a recipe that reached update 3200. `state/` reads with `json` and
+`torch.load`, without Etude or manabot.
 
-`--updates N` sets only the stop target. Unlike the old `--steps`, it leaves
-the recipe's own update count, which fixes local and baseline rates and the
-checkpoint grid, unchanged: `--recipe baseline --updates 32` runs the first
-quarter of its 128-update schedule. Run a finished recipe again with a larger
-`N` and it trains on from where it ended and writes a later checkpoint beside
-the earlier ones, which stay as they were. Choose a new `--out` for a
-new run; reusing one continues it, and a directory whose `state.pt` was
-written for other settings, another seed or another world is refused before
-training, naming what differs. Without `--out` a recipe uses
-`.runs/<recipe>-<seed>`, so repeating the command resumes that run. The `local`
-smoke is the exception: it writes a fresh timestamped directory under `.runs/`
-each time, because it checks an installation and keeps nothing worth resuming.
-A command stopped by a stop request or at its deadline saves its state, prints
-the update it reached and exits 75, the status Etude gives a planned stop; run
-it again to carry on.
+| Option | Sets |
+| --- | --- |
+| `--config JSON` | Fields of the recipe's config; the rest keep their defaults. `--config '{"device": "cuda", "streams": 64}'` |
+| `--seed N` | The run's seed (0 when omitted). The seed is the run's, never a config field. |
+| `--name NAME` | The run's id. It must be new within its experiment: a taken name is refused, never resumed. |
+| `--until updates=N` | Where this run stops, in place of the recipe's own update count. |
+| `--seconds N` | A deadline. A run that reaches it saves its state and stops. |
+| `--resume RUN` | Another attempt of an existing run instead of a new one ([recovery](#recovery)). |
 
-Ctrl-C exits 130 and prints the output directory to reuse. Rerun with that
-`--out` to resume from the last saved state; work since that save is lost.
+The command exits 0 when the run finished, 75 when it saved and stopped on
+purpose (a deadline or a stop request), and with another status when it
+failed. A run that ended without finishing, whether it stopped, failed or was
+interrupted with Ctrl-C, is carried on with `--resume`:
 
-`--recipe local` is the default: a two-update smoke on CPU with no evaluation,
-for checking an installation. `--device cpu|mps|cuda` overrides the recipe's
-device; without it a recipe uses CUDA when available and CPU otherwise.
-`uv run manabot train --list` names every recipe the CLI can run: ours in
-`manabot.recipes`, and each experiment module's recipe functions as
-`<experiment>` for modules exposing `train(config)`. An explicitly named
-`<experiment>:<function>` also accepts a function with one typed Pydantic config.
-Its run records under the experiment module's name, with a default output
-directory of `.runs/<experiment>-<function>-<seed>` so different functions keep
-separate runs.
-Frozen zero-argument regime builders are data readers, not executable recipes.
+```bash
+uv run etude run manabot/recipes/elemental.py --resume elemental-197
+```
+
+That is a new attempt of the same run on the current code, from its last saved
+state, with the config and seed the run recorded. Work since that save is
+repeated. `--resume` refuses a finished run, and refuses a config or seed that
+differs from the run's, naming the fields. To train a finished run further,
+continue it as a new run that starts from the first one's state:
+
+```bash
+uv run etude continue --run elemental-197 --until updates=6400
+```
+
+`--until updates=N` sets only the stop target. It leaves the recipe's own
+update count, which fixes the baseline rates and the checkpoint grid,
+unchanged: `manabot/recipes/baseline.py --until updates=32` runs the first
+quarter of its 128-update schedule
+([schedules and clocks](#schedules-and-clocks)).
+
+The recipes we maintain are the files in `manabot/recipes/` that define
+`train`: `local.py` (a two-update smoke with no evaluation, for checking an
+installation), `baseline.py`, `elemental.py`, and `belief_policy.py` with
+`belief_sampler.py` ([recipes in stages](#recipes-in-stages)). An experiment
+file that defines `train` runs the same way
+(`uv run etude run experiments/batched_baseline.py`). A recipe's device is a
+config field with the recipe's own default (`cpu` for local and Elemental,
+`cuda` for baseline); nothing selects a device automatically. Frozen
+zero-argument regime builders are data readers, not executable recipes.
+
+`manabot train` is removed. It exits naming the `etude run` command above. Its
+`--out` directories, which kept the learner in one `state.pt`, are not read
+by this loop and there is no loading path for them; the last revision that
+resumes one is `f577362135562e569033fe33e48c7ef0411a829d`. Their policy
+checkpoints load as before.
 
 CPU is the default and recommended device on Apple Silicon. On a quiet Apple
 M2, MPS was slower than CPU for collection at every measured batch size, only
 tied 8-thread CPU for learning, and its driver memory grew past 20 GB within a
 few learner steps; `torch.compile` and fixed minibatch sizes did not change
-that. MPS is admitted on explicit request (`--device mps`) for float32
-self-play and requires Torch 2.15 or newer: on an Apple M2, Torch 2.10–2.13
-compute wrong MPS linear-layer weight gradients, which gradient clipping then
-applies (see `manabot/training/mps.py`). The repository lock installs 2.15;
-with an older Torch, `--device mps` stops before training with a message
-naming both versions. An unavailable device fails explicitly. Reduced precision
-remains CUDA-only. Belief inputs and frozen opponents are unsupported on MPS.
-Evaluation and search stay on CPU. A separate [MLX backend](../manabot/backends/mlx.md)
-of the policy and the damped update reads the same checkpoints, converted to
-the shared container, for measurement on Apple Silicon; no recipe runs on it. This support makes no speed or strength claim.
+that. MPS is admitted on explicit request (`--config '{"device": "mps"}'`) for
+float32 self-play and requires Torch 2.15 or newer: on an Apple M2, Torch
+2.10–2.13 compute wrong MPS linear-layer weight gradients, which gradient
+clipping then applies (see `manabot/training/mps.py`). The repository lock
+installs 2.15; with an older Torch, an MPS run stops before training with a
+message naming both versions. An unavailable device fails explicitly. Reduced
+precision remains CUDA-only. Belief inputs and frozen opponents are unsupported
+on MPS. Evaluation and search stay on CPU. A separate
+[MLX backend](../manabot/backends/mlx.md) of the policy and the damped update
+reads the same checkpoints, converted to the shared container, for measurement
+on Apple Silicon; no recipe runs on it. This support makes no speed or strength claim.
 
 ### Saved regimes
 
@@ -113,36 +138,32 @@ Before recipes were functions, a run was a saved `TrainingRegime` executed by
 `execute_regime`. Saved regime files, their `run.json` records and their
 checkpoints stay readable: `manabot.training.records` reads every retained
 record and `load_checkpoint` loads every world-bound checkpoint as before,
-with serialized keys unchanged. They no longer execute. Their last executor revision is
-`f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. `manabot train
---regime FILE` and `--regime-name` refuse, naming the last revision that runs
-them. For an exact reproduction, use the experiment’s recorded revision and
-lock; the revision above retains the executor before this cutover.
+with serialized keys unchanged. They no longer execute. Their last executor
+revision is `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. For an exact
+reproduction, use the experiment's recorded revision and lock; the revision
+above retains the executor.
 
 ## Write a recipe
 
 A recipe is a training function: `train(config)`, an ordinary typed function
-whose body shows what runs. It declares its run with Etude's `track`, reads
-its run directory and target from the run, and calls a loop. Nothing wraps it;
-the command line and a launched job both simply call it. The config holds only
-what varies between runs of the recipe. Everything else is code in the
-function. This is the Elemental recipe (abridged: its optional CUDA numerics
-gate, `validate_numerics`, is left out):
+whose body shows what runs. It opens its run with Etude's `track` and calls a
+loop. Nothing wraps it; `etude run` and a launched job both simply call it.
+The config holds only what varies between runs of the recipe, and never the
+seed. Everything else is code in the function. This is the Elemental recipe
+(abridged: its optional CUDA numerics gate, `validate_numerics`, is left out):
 
 ```python
 # manabot/recipes/elemental.py
 from typing import Literal
 
-from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import BaseModel, Field
 
 from manabot.recipes.builders import elemental_self_play
-from manabot.training.loops.self_play import self_play
+from manabot.training.loops.self_play import CLOCKS, self_play
 
 
 class ElementalConfig(BaseModel):
-    seed: int = 197
     updates: int = Field(default=3200, ge=1)
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     streams: int = Field(default=256, ge=2)
@@ -152,143 +173,128 @@ def train(config: ElementalConfig) -> None:
     settings = elemental_self_play().model_copy(
         update={"device": config.device, "streams": config.streams}
     )
-    with track(
-        clocks=[
-            Step("updates", "collection/update iterations"),
-            Time("training_seconds", "active collection and learning seconds"),
-        ],
-        seed=config.seed,
-        config=config.model_dump(mode="json"),
-    ) as run:
-        updates = int(run.until("updates", default=config.updates))
-        self_play(settings, run.out, seed=config.seed, updates=updates, run=run)
+    with track(clocks=CLOCKS, config=config) as run:
+        self_play(settings, run, updates=config.updates)
+```
+
+What Etude asks of a recipe:
+
+- The config is a Pydantic model. There is no Etude base class and no required
+  field. It survives a trip through JSON, because that is how it reaches a
+  rented machine; Etude checks this at launch and refuses there.
+- `train` takes that one parameter, annotated with the config's type, and sits
+  at the top level of an importable file.
+- A job has no seed; a run is a job with a seed. The loop reads `run.seed`.
+
+Calling `train(config)` is one attempt at the whole job. It returns (the run
+finished), raises `Stopped` (it saved and left on purpose; it is called
+again), or raises anything else (the run failed).
+
+`CLOCKS` are the two x-axes every self-play run declares:
+
+```python
+CLOCKS = [
+    Step("updates", "collection/update iterations"),
+    Time("training_seconds", "active collection and learning seconds"),
+]
 ```
 
 The `updates` clock counts collection/update iterations: one batch collected
 and learned from. It is not a count of `optimizer.step()` calls, which a run
 logs separately ([costs and counters](#costs-and-counters)).
 
-Etude supplies the parts that are true of any training run, and the function
-asks for them where it uses them:
-
-| From Etude | What the function gets |
-| --- | --- |
-| `track(...)` | The run: its record, seed, config and clocks. Leaving the block finishes the attempt, as `stopped` when the block raised `Stopped` and as failed on any other exception. |
-| `run.out` | The run's directory, the same on every attempt. Under a launch Etude carries its files to storage as they are written and restores them before an attempt on another machine. |
-| `run.until("updates", default=...)` | The absolute update to train to: the launch's target when it names one (a retry or `etude continue`), otherwise the recipe's own. |
-| `run.stopping()` | True once a stop was requested or the attempt's deadline is nearer than the slowest update so far. |
-| `run.log`, `run.log_table`, `run.checkpoint` | Metric rows, row tables and checkpoints in the run's record. |
-| `run.latest_checkpoint()` | The last recorded checkpoint, including its complete clock coordinate in `.at`, or `None` when none has been recorded. |
-| `Stopped` | Raised by a loop that saved its state short of its target. Under a launch the function is called again while the run has hours, dollars and attempts left. |
-
-`track` names no experiment. Under `etude launch` the run belongs to the
-experiment file that launched it, and `uv run manabot train --recipe elemental`
-records it under the recipe's name. Naming one in the recipe would stop every
-other experiment file from launching it: Etude refuses a run whose `track`
-names a different experiment from its launch.
-
-The command line calls the function the way a launch does, through Etude's
-`local_launch`, which names the run directory and experiment for every `track`
-in its block:
-
-```python
-from etude.train.run import local_launch
-
-from manabot.recipes.elemental import ElementalConfig, train
-
-with local_launch(out=".runs/elemental", experiment="elemental"):
-    train(ElementalConfig(seed=197))
-```
-
 `self_play` (`manabot.training.loops.self_play`) is the loop every current
 recipe uses. Read it as the template for your own; its body is the loop you
-would write (shown without its game-error ledger, failure capture and outcome
-table):
+would write:
 
 ```python
-def self_play(
-    settings: SelfPlay, out: Path, *, seed: int, updates: int, run: Tracker | None = None
-) -> Path:
-    state = load_state(out / "state.pt", settings, seed) or new_state(settings, seed)
-    if state.update >= updates:
-        return record_checkpoint(out, state, run)  # covers a crash before recording
-    if is_checkpoint(settings, state.update):
-        save_state(out / "state.pt", state)
-        record_checkpoint(out, state, run)  # repair a saved milestone before training on
-    base = state.counts  # earlier attempts' work; this collector's totals add to it
-    rng = np.random.default_rng(seed + MINIBATCH_SEED + state.update)
-    collector = self_play_collector(settings, seed=seed, start=state.update)
-    seed_random(seed + state.update)
-    try:
-        while state.update < updates and not (run and run.stopping()):
-            state, row = step(state, collector, rng, base=base)
-            if run:
-                run.log(row, **clocks(state))
-            checkpoint_due = state.update < updates and is_checkpoint(settings, state.update)
-            if checkpoint_due or state.update % settings.save_every == 0:
-                save_state(out / "state.pt", state)
-            if checkpoint_due:
-                record_checkpoint(out, state, run)
-    finally:
-        close_collector(collector)
-    save_state(out / "state.pt", state)
-    if state.update < updates:
-        raise Stopped
-    return record_checkpoint(out, state, run)
+def self_play(settings: SelfPlay, run: Run, *, updates: int) -> Path:
+    """Train to the run's update target and return the final policy's path."""
+    with device_settings(settings):
+        learner, ema = create(settings, seed=run.seed)
+        counts = run.resume(
+            learner=learner.agent, optimizer=learner.optimizer, ema=ema, extra=Counts()
+        )
+        with self_play_games(settings, run) as collector:
+            if counts.updates == 0:
+                publish(run, learner, ema, counts)  # the untrained policy
+            for update in run.steps("updates", to=updates):
+                counts, row = step(settings, learner, ema, collector, counts)
+                run.log(row, training_seconds=counts.training_seconds)
+                run.log_table(
+                    OUTCOME_TABLE,
+                    collector.stats.self_play.drain(),
+                    training_seconds=counts.training_seconds,
+                )
+                run.save()
+                if is_checkpoint(settings, update):
+                    publish(run, learner, ema, counts)
+        return publish(run, learner, ema, counts)
 ```
 
 It returns the policy it trained: the EMA checkpoint of its last update when
-the learning record keeps an EMA, the raw one otherwise.
+the learning record keeps an EMA, the raw one otherwise. There is no resume
+branch, stop check or state file in it. Those are the run's:
 
-The pieces it uses:
+| From Etude | What the loop gets |
+| --- | --- |
+| `track(clocks=, config=)` | The run. Leaving the block finishes the attempt: as stopped when the block raised `Stopped`, as failed on any other exception. |
+| `run.seed` | This run's seed. |
+| `run.resume(**objects, extra=)` | Registers what the run keeps, anything with `state_dict()` and `load_state_dict()`, and loads the last save into it. `extra` is a Pydantic model for the loop's own numbers, here `Counts`; it comes back as saved, or as given on a fresh run. |
+| `run.steps("updates", to=)` | Counts from the resumed update to the target: the launch's (`--until`, a continuation) or else `to`. When a stop is asked for or the deadline is near, the current pass finishes and the next raises `Stopped`, so the lines after the loop run only when the target was reached. |
+| `run.save()` | Called every pass. Etude writes the registered objects when a save is due and always on the last pass before a stop; a write replaces the previous state whole or not at all. |
+| `run.log`, `run.log_table` | Metric rows and row tables on the declared clocks. The stepped clock is filled in; the loop passes `training_seconds`. |
+| `run.checkpoint(path)` | Publishes an immutable policy with where every clock stood. Evaluations, reports and other runs read these. |
+| `run.out` | The run's directory, the same on every attempt. Under a launch Etude carries it to storage as it is written and restores it before an attempt on another machine. |
+| `run.input(name)` | A file this run was given at launch, checked by digest ([recipes in stages](#recipes-in-stages)). |
+
+`track` names no experiment. Under `etude launch` the run belongs to the
+experiment file that launched it, and `etude run` records it under the recipe
+file's name.
+
+The pieces that are manabot's:
 
 | Piece | What it does |
 | --- | --- |
-| `SelfPlay` | The loop's settings: match and decks, model and observation configs, the update and its learning record, streams, transitions, learning seats, batch closure, game-error policy, workers, device, precision, `save_every` and `checkpoint_every`. A Pydantic model holding data only; everything the loop does with it is a function. A recipe builds one in its body (`elemental_self_play()`); its digest is saved in `state.pt`. |
-| `new_state(settings, seed)` | Fresh weights from `seed`, EMA as a copy, a fresh Adam, update 0. |
-| `load_state(path, settings, seed)` | The saved learner, or `None` when `path` does not exist. Refuses a state written for other settings, another seed or another world, naming what differs. `device`, `workers` and `threads` may change between attempts. The target `updates` is not part of the state, so a later target carries on; a schedule's horizon is a learning setting, so a changed horizon is refused. |
-| `save_state(path, state)` | Writes raw weights, EMA, Adam, the update count and the source revision to a temporary file, then renames it over `path`. A crash leaves the previous state whole. |
-| `save_checkpoint(directory, state)` | World-bound raw and EMA policies at this update (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`; returns the EMA path when the learning record keeps an EMA and the raw path otherwise. A file is written once: when it already exists for this update the path is returned and nothing is rewritten, because Etude records a checkpoint inside `run.out` where it is and readers verify its digest. |
-| `record_checkpoint(out, state, run)` | `save_checkpoint` into `out / "checkpoints"`, then `run.checkpoint(path, **clocks(state))`. Recording an update again keeps its file and its one record at that coordinate. The loop adds no `final` tag: Etude's `TrainingRun.final` is the last checkpoint of a finished run. |
-| `self_play_collector(settings, seed=, start=)` | A `Collector` (`open_collector` in `manabot.training.rollout.collection`) whose streams are seeded from the run seed and the update it starts at, so a resumed loop plays fresh, reproducible games. Sampling (`seed_random`) and minibatch order are reseeded the same way. With `start=0` these use the retired executor's seed offsets. A two-update CPU comparison against the retired executor after the backend merge produced bitwise-equal raw and EMA weights for PPO and damped policy (seed 197, two streams); this does not promise uninterrupted equivalence after resume. |
-| `clocks(state)` | Both coordinates of this update: `updates` and `training_seconds`, the completed updates' active collection and learning time. Pass all declared clocks to metrics, tables and checkpoints. |
-| `step(state, collector, rng, base=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `LoopState` (update and counts replaced; the learner, Adam and EMA are updated in place) with its metric row. |
-| `learn(state, batch, rng)` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the state alone: damped-policy schedules read the absolute iteration, PPO schedules read `state.update / horizon`, and neither reads the target ([schedules and clocks](#schedules-and-clocks)). |
-| `Tracker` | What a loop asks of a tracker: `log(values, **clocks)`, `log_table(name, rows, **clocks)`, `checkpoint(path, **clocks)` and `stopping()`. Etude's `Run` is one; pass `None` to train with no tracking. |
-| `Stopped` | Etude's planned-stop exception (`etude.stopping.Stopped`); the loop raises it after saving, short of its target. |
+| `SelfPlay` | The loop's settings: match and decks, model and observation configs, the update and its learning record, streams, transitions, learning seats, batch closure, game-error policy, workers, device, precision and `checkpoint_every`. A Pydantic model holding data only; everything the loop does with it is a function. A recipe builds one in its body (`elemental_self_play()`). |
+| `create(settings, seed=)` | A `Learner` (model and Adam) with fresh weights from `seed`, and the EMA as a copy, or `None` when the learning record keeps none. `run.resume` then loads a saved run over them. |
+| `Counts` | Cumulative work across every attempt: completed updates, `training_seconds`, games, decisions, learner transitions and optimizer calls. A Pydantic model, saved in `state.json`. |
+| `self_play_games(settings, run)` | A context manager around the `Collector` (`open_collector` in `manabot.training.rollout.collection`), the game-error ledger and failure capture under `run.out`. Streams, sampling and minibatch order are seeded from `run.seed` and the update the attempt starts at, so a resumed loop plays fresh, reproducible games. |
+| `step(settings, learner, ema, collector, counts)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `Counts` with the metric row. The learner, Adam and EMA are updated in place. |
+| `learn` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Rates come from the completed update count alone and never from the target ([schedules and clocks](#schedules-and-clocks)). |
+| `publish(run, learner, ema, counts)` | Writes world-bound raw and EMA policies at this update into `run.out / "policies"` (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`, and records the one the loop returns with `run.checkpoint(path)`. A file is written once; publishing an update again keeps its file and its one record. |
 
-`run.stopping()` is asked once per update. The loop then saves its state and
-raises `Stopped`, and the next call carries on from that update. There is no
-separate resume path: the first attempt, a retry after a lost machine and a
-run continued to a later target are all the same call.
+The loop takes Etude's `Run`; there is no untracked path through it. The
+updates and pieces it calls need no run
+([training loops](training-loop.md)), and
+[`loops/minimal.py`](training-loop.md#a-complete-self-play-loop) is a whole
+resumable loop in about ninety lines to copy from.
 
-Without Etude, call the loop yourself and keep what it returns:
+## Recipes in stages
 
-```python
-from pathlib import Path
-
-from manabot.recipes.builders import elemental_self_play
-from manabot.training.loops.self_play import self_play
-
-policy = self_play(elemental_self_play(), Path(".runs/mine"), seed=3, updates=64)
-```
-
-## Recipes with several steps
-
-A recipe with several steps passes file paths from one step to the next. Each
-step writes its output atomically and returns at once when that output already
-exists, so a recipe resumed after any failure skips the steps it finished. A
-step's output is named for the input it was made from, so a policy trained
-further is a new file and the steps after it run again rather than reusing
-what an earlier policy produced. The belief recipe trains a policy, collects
-hidden-hand histories with it and fits a sampler:
+A recipe whose later stage reads an earlier stage's result is two jobs, and
+the second names the first as its start. Split this way when the stages want
+different machines or budgets, when several runs start from one, or when the
+earlier result is evaluated on its own. The belief recipe trains a policy,
+then collects hidden-hand histories with it and fits a sampler:
 
 ```python
 # manabot/recipes/belief_sampler.py
+from decimal import Decimal
+
+from etude.jobs import training
+from etude.launch.records import Job
+from etude.train.records import Step
+from etude.train.run import track
+from pydantic import BaseModel, Field
+
+from manabot.belief.collect import collect_belief
+from manabot.belief.train import SamplerConfig, train_belief
+from manabot.recipes import belief_policy
+from manabot.recipes.belief_policy import PolicyConfig
+
+
 class BeliefConfig(BaseModel):
-    seed: int = 197
-    updates: int = Field(default=1, ge=1)
-    device: Literal["cpu", "mps", "cuda"] = "cpu"
     games: int = Field(default=3, ge=3)
     max_steps: int = Field(default=1000, ge=1)
     sampler: SamplerConfig = SamplerConfig(
@@ -297,70 +303,64 @@ class BeliefConfig(BaseModel):
 
 
 def train(config: BeliefConfig) -> None:
-    settings = gray_ogre_self_play(horizon=config.updates).model_copy(
-        update={"device": config.device}
-    )
-    with track(
-        clocks=[
-            Step("updates", "collection/update iterations"),
-            Time("training_seconds", "active collection and learning seconds"),
-        ],
-        seed=config.seed,
-        config=config.model_dump(mode="json"),
-    ) as run:
-        updates = int(run.until("updates", default=config.updates))
-        policy = self_play(
-            settings, run.out / "policy", seed=config.seed, updates=updates, run=run
-        )  # policy/checkpoints/00000001-raw.pt
-        policy_record = run.latest_checkpoint()
-        if policy_record is None:
-            raise RuntimeError("policy checkpoint was not recorded")
+    with track(clocks=[Step("steps", "sampler gradient steps")], config=config) as run:
+        policy = run.input("start")  # the policy run's final checkpoint
         histories = collect_belief(
             policy,
-            run.out / f"histories-{policy.stem}.json",
-            match=root_match(settings),
+            run.out / "histories.json",
+            match=belief_policy.match(),
             games=config.games,
-            seed=config.seed,
+            seed=run.seed,
             max_steps=config.max_steps,
         )
-        sampler = train_belief(
-            histories, run.out / f"belief-{policy.stem}.pt", config.sampler, seed=config.seed
-        )
-        run.checkpoint(sampler, tags=("belief",), **policy_record.at)
+        sampler = train_belief(histories, run.out / "belief.pt", config.sampler, seed=run.seed)
+        run.checkpoint(sampler, steps=config.sampler.steps)
+
+
+def runs() -> list[Job]:
+    policy = training(
+        belief_policy.train, config=PolicyConfig(), seeds=(197,), max_hours=1, max_usd=Decimal(1)
+    )
+    sampler = training(
+        train, config=BeliefConfig(), start=policy, seeds=(197,), max_hours=1, max_usd=Decimal(1)
+    )
+    return [policy, sampler]
 ```
 
-A later step's output is recorded at the complete clock coordinate of the
-policy it was made from (`policy_record.at`).
-
-Its defaults are a pilot's: one update, three games and a small sampler, enough
-to exercise every step in seconds.
+`manabot/recipes/belief_policy.py` is an ordinary one-stage recipe: PPO
+self-play on the Gray Ogre match, whose rates follow the horizon the recipe
+states (`gray_ogre_self_play(horizon=config.updates)`). `start=policy` gives
+each sampler run the final checkpoint of the policy run with its seed, checked
+by digest, and records that edge between the two runs. The sampler run starts
+only when that policy run has finished.
 
 ```bash
-uv run manabot train --recipe belief --out .runs/belief
-uv run manabot train --recipe belief --out .runs/belief --updates 2
+uv run etude smoke manabot/recipes/belief_sampler.py
+uv run etude launch manabot/recipes/belief_sampler.py
 ```
+
+Its defaults are a pilot's: one update, three games and a small sampler, enough
+to exercise both stages in seconds. Each stage's files are in its own run:
 
 ```text
-.runs/belief/
-  policy/checkpoints/00000001-raw.pt   policy/checkpoints/00000002-raw.pt
-  histories-00000001-raw.json          histories-00000002-raw.json
-  belief-00000001-raw.pt               belief-00000002-raw.pt
+belief_sampler/policy-seed-197/out/policies/00000001-raw.pt
+belief_sampler/sampler-seed-197/out/histories.json
+belief_sampler/sampler-seed-197/out/belief.pt
 ```
 
-The second command trains the same learner one update further and runs the
-later steps again for the new policy; nothing made from the earlier policy is
-overwritten or mistaken for the later one's. This recipe's policy learns with
-PPO, whose rates follow a horizon the recipe states (`horizon=config.updates`),
-so the first update is the same whether the run stops there or is extended.
-The second update lies past that one-update horizon and uses the final rates
-([schedules and clocks](#schedules-and-clocks)).
+A policy trained further is another run (`etude continue`), and a sampler for
+it is another sampler run started from it; nothing made from the earlier
+policy is overwritten or mistaken for the later one's.
 
 `collect_belief` (`manabot.belief.collect`) plays `games` complete games with a
 frozen policy and writes each viewer's history with its private hand label;
 `train_belief` (`manabot.belief.train`) fits the sampler on them. Neither
-changes the policy. To start from a published policy rather than training one,
-pass its checkpoint path in place of `policy`; `load_checkpoint` checks that it
-belongs to this world and these model and observation configs.
+changes the policy, and neither keeps state: an interrupted sampler run
+collects and fits again when resumed. `load_checkpoint` checks that the start
+policy belongs to this world and these model and observation configs.
+
+Phases that share one run and each keep state of their own pass `name=` to
+`run.resume` and `run.save`. No current recipe needs it.
 
 ## Self-play settings
 
@@ -395,7 +395,7 @@ evaluation output with its own clock. The selection rule is
 
 ### Schedules and clocks
 
-The target (`updates`, `--updates`, `etude continue --until`) says where
+The target (`updates`, `--until updates=N`, `etude continue --until`) says where
 training stops and nothing else. Rates are set by the learning record, so the
 updates a run has already made are the same whatever target it is later given:
 
@@ -414,11 +414,10 @@ DampedPolicyLearning(gradient="damped_policy", iteration_schedule=IterationSched
 `Learning.horizon` is required for self-play: `SelfPlay` refuses a PPO record
 without one, naming the field, because there is no target-independent default.
 A recipe sets it from its own update count
-(`gray_ogre_self_play(horizon=config.updates)`). The horizon is part of the
-learner's settings in `state.pt`, so resuming with a different one is refused
-like any other changed setting; to train under another horizon, start a new
-run. Extending a run past its horizon is allowed and trains on at the final
-rates. An unset `horizon` is omitted from serialization, so saved regimes that
+(`gray_ogre_self_play(horizon=config.updates)`), so the horizon follows a
+config field and resuming under another is refused like any other changed
+config; to train under another horizon, start a new run. Extending a run past
+its horizon is allowed and trains on at the final rates. An unset `horizon` is omitted from serialization, so saved regimes that
 hold a `Learning` record keep their bytes; their stages took progress from the
 stage's own length and run only from the revision
 [saved regimes](#saved-regimes) names.
@@ -503,12 +502,13 @@ results are frozen-policy associations, not causal filter benefits.
 
 ### Reuse a published policy
 
-A step that reads a policy takes a checkpoint path, so a published policy is
-used by passing its file where a recipe would pass the one it trained:
+A stage that reads a policy takes a checkpoint path, so a published policy is
+used by passing its file where a recipe would pass the one its run was started
+from:
 
 ```python
 histories = collect_belief(Path("inputs/producer-ema.pt"), run.out / "histories.json",
-                           match=match, games=256, seed=config.seed)
+                           match=match, games=256, seed=run.seed)
 ```
 
 `load_checkpoint` refuses a checkpoint from another world or with other model
@@ -535,30 +535,35 @@ An experiment file keeps its explicit functions: `train(config)` is what a run
 does, `runs()` declares what to launch, `eval(state)` says which matches its
 checkpoints should play and `report()` draws them
 ([experiment files](../experiments/README.md#etude-experiment-files)). `runs()`
-returns Etude runs whose training job calls the training function with a config:
+returns the jobs to launch. A job is the training function and its config;
+each of its seeds is one run:
 
 ```python
 # experiments/<name>.py
 from decimal import Decimal
 
 from etude.jobs import training
-from etude.launch.records import Run
+from etude.launch.records import Job
 
 from manabot.experiment.setup import machine_setup
 from manabot.recipes.elemental import ElementalConfig, train
 
 
-def runs(revision: str) -> list[Run]:
+def runs(revision: str) -> Job:
     return training(
         train,
         config=ElementalConfig(updates=3200, device="cuda", validate_numerics=True),
         smoke=ElementalConfig(updates=1, device="cpu", streams=2),
+        seeds=(197, 198),
         revision=revision,
         setup=machine_setup(" --extra artifacts"),
         max_hours=12,
         max_usd=Decimal(9),
-    ).runs(197, 198)
+    )
 ```
+
+One job with two seeds is two runs, named for the job and the seed. A name
+already taken in the experiment is refused before anything is rented.
 
 An experiment whose training differs from a maintained recipe defines its own
 `train(config)` at the top of the file, with its own small config, and passes
@@ -578,7 +583,9 @@ run, seed and attempt from the launch, and `run.out` is the run's directory,
 which Etude carries to storage as the function writes it and gives back, whole,
 to the next attempt. An attempt that raised `Stopped`, or lost its machine, is
 called again while the run has hours, dollars and attempts left; any other
-exception ends the run as failed. Runs track under the experiment file's stem,
+exception ends the run as failed. A run that ended unfinished is brought back
+with `uv run etude launch experiments/elemental.py --resume RUN`, as another
+attempt of the same run on the current code. Runs track under the experiment file's stem,
 so that file's `eval(state)` and `report()` find them; every milestone
 checkpoint is recorded with `run.checkpoint`, so Etude evaluation can follow
 during training.
@@ -596,35 +603,35 @@ Pick the machine at launch (`--pool`, `--rent`); read progress with
 `etude status`, `etude logs` and `etude usage`. To train an existing run
 further, `etude continue --run RUN --until updates=6400` makes a child run that
 starts from a copy of the parent's `run.out` with the same config;
-`run.until` returns the new target, so the config does not change.
+`run.steps` counts to the new target, so the config does not change.
 See Etude's
 [launcher guide](https://github.com/loopflowstudio/etude/blob/main/docs/launcher.md).
 
 ## Monitoring
 
 A run's Etude record keeps its config, seed, source revision, host, attempts,
-costs, logged rows and recorded checkpoints; `state.pt` and the checkpoints
+costs, logged rows and recorded checkpoints; `state/` and the policies
 under `run.out` are the learner. Checkpoint evaluation is a separate Etude
 evaluation that reads those checkpoints. No account is needed to train.
 
 The recipes declare `updates` and `training_seconds` clocks. Every update row,
 outcome table and checkpoint carries both. `training_seconds` is the sum of each
-completed update's `time/collection` and `time/learning`, and `state.pt` keeps it
-across attempts; startup, checkpoint writes, reporting and failed partial updates
-are excluded. In the belief recipe it measures policy self-play, not history
-collection or sampler fitting. The training report's default active-time clock
+completed update's `time/collection` and `time/learning`, and the saved `Counts`
+keep it across attempts; startup, checkpoint writes, reporting and failed partial
+updates are excluded. The belief sampler's run declares its own `steps` clock. The training report's default active-time clock
 therefore works for loop runs. No transitions clock is declared; cumulative
 learner transitions remain a metric.
 
 ### Update metrics
 
-A local run keeps its Etude record inside its output directory, under
-`etude/`; under `etude launch` it is the launcher's run in
-`ETUDE_TRACK_DIR`. A resumed attempt continues the same Etude run, and later
-rows replace earlier ones from the resumed update. Draw it with:
+A run's rows are in its folder: under `~/.etude/track` for a local run and in
+the launch's storage for a launched one. A resumed attempt continues the same
+run, and later rows replace earlier ones from the resumed update. Draw it
+with:
 
 ```bash
-uv run etude report experiments/elemental.py --source .runs/elemental --open
+uv run etude report experiments/elemental.py --open                           # local runs
+uv run etude report experiments/elemental.py --source r2://manabot/jobs --open
 ```
 
 Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
@@ -686,18 +693,16 @@ learning quality. Throughput is cumulative work over observed elapsed cost.
 
 ### Checkpoint cadence
 
-`SelfPlay.checkpoint_every` (`n`) makes the loop write a world-bound
-checkpoint at absolute updates 0, n, 2n, … and record it with
-`run.checkpoint`; the loop always writes its last update. Etude derives
-`TrainingRun.final` as the last checkpoint of a finished run, including after
-extension. Elemental uses a 50-update grid, chosen by the recipe rather than
-estimated from wall time. The grid is absolute, and
-an attempt that starts on it records that update before collecting: a run
-continued from 26,000 with `checkpoint_every=1000` records 26,000, then
-27,000. That also repairs an attempt lost after saving state but before
-publishing the milestone. A milestone checkpoint carries raw and EMA weights
-only; `state.pt` carries what resuming needs. A failed write fails the update
-rather than leaving a silent gap.
+`SelfPlay.checkpoint_every` (`n`) makes the loop publish a world-bound
+policy at absolute updates n, 2n, … with `run.checkpoint`; the loop always
+publishes the untrained policy at update 0 and its last update. A run's final
+checkpoint is the last one of a finished run, including after extension.
+Elemental uses a 50-update grid, chosen by the recipe rather than estimated
+from wall time. The grid is absolute: a run continued from 26,000 with
+`checkpoint_every=1000` publishes 27,000 next. A published policy carries raw
+or EMA weights only; `state/` carries what resuming needs. A failed write
+fails the update rather than leaving a silent gap. `run.checkpoints()` lists
+what a run has published, oldest first, the same records evaluation reads.
 
 ### Checkpoint evaluation
 
@@ -877,25 +882,39 @@ is `experiments/data/etu126/cuda-admission-20261008.json` in the artifact store.
 
 ## Recovery
 
-There is one recovery contract: a run resumes from the last `state.pt` its loop
-saved. Running the same command again does this locally; under Etude, a run
-that loses its machine, reaches its deadline or is asked to stop is called
-again on another attempt with the same `run.out`, until it finishes or uses up
-its hours, dollars or attempts. Attempts, retries, deadlines, the stop
-reserve, the carriage of `run.out` and the run record are Etude's
-([out, a stop signal and running again](https://github.com/loopflowstudio/etude/blob/main/docs/tracking.md#out-a-stop-signal-and-running-again));
-manabot keeps only `state.pt` and the loop that reads it. A retried attempt's
-first logged row sets where its rows replace the earlier attempt's, so the
-record reads as one run.
+There is one recovery contract: a run carries on from the last state it saved,
+and Etude does the saving, the carrying and the calling again. The loop
+registers its learner, Adam, EMA and counts with `run.resume` and calls
+`run.save()` every update; it has no state file or resume branch of its own.
+
+| The run | What carries it on |
+| --- | --- |
+| lost its machine, reached its deadline or was asked to stop, under a launch | Nothing to do: the launcher calls `train` again as another attempt, with the same `run.out`, until the run finishes or uses up its hours, dollars or attempts. |
+| ended unfinished: it failed and the bug is fixed, ran out of hours, was cancelled, or was interrupted locally | `uv run etude run RECIPE --resume RUN` here, `uv run etude launch FILE --resume RUN` on machines: another attempt of the same run on the current code. |
+| finished, and should go further | `uv run etude continue --run RUN --until updates=N`: a new run descended from it ([portable learner continuation](#portable-learner-continuation)). |
+
+A new run and a resumed one are different commands; nothing is inferred from
+a directory that happens to exist. `--resume` refuses a finished run, and
+refuses a config or seed that differs from the run's, naming the fields.
+Attempts, retries, deadlines, the stop reserve, the carriage of `run.out` and
+the run record are Etude's. A retried attempt's first logged row sets where
+its rows replace the earlier attempt's, so the record reads as one run.
 
 | Kept across a resume | Started again |
 | --- | --- |
-| Raw weights, EMA, Adam moments, the absolute update count, the schedules that follow it, every finished step's output and every recorded checkpoint | Native game streams (seeded from the run seed and the update they start at), RNG state, and every update after the last save |
+| Raw weights, EMA, Adam moments, the completed update count and the other cumulative counts, the schedules that follow the update count, and every published checkpoint | Native game streams (seeded from the run seed and the update they start at), RNG state, and every update after the last save |
 
 Work after the last save repeats, and Etude charges its hours and dollars to
-the run. `save_every` (default every update) bounds that work; an update is
-the unit, so nothing mid-collection is saved. A deadline stop saves at an
-update boundary first, so a planned stop repeats nothing.
+the run. Etude writes state on a wall-time interval and always on the last
+update before a planned stop, so a deadline stop repeats nothing; an update is
+the unit, so nothing mid-collection is saved.
+
+Etude compares the config and the seed between attempts and nothing else.
+Keeping the code compatible is the recipe author's: an attempt may run a later
+commit, which it records, but settings built in the recipe's body, the model's
+shape and the world are not compared, and changing them within a run is
+undefined. A changed model shape fails when the saved weights load; published
+policies stay world-bound, so `load_checkpoint` refuses one from another world.
 
 ### What resume does not promise
 
@@ -912,21 +931,20 @@ update boundary first, so a planned stop repeats nothing.
   the same seed would have. Each checkpoint names the revision that wrote it
   and, under `etude launch`, its Etude run. Etude's run record names the attempts and their resume
   coordinates. These records preserve provenance, not identical bytes.
-- **Source repair within a launched run.** A launched run executes one source
-  revision for all its attempts; `--source-repair-reason` is gone. Fix the
-  code and start a new launched run, or continue the old one as a child
-  (`etude continue`), which records the new revision beside its parent's.
-  A local rerun after a code change resumes when the world, seed and learner
-  settings still match: the revision is not compared, existing checkpoints
-  stay as written and new ones name the revision that wrote them.
+- **A check that a fix is compatible.** After a bug fix, `--resume` runs the
+  current code as another attempt of the same run; `--source-repair-reason`
+  is gone. Each attempt records its commit, existing checkpoints stay as
+  written and new ones name the revision that wrote them. Only the config and
+  seed are compared, so whether the fixed code still fits the saved state is
+  the author's judgment.
 
 ### Portable learner continuation
 
 A run continued with `etude continue --run RUN --until updates=N` starts from a
-copy of its parent's `run.out`, so from its `state.pt` with Adam and EMA: it is
+copy of its parent's `run.out`, so from its saved state with Adam and EMA: it is
 the same learner trained further. The child runs the parent's config and
-seed; its target comes from `run.until`, and only that target and the machine
-may change. A state written for other settings is refused. Rates do not move
+seed; `run.steps` counts to the new target, and only that target and the
+machine may change. Rates do not move
 with the target ([schedules and clocks](#schedules-and-clocks)). A parent at 26,000
 updates can produce a child ending at 63,000 and then one ending at 100,000;
 damped-policy rates keep their absolute formulas (update 26,001 uses LR
@@ -963,7 +981,7 @@ truncations and action limits once per settled native game. Run interruptions
 are Etude attempts, outside that denominator. Each attempt appends to its own
 ledger under `game-attempts/` and starts by counting every earlier one, so a
 resumed run keeps counting from where it stopped, including games after the
-last `state.pt`. After
+last saved state. After
 warmup, `rate > threshold` stops the run; the stop survives a resume. The example above tolerates 10 failures in the latest 100 settled
 games and stops at 11, after a 100-game warmup. The prospective
 [TLA v10 pilot](../experiments/protocols/tla-trophy-213-v10.md) selects capacity
@@ -984,12 +1002,12 @@ the observation configuration so replay crosses the same encoding boundary.
 Never publish the ledger as a replay. Replay a receipt by its one-based line:
 
 ```sh
-uv run python -m manabot.training.state.game_errors .runs/example/game-attempts/0000.jsonl --attempt 1 --seconds 30
+uv run python -m manabot.training.state.game_errors RUN_DIR/out/game-attempts/0000.jsonl --attempt 1 --seconds 30
 ```
 
-After a fix, follow [source repair](#what-resume-does-not-promise): a new
-launched run, a child continuation, or a local rerun. A local rerun resumes
-with its ledgers, so it does not clear a game-error threshold stop.
+After a fix, resume the run or start a new one
+([recovery](#recovery)). A resumed run keeps its ledgers, so resuming does not
+clear a game-error threshold stop.
 
 ### Automatic capture and replay
 
@@ -1004,7 +1022,7 @@ each pending Command under `failures/` before execution (pass
 `keep_game_logs=True` to keep journals of successful games).
 
 ```sh
-uv run python -m manabot.training.state.game_errors .runs/example/failures/ID.jsonl --attempt 1 --seconds 30
+uv run python -m manabot.training.state.game_errors RUN_DIR/out/failures/ID.jsonl --attempt 1 --seconds 30
 uv run python -m manabot.sim.replay .runs/arena/traces/CELL.commands.jsonl.gz --game 1 --seconds 30
 uv run python -m manabot.sim.replay .runs/arena/failures/CELL.SEED.LEG.jsonl --game 1 --seconds 30
 ```

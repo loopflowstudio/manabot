@@ -160,3 +160,56 @@ exit 130. Do not convert KeyboardInterrupt into Stopped, whose contract says
 state was saved, or write Etude's state.json from Manabot. Etude owns the
 admission/interruption status fix (plan.md). The release remains pending;
 continue testing with the real SDK source override without committing a path.
+
+## Docs for the train-API rebuild — 2026-11-13
+
+Written against `design-train-api.md`; nothing here was run, and the Etude
+calls do not exist yet. The docs settle these details the design leaves
+unstated. Each is reversible; the simpler option was taken without asking.
+
+- The whole `manabot train` command goes, not only `--out`: it exits naming
+  `etude run FILE`. No `--recipe` names or `--list`; a recipe is a file with
+  `train`. An installed package without a checkout has no documented smoke
+  path; the guide's recipe example is the file to write.
+- Device is only a config field with the recipe's default (`cpu` local and
+  Elemental, `cuda` baseline). The CLI's "CUDA when available" selection and
+  the local recipe's 120-second cap are gone with the CLI.
+- Manabot's world-bound policy files move from `out/checkpoints/` to
+  `out/policies/`, because the design gives `out/checkpoints/updates-N/` to
+  Etude's own checkpoint folders.
+- `Counts` gains the completed update count, and the loop publishes the
+  untrained policy when `counts.updates == 0`. The design's loop listing
+  publishes no update 0, but `baseline.evaluate` compares initial with final.
+- `SelfPlay.save_every` goes; Etude decides when a save is due (design, open
+  item 5).
+- `CLOCKS` is defined once in `loops/self_play.py`.
+- Belief: `manabot/recipes/belief_policy.py` (`PolicyConfig`, `train`,
+  `match()`) and `belief_sampler.py` (`BeliefConfig`, `train`, and `runs()`
+  returning both jobs). The sampler run declares a `steps` clock and keeps no
+  state: an interrupted one collects and fits again.
+- Old `state.pt` directories: the guide names `f577362135` as the last
+  revision that resumes one. That commit is this unmerged branch (the
+  `state.pt` loop never reached main), so it is reachable only through PR #500.
+
+Open, for EXP-56 or a person; the docs show one spelling of each:
+
+1. What `run.resume(..., extra=Counts())` returns. The design's call table
+   says the clocks at the last save; its Manabot loop assigns the result to
+   `counts`. `docs/training.md` follows the loop (`extra` comes back);
+   `docs/training-loop.md`'s minimal loop, which passes no `extra`, reads
+   `["updates"]` from the result.
+2. How a job names another run's final checkpoint. The docs write
+   `training(train, ..., start=policy)` where `policy` is the earlier job,
+   meaning its run of the same seed. The design says only
+   `start=<checkpoint of another run>`.
+3. Whether `etude run` can give a run a start (the design lists no such
+   option). The docs run the belief recipe only through `etude smoke` and
+   `etude launch` on its job file.
+4. What `run.input("start")` returns for a checkpoint recorded by path. The
+   docs treat it as the policy file.
+5. Where `etude run` writes and what it names the experiment. The docs say
+   `~/.etude/track/<file stem>/<run>/` (tracking's default today) and do not
+   state the format of a generated run id.
+6. How `scripts/bench_training_update.py` runs once the loop has no untracked
+   path. `docs/workflows.md` says each reading is a new local Etude run and
+   drops `--out`.

@@ -139,29 +139,27 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 An experiment file keeps its explicit `train(config)`, `runs()`, `eval(state)`
 and `report()` functions. Training is an ordinary function that calls a loop;
-Etude supplies its run directory, stop signal, tracking and retry. `runs()`
+Etude supplies its run directory, seed, saved state, stopping, tracking and retry. `runs()`
 returns jobs made with `etude.jobs.training(train, config=..., smoke=...)`.
-Put each arm and training seed in that declaration, with its hours and dollar
-cap. Evaluation and reports continue to read the recorded checkpoints.
+Put each arm in that declaration with its hours and dollar cap, and its
+training seeds in `seeds=`; a config has no seed. Evaluation and reports continue to read the recorded checkpoints.
 
 For example, `experiments/elemental.py` launches the current Elemental recipe
-and evaluates its checkpoints on the existing paired-deal grid. A local call
-uses the same function:
+and evaluates its checkpoints on the existing paired-deal grid. A local run
+calls the same function:
 
-```python
-from etude.train.run import local_launch
-from manabot.recipes.elemental import ElementalConfig, train
-
-with local_launch(out=".runs/elemental-197", experiment="elemental"):
-    train(ElementalConfig(seed=197))
+```bash
+uv run etude run manabot/recipes/elemental.py --seed 197 --name elemental-197
+uv run etude run manabot/recipes/elemental.py --resume elemental-197
 ```
 
-Repeating a call resumes that directory. An Etude continuation sets the target
+The first command is always a new run; the second is another attempt of that
+run from its last saved state. An Etude continuation sets the target
 with `--until updates=N`, preserving the recipe's settings and the parent's
 output. See [training](training.md#recovery) for the guarantees and limits.
 
-The nightly baseline calls `manabot.recipes.baseline.train(config)` and then
-`evaluate(config, directory)`. Evaluation compares the initial and final raw
+The nightly baseline runs `manabot/recipes/baseline.py` with `etude run` and
+then calls `evaluate(config, directory)` on that run's `out`. Evaluation compares the initial and final raw
 checkpoints on the same four deck/seat legs per deal, runs the existing native
 choice inspection, and writes `learning.json` for aggregation across training
 seeds. Training time and evaluation time remain separate.

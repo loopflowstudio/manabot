@@ -10,6 +10,28 @@ The prototype and EXP-56 API implementation exist. The current approach is
 ordinary typed recipe functions using Etude run primitives, with the reusable
 SDK delivered separately before the Manabot dependency can be pinned.
 
+## Train-API rebuild: docs written — 2026-11-13
+
+`design-train-api.md` replaces the loop and recipe shape below; the sections
+after this one describe the superseded `state.pt` cutover. Build what can be
+written without EXP-56's new calls, then stop; no local stub, no delivery.
+
+The docs describe the intended behavior and are the reference for the build:
+
+- `docs/training.md`: run training (`etude run`, options, run folder, exit
+  codes, `--resume`, `etude continue`), write a recipe (config without seed,
+  `CLOCKS`, the loop on `run.resume`/`run.steps`/`run.save`, pieces), recipes
+  in stages (belief as two jobs joined by `start=`), remote `seeds=`,
+  monitoring, checkpoint cadence, recovery.
+- `docs/training-loop.md`: `loops/minimal.py` as a resumable `train(config)`.
+- `README.md`, `manabot/README.md`, `experiments/README.md`,
+  `docs/experiments.md`, `docs/development.md`, `docs/workflows.md`,
+  `manabot/model/training.md`: commands and state wording.
+
+Not edited, still naming `manabot train` and `state.pt`: `.lf/skills/qa.md`;
+change it with the code. The detail choices and six open API questions are at
+the end of `questions.md`.
+
 ## Current status — 2026-11-13
 
 The cutover is implemented against EXP-56's real SDK source. See

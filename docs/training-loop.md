@@ -20,8 +20,8 @@ method; [training](training.md) explains running a recipe.
 ## The updates we maintain
 
 A recipe's loop ([training](training.md#write-a-recipe)) runs one update
-each iteration and adds checkpoints, tracking, recovery and evaluation around
-it. Its learning record selects the update; both live in
+each iteration; Etude's run adds saving, resuming, tracking and checkpoints
+around it. Its learning record selects the update; both live in
 `manabot/training/updates/`:
 
 - **Damped policy** (`DampedPolicyLearning`, `update_damped_iteration` in
@@ -181,8 +181,9 @@ plus reverse KL to the generating policy. Against that design:
 ## Write your own loop
 
 A new method is the pieces in a different arrangement. Write it as a loop of
-your own to try it quickly. When it needs checkpoints, tracking and Etude
-launches, add a learning record for it in `manabot.training.learning` and an
+your own to try it quickly; the loop below already saves, resumes and
+publishes checkpoints through Etude. When it should run in our recipes, add a
+learning record for it in `manabot.training.learning` and an
 update in `manabot/training/updates/` beside the two above; our recipes then
 run it as they run those. Write that update as they are written: take the
 backend first, do array math only through `backend.rl`, `backend.learner`
@@ -194,16 +195,21 @@ it calls.
 
 `manabot/training/loops/minimal.py` trains one model against itself with PPO
 on complete games, on CPU. It writes its update inline, inside the loop, so
-the whole method reads on one page. It is a PyTorch loop: it builds the
+the whole method reads on one page, and it survives losing its machine: seven
+of its lines are Etude's (`track`, `run.seed`, `run.resume`, `run.steps`,
+`run.log`, `run.save`, `run.checkpoint`). It is a PyTorch loop: it builds the
 `ActorCritic` and its optimizer directly and takes its terms from the torch
 backend's `rl` and `learner`:
 
 ```python
-"""A self-play PPO loop written from the pieces alone, with no recipe or executor."""
+"""A resumable self-play PPO loop written from the pieces alone."""
 
 from copy import deepcopy
 
+from etude.train.records import Step
+from etude.train.run import track
 import numpy as np
+from pydantic import BaseModel, Field
 import torch
 
 from manabot.backends.torch import learner, rl
@@ -219,87 +225,108 @@ from manabot.training.rollout.collection import (
 )
 
 
-def train(
-    iterations: int,
-    *,
-    streams: int = 4,
-    decisions: int = 64,
-    seed: int = 0,
-    model: ModelConfig | None = None,
-) -> ActorCritic:
-    """Return the EMA of a policy trained `iterations` collect/update rounds."""
-    torch.manual_seed(seed)
-    rng = np.random.default_rng(seed)
-    agent = ActorCritic(ObservationSpace(), model or ModelConfig(hidden_dim=64))
-    averaged = deepcopy(agent)
-    optimizer = torch.optim.Adam(agent.parameters(), lr=2.5e-4, eps=1e-5)
-    collector = open_collector(
-        agent.observation_space,
-        Match(),
-        Reward(RewardConfig()),
-        num_envs=streams,
-        seed=seed,
-        opponent_mode="self",  # one model plays and learns from both seats
-    )
-    try:
-        for _ in range(iterations):
-            # Whole games, at least `decisions` learner rows per stream.
-            batch = collect(collector, agent, decisions)
-            ends = torch.as_tensor(batch.dones)
-            values = torch.as_tensor(batch.values)
-            # Complete games end every trajectory, so the tail value is never read.
-            tail = torch.zeros(ends.shape[1])
-            advantages, returns = rl.transition_gae(
-                torch.as_tensor(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
-            )
-            # Time-major [T,E] rows, the order `batch.observations` indexes.
-            advantages, returns = advantages.flatten(), returns.flatten()
-            advantages = rl.standardized_advantages(advantages)
-            actions = torch.as_tensor(batch.actions).flatten()
-            behavior = torch.as_tensor(batch.logprobs).flatten()
+class MinimalConfig(BaseModel):
+    updates: int = Field(default=3, ge=1)
+    streams: int = Field(default=4, ge=2)
+    decisions: int = Field(default=64, ge=1)
+    model: ModelConfig = ModelConfig(hidden_dim=64)
 
-            # Admission checks each row's policy input once, before any epoch.
-            admitted = AdmittedRollout(agent, batch)
-            admitted.admit_rows(np.arange(len(actions)), 256)
-            agent.train()
-            for _epoch in range(2):
-                order = torch.as_tensor(rng.permutation(len(actions)))
-                for rows in order.split(256):
-                    obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
-                    valid = rl.legal_mask(obs["actions_valid"])
-                    logits, value = agent(obs)
-                    logs = rl.policy_logs(logits, valid)
-                    chosen = rl.action_logs(logs, actions[rows])
-                    loss = (
-                        rl.clipped_surrogate(
-                            chosen - behavior[rows], advantages[rows], 0.2
-                        ).mean()
-                        + 0.5 * rl.squared_value_loss(value, returns[rows]).mean()
-                        - 0.01 * rl.entropy(logs, valid).mean()
-                    )
-                    learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
-            learner.update_ema(averaged, agent, rate=0.99)
-    finally:
-        close_collector(collector)
-    return averaged
+
+def train(config: MinimalConfig) -> None:
+    """Train `config.updates` collect/update rounds and publish the EMA policy."""
+    with track(clocks=[Step("updates", "collect/update rounds")], config=config) as run:
+        torch.manual_seed(run.seed)
+        agent = ActorCritic(ObservationSpace(), config.model)
+        averaged = deepcopy(agent)
+        optimizer = torch.optim.Adam(agent.parameters(), lr=2.5e-4, eps=1e-5)
+        # Loads the last save into all three; a fresh run starts at update 0.
+        start = int(run.resume(agent=agent, averaged=averaged, optimizer=optimizer)["updates"])
+        # Only the registered objects carry on: an attempt plays fresh games.
+        torch.manual_seed(run.seed + start)
+        rng = np.random.default_rng(run.seed + start)
+        collector = open_collector(
+            agent.observation_space,
+            Match(),
+            Reward(RewardConfig()),
+            num_envs=config.streams,
+            seed=run.seed + start,
+            opponent_mode="self",  # one model plays and learns from both seats
+        )
+        try:
+            for _update in run.steps("updates", to=config.updates):
+                # Whole games, at least `decisions` learner rows per stream.
+                batch = collect(collector, agent, config.decisions)
+                ends = torch.as_tensor(batch.dones)
+                values = torch.as_tensor(batch.values)
+                # Complete games end every trajectory, so the tail value is never read.
+                tail = torch.zeros(ends.shape[1])
+                advantages, returns = rl.transition_gae(
+                    torch.as_tensor(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
+                )
+                # Time-major [T,E] rows, the order `batch.observations` indexes.
+                advantages, returns = advantages.flatten(), returns.flatten()
+                advantages = rl.standardized_advantages(advantages)
+                actions = torch.as_tensor(batch.actions).flatten()
+                behavior = torch.as_tensor(batch.logprobs).flatten()
+
+                # Admission checks each row's policy input once, before any epoch.
+                admitted = AdmittedRollout(agent, batch)
+                admitted.admit_rows(np.arange(len(actions)), 256)
+                agent.train()
+                for _epoch in range(2):
+                    order = torch.as_tensor(rng.permutation(len(actions)))
+                    for rows in order.split(256):
+                        obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
+                        valid = rl.legal_mask(obs["actions_valid"])
+                        logits, value = agent(obs)
+                        logs = rl.policy_logs(logits, valid)
+                        chosen = rl.action_logs(logs, actions[rows])
+                        loss = (
+                            rl.clipped_surrogate(
+                                chosen - behavior[rows], advantages[rows], 0.2
+                            ).mean()
+                            + 0.5 * rl.squared_value_loss(value, returns[rows]).mean()
+                            - 0.01 * rl.entropy(logs, valid).mean()
+                        )
+                        learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
+                learner.update_ema(averaged, agent, rate=0.99)
+                run.log({"loss": float(loss)})  # the last minibatch's
+                run.save()
+        finally:
+            close_collector(collector)
+        # Reached only at the target: a stopped loop raises `Stopped` instead.
+        run.checkpoint(policy=averaged)
 ```
 
 ```bash
-uv run python -c "from manabot.training.loops.minimal import train; train(3)"
+uv run etude run manabot/training/loops/minimal.py
+uv run etude run manabot/training/loops/minimal.py --config '{"updates": 200}' --seconds 60
+uv run etude run manabot/training/loops/minimal.py --resume RUN
 ```
 
-Three iterations take a few seconds on a laptop CPU and return a policy;
-they teach it almost nothing. Keep a run with `save_checkpoint(policy,
-policy.observation_space, "policy.pt", player_configs=Match().to_rust())`
-from `manabot.backends.torch.checkpoint`, which binds it to the decks it
-played, as a recipe's checkpoints are bound to their setups;
-`load_checkpoint("policy.pt")` returns the policy and its observation
-space. `load_checkpoint` also reads the
+The first command trains three updates in a few seconds on a laptop CPU and
+prints the run's id; they teach the policy almost nothing. The second stops at
+its deadline, saved, and exits 75; the third carries that run on to update
+200. The run's folder holds everything in ordinary formats:
+
+```text
+~/.etude/track/minimal/RUN/out/
+  state/state.json                       {"at": {"updates": 3}, "seed": 0, "files": {"agent": "agent.pt", ...}}
+  state/agent.pt  averaged.pt  optimizer.pt
+  checkpoints/updates-00000003/checkpoint.json
+  checkpoints/updates-00000003/policy.pt   torch.save(averaged.state_dict())
+```
+
+`run.checkpoint(policy=averaged)` publishes plain weights. To publish a policy
+bound to the decks it played, as a recipe's are bound to their setups, write
+it with `save_checkpoint(policy, policy.observation_space, path,
+player_configs=Match().to_rust())` from `manabot.backends.torch.checkpoint`
+and record the file with `run.checkpoint(path)`;
+`load_checkpoint(path)` returns the policy and its observation space.
+`load_checkpoint` also reads the
 [shared container](../manabot/backends/README.md#convert-a-pytorch-checkpoint) that
 other backends load; `uv run python -m manabot.backends.convert` writes one from a
-`.pt` file. `tests/training/test_minimal_loop.py`
-runs the loop on two streams and a tiny model through the `model` argument,
-then saves and reloads its checkpoint.
+`.pt` file.
 
 The entropy bonus is there to show that a term is one line. manabot's own
 updates use none; they regularize with KL penalties instead

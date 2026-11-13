@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Etude positioning: three directions</title>
+<style>
+:root {
+  --bg: #f8f8f6; --surface: #ffffff; --ink: #1b1f24; --muted: #5f6873; --line: #dcdfe3;
+  --code: #eff1f3; --new: #0b6e78; --new-soft: #dcf0f1;
+  --a: #50606e; --b: #7a3d8f; --c: #a8530d;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13161a; --surface: #1b2026; --ink: #e7eaee; --muted: #9ba5b0; --line: #303842;
+  --code: #0e1114; --new: #62c8d1; --new-soft: #12343a;
+  --a: #a9b7c4; --b: #cf9be2; --c: #eda35f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13161a; --surface: #1b2026; --ink: #e7eaee; --muted: #9ba5b0; --line: #303842;
+  --code: #0e1114; --new: #62c8d1; --new-soft: #12343a;
+  --a: #a9b7c4; --b: #cf9be2; --c: #eda35f; color-scheme: dark }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.62 -apple-system, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 780px; margin: 0 auto; padding: 44px 20px 96px; }
+header { color: var(--muted); font-size: 13.5px; border-bottom: 1px solid var(--line); padding-bottom: 14px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 26px 0 0; text-wrap: balance; }
+h2 { font-size: 22px; line-height: 1.25; margin: 68px 0 0; text-wrap: balance; }
+h3 { font-size: 16.5px; margin: 30px 0 0; }
+p, ul, ol { margin: 13px 0 0; }
+li { margin-top: 6px; }
+.lede { font-size: 18px; }
+.muted { color: var(--muted); }
+code { font: 13.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+pre { font: 13px/1.55 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code); border: 1px solid var(--line);
+  border-radius: 6px; padding: 14px 16px; margin: 14px 0 0; overflow-x: auto; }
+pre .c { color: var(--muted); }
+ins { text-decoration: none; background: var(--new-soft); box-shadow: inset 0 -2px 0 var(--new); border-radius: 2px; }
+.key { font-size: 13.5px; color: var(--muted); margin-top: 10px; }
+.scroll { overflow-x: auto; margin-top: 14px; }
+table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.vision { margin-top: 56px; padding-top: 22px; border-top: 3px solid var(--line); }
+.vision.a { border-color: var(--a); } .vision.b { border-color: var(--b); } .vision.c { border-color: var(--c); }
+.vision h2 { margin-top: 0; }
+.vision .noun { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pitch { font-size: 18px; margin-top: 10px; }
+.q { margin-top: 22px; }
+.q b { display: block; }
+.q ol { list-style: lower-alpha; margin-top: 6px; }
+a { color: var(--new); }
+</style>
+</head>
+<body>
+<main>
+<header>
+MTG-329 and Etude EXP-56 · explore · 13 November 2026<br>
+Built from: Etude <code>README.md</code>, <code>docs/tracking.md</code>, <code>docs/evaluation.md</code> at <code>105abdd</code>; Manabot <code>experiments/elemental.py</code>, <code>training/loops/self_play.py</code>; web research on W&amp;B, ClearML, Prime Intellect, Tinker, Softmax and autoresearch (sources at the end). Design notes: <code>scratch/positioning.md</code>.
+</header>
+
+<p style="border-left:3px solid var(--c);padding-left:12px"><strong>Scope since round five:</strong> the SDK. "I think 'experiment' as a formalized concept really starts to come up more when we get to [Etude] Cloud. I think it's important to know that's kind of where we're going but right now I want to focus on [Etude] SDK" (Jack Heart, 2026-11-13). Direction C and questions 3, 4, 7, 9, 10, 12 and 15 are parked as where this is going. Open for the SDK: 2, 6, 13, 14.</p>
+<h1>What is Etude for, and which noun sits at its centre?</h1>
+<p class="lede">The decision: Etude can be built around the <strong>run</strong>, around the <strong>player and the match</strong>, or around the <strong>question</strong>. Each is a different product with a different first page of the README, and each tells us what to spend API design on. They stack, so the real choice is which one is the headline and which are layers.</p>
+<p class="muted">In the code below, <ins>tinted text</ins> is proposed. Everything else exists in Etude today.</p>
+
+<h2>What the incumbents teach</h2>
+<h3>Table stakes worth copying</h3>
+<div class="scroll"><table>
+<thead><tr><th>From</th><th>What users now expect</th><th>Etude today</th></tr></thead>
+<tbody>
+<tr><td>W&amp;B</td><td>Two lines to start: <code>init</code>, <code>log</code>.</td><td><code>track</code>, <code>run.log</code>. Present.</td></tr>
+<tr><td>W&amp;B</td><td>A link you can send someone while the run is still going.</td><td>Missing. <code>etude report --serve</code> is local only.</td></tr>
+<tr><td>W&amp;B</td><td>CPU, memory and GPU charts without asking.</td><td>Missing. Manabot samples them by hand in its loop.</td></tr>
+<tr><td>W&amp;B</td><td>Lineage: which run wrote this checkpoint, which evaluation read it.</td><td>Present for checkpoints and matches; not drawn anywhere.</td></tr>
+<tr><td>W&amp;B</td><td>A written report that mixes prose and live charts.</td><td><code>report()</code> gives charts; prose lives in the repository.</td></tr>
+<tr><td>ClearML</td><td>The environment is captured for you: commit, uncommitted diff, packages.</td><td>Commit and lock file are pinned at launch. A dirty tree is not launchable, which is stricter and better.</td></tr>
+<tr><td>ClearML</td><td>Take a finished run, change one setting, run it again.</td><td><code>etude continue --config</code> is close. No "copy this run with a change".</td></tr>
+<tr><td>ClearML</td><td>Queues over machines you own.</td><td>Pools and SSH hosts. Present.</td></tr>
+</tbody></table></div>
+
+<h3>What their users complain about</h3>
+<div class="scroll"><table>
+<thead><tr><th>Complaint</th><th>Why it happens</th><th>What Etude should hold on to</th></tr></thead>
+<tbody>
+<tr><td>W&amp;B bills by tracked hours, so running many machines in parallel multiplies the bill.</td><td>The service meters your compute time, which it does not provide.</td><td>Tracking is files in your bucket. It costs nothing to log from a thousand CPU workers, which is what self-play looks like.</td></tr>
+<tr><td>The W&amp;B interface slows down with many runs or large logs; uploads and offline sync are unreliable.</td><td>Everything goes through one hosted database and its API.</td><td>Rows are columnar files read directly. Reports are a static page over them.</td></tr>
+<tr><td>One step axis that must go up. Resuming or logging against two clocks fights the tool.</td><td>W&amp;B was designed for supervised training with one counter.</td><td>Declared clocks, any number, on every row. This is already Etude's best idea for RL.</td></tr>
+<tr><td>Your history lives in someone else's service. Neptune was bought by OpenAI and its hosted product was wound down; W&amp;B now belongs to CoreWeave.</td><td>Hosted trackers are acquisition targets.</td><td>"The files are the record" is a promise a cloud service of ours must keep too.</td></tr>
+<tr><td>No stable shared view. "we had a very hard time having 'company dashboards' and getting people to have consistent views into ongoing experiments that they understood. charts were always moving around, the step function would hcange" (Jack Heart, from using W&amp;B).</td><td>Every viewer can rearrange panels and pick the x-axis, and those edits are saved state in the service, separate from the code.</td><td>An experiment's page is its <code>report()</code> function at a commit: the same charts, in the same order, against a declared clock, for everyone. A hosted page must render that and must not grow a saved, draggable layout beside it.</td></tr>
+<tr><td>ClearML's automatic capture surprises people; it patches libraries and guesses.</td><td>Convenience by interception.</td><td>Nothing is recorded that the code did not say. One typed config, validated before launch.</td></tr>
+<tr><td>ClearML needs a server, and its queues need setting up before anything runs; reviews call the learning curve steep.</td><td>It is an operations platform first.</td><td>No server, no account. <code>etude launch</code> works on this computer with no setup.</td></tr>
+<tr><td>In both: a setting changed in the web page silently disagrees with the code.</td><td>Two places can define a run.</td><td>The experiment file at a commit is the only definition.</td></tr>
+</tbody></table></div>
+<p class="muted">The first two W&amp;B rows and the ClearML setup row come from review sites found today. The step-axis, interception and two-sources rows are from my own knowledge of the tools, not from a source I checked today.</p>
+
+<h2>Where the newer companies are heading</h2>
+<p><strong>Tinker</strong> (Thinking Machines) gives the researcher four calls: <code>forward_backward</code>, <code>optim_step</code>, <code>sample</code>, <code>save_state</code>. The training loop, the data and the loss stay in a script on your laptop. The service owns everything about GPUs. Search results show Fireworks and Baseten now documenting similar training APIs, so this shape is spreading.</p>
+<p><strong>Prime Intellect</strong> makes the <em>environment package</em> the unit: a task set plus a scoring rubric, published to a hub, and used unchanged by evaluation and by training. Their May 2026 release gave evaluation and training one shared config shape. Hosted training takes a config; the <code>prime</code> command sets up a workspace built for coding agents to work in.</p>
+<p><strong>SF Compute Autoresearch</strong> (launched 11 September 2026, also called givemeanode) is the closest thing to direction C that is on sale. A coding agent such as Claude or Codex connects over MCP or a command line and gets a container on an H100, billed per minute, with a "research harness that executes experiments and records results". Sandboxes save disk and memory state so an RL experiment can fork from a prepared environment. Fully managed agents, "given source code, an objective and a budget", are in private preview. It is sold by a compute market, so its job is to sell GPU minutes.</p>
+<p>Four things these companies are doing, which I read as the direction of travel:</p>
+<ol>
+<li><strong>The loop goes back to the researcher.</strong> The platform shrinks to a few primitives that hide machines. <span class="muted">Corrected by Jack Heart: Tinker "kind of is saying, 'We'll sell you a trainer class'", since the gradient step is theirs behind an API. Etude owns no part of the step and is a library: "You can just call our code." The trainer for Magic is Manabot, which is not what Etude sells.</span></li>
+<li><strong>The reusable thing is the environment and its scoring</strong>, not the model code. Evaluation and training read the same definition. <span class="muted">Extended by Jack Heart: only if the environment includes "what are the other policies that are in the situation". An experiment sets up the game (format, drafting, deck building) and "who the other players are", in a world that is "more evolutionary".</span></li>
+<li><strong>The command line and docs are written for coding agents</strong> as much as for people.</li>
+<li><strong>Experiments are getting cheap to write.</strong> Karpathy's autoresearch (March 2026) has an agent run about a hundred five-minute experiments overnight against one metric, with a text file for direction and a git log for memory. Its critics point at exactly what is missing: one number is easy to game, and a git log is a poor record of what was learned.</li>
+</ol>
+<p>Where none of them is going. Tinker and Prime Intellect are for language models only and assume one policy scored by a fixed rubric. All three run on their own machines. SF Compute's harness "records results", but nothing public describes a vocabulary for what a result means, how it is checked, or how the next agent finds it. Multi-agent RL breaks the fixed-rubric assumption, and a compute seller has no reason to build a record that works on someone else's machines. Those are the two openings.</p>
+
+<h2>What multi-agent changes</h2>
+<ul>
+<li><strong>A result is a relation, not a number.</strong> "Checkpoint 3200 scores 61%" means nothing without "against whom, in which seat, on which deals". W&amp;B and ClearML have no place to put that.</li>
+<li><strong>Results go stale.</strong> A checkpoint's standing changes whenever a new opponent appears. Evaluation is never finished; it is a ledger that keeps growing and gets re-read.</li>
+<li><strong>Training reads other runs.</strong> Opponents come from a population of earlier checkpoints, sometimes from other runs. Lineage is a graph that training itself walks.</li>
+<li><strong>Players are different kinds of thing.</strong> A neural checkpoint, a scripted heuristic, a language model behind an API, a person. They need one interface.</li>
+<li><strong>Measurement quality is specific.</strong> Paired deals with seats swapped, and training seeds as the unit of evidence. These are the things Manabot protects most carefully.</li>
+<li><strong>The cost is simulation on CPUs</strong>, not GPU hours.</li>
+</ul>
+<p>Softmax is the useful test of whether this generalises past card games. Their benchmark scores an agent by how much better its <em>team</em> does, averaged over random teammates drawn from a population. Their site now describes "a universe of multiplayer games where humans and their coding agents compete, cooperate, and interact". That is the same structure with one addition: seats belong to teams, and the score can be shared. If Etude's match has seats, optional teams and a score per seat, it covers Magic, poker, Softmax's cooperative worlds and language-model agents negotiating, without knowing what a card is.</p>
+
+<section class="vision a">
+<div class="noun">Direction A · the noun is the run</div>
+<h2>The run contract</h2>
+<p class="pitch">"Write your training loop as one file. Etude makes it survive rented machines."</p>
+<p>Etude is to your own or rented compute what Tinker is to theirs: a handful of calls that make any loop resumable, budgeted and tracked. This is the direction MTG-329 and EXP-56 are already on, finished properly.</p>
+<pre><code>def train(config: Config) -&gt; None:
+    with track(clocks=CLOCKS, seed=config.seed, <ins>config=config</ins>) as run:
+        state = load(run.out) or new(config)
+        while state.update &lt; run.until("updates", default=3200) and not run.stopping():
+            <ins>with run.time("collection"):</ins>
+                batch = collect(...)
+            <ins>with run.time("learning"):</ins>
+                metrics = update(...)
+            run.log(metrics, updates=state.update)
+            save(run.out, state)
+        run.checkpoint(policy, updates=state.update)</code></pre>
+<pre><code>$ etude smoke job.py              <span class="c"># one tiny update here, spending nothing</span>
+$ etude launch job.py --rent l4   <span class="c"># capped at the job's max_usd</span>
+$ <ins>etude run train:train --config '{"streams": 2}' --until updates=4</ins></code></pre>
+<p><strong>The store holds</strong> runs, rows, checkpoints, attempts.</p>
+<p><strong>Appeal.</strong> Small, finishable in weeks, useful to any RL or fine-tuning project. It is the honest description of what exists.</p>
+<p><strong>Cost and risk.</strong> Low cost. The risk is that it is a follower: W&amp;B plus SkyPilot or Modal covers most of it, and "a nicer tracker with a launcher" is a hard thing to be known for. It also says nothing about the part of Etude nobody else has, which is evaluation between players.</p>
+</section>
+
+<section class="vision b">
+<div class="noun">Direction B · the noun is the player and the match</div>
+<h2>The league</h2>
+<p class="pitch">"Experiment tracking for agents that play each other."</p>
+<p>The population is the first-class object. Every checkpoint is a player. Every result is a match between players in seats, on named conditions. Strength is always read from the ledger of matches, so it is always current. Training draws its opponents from the same population that evaluation rates.</p>
+<pre><code><span class="c"># What evaluation asks for. This shape exists today in experiments/elemental.py.</span>
+def eval(state: ExperimentState) -&gt; list[Job]:
+    rated = [c for run in state.runs for c in run.checkpoints]
+    return [evaluation(Benchmark(name="grid", matchups=grid(rated, heuristic)), play=play)]
+
+<span class="c"># What training asks for.</span>
+<ins>league = run.league()                                # every player this experiment has recorded
+opponent = league.sample(by="win-rate-against-me")   # or uniform, latest, a named anchor
+...
+run.checkpoint(policy, updates=u)                    # joins the league as a player</ins></code></pre>
+<pre><code>$ <ins>etude league elemental</ins>
+player                 games   vs heuristic   vs previous   rating
+seed197 u3200 ema       5000      0.71           0.56         1412
+seed197 u3150 ema        600      0.69           0.53         1398
+heuristic              11200      0.50            -           1200
+gpt-agent-v2 (code)      400      0.44            -           1161
+
+$ <ins>etude league elemental --wanted</ins>      <span class="c"># matches the schedule asks for and nobody has played</span>
+$ <ins>etude league elemental --team-value</ins>  <span class="c"># score of each player's team over random teammates</span></code></pre>
+<p><strong>The store holds</strong> players (checkpoints, code, hosted models), matches with seats, teams and conditions, per-seat scores, and the run records underneath.</p>
+<p><strong>What it implies for the API.</strong></p>
+<ul>
+<li>The run contract from A stays, but stays small. It is plumbing, not the product.</li>
+<li><code>Match</code> gains optional teams and a score per seat, so shared-reward games fit.</li>
+<li>A <code>Player</code> is anything with <code>act</code>; a hosted language model is a player like any other. The types <code>Player</code> and <code>Inference</code> already exist.</li>
+<li>Paired conditions (the same deal with seats swapped) become an Etude concept, not a Manabot one.</li>
+<li>The report's main charts are a rating over a clock, a payoff matrix and head-to-head, which <code>etude.report</code> already has.</li>
+</ul>
+<p><strong>Appeal.</strong> Nobody else models this. It is where Etude's evaluation code already is, it is what Manabot needs daily, and it reaches Softmax-style cooperative research and language-model agents in games with one data model. A small field, but one where Etude can be the obvious choice.</p>
+<p><strong>Cost and risk.</strong> Medium cost: a league reader for training, teams in the match record, generalising paired deals. The market today is small. The bet is that multi-agent evaluation becomes ordinary as language-model agents are deployed against and alongside each other.</p>
+</section>
+
+<section class="vision c">
+<div class="noun">Direction C · the noun is the question</div>
+<h2>The lab that remembers</h2>
+<p class="pitch">"State a question and a budget. Agents run the experiments. You review the findings."</p>
+<p>This is the radical one. Experiments are becoming cheap to write, so the scarce things become: knowing what has already been tried, trusting a result, and controlling spend. Etude Cloud is a research record with a fixed vocabulary, and agents are assigned to questions inside it. The open-source SDK is how both people and agents write to that record.</p>
+<pre><code><span class="c"># The vocabulary. Manabot's own experiment rules already describe most of it.</span>
+<ins>Question     what we want to know, the method, the known confound, a cost cap
+Experiment   a file at a commit: runs(), eval(state), report()
+Run, Match   what was executed, with seeds and paired conditions
+Evidence     the tables those produced, immutable, addressed by digest
+Finding      a claim, the evidence it cites, and who reviewed it</ins></code></pre>
+<pre><code>$ <ins>etude ask "Does learning from both seats beat one seat per learner decision?" \
+      --method "matched updates, head-to-head on paired deals, 3 seeds" --max-usd 25</ins>
+question q-0412 opened. Prior work found: 1 finding (seat-comparison-v1, 2026-10-23).
+
+$ <ins>etude questions</ins>
+q-0412  running    agent wrote experiments/seat_comparison_v2.py at 3f9c2a1
+                   smoke passed · 3 runs launched · USD 6.10 of 25.00
+q-0409  to review  finding drafted: "uniform matchups are no worse than any curriculum"
+                   cites 4 runs, 11,200 matches · USD 18.40
+
+$ <ins>etude review q-0409</ins>      <span class="c"># the report, the claim, the evidence it cites; accept or send back</span></code></pre>
+<p><strong>The store holds</strong> everything in A and B, plus questions, findings and their citations, and an index an agent can search before it proposes anything.</p>
+<p><strong>What it implies for the open-source SDK, starting now.</strong></p>
+<ul>
+<li>Every command has a machine-readable output and meaningful exit codes. Agents are the main caller.</li>
+<li>Spending limits are enforced by the launcher, never by the agent's good behaviour. <code>max_usd</code> and <code>etude smoke</code> already work this way.</li>
+<li>Evidence cannot be rewritten after the fact. Etude's sealed blocks and digest-named files already work this way.</li>
+<li>The experiment file is the unit an agent writes and a person reviews. It already is.</li>
+<li>Question and Finding are record types in the SDK, stored as files, so the vocabulary is open and the cloud only adds the index, the agents and the review queue.</li>
+</ul>
+<p><strong>Appeal.</strong> It is where the puck is going, and it answers the specific weakness of autoresearch: one gameable metric and no memory. Etude's habits (seeds as evidence, paired deals, frozen commits, hard cost caps) are exactly what makes an agent's result trustworthy. And a multi-agent league is a natural target for agents, because "is this policy stronger" has a rigorous answer.</p>
+<p><strong>Cost and risk.</strong> High. It is a hosted service, with accounts, agents and a review product. Every large lab is building some form of automated research, and SF Compute already sells "source code, an objective and a budget" with the GPUs attached. Without B underneath it, it competes head-on as a general tool; with B, it is the automated lab for a field that has a clear ground truth.</p>
+<p><strong>Two versions of C, because of SF Compute.</strong> In <em>C1, Etude runs the agents</em>, the commands above are a managed service and SF Compute is a direct competitor with cheaper compute. In <em>C2, Etude is the record agents write to</em>, the agent can be anyone's: yours in a terminal, SF Compute's managed one, a lab's own. Etude supplies the vocabulary, the launch-time spending cap, the evidence that cannot be rewritten, the search over prior work and the review queue, and SF Compute becomes one more place to rent machines. C2 is much cheaper to build and is the one a compute seller will not build.</p>
+</section>
+
+<section class="vision c">
+<div class="noun">Round two · after "it should be going through Loopflow" and "not compete on compute"</div>
+<h2>Two things Etude never is</h2>
+<p class="pitch">Loopflow is a meta-harness: it sits above every agent harness. Etude is the same idea one layer down: it sits above every place you can get compute.</p>
+<div class="scroll"><table>
+<thead><tr><th></th><th>Loopflow</th><th>Etude</th></tr></thead>
+<tbody>
+<tr><td>Sits above</td><td>Claude Code, Codex and whatever comes next</td><td>this laptop, SSH hosts you own, RunPod, Lium, Vast, and SF Compute as one more</td></tr>
+<tr><td>Is never</td><td>a harness</td><td>a cloud, or an agent runner</td></tr>
+<tr><td>Its unit of work</td><td>a Task that ends in a pull request</td><td>an experiment that ends in evidence</td></tr>
+<tr><td>What it keeps</td><td>Sessions, Tasks, Waves</td><td>runs, matches, checkpoints, machines and what they cost</td></tr>
+</tbody></table></div>
+<p>So C is neither C1 nor C2 as I wrote them. Etude does steer agents, but every agent is a Loopflow Session, and Etude builds no agent runner of its own. A chat window on top talks to Loopflow.</p>
+<pre><code>$ <ins>etude ask "Does learning from both seats beat one seat?" --max-usd 25</ins>
+question q-0412 opened · Loopflow Task MTG-361 created with Graph <ins>research</ins>
+
+<span class="c"># The Graph is ordinary Loopflow. Each step calls Etude, which enforces the budget.</span>
+<ins>prior-work   etude findings --search ...        nothing may be proposed before this
+write        experiments/seat_comparison_v2.py   committed; the pull request is the review surface
+smoke        etude smoke                         spends nothing
+launch       etude launch --max-usd 25           Etude picks machines; reuses spare ones first
+evaluate     etude eval
+report       etude report                        a finding is drafted, citing its evidence
+review       interactive: a person accepts or sends back</ins></code></pre>
+<p><strong>Who this is for.</strong> Someone without a standing allocation, getting compute from several places a few dollars at a time. A company with long-term compute brings its own cloud and needs less from Etude; SF Compute sells to a wider market. The promise here is narrower: the machines you can scrape together are used well, and you never think about which one a run landed on.</p>
+<p><strong>What this makes more important.</strong></p>
+<ul>
+<li>EXP-58 is the compute-independence work, not a metrics feature: one model of a machine across every source, what it cost, what is on it, and whether another run can share it.</li>
+<li>Placement becomes Etude's job: given a budget and what is free or cheap right now, choose where a run goes, and move it when a machine is lost. The run contract in A is what makes moving safe.</li>
+<li>Every Etude command needs machine-readable output, because its main caller is a Loopflow Graph step.</li>
+<li>Etude and Loopflow need one agreed link between a question and the Task doing the work.</li>
+</ul>
+</section>
+
+<h2>How they stack</h2>
+<p>A is the floor, B is the domain model, C is the service. They are not rivals, but the headline decides where the design effort goes this quarter:</p>
+<div class="scroll"><table>
+<thead><tr><th></th><th>A leads</th><th>B leads</th><th>C leads</th></tr></thead>
+<tbody>
+<tr><td>README opens with</td><td>a training loop</td><td>a league table</td><td>a question and a finding</td></tr>
+<tr><td>First outside user</td><td>anyone training RL on rented machines</td><td>someone training agents in a game, such as a managym or MettaGrid user</td><td>a small lab that wants experiments run overnight</td></tr>
+<tr><td>EXP-56's run contract</td><td>is the product; polish it</td><td>ship it small and move on</td><td>ship it small; add machine-readable output</td></tr>
+<tr><td>Next thing built</td><td>live link, machine metrics, local caller</td><td>league reader, teams, paired conditions</td><td>question and finding records, search over prior work</td></tr>
+<tr><td>Cloud service is</td><td>a hosted report link</td><td>a hosted league, possibly public</td><td>the product</td></tr>
+</tbody></table></div>
+<p>My read, offered as one opinion: lead with B in open source, keep A deliberately small beneath it, and write C's record types as files now so the cloud is an addition and not a rewrite. That is the path where Etude is not following anyone.</p>
+
+<h2>Questions</h2>
+<div class="q"><b>1. Which noun leads?</b>
+<ol><li>The run (A).</li><li>The player and the match (B).</li><li>The question (C).</li><li>B in open source, C as the cloud, A kept small underneath.</li></ol></div>
+<div class="q"><b>2. How wide is "multi-agent" on day one?</b>
+<ol><li>Two-player, zero-sum games. Teams later.</li><li>Seats with optional teams and shared scores from the start, so Softmax-style worlds fit.</li><li>Stay "any RL"; multi-agent is one module among several.</li></ol></div>
+<div class="q"><b>3. What is the first thing the cloud does?</b>
+<ol><li>Nothing yet. Files only.</li><li>A link to a live report, the one W&amp;B table stake Etude lacks.</li><li>A hosted league.</li><li>Questions, agents and review.</li></ol></div>
+<div class="q"><b>4. When do Question and Finding become record types?</b>
+<ol><li>Now, as files in the SDK, used first for Manabot's own experiment reports.</li><li>When the cloud is built.</li></ol></div>
+<div class="q"><b>5. Who is the first outside user we design for?</b>
+<ol><li>Someone with their own loop on managym, like Jace.</li><li>Someone training in MettaGrid or a similar cooperative world.</li><li>Someone evaluating language-model agents against each other.</li></ol></div>
+<div class="q"><b>6. Given the answer to 1, what happens to EXP-56?</b>
+<ol><li>Release the run contract with the three fixes from the earlier guide, and stop polishing it.</li><li>Hold it and keep refining the loop-side API first.</li></ol></div>
+
+<div class="q"><b>7. If C is in the plan, which version?</b>
+<ol><li>C1: Etude Cloud runs the research agents.</li><li>C2: Etude is the record and the guard rails; any agent, on any compute, writes to it.</li><li>C2 first, C1 later if it earns it.</li></ol></div>
+<div class="q"><b>8. Which product does the compute scraping belong to?</b> You said "Loopflow kind of helps you do that".
+<ol><li>Etude: the launcher places runs; Loopflow only orchestrates agents.</li><li>Loopflow: it allocates machines for agents and experiments alike, and Etude's launcher moves there.</li><li>Etude owns experiment machines, Loopflow owns agent machines, with one shared machine record.</li></ol></div>
+<div class="q"><b>9. Where does a Question live?</b>
+<ol><li>In Etude, as a record; a Loopflow Task is the work assigned to answer it and links to it.</li><li>In Loopflow: a Question is a kind of Task, and Etude only stores evidence and findings.</li><li>A Wave is the question; its Tasks are experiments.</li></ol></div>
+<div class="q"><b>10. What is the first step toward steering agents?</b>
+<ol><li>C2 first: Question and Finding records as files, written by hand and by today's agents.</li><li>A <code>research</code> Graph in Loopflow that drives today's Etude commands, records later.</li><li>Both together, on one real Manabot question.</li></ol></div>
+
+<h2>Round three: what was said on 8 to 10</h2>
+<p><strong>8.</strong> "for right now ive decided to keep the compute launching interfaces different, and its not clear that we will need agentcompute launching". Etude launches experiment compute. Where agents run is chosen through Loopflow, and may simply be your laptop.</p>
+<p><strong>9.</strong> "question is the key to the Etude Cloud." The Etude SDK is what is being built now. Etude Cloud is "some combination of a hosted version of the SDK as well as this additional UI and ontology around questions". That ontology already has a design in <code>etude-studio</code>: one node type, Inquiry, in a graph (STU-10). The Question and Finding sketch above should be read as that.</p>
+<p><strong>10.</strong> The flow today is the intended one: Loopflow runs agents, the agents launch things in Etude. Agents may stay on your own machine, "given some combination of Loopflow and Etude SDKs" to read and write the Cloud's questions and to launch experiments. The agent that tends a launched experiment "might be a different agent than the agent you're using to decide which experiments to launch".</p>
+<p>What that implies for the SDK, on my reading:</p>
+<ul>
+<li>The SDK is the only way in. A person, a local agent and the Cloud's own pages all use the same commands and records. The Cloud adds a store, sign-in and pages; it adds no second API.</li>
+<li>The SDK needs a client for inquiries as well as for runs: read what is known, attach an experiment, attach a finding. With no Cloud configured these are files or simply absent, and launching still works.</li>
+<li>There are two agent roles with different needs. The <em>deciding</em> agent reads inquiries and prior findings and writes an experiment file. The <em>tending</em> agent watches one launched experiment: status, logs, machine load, spend, and when to stop or continue. EXP-57 and EXP-58 are largely what the tending agent reads.</li>
+</ul>
+<div class="q"><b>11. What does the tending agent get to do without asking?</b>
+<ol><li>Watch and report only.</li><li>Also cancel, retry and continue within the experiment's existing budget.</li><li>Also change the experiment (new seeds, a config change) within budget.</li></ol></div>
+<div class="q"><b>12. Naming: SDK and Cloud.</b>
+<ol><li>Keep "Etude" for both, as "Etude SDK" and "Etude Cloud".</li><li>Etude is the open SDK; the hosted product gets its own name.</li><li>Decide later.</li></ol></div>
+<p class="muted">Said on these, 2026-11-13: "11 b or c, 12 b or c". So the tending agent acts within budget, not only watches; and the hosted product is not simply called "Etude Cloud". Which of b or c is open for 12. On 11, later: "actually 11c almost certainly. but probably there are firm boundaries like the cant exceed the experiment budget. i dont see it as a ig question."</p>
+
+<h2>Round four: match, decline, differentiate</h2>
+<p>Said, 2026-11-13: training runs are to Etude what checkpoints are to every ML operations product, "a fundamental unit" but not "what defines the product". The target user: "in a previous job I used Wandb and Sky Pilot. I would like to get to the point where I can tell people, 'Hey if you use those tools and you're a little bit unsatisfied with them, you should try using ours.'" And: "one of the biggest places we're differentiating is the focus on evals ... being able to generate evals where you're comparing different checkpoints with each other in certain environments."</p>
+<p>The question asked was how much to implement directly and call a drop-in replacement, and where to differ completely. A proposal:</p>
+
+<h3>Match: the ten-minute port</h3>
+<p>Not the same API. The same <em>habits</em>, so someone moving a script from W&amp;B and SkyPilot loses nothing they used daily.</p>
+<div class="scroll"><table>
+<thead><tr><th>They have</th><th>Etude</th></tr></thead>
+<tbody>
+<tr><td>W&amp;B: start a run and log in two lines</td><td>Has it: <code>track</code>, <code>run.log</code></td></tr>
+<tr><td>W&amp;B: a link to a live run</td><td>EXP-57, STU-14</td></tr>
+<tr><td>W&amp;B: machine charts on every run</td><td>EXP-58</td></tr>
+<tr><td>W&amp;B: compare runs across seeds and configs</td><td>Has it: a job's seeds are drawn as mean and range</td></tr>
+<tr><td>SkyPilot: one command, several clouds, cheapest that is available</td><td>Has it: pools, <code>--rent</code>, providers</td></tr>
+<tr><td>SkyPilot: recover when a rented machine is taken away</td><td>Has it, and stronger: the run is one run across attempts</td></tr>
+<tr><td>SkyPilot: put another job on a cluster that is already up</td><td>EXP-58 (reuse a machine with spare capacity)</td></tr>
+<tr><td>SkyPilot: stop machines that are idle</td><td>Has it: runs own their machines and budgets end them</td></tr>
+</tbody></table></div>
+
+<h3>Decline: say no in the README</h3>
+<ul>
+<li>A hyperparameter search service. A sweep is a list of runs in a Python file.</li>
+<li>Saved, draggable dashboards. The page is <code>report()</code>.</li>
+<li>A general artifact registry and media viewer. Checkpoints and row tables only.</li>
+<li>Language-model call tracing (W&amp;B's Weave), model serving (SkyPilot's serve), Kubernetes.</li>
+<li>An import shim that pretends to be the <code>wandb</code> module. Its single step counter is the thing declared clocks replace.</li>
+<li>Selling compute.</li>
+</ul>
+
+<h3>Differentiate: what neither can do</h3>
+<div class="scroll"><table>
+<thead><tr><th></th><th>Why W&amp;B and SkyPilot cannot</th></tr></thead>
+<tbody>
+<tr><td><strong>Evaluation as its own first-class job.</strong> Checkpoints are players. An evaluation is matches between players in an environment, on declared conditions, run in parallel on the same launcher, stored as a ledger you query and add to.</td><td>W&amp;B has a number you log from inside training. It has no idea of an opponent, a seat or a schedule.</td></tr>
+<tr><td><strong>Launch and tracking are one thing.</strong> A run has a budget in dollars, survives losing its machine, and reads back as one run with its cost.</td><td>Each tool knows half. W&amp;B does not know what a machine cost; SkyPilot does not know what a run is.</td></tr>
+<tr><td><strong>Train, evaluate and report in one file at one commit</strong>, with a tiny smoke of all three before spending.</td><td>Their definitions live in a YAML file, a script and a web page.</td></tr>
+<tr><td><strong>Declared clocks</strong> and <strong>pages as code</strong>.</td><td>The four complaints above.</td></tr>
+<tr><td><strong>Your files, no server.</strong></td><td>W&amp;B is a hosted database.</td></tr>
+</tbody></table></div>
+<p>If that holds, the README's first example is not a training loop. It is an evaluation: two checkpoints of one run, played against each other and against a fixed opponent, with the chart that comes out. Training appears second, as the thing that produced the checkpoints.</p>
+<p class="muted">The SkyPilot rows are from my own knowledge of it and were not checked today.</p>
+
+<div class="q"><b>13. What does "evaluation" cover in the first README?</b>
+<ol><li>Multi-agent only: players, matches, checkpoints against each other.</li><li>Multi-agent first, with single-agent benchmarks (a policy scored on tasks) shown as the one-player case.</li><li>Any evaluation job; multi-agent is one example among several.</li></ol></div>
+<div class="q"><b>14. How far does "match" go against SkyPilot?</b>
+<ol><li>As in the table: what a small team scraping compute needs. No Kubernetes, no big clouds' full catalogues.</li><li>Also the large clouds (AWS, GCP, Azure) so a company can bring its own.</li><li>Etude can hand the machine step to SkyPilot where someone already uses it.</li></ol></div>
+
+<h2>Round five: the experiment design as source</h2>
+<p>Said, 2026-11-13: "Experiments are relatively cheap to write but they can be expensive to run ... designing the experiment is kind of like the lingua franca of doing work ... you can think about experiment design as almost sort of like a coding language because it can be 'compiled' and executed by the 'agent' runtime".</p>
+<p>Taking the analogy at its word, each part of a language toolchain has a counterpart, and most already exist:</p>
+<div class="scroll"><table>
+<thead><tr><th>In a language</th><th>Here</th><th>Exists?</th></tr></thead>
+<tbody>
+<tr><td>Source</td><td>The design: question, method, known confound, what is compared, cost cap, what the agent may decide alone</td><td>As a convention. Manabot's reports open with it; <code>etude-studio</code>'s README lists the same fields</td></tr>
+<tr><td>Compiler</td><td>An agent, run by Loopflow</td><td>Yes</td></tr>
+<tr><td>Compiled output</td><td>The experiment file at a commit: <code>runs()</code>, <code>eval(state)</code>, <code>report()</code></td><td>Yes</td></tr>
+<tr><td>Type check</td><td><code>etude smoke</code>: every entry point run tiny, spending nothing</td><td>Yes</td></tr>
+<tr><td>Runtime</td><td>The launcher and the machines it places runs on</td><td>Yes</td></tr>
+<tr><td>Resource limit</td><td>The experiment's budget, enforced by the launcher</td><td>Per run today; per experiment is needed</td></tr>
+<tr><td>Program output</td><td>Evidence, and a finding that cites it</td><td>Evidence yes; finding as a record, no</td></tr>
+<tr><td>Error that points at the source line</td><td>A result that says which part of the design it bears on, or which part could not be carried out</td><td>No</td></tr>
+<tr><td>Standard library</td><td>Things a design can name without defining: a benchmark, a field of opponents, a paired-deal schedule</td><td>In pieces</td></tr>
+</tbody></table></div>
+<p>Because running is the expensive part, the cheap checks carry the weight: a design should be refusable before any money is spent, for a missing comparison, no stated confound, or a cost cap its own plan cannot meet.</p>
+<div class="q"><b>15. What form does the source take?</b>
+<ol><li>Prose, with a few required headings. The agent reads it as a person would.</li><li>A typed record (fields for question, arms, metric, budget) with prose inside each field.</li><li>Prose now; the record is whatever the hosted product's inquiry model needs later.</li></ol></div>
+
+<h2>Sources</h2>
+<p class="muted" style="font-size:14px">
+W&amp;B pricing and complaints: costbench.com/software/mlops/weights-and-biases, neptune.ai blog, zenml.io/blog/weights-and-biases-alternatives (comparison sites, some run by competitors).
+ClearML: clear.ml/docs agents and queues, faq.clear.ml user questions, dev.co and modern-datatools.com reviews.
+Prime Intellect: github.com/PrimeIntellect-ai/verifiers and its PyPI release notes.
+Tinker: tinker-docs.thinkingmachines.ai; similar APIs at docs.fireworks.ai and docs.baseten.co.
+Softmax: softmax.com, softmax.com/mission, softmax.com/alignmentleague.
+SF Compute Autoresearch: sfcompute.com/news/sfc-autoresearch, autoresearch.sfcompute.com (docs and changelog).
+Karpathy's autoresearch: coverage at theneuron.ai and rits.shanghai.nyu.edu.
+The Neptune and CoreWeave acquisitions are from memory, not checked today.
+</p>
+</main>
+</body>
+</html>

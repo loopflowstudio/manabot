@@ -66,14 +66,14 @@ For a bounded training reading on an available, authorized machine with the
 ```sh
 mkdir -p .runs/update-baseline
 uv run python scripts/bench_training_update.py --streams 256 --updates 3 \
-  --out .runs/update-baseline/run --json .runs/update-baseline/rows.json
+  --json .runs/update-baseline/rows.json
 ```
 
 This prints seconds, decisions and games per update and phase timings in
 microseconds per decision. `--json` retains the per-update rows, validated
-settings, seed and summary; `--out` retains `state.pt` and immutable policies.
-The benchmark is untracked; it writes no Etude record or `TrainingRun` receipt.
-Without `--out` the learner files are temporary. Use fresh, separate output
+settings, seed and summary. Each reading trains a new local Etude run and
+prints its id; the learner state and policies are in that run's folder, and
+no `TrainingRun` receipt is written. Use separate `--json`
 paths for baseline and candidate, matching input capacities and explicit
 `--recipe`, `--seed` and `--device` settings. `--recipe` is a zero-argument
 `module:function` returning `SelfPlay`; its default is

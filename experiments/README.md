@@ -11,19 +11,20 @@ built from [`manabot.recipes.builders`](../manabot/recipes/builders.py), and
 anything only it needs to run and report. `manabot/` keeps the reusable
 instruments.
 
-The CLI lists runnable recipes with `uv run manabot train --list`. Retained
+A runnable recipe is a file that defines `train(config)`; run one with
+`uv run etude run FILE` ([training](../docs/training.md#run-training)). Retained
 `TrainingRegime` builders are records; execute them from the pre-cutover main
 revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. Exact reproductions use
 the experiment's recorded revision and lock ([saved regimes](../docs/training.md#saved-regimes)).
 
 | module | current role | execution |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `train(config)`; retained `batched_baseline()` and `scale_ladder()` builders ([scale ladder](scale-ladder.md)) | `uv run manabot train --recipe batched_baseline`; retained builders require pre-cutover source |
+| [batched_baseline](batched_baseline.py) | `train(config)`; retained `batched_baseline()` and `scale_ladder()` builders ([scale ladder](scale-ladder.md)) | `uv run etude run experiments/batched_baseline.py`; retained builders require pre-cutover source |
 | [value_model_baseline](value_model_baseline.py) | retained regime builder ([value models](value-models.md)) | pre-cutover source |
 | [ataraxos_move](ataraxos_move.py) | retained `ataraxos_move()` and `ataraxos_move_scalar()` builders ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | pre-cutover source |
 | [direct_self_play](direct_self_play.py) | retained regime builder | pre-cutover source |
 | [ataraxos_ablation](ataraxos_ablation.py) | retained RL control and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `uv run python -m experiments.ataraxos_ablation` refuses and names the pre-cutover revision |
-| [belief recipe](../manabot/recipes/belief_sampler.py) | `train(config)` trains a policy, collects histories and fits its sampler ([guide](../docs/training.md#recipes-with-several-steps)) | `uv run manabot train --recipe belief` |
+| [belief recipe](../manabot/recipes/belief_sampler.py) | two jobs: [belief_policy](../manabot/recipes/belief_policy.py) trains a policy; the sampler run starts from its final checkpoint, collects histories and fits the sampler ([guide](../docs/training.md#recipes-in-stages)) | `uv run etude launch manabot/recipes/belief_sampler.py` |
 
 The compound-decision study (`compound_decisions.py`) is no longer runnable;
 reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.

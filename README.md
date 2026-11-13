@@ -221,8 +221,8 @@ These exist and run, and none of them is on the training path today.
   over one `PossibleWorldSpace`, a tracker fed by viewer observations, and the
   `AutoregressiveBeliefSampler`, which learns opponent hand counts from a
   frozen policy's games. The `collect_belief` and `train_belief` steps fit it
-  on an immutable dataset (`uv run manabot train --recipe belief --seed 421
-  --out .runs/belief-pilot` is the bounded pilot), and
+  on an immutable dataset (`uv run etude smoke manabot/recipes/belief_sampler.py`
+  is the bounded pilot), and
   `python -m manabot.reports.belief` scores a sampler by held-out joint NLL,
   Brier and calibration. Consumers are search players and a demo seam only;
   `ActorCritic` has an optional belief channel that self-play rejects, and
@@ -348,24 +348,25 @@ uv sync --locked --python 3.13 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-uv run manabot train                       # two-update local smoke, capped at two minutes
+uv run etude run manabot/recipes/local.py  # two-update local smoke
 uv run python scripts/inspect_batch.py     # one real batch and how credit reaches each decision
 ```
 
-`uv run manabot train` trains a small agent and saves checkpoints under
-`.runs/`. The local recipe uses CUDA when available and CPU otherwise, including
-on Apple Silicon. `--recipe baseline` requires CUDA (or an explicit
-`--device mps`) and trains on that accelerator; its evaluation and search run on
-CPU. `--device cpu|mps|cuda` overrides local selection; baseline accepts only
-CUDA or MPS. MPS is never selected automatically: it was not faster than CPU in
-our measurements. MPS training uses float32 and requires Torch 2.15 or newer.
-This makes no speed or strength claim.
+That command trains a small agent on CPU as a new
+[Etude](https://github.com/loopflowstudio/etude) run, prints the run's id and
+keeps its state and checkpoints under `~/.etude/track`. A recipe's device is a
+field of its config (`--config '{"device": "cuda"}'`): the local and Elemental
+recipes default to CPU, and `manabot/recipes/baseline.py` defaults to CUDA and
+accepts only CUDA or MPS; its evaluation and search run on CPU. MPS is never
+selected automatically: it was not faster than CPU in our measurements. MPS
+training uses float32 and requires Torch 2.15 or newer. This makes no speed or
+strength claim.
 Training recipes are Python functions: ours in [manabot/recipes/](manabot/recipes/),
 built from the settings in
 [manabot/recipes/builders.py](manabot/recipes/builders.py), and one module per
 current experiment in [experiments/](experiments/). The current recipe is
-`uv run manabot train --recipe elemental --seed 197 --out .runs/elemental`;
-run the same command again to resume it.
+`uv run etude run manabot/recipes/elemental.py --seed 197 --name elemental-197`;
+`--resume elemental-197` carries that run on after an interruption.
 [docs/training.md](docs/training.md) covers running, monitoring and recovering
 runs, and [manabot/README.md](manabot/README.md) covers the package.
 

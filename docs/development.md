@@ -39,7 +39,7 @@ atomically.
   `uv run scripts/play.py` works in an already prepared environment but cannot
   diagnose a missing `uv`. Development flags: `--port`, `--frontend-port`,
   `--no-frontend`, `--demo learn`.
-- `uv run manabot train --out .runs/<name>` runs a training smoke.
+- `uv run etude run manabot/recipes/local.py` runs a training smoke.
 
 The `manabot` public dependency requirements are `etude-sdk>=0.2.16` (also for
 its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
