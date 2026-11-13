@@ -13,8 +13,9 @@ us get there."
 This document replaces the client-facing shape of EXP-56 (PR #103 at
 `105abdd`) and the loop and recipe shape of MTG-329. The launcher machinery
 PR #103 built (out carriage, planned-stop retries, attempt cutoffs,
-continuation, digest-checked inputs) is kept and built on. Nothing here has
-been implemented or run.
+continuation, digest-checked inputs) is kept and built on. The independent
+Manabot CLI retirement is implemented (plan.md); the new loop and recipe API
+has not been implemented or run.
 
 ## Where this is going
 

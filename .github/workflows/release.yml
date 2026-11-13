@@ -159,7 +159,7 @@ jobs:
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import academy.server; import manabot.reports.experiment; import manabot.reports.time_sources; import nbclient; import transformers; import httpx'
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.eval.cards --help
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.sim.replay --help
-          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" manabot train --list
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" manabot --help
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
       - name: Exercise latest compatible Torch and Etude in the consumer environment
         shell: bash

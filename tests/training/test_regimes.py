@@ -2,9 +2,6 @@
 
 import json
 from pathlib import Path
-import subprocess
-import sys
-import textwrap
 
 import numpy as np
 import pytest
@@ -79,41 +76,6 @@ def test_modified_models_are_revalidated_before_execution():
     value.stages[0].transitions = 0
     with pytest.raises(ValueError):
         validate_regime(value)
-
-
-def test_cli_rejects_retired_training_overrides() -> None:
-    from typer.testing import CliRunner
-
-    from manabot import cli
-
-    runner = CliRunner()
-    for flags in (["--preset", "local"], ["--set", "train.num_steps=2"]):
-        result = runner.invoke(
-            cli.app, ["train", "--regime", "unused.json", "--out", "unused", *flags]
-        )
-        assert result.exit_code != 0
-        assert "retired" in result.output
-
-
-def test_regime_discovery_without_evaluation_dependencies() -> None:
-    # A fresh process prevents installed extras or prior tests from hiding
-    # report dependencies imported by experiment modules during discovery.
-    probe = textwrap.dedent("""
-        import sys
-
-        sys.modules["duckdb"] = None
-        from manabot.cli import recipe_names
-
-        assert "batched_baseline" in recipe_names()
-    """)
-    result = subprocess.run(
-        [sys.executable, "-c", probe],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_legacy_learning_discriminator_is_rejected() -> None:

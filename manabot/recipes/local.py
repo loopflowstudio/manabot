@@ -10,7 +10,6 @@ from manabot.recipes.baseline import BaselineConfig, settings
 from manabot.training.loops.self_play import self_play
 
 LOCAL_STEPS = 2
-LOCAL_SECONDS = 120.0
 
 
 class LocalConfig(BaselineConfig):

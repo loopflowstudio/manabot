@@ -157,9 +157,11 @@ establish that boundary). Tracking or report discovery:
 the recipe proof checks local tracking, stop/resume, immutable checkpoints and
 belief output provenance.
 
-**Python package and CLI moves.** Experiment imports or recipe discovery:
-`uv run --extra dev pytest tests/training/test_regimes.py -q` (listing recipes
-must not import DuckDB). Adding, renaming or removing an Etude experiment also
+**Python package and CLI moves.** Training command retirement:
+`uv run --extra dev pytest tests/training/test_train_command.py -q` (the
+migration message must be available without training SDK imports). Saved
+regime readers: `uv run --extra dev pytest tests/training/test_regimes.py -q`.
+Adding, renaming or removing an Etude experiment also
 requires updating its exact discovery inventory and running
 `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_experiment_files.py -q`.
 When integrating a frozen pilot with a changed world or tensor schema, run its

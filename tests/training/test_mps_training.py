@@ -3,16 +3,14 @@
 from copy import deepcopy
 import math
 import time
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 from typing import Literal
 
 import numpy as np
 import pytest
 import torch
-from typer.testing import CliRunner
 
 from experiments.tla_frontier import frozen
-from manabot import cli
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
@@ -72,32 +70,6 @@ def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:
     actual_grad = torch.autograd.grad(actual.sum(), logs)[0]
     expected_grad = torch.autograd.grad(expected.sum(), logs)[0]
     assert torch.equal(actual_grad, expected_grad)
-
-
-@pytest.mark.parametrize("recipe", ["local", "baseline"])
-def test_cli_threads_device_and_rejects_regime_overrides(
-    recipe: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    calls: list[dict[str, object]] = []
-
-    def run(**kwargs: object) -> SimpleNamespace:
-        calls.append(kwargs)
-        return SimpleNamespace(
-            status="completed",
-            id="test",
-            notebook="baseline.ipynb",
-            stages=[SimpleNamespace(artifacts={"raw": {"path": "policy.pt"}})],
-        )
-
-    monkeypatch.setattr(cli, f"run_{recipe}", run)
-    runner = CliRunner()
-    result = runner.invoke(cli.app, ["train", "--recipe", recipe, "--device", "mps"])
-    assert result.exit_code == 0, result.output
-    assert calls[0]["device"] == "mps"
-    for option in ("--regime", "--regime-name"):
-        result = runner.invoke(cli.app, ["train", option, "unused", "--device", "mps"])
-        assert result.exit_code != 0
-        assert "--device" in result.output and "recipe" in result.output
 
 
 def _assert_finite(value: object) -> None:

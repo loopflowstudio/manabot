@@ -1,14 +1,8 @@
-# Historical functional audit
+# Historical functional-audit
 
-The earlier audit enumerated 755 top-level classes across manabot and Academy.
-Its full findings are retained at
-`eb040c04f090ebfd331cdb1e9c4a7c251a7483e5:scratch/functional-audit.md`;
-the module inventory is at
-`f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653:scratch/functional-audit.md`.
-Those notes describe an earlier concurrent pass, including obsolete off-limits
-labels and pre-backend-merge paths. They do not select further work.
-
-The cutover preserves historical experiment records and report readers.
-Current deletion scope and remaining delivery work are in plan.md;
-implementation.md holds the run evidence. Other class-conversion candidates
-remain outside this execution extraction.
+Complete source, including exact remarks and contrary findings:
+`bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/functional-audit.md`.
+The current rebuild design is `scratch/design-train-api.md`; remaining work
+and API dependencies are in plan.md and questions.md. This historical material
+does not select more work. Etude's README/ontology proposals belong to EXP-56;
+no Etude files are edited from this checkout.

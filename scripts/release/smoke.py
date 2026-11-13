@@ -1,6 +1,7 @@
 """Exercise installed release artifacts from a directory outside the checkout."""
 
 from importlib.metadata import version
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -30,21 +31,34 @@ def main() -> None:
     subprocess.run([*command, "--help"], check=True)
     subprocess.run([*command, "train", "--help"], check=True)
     output = Path.cwd() / "release-smoke"
+    output.mkdir()
+    # The installed package is a library; Etude executes an author's recipe file.
+    recipe = output / "local.py"
+    recipe.write_text(
+        "from manabot.recipes.local import LocalConfig, train as train_local\n\n"
+        "def train(config: LocalConfig) -> None:\n"
+        "    train_local(config)\n"
+    )
     subprocess.run(
         [
-            *command,
-            "train",
-            "--recipe",
-            "local",
-            "--device",
-            "cpu",
-            "--out",
-            str(output),
+            "uv",
+            "run",
+            "--no-project",
+            "--python",
+            sys.executable,
+            "etude",
+            "run",
+            str(recipe),
+            "--name",
+            "smoke",
         ],
+        env={**os.environ, "ETUDE_HOME": str(output / "etude")},
         check=True,
         timeout=180,
     )
-    policy, _ = load_checkpoint(str(output / "self-play-raw.pt"))
+    policy, _ = load_checkpoint(
+        str(output / "etude/track/local/smoke/out/policies/00000002-raw.pt")
+    )
     assert not policy.training
     print(
         f"release smoke passed: Python {sys.version.split()[0]}, manabot {version('manabot')}, "

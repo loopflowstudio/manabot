@@ -144,9 +144,9 @@ publish, land or choose the next Graph step from here.
   match and checkpoint; with equal player and reset seeds, every evidence and
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
-- Model or training-path changes: `uv run manabot train --recipe local --device
-  cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
-  seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
+- Model or training-path changes: `uv run etude run manabot/recipes/local.py`
+  runs the local CPU smoke. Inspect metric rows for per-phase collection and
+  learning seconds; the command prints its run id. Play
   checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
   <f> --set sim.hero=<ckpt.pt> --set sim.villain=<ckpt.pt> --set
   sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
@@ -188,29 +188,23 @@ publish, land or choose the next Graph step from here.
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
-- Training recipes: run `uv run manabot train --recipe local --updates 2 --device cpu --out /tmp/<dir>/run`.
-  Inspect `state.pt`, immutable `checkpoints/` and Etude rows under `etude/`.
-  Repeat the same output and seed to resume; extend only the target to continue.
-  For phase attribution use `scripts/bench_training_update.py` with a declared
-  small `--recipe module:function` returning `SelfPlay` without arguments.
-  It writes rows and summary with `--json`, not a `TrainingRun` receipt, and
-  requires fresh output. Regime JSON execution and `--resume-from` are retired.
-  To compare machine options, copy and validate the settings, use separate
-  outputs with the same seed, and compare raw/EMA checkpoint tensors. Keep
-  transitions and stream counts small for functional checks; a throughput
-  measurement needs the declared workload. Fetch artifacts through Doppler
-  without printing credentials. See docs/workflows.md for the output contract.
-  While the pinned SDK lacks `etude.stopping`, overlay a newer SDK checkout
-  with `uv run --no-sync --with <etude checkout> manabot train ...`; zsh does
-  not word-split a command held in a variable, so put it in a small wrapper
-  script. `--seconds 1 --updates 12` gives a planned stop (exit 75) after one
-  update. `etude checkpoints --source <out>` lists recorded checkpoints and
-  their clocks; `etude.train.read.read(<out>/etude, <experiment>, <basename of
-  out>)` gives rows (`.metrics()`, `.points(name, "updates")`, `.attempts`).
-  `etude smoke experiments/elemental.py --step train --revision HEAD` also
-  needs `runs()`'s `--updates/--hours/--usd-per-run`, and builds the
-  revision's own venv from the lock (about 2.5 minutes), so it tests the
-  pinned SDK, not an overlay.
+- Training recipes: run `uv run etude run manabot/recipes/local.py --name smoke`.
+  Inspect `~/.etude/track/local/smoke/` (or `$ETUDE_HOME/track/local/smoke/`):
+  `run.json`, logged rows, `out/state/state.json`, framework state files and
+  immutable `out/policies/`. A second new run with that name must refuse.
+  For a planned stop, use a larger config update count with `--seconds 1`;
+  expect exit 75, then `--resume RUN` to finish the same run. To extend a
+  finished run, use `etude continue --run RUN --until updates=N`.
+  Device and other recipe fields are passed with `--config JSON`; the seed
+  is the run's `--seed`, not a config field. Check raw/EMA checkpoint tensors
+  with matched small inputs. Fetch artifacts through Doppler without printing
+  credentials. `manabot train`, its `--out` identity and `state.pt` are retired.
+  These checks require EXP-56's new train API and its release pin; SDK 0.2.16
+  and source `105abdd` do not provide it. Do not stub the SDK for QA. Until the
+  API lands, report the missing real-path proof and stop dependent checks.
+  `etude smoke experiments/elemental.py --step train --revision HEAD` needs
+  `runs()`'s `--updates/--hours/--usd-per-run`; it builds the revision's own
+  locked venv, so an overlay does not prove the committed dependency works.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
