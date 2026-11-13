@@ -165,7 +165,7 @@ These are gate requirements; actual results are under Implementation progress.
 - `cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w17-v3 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures` -> no failures.
 - Rebuilt extension, then the slice-1 script -> the same SHA-256 as the baseline.
 - `uv run --extra dev pytest tests/env/test_object_record_aliases.py tests/env/test_observation.py tests/env/test_named_observation_layout.py tests/semantic/test_text_observation.py -q -W error::DeprecationWarning` -> pass. The alias test asserts, for `managym.Card`, `Observation.agent_cards`, `Observation.opponent_cards` and `StackObject.source_card_registry_key`: one `DeprecationWarning` containing "0.3.0" and the new name, value equal to the new name's, setters write through; and that a seeded game through the Python encoder, the text observation and the Academy projection raises none.
-- `git diff 493127545a --stat -- conformance protocol/fixtures academy/fixtures managym/tests/fixtures tests/fixtures managym/src/agent/record_vocabulary.rs` -> empty, except fixtures whose only content is the text observation at version 7, listed in the PR if any.
+- `git diff d1554835be --stat -- conformance protocol/fixtures academy/fixtures managym/tests/fixtures tests/fixtures managym/src/agent/record_vocabulary.rs` -> empty (the branch's main base; `493127545a..d1554835be` itself adds `managym/tests/fixtures/payment_search/manabot_slow_step.py`), except fixtures whose only content is the text observation at version 7, listed in the PR if any.
 
 ## Done when
 
@@ -240,3 +240,17 @@ JSON keys, buffer fields/keys, token vocabulary and evidence as listed above.
   extension, then the alias, text-field-guard and named-layout parity tests with
   `-W error::DeprecationWarning` -> 20 passed (3.99s); digest script -> 3,512
   decisions, same SHA-256 `14c102e4...100a`.
+- Realign after syncing onto main `d1554835be` (adds `de39d601fb`, large-board
+  benchmarks and payment-scan changes): the new `managym/examples/bench_states.rs`
+  read native `Observation.agent_cards`/`opponent_cards`; moved to
+  `agent_objects`/`opponent_objects` (its `Output::Observation.cards` label stays).
+  `CARGO_BUILD_JOBS=2 cargo check --manifest-path managym/Cargo.toml --features benchmark --examples`
+  -> pass. No other old-name use outside aliases, their test, serde renames,
+  frozen JSON keys and fixtures.
+- Not yet rerun at the merged HEAD: extension rebuild, digest script (expect
+  `14c102e4...100a`; `de39d601fb` changes payment scans, not observations) and
+  the gate suites above.
+- Left as is, outside this Task's observation/Python scope: engine runtime
+  `managym/state/src/stack_object.rs::StackObject::source_card_registry_key()`
+  (serialized key frozen by `match_state_hash_tests.rs:250`). Its source may be a
+  token, so it is a candidate for the alias-removal Task or an engine rename.
