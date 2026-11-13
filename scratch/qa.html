@@ -2,6 +2,23 @@
 <html><head><meta charset="utf-8"><title>MTG-320 QA</title>
 <style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}code,pre{background:#f4f1ea}pre{padding:.6em;overflow:auto}</style></head>
 <body>
+<h1>MTG-320 QA at 9c9124627 (after merging main 22ed4a733), 2026-11-13</h1>
+<p>The installed extension (09:29) predated the merge, so both engines were rebuilt in release (cp313): <b>before</b> = main <code>22ed4a733</code> (tree equal to main 2c47f59ae, with mana-spending choices, Heartbeat of Spring and the TLE bonus sheet) in a throwaway worktree; <b>after</b> = this head, installed atomically into <code>managym/</code>. Each run printed <code>managym.__file__</code>. Host load averages were 120&ndash;210 (other work).</p>
+<h2>A. Same seeded games on both engines</h2>
+<p>The same comparison script as below (per-decision hash of both seats' <code>toJSON()</code> plus <code>state_digest()</code>, and each result line), with one new group: 30 constructed mirrors of Heartbeat of Spring, Lita (Zeppelin token), Release to Memory (<code>token.plain_spirit</code>), Spectral Sailor and Lightning Bolt. A replay of those 30 games on the new engine saw Zeppelin in 30, Heartbeat on the battlefield in 29 and a Spirit in 28 (matched by name in the observation JSON).</p>
+<pre>games 568 (108 authored, 30 Azula, 30 TLE-bonus, 400 TLA pools)
+decisions 137,518 per engine; 567 finished, 1 PyAgentError on both
+before.txt vs after.txt (138,086 lines): IDENTICAL</pre>
+<p>The one error, pool <code>84736ef2</code> vs <code>56f0ddb0</code>: <code>PyAgentError: source cannot pay tap cost</code>, at the same decision on main and the branch. It is an existing engine bug on main, not caused by this change.</p>
+<h2>B. Academy table</h2>
+<p><code>./scripts/play --port 18781 --frontend-port 18782</code>; <code>ACADEMY_PLAY_READY</code> named this checkout's rebuilt cp313 module. Headless Chromium: first visit, New Game (UR Lessons vs GW Allies), random clicks on action-panel offers only, Play Again, second game. Both reached Game Over (19 clicks/52 s and 40 clicks/177 s), no page or console errors. The midgame shot was taken right after a click, while the table briefly said &ldquo;Waiting for the table&rdquo;; it continued. The GW Ally token is on the battlefield at the end of game 2. Server stopped with SIGINT.</p>
+<img src="qa/sync-02-new-game.png" alt="new game"><img src="qa/sync-03-midgame.png" alt="order bottom cards decision"><img src="qa/sync-04-end-1.png" alt="game over with Ally token">
+<h2>Result</h2>
+<p><b>Works:</b> no behavior change against merged main for 568 seeded games, now including the merged mana-spending code and the TLE bonus tokens; two Academy games to Game Over.</p>
+<p><b>Fixed:</b> nothing; nothing broke.</p>
+<p><b>Not reached:</b> Rust debug suite, Engine Budget and CI on this head (gate owns them); a permanent-spell copy in Academy; emblems.</p>
+<p><b>Still wrong, worst first:</b> (1) main's &ldquo;source cannot pay tap cost&rdquo; agent error in one TLA pool game (present before this change); (2) the earlier Academy table stall did not recur, its cause still unknown.</p>
+<hr>
 <h1>MTG-320 final-head QA (96d3aa14e + working tree), 2026-11-12/13</h1>
 <p>Before engine: main <code>6ce618b8a</code> (includes both payment optimizations), release cp313 built in a detached worktree at <code>/tmp/mtg320-before</code>. After engine: this branch, release cp313 installed atomically into <code>managym/</code>; each run printed <code>managym.__file__</code> to confirm which tree loaded. Host load averages were 60&ndash;280 throughout (other work on the machine).</p>
 <h2>A. Same seeded games on both engines</h2>

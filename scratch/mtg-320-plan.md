@@ -69,6 +69,13 @@ here. `ZoneManager::store_mut` returns the zone's backing list as
 `ZoneStore::Cards` or `Objects`, the one place that maps a zone to its shape
 for mutation; it replaced `mixed_objects_mut` and its unreachable arm.
 
+Re-read 2026-11-13 at 9c9124627 (after the 22ed4a733 merge), headless: same
+result. Greps over `managym/src`, `managym/state/src`, tests and examples found
+no `card`-named binding, field or `fn` return typed `ObjectId`, no
+`object`-named `CardId`, and no `CardId(` construction outside
+`state/src/game_object.rs`; the merged mana-spending code follows the naming
+rule. No implement direction and no new open choice.
+
 ## Delete — do not maintain
 
 Completed: runtime `Card`/`CardVec`, definition-owned runtime token flags,
@@ -172,3 +179,10 @@ every entry, with complete commands: `29423d3fdf:scratch/mtg-320-plan.md`
   'test(lita_creates_a_zeppelin_that_crews_until_end_of_turn) or
   test(every_decision_code_is_within_the_validated_bound)'`. No release rebuild
   or wider gate checks in this conflict-recovery run; nothing pushed.
+- **Post-merge QA at 9c9124627 (2026-11-13).** Release cp313 engines for main
+  22ed4a733 and this head: 568 seeded games (108 authored, 30 Azula, 30
+  Heartbeat/Lita/Release to Memory mirrors, 400 TLA pools), 137,518 decisions,
+  observation+state hashes byte-identical. One `PyAgentError: source cannot pay
+  tap cost` (pool 84736ef2 vs 56f0ddb0) occurs identically on main: an existing
+  bug, not this change. Two Academy games reached Game Over with no page
+  errors. Receipts: `scratch/qa.html`.
