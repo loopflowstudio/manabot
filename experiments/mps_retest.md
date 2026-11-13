@@ -94,7 +94,10 @@ float32 and float16, but bfloat16's relative loss difference is **1.07%**, above
 its unchanged **1%** gate; its other gates pass. The
 [validation receipts](data/mps_retest/laptop/paired-update/validation/README.md)
 retain that counterexample. Use the parity command on the intended checkpoint
-and capture before relying on a half-precision configuration.
+and capture before relying on a half-precision configuration. After syncing
+main and rebuilding the native extension, a fresh bounded capture passes all
+three MLX dtypes; [those receipts](data/mps_retest/laptop/paired-update/validation/after-sync/README.md)
+stay separate from the earlier counterexample and the timed evidence.
 
 | Arm | Legal logit Δ | Value Δ | Relative loss Δ | Global gradient cosine | Minimum tensor cosine | One-step parameter Δ | Choice mismatches |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -364,6 +367,10 @@ not establish equivalent learning trajectories. Larger batches, shapes that do
 not fit, host load, first-call overhead and phase shares must remain visible
 when interpreting ratios. The harness reports numbers and completeness; it
 never chooses a backend automatically.
+The delivery sync brought newer native observation shapes from main. Retained
+captures remain bound to their original world and source; reproduce the timed
+results from `140eec28d`, not by rebinding those arrays to the delivery tree.
+
 
 The M2 comparison has already shown active paging with all five models
 resident: between 04:24:04 and 04:25:37 UTC, swap-ins increased by 361.98 MiB
@@ -611,6 +618,16 @@ on the explicit wrap-up direction. Neither an uncompleted repetition nor the
 correctness-only probe is used in a median. Raw ledgers, reference arrays,
 launcher sources and terminal Etude receipts remain under
 `laptop/paired-update/`. No larger-stream or CUDA block started.
+
+**Delivery checks:** after syncing main and rebuilding the CPython 3.13
+native extension, 81 affected backend, capture, inference, bucket-shape,
+experiment-discovery and artifact tests pass. The focused package-boundary,
+capture, discovery, CI-selection and release checks also pass (111 tests).
+Ruff and diff checks pass. The public parity path passes all three MLX dtypes
+on a new two-row real capture; the earlier bfloat16 loss-gate failure is
+retained above. Injected reporting checks confirm incomplete repetitions and
+pending retries never become bars. Native rules changes came from main; this
+Task makes no Rust changes, and the native suite remains CI's responsibility.
 
 **Supported MLX precision:** the final implementation replaces the temporary
 mixed-precision subclass with one policy-owned precision option shared by

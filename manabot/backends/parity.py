@@ -34,8 +34,8 @@ or capture is missing, the checkpoint is refused or no backend is installed.
 
 Use `--backend mlx --precision bfloat16` (or `float16`) for explicit half
 precision. Half uses its measured logit/value, loss and full-gradient cosine
-bars in `TOLERANCES`; every tensor cosine and the one-step difference remain
-diagnostics. Float32 retains all the stricter checks above. Passing half's
+bars in `TOLERANCES`; the minimum per-tensor cosine and one-step difference
+remain diagnostics. Float32 retains all the stricter checks above. Passing half's
 numerical gates does not establish equivalent optimization or playing strength.
 """
 
@@ -461,7 +461,8 @@ def _compare_step(
     """One clipped Adam step in both frameworks from the same weights.
 
     All parameters count, including tensors with near-zero gradients. Cosine
-    is diagnostic only: the absolute weight difference is the acceptance bar.
+    is diagnostic only; float32 gates the absolute difference, while half
+    reports it beside its dtype-specific forward, loss and gradient gates.
     """
     before = reference.parameters()
     reference.set_learning_rate(settings.learning_rate)

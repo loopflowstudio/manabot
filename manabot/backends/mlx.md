@@ -161,13 +161,14 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
 These bounds cover the retained real-input w384/w768 checks in the
 [MPS retest](../../experiments/mps_retest.md), source `140eec28d`; they are
 measured-domain numerical gates, not a claim about optimization trajectories.
-Half still requires a finite clipped Adam step and reports every tensor's
-minimum cosine and the maximum post-step parameter difference. It does not
+Half still requires a finite clipped Adam step and reports the minimum
+per-tensor cosine and the maximum post-step parameter difference. It does not
 apply float32's 1e-6 post-step bound: the retained half deltas exceed it.
 Float32 keeps its existing per-tensor cosine and post-step gates unchanged.
 
 Run this preflight on the intended weights and inputs. The bounded real-capture
 check of the supported API passed float32 and float16 but rejected bfloat16
 at 1.07% relative loss difference against its unchanged 1% gate. That
-counterexample is retained in the report; support does not mean every input
-passes the numerical gate.
+counterexample is retained in the report. A fresh capture after the native
+sync passes all three dtypes; support does not mean every input passes the
+numerical gate.

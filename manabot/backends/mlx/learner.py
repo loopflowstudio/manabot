@@ -146,6 +146,8 @@ class Learner:
         and optimizer are then unchanged. Raises after stepping if a parameter
         became nonfinite.
         """
+        if any(p.dtype != mx.float32 for _, p in tree_flatten(self.agent.parameters())):
+            raise ValueError("close the inference precision scope before stepping")
         gradients = self._gradients(loss)
         self._pending = None
         track = recorder.track if recorder is not None else _untracked

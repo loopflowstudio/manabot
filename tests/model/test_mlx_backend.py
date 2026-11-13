@@ -298,6 +298,8 @@ def test_mixed_precision_preserves_master_updates(
     )
     assert norm > settings.max_grad_norm
     learner.set_learning_rate(settings.learning_rate)
+    with policy.forward_precision(), pytest.raises(ValueError, match="before stepping"):
+        learner.step(loss, settings.max_grad_norm)
     learner.step(loss, settings.max_grad_norm)
     after = learner.parameters()
     changed = False
