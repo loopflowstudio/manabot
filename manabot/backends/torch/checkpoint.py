@@ -46,6 +46,7 @@ from manabot.model.world import (
     validate_policy_input,
 )
 from manabot.policy.checkpoint import (
+    NotAContainer,
     PolicyCheckpoint,
     canonical_name,
     read_container,
@@ -100,18 +101,25 @@ def load_checkpoint(
     """Load saved configuration and validate world/schema; verify S3 bytes before loading.
 
     A PyTorch `.pt` file (a zip archive) loads as written; any other file is
-    read as the shared container, which raises `NotAContainer` if it is not
-    one and `UnsupportedPolicy` for a configuration the container does not
-    carry. Raises `UnsupportedPolicyInput` for a checkpoint of another policy
-    input. `bucketed_shapes` and `live_tokens` select the forward's padding and
-    attention layout (see `ActorCritic`); they are execution choices, not
-    checkpoint fields.
+    read as the shared container. Raises `NotAContainer` for a file that is
+    neither (a truncated download, say), `UnsupportedPolicy` for a
+    configuration the container does not carry, and `UnsupportedPolicyInput`
+    for a checkpoint of another policy input. `bucketed_shapes` and
+    `live_tokens` select the forward's padding and attention layout (see
+    `ActorCritic`); they are execution choices, not checkpoint fields.
     """
 
     if isinstance(path, StoredArtifact):
         path = str(materialize_artifact(path))
     if not _is_torch_file(Path(path)):
-        agent, obs_space = _load_container(Path(path), bucketed_shapes)
+        try:
+            agent, obs_space = _load_container(Path(path), bucketed_shapes)
+        except NotAContainer as error:
+            raise NotAContainer(
+                f"{path} is neither a PyTorch checkpoint (a zip archive) nor a "
+                "policy checkpoint container; it may be truncated or another "
+                "kind of file"
+            ) from error
         if include_belief_binding:
             return agent, obs_space, None
         return agent, obs_space

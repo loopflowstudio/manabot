@@ -525,3 +525,27 @@ stays: `value_scale`'s `quantile` argument shadows `returns.quantile`. Check:
 returns, boundaries, update backends, minimal loop, torch protocol, mlx
 backend: 64 passed.
 
+
+## Concept review after speed pass 4 (2026-11-12, HEAD 41dacc6bc)
+
+Nothing to change. New since the last review: recorded bucket needs
+(c314838a9, in #503). Needs are a fact about observation rows under an
+encoder (they count object references whatever the trimming), so recording
+them at collection and regrouping them in `AdmittedRollout` is one owner
+(`policy.buckets.row_needs`) carried like `references`; a row with no
+recorded needs (-1) is measured, never guessed. `AdmittedObservation.buckets`
+beside `.needs` is a cached derivation, not a second fact. The three layers,
+`backend` as a module argument and the MTG-333 split stand. The alias
+wording in split steer 0152f1d6 against steer 8332334d stays as recorded in
+`questions.md` and #503's body; it is reversible and does not block.
+Next: gate.
+
+## QA pass (2026-11-12, `scratch/qa.html`)
+
+Real-path checks: local recipe train (head vs main: same rows; weights differ
+≤2.4e-7 only under `action_type_uniform`, 0 differ with `uniform`), sim
+identical across main/head, container convert + sim, Academy vs trained
+opponents, interrupt/resume, parity on a fresh small capture: pass.
+Fixed: `mlx_pilot.py capture` (stale `self.optimizer`, and `targets` read
+before flattening), `load_checkpoint`'s message for a file in neither format,
+`uv run` in the container remedy, parity's requires_grad warning.

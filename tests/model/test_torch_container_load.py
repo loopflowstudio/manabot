@@ -82,5 +82,5 @@ def test_pt_and_container_load_the_same_policy(tmp_path: Path) -> None:
 def test_a_file_that_is_neither_format_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "policy.bin"
     path.write_bytes(np.arange(64, dtype=np.int64).tobytes())
-    with pytest.raises(NotAContainer):
+    with pytest.raises(NotAContainer, match="neither a PyTorch checkpoint"):
         load_checkpoint(str(path))

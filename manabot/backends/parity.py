@@ -281,7 +281,7 @@ def check(
         batch = policy.prepare(obs)
         port_logits, port_values = policy.evaluate(batch)
         port_loss = minibatch_loss(module, policy, learner, batch, targets, settings)
-        loss_value = float(port_loss)
+        loss_value = float(module.arrays.to_numpy(port_loss))
         grads = learner.gradients(port_loss)
         absolute, relative = _legal_difference(port_logits, logits.numpy(), valid)
         value_difference = float(np.abs(port_values - values.numpy().reshape(-1)).max())
