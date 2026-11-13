@@ -166,7 +166,7 @@ def _updates(data: RunData) -> Updates:
     not an update. Etude selects and verifies outcome tables the same way.
     """
     # Group blocks, not decoded rows: read one block at a time without populating
-    # RunData.tables, which caches the entire history. Keep empty attempts too.
+    # RunData.columns, which caches the entire history. Keep empty attempts too.
     writers: dict[str, list[StoredBlock]] = {
         attempt.writer: [] for attempt in data.attempts
     }
@@ -182,18 +182,18 @@ def _updates(data: RunData) -> Updates:
         resumed = attempt.resumed_at.get("updates") if attempt is not None else None
         rows: dict[int, MetricRow] = {}
         for block in writers[writer]:
-            table = block.table()
+            table = block.columns()
             for index in range(table.rows):
                 logged = table.row(index)
-                clocks, values = logged["clocks"], logged["values"]
-                if not isinstance(clocks, dict) or "updates" not in clocks:
+                clocks, values = logged.clocks, logged.values
+                if "updates" not in clocks:
                     continue
                 update = clocks["updates"]
                 if not isinstance(update, (int, float)):
                     raise ValueError("Etude updates clock is not a number")
                 if resumed is None:
                     resumed = update
-                if isinstance(values, dict) and values:
+                if values:
                     rows.setdefault(int(update), {}).update(_integral(values))
         # A later attempt replaces history beyond its resume point, including
         # when it has no rows. Within an attempt each metric's latest write wins.

@@ -17,8 +17,8 @@ from etude.eval.records import (
     Environment,
     Inference,
     Match,
-    Matchup,
     Model,
+    Seating,
 )
 from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
@@ -261,8 +261,8 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
             files=canonical_sha256(duel.two_seat.evaluation_identities),
             config={"purpose": "repeated-development-comparison"},
         ),
-        matchups=(
-            Matchup(
+        seatings=(
+            Seating(
                 name="two-seat vs one-seat",
                 players=(
                     Inference(
