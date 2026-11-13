@@ -275,6 +275,10 @@ Integration and Academy Integration install every extra they use in one
 engine a second time. Each Integration group runs one pytest worker per logical core
 (`pytest -n logical`; [TESTING.md](../TESTING.md) says what that asks of a test)
 and prints its 20 slowest tests (`--durations=20`) at the end of its test step.
+
+Integration and Python unit install the locked CPU Torch with
+`--no-default-groups --group play-runtime` because hosted Ubuntu runners have no GPU.
+
 When a job passes 8 minutes, in order of preference:
 
 1. Make its slowest tests cheaper (a smaller fixture, fewer updates or games,
