@@ -2929,6 +2929,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
     }));
     fields.extend(encoding!(SpendEffectManaData {
+        combat => [FactOccurrence(FactKind::EffectProgram)],
+        restriction => [FactOccurrence(FactKind::EffectProgram)],
         effect => [FactOccurrence(FactKind::EffectProgram)],
         mana => [
             FactOccurrence(FactKind::EffectProgram),
@@ -4443,6 +4445,7 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
     }
 
     let mut s = five_color_setup(&["Kyoshi Warrior Guard"]);
+    s.set_player_mana_pool(0, "1W");
     cast(&mut s, "Kyoshi Warrior Guard");
     let observation = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(observation.continuation[0].kind, 1);
@@ -4923,4 +4926,24 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     );
     let row = encoded(&s).player_turn_state;
     assert_eq!(row[turn_state::NONARTIFACT_MANA_COLORLESS], 0.1);
+}
+
+#[test]
+fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
+    let mut s = five_color_setup(&["Animal Attendant"]);
+    s.set_player_mana_pool(0, "255");
+    s.game_mut().state.players[0].combat_mana_pool = managym::state::mana::Mana::parse("1");
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let player = if viewer == 0 {
+            &observation.agent
+        } else {
+            &observation.opponent
+        };
+        assert_eq!(player.mana[5], 256);
+        assert_eq!(player.spend_effect_mana.len(), 1);
+        assert!(player.spend_effect_mana[0].combat);
+        assert_eq!(player.spend_effect_mana[0].mana[5], 1);
+        encoded_default(&observation);
+    }
 }

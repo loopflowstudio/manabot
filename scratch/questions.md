@@ -24,9 +24,10 @@
 - The receipt is projected only when a rule reads it, so ordinary spells add
   no rows. A card that reads another object's spent mana would need the
   receipt projected for that object too; none exists.
-- Automatic spending order for mana with a spend effect: before ordinary
-  mana when the effect applies to the spell being cast, after it otherwise.
-  This stands in for the design's spending choice until that is built.
+- Expiry is a `combat` property of a class in combined payment search and
+  projection; live regular/combat pools keep their existing ownership. This
+  keeps ordinary regular mana allocation-free and needs no input shape change.
+  Automatic class/expiry preferences have been removed.
 
 - Sync onto `285cd49ce` (2026-11-12): retain main's unrelated w17 fixtures,
   parity hashes and belief receipts as directed by sync-conflicts. Neither

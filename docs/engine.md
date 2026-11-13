@@ -723,8 +723,11 @@ raises `managym.DeckImportError` naming it as unknown:
 
 | Card | Waits for |
 | --- | --- |
-| Release to Memory | Tokens with their own definition type, resolved by key |
-| Lita, Mechanical Engineer | The same token change (its Zeppelin token has no printing) |
+| Release to Memory | Its card definition |
+| Lita, Mechanical Engineer | Its card and Zeppelin token definitions |
+
+Tokens now have their own definitions resolved by key, including support for
+tokens without a printing. These two cards remain unauthored.
 
 Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, 998
 admit; the two that fail list Lita. Do

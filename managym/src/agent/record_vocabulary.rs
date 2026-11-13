@@ -222,6 +222,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "program",
         "amounts",
         "entry_counters",
+        "combat",
     ] {
         add(TokenKind::Field, field);
     }

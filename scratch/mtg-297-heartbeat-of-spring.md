@@ -1,72 +1,73 @@
 # MTG-297: Heartbeat, Animal Attendant, Toph, Uncle's Musings
 
-Contract: `tle-production-design.md`; review answers and MTG-242 coordination:
-`heartbeat-design.md`. Implementation inventory before compression:
-`2af8bc650:scratch/mtg-297-heartbeat-of-spring.md`.
+Contract: `tle-production-design.md`; verbatim review and coordination:
+`heartbeat-design.md`. Earlier inventory: `2af8bc650:scratch/mtg-297-heartbeat-of-spring.md`.
 
-## Current approach
+## Approach and remaining work
 
-- Production authority is `flow/mana.rs`: tap captures `TappedForMana`, output
-  selects live `production_bonuses`, and `resolve_mana_bonuses` resolves or
-  returns the next choice. `ManaProduction` retains source/bonus identity.
-  The planner includes the same bonus alternatives; tap-time firing is deleted.
-- Spending extends MTG-242's types with `ManaClass { restriction, effect }` and
-  `ManaSpent`. The receipt follows payment → stack → resolution → entering
-  permanent → its own trigger; `ZoneEntry` applies Attendant's counters.
-  `EffectValue::{ManaSpentToCast, ColorsSpentToCast}` serves Toph/converge.
-- Projection uses kind-11 `PooledMana` programs and kind-14 `mana spent`
-  execution occurrences, with native/Python/text/token parity. No new layout,
-  model kind or version branch. Only rule-relevant receipts are projected.
-- The four definitions and Scryfall fixture entries are present.
-  `scripts/refresh_card_fixture.py` dropped existing double-faced entries in
-  the earlier run, so only the four new entries were added.
+Production stays in `flow/mana.rs`: capture `TappedForMana` at tap, select live
+trigger sources at production, then resolve independent bonuses. Spending uses
+`Mana::spending_choices` with saved `SpendCompletion`s in `flow/decision.rs`;
+unit choices preserve color, restriction, rider, expiry and every saved caller.
+The receipt excludes nested activation fees and reaches `ZoneEntry` and the
+entering permanent's own triggers. Existing fact kinds 11/14 carry the pools,
+offers and receipts in v9/v10; no input shape or model kind was added.
 
-## Remaining / Delete — do not maintain
+Compression removes the unused `Mana::set_class` remainder-writing API and
+single-use `ManaClass::effect_applies` wrapper. Search completes both zero costs
+and a cost's last unit through the same zero-cost transition. That transition
+alone emits the Spend boundary; a unit is explored only when the remaining
+current cost is already pooled. Payment completion types live with their saved
+decisions, and owned resolution effects move directly into the frame.
+The CR 106 color/restriction matrix now spends explicit offered units; the
+hybrid feasibility test no longer substitutes draining a pool for payment.
 
-**Spending choices remain required.** Replace automatic first-remainder and
-class/expiry selection in `Mana::pay` / `Game::spend_mana` /
-`spend_mana_to_remainder` with native choices whenever receipts or remainders
-differ. Do not refactor the automatic policy while waiting for this cut.
-Today converge gets the colors automatic tapping/spending chooses, and a
-player cannot hold Attendant mana back from a qualifying creature.
+Gate still needs the affected suites, current-world authored parity/authority,
+fixture binding and belief receipts, world-admission checks, and the three
+Heartbeat events among the first 1,000 MTG-213 corpus decks. Keep
+`docs/engine.md` counts aligned. No production/spending behavior is deferred.
 
-Remaining witnesses: countered then reanimated creatures receive no counter
-or X; a filter's activation fee is excluded from the outer cast receipt.
-The combat-pool Attendant witness is already present in
-`cards/tests/cards/tle.rs::animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect`.
-Academy's `experience.rs` player view still omits the spend-effect rider.
+Main `285cd49ce` was merged as `a4768f624`; its w17 fixtures, parity hashes and
+belief receipts were retained. Neither parent's evidence describes the combined
+catalog: refresh current-world evidence only, preserving frozen evidence.
+MTG-242 is incorporated; no dependency wait or Wave remains. Release to Memory
+and Lita are outside this Task; their token prerequisite landed but their card
+definitions are absent. Production limitations remain in `questions.md`.
 
-Production's obsolete bonus path and restriction-only pool equivalence are
-already deleted; the detailed deletion list is in the contract.
-
-## Compression
-
-Return the next decision directly from the infallible bonus resolver; both a
-bonus choice and its caller use the same suspension path. `advance_mana_upfront`
-only advances upfront payments, so a bonus choice stays pending. Keep
-trigger-enumeration helpers private to `flow/mana.rs`. Reuse `mana_description`
-for receipt amounts; build the receipt relevance index in catalog order.
-No serialized game state, choice order or projected bytes change.
+The earlier `scripts/refresh_card_fixture.py` run dropped existing double-faced
+entries, so only the four new entries were added to the Scryfall fixture.
 
 ## Run evidence
 
-- Production before the main merge: cards 694, rules_tests 169, engine lib
-  197 passed in debug; first 1,000 corpus decks: 998 admit, two failures name Lita.
-- After merging MTG-242 and adding spending: debug cards 707, engine lib 197,
-  rules_tests 170, match_state_hash 11, search_state_contract 6,
-  canonical_replay 6, experience_protocol 5, conformance 2, content_pack 3,
-  state 15 passed. Python academy parity/authority/fixture, semantic text/mana
-  input, env observation/layout, belief state and authored matchup passed after
-  re-recording w17 evidence (authored-match receipt 66d51605…,
-  terminal state db1a0bbb…, belief v3 receipts).
+The first compression debug build found two remaining `Mana::pay` calls in
+`tests/rules/cr_106_mana.rs`; both witnesses now use the surviving unit API.
 
-For PR review: trigger timing follows CR 106.12a over the original proposal;
-existing fact/frame joins replace its proposed v10 block and new kinds.
-Spending choices remain unfinished.
+Compression check: `cargo nextest run --manifest-path managym/Cargo.toml
+--profile ci --build-jobs 2 --test-threads 2 --lib --test cards --test rules_tests`
+with the mana, CHK/TLE, Prism, Henge/Citadel, foretell, receipt/expiry,
+completion and decision-code filters — **57 passed** (run
+`d6d6fff3-5628-4083-bf65-edf94c276580`).
 
-Compression checks (2026-11-12):
-- `cargo fmt --manifest-path managym/Cargo.toml --all --check` — passed.
-- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --lib --test cards -E 'test(chk::) | test(tle::) | test(observability::cast_receipt) | test(observability::spend_effect_mana) | test(agent::continuation::) | test(flow::mana::) | test(cost_effect_completion_retains_output) | test(the_great_henge) | test(tarnished_citadel)'` — 53 passed on the final Rust source.
-- `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -j 2 -- -D warnings` — passed.
+- Compression rebuild: `CARGO_BUILD_JOBS=2 uv run --extra play maturin build
+  --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
+  — passed; matching cp313 Darwin extension replaced atomically.
+- `uv run --extra dev --extra play pytest tests/semantic/test_spend_effect_mana_input.py -q`
+  — **3 passed**, covering native/reference scalar/vector v9/v10, text and Academy projection.
+- `cargo fmt --manifest-path managym/Cargo.toml --all --check` and
+  `git diff --check` — passed.
+
+The following passes preceded this compression pass.
+
+Earlier receipts, including pre-merge checks, are retained at
+`58c12b399:scratch/mtg-297-heartbeat-of-spring.md`; they do not validate this cut.
+
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards -E 'test(chk::) | test(tle::animal_attendant) | test(tle::toph_) | test(tle::uncles_) | test(roe::prism_) | test(tla::sozins_comet_foretell_spending) | test(the_great_henge) | test(tarnished_citadel) | test(observability::cast_receipt) | test(observability::spend_effect_mana) | test(observability::pooled_mana_expiry)'` — 37 passed on the combined source.
+- Focused `--lib --test cards` debug runs also passed the state mana tests,
+  decision-code bound, nested Command fork/restore and cost-effect completion
+  cases. The full-fee witness caught and fixed a partial-production edge case.
 - `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 Darwin extension installed atomically.
-- `uv run --extra dev pytest tests/semantic/test_spend_effect_mana_input.py -q` — 2 passed against the rebuilt extension (native/reference encoding and text).
+- `uv run --extra dev --extra play pytest tests/semantic/test_spend_effect_mana_input.py -q` — 3 passed; the extended text-submission witness passed again with `-k spending_choices`. Covers v9/v10 native/reference scalar and batched encoding, text, Academy projection and runtime token vocabulary. Two missing text-renderer mappings (stage and obligation 31) were found and fixed.
+- `tests/academy/test_experience_protocol.py` — 14 passed. All six embedding schemas regenerated from their authorities; no historical fixtures rewritten.
+- `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py -q -k 'every_native_decision_code or every_observed_field'` — 13 passed.
+- Academy `npm run check` — zero errors/warnings; `npm run test -- src/lib/protocol-conformance.test.ts src/lib/decision-labels.test.ts` — 9 passed.
+- Rust formatting, changed-Python Ruff checks and `git diff --check` — passed.

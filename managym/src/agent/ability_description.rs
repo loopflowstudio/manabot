@@ -808,6 +808,9 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
         })
         .collect();
     for (class, _) in mana.classes() {
+        if class.combat {
+            text.push_str(" (expires at end of combat)");
+        }
         if let Some(restriction) = &class.restriction {
             text.push_str(&format!(" ({} only)", restriction.describe()));
         }

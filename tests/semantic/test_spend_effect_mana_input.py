@@ -19,6 +19,8 @@ from manabot.managym.enums import ActionEnum
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
 import managym
+from managym.experience import LegacyPlayerView
+from managym.experience_projection import serialize_observation
 
 # Integer tokens: a program of literals needs no vocabulary.
 _PROGRAM = [[4, 0], [4, 1], [4, 2]]
@@ -35,6 +37,8 @@ def _observation(seat: str) -> tuple[managym.Env, managym.Observation]:
     payload = json.loads(env.observation_for_player(0).toJSON())
     payload[seat]["spend_effect_mana"] = [
         {
+            "combat": False,
+            "restriction": "",
             "effect": "a +1/+1 counter on a non-Human creature spell it casts",
             "mana": [0, 0, 0, 0, 1, 0],
             "program": _PROGRAM,
@@ -68,11 +72,18 @@ def test_spend_effect_mana_encodes_identically_as_a_program_on_its_player() -> N
 
 
 def _assert_parity(env: managym.Env, obs: managym.Observation) -> None:
-    encoder = ObservationEncoder(ObservationConfig())
-    reference = encoder.encode(obs)
-    native = env.encode_observation(obs, encoder.config.max_facts)
-    for key, value in reference.items():
-        np.testing.assert_array_equal(native[key], value, err_msg=key)
+    for version in (9, 10):
+        encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
+        reference = encoder.encode(obs)
+        native = {key: np.zeros_like(value) for key, value in reference.items()}
+        env.encode_observation_into(obs, native)
+        for key, value in reference.items():
+            np.testing.assert_array_equal(native[key], value, err_msg=key)
+        if obs.agent.player_index == env.current_agent_index():
+            buffers = encoder.allocate(1)
+            managym.encode_observations_into([env], buffers, 1)
+            for key, value in reference.items():
+                np.testing.assert_array_equal(buffers[key][0], value, err_msg=key)
 
 
 def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity() -> (
@@ -118,10 +129,11 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
         obs = env.observation_for_player(owner)
         if obs.stack_objects:
             break
+        _assert_parity(env, obs)
         pay = next(
             index
             for index, action in enumerate(obs.action_space.actions)
-            if int(action.action_type) == ActionEnum.PAY_COST
+            if int(action.action_type) in (ActionEnum.PAY_COST, ActionEnum.CHOOSE_MODE)
         )
         env.step(pay)
     else:
@@ -134,3 +146,64 @@ def test_animal_attendant_mana_and_cast_receipt_native_reference_and_text_parity
         assert obs.continuation[0].effect_execution
         _assert_parity(env, obs)
     assert "mana spent" in capture_text_decision(env).text
+
+
+def test_spending_choices_share_native_vector_text_and_academy_observations() -> None:
+    env = priority_root(("Uncle's Musings",), ("Animal Attendant",) * 5)
+    for symbol in ("W", "U", "G", "G", "G"):
+        decision = capture_text_decision(env)
+        activate = next(
+            a
+            for a in decision.actions
+            if "Activate" in a.description and "Animal Attendant" in a.description
+        )
+        submit_response(env, decision, activate.reference)
+        decision = capture_text_decision(env)
+        output = next(a for a in decision.actions if f"{{{symbol}}}" in a.description)
+        submit_response(env, decision, output.reference)
+    decision = capture_text_decision(env)
+    cast = next(
+        a
+        for a in decision.actions
+        if "Cast" in a.description and "Uncle's Musings" in a.description
+    )
+    submit_response(env, decision, cast.reference)
+    owner = env.current_agent_index()
+    assert owner is not None
+    obs = env.observation_for_player(owner)
+    _assert_parity(env, obs)
+    assert obs.continuation[-1].decision == 31
+    text = capture_text_decision(env)
+    assert len(text.actions) == 3
+    assert all(
+        "Spend" in a.description
+        and "puts" in a.description
+        and "expires" in a.description
+        for a in text.actions
+    )
+    view = serialize_observation(obs, include_details=True)
+    LegacyPlayerView.model_validate(view["agent"])
+    pools = view["agent"]["spend_effect_mana"]
+    assert pools[0]["effect"]
+    assert pools[0]["combat"] is False
+    # Every selectable unit, not just the aggregate colors, reaches the
+    # policy's closed runtime vocabulary through the execution program.
+    vocabulary = {
+        (kind, token)
+        for _, _, _, kind, token in managym.record_vocabulary()
+        if kind is not None
+    }
+    catalog = managym.catalog_tokens()
+    vocabulary.update(zip(catalog["token_kind"], catalog["token_value"], strict=True))
+    for frame in obs.continuation:
+        for kind, value in frame.effect_execution:
+            assert kind in (4, 5, 8) or (kind, value) in vocabulary
+
+    for symbol in ("W", "U"):
+        decision = capture_text_decision(env)
+        choice = next(a for a in decision.actions if f"{{{symbol}}}" in a.description)
+        submit_response(env, decision, choice.reference)
+        actor = env.current_agent_index()
+        assert actor is not None
+        _assert_parity(env, env.observation_for_player(actor))
+    assert env.observation_for_player(owner).stack_objects

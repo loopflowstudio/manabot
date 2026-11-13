@@ -4,8 +4,6 @@ from hashlib import sha256
 import json
 from pathlib import Path
 
-from managym.decision import SemanticContractError
-from managym.decision_capture import DecisionInput
 import numpy as np
 import pytest
 
@@ -28,6 +26,8 @@ from manabot.semantic.text_observation import (
 )
 from manabot.verify.text_observation import collision_branches, priority_root, run_demo
 import managym
+from managym.decision import SemanticContractError
+from managym.decision_capture import DecisionInput
 
 
 def test_every_native_decision_code_has_a_label() -> None:
@@ -587,6 +587,13 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "spend_effect_mana": "Mana that puts",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
+    },
+    managym.SpendEffectMana: {
+        "effect": "Mana that puts",
+        "mana": "amounts by color",
+        "restriction": "Spend only for",
+        "combat": "Expires at end of combat or at step end",
+        "program": "the same class stated by rider, restriction and expiry",
     },
     managym.ContinuousEffect: {
         "description": "the effect phrase of a rules payload",

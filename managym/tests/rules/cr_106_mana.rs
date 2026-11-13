@@ -103,7 +103,14 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
                 );
                 if expected {
                     let mut remaining = pool.clone();
-                    remaining.pay(&cost);
+                    let mut owed = cost.clone();
+                    while owed.mana_value > 0 {
+                        // This fixture chooses one valid path; the engine offers
+                        // every distinct unit instead of preferring a color.
+                        let choice = remaining.spending_choices(&owed).remove(0);
+                        remaining.spend(&choice.unit, &owed.purpose);
+                        owed = choice.remaining;
+                    }
                     assert_eq!(remaining.total(), pool.total() - generic as u16 - 1);
                     assert_eq!(remaining.mana[slot], 0);
                     assert!(remaining
@@ -134,8 +141,10 @@ fn audit_restricted_mana_never_pays_unrelated_costs() {
                 cost.purpose = SpendingContext::cast(["Lesson"], []);
             }
             assert_eq!(pool.can_pay(&cost), eligible);
+            let choices = pool.spending_choices(&cost);
+            assert_eq!(choices.len(), usize::from(eligible));
             if eligible {
-                pool.pay(&cost);
+                pool.spend(&choices[0].unit, &cost.purpose);
                 assert_eq!(pool.total(), 0);
             }
             pool.clear();

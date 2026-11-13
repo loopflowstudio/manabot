@@ -57,8 +57,8 @@ pub struct PlayerData {
     /// Restricted mana by restriction class, in class order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<RestrictedManaData>,
-    /// Pooled mana whose spending has an effect (Animal Attendant), by
-    /// class, in class order. Its amounts are also counted in `mana` when
+    /// Pooled mana with a spend effect or combat expiry, by class and expiry.
+    /// The field name predates expiry projection. Its amounts are also counted in `mana` when
     /// unrestricted and in `restricted_mana` when restricted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spend_effect_mana: Vec<SpendEffectManaData>,
@@ -128,12 +128,16 @@ pub struct RestrictedManaData {
     pub mana: [i32; 6],
 }
 
-/// Pooled mana of one class that carries a spend effect. `program` is the
+/// Pooled mana of one class with a spend effect or combat expiry. `program` is the
 /// class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary, the
 /// same serialization the producing card's definition uses.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SpendEffectManaData {
+    #[serde(default)]
+    pub combat: bool,
+    #[serde(default)]
+    pub restriction: String,
     /// "a +1/+1 counter on a non-Human creature spell it casts".
     pub effect: String,
     pub mana: [i32; 6],
@@ -1169,7 +1173,21 @@ impl Observation {
 
         // Regular and combat mana together, as the player may spend it.
         let mut pool = p.mana_pool.clone();
-        pool.add(&p.combat_mana_pool);
+        pool.add_combat(&p.combat_mana_pool);
+        // Individual class counts are u8; public totals may exceed one class's
+        // capacity when regular and combat mana have the same color.
+        let mut mana = pool.mana.map(i32::from);
+        let mut lesson_mana = [0_i32; 6];
+        for (class, amounts) in pool.classes() {
+            let total = if class.restriction.is_some() {
+                &mut lesson_mana
+            } else {
+                &mut mana
+            };
+            for (sum, amount) in total.iter_mut().zip(amounts) {
+                *sum += i32::from(*amount);
+            }
+        }
         PlayerData {
             main_counts,
             unseen_counts,
@@ -1186,8 +1204,8 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
-            mana: pool.unrestricted_colors().map(i32::from),
-            lesson_mana: pool.restricted_colors().map(i32::from),
+            mana,
+            lesson_mana,
             restricted_mana: pool
                 .classes()
                 .iter()
@@ -1200,9 +1218,19 @@ impl Observation {
                 .classes()
                 .iter()
                 .filter_map(|(class, amounts)| {
-                    let effect = class.effect.as_ref()?;
+                    if class.effect.is_none() && !class.combat {
+                        return None;
+                    }
                     Some(SpendEffectManaData {
-                        effect: effect.describe(),
+                        combat: class.combat,
+                        restriction: class
+                            .restriction
+                            .as_ref()
+                            .map_or_else(String::new, |r| r.describe()),
+                        effect: class
+                            .effect
+                            .as_ref()
+                            .map_or_else(String::new, |e| e.describe()),
                         mana: amounts.map(i32::from),
                         program: crate::cards::tokens::rules_tokens(
                             &Mana::of_class(class.clone(), *amounts),

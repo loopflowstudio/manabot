@@ -18,7 +18,7 @@ use crate::{
     },
     cards::{content_pack::default_content_pack, tokens::TokenWriter},
     flow::{
-        decision::{Decision, EffectFrame, FrameCompletion},
+        decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
         game::{ActivationSource, Game, Payment},
         proposed_event::{
@@ -118,6 +118,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "linked return",
     "linked source",
     "mana spent",
+    "spending option",
+    "cost sacrifice",
     "maximum total power",
     "mode",
     "moved",
@@ -431,41 +433,7 @@ impl<'a> Projection<'a> {
                 }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
-                match payment {
-                    Payment::Spell {
-                        card,
-                        cast,
-                        mode,
-                        targets,
-                        target_req_indices,
-                    } => {
-                        self.card("paid spell", *card);
-                        self.field("cast choices", cast);
-                        self.field("mode", mode);
-                        self.field("target clauses", target_req_indices);
-                        for target in targets {
-                            self.target("target", *target);
-                        }
-                    }
-                    Payment::Activation {
-                        source,
-                        ability_index,
-                        targets,
-                        x,
-                    } => {
-                        match source {
-                            ActivationSource::Permanent(id) => {
-                                self.target("paid source", Target::Permanent(*id))
-                            }
-                            ActivationSource::Card(card) => self.card("paid source", *card),
-                        }
-                        self.field("ability", ability_index);
-                        self.field("X", x);
-                        for target in targets {
-                            self.target("target", *target);
-                        }
-                    }
-                }
+                self.payment(payment);
             }
             FrameCompletion::Activated {
                 ability,
@@ -492,6 +460,44 @@ impl<'a> Projection<'a> {
                 }
                 if let Some(card) = source_after_cost {
                     self.card("source after cost", *card);
+                }
+            }
+        }
+    }
+
+    fn payment(&mut self, payment: &Payment) {
+        match payment {
+            Payment::Spell {
+                card,
+                cast,
+                mode,
+                targets,
+                target_req_indices,
+            } => {
+                self.card("paid spell", *card);
+                self.field("cast choices", cast);
+                self.field("mode", mode);
+                self.field("target clauses", target_req_indices);
+                for target in targets {
+                    self.target("target", *target);
+                }
+            }
+            Payment::Activation {
+                source,
+                ability_index,
+                targets,
+                x,
+            } => {
+                match source {
+                    ActivationSource::Permanent(id) => {
+                        self.target("paid source", Target::Permanent(*id))
+                    }
+                    ActivationSource::Card(card) => self.card("paid source", *card),
+                }
+                self.field("ability", ability_index);
+                self.field("X", x);
+                for target in targets {
+                    self.target("target", *target);
                 }
             }
         }
@@ -935,6 +941,50 @@ pub(crate) fn project_decision(
 ) {
     let mut out = Projection::new(game, viewer, text);
     match decision {
+        Decision::ManaSpend {
+            player,
+            cost,
+            spent,
+            completion,
+        } => {
+            out.field("mana spent", spent);
+            out.summary(|| {
+                format!(
+                    "Mana already spent in this payment: {}.",
+                    mana_description(&crate::state::mana::Mana {
+                        mana: spent.amounts,
+                        ..Default::default()
+                    })
+                )
+            });
+            for (mode, choice) in game.mana_spend_choices(*player, cost).iter().enumerate() {
+                out.field("mode", &mode);
+                out.field("spending option", &choice.unit);
+            }
+            match completion.as_ref() {
+                SpendCompletion::Announced {
+                    payment, sacrifice, ..
+                } => {
+                    out.payment(payment);
+                    if let Some(permanent) = sacrifice {
+                        out.target(
+                            "cost sacrifice",
+                            crate::state::game_object::Target::Permanent(*permanent),
+                        );
+                    }
+                }
+                SpendCompletion::Resolution(payment) => {
+                    out.effects("if paid", &payment.if_paid);
+                    out.objects("waterbend contributions", &payment.waterbend_paid);
+                    if let Some(key) = payment.spends {
+                        out.object("once each turn source", key.0);
+                        out.field("once each turn ability", &key.1);
+                    }
+                }
+                SpendCompletion::Foretell(card) => out.card("cast from hand", *card),
+                SpendCompletion::Upfront(_) => {}
+            }
+        }
         Decision::SelectCards {
             selected,
             min,

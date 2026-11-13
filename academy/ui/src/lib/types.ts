@@ -154,6 +154,7 @@ export interface PlayerTurnHistory {
 }
 
 export interface PlayerState {
+  spend_effect_mana?: { mana: number[]; effect: string; restriction: string; combat: boolean }[];
   mana?: number[];
   lesson_mana?: number[];
   /** `lesson_mana` split by restriction class. */

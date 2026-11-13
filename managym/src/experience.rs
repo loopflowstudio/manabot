@@ -357,6 +357,8 @@ pub struct LegacyCastPermissionView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyRestrictedManaView {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub except_nonartifact_spells: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spells: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -489,7 +491,18 @@ pub struct SideboardCardView {
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct PooledManaView {
+    pub mana: [i32; 6],
+    pub effect: String,
+    pub restriction: String,
+    pub combat: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LegacyPlayerView {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spend_effect_mana: Vec<PooledManaView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mana: Option<[i32; 6]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

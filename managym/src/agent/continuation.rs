@@ -928,6 +928,7 @@ impl Game {
                     &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
                 );
             }
+            Decision::ManaSpend { cost, .. } => frame.cost(cost),
             Decision::ManaChoice {
                 choices,
                 production,
@@ -1014,7 +1015,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 30;
+pub const MAX_DECISION_CODE: u8 = 31;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -1028,6 +1029,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::Payment(_) => 1,
         Decision::ManaUpfront { .. } => 2,
         Decision::ManaChoice { .. } => 3,
+        Decision::ManaSpend { .. } => 31,
         Decision::ChooseObject { .. } => 4,
         Decision::SelectCards { .. } => 28,
         Decision::Scry { .. } => 8,
@@ -1213,6 +1215,7 @@ pub fn encode_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::flow::decision::SpendCompletion;
     use crate::state::ability::DistinctSearchEnd;
     use std::collections::HashMap;
 
@@ -1302,6 +1305,14 @@ mod tests {
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
         let decisions = [
+            Decision::ManaSpend {
+                player,
+                cost: ManaCost::default(),
+                spent: crate::state::mana::ManaSpent::default(),
+                completion: Box::new(SpendCompletion::Foretell(
+                    crate::state::game_object::CardId(0),
+                )),
+            },
             Decision::OrderReplacement {
                 player: PlayerId(0),
                 candidates: Vec::new(),

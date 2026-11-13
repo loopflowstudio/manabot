@@ -4,7 +4,7 @@ The original MTG-286 proposal is preserved at
 `5f6ae4633:scratch/tle-production-design.md`; its reviewed MTG-297 copy is at
 `2af8bc650:scratch/tle-production-design.md`. Review answers and timing decisions
 are in `heartbeat-design.md`; implementation status is in
-`mtg-297-heartbeat-of-spring.md`. This contract includes unfinished work.
+`mtg-297-heartbeat-of-spring.md`. This contract covers the complete production and spending change.
 
 ## Production
 
@@ -48,13 +48,15 @@ the spell as cast and contributes one entry counter per applicable unit, through
 `ZoneEntry`, not an ETB trigger. Countering/reanimation cannot transfer the
 receipt to a later entry; copied spells have no original payment receipt.
 
-**Still required:** replace automatic first-remainder commitment whenever
-alternative receipts or remaining pools differ. Offer one unit/class choice at
-a time, feasible for every saved obligation: colors for generic costs,
-restrictions, spend effects and expiry all matter. Equivalent units add no
-choices. Native narrowing, if needed, commits no spending. Preserve Command,
-replay and fork identity; no browser-only selection or undo of committed costs.
-Memoization, bounds and executable witnesses must use the same pool semantics.
+Spending is a native unit/class choice whenever alternative receipts or
+remaining pools differ. One unit is offered at a time, feasible for every saved
+obligation: colors for generic costs, restrictions, spend effects and expiry all
+matter. Equivalent units add no choices. Native narrowing, if needed, commits
+no spending. Preserve Command, replay and fork identity; no browser-only
+selection or undo of committed costs. Memoization, bounds and executable
+witnesses use the same pool semantics. Automatic production pools the complete
+current cost before a spending choice starts; nested output and parent costs
+remain in feasibility throughout that choice.
 
 ## Shared observation
 
@@ -66,9 +68,12 @@ model embedding, raw storage identity or hidden information is needed.
 - A production choice uses the existing obligation frame: output `source` is
   the mana ability's source; bonus `source` is its trigger, `context` the tap.
 - Public spend-effect pools are kind-11 `EffectProgram`s on the player under
-  `PooledMana`, one class program per occurrence. Counts also join the matching
+  `PooledMana`, one class/expiry program per occurrence. Counts also join the matching
   ordinary/restricted aggregate. Keep exact restrictions, effects and expiry
-  understandable to both viewers; Academy's rider display remains unfinished.
+  understandable to both viewers. Combat classes (including ordinary combat
+  mana) retain their expiry in the program; Academy displays the rider,
+  restriction and expiry. A spending obligation uses code 31 in the existing
+  kind-6 frame and joins native mode offers to unit programs in kind 14.
 - A rule-relevant cast receipt is a kind-14 execution occurrence (`mana spent`)
   on its public stack or acting resolution frame. Register every runtime name
   in `record_vocabulary.rs`. A future rule reading another object's receipt
@@ -92,8 +97,10 @@ Completed: fixed-only `TriggeredManaAbility.mana`; `tap_mana_bonus`,
 source-free runtime `ManaChoice`; restriction-only pool equivalence.
 Their consumers use production and `ManaClass` directly.
 
-Remaining with spending choices: unconditional first-remainder commitment in
-`Mana::pay` / `Game::spend_mana` / `spend_mana_to_remainder`, including automatic
-class/expiry preferences. Replace those choices with the shared decision
-surface, retaining ordinary/restricted/hybrid and combat behavior in one planner.
-Do not polish that predecessor while its replacement remains pending.
+Completed with spending choices: `Mana::pay`, `payment_options`,
+`apply_payment_remainder`, automatic class ordering, `Game::spend_mana` and
+`spend_mana_to_remainder`. Ordinary/restricted/hybrid and combat behavior use
+one unit transition model and the shared decision surface.
+Compression also removes the unused `Mana::set_class` remainder writer and
+the single-use `ManaClass::effect_applies` forwarding method. No deletion
+target remains open.

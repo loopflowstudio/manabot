@@ -54,5 +54,5 @@ rewrite pool storage in parallel. If spending must wait for MTG-242 to reach
 main, finish production and stop there."
 
 MTG-242 PR #496 merged 2026-11-12T21:37Z; main merged here as 824753626.
-Spending is built on those types. Spending choices remain required, not
-approved out of scope; see the active plan.
+Spending is built on those types. Spending choices are built in the active plan; they were never approved out
+of scope.

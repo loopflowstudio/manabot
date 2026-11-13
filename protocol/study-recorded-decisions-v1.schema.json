@@ -1618,6 +1618,12 @@
           "format": "uint32",
           "minimum": 0
         },
+        "spend_effect_mana": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PooledManaView"
+          }
+        },
         "stack": {
           "type": "array",
           "items": {
@@ -1673,6 +1679,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "except_nonartifact_spells": {
+          "type": "boolean"
         },
         "mana": {
           "type": "array",
@@ -1853,6 +1862,36 @@
         }
       },
       "additionalProperties": false
+    },
+    "PooledManaView": {
+      "type": "object",
+      "properties": {
+        "combat": {
+          "type": "boolean"
+        },
+        "effect": {
+          "type": "string"
+        },
+        "mana": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 6,
+          "minItems": 6
+        },
+        "restriction": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mana",
+        "effect",
+        "restriction",
+        "combat"
+      ]
     },
     "PresentationEvent": {
       "type": "object",

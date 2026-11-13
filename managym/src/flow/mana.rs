@@ -8,8 +8,8 @@ use crate::{
     agent::action::{Action, AgentError},
     flow::{
         decision::{
-            Decision, EffectFrame, ManaProduction, PendingManaBonus, SuspendedResolution,
-            TappedForMana,
+            Decision, EffectFrame, ManaProduction, PendingManaBonus, SpendCompletion,
+            SuspendedResolution, TappedForMana,
         },
         game::{ActivationSource, Game, Payment, PendingChoice},
         statics::Characteristics,
@@ -21,7 +21,7 @@ use crate::{
             TriggeredManaOutput,
         },
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
-        mana::{Color, Mana, ManaCost, ManaSpent},
+        mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent},
     },
 };
 
@@ -80,7 +80,7 @@ struct SourceReservation {
 enum PaymentStep {
     Fixed(PermanentId),
     Activate(PermanentId, usize),
-    Spend(Mana),
+    Spend,
     Output(usize),
     Waterbend(PermanentId),
     Tap(CardId),
@@ -106,7 +106,7 @@ impl PaymentStep {
                 player,
                 permanent: *permanent,
             }),
-            Self::Fixed(_) | Self::Spend(_) => None,
+            Self::Fixed(_) | Self::Spend => None,
         }
     }
 }
@@ -334,6 +334,22 @@ impl PaymentModel {
                 }
             }
             Obligation::Pay { cost, waterbend } => {
+                if cost.mana_value == 0 {
+                    return self
+                        .witness(
+                            PaymentSearchState {
+                                obligations: rest,
+                                prefix: None,
+                                ..state
+                            },
+                            policy,
+                            visited,
+                        )
+                        .map(|mut path| {
+                            path.insert(0, PaymentStep::Spend);
+                            path
+                        });
+                }
                 // Color/restriction upper bound: count each repeatable output,
                 // relaxing shared resources and choosing every color together.
                 let mut optimistic = state.pool.clone();
@@ -376,18 +392,21 @@ impl PaymentModel {
                 if usable < u64::from(cost.mana_value) || !optimistic.can_pay(&cost) {
                     return None;
                 }
-                for remainder in state.pool.payment_options(&cost) {
-                    if let Some(mut path) = self.witness(
-                        PaymentSearchState {
-                            pool: remainder.clone(),
-                            obligations: rest.clone(),
-                            prefix: None,
-                            ..state.clone()
-                        },
-                        policy,
-                        visited,
-                    ) {
-                        path.insert(0, PaymentStep::Spend(remainder));
+                for choice in state.pool.spending_choices(&cost) {
+                    let mut next = state.clone();
+                    next.pool.spend(&choice.unit, &cost.purpose);
+                    // Pool the whole current cost before spending starts;
+                    // production cannot interleave with its unit choices.
+                    if !next.pool.can_pay(&choice.remaining) {
+                        continue;
+                    }
+                    next.obligations[0] = Obligation::Pay {
+                        cost: choice.remaining,
+                        waterbend,
+                    };
+                    // The zero-cost arm owns completion and the Spend boundary,
+                    // including when this was the last unit of a nonzero cost.
+                    if let Some(path) = self.witness(next, policy, visited) {
                         return Some(path);
                     }
                 }
@@ -654,6 +673,26 @@ impl Game {
         }
         fn reserve(decision: &Decision, game: &Game, reserved: &mut Vec<SourceReservation>) {
             match decision {
+                Decision::ManaSpend { completion, .. } => {
+                    if let SpendCompletion::Upfront(next) = completion.as_ref() {
+                        reserve(next, game, reserved);
+                    }
+                    if let SpendCompletion::Announced {
+                        payment, sacrifice, ..
+                    } = completion.as_ref()
+                    {
+                        if let Some(r) = game.payment_reservation(payment) {
+                            reserved.push(r);
+                        }
+                        if let Some(source) = sacrifice {
+                            reserved.push(SourceReservation {
+                                permanent: *source,
+                                tap: false,
+                                sacrifice: true,
+                            });
+                        }
+                    }
+                }
                 Decision::ManaUpfront {
                     permanent,
                     ability_index,
@@ -776,6 +815,19 @@ impl Game {
     fn payment_obligations(&self, player: PlayerId) -> Vec<Obligation> {
         fn append(decision: &Decision, game: &Game, result: &mut Vec<Obligation>) {
             match decision {
+                Decision::ManaSpend {
+                    cost, completion, ..
+                } => {
+                    result.push(Obligation::Pay {
+                        cost: cost.clone(),
+                        waterbend: false,
+                    });
+                    if let SpendCompletion::Upfront(next) = completion.as_ref() {
+                        let mut saved = Vec::new();
+                        append(next, game, &mut saved);
+                        result.extend(saved.into_iter().skip(1));
+                    }
+                }
                 Decision::ManaUpfront {
                     permanent,
                     ability_index,
@@ -1189,8 +1241,8 @@ impl Game {
         self.advance_mana_upfront()
     }
 
-    /// Automatic fixed sources and spending commit the exact witness prefix.
-    /// Chosen-output sources suspend instead; no witness selects a player's color.
+    /// Commit the automatic fixed-source prefix, then enter native spending.
+    /// Neither spending nor chosen output is selected by a search witness.
     pub(crate) fn advance_mana_upfront(&mut self) -> Result<(), AgentError> {
         let Some(suspended) = &self.state.suspended_decision else {
             return Ok(());
@@ -1221,7 +1273,7 @@ impl Game {
         };
         if path
             .iter()
-            .take_while(|step| !matches!(step, PaymentStep::Spend(_)))
+            .take_while(|step| !matches!(step, PaymentStep::Spend))
             .any(|step| step.action(player).is_some())
         {
             return Ok(());
@@ -1229,13 +1281,32 @@ impl Game {
         for step in path {
             match step {
                 PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, source),
-                PaymentStep::Spend(remainder) => {
-                    self.spend_mana_to_remainder(player, remainder);
-                    break;
-                }
+                PaymentStep::Spend => break,
                 _ => unreachable!("validated automatic prefix"),
             }
         }
+        let cost = self.characteristics(permanent).activated_abilities[ability_index]
+            .mana_cost
+            .clone();
+        let caller = self.state.suspended_decision_mut().take().unwrap();
+        self.begin_mana_spend(
+            player,
+            cost,
+            SpendCompletion::Upfront(Box::new(caller.decision)),
+            caller.frame,
+        )
+    }
+
+    fn complete_mana_upfront(&mut self) -> Result<(), AgentError> {
+        let Decision::ManaUpfront {
+            player,
+            permanent,
+            ability_index,
+            ..
+        } = self.state.suspended_decision.as_ref().unwrap().decision
+        else {
+            unreachable!()
+        };
         let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         // Tapping the source for mana (CR 106.12) records what the source
         // was, so a sacrifice cost leaves its last known information; the
@@ -1466,7 +1537,7 @@ impl Game {
     /// Both pools combined (regular + until-end-of-combat).
     pub(crate) fn pooled_mana(&self, player: PlayerId) -> Mana {
         let mut total = self.state.players[player.0].mana_pool.clone();
-        total.add(&self.state.players[player.0].combat_mana_pool);
+        total.add_combat(&self.state.players[player.0].combat_mana_pool);
         total
     }
 
@@ -1495,57 +1566,163 @@ impl Game {
         Ok(())
     }
 
-    /// Pay `cost` from eligible pools and report the mana spent. Within each
-    /// color, classes are spent in `Mana::pay`'s order; combat mana is spent
-    /// first within each class.
-    pub(crate) fn spend_mana(
-        &mut self,
-        player: PlayerId,
-        cost: &ManaCost,
-    ) -> Result<ManaSpent, AgentError> {
-        let combined = self.pooled_mana(player);
-        if !combined.can_pay(cost) {
-            return Err(AgentError("insufficient mana in pool".to_string()));
+    /// Commit precisely the selected unit, retaining its expiry identity.
+    fn spend_mana_unit(&mut self, player: PlayerId, unit: &Mana, cost: &ManaCost) -> ManaSpent {
+        let (regular, combat) = self.state.mana_pools_mut(player);
+        if let Some((class, amounts)) = unit.classes().first().filter(|(class, _)| class.combat) {
+            let mut class = class.clone();
+            class.combat = false;
+            let unit = if class.restriction.is_none() && class.effect.is_none() {
+                Mana {
+                    mana: *amounts,
+                    ..Mana::default()
+                }
+            } else {
+                Mana::of_class(class, *amounts)
+            };
+            combat.spend(&unit, &cost.purpose)
+        } else {
+            regular.spend(unit, &cost.purpose)
         }
-        let mut remaining = combined;
-        let spent = remaining.pay(cost);
-
-        self.spend_mana_to_remainder(player, remaining);
-        Ok(spent)
     }
 
-    /// Commit an already validated pool payment. Feasibility probes and real
-    /// activations retain the same remainder, including restriction classes.
-    fn spend_mana_to_remainder(&mut self, player: PlayerId, remaining: Mana) {
-        // Rebuild the pools by restriction class and color, consuming the
-        // expiring combat pool before the regular pool within each class.
-        let (mana_pool, combat_mana_pool) = self.state.mana_pools_mut(player);
-        let mut classes = mana_pool
-            .classes()
-            .iter()
-            .chain(combat_mana_pool.classes())
-            .map(|(class, _)| class.clone())
-            .collect::<Vec<_>>();
-        classes.sort();
-        classes.dedup();
-        for class in &classes {
-            let mut regular = mana_pool.class_of(class);
-            let mut combat = combat_mana_pool.class_of(class);
-            let left = remaining.class_of(class);
-            for slot in 0..left.len() {
-                let spent = regular[slot] + combat[slot] - left[slot];
-                let from_combat = spent.min(combat[slot]);
-                combat[slot] -= from_combat;
-                regular[slot] -= spent - from_combat;
-            }
-            mana_pool.set_class(class, regular);
-            combat_mana_pool.set_class(class, combat);
+    /// Feasible unit selections preserve every saved caller, including the
+    /// output of an in-progress filter before the outer cast's remaining cost.
+    pub(crate) fn mana_spend_choices(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+    ) -> Vec<ManaSpendChoice> {
+        let pool = self.pooled_mana(player);
+        let mut tail = self.payment_obligations(player);
+        if !tail.is_empty() {
+            tail.remove(0);
         }
-        for slot in 0..remaining.mana.len() {
-            let spent = mana_pool.mana[slot] + combat_mana_pool.mana[slot] - remaining.mana[slot];
-            let combat = spent.min(combat_mana_pool.mana[slot]);
-            combat_mana_pool.mana[slot] -= combat;
-            mana_pool.mana[slot] -= spent - combat;
+        let model = (!tail.is_empty()).then(|| self.payment_model(player, None));
+        let mut choices: Vec<_> = pool
+            .spending_choices(cost)
+            .into_iter()
+            .filter(|choice| {
+                let mut remaining = pool.clone();
+                remaining.spend(&choice.unit, &cost.purpose);
+                if !remaining.can_pay(&choice.remaining) {
+                    return false;
+                }
+                let Some(model) = &model else {
+                    return true;
+                };
+                let mut obligations = vec![Obligation::Pay {
+                    cost: choice.remaining.clone(),
+                    waterbend: false,
+                }];
+                obligations.extend(tail.clone());
+                model
+                    .plan(remaining, obligations, SourcePolicy::All)
+                    .is_some()
+            })
+            .collect();
+        // If all usable units must be consumed, their order cannot change the
+        // receipt or remaining pool. Do not ask for permutations of one payment.
+        if pool.usable_total(cost) == u16::from(cost.mana_value) {
+            choices.truncate(1);
+        }
+        choices
+    }
+
+    pub(crate) fn begin_mana_spend(
+        &mut self,
+        player: PlayerId,
+        cost: ManaCost,
+        completion: SpendCompletion,
+        frame: EffectFrame,
+    ) -> Result<(), AgentError> {
+        *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+            frame,
+            decision: Decision::ManaSpend {
+                player,
+                cost,
+                spent: ManaSpent::default(),
+                completion: Box::new(completion),
+            },
+        });
+        self.advance_mana_spend(None)
+    }
+
+    pub(crate) fn advance_mana_spend(
+        &mut self,
+        mut selected: Option<usize>,
+    ) -> Result<(), AgentError> {
+        loop {
+            let Some(suspended) = self.state.suspended_decision.as_ref() else {
+                return Ok(());
+            };
+            let Decision::ManaSpend { player, cost, .. } = &suspended.decision else {
+                return Ok(());
+            };
+            let player = *player;
+            let cost = cost.clone();
+            if cost.mana_value > 0 {
+                let choices = self.mana_spend_choices(player, &cost);
+                let index = match selected.take() {
+                    Some(index) => index,
+                    None if choices.len() == 1 => 0,
+                    None if !choices.is_empty() => return Ok(()),
+                    None => return Err(AgentError("no feasible mana spending choice".into())),
+                };
+                let choice = choices
+                    .get(index)
+                    .ok_or_else(|| AgentError("illegal mana spending choice".into()))?;
+                let receipt = self.spend_mana_unit(player, &choice.unit, &cost);
+                let suspended = self.state.suspended_decision_mut().as_mut().unwrap();
+                let Decision::ManaSpend { cost, spent, .. } = &mut suspended.decision else {
+                    unreachable!()
+                };
+                *cost = choice.remaining.clone();
+                for (sum, amount) in spent.amounts.iter_mut().zip(receipt.amounts) {
+                    *sum += amount;
+                }
+                spent.entry_counters += receipt.entry_counters;
+                continue;
+            }
+            let suspended = self.state.suspended_decision_mut().take().unwrap();
+            let Decision::ManaSpend {
+                spent, completion, ..
+            } = suspended.decision
+            else {
+                unreachable!()
+            };
+            match *completion {
+                SpendCompletion::Announced {
+                    payment,
+                    sacrifice,
+                    waterbend,
+                } => {
+                    self.complete_announced_payment(player, payment, sacrifice, waterbend, spent)?;
+                }
+                SpendCompletion::Upfront(decision) => {
+                    *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                        frame: suspended.frame,
+                        decision: *decision,
+                    });
+                    self.complete_mana_upfront()?;
+                }
+                SpendCompletion::Resolution(payment) => {
+                    if let Some(key) = payment.spends {
+                        self.spend_once_each_turn(key);
+                    }
+                    if matches!(
+                        payment.remaining,
+                        crate::state::ability::PaymentCost::Waterbend { .. }
+                    ) {
+                        self.record_bending(player, crate::flow::turn::Bending::Water);
+                    }
+                    let mut frame = suspended.frame;
+                    frame.prepend_effects(payment.if_paid.into_iter());
+                    self.run_frame(frame);
+                }
+                SpendCompletion::Foretell(card) => self.complete_foretell(player, card),
+            }
+            return Ok(());
         }
     }
 

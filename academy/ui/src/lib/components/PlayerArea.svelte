@@ -147,6 +147,9 @@
           · {manaText(restricted.mana)} only for {spendingText(restricted)}
         {/each}
       {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
+      {#each player.spend_effect_mana ?? [] as pooled}
+        · {manaText(pooled.mana)}{pooled.restriction ? ` only for ${pooled.restriction}` : ''}{pooled.effect ? ` puts ${pooled.effect}` : ''}; expires {pooled.combat ? 'at end of combat' : 'at step end'}
+      {/each}
       {#if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
       {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
     </p>

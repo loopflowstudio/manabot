@@ -227,6 +227,11 @@ Mana feasibility and production share typed costs and pools. `ManaClass`
 retains each class's spending restriction and spend effect; `SpendingContext`
 distinguishes casting, activation and resolving costs. A spell's payment records
 `ManaSpent`, carried to resolution and the entering permanent's own triggers.
+Spending is a native unit/class decision whenever receipts or remaining pools
+differ, including generic colors, restrictions, riders and combat expiry. Each
+offer can complete every saved payment. Partial spending, nested activation
+fees and their saved caller survive exact forks and Command replay; the spell's
+receipt excludes those fees. Academy and policy inputs expose the same choices.
 Chosen-color mana abilities pay their activation costs before their
 immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend

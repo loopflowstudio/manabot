@@ -1453,6 +1453,10 @@ pub struct PyRestrictedMana {
 #[derive(Clone)]
 pub struct PySpendEffectMana {
     #[pyo3(get)]
+    pub combat: bool,
+    #[pyo3(get)]
+    pub restriction: String,
+    #[pyo3(get)]
     pub effect: String,
     #[pyo3(get)]
     pub mana: [i32; 6],
@@ -1464,6 +1468,8 @@ pub struct PySpendEffectMana {
 impl From<SpendEffectManaData> for PySpendEffectMana {
     fn from(value: SpendEffectManaData) -> Self {
         Self {
+            combat: value.combat,
+            restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
             program: value.program,
@@ -1475,6 +1481,8 @@ impl From<SpendEffectManaData> for PySpendEffectMana {
 impl From<PySpendEffectMana> for SpendEffectManaData {
     fn from(value: PySpendEffectMana) -> Self {
         Self {
+            combat: value.combat,
+            restriction: value.restriction,
             effect: value.effect,
             mana: value.mana,
             program: value.program,

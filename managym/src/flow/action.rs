@@ -95,6 +95,16 @@ impl Game {
                         NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
                     },
                     Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
+                    Decision::ManaSpend { player, cost, .. } => {
+                        let choices = self.mana_spend_choices(*player, cost);
+                        let unit = &choices.get(*mode)?.unit;
+                        let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
+                            ""
+                        } else {
+                            " (expires at step end)"
+                        };
+                        Some(format!("Spend {}{expiry}", mana_description(unit)))
+                    }
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))
                     }

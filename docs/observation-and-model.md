@@ -376,13 +376,25 @@ schedules and delegated decisions use kinds 13 and 14.
 
 Pooled mana whose spending has an effect (Animal Attendant's "that creature
 enters with an additional +1/+1 counter") counts in its player's ordinary
-mana columns and is stated as an effect program on that player: fact kind 11
+or restricted mana aggregate, according to its restriction, and is stated as
+an effect program on that player: fact kind 11
 under the id `PooledMana`, one program per class, in the tokens the producing
 card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is
 an execution occurrence of its stack or resolution frame (`mana spent`, a
 kind-14 continuation program) when a rule still reads it: the definition
-counts that mana (Toph, converge) or a spend effect applied. Both are public
-and identical in v9 and v10.
+counts that mana (Toph, converge) or a spend effect applied. These programs
+use the same representation in v9 and v10. Combat mana also has a pool
+program, including ordinary combat mana; its class records combat expiry.
+Regular and combat units never merge during payment search. Academy shows each
+rider, restriction and expiry alongside the public amounts.
+
+Spending offers select one color and class at a time. The native obligation
+frame (decision code 31) carries the remaining cost; its execution program
+joins each offer's mode to the exact unit and retains the partial receipt.
+Every offer preserves all saved payments, including nested mana-ability fees.
+Equivalent units and permutations of a single forced payment need no choice.
+Submitting a spending Command commits that unit; replay, forks and stale
+rejection use the same authority as other decisions.
 
 Fact rows carry source, duration and timestamp rank. The model divides
 timestamp ranks by 128, independent of fact capacity.

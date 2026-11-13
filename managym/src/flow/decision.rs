@@ -24,7 +24,7 @@ use crate::{
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
-        mana::ManaCost,
+        mana::{ManaCost, ManaSpent},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -48,7 +48,7 @@ pub enum FrameCompletion {
     Paid {
         player: PlayerId,
         payment: Payment,
-        spent: crate::state::mana::ManaSpent,
+        spent: ManaSpent,
     },
     Activated {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
@@ -137,7 +137,7 @@ pub struct EffectFrame {
     /// The mana spent to cast the resolving spell, or the permanent whose
     /// entering triggered the resolving ability; empty otherwise.
     #[serde(skip_serializing_if = "crate::state::mana::ManaSpent::is_empty")]
-    pub spent: crate::state::mana::ManaSpent,
+    pub spent: ManaSpent,
     /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
@@ -389,6 +389,20 @@ pub enum ResolutionCastOffer {
     Cascade { card: CardId, exiled: Vec<CardId> },
 }
 
+/// The operation completed by a mana payment. It owns its saved caller;
+/// nested fees cannot contribute to an outer spell's receipt.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum SpendCompletion {
+    Announced {
+        payment: Payment,
+        sacrifice: Option<PermanentId>,
+        waterbend: bool,
+    },
+    Upfront(Box<Decision>),
+    Resolution(PaymentProgress),
+    Foretell(CardId),
+}
+
 /// What a `ManaChoice` adds mana for.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ManaProduction {
@@ -484,6 +498,13 @@ pub enum Decision {
         remaining: usize,
     },
     Payment(PaymentProgress),
+    /// Spend one exact mana unit. Every option preserves saved obligations.
+    ManaSpend {
+        player: PlayerId,
+        cost: ManaCost,
+        spent: ManaSpent,
+        completion: Box<SpendCompletion>,
+    },
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
         player: PlayerId,
@@ -697,6 +718,7 @@ impl Decision {
             | Decision::SearchNamed { player, .. }
             | Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
+            | Decision::ManaSpend { player, .. }
             | Decision::ChooseObject { player, .. }
             | Decision::KeepCreatures { player, .. }
             | Decision::ChooseToExile { player, .. }
@@ -753,6 +775,7 @@ impl Decision {
             | Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
+            | Decision::ManaSpend { .. }
             | Decision::ChooseObject { .. }
             | Decision::KeepCreatures { .. }
             | Decision::ChooseToExile { .. }
@@ -839,6 +862,11 @@ impl SuspendedResolution {
             out.push(ResolutionRef::Frame(frame));
         }
         fn decision_chain<'a>(decision: &'a Decision, out: &mut Vec<ResolutionRef<'a>>) {
+            if let Decision::ManaSpend { completion, .. } = decision {
+                if let SpendCompletion::Upfront(next) = completion.as_ref() {
+                    decision_chain(next, out);
+                }
+            }
             if let Decision::ManaUpfront {
                 resume: Some(parent),
                 ..
@@ -1557,6 +1585,20 @@ impl Game {
                     focus: source_focus,
                 }
             }
+            Decision::ManaSpend { player, cost, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                focus: source_focus,
+                actions: self
+                    .mana_spend_choices(*player, cost)
+                    .iter()
+                    .enumerate()
+                    .map(|(mode, _)| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+            },
             Decision::ManaChoice {
                 player, choices, ..
             } => ActionSpace {
@@ -1893,6 +1935,11 @@ impl Game {
                 return self.pay_mana_tap_cost(*player, *card);
             }
         }
+        if let (Decision::ManaSpend { .. }, Action::ChooseMode { mode, .. }) =
+            (&suspended.decision, action)
+        {
+            return self.advance_mana_spend(Some(*mode));
+        }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
             (Decision::EnterAsCopy { candidates, .. }, choice) => {
@@ -2006,23 +2053,19 @@ impl Game {
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
                 let cost = payment.remaining.mana_cost();
-                if let Err(error) = self
-                    .produce_mana(payment.player, &cost)
-                    .and_then(|()| self.spend_mana(payment.player, &cost))
-                {
+                if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
                 }
-                if let Some(key) = payment.spends {
-                    self.spend_once_each_turn(key);
-                }
-                if matches!(payment.remaining, PaymentCost::Waterbend { .. }) {
-                    self.record_bending(payment.player, crate::flow::turn::Bending::Water);
-                }
-                let effects = std::mem::take(&mut payment.if_paid);
-                suspended.frame.prepend_effects(effects.into_iter());
-                self.run_frame(suspended.frame);
-                Ok(())
+                let Decision::Payment(payment) = suspended.decision else {
+                    unreachable!()
+                };
+                self.begin_mana_spend(
+                    payment.player,
+                    cost,
+                    SpendCompletion::Resolution(payment),
+                    suspended.frame,
+                )
             }
             (Decision::ChooseObject { optional: true, .. }, Action::Decline { .. }) => {
                 self.run_frame(suspended.frame);

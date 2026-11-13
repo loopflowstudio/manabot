@@ -12,6 +12,9 @@ import json
 import re
 from typing import Callable
 
+from pydantic import ValidationError
+
+import managym
 from managym.decision import Command, SemanticContractError, SemanticTransition
 from managym.decision_capture import (
     CardReference,
@@ -24,9 +27,6 @@ from managym.decision_capture import (
     PlayerReference,
     UnavailableReference,
 )
-from pydantic import ValidationError
-
-import managym
 
 REPRESENTATION_VERSION = "manabot-text-6"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
@@ -92,6 +92,7 @@ _STAGES = frozenset(
         "mana_payment",
         "tap_payment",
         "mana_color",
+        "mana_spend",
         "resolution_choice",
         "private_search",
         "learn",
@@ -207,6 +208,7 @@ _OBLIGATIONS = (
     "select cards",
     "order replacements",
     "enter as a copy",
+    "spend mana",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -733,13 +735,29 @@ class _Renderer:
                 )
             for pooled in player.spend_effect_mana:
                 lines.append(
-                    f"Mana that puts {pooled.effect}: "
+                    (
+                        f"Mana that puts {pooled.effect}: "
+                        if pooled.effect
+                        else "Combat mana: "
+                    )
                     + ", ".join(
                         f"{symbol} {count}"
                         for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
                         if count
                     )
                     + "."
+                )
+                lines.append(
+                    (
+                        f"Spend only for {pooled.restriction}. "
+                        if pooled.restriction
+                        else ""
+                    )
+                    + (
+                        "Expires at end of combat."
+                        if pooled.combat
+                        else "Expires at step end."
+                    )
                 )
             if player.hand_only_until is not None:
                 lines.append(
