@@ -1,0 +1,2483 @@
+{
+  "config": {
+    "hero_deck": {
+      "Swamp": 24,
+      "Callous Inspector": 16,
+      "Deadly Dispute": 10,
+      "Deadly Precision": 10
+    },
+    "villain_deck": {
+      "Forest": 60
+    },
+    "villain_type": "passive",
+    "auto_pass": false,
+    "seed": 1
+  },
+  "manifest": {
+    "world_version": "w17",
+    "schema_version": 1,
+    "content_digest": "b9344ef332cc07e1475e6a8860907ea84401ea427cec04a5cd23781e78c5818c",
+    "definitions": [
+      {
+        "card_def_id": 0,
+        "key": "tla.aang_s_iceberg",
+        "registry_name": "Aang's Iceberg"
+      },
+      {
+        "card_def_id": 1,
+        "key": "tla.aang_s_journey",
+        "registry_name": "Aang's Journey"
+      },
+      {
+        "card_def_id": 2,
+        "key": "tle.aang_air_nomad",
+        "registry_name": "Aang, Air Nomad"
+      },
+      {
+        "card_def_id": 3,
+        "key": "tla.aang_swift_savior",
+        "registry_name": "Aang, Swift Savior"
+      },
+      {
+        "card_def_id": 4,
+        "key": null,
+        "registry_name": "Aang and La, Ocean's Fury"
+      },
+      {
+        "card_def_id": 5,
+        "key": "tla.aang_at_the_crossroads",
+        "registry_name": "Aang, at the Crossroads"
+      },
+      {
+        "card_def_id": 6,
+        "key": null,
+        "registry_name": "Aang, Destined Savior"
+      },
+      {
+        "card_def_id": 7,
+        "key": "tla.aang_the_last_airbender",
+        "registry_name": "Aang, the Last Airbender"
+      },
+      {
+        "card_def_id": 8,
+        "key": "tle.aardvark_sloth",
+        "registry_name": "Aardvark Sloth"
+      },
+      {
+        "card_def_id": 9,
+        "key": "tla.abandon_attachments",
+        "registry_name": "Abandon Attachments"
+      },
+      {
+        "card_def_id": 10,
+        "key": "tla.abandoned_air_temple",
+        "registry_name": "Abandoned Air Temple"
+      },
+      {
+        "card_def_id": 11,
+        "key": "tla.accumulate_wisdom",
+        "registry_name": "Accumulate Wisdom"
+      },
+      {
+        "card_def_id": 12,
+        "key": "m20.agent_of_treachery",
+        "registry_name": "Agent of Treachery"
+      },
+      {
+        "card_def_id": 13,
+        "key": "tla.agna_qel_a",
+        "registry_name": "Agna Qel'a"
+      },
+      {
+        "card_def_id": 14,
+        "key": "tla.air_nomad_legacy",
+        "registry_name": "Air Nomad Legacy"
+      },
+      {
+        "card_def_id": 15,
+        "key": "tla.airbender_ascension",
+        "registry_name": "Airbender Ascension"
+      },
+      {
+        "card_def_id": 16,
+        "key": "tla.airbender_s_reversal",
+        "registry_name": "Airbender's Reversal"
+      },
+      {
+        "card_def_id": 17,
+        "key": "tla.airbending_lesson",
+        "registry_name": "Airbending Lesson"
+      },
+      {
+        "card_def_id": 18,
+        "key": "tla.airship_engine_room",
+        "registry_name": "Airship Engine Room"
+      },
+      {
+        "card_def_id": 19,
+        "key": "tle.allied_teamwork",
+        "registry_name": "Allied Teamwork"
+      },
+      {
+        "card_def_id": 20,
+        "key": "tla.allies_at_last",
+        "registry_name": "Allies at Last"
+      },
+      {
+        "card_def_id": 21,
+        "key": "token.ally",
+        "registry_name": "Ally"
+      },
+      {
+        "card_def_id": 22,
+        "key": "lea.ancestral_recall",
+        "registry_name": "Ancestral Recall"
+      },
+      {
+        "card_def_id": 23,
+        "key": "tle.animal_attendant",
+        "registry_name": "Animal Attendant"
+      },
+      {
+        "card_def_id": 24,
+        "key": "tla.appa_loyal_sky_bison",
+        "registry_name": "Appa, Loyal Sky Bison"
+      },
+      {
+        "card_def_id": 25,
+        "key": "tla.appa_steadfast_guardian",
+        "registry_name": "Appa, Steadfast Guardian"
+      },
+      {
+        "card_def_id": 26,
+        "key": "tla.avatar_aang",
+        "registry_name": "Avatar Aang"
+      },
+      {
+        "card_def_id": 27,
+        "key": null,
+        "registry_name": "Aang, Master of Elements"
+      },
+      {
+        "card_def_id": 28,
+        "key": "tla.avatar_destiny",
+        "registry_name": "Avatar Destiny"
+      },
+      {
+        "card_def_id": 29,
+        "key": "tla.avatar_enthusiasts",
+        "registry_name": "Avatar Enthusiasts"
+      },
+      {
+        "card_def_id": 30,
+        "key": "tla.avatar_s_wrath",
+        "registry_name": "Avatar's Wrath"
+      },
+      {
+        "card_def_id": 31,
+        "key": "tla.azula_always_lies",
+        "registry_name": "Azula Always Lies"
+      },
+      {
+        "card_def_id": 32,
+        "key": "tla.azula_cunning_usurper",
+        "registry_name": "Azula, Cunning Usurper"
+      },
+      {
+        "card_def_id": 33,
+        "key": "tla.azula_on_the_hunt",
+        "registry_name": "Azula, On the Hunt"
+      },
+      {
+        "card_def_id": 34,
+        "key": "tla.ba_sing_se",
+        "registry_name": "Ba Sing Se"
+      },
+      {
+        "card_def_id": 35,
+        "key": "tla.badgermole",
+        "registry_name": "Badgermole"
+      },
+      {
+        "card_def_id": 36,
+        "key": "tla.badgermole_cub",
+        "registry_name": "Badgermole Cub"
+      },
+      {
+        "card_def_id": 37,
+        "key": "token.ballistic_boulder",
+        "registry_name": "Ballistic Boulder"
+      },
+      {
+        "card_def_id": 38,
+        "key": "tla.barrels_of_blasting_jelly",
+        "registry_name": "Barrels of Blasting Jelly"
+      },
+      {
+        "card_def_id": 39,
+        "key": "iko.bastion_of_remembrance",
+        "registry_name": "Bastion of Remembrance"
+      },
+      {
+        "card_def_id": 40,
+        "key": "token.bear",
+        "registry_name": "Bear"
+      },
+      {
+        "card_def_id": 41,
+        "key": "zen.beastmaster_ascension",
+        "registry_name": "Beastmaster Ascension"
+      },
+      {
+        "card_def_id": 42,
+        "key": "tla.beetle_headed_merchants",
+        "registry_name": "Beetle-Headed Merchants"
+      },
+      {
+        "card_def_id": 43,
+        "key": "tla.beifong_s_bounty_hunters",
+        "registry_name": "Beifong's Bounty Hunters"
+      },
+      {
+        "card_def_id": 44,
+        "key": "tla.bender_s_waterskin",
+        "registry_name": "Bender's Waterskin"
+      },
+      {
+        "card_def_id": 45,
+        "key": "tla.benevolent_river_spirit",
+        "registry_name": "Benevolent River Spirit"
+      },
+      {
+        "card_def_id": 46,
+        "key": "hob.beorn_the_fierce",
+        "registry_name": "Beorn the Fierce"
+      },
+      {
+        "card_def_id": 47,
+        "key": "tla.bitter_work",
+        "registry_name": "Bitter Work"
+      },
+      {
+        "card_def_id": 48,
+        "key": "mbs.black_sun_s_zenith",
+        "registry_name": "Black Sun's Zenith"
+      },
+      {
+        "card_def_id": 49,
+        "key": "isd.blasphemous_act",
+        "registry_name": "Blasphemous Act"
+      },
+      {
+        "card_def_id": 50,
+        "key": "zen.bloodchief_ascension",
+        "registry_name": "Bloodchief Ascension"
+      },
+      {
+        "card_def_id": 51,
+        "key": "tla.boar_q_pine",
+        "registry_name": "Boar-q-pine"
+      },
+      {
+        "card_def_id": 52,
+        "key": "ori.boggart_brute",
+        "registry_name": "Boggart Brute"
+      },
+      {
+        "card_def_id": 53,
+        "key": "tla.boiling_rock_prison",
+        "registry_name": "Boiling Rock Prison"
+      },
+      {
+        "card_def_id": 54,
+        "key": "tla.boiling_rock_rioter",
+        "registry_name": "Boiling Rock Rioter"
+      },
+      {
+        "card_def_id": 55,
+        "key": "tla.boomerang_basics",
+        "registry_name": "Boomerang Basics"
+      },
+      {
+        "card_def_id": 56,
+        "key": "mmq.bribery",
+        "registry_name": "Bribery"
+      },
+      {
+        "card_def_id": 57,
+        "key": "m20.brought_back",
+        "registry_name": "Brought Back"
+      },
+      {
+        "card_def_id": 58,
+        "key": "tla.bumi_bash",
+        "registry_name": "Bumi Bash"
+      },
+      {
+        "card_def_id": 59,
+        "key": "tla.bumi_king_of_three_trials",
+        "registry_name": "Bumi, King of Three Trials"
+      },
+      {
+        "card_def_id": 60,
+        "key": "tla.bumi_unleashed",
+        "registry_name": "Bumi, Unleashed"
+      },
+      {
+        "card_def_id": 61,
+        "key": "tla.buzzard_wasp_colony",
+        "registry_name": "Buzzard-Wasp Colony"
+      },
+      {
+        "card_def_id": 62,
+        "key": "tla.callous_inspector",
+        "registry_name": "Callous Inspector"
+      },
+      {
+        "card_def_id": 63,
+        "key": "tla.canyon_crawler",
+        "registry_name": "Canyon Crawler"
+      },
+      {
+        "card_def_id": 64,
+        "key": "tle.capital_guard",
+        "registry_name": "Capital Guard"
+      },
+      {
+        "card_def_id": 65,
+        "key": "inv.captain_sisay",
+        "registry_name": "Captain Sisay"
+      },
+      {
+        "card_def_id": 66,
+        "key": "dft.caradora_heart_of_alacria",
+        "registry_name": "Caradora, Heart of Alacria"
+      },
+      {
+        "card_def_id": 67,
+        "key": "tla.cat_gator",
+        "registry_name": "Cat-Gator"
+      },
+      {
+        "card_def_id": 68,
+        "key": "tla.cat_owl",
+        "registry_name": "Cat-Owl"
+      },
+      {
+        "card_def_id": 69,
+        "key": "bro.cityscape_leveler",
+        "registry_name": "Cityscape Leveler"
+      },
+      {
+        "card_def_id": 70,
+        "key": "lea.clone",
+        "registry_name": "Clone"
+      },
+      {
+        "card_def_id": 71,
+        "key": "dtk.clone_legion",
+        "registry_name": "Clone Legion"
+      },
+      {
+        "card_def_id": 72,
+        "key": "token.clue",
+        "registry_name": "Clue"
+      },
+      {
+        "card_def_id": 73,
+        "key": "tla.combustion_man",
+        "registry_name": "Combustion Man"
+      },
+      {
+        "card_def_id": 74,
+        "key": "tla.combustion_technique",
+        "registry_name": "Combustion Technique"
+      },
+      {
+        "card_def_id": 75,
+        "key": "tla.compassionate_healer",
+        "registry_name": "Compassionate Healer"
+      },
+      {
+        "card_def_id": 76,
+        "key": "mid.consider",
+        "registry_name": "Consider"
+      },
+      {
+        "card_def_id": 77,
+        "key": "ptk.corrupt_court_official",
+        "registry_name": "Corrupt Court Official"
+      },
+      {
+        "card_def_id": 78,
+        "key": "lea.counterspell",
+        "registry_name": "Counterspell"
+      },
+      {
+        "card_def_id": 79,
+        "key": "tla.crashing_wave",
+        "registry_name": "Crashing Wave"
+      },
+      {
+        "card_def_id": 80,
+        "key": "lea.craw_wurm",
+        "registry_name": "Craw Wurm"
+      },
+      {
+        "card_def_id": 81,
+        "key": "tla.crescent_island_temple",
+        "registry_name": "Crescent Island Temple"
+      },
+      {
+        "card_def_id": 82,
+        "key": null,
+        "registry_name": "Crossroads of Destiny"
+      },
+      {
+        "card_def_id": 83,
+        "key": "tla.cruel_administrator",
+        "registry_name": "Cruel Administrator"
+      },
+      {
+        "card_def_id": 84,
+        "key": "por.cruel_tutor",
+        "registry_name": "Cruel Tutor"
+      },
+      {
+        "card_def_id": 85,
+        "key": "tla.cunning_maneuver",
+        "registry_name": "Cunning Maneuver"
+      },
+      {
+        "card_def_id": 86,
+        "key": "tla.curious_farm_animals",
+        "registry_name": "Curious Farm Animals"
+      },
+      {
+        "card_def_id": 87,
+        "key": "tla.cycle_of_renewal",
+        "registry_name": "Cycle of Renewal"
+      },
+      {
+        "card_def_id": 88,
+        "key": "tla.dai_li_agents",
+        "registry_name": "Dai Li Agents"
+      },
+      {
+        "card_def_id": 89,
+        "key": "tla.dai_li_indoctrination",
+        "registry_name": "Dai Li Indoctrination"
+      },
+      {
+        "card_def_id": 90,
+        "key": "csp.dark_depths",
+        "registry_name": "Dark Depths"
+      },
+      {
+        "card_def_id": 91,
+        "key": "tla.day_of_black_sun",
+        "registry_name": "Day of Black Sun"
+      },
+      {
+        "card_def_id": 92,
+        "key": "afr.deadly_dispute",
+        "registry_name": "Deadly Dispute"
+      },
+      {
+        "card_def_id": 93,
+        "key": "tla.deadly_precision",
+        "registry_name": "Deadly Precision"
+      },
+      {
+        "card_def_id": 94,
+        "key": "tle.deer_dog",
+        "registry_name": "Deer-Dog"
+      },
+      {
+        "card_def_id": 95,
+        "key": "tla.deserter_s_disciple",
+        "registry_name": "Deserter's Disciple"
+      },
+      {
+        "card_def_id": 96,
+        "key": "tla.destined_confrontation",
+        "registry_name": "Destined Confrontation"
+      },
+      {
+        "card_def_id": 97,
+        "key": "ptk.diaochan_artful_beauty",
+        "registry_name": "Diaochan, Artful Beauty"
+      },
+      {
+        "card_def_id": 98,
+        "key": "tla.diligent_zookeeper",
+        "registry_name": "Diligent Zookeeper"
+      },
+      {
+        "card_def_id": 99,
+        "key": "blb.diresight",
+        "registry_name": "Diresight"
+      },
+      {
+        "card_def_id": 100,
+        "key": "stx.divide_by_zero",
+        "registry_name": "Divide by Zero"
+      },
+      {
+        "card_def_id": 101,
+        "key": "c19.dockside_extortionist",
+        "registry_name": "Dockside Extortionist"
+      },
+      {
+        "card_def_id": 102,
+        "key": "rav.doubling_season",
+        "registry_name": "Doubling Season"
+      },
+      {
+        "card_def_id": 103,
+        "key": "token.dragon",
+        "registry_name": "Dragon"
+      },
+      {
+        "card_def_id": 104,
+        "key": "tle.dragon_moose",
+        "registry_name": "Dragon Moose"
+      },
+      {
+        "card_def_id": 105,
+        "key": "tla.dragonfly_swarm",
+        "registry_name": "Dragonfly Swarm"
+      },
+      {
+        "card_def_id": 106,
+        "key": "kld.dramatic_reversal",
+        "registry_name": "Dramatic Reversal"
+      },
+      {
+        "card_def_id": 107,
+        "key": "iko.drannith_magistrate",
+        "registry_name": "Drannith Magistrate"
+      },
+      {
+        "card_def_id": 108,
+        "key": "tla.earth_kings_lieutenant",
+        "registry_name": "Earth King's Lieutenant"
+      },
+      {
+        "card_def_id": 109,
+        "key": "tla.earth_kingdom_general",
+        "registry_name": "Earth Kingdom General"
+      },
+      {
+        "card_def_id": 110,
+        "key": "tla.earth_kingdom_jailer",
+        "registry_name": "Earth Kingdom Jailer"
+      },
+      {
+        "card_def_id": 111,
+        "key": "tla.earth_kingdom_protectors",
+        "registry_name": "Earth Kingdom Protectors"
+      },
+      {
+        "card_def_id": 112,
+        "key": "tla.earth_kingdom_soldier",
+        "registry_name": "Earth Kingdom Soldier"
+      },
+      {
+        "card_def_id": 113,
+        "key": "tla.earth_rumble",
+        "registry_name": "Earth Rumble"
+      },
+      {
+        "card_def_id": 114,
+        "key": "tla.earth_rumble_wrestlers",
+        "registry_name": "Earth Rumble Wrestlers"
+      },
+      {
+        "card_def_id": 115,
+        "key": "tla.earth_village_ruffians",
+        "registry_name": "Earth Village Ruffians"
+      },
+      {
+        "card_def_id": 116,
+        "key": "tla.earthbender_ascension",
+        "registry_name": "Earthbender Ascension"
+      },
+      {
+        "card_def_id": 117,
+        "key": "tla.earthbending_lesson",
+        "registry_name": "Earthbending Lesson"
+      },
+      {
+        "card_def_id": 118,
+        "key": "tla.earthen_ally",
+        "registry_name": "Earthen Ally"
+      },
+      {
+        "card_def_id": 119,
+        "key": "pls.eladamri_s_call",
+        "registry_name": "Eladamri's Call"
+      },
+      {
+        "card_def_id": 120,
+        "key": "ori.elemental_bond",
+        "registry_name": "Elemental Bond"
+      },
+      {
+        "card_def_id": 121,
+        "key": "tla.elemental_teachings",
+        "registry_name": "Elemental Teachings"
+      },
+      {
+        "card_def_id": 122,
+        "key": "tle.elephant_rat",
+        "registry_name": "Elephant-Rat"
+      },
+      {
+        "card_def_id": 123,
+        "key": "token.elf_warrior",
+        "registry_name": "Elf Warrior"
+      },
+      {
+        "card_def_id": 124,
+        "key": "tla.ember_island_production",
+        "registry_name": "Ember Island Production"
+      },
+      {
+        "card_def_id": 125,
+        "key": "ptk.empty_city_ruse",
+        "registry_name": "Empty City Ruse"
+      },
+      {
+        "card_def_id": 126,
+        "key": "tla.energybending",
+        "registry_name": "Energybending"
+      },
+      {
+        "card_def_id": 127,
+        "key": "tla.enter_the_avatar_state",
+        "registry_name": "Enter the Avatar State"
+      },
+      {
+        "card_def_id": 128,
+        "key": "stx.enthusiastic_study",
+        "registry_name": "Enthusiastic Study"
+      },
+      {
+        "card_def_id": 129,
+        "key": "ody.entomb",
+        "registry_name": "Entomb"
+      },
+      {
+        "card_def_id": 130,
+        "key": "eld.epic_downfall",
+        "registry_name": "Epic Downfall"
+      },
+      {
+        "card_def_id": 131,
+        "key": "tle.explosive_shot",
+        "registry_name": "Explosive Shot"
+      },
+      {
+        "card_def_id": 132,
+        "key": "stx.eyetwitch",
+        "registry_name": "Eyetwitch"
+      },
+      {
+        "card_def_id": 133,
+        "key": "eld.fabled_passage",
+        "registry_name": "Fabled Passage"
+      },
+      {
+        "card_def_id": 134,
+        "key": "tla.fancy_footwork",
+        "registry_name": "Fancy Footwork"
+      },
+      {
+        "card_def_id": 135,
+        "key": "tla.fatal_fissure",
+        "registry_name": "Fatal Fissure"
+      },
+      {
+        "card_def_id": 136,
+        "key": "tla.fated_firepower",
+        "registry_name": "Fated Firepower"
+      },
+      {
+        "card_def_id": 137,
+        "key": "rtr.fencing_ace",
+        "registry_name": "Fencing Ace"
+      },
+      {
+        "card_def_id": 138,
+        "key": "wth.fervor",
+        "registry_name": "Fervor"
+      },
+      {
+        "card_def_id": 139,
+        "key": "soi.fevered_visions",
+        "registry_name": "Fevered Visions"
+      },
+      {
+        "card_def_id": 140,
+        "key": "stx.field_trip",
+        "registry_name": "Field Trip"
+      },
+      {
+        "card_def_id": 141,
+        "key": "tla.fire_lord_azula",
+        "registry_name": "Fire Lord Azula"
+      },
+      {
+        "card_def_id": 142,
+        "key": "tla.fire_lord_zuko",
+        "registry_name": "Fire Lord Zuko"
+      },
+      {
+        "card_def_id": 143,
+        "key": "tle.fire_nation_ambushers",
+        "registry_name": "Fire Nation Ambushers"
+      },
+      {
+        "card_def_id": 144,
+        "key": "tla.fire_nation_attacks",
+        "registry_name": "Fire Nation Attacks"
+      },
+      {
+        "card_def_id": 145,
+        "key": "tla.fire_nation_cadets",
+        "registry_name": "Fire Nation Cadets"
+      },
+      {
+        "card_def_id": 146,
+        "key": "tla.fire_nation_engineer",
+        "registry_name": "Fire Nation Engineer"
+      },
+      {
+        "card_def_id": 147,
+        "key": "tla.fire_nation_palace",
+        "registry_name": "Fire Nation Palace"
+      },
+      {
+        "card_def_id": 148,
+        "key": "tla.fire_nation_raider",
+        "registry_name": "Fire Nation Raider"
+      },
+      {
+        "card_def_id": 149,
+        "key": "tle.fire_nation_soldier",
+        "registry_name": "Fire Nation Soldier"
+      },
+      {
+        "card_def_id": 150,
+        "key": "tla.fire_nation_warship",
+        "registry_name": "Fire Nation Warship"
+      },
+      {
+        "card_def_id": 151,
+        "key": "tle.fire_nation_s_conquest",
+        "registry_name": "Fire Nation's Conquest"
+      },
+      {
+        "card_def_id": 152,
+        "key": "tla.fire_navy_trebuchet",
+        "registry_name": "Fire Navy Trebuchet"
+      },
+      {
+        "card_def_id": 153,
+        "key": "tla.fire_sages",
+        "registry_name": "Fire Sages"
+      },
+      {
+        "card_def_id": 154,
+        "key": "tla.firebender_ascension",
+        "registry_name": "Firebender Ascension"
+      },
+      {
+        "card_def_id": 155,
+        "key": "tla.firebending_lesson",
+        "registry_name": "Firebending Lesson"
+      },
+      {
+        "card_def_id": 156,
+        "key": "tla.firebending_student",
+        "registry_name": "Firebending Student"
+      },
+      {
+        "card_def_id": 157,
+        "key": "tla.first_time_flyer",
+        "registry_name": "First-Time Flyer"
+      },
+      {
+        "card_def_id": 158,
+        "key": "mh1.fists_of_flame",
+        "registry_name": "Fists of Flame"
+      },
+      {
+        "card_def_id": 159,
+        "key": "tla.flexible_waterbender",
+        "registry_name": "Flexible Waterbender"
+      },
+      {
+        "card_def_id": 160,
+        "key": "tla.flopsie_bumi_s_buddy",
+        "registry_name": "Flopsie, Bumi's Buddy"
+      },
+      {
+        "card_def_id": 161,
+        "key": "tle.flying_dolphin_fish",
+        "registry_name": "Flying Dolphin-Fish"
+      },
+      {
+        "card_def_id": 162,
+        "key": "tla.foggy_bottom_swamp",
+        "registry_name": "Foggy Bottom Swamp"
+      },
+      {
+        "card_def_id": 163,
+        "key": "tla.foggy_swamp_hunters",
+        "registry_name": "Foggy Swamp Hunters"
+      },
+      {
+        "card_def_id": 164,
+        "key": "tla.foggy_swamp_spirit_keeper",
+        "registry_name": "Foggy Swamp Spirit Keeper"
+      },
+      {
+        "card_def_id": 165,
+        "key": "tla.foggy_swamp_vinebender",
+        "registry_name": "Foggy Swamp Vinebender"
+      },
+      {
+        "card_def_id": 166,
+        "key": "tla.foggy_swamp_visions",
+        "registry_name": "Foggy Swamp Visions"
+      },
+      {
+        "card_def_id": 167,
+        "key": "token.food",
+        "registry_name": "Food"
+      },
+      {
+        "card_def_id": 168,
+        "key": "mh1.force_of_negation",
+        "registry_name": "Force of Negation"
+      },
+      {
+        "card_def_id": 169,
+        "key": "tla.forecasting_fortune_teller",
+        "registry_name": "Forecasting Fortune Teller"
+      },
+      {
+        "card_def_id": 170,
+        "key": "lea.forest",
+        "registry_name": "Forest"
+      },
+      {
+        "card_def_id": 171,
+        "key": "tle.frog_squirrels",
+        "registry_name": "Frog-Squirrels"
+      },
+      {
+        "card_def_id": 172,
+        "key": "tla.gather_the_white_lotus",
+        "registry_name": "Gather the White Lotus"
+      },
+      {
+        "card_def_id": 173,
+        "key": "tla.geyser_leaper",
+        "registry_name": "Geyser Leaper"
+      },
+      {
+        "card_def_id": 174,
+        "key": "bro.giant_cindermaw",
+        "registry_name": "Giant Cindermaw"
+      },
+      {
+        "card_def_id": 175,
+        "key": "tla.giant_koi",
+        "registry_name": "Giant Koi"
+      },
+      {
+        "card_def_id": 176,
+        "key": "lea.giant_spider",
+        "registry_name": "Giant Spider"
+      },
+      {
+        "card_def_id": 177,
+        "key": "tle.gilacorn",
+        "registry_name": "Gilacorn"
+      },
+      {
+        "card_def_id": 178,
+        "key": "tla.glider_kids",
+        "registry_name": "Glider Kids"
+      },
+      {
+        "card_def_id": 179,
+        "key": "tla.glider_staff",
+        "registry_name": "Glider Staff"
+      },
+      {
+        "card_def_id": 180,
+        "key": "ons.glory_seeker",
+        "registry_name": "Glory Seeker"
+      },
+      {
+        "card_def_id": 181,
+        "key": "stx.gnarled_professor",
+        "registry_name": "Gnarled Professor"
+      },
+      {
+        "card_def_id": 182,
+        "key": "tla.gran_gran",
+        "registry_name": "Gran-Gran"
+      },
+      {
+        "card_def_id": 183,
+        "key": "lea.gray_ogre",
+        "registry_name": "Gray Ogre"
+      },
+      {
+        "card_def_id": 184,
+        "key": "tla.great_divide_guide",
+        "registry_name": "Great Divide Guide"
+      },
+      {
+        "card_def_id": 185,
+        "key": "tla.guru_pathik",
+        "registry_name": "Guru Pathik"
+      },
+      {
+        "card_def_id": 186,
+        "key": "tla.hakoda_selfless_commander",
+        "registry_name": "Hakoda, Selfless Commander"
+      },
+      {
+        "card_def_id": 187,
+        "key": "tla.hama_the_bloodbender",
+        "registry_name": "Hama, the Bloodbender"
+      },
+      {
+        "card_def_id": 188,
+        "key": "tla.haru_hidden_talent",
+        "registry_name": "Haru, Hidden Talent"
+      },
+      {
+        "card_def_id": 189,
+        "key": "grn.healer_s_hawk",
+        "registry_name": "Healer's Hawk"
+      },
+      {
+        "card_def_id": 190,
+        "key": "chk.heartbeat_of_spring",
+        "registry_name": "Heartbeat of Spring"
+      },
+      {
+        "card_def_id": 191,
+        "key": "tla.heartless_act",
+        "registry_name": "Heartless Act"
+      },
+      {
+        "card_def_id": 192,
+        "key": "tla.hei_bai_spirit_of_balance",
+        "registry_name": "Hei Bai, Spirit of Balance"
+      },
+      {
+        "card_def_id": 193,
+        "key": "tla.hermitic_herbalist",
+        "registry_name": "Hermitic Herbalist"
+      },
+      {
+        "card_def_id": 194,
+        "key": "aer.heroic_intervention",
+        "registry_name": "Heroic Intervention"
+      },
+      {
+        "card_def_id": 195,
+        "key": "lea.hill_giant",
+        "registry_name": "Hill Giant"
+      },
+      {
+        "card_def_id": 196,
+        "key": "tle.hippo_cows",
+        "registry_name": "Hippo-Cows"
+      },
+      {
+        "card_def_id": 197,
+        "key": "tla.hog_monkey",
+        "registry_name": "Hog-Monkey"
+      },
+      {
+        "card_def_id": 198,
+        "key": "tla.honest_work",
+        "registry_name": "Honest Work"
+      },
+      {
+        "card_def_id": 199,
+        "key": "tla.how_to_start_a_riot",
+        "registry_name": "How to Start a Riot"
+      },
+      {
+        "card_def_id": 200,
+        "key": "token.human",
+        "registry_name": "Human"
+      },
+      {
+        "card_def_id": 201,
+        "key": "token.human_soldier",
+        "registry_name": "Human Soldier"
+      },
+      {
+        "card_def_id": 202,
+        "key": "frf.humble_defector",
+        "registry_name": "Humble Defector"
+      },
+      {
+        "card_def_id": 203,
+        "key": "stx.igneous_inspiration",
+        "registry_name": "Igneous Inspiration"
+      },
+      {
+        "card_def_id": 204,
+        "key": "tla.iguana_parrot",
+        "registry_name": "Iguana Parrot"
+      },
+      {
+        "card_def_id": 205,
+        "key": "emn.imprisoned_in_the_moon",
+        "registry_name": "Imprisoned in the Moon"
+      },
+      {
+        "card_def_id": 206,
+        "key": "ons.insurrection",
+        "registry_name": "Insurrection"
+      },
+      {
+        "card_def_id": 207,
+        "key": "sth.intruder_alarm",
+        "registry_name": "Intruder Alarm"
+      },
+      {
+        "card_def_id": 208,
+        "key": "tla.invasion_reinforcements",
+        "registry_name": "Invasion Reinforcements"
+      },
+      {
+        "card_def_id": 209,
+        "key": "tla.invasion_submersible",
+        "registry_name": "Invasion Submersible"
+      },
+      {
+        "card_def_id": 210,
+        "key": "tla.invasion_tactics",
+        "registry_name": "Invasion Tactics"
+      },
+      {
+        "card_def_id": 211,
+        "key": "tla.iroh_s_demonstration",
+        "registry_name": "Iroh's Demonstration"
+      },
+      {
+        "card_def_id": 212,
+        "key": "tle.iroh_firebending_instructor",
+        "registry_name": "Iroh, Firebending Instructor"
+      },
+      {
+        "card_def_id": 213,
+        "key": "tla.iroh_grand_lotus",
+        "registry_name": "Iroh, Grand Lotus"
+      },
+      {
+        "card_def_id": 214,
+        "key": "tla.iroh_tea_master",
+        "registry_name": "Iroh, Tea Master"
+      },
+      {
+        "card_def_id": 215,
+        "key": "lea.island",
+        "registry_name": "Island"
+      },
+      {
+        "card_def_id": 216,
+        "key": "tla.itll_quench_ya",
+        "registry_name": "It'll Quench Ya!"
+      },
+      {
+        "card_def_id": 217,
+        "key": "tla.jasmine_dragon_tea_shop",
+        "registry_name": "Jasmine Dragon Tea Shop"
+      },
+      {
+        "card_def_id": 218,
+        "key": "tla.jeong_jeongs_deserters",
+        "registry_name": "Jeong Jeong's Deserters"
+      },
+      {
+        "card_def_id": 219,
+        "key": "tla.jeong_jeong_the_deserter",
+        "registry_name": "Jeong Jeong, the Deserter"
+      },
+      {
+        "card_def_id": 220,
+        "key": "tla.jet_s_brainwashing",
+        "registry_name": "Jet's Brainwashing"
+      },
+      {
+        "card_def_id": 221,
+        "key": "tla.jet_freedom_fighter",
+        "registry_name": "Jet, Freedom Fighter"
+      },
+      {
+        "card_def_id": 222,
+        "key": "mid.join_the_dance",
+        "registry_name": "Join the Dance"
+      },
+      {
+        "card_def_id": 223,
+        "key": "tla.joo_dee_one_of_many",
+        "registry_name": "Joo Dee, One of Many"
+      },
+      {
+        "card_def_id": 224,
+        "key": "tla.june_bounty_hunter",
+        "registry_name": "June, Bounty Hunter"
+      },
+      {
+        "card_def_id": 225,
+        "key": "tla.katara_bending_prodigy",
+        "registry_name": "Katara, Bending Prodigy"
+      },
+      {
+        "card_def_id": 226,
+        "key": "tle.katara_heroic_healer",
+        "registry_name": "Katara, Heroic Healer"
+      },
+      {
+        "card_def_id": 227,
+        "key": "tla.katara_water_tribe_s_hope",
+        "registry_name": "Katara, Water Tribe's Hope"
+      },
+      {
+        "card_def_id": 228,
+        "key": "tla.katara_the_fearless",
+        "registry_name": "Katara, the Fearless"
+      },
+      {
+        "card_def_id": 229,
+        "key": "fdn.kellan_planar_trailblazer",
+        "registry_name": "Kellan, Planar Trailblazer"
+      },
+      {
+        "card_def_id": 230,
+        "key": "tle.kindly_customer",
+        "registry_name": "Kindly Customer"
+      },
+      {
+        "card_def_id": 231,
+        "key": "tla.knowledge_seeker",
+        "registry_name": "Knowledge Seeker"
+      },
+      {
+        "card_def_id": 232,
+        "key": "tle.koala_sheep",
+        "registry_name": "Koala-Sheep"
+      },
+      {
+        "card_def_id": 233,
+        "key": "tla.koh_the_face_stealer",
+        "registry_name": "Koh, the Face Stealer"
+      },
+      {
+        "card_def_id": 234,
+        "key": "token.komas_coil",
+        "registry_name": "Koma's Coil"
+      },
+      {
+        "card_def_id": 235,
+        "key": "khm.koma_cosmos_serpent",
+        "registry_name": "Koma, Cosmos Serpent"
+      },
+      {
+        "card_def_id": 236,
+        "key": "tle.komodo_rhino",
+        "registry_name": "Komodo Rhino"
+      },
+      {
+        "card_def_id": 237,
+        "key": "tla.kyoshi_battle_fan",
+        "registry_name": "Kyoshi Battle Fan"
+      },
+      {
+        "card_def_id": 238,
+        "key": "tla.kyoshi_island_plaza",
+        "registry_name": "Kyoshi Island Plaza"
+      },
+      {
+        "card_def_id": 239,
+        "key": "tla.kyoshi_village",
+        "registry_name": "Kyoshi Village"
+      },
+      {
+        "card_def_id": 240,
+        "key": "tle.kyoshi_warrior_guard",
+        "registry_name": "Kyoshi Warrior Guard"
+      },
+      {
+        "card_def_id": 241,
+        "key": "tla.kyoshi_warriors",
+        "registry_name": "Kyoshi Warriors"
+      },
+      {
+        "card_def_id": 242,
+        "key": "tla.leaves_from_the_vine",
+        "registry_name": "Leaves from the Vine"
+      },
+      {
+        "card_def_id": 243,
+        "key": "lea.lightning_bolt",
+        "registry_name": "Lightning Bolt"
+      },
+      {
+        "card_def_id": 244,
+        "key": "ths.lightning_strike",
+        "registry_name": "Lightning Strike"
+      },
+      {
+        "card_def_id": 245,
+        "key": "j22.lita_mechanical_engineer",
+        "registry_name": "Lita, Mechanical Engineer"
+      },
+      {
+        "card_def_id": 246,
+        "key": "lea.llanowar_elves",
+        "registry_name": "Llanowar Elves"
+      },
+      {
+        "card_def_id": 247,
+        "key": "tla.lo_and_li_twin_tutors",
+        "registry_name": "Lo and Li, Twin Tutors"
+      },
+      {
+        "card_def_id": 248,
+        "key": "tla.long_feng_grand_secretariat",
+        "registry_name": "Long Feng, Grand Secretariat"
+      },
+      {
+        "card_def_id": 249,
+        "key": "tla.lost_days",
+        "registry_name": "Lost Days"
+      },
+      {
+        "card_def_id": 250,
+        "key": "zen.lotus_cobra",
+        "registry_name": "Lotus Cobra"
+      },
+      {
+        "card_def_id": 251,
+        "key": "tla.mai_jaded_edge",
+        "registry_name": "Mai, Jaded Edge"
+      },
+      {
+        "card_def_id": 252,
+        "key": "tla.mai_scornful_striker",
+        "registry_name": "Mai, Scornful Striker"
+      },
+      {
+        "card_def_id": 253,
+        "key": "vis.man_o_war",
+        "registry_name": "Man-o'-War"
+      },
+      {
+        "card_def_id": 254,
+        "key": "token.marit_lage",
+        "registry_name": "Marit Lage"
+      },
+      {
+        "card_def_id": 255,
+        "key": "tla.master_pakku",
+        "registry_name": "Master Pakku"
+      },
+      {
+        "card_def_id": 256,
+        "key": "tla.master_piandao",
+        "registry_name": "Master Piandao"
+      },
+      {
+        "card_def_id": 257,
+        "key": "war.mayhem_devil",
+        "registry_name": "Mayhem Devil"
+      },
+      {
+        "card_def_id": 258,
+        "key": "tla.meditation_pools",
+        "registry_name": "Meditation Pools"
+      },
+      {
+        "card_def_id": 259,
+        "key": "tla.merchant_of_many_hats",
+        "registry_name": "Merchant of Many Hats"
+      },
+      {
+        "card_def_id": 260,
+        "key": "tla.messenger_hawk",
+        "registry_name": "Messenger Hawk"
+      },
+      {
+        "card_def_id": 261,
+        "key": "tla.meteor_sword",
+        "registry_name": "Meteor Sword"
+      },
+      {
+        "card_def_id": 262,
+        "key": "m15.meteorite",
+        "registry_name": "Meteorite"
+      },
+      {
+        "card_def_id": 263,
+        "key": "emn.mirrorwing_dragon",
+        "registry_name": "Mirrorwing Dragon"
+      },
+      {
+        "card_def_id": 264,
+        "key": "tla.misty_palms_oasis",
+        "registry_name": "Misty Palms Oasis"
+      },
+      {
+        "card_def_id": 265,
+        "key": "tla.momo_friendly_flier",
+        "registry_name": "Momo, Friendly Flier"
+      },
+      {
+        "card_def_id": 266,
+        "key": "tla.momo_playful_pet",
+        "registry_name": "Momo, Playful Pet"
+      },
+      {
+        "card_def_id": 267,
+        "key": "ktk.monastery_swiftspear",
+        "registry_name": "Monastery Swiftspear"
+      },
+      {
+        "card_def_id": 268,
+        "key": "tla.mongoose_lizard",
+        "registry_name": "Mongoose Lizard"
+      },
+      {
+        "card_def_id": 269,
+        "key": "token.monk",
+        "registry_name": "Monk"
+      },
+      {
+        "card_def_id": 270,
+        "key": "lea.mountain",
+        "registry_name": "Mountain"
+      },
+      {
+        "card_def_id": 271,
+        "key": "ice.mystic_remora",
+        "registry_name": "Mystic Remora"
+      },
+      {
+        "card_def_id": 272,
+        "key": "tla.north_pole_gates",
+        "registry_name": "North Pole Gates"
+      },
+      {
+        "card_def_id": 273,
+        "key": "tla.north_pole_patrol",
+        "registry_name": "North Pole Patrol"
+      },
+      {
+        "card_def_id": 274,
+        "key": "tla.northern_air_temple",
+        "registry_name": "Northern Air Temple"
+      },
+      {
+        "card_def_id": 275,
+        "key": "kld.noxious_gearhulk",
+        "registry_name": "Noxious Gearhulk"
+      },
+      {
+        "card_def_id": 276,
+        "key": "tla.obsessive_pursuit",
+        "registry_name": "Obsessive Pursuit"
+      },
+      {
+        "card_def_id": 277,
+        "key": "tla.octopus_form",
+        "registry_name": "Octopus Form"
+      },
+      {
+        "card_def_id": 278,
+        "key": "tla.omashu_city",
+        "registry_name": "Omashu City"
+      },
+      {
+        "card_def_id": 279,
+        "key": "tla.origin_of_metalbending",
+        "registry_name": "Origin of Metalbending"
+      },
+      {
+        "card_def_id": 280,
+        "key": "tla.ostrich_horse",
+        "registry_name": "Ostrich-Horse"
+      },
+      {
+        "card_def_id": 281,
+        "key": "tla.otter_penguin",
+        "registry_name": "Otter-Penguin"
+      },
+      {
+        "card_def_id": 282,
+        "key": "tla.ozai_s_cruelty",
+        "registry_name": "Ozai's Cruelty"
+      },
+      {
+        "card_def_id": 283,
+        "key": "tla.ozai_the_phoenix_king",
+        "registry_name": "Ozai, the Phoenix King"
+      },
+      {
+        "card_def_id": 284,
+        "key": "tla.path_to_redemption",
+        "registry_name": "Path to Redemption"
+      },
+      {
+        "card_def_id": 285,
+        "key": "tla.phoenix_fleet_airship",
+        "registry_name": "Phoenix Fleet Airship"
+      },
+      {
+        "card_def_id": 286,
+        "key": "tla.pillar_launch",
+        "registry_name": "Pillar Launch"
+      },
+      {
+        "card_def_id": 287,
+        "key": "tla.pirate_peddlers",
+        "registry_name": "Pirate Peddlers"
+      },
+      {
+        "card_def_id": 288,
+        "key": "lea.plains",
+        "registry_name": "Plains"
+      },
+      {
+        "card_def_id": 289,
+        "key": "tla.planetarium_of_wan_shi_tong",
+        "registry_name": "Planetarium of Wan Shi Tong"
+      },
+      {
+        "card_def_id": 290,
+        "key": "tla.platypus_bear",
+        "registry_name": "Platypus-Bear"
+      },
+      {
+        "card_def_id": 291,
+        "key": "stx.pop_quiz",
+        "registry_name": "Pop Quiz"
+      },
+      {
+        "card_def_id": 292,
+        "key": "afr.power_word_kill",
+        "registry_name": "Power Word Kill"
+      },
+      {
+        "card_def_id": 293,
+        "key": "token.powerstone",
+        "registry_name": "Powerstone"
+      },
+      {
+        "card_def_id": 294,
+        "key": "tla.pretending_poxbearers",
+        "registry_name": "Pretending Poxbearers"
+      },
+      {
+        "card_def_id": 295,
+        "key": "tla.price_of_freedom",
+        "registry_name": "Price of Freedom"
+      },
+      {
+        "card_def_id": 296,
+        "key": "mh1.prismatic_vista",
+        "registry_name": "Prismatic Vista"
+      },
+      {
+        "card_def_id": 297,
+        "key": "tla.professor_zei_anthropologist",
+        "registry_name": "Professor Zei, Anthropologist"
+      },
+      {
+        "card_def_id": 298,
+        "key": "stx.professor_of_symbology",
+        "registry_name": "Professor of Symbology"
+      },
+      {
+        "card_def_id": 299,
+        "key": "mkm.proft_s_eidetic_memory",
+        "registry_name": "Proft's Eidetic Memory"
+      },
+      {
+        "card_def_id": 300,
+        "key": "roe.prophetic_prism",
+        "registry_name": "Prophetic Prism"
+      },
+      {
+        "card_def_id": 301,
+        "key": "vis.prosperity",
+        "registry_name": "Prosperity"
+      },
+      {
+        "card_def_id": 302,
+        "key": "ice.pyroclasm",
+        "registry_name": "Pyroclasm"
+      },
+      {
+        "card_def_id": 303,
+        "key": "tla.rabaroo_troop",
+        "registry_name": "Rabaroo Troop"
+      },
+      {
+        "card_def_id": 304,
+        "key": "por.raging_goblin",
+        "registry_name": "Raging Goblin"
+      },
+      {
+        "card_def_id": 305,
+        "key": "tla.ran_and_shaw",
+        "registry_name": "Ran and Shaw"
+      },
+      {
+        "card_def_id": 306,
+        "key": "tla.raucous_audience",
+        "registry_name": "Raucous Audience"
+      },
+      {
+        "card_def_id": 307,
+        "key": "tla.raven_eagle",
+        "registry_name": "Raven Eagle"
+      },
+      {
+        "card_def_id": 308,
+        "key": "tla.razor_rings",
+        "registry_name": "Razor Rings"
+      },
+      {
+        "card_def_id": 309,
+        "key": "tla.realm_of_koh",
+        "registry_name": "Realm of Koh"
+      },
+      {
+        "card_def_id": 310,
+        "key": "tla.rebellious_captives",
+        "registry_name": "Rebellious Captives"
+      },
+      {
+        "card_def_id": 311,
+        "key": "tla.redirect_lightning",
+        "registry_name": "Redirect Lightning"
+      },
+      {
+        "card_def_id": 312,
+        "key": "nec.release_to_memory",
+        "registry_name": "Release to Memory"
+      },
+      {
+        "card_def_id": 313,
+        "key": "dtk.rending_volley",
+        "registry_name": "Rending Volley"
+      },
+      {
+        "card_def_id": 314,
+        "key": "eld.return_of_the_wildspeaker",
+        "registry_name": "Return of the Wildspeaker"
+      },
+      {
+        "card_def_id": 315,
+        "key": "shm.rhys_the_redeemed",
+        "registry_name": "Rhys the Redeemed"
+      },
+      {
+        "card_def_id": 316,
+        "key": "fut.rites_of_flourishing",
+        "registry_name": "Rites of Flourishing"
+      },
+      {
+        "card_def_id": 317,
+        "key": "tla.rockalanche",
+        "registry_name": "Rockalanche"
+      },
+      {
+        "card_def_id": 318,
+        "key": "tla.rocky_rebuke",
+        "registry_name": "Rocky Rebuke"
+      },
+      {
+        "card_def_id": 319,
+        "key": "tla.rough_rhino_cavalry",
+        "registry_name": "Rough Rhino Cavalry"
+      },
+      {
+        "card_def_id": 320,
+        "key": "tla.rowdy_snowballers",
+        "registry_name": "Rowdy Snowballers"
+      },
+      {
+        "card_def_id": 321,
+        "key": "tla.ruinous_waterbending",
+        "registry_name": "Ruinous Waterbending"
+      },
+      {
+        "card_def_id": 322,
+        "key": "tla.rumble_arena",
+        "registry_name": "Rumble Arena"
+      },
+      {
+        "card_def_id": 323,
+        "key": "dom.run_amok",
+        "registry_name": "Run Amok"
+      },
+      {
+        "card_def_id": 324,
+        "key": "tla.saber_tooth_moose_lion",
+        "registry_name": "Saber-Tooth Moose-Lion"
+      },
+      {
+        "card_def_id": 325,
+        "key": "cmr.sakashima_of_a_thousand_faces",
+        "registry_name": "Sakashima of a Thousand Faces"
+      },
+      {
+        "card_def_id": 326,
+        "key": "tla.sandbender_scavengers",
+        "registry_name": "Sandbender Scavengers"
+      },
+      {
+        "card_def_id": 327,
+        "key": "tla.sandbenders_storm",
+        "registry_name": "Sandbenders' Storm"
+      },
+      {
+        "card_def_id": 328,
+        "key": "lea.savannah_lions",
+        "registry_name": "Savannah Lions"
+      },
+      {
+        "card_def_id": 329,
+        "key": "blb.savor",
+        "registry_name": "Savor"
+      },
+      {
+        "card_def_id": 330,
+        "key": "fin.sazh_s_chocobo",
+        "registry_name": "Sazh's Chocobo"
+      },
+      {
+        "card_def_id": 331,
+        "key": "woe.scarecrow_guide",
+        "registry_name": "Scarecrow Guide"
+      },
+      {
+        "card_def_id": 332,
+        "key": "fut.scout_s_warning",
+        "registry_name": "Scout's Warning"
+      },
+      {
+        "card_def_id": 333,
+        "key": "bng.searing_blood",
+        "registry_name": "Searing Blood"
+      },
+      {
+        "card_def_id": 334,
+        "key": "tla.secret_tunnel",
+        "registry_name": "Secret Tunnel"
+      },
+      {
+        "card_def_id": 335,
+        "key": "tla.secret_of_bloodbending",
+        "registry_name": "Secret of Bloodbending"
+      },
+      {
+        "card_def_id": 336,
+        "key": "tla.seismic_sense",
+        "registry_name": "Seismic Sense"
+      },
+      {
+        "card_def_id": 337,
+        "key": "tla.serpent_of_the_pass",
+        "registry_name": "Serpent of the Pass"
+      },
+      {
+        "card_def_id": 338,
+        "key": "tla.serpents_pass",
+        "registry_name": "Serpent's Pass"
+      },
+      {
+        "card_def_id": 339,
+        "key": "lea.serra_angel",
+        "registry_name": "Serra Angel"
+      },
+      {
+        "card_def_id": 340,
+        "key": "tla.shared_roots",
+        "registry_name": "Shared Roots"
+      },
+      {
+        "card_def_id": 341,
+        "key": "gpt.shattering_spree",
+        "registry_name": "Shattering Spree"
+      },
+      {
+        "card_def_id": 342,
+        "key": "lea.shivan_dragon",
+        "registry_name": "Shivan Dragon"
+      },
+      {
+        "card_def_id": 343,
+        "key": "tle.sledding_otter_penguin",
+        "registry_name": "Sledding Otter-Penguin"
+      },
+      {
+        "card_def_id": 344,
+        "key": "tla.sokka_s_haiku",
+        "registry_name": "Sokka's Haiku"
+      },
+      {
+        "card_def_id": 345,
+        "key": "tle.sokka_s_sword_training",
+        "registry_name": "Sokka's Sword Training"
+      },
+      {
+        "card_def_id": 346,
+        "key": "tla.sokka_bold_boomeranger",
+        "registry_name": "Sokka, Bold Boomeranger"
+      },
+      {
+        "card_def_id": 347,
+        "key": "tla.sokka_lateral_strategist",
+        "registry_name": "Sokka, Lateral Strategist"
+      },
+      {
+        "card_def_id": 348,
+        "key": "tla.sokka_tenacious_tactician",
+        "registry_name": "Sokka, Tenacious Tactician"
+      },
+      {
+        "card_def_id": 349,
+        "key": "tle.sokka_wolf_cove_s_protector",
+        "registry_name": "Sokka, Wolf Cove's Protector"
+      },
+      {
+        "card_def_id": 350,
+        "key": "lea.sol_ring",
+        "registry_name": "Sol Ring"
+      },
+      {
+        "card_def_id": 351,
+        "key": "tla.sold_out",
+        "registry_name": "Sold Out"
+      },
+      {
+        "card_def_id": 352,
+        "key": "token.soldier",
+        "registry_name": "Soldier"
+      },
+      {
+        "card_def_id": 353,
+        "key": "tla.solstice_revelations",
+        "registry_name": "Solstice Revelations"
+      },
+      {
+        "card_def_id": 354,
+        "key": "tla.south_pole_voyager",
+        "registry_name": "South Pole Voyager"
+      },
+      {
+        "card_def_id": 355,
+        "key": "tla.southern_air_temple",
+        "registry_name": "Southern Air Temple"
+      },
+      {
+        "card_def_id": 356,
+        "key": "tla.sozins_comet",
+        "registry_name": "Sozin's Comet"
+      },
+      {
+        "card_def_id": 357,
+        "key": "tla.sparring_dummy",
+        "registry_name": "Sparring Dummy"
+      },
+      {
+        "card_def_id": 358,
+        "key": "m20.spectral_sailor",
+        "registry_name": "Spectral Sailor"
+      },
+      {
+        "card_def_id": 359,
+        "key": "token.plain_spirit",
+        "registry_name": "Spirit"
+      },
+      {
+        "card_def_id": 360,
+        "key": "token.spirit",
+        "registry_name": "Spirit"
+      },
+      {
+        "card_def_id": 361,
+        "key": "tla.spirit_water_revival",
+        "registry_name": "Spirit Water Revival"
+      },
+      {
+        "card_def_id": 362,
+        "key": "ody.standstill",
+        "registry_name": "Standstill"
+      },
+      {
+        "card_def_id": 363,
+        "key": "tla.suki_courageous_rescuer",
+        "registry_name": "Suki, Courageous Rescuer"
+      },
+      {
+        "card_def_id": 364,
+        "key": "tla.suki_kyoshi_warrior",
+        "registry_name": "Suki, Kyoshi Warrior"
+      },
+      {
+        "card_def_id": 365,
+        "key": "tla.sun_warriors",
+        "registry_name": "Sun Warriors"
+      },
+      {
+        "card_def_id": 366,
+        "key": "tla.sun_blessed_peak",
+        "registry_name": "Sun-Blessed Peak"
+      },
+      {
+        "card_def_id": 367,
+        "key": "mh1.sunbaked_canyon",
+        "registry_name": "Sunbaked Canyon"
+      },
+      {
+        "card_def_id": 368,
+        "key": "m12.sundial_of_the_infinite",
+        "registry_name": "Sundial of the Infinite"
+      },
+      {
+        "card_def_id": 369,
+        "key": "spm.supportive_parents",
+        "registry_name": "Supportive Parents"
+      },
+      {
+        "card_def_id": 370,
+        "key": "lea.swamp",
+        "registry_name": "Swamp"
+      },
+      {
+        "card_def_id": 371,
+        "key": "tla.swampsnare_trap",
+        "registry_name": "Swampsnare Trap"
+      },
+      {
+        "card_def_id": 372,
+        "key": "ody.tarnished_citadel",
+        "registry_name": "Tarnished Citadel"
+      },
+      {
+        "card_def_id": 373,
+        "key": "ptk.taunting_challenge",
+        "registry_name": "Taunting Challenge"
+      },
+      {
+        "card_def_id": 374,
+        "key": "tla.team_avatar",
+        "registry_name": "Team Avatar"
+      },
+      {
+        "card_def_id": 375,
+        "key": "c17.teferis_protection",
+        "registry_name": "Teferi's Protection"
+      },
+      {
+        "card_def_id": 376,
+        "key": "tla.teo_spirited_glider",
+        "registry_name": "Teo, Spirited Glider"
+      },
+      {
+        "card_def_id": 377,
+        "key": "tla.the_boulder_ready_to_rumble",
+        "registry_name": "The Boulder, Ready to Rumble"
+      },
+      {
+        "card_def_id": 378,
+        "key": "tle.the_cabbage_merchant",
+        "registry_name": "The Cabbage Merchant"
+      },
+      {
+        "card_def_id": 379,
+        "key": "tla.the_cave_of_two_lovers",
+        "registry_name": "The Cave of Two Lovers"
+      },
+      {
+        "card_def_id": 380,
+        "key": "tla.the_earth_king",
+        "registry_name": "The Earth King"
+      },
+      {
+        "card_def_id": 381,
+        "key": "tla.the_fire_nation_drill",
+        "registry_name": "The Fire Nation Drill"
+      },
+      {
+        "card_def_id": 382,
+        "key": "eld.the_great_henge",
+        "registry_name": "The Great Henge"
+      },
+      {
+        "card_def_id": 383,
+        "key": "tla.the_last_agni_kai",
+        "registry_name": "The Last Agni Kai"
+      },
+      {
+        "card_def_id": 384,
+        "key": "tla.the_legend_of_kuruk",
+        "registry_name": "The Legend of Kuruk"
+      },
+      {
+        "card_def_id": 385,
+        "key": null,
+        "registry_name": "Avatar Kuruk"
+      },
+      {
+        "card_def_id": 386,
+        "key": "tla.the_legend_of_kyoshi",
+        "registry_name": "The Legend of Kyoshi"
+      },
+      {
+        "card_def_id": 387,
+        "key": null,
+        "registry_name": "Avatar Kyoshi"
+      },
+      {
+        "card_def_id": 388,
+        "key": "tla.the_legend_of_roku",
+        "registry_name": "The Legend of Roku"
+      },
+      {
+        "card_def_id": 389,
+        "key": null,
+        "registry_name": "Avatar Roku"
+      },
+      {
+        "card_def_id": 390,
+        "key": "tla.the_legend_of_yangchen",
+        "registry_name": "The Legend of Yangchen"
+      },
+      {
+        "card_def_id": 391,
+        "key": null,
+        "registry_name": "Avatar Yangchen"
+      },
+      {
+        "card_def_id": 392,
+        "key": "tla.the_lion_turtle",
+        "registry_name": "The Lion-Turtle"
+      },
+      {
+        "card_def_id": 393,
+        "key": "tla.the_mechanist_aerial_artisan",
+        "registry_name": "The Mechanist, Aerial Artisan"
+      },
+      {
+        "card_def_id": 394,
+        "key": "tla.the_rise_of_sozin",
+        "registry_name": "The Rise of Sozin"
+      },
+      {
+        "card_def_id": 395,
+        "key": null,
+        "registry_name": "Fire Lord Sozin"
+      },
+      {
+        "card_def_id": 396,
+        "key": "tla.the_spirit_oasis",
+        "registry_name": "The Spirit Oasis"
+      },
+      {
+        "card_def_id": 397,
+        "key": "tle.the_terror_of_serpent_s_pass",
+        "registry_name": "The Terror of Serpent's Pass"
+      },
+      {
+        "card_def_id": 398,
+        "key": "tla.the_unagi_of_kyoshi_island",
+        "registry_name": "The Unagi of Kyoshi Island"
+      },
+      {
+        "card_def_id": 399,
+        "key": "tla.the_walls_of_ba_sing_se",
+        "registry_name": "The Walls of Ba Sing Se"
+      },
+      {
+        "card_def_id": 400,
+        "key": "psal.three_dreams",
+        "registry_name": "Three Dreams"
+      },
+      {
+        "card_def_id": 401,
+        "key": "tla.tiger_dillo",
+        "registry_name": "Tiger-Dillo"
+      },
+      {
+        "card_def_id": 402,
+        "key": "tla.tiger_seal",
+        "registry_name": "Tiger-Seal"
+      },
+      {
+        "card_def_id": 403,
+        "key": "mh2.tireless_provisioner",
+        "registry_name": "Tireless Provisioner"
+      },
+      {
+        "card_def_id": 404,
+        "key": "soi.tireless_tracker",
+        "registry_name": "Tireless Tracker"
+      },
+      {
+        "card_def_id": 405,
+        "key": "tla.tolls_of_war",
+        "registry_name": "Tolls of War"
+      },
+      {
+        "card_def_id": 406,
+        "key": "tle.toph_greatest_earthbender",
+        "registry_name": "Toph, Greatest Earthbender"
+      },
+      {
+        "card_def_id": 407,
+        "key": "tla.toph_hardheaded_teacher",
+        "registry_name": "Toph, Hardheaded Teacher"
+      },
+      {
+        "card_def_id": 408,
+        "key": "tla.toph_the_blind_bandit",
+        "registry_name": "Toph, the Blind Bandit"
+      },
+      {
+        "card_def_id": 409,
+        "key": "tla.toph_the_first_metalbender",
+        "registry_name": "Toph, the First Metalbender"
+      },
+      {
+        "card_def_id": 410,
+        "key": "tle.toucan_puffin",
+        "registry_name": "Toucan-Puffin"
+      },
+      {
+        "card_def_id": 411,
+        "key": "roe.training_grounds",
+        "registry_name": "Training Grounds"
+      },
+      {
+        "card_def_id": 412,
+        "key": "token.treasure",
+        "registry_name": "Treasure"
+      },
+      {
+        "card_def_id": 413,
+        "key": "tla.treetop_freedom_fighters",
+        "registry_name": "Treetop Freedom Fighters"
+      },
+      {
+        "card_def_id": 414,
+        "key": "ulg.treetop_village",
+        "registry_name": "Treetop Village"
+      },
+      {
+        "card_def_id": 415,
+        "key": "tla.true_ancestry",
+        "registry_name": "True Ancestry"
+      },
+      {
+        "card_def_id": 416,
+        "key": "tla.trusty_boomerang",
+        "registry_name": "Trusty Boomerang"
+      },
+      {
+        "card_def_id": 417,
+        "key": "tla.tundra_tank",
+        "registry_name": "Tundra Tank"
+      },
+      {
+        "card_def_id": 418,
+        "key": "tle.tundra_wall",
+        "registry_name": "Tundra Wall"
+      },
+      {
+        "card_def_id": 419,
+        "key": "tla.turtle_duck",
+        "registry_name": "Turtle-Duck"
+      },
+      {
+        "card_def_id": 420,
+        "key": "tle.turtle_seals",
+        "registry_name": "Turtle-Seals"
+      },
+      {
+        "card_def_id": 421,
+        "key": "tla.twin_blades",
+        "registry_name": "Twin Blades"
+      },
+      {
+        "card_def_id": 422,
+        "key": "tla.ty_lee_artful_acrobat",
+        "registry_name": "Ty Lee, Artful Acrobat"
+      },
+      {
+        "card_def_id": 423,
+        "key": "tla.ty_lee_chi_blocker",
+        "registry_name": "Ty Lee, Chi Blocker"
+      },
+      {
+        "card_def_id": 424,
+        "key": "isd.typhoid_rats",
+        "registry_name": "Typhoid Rats"
+      },
+      {
+        "card_def_id": 425,
+        "key": "tla.uncle_iroh",
+        "registry_name": "Uncle Iroh"
+      },
+      {
+        "card_def_id": 426,
+        "key": "tle.uncle_s_musings",
+        "registry_name": "Uncle's Musings"
+      },
+      {
+        "card_def_id": 427,
+        "key": "tla.united_front",
+        "registry_name": "United Front"
+      },
+      {
+        "card_def_id": 428,
+        "key": "tla.unlucky_cabbage_merchant",
+        "registry_name": "Unlucky Cabbage Merchant"
+      },
+      {
+        "card_def_id": 429,
+        "key": "zen.valakut_the_molten_pinnacle",
+        "registry_name": "Valakut, the Molten Pinnacle"
+      },
+      {
+        "card_def_id": 430,
+        "key": "tla.vengeful_villagers",
+        "registry_name": "Vengeful Villagers"
+      },
+      {
+        "card_def_id": 431,
+        "key": "tla.vindictive_warden",
+        "registry_name": "Vindictive Warden"
+      },
+      {
+        "card_def_id": 432,
+        "key": "m12.visions_of_beyond",
+        "registry_name": "Visions of Beyond"
+      },
+      {
+        "card_def_id": 433,
+        "key": "cmr.volcanic_torrent",
+        "registry_name": "Volcanic Torrent"
+      },
+      {
+        "card_def_id": 434,
+        "key": "lea.wall_of_stone",
+        "registry_name": "Wall of Stone"
+      },
+      {
+        "card_def_id": 435,
+        "key": "tla.walltop_sentries",
+        "registry_name": "Walltop Sentries"
+      },
+      {
+        "card_def_id": 436,
+        "key": "tla.wan_shi_tong_librarian",
+        "registry_name": "Wan Shi Tong, Librarian"
+      },
+      {
+        "card_def_id": 437,
+        "key": "tla.wandering_musicians",
+        "registry_name": "Wandering Musicians"
+      },
+      {
+        "card_def_id": 438,
+        "key": "tla.war_balloon",
+        "registry_name": "War Balloon"
+      },
+      {
+        "card_def_id": 439,
+        "key": "lea.war_mammoth",
+        "registry_name": "War Mammoth"
+      },
+      {
+        "card_def_id": 440,
+        "key": "tle.warship_scout",
+        "registry_name": "Warship Scout"
+      },
+      {
+        "card_def_id": 441,
+        "key": "m12.warstorm_surge",
+        "registry_name": "Warstorm Surge"
+      },
+      {
+        "card_def_id": 442,
+        "key": "tla.wartime_protestors",
+        "registry_name": "Wartime Protestors"
+      },
+      {
+        "card_def_id": 443,
+        "key": "tla.water_tribe_captain",
+        "registry_name": "Water Tribe Captain"
+      },
+      {
+        "card_def_id": 444,
+        "key": "tla.water_tribe_rallier",
+        "registry_name": "Water Tribe Rallier"
+      },
+      {
+        "card_def_id": 445,
+        "key": "tla.waterbender_ascension",
+        "registry_name": "Waterbender Ascension"
+      },
+      {
+        "card_def_id": 446,
+        "key": "tla.waterbending_lesson",
+        "registry_name": "Waterbending Lesson"
+      },
+      {
+        "card_def_id": 447,
+        "key": "tla.waterbending_scroll",
+        "registry_name": "Waterbending Scroll"
+      },
+      {
+        "card_def_id": 448,
+        "key": "stx.waterfall_aerialist",
+        "registry_name": "Waterfall Aerialist"
+      },
+      {
+        "card_def_id": 449,
+        "key": "tla.watery_grasp",
+        "registry_name": "Watery Grasp"
+      },
+      {
+        "card_def_id": 450,
+        "key": "iko.weaponize_the_monsters",
+        "registry_name": "Weaponize the Monsters"
+      },
+      {
+        "card_def_id": 451,
+        "key": "tla.white_lotus_hideout",
+        "registry_name": "White Lotus Hideout"
+      },
+      {
+        "card_def_id": 452,
+        "key": "tla.white_lotus_reinforcements",
+        "registry_name": "White Lotus Reinforcements"
+      },
+      {
+        "card_def_id": 453,
+        "key": "tla.white_lotus_tile",
+        "registry_name": "White Lotus Tile"
+      },
+      {
+        "card_def_id": 454,
+        "key": "por.wind_drake",
+        "registry_name": "Wind Drake"
+      },
+      {
+        "card_def_id": 455,
+        "key": "tle.wolf_cove_villager",
+        "registry_name": "Wolf Cove Villager"
+      },
+      {
+        "card_def_id": 456,
+        "key": "tla.wolfbat",
+        "registry_name": "Wolfbat"
+      },
+      {
+        "card_def_id": 457,
+        "key": "tla.yip_yip",
+        "registry_name": "Yip Yip!"
+      },
+      {
+        "card_def_id": 458,
+        "key": "sth.youthful_knight",
+        "registry_name": "Youthful Knight"
+      },
+      {
+        "card_def_id": 459,
+        "key": "tla.yue_the_moon_spirit",
+        "registry_name": "Yue, the Moon Spirit"
+      },
+      {
+        "card_def_id": 460,
+        "key": "tla.yuyan_archers",
+        "registry_name": "Yuyan Archers"
+      },
+      {
+        "card_def_id": 461,
+        "key": "token.zeppelin",
+        "registry_name": "Zeppelin"
+      },
+      {
+        "card_def_id": 462,
+        "key": "tla.zhao_ruthless_admiral",
+        "registry_name": "Zhao, Ruthless Admiral"
+      },
+      {
+        "card_def_id": 463,
+        "key": "tla.zhao_the_moon_slayer",
+        "registry_name": "Zhao, the Moon Slayer"
+      },
+      {
+        "card_def_id": 464,
+        "key": "tle.zhao_the_seething_flame",
+        "registry_name": "Zhao, the Seething Flame"
+      },
+      {
+        "card_def_id": 465,
+        "key": "tla.zuko_s_conviction",
+        "registry_name": "Zuko's Conviction"
+      },
+      {
+        "card_def_id": 466,
+        "key": "tla.zuko_s_exile",
+        "registry_name": "Zuko's Exile"
+      },
+      {
+        "card_def_id": 467,
+        "key": "tle.zukos_offense",
+        "registry_name": "Zuko's Offense"
+      },
+      {
+        "card_def_id": 468,
+        "key": "tla.zuko_conflicted",
+        "registry_name": "Zuko, Conflicted"
+      },
+      {
+        "card_def_id": 469,
+        "key": "tla.zuko_exiled_prince",
+        "registry_name": "Zuko, Exiled Prince"
+      }
+    ]
+  },
+  "prefix": [
+    {
+      "before_digest": "33e8783e90b9a1b0f45ea7678606b8147a58402ff245ce3ea1043532afa02d7d",
+      "offer_id": 0,
+      "label": "Play Swamp"
+    },
+    {
+      "before_digest": "a1f4b927a2c307e569b70e01bcc423436ca84b184faada7fb355e3e095b6748d",
+      "offer_id": 0,
+      "label": "Cast Callous Inspector"
+    },
+    {
+      "before_digest": "94061c506ed0cc7853ca8200bbaf5529131c8ea5e9d7539c7d3c092b4051fe45",
+      "offer_id": 3,
+      "label": "Play Swamp"
+    },
+    {
+      "before_digest": "a8ee791adc5cecc83de12aa782d3c35c72b8e7335b4f2ccf50295a0897554d90",
+      "offer_id": 1,
+      "label": "Cast Callous Inspector"
+    },
+    {
+      "before_digest": "236857f7aa6c41fb8324c5c00d23bdfd046f2804d3ec5d46cbcc627acfcad06d",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "b0953d5d107603deda58c666a746d53941d05798a0a9e9c0cc97c87bc2b35c1e",
+      "offer_id": 1,
+      "label": "Do not attack with Callous Inspector"
+    },
+    {
+      "before_digest": "fde08f38506a7e91e79b8eca7ed7d4e0f4c49a98071dc50bb9eed9a529346fd7",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "c57b3eaf1636352feacdc26c3e3af55a235690155bc2873b5cafeb13a66e6b8a",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "26f81a9180c594f41a34205ff95162e3892efd513155de0f3da4c58c9af87571",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "12479ded8593b4891ca0abbcb1948afce8dc3ed37cff113a5bf22185fcac94fe",
+      "offer_id": 3,
+      "label": "Cast Callous Inspector"
+    },
+    {
+      "before_digest": "106dd798a8a1402aed96b9df830225575ec1166ce747fb31d3be60b61529ba6c",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "9dd655a54a9a838a44d176d9f19eb9e07f829dab06ffe60ec72331e7dd5288b5",
+      "offer_id": 1,
+      "label": "Do not attack with Callous Inspector"
+    },
+    {
+      "before_digest": "3a71edfd73ea6b1b76c061289126c20ebec661f9151ee117c667709d2d754c4c",
+      "offer_id": 1,
+      "label": "Do not attack with Callous Inspector"
+    },
+    {
+      "before_digest": "b4b50f72d7d64774b7f9bd8908b5d7bc84eb236ddf55de0107162b379bb0c637",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "6c7c345e6cb27f5b7916ddda5b93e07d007933f139cb5092322a0bde97c330a9",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "9f2fd1a2b88866ae380acc910ce61972087cadc003cf8ccdef71034da8bbe178",
+      "offer_id": 2,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "18b4d9ab843f94d48d1caaea63d5855a6da92244366c61108ebb03d0d40f0f73",
+      "offer_id": 4,
+      "label": "Play Swamp"
+    },
+    {
+      "before_digest": "b2877c5747dc460b54ffb3541a067206dd46227bb10f48698b7094304c7718c8",
+      "offer_id": 3,
+      "label": "Cast Callous Inspector"
+    },
+    {
+      "before_digest": "37bf230f5b1a72954ebed62af2fac0f89cf451ceac8d99c74330134f66725a7a",
+      "offer_id": 0,
+      "label": "Cast Deadly Dispute"
+    },
+    {
+      "before_digest": "c986088a660cf5809fe94388fb302f0d0aa6afee4e2a6f08abf80eb402089e31",
+      "offer_id": 0,
+      "label": "Sacrifice Callous Inspector"
+    },
+    {
+      "before_digest": "8b5d5f144ca88d82050c643129bc5234b93c8302e4060309850076ca9a258470",
+      "offer_id": 1,
+      "label": "Pass priority"
+    }
+  ],
+  "decision_digest": "e463e0eef669e7c5bf1fa3757b56952d42f01dbd8037163ebcec86acafc6912c",
+  "decision_revision": 30,
+  "decision_kind": "PRIORITY"
+}
