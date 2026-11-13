@@ -34,7 +34,8 @@ Nothing upstream since e82a20033 touched `managym/src`, `managym/perf` or
   sources kept only inside a scan, across a nested guard, never in a clone.
   Passed in debug with the three `direct_payment_*` tests.
 - Workspace clippy `--all-targets` clean and `--features benchmark --examples`
-  checked before the scan test was added; not rerun since.
+  checked before the scan test was added; after it, `cargo clippy -p managym
+  --all-targets` clean.
 - Release, one run each, digests unchanged (raw in `scratch/payment-after/`):
 
 | | baseline median | after (1 run) |
