@@ -33,7 +33,7 @@ from manabot.env.observation import (
 )
 from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.experiment.job import TrainingJob
-from manabot.infra.config import RewardConfig
+from manabot.infra.config import BF16_MIN_HIDDEN_DIM, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model import semantic_cards, shared_effects
 from manabot.model.facts import FactEncoder
@@ -45,6 +45,7 @@ from manabot.model.semantic_cards import (
 )
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.baseline import baseline
+from manabot.recipes.builders import with_capacity
 from manabot.recipes.device import accelerator
 from manabot.recipes.local import local_smoke
 from manabot.training import execution
@@ -53,7 +54,6 @@ from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
     Learning,
-    Precision,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -65,14 +65,17 @@ import managym
 
 
 def test_mps_admitted_without_changing_saved_regimes() -> None:
-    assert Execution(device="mps").precision == "float32"
+    # Authoring leaves precision to the regime, which resolves it per model.
+    assert Execution(device="mps").precision == "auto"
     assert Execution().model_dump() == {
         "device": "cpu",
-        "precision": "float32",
+        "precision": "auto",
         "workers": 1,
         "threads": 1,
         "wall_seconds": 300,
         "memory_bytes": 32 * 1024**3,
+        "bucketed_shapes": "auto",
+        "live_tokens": "auto",
     }
     saved = TrainingJob.model_validate_json(
         packing.runs("HEAD", "d1")[0].job.config or ""
@@ -83,12 +86,14 @@ def test_mps_admitted_without_changing_saved_regimes() -> None:
     for plan in (local_smoke(device="mps"), baseline(device="mps").regime):
         assert TrainingRegime.model_validate_json(plan.model_dump_json()) == plan
         assert plan.stages[0].execution.device == "mps"
+        # The recipes' narrow model stays float32 on MPS.
+        assert plan.stages[0].execution.resolved_precision == "float32"
 
 
-@pytest.mark.parametrize("precision", ["tf32", "bf16"])
-def test_mps_rejects_reduced_precision(precision: Precision) -> None:
-    with pytest.raises(ValueError, match="requires CUDA"):
-        Execution(device="mps", precision=precision)
+def test_mps_admits_bf16_and_rejects_tf32() -> None:
+    assert Execution(device="mps", precision="bf16").precision == "bf16"
+    with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
+        Execution(device="mps", precision="tf32")
 
 
 def test_mps_rejects_process_recovery_and_belief() -> None:
@@ -295,6 +300,73 @@ def test_mps_one_update_and_export(
     assert len(observed) == 1
     assert Path(record.artifacts["raw"]["path"]).is_file()
     _assert_finite(record.model_dump())
+
+
+@pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
+def test_mps_wide_model_trains_one_bf16_update_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`auto` at the threshold width runs bfloat16 forwards on MPS, keeping
+    float32 behavior logs, master weights and a finite update."""
+    plan = with_capacity(
+        local_smoke(steps=1, seconds=600, learning_seats="one", device="mps"),
+        id="mps-wide",
+        width=BF16_MIN_HIDDEN_DIM,
+        depth=2,
+        heads=8,
+    )
+    stage = plan.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    assert stage.execution.resolved_precision == "bf16"
+    stage.learning.min_advantage = 0
+    autocast: list[bool] = []
+    forward = ActorCritic.forward_distribution
+
+    def tracked(self: ActorCritic, *args: object) -> object:
+        autocast.append(
+            torch.is_autocast_enabled("mps")
+            and torch.get_autocast_dtype("mps") == torch.bfloat16
+        )
+        return forward(self, *args)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ActorCritic, "forward_distribution", tracked)
+    observed: list[UpdateDiagnostics] = []
+    original = execution.update_damped_iteration
+
+    def update(
+        backend: ModuleType,
+        learner: Learner,
+        batch: RolloutBatch,
+        learning: DampedPolicyLearning,
+        iteration: int,
+        *,
+        bootstrap_agent: ActorCritic | None = None,
+    ) -> UpdateDiagnostics:
+        assert learner.precision == "bf16"
+        assert batch.logprobs.dtype == np.float32
+        result = original(
+            backend,
+            learner,
+            batch,
+            learning,
+            iteration,
+            bootstrap_agent=bootstrap_agent,
+        )
+        assert all(
+            p.dtype == torch.float32 and torch.isfinite(p).all()
+            for p in learner.agent.parameters()
+        )
+        _assert_finite(result)
+        observed.append(result)
+        return result
+
+    monkeypatch.setattr(execution, "update_damped_iteration", update)
+    with VerifyStore(tmp_path / "runs.sqlite") as store:
+        run = execution.execute_regime(plan, 197, tmp_path / "mps-wide", store)
+    assert run.status == "completed", run.error
+    assert len(observed) == 1
+    assert observed[0]["numerical"]["rejected_steps"] == 0
+    assert autocast and all(autocast)
 
 
 @pytest.mark.parametrize("family", ["none", "name", "detail"])

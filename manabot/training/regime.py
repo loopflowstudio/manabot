@@ -13,6 +13,7 @@ from pydantic import (
 )
 
 from manabot.infra.config import (
+    BF16_MIN_HIDDEN_DIM,
     COMPOUND_DECISIONS_REMOVED,
     MatchConfig,
     ModelConfig,
@@ -209,17 +210,22 @@ class DampedPolicyLearning(Strict):
 
 
 # float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
-# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.backends.torch.learner).
+# tensor cores; bf16 autocasts policy forwards to bfloat16 on CUDA and MPS
+# (manabot.backends.torch.learner).
 Precision = Literal["float32", "tf32", "bf16"]
 Device = Literal["cpu", "mps", "cuda"]
 
-# The narrowest measured BF16 speed crossover on an L4 with bucketed shapes.
-# Learning admission is separate: experiments/precision_ladder.md.
-BF16_MIN_HIDDEN_DIM = 256
-
 
 def ladder_precision(device: Device, hidden_dim: int) -> Precision:
-    """Keep float32 until the learning comparison admits the measured crossover."""
+    """The precision `auto` means: BF16 forwards for wide GPU models, else float32.
+
+    CUDA and MPS share the one width rule (`BF16_MIN_HIDDEN_DIM`), which the
+    MLX backend also follows. Log-probabilities, losses, master weights and
+    optimizer state stay float32 in either case
+    (`manabot.backends.torch.learner.forward_precision`).
+    """
+    if device != "cpu" and hidden_dim >= BF16_MIN_HIDDEN_DIM:
+        return "bf16"
     return "float32"
 
 
@@ -256,8 +262,12 @@ class Execution(Strict):
 
     @model_validator(mode="after")
     def cuda_settings(self) -> "Execution":
-        if self.precision not in ("float32", "auto") and self.device != "cuda":
-            raise ValueError(f"precision {self.precision} requires CUDA")
+        # TF32 is a CUDA tensor-core mode. BF16 autocast is admitted on the GPU
+        # devices where it was measured, CUDA and MPS; CPU trains in float32.
+        if self.precision == "tf32" and self.device != "cuda":
+            raise ValueError("precision tf32 requires CUDA")
+        if self.precision == "bf16" and self.device == "cpu":
+            raise ValueError("precision bf16 requires CUDA or MPS")
         # Off CUDA, jagged attention falls back to one call per observation.
         if self.live_tokens is True and self.device != "cuda":
             raise ValueError(
@@ -831,7 +841,9 @@ class TrainingRegime(Strict):
         Bucketed shapes and live tokens pay on CUDA at every measured width
         (experiments/live_token_attention.md), so `auto` is on for a CUDA
         `train_self_play` stage and off on CPU and MPS and for every other
-        operation. Precision follows the learning-gated width ladder.
+        operation. A `train_self_play` stage's precision follows the width
+        ladder (`ladder_precision`: BF16 for wide models on CUDA and MPS);
+        every other operation is float32.
         Stages are copied, never mutated, so a stage instance shared
         by several regimes resolves separately in each. Runs before
         `references`, which validates the resolved values.
@@ -849,7 +861,9 @@ class TrainingRegime(Strict):
                 resolved: dict[str, object] = {
                     "precision": ladder_precision(
                         execution.device, self.agent.hidden_dim
-                    ),
+                    )
+                    if isinstance(stage, TrainSelfPlay)
+                    else "float32",
                     **dict.fromkeys(LAYOUT_FIELDS, on),
                 }
                 execution = execution.model_copy(

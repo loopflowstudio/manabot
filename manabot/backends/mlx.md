@@ -114,8 +114,11 @@ Results, machine and cost are in
 
 ## Compute precision
 
-Float32 is the default. Both half dtypes are supported explicitly on the policy
-and learner; this does not enable an MLX training CLI or change Torch admission.
+A policy built without a precision follows the
+[one width rule](../../docs/training.md#reduced-precision) every GPU backend
+shares: bfloat16 at `hidden_dim` 256 or more (`BF16_MIN_HIDDEN_DIM`), float32
+below it (`manabot.backends.mlx.arrays.default_precision`). An explicit
+precision always wins. This does not enable an MLX training CLI.
 
 ```python
 from manabot.backends.mlx.checkpoint import load_mlx_policy
@@ -125,20 +128,22 @@ policy, obs_space = load_mlx_policy(
     ".runs/example/checkpoint.safetensors", precision="bfloat16"
 )
 learner = Learner(policy, minibatch_rows=64)  # inherits the policy's precision
-# Alternatively: Learner(policy, minibatch_rows=64, precision="float16")
+# Alternatively: Learner(policy, minibatch_rows=64, precision="float32")
 ```
 
 `MLXActorCritic`, `assemble`, `build` and `MLXBackend` also accept `precision`:
-`"float32"`, `"bfloat16"` or `"float16"`. It is an execution option, not a change
+`"float32"` or `"bfloat16"`; omitted, each policy takes its width's
+default. The parity command always names its precision (float32 unless
+`--precision` says otherwise). It is an execution option, not a change
 to the checkpoint's stored float32 weights. `policy.set_precision(...)` changes
 both inference and learning and invalidates cached catalog encodings.
 
 Weights and floating activations use the selected compute dtype inside the
 forward; gradients return through those casts to float32 master weights.
-Loss arithmetic, global clipping and Adam state remain float32. Float16 uses
-fixed loss scaling of 128; a nonfinite objective or gradient refuses the step
-before changing parameters or Adam state. It does not silently skip a step or
-adapt the scale. Logits, values, log-softmax and sampled action log probabilities
+Loss arithmetic, global clipping and Adam state remain float32; bfloat16 keeps
+float32's exponent range, so no loss scaling is used. A nonfinite objective or
+gradient refuses the step before changing parameters or Adam state; it never
+silently skips a step. Logits, values, log-softmax and sampled action log probabilities
 are float32 for both behavior and learner evaluation. Both paths use
 `rl.policy_logs` and `rl.action_logs`, promoting before normalization.
 
@@ -156,28 +161,25 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
 | Precision | Legal logits, max absolute | Values, max absolute | Loss, relative | Full-gradient cosine |
 |---|---:|---:|---:|---:|
 | bfloat16 | 0.001 | 0.01 | 1% | ≥ 0.99 |
-| float16 | 0.0001 | 0.002 | 0.2% | ≥ 0.999 |
 
-These bounds were calibrated on the retained real-input w384/w768 checks in
-the [MPS retest](../../experiments/mps_retest.md), source `140eec28d`. They
-remain numerical gates; passing those cases does not establish general
+The bound was calibrated on the retained real-input w384/w768 checks in
+the [MPS retest](../../experiments/mps_retest.md), source `140eec28d`. It
+remains a numerical gate; passing those cases does not establish general
 equivalence or equivalent optimization trajectories.
 Half still requires a finite clipped Adam step and reports the minimum
 per-tensor cosine and the maximum post-step parameter difference. It does not
 apply float32's 1e-6 post-step bound: the retained half deltas exceed it.
 Float32 keeps its existing per-tensor cosine and post-step gates unchanged.
 
-Run this preflight on the intended weights and inputs: explicit half support
-means the API executes that dtype, not that an input passes its gate or trains
-equivalently. Float32 passed each real-capture check below. Half did not:
+Run this preflight on the intended weights and inputs: half support, default
+or explicit, means the API executes that dtype, not that an input passes its
+gate or trains equivalently. Float32 passed each real-capture check below. Half did not:
 
 - Two-row captures: bfloat16 failed once at 1.07% relative loss
-  difference against 1%, and all three dtypes passed on one later capture.
-- Four 8-row minibatches at w64l2 and w384l8: three of four half
-  configurations failed. bfloat16 at w64 reached a full-gradient cosine of
-  0.9315 against ≥ 0.99; bfloat16 at w384 failed only the relative-loss gate,
-  on near-zero losses; float16 failed at w64 and passed at w384 (0.197%
-  against 0.2%).
+  difference against 1%, and passed on one later capture.
+- Four 8-row minibatches at w64l2 and w384l8: bfloat16 at w64 reached a
+  full-gradient cosine of 0.9315 against ≥ 0.99; bfloat16 at w384 failed only
+  the relative-loss gate, on near-zero losses.
 
 The [report's QA table](../../experiments/mps_retest.md#later-small-capture-qa-2026-11-13)
 has each measurement. Tolerances are unchanged, and the relative-loss gate has
