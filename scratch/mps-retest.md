@@ -17,11 +17,12 @@ measurements with M2 explicitly unmeasured (deadline in `questions.md`).
 
 ## Delete — do not maintain
 
-Remove the obsolete laptop capture/small-width refusals in the harness and
-its overflow-only documentation. Preserve the load guard, eight-thread replay
-limit, four-thread capture, receipt provenance and separated host charts.
-The shared capture owner has already replaced the pilot's inline capture;
-`HostReport` is the one selection path. No rental subsystem is planned.
+Removed the laptop capture/small-width refusals, overflow-only wording and
+laptop exception to the same-hour completeness rule. Worker dispatch now takes
+one phase; `replays` no longer exposes an unused per-call `--repeats` option.
+The shared capture owner replaces the pilot's inline capture; `HostReport` is
+the one selection path. No remaining deletion targets or rental subsystem.
+Preserve load guards, eight-thread replays, four-thread capture and host provenance.
 
 ## Implemented and checked
 
@@ -95,3 +96,11 @@ loads 8/90 before output creation, and five laptop CLI paths including small
 widths, with execution replaced by controlled fixtures. Ruff check/format
 and `git diff --check` passed. No model/game ran. Final 01:17 UTC load was
 105.66; the 256-stream capture is ready for the operator's quiet window.
+
+2026-11-12 second compress: receipt admission now precedes model allocation and
+capture reads, so missing/unsupported parity needs neither. Dispatch derives
+the worker command from its phase, and completeness applies the same-hour
+requirement to both hosts. `uv run --no-sync python .runs/mps-simplify-check.py`
+passed injected admission, dispatch, timeout/failure, triple-replay and M2/M4
+window checks; existing compress and laptop fixtures passed too. Compilation,
+Ruff and `git diff --check` passed. No models, games or measurements ran.

@@ -672,6 +672,32 @@ def bench(
         "started": time.time(),
         "load_before": _quiet(laptop),
     }
+    # Receipt admission needs no model, device allocation or capture arrays.
+    if phase != "parity":
+        parity = _latest_parity(out, metadata, width, arm).get(size)
+        if parity is None or parity["status"] != "ok":
+            if parity is not None and parity["status"] == "unsupported":
+                row.update(
+                    status="unsupported",
+                    error=parity["error"],
+                    failure_phase="parity",
+                    load_after=os.getloadavg()[0],
+                    ended=time.time(),
+                )
+                _emit(out / "bench.jsonl", row)
+                return
+            raise ValueError(
+                "run parity for this host, revision, capture, width, rows and arm first"
+            )
+        row["parity"] = {
+            k: parity[k]
+            for k in (
+                "gradient_cosine",
+                "gradient_min_cosine",
+                "logits_max_abs",
+                "passes_gradient",
+            )
+        }
     batch = _batch(capture, "learner" if phase == "parity" else phase, size)
     with _runner(capture, width, arm) as runner:
         if phase == "parity":
@@ -720,30 +746,6 @@ def bench(
                 )
             )
         else:
-            parity = _latest_parity(out, metadata, width, arm).get(size)
-            if parity is None or parity["status"] != "ok":
-                if parity is not None and parity["status"] == "unsupported":
-                    row.update(
-                        status="unsupported",
-                        error=parity["error"],
-                        failure_phase="parity",
-                        load_after=os.getloadavg()[0],
-                        ended=time.time(),
-                    )
-                    _emit(out / "bench.jsonl", row)
-                    return
-                raise ValueError(
-                    "run parity for this host, revision, capture, width, rows and arm first"
-                )
-            row["parity"] = {
-                k: parity[k]
-                for k in (
-                    "gradient_cosine",
-                    "gradient_min_cosine",
-                    "logits_max_abs",
-                    "passes_gradient",
-                )
-            }
             times: list[float] = []
             _quiet(laptop)
             tick = time.perf_counter()
@@ -892,14 +894,14 @@ def capture(out: Path, streams: int, laptop: bool) -> None:
 
 def _child(
     args: argparse.Namespace,
-    command: str,
+    phase: Literal["parity", "learner", "collection", "update"],
     width: int,
-    size: int,
     arm: Arm,
     *,
-    phase: str = "",
+    size: int = 0,
     rep: int = 0,
 ) -> None:
+    command = "update" if phase == "update" else "bench"
     cmd = [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -913,7 +915,9 @@ def _child(
         arm,
     ]
     if command == "bench":
-        cmd += ["--phase", phase, "--rows", str(size), "--repeats", str(args.repeats)]
+        cmd += ["--phase", phase, "--rows", str(size)]
+        if phase != "parity":
+            cmd += ["--repeats", str(args.repeats)]
     else:
         cmd += ["--rep", str(rep)]
     if args.laptop:
@@ -933,7 +937,7 @@ def _child(
     _emit(
         ledger,
         {
-            "event": phase if command == "bench" else "update",
+            "event": phase,
             "width": width,
             "rows": size,
             "arm": arm,
@@ -950,10 +954,10 @@ def matrix(args: argparse.Namespace) -> None:
         for size in SIZES["learner"]:
             for arm in ARMS:
                 _quiet(args.laptop)
-                _child(args, "bench", width, size, arm, phase="parity")
-                _child(args, "bench", width, size, arm, phase="learner")
+                _child(args, "parity", width, arm, size=size)
+                _child(args, "learner", width, arm, size=size)
                 if size in SIZES["collection"]:
-                    _child(args, "bench", width, size, arm, phase="collection")
+                    _child(args, "collection", width, arm, size=size)
 
 
 def replays(args: argparse.Namespace) -> None:
@@ -968,11 +972,11 @@ def replays(args: argparse.Namespace) -> None:
                 ).values()
             ):
                 _quiet(args.laptop)
-                _child(args, "bench", width, 64, arm, phase="parity")
+                _child(args, "parity", width, arm, size=64)
         for rep in range(3):
             for arm in ARMS:
                 _quiet(args.laptop)
-                _child(args, "update", width, 0, arm, rep=rep)
+                _child(args, "update", width, arm, rep=rep)
 
 
 @dataclass(frozen=True)
@@ -1347,7 +1351,7 @@ def _host_report(
     summary = {
         "host": host,
         "missing": missing,
-        "complete": not missing and (same_hour or host["chip"] != "Apple M2"),
+        "complete": not missing and same_hour,
         "captures": captures,
         "whole_updates": medians,
         "replay_windows": spans,
@@ -1676,7 +1680,7 @@ def main() -> None:
             command.add_argument(
                 "--rows", type=int, choices=SIZES["learner"], required=True
             )
-        if name in ("bench", "matrix", "replays"):
+        if name in ("bench", "matrix"):
             command.add_argument("--repeats", type=int, default=3)
         if name in ("matrix", "replays"):
             command.add_argument("--timeout", type=float, default=900)

@@ -20,7 +20,7 @@ cells. Generated `comparisons.md` tables expose first-call/setup time, warmed
 rates, memory, gradient/logit/value/loss differences and sampled choices.
 Each host gets separate charts and tables; replay receipts preserve the
 capture host and its thread count. These outputs have been checked with
-synthetic receipts, not performance evidence. Receipt completeness is not a
+synthetic receipts, not performance evidence. Receipt completeness requires the same-hour window on either host and is not a
 correctness verdict; the numerical differences must be interpreted separately.
 
 The operator owns AWS allocation, access notes, release after the 24-hour
@@ -191,7 +191,7 @@ hostname suffix.
 
 **2026-11-12:** The decision threshold was removed before any experiment run.
 The steered matrix adds small/wide models, all three stream counts, both half
-arms, whole-update phase stacks and a separate quiet-laptop overflow path.
+arms, whole-update phase stacks and a separate quiet-laptop measurement path.
 Controlled checks exercised MLX bucket trimming and the harness on tiny fixed
 inputs; they are implementation validation, not performance evidence.
 
