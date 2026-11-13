@@ -84,6 +84,10 @@ checkpoints or experiment evidence.
 
 ### Experiments
 
+- Launcher credentials are split across Doppler projects: `manabot/prd` holds
+  R2 variables and `etude/prd` holds provider variables such as `RUNPOD_API_KEY`.
+  Nest `doppler run` for both when a command needs both; never print values.
+
 - Most runs are exploratory: calibration, throughput, capacity, pilots and
   anything run to make later work possible. They need no prediction, protocol
   or review; the report ends them. A finding, a result that will be cited as a claim

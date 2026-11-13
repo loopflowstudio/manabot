@@ -274,4 +274,9 @@ Cast payments are labeled natively, separately from other payment purposes.
 
 Checks: debug `fixed_outcomes` — 3 passed (cap/identity collapse, receipt
 colors, saved-obligation refusal); experiment discovery — 1 passed; Ruff passed.
-No measurement results or learning costs have yet been added by this slice.
+`over_tap` debug check also passed, including first-feasible automatic spending
+and fork independence. Local release extension rebuild is running. Learning
+source is `00ee188998`; launcher request uses `mtg347-mana-learning`, two L4s
+at once, `--max-usd 17`. Quote: USD2.24 per first-wave run, USD4.48 first wave,
+USD12 job/cohort rental budget. This is a quote, not incurred cost; run IDs and
+actual launcher cost remain to be recorded.

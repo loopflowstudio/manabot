@@ -368,6 +368,12 @@ def shapes(source: Path, out: Path, cap: int) -> None:
                 )
             if len(payments) != game.mana_payments:
                 raise ValueError("payment capture and frequency counter disagree")
+            if [n for p in payments for n in p.spend_offers] != game.spend_offers:
+                raise ValueError("payment capture and observed spend offers disagree")
+            if any(p.outcomes == 0 and not p.cap_hit for p in payments):
+                raise ValueError(
+                    "an actual payment has no enumerated fixed-source outcome"
+                )
             output.write(
                 json.dumps(
                     {
@@ -466,7 +472,7 @@ def summarize_shapes(source: Path) -> None:
             "C_decisions_per_game_upper": (
                 decisions
                 - cast_spend
-                + sum(p.outcomes > 1 for p in casts)
+                + sum(p.outcomes > 1 or p.cap_hit for p in casts)
                 + sum(p.outcomes > 2 or p.cap_hit for p in casts)
             )
             / len(games),
@@ -478,6 +484,9 @@ def summarize_shapes(source: Path) -> None:
                 decisions - cast_spend + sum(p.outcomes > 1 or p.cap_hit for p in casts)
             )
             / len(games),
+            "C_worst_path_exact_offers": quantiles(
+                [2 for p in real] + [p.outcomes - 1 for p in real if p.outcomes > 2]
+            ),
             "D_exact_offers": quantiles([p.outcomes for p in real]),
             "D_exact_over64": sum(p.outcomes > 64 for p in exact),
             "D_certified_over64": sum(p.outcomes > 64 for p in casts),
