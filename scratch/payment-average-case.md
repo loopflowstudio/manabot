@@ -49,6 +49,19 @@ Nothing upstream since e82a20033 touched `managym/src`, `managym/perf` or
   edit (19:33, the `DirectTap`/`direct_margin` simplification). Only
   `bench_steps` was rerun on the final code; `bench_search` has no run of it.
 
+## Concept review (2026-11-12): no design change
+
+- `PaymentScan` stays separate from `BoardScan` although both count live
+  guards and clone to zero. `payment_model` and `payment_sources` each take
+  their own `BoardScan`, so a merged guard would be live for every lone
+  question and would store sources it then drops; telling an enclosing
+  computation from that inner scan is the second concept again. `BoardScan`
+  is also free in release and would stop being so.
+- `direct` / `payable` / `plan` and `waterbend_taps_keeping_payable` name what
+  they answer; the search remains the one definition of a legal payment.
+- No open product choice. The items in `scratch/questions.md` are engineering
+  notes, none changes what the engine offers or taps.
+
 ## Remaining
 
 - Gate: full debug suites (the assertions run in every game they play), clippy
