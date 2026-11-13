@@ -59,7 +59,7 @@ class BatchedSampler:
         epsilon: float = 0.0,
         seed: int = 0,
         device: str = "cpu",
-    ):
+    ) -> None:
         self.agent = agent.to(device)
         self.agent.eval()
         self.deterministic = deterministic

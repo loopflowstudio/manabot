@@ -577,3 +577,21 @@ Torch/MLX captured parity passes (`injected-parity.json`): post-clipped-Adam
 weights max 7.5e-9 / 1.2e-7; MLX logits 5.4e-9, values 3.9e-7, relative loss
 0.0004%. The first updates invocation omitted its output argument and was
 rerun correctly; no data or harness changes followed that invocation error.
+
+L4 equivalence queued: Etude `439342c34491`, source `a222dc9df`, cohort
+`mtg333-equivalence` cap $3; template `mtg333-l4` is one L4 at at most $0.75/hour.
+The first launch (`e1b75519b9de`) failed at admission without starting a command
+or recording a run; availability changed after source preparation. The queued
+run is the one to inspect. No result or cost is recorded yet.
+Academy checkpoint catalog/admission/play: **6 passed in 20.67s**.
+
+The shared launcher's wait traversed historical supplies before this run, so
+`439342c34491` was cancelled at **$0.00**. Active equivalence is now
+`4d6117d0b975`, same source and cap, in isolated launcher home
+`/tmp/mtg333/launcher`; use `ETUDE_HOME` for its Etude commands. The CLI overlay
+is `etude-sdk[s3,eval]==0.2.15` (the repository's 0.2.16 cannot read the old
+shared launcher DB); credentials are injected with nested Doppler etude/prd
+and manabot/prd. The isolated home contains only this Task's supply.
+Speed harness CPU smoke (2 streams, 2-transition floor, one repeat) completed:
+407 learner rows, preparation/save/load results present; this is harness
+validation, not a speed comparison or a substitute for the L4 measurements.

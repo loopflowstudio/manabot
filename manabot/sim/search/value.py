@@ -37,7 +37,7 @@ class ValueScorer:
     wins. Callers flip 1-V for non-hero actors.
     """
 
-    def __init__(self, agent: BackendPolicy, *, device: str = "cpu"):
+    def __init__(self, agent: BackendPolicy, *, device: str = "cpu") -> None:
         self.agent = agent.to(device)
         self.agent.eval()
         self.device = device

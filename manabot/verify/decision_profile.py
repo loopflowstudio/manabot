@@ -36,6 +36,7 @@ import numpy as np
 import torch
 
 from manabot.backends.torch.arrays import device_of, on_device, to_numpy
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationBuffers, ObservationSpace
@@ -92,15 +93,13 @@ class GameProfile:
 
 
 def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
-    from manabot.backends.torch.policy import ActorCritic
-
     torch.manual_seed(seed)
     agent = ActorCritic(observation_space, config.agent)
     agent.eval()
     return agent
 
 
-def _agent_policy(agent) -> Callable[[dict[str, np.ndarray]], int]:
+def _agent_policy(agent: ActorCritic) -> Callable[[ObservationBuffers], int]:
     def policy(obs: ObservationBuffers) -> int:
         tensor_obs = on_device(
             agent.prepare(

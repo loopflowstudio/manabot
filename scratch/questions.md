@@ -56,3 +56,8 @@ targets. Original uncommitted notes were copied to
   loop, numerical-health and experiment-launch helpers remain with its deferred
   backend selection. sim/eval forward, sampling and checkpoint consumers move
   here. Selection reporting uses the existing shared NumPy helpers.
+
+- **L4 hourly quote (2026-11-13).** Shared `l4` refuses the current $0.69/hour
+  quote under its $0.60 ceiling. Use a Task-specific one-machine template at
+  $0.75/hour, preserving the $3 equivalence/$10 speed cohort caps and $25 total.
+  Leave the shared rental configuration unchanged.
