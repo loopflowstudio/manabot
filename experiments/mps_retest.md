@@ -629,6 +629,15 @@ retained above. Injected reporting checks confirm incomplete repetitions and
 pending retries never become bars. Native rules changes came from main; this
 Task makes no Rust changes, and the native suite remains CI's responsibility.
 
+**Harness simplification after measurement:** the per-tensor and full-gradient
+cosines now come from one function shared with the parity command
+(`manabot.backends.parity.gradient_agreement`), and the harness's receipt and
+worker paths were consolidated without changing receipt fields. Re-rendering
+all six retained ledgers reproduces the published tables, summaries and charts
+byte for byte; a small real capture exercised parity, per-call and paired-replay
+workers as implementation validation only. Timed results still belong to
+`140eec28d`.
+
 **Supported MLX precision:** the final implementation replaces the temporary
 mixed-precision subclass with one policy-owned precision option shared by
 inference and the learner, defaulting to float32. The
