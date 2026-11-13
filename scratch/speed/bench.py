@@ -12,16 +12,21 @@ damped updates and PPO updates (optimizer steps per second, counted by a global
 optimizer hook), `--inference` timed collection forwards through
 `PolicyInference` over the collector's last observation rows (prepare, forward,
 legal logs, sampling, host read), and `--checkpoints` save/load round trips.
+`--ppo-only` omits the other operations. `--profile` adds an untimed update
+after the samples; its operator trace covers the first optimizer step.
 """
 
 import argparse
+from collections.abc import Callable
+from copy import deepcopy
+import cProfile
+import hashlib
 import importlib
 import importlib.util
 import inspect
-import cProfile
-from copy import deepcopy
 import json
 from pathlib import Path
+import pstats
 import statistics
 import tempfile
 import time
@@ -30,15 +35,16 @@ import numpy as np
 import torch
 from torch.optim.optimizer import register_optimizer_step_post_hook
 
+import manabot
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.inference import PolicyInference
 from manabot.training.execution import validate_regime
 from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates.selection import UpdateDiagnostics
 import managym
-import manabot
 
 
 def _first(*homes: str) -> object:
@@ -132,6 +138,7 @@ def main() -> None:
     parser.add_argument("--inference", type=int, default=50)
     parser.add_argument("--checkpoints", type=int, default=5)
     parser.add_argument("--profile", type=Path, help="cProfile one update of each kind")
+    parser.add_argument("--ppo-only", action="store_true")
     args = parser.parse_args()
     device = torch.device(args.device)
     precision = "tf32" if device.type == "cuda" else "float32"
@@ -176,14 +183,24 @@ def main() -> None:
         "device": str(device),
         "gpu": torch.cuda.get_device_name() if device.type == "cuda" else None,
         "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        "precision": precision,
+        "streams": args.streams,
+        "transitions": args.transitions,
+        "learning": Learning(reference="action_type_uniform").model_dump(mode="json"),
         "collection_seconds": collection_seconds,
         "learner_rows": int(np.asarray(batch.rewards).size),
     }
 
-    def updates(name: str, run: "callable") -> None:  # type: ignore[valid-type]
+    def updates(
+        name: str, run: Callable[[object, RolloutBatch], UpdateDiagnostics]
+    ) -> None:
         global _steps
         rates, seconds, steps = [], [], []
-        for repeat in range(args.repeats + 1):
+        receipts: list[dict[str, object]] = []
+        reference_weights: dict[str, torch.Tensor] | None = None
+        sections_by_repeat: list[object] = []
+        for repeat in range(args.repeats + 1 + int(args.profile is not None)):
             agent.load_state_dict(initial)
             learner = Learner(
                 agent, device, minibatch_rows=args.streams, precision=precision
@@ -192,32 +209,91 @@ def main() -> None:
             _sync(device)
             _steps = 0
             tick = time.perf_counter()
-            if args.profile is not None and repeat == 1:
+            profiled = args.profile is not None and repeat == args.repeats + 1
+            if profiled:
                 profiler = cProfile.Profile()
-                profiler.runcall(run, learner, copy)
+                activities = [torch.profiler.ProfilerActivity.CPU]
+                if device.type == "cuda":
+                    activities.append(torch.profiler.ProfilerActivity.CUDA)
+                # Record one complete minibatch, then stop recording. The rest
+                # of this update completes normally but is never a timing sample.
+                with torch.profiler.profile(
+                    activities=activities,
+                    schedule=torch.profiler.schedule(
+                        wait=0, warmup=0, active=1, repeat=1
+                    ),
+                    record_shapes=True,
+                    with_stack=True,
+                    on_trace_ready=lambda p: p.export_chrome_trace(
+                        f"{args.profile}.{name}.trace.json"
+                    ),
+                ) as trace:
+                    handle = register_optimizer_step_post_hook(lambda *_: trace.step())
+                    try:
+                        diagnostics = profiler.runcall(run, learner, copy)
+                    finally:
+                        handle.remove()
                 profiler.dump_stats(f"{args.profile}.{name}")
+                with Path(f"{args.profile}.{name}.txt").open("w") as stream:
+                    pstats.Stats(profiler, stream=stream).sort_stats(
+                        "cumtime"
+                    ).print_stats(60)
             else:
-                run(learner, copy)
+                diagnostics = run(learner, copy)
             _sync(device)
             elapsed = time.perf_counter() - tick
-            if repeat:
+            if repeat and not profiled:
                 sections = learner.profiler.get_stats()
+                sections_by_repeat.append(sections)
                 rates.append(_steps / elapsed)
                 seconds.append(elapsed)
                 steps.append(_steps)
+                digest = hashlib.sha256()
+                weights = {
+                    key: value.detach().cpu().clone()
+                    for key, value in agent.state_dict().items()
+                }
+                if reference_weights is None:
+                    reference_weights = weights
+                for key, value in sorted(weights.items()):
+                    digest.update(key.encode())
+                    digest.update(value.numpy().tobytes())
+                health = diagnostics["numerical"]
+                assert health["optimizer_steps"] == _steps > 0
+                assert health["rejected_steps"] == health["skipped_steps"] == 0
+                receipts.append(
+                    {
+                        "weights_sha256": digest.hexdigest(),
+                        "max_abs_weight_difference_from_first": max(
+                            float((value - reference_weights[key]).abs().max())
+                            for key, value in weights.items()
+                            if value.is_floating_point() and value.numel()
+                        ),
+                        "optimizer_exposures": diagnostics["optimizer_exposures"],
+                        "errors": health["rejected_steps"],
+                        "diagnostics": diagnostics,
+                    }
+                )
+                print(
+                    f"{name} repeat={repeat} seconds={elapsed:.3f} steps={_steps}",
+                    flush=True,
+                )
         result[name] = {
             "sections": sections,
+            "sections_by_repeat": sections_by_repeat,
+            "receipts": receipts,
             "steps_per_second": _summary(rates),
             "seconds": _summary(seconds),
             "steps": steps,
         }
 
-    updates(
-        "damped",
-        lambda learner, b: update_damped_iteration(
-            *LEAD, learner, b, stage.learning, 1
-        ),
-    )
+    if not args.ppo_only:
+        updates(
+            "damped",
+            lambda learner, b: update_damped_iteration(
+                *LEAD, learner, b, stage.learning, 1
+            ),
+        )
     ppo = Learning(reference="action_type_uniform")
     updates(
         "ppo",
@@ -225,6 +301,18 @@ def main() -> None:
             *LEAD, learner, b, ppo, 0.3, np.random.default_rng(3), iteration=1
         ),
     )
+    if args.ppo_only:
+        collector.close()
+        args.out.write_text(json.dumps(result, indent=1))
+        print(
+            json.dumps(
+                {
+                    "ppo": result["ppo"]["steps_per_second"],
+                    "learner_rows": result["learner_rows"],
+                }
+            )
+        )
+        return
 
     agent.load_state_dict(initial)
     agent.eval()
