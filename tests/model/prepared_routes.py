@@ -8,9 +8,10 @@ import torch
 
 from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.arrays import device_of, on_device
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, _catalog_order
 from manabot.policy.admission import Catalog
 from manabot.policy.prepare import (
+    CatalogPrograms,
     EffectRoutes,
     FactRoutes,
     Layout,
@@ -18,6 +19,7 @@ from manabot.policy.prepare import (
     Tables,
     _effects,
     _facts,
+    catalog_programs,
 )
 
 
@@ -34,7 +36,10 @@ def _tables(catalog: SemanticCardEncoder | None) -> Tables:
             }
         )
         buffers["name_candidates.program_rows"] = np.zeros(1, np.int64)
-    return Tables.from_buffers(buffers, Layout(0, 0, 0, (), ()))
+    return replace(
+        Tables.from_buffers(buffers, Layout(0, 0, 0, (), ())),
+        order_lengths=_catalog_order,
+    )
 
 
 def _device(value: Any, objects: torch.Tensor) -> Any:
@@ -110,3 +115,16 @@ def record_vocabulary(cards: SemanticCardEncoder | None) -> Catalog | None:
     return Catalog(
         tables.definition_rows, tables.record_name_keys, tables.record_token_keys
     )
+
+
+def program_input(
+    cards: SemanticCardEncoder, rows: torch.Tensor | None = None
+) -> CatalogPrograms[torch.Tensor]:
+    """Standalone program fixtures use the same host schedule as policy preparation."""
+    host = catalog_programs(
+        cards.tokens.detach().cpu().numpy(),
+        cards.lengths.detach().cpu().numpy(),
+        None if rows is None else rows.detach().cpu().numpy(),
+        order_lengths=_catalog_order,
+    )
+    return on_device(host, device_of(cards))

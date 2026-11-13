@@ -601,30 +601,9 @@ def replay(
 
 def _catalog_bench(agent: Any, device: str, repeats: int = 10) -> dict[str, Any]:
     """Full-catalog program encoding alone: forward, and forward plus backward."""
-    encoder = agent.semantic_cards
-    if encoder is None:
-        return {}
-    result: dict[str, Any] = {"definitions": int(len(encoder.definition_rows))}
-    for mode in ("forward", "forward_backward"):
-        samples = []
-        for _ in range(repeats + 2):
-            agent.zero_grad(set_to_none=True)
-            _sync(device)
-            tick = time.perf_counter()
-            if mode == "forward":
-                with torch.no_grad():
-                    encoder.definitions()
-            else:
-                encoder.definitions().square().sum().backward()
-            _sync(device)
-            samples.append(time.perf_counter() - tick)
-        result[mode] = sorted(samples[2:])
-    agent.zero_grad(set_to_none=True)
-    return result
-
-
-# --------------------------------------------------------------------------
-# Stage 3: trace analysis
+    raise RuntimeError(
+        "This catalog profiler patches the pre-Prepared encoder; run it at ef28f3a58."
+    )
 
 
 def _union(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:

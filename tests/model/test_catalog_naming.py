@@ -7,7 +7,6 @@ at ordinary action capacity.
 """
 
 from dataclasses import dataclass
-from functools import partial
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -476,7 +475,7 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
     with patch.object(semantic, "definitions", wraps=semantic.definitions) as encode:
         model(device_input(model, tensors))
         assert encode.call_count == 1
-        rows = encode.call_args.args[0]
+        rows = encode.call_args.args[0].rows
         if not naming:
             assert len(rows) < semantic.catalog_shape.definitions
 
@@ -613,7 +612,9 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
     with patch.object(
         reference.semantic_cards,
         "definitions",
-        side_effect=partial(packed_definitions, reference.semantic_cards),
+        side_effect=lambda programs: packed_definitions(
+            reference.semantic_cards, programs.rows
+        ),
     ):
         expected, expected_values = reference.forward_distribution(obs)
     torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)

@@ -20,15 +20,15 @@ the facts earn weight; gradients reach every fact row that names a valid object.
 Captured programs are encoded in row order and preserve signed numeric tokens.
 
 Host admission checks rows once. Host preparation
-compacts and indexes them; the encoder reads `FactRoutes` and retains Torch
-packing of program sequences to preserve its equal-length sorting order.
+compacts and indexes them; the encoder reads `FactRoutes`, including the
+host's packed program schedule in the original equal-length sorting order.
 """
 
 from typing import Literal
 
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pack_sequence, unpack_sequence
+from torch.nn.utils.rnn import PackedSequence
 
 from manabot.backends.torch._numerics import embedding_rows
 from manabot.backends.torch._records import program_number
@@ -107,14 +107,13 @@ class FactEncoder(nn.Module):
             tokens = hidden.flatten(0, 1)[program.rows] + self.program_numeric(
                 program_number(program.numbers).unsqueeze(-1)
             )
-            # Keep Torch's historical sort for equal-length sequences; the
-            # host owns boundaries, while pack_sequence preserves GRU arithmetic.
             packed, _ = self.program_sequence(
-                pack_sequence(
-                    list(tokens.split(program.schedule.lengths)), enforce_sorted=False
+                PackedSequence(
+                    tokens[program.schedule.gather],
+                    torch.tensor(program.schedule.sizes),
                 )
             )
-            sequence = torch.cat(unpack_sequence(packed))
+            sequence = packed.data[program.schedule.unpack]
             hidden = hidden.masked_scatter(
                 program.mask.view_as(rows.kinds).unsqueeze(-1),
                 (tokens + sequence).to(hidden.dtype),

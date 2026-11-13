@@ -35,7 +35,6 @@ from manabot.policy.prepare import (
     Packed,
     Prepared,
     Tables,
-    catalog_schedule,
     prepare,
 )
 
@@ -284,7 +283,8 @@ class MLXActorCritic(nn.Module):
         self.shared_effects = SharedEffects(dims)
         self.name_candidates = NameCandidates(dims)
         self.continuation = Continuation(dims)
-        tokens, schedule = catalog_schedule(tables)
+        programs = tables.full_programs
+        tokens, schedule = programs.tokens, programs.schedule
         named = np.nonzero(tables.name_definitions != 0)[0]
         sign = np.where(tables.is_agent, 1.0, -1.0).astype(np.float32)
         # Underscore attributes outside the module tree: never parameters.

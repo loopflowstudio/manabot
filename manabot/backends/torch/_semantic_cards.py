@@ -14,7 +14,7 @@ from enum import IntEnum
 import torch
 from torch import nn
 
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import CatalogPrograms, Prepared
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -200,12 +200,12 @@ class SemanticCardEncoder(nn.Module):
                 torch.tensor([tables.numbers.get(kind, 0) for kind in range(6)]),
             )
 
-    def definitions(self, rows: torch.Tensor | None = None) -> torch.Tensor:
+    def definitions(self, programs: CatalogPrograms[torch.Tensor]) -> torch.Tensor:
         """Encode catalog programs into a [definitions + 1, hidden] table; row 0
         is the zero padding row and every consumer indexes by catalog row + 1.
 
-        With `rows` (unique catalog rows + 1, from `referenced_rows`), only
-        those programs run through the GRU and the rest of the table is zero.
+        The host schedule selects the programs that run through the GRU; every
+        other definition row stays zero.
         Each program is encoded independently, so selected rows and parameter
         gradients agree with full encoding up to floating-point roundoff;
         unreferenced rows receive none. Training uses this because the catalog
@@ -213,8 +213,7 @@ class SemanticCardEncoder(nn.Module):
         caches the full table once per policy scope instead.
         """
         count = len(self.tokens)
-        if rows is None:
-            rows = torch.arange(1, count + 1, device=self.tokens.device)
+        rows = programs.rows
         table = self.token_embedding.weight.new_zeros(
             (count + 1, self.token_embedding.embedding_dim)
         )
@@ -223,29 +222,22 @@ class SemanticCardEncoder(nn.Module):
         # CUDA's packed GRU can return Half even inside BF16 autocast. The
         # definition table follows the embedding weights (also for empty rows),
         # so normalize at this join without detaching the program gradients.
-        encoded = self._encode_programs(rows).to(table.dtype)
+        encoded = self._encode_programs(programs).to(table.dtype)
         return table.index_copy(0, rows, encoded)
 
-    def _encode_programs(self, rows: torch.Tensor) -> torch.Tensor:
+    def _encode_programs(self, programs: CatalogPrograms[torch.Tensor]) -> torch.Tensor:
         """Encode nonempty one-based catalog rows, preserving their supplied order.
 
         Packing sorts programs by length. Within each chunk, completed programs
         occupy the hidden state's suffix; only the active prefix continues.
         """
-        # Pack integer IDs first: padding needs neither embeddings nor gradients.
-        packed = nn.utils.rnn.pack_padded_sequence(
-            self.tokens[rows - 1],
-            self.lengths[rows - 1].cpu(),
-            batch_first=True,
-            enforce_sorted=False,
-        )
         # Packed GRU backward creates a packed-input-sized slice gradient at
         # each time step. Bound that copying to 64 steps per call. This is full
         # backpropagation through time: hidden states keep their gradients at
         # every chunk boundary. The same GRU encodes every real token once.
-        batches = packed.batch_sizes.split(64)
+        batches = torch.tensor(programs.schedule.sizes, dtype=torch.long).split(64)
         sizes = [int(batch.sum()) for batch in batches]
-        chunks = self.token_embedding(packed.data).split(sizes)
+        chunks = self.token_embedding(programs.tokens).split(sizes)
         state: torch.Tensor | None = None
         finished: list[torch.Tensor] = []
         for index, (data, batch) in enumerate(zip(chunks, batches, strict=True)):
@@ -259,8 +251,7 @@ class SemanticCardEncoder(nn.Module):
         # Packed sequences end shortest first. Reverse their completed suffixes
         # to restore descending-length order, then undo the original sorting.
         encoded = torch.cat(finished[::-1], dim=1)[0]
-        assert packed.unsorted_indices is not None
-        return encoded[packed.unsorted_indices]
+        return encoded[programs.schedule.restore]
 
     def forward(
         self, batch: Prepared[torch.Tensor], definitions: torch.Tensor

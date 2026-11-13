@@ -42,3 +42,8 @@ targets. Original uncommitted notes were copied to
   set by `PolicyInference`; it preserves closed/changed-policy and autograd
   refusals without a second batch wrapper. Bucket needs remain host tuples on
   the prepared batch for the collector, rather than copied device arrays.
+
+- **Packed tie order.** The shared host builder accepts a length-order function;
+  Torch uses its CPU sort for the existing packed-GRU tie order. This keeps
+  integer work in the one host preparation without changing accumulation order.
+  The 3,248-tensor oracle is exact after catalog and fact packing moved.

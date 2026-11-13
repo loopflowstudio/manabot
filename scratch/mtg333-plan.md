@@ -88,8 +88,9 @@ Prepared retains bucket needs as host tuples for collection. Direct callers and
 tests are migrated; the fresh carrier-free CPU and update oracles pass (receipt below).
 
 Encoders live in private modules under `backends/torch/`. `RecordEmbeddings`, old record lookup/admission wrappers and their exclusive
-tests are deleted. Catalog program execution still selects token rows and reads
-lengths on CPU; its static/prepared schedule boundary remains.
+tests are deleted. The current slice carries catalog and fact program schedules on Prepared;
+its oracle and focused results are below. Static naming joins use nonpersistent
+precomputed routes. No catalog lengths are read back from the device in forward.
 
 General container saves and metadata readers, policy fixture mutation and new
 export suffixes are implemented. The docs describe the full PR; backend
@@ -147,8 +148,8 @@ order is not the host's), reading host indexes instead of computing them.
   + 1), never `layout.objects`.
 - Recent events: kind/owner/zone/status ids, amounts, ages (integers; `log1p`
   in graph), definition rows, focus indexes and masks.
-- `referenced_definitions` (sorted unique catalog rows + 1; `np.unique` =
-  `torch.unique`'s order) for non-bucketed learning.
+- `CatalogPrograms.rows` (sorted unique catalog rows + 1; `np.unique` =
+  `torch.unique`'s order) and packed tokens/schedule for non-bucketed learning.
 - Raw `known_counts`; signed program/detail integers. `FactRoutes.programs`
   is one optional `FactPrograms`; `Packed.lengths` owns sequence boundaries.
 - Legal coordinates at full action capacity (logits return at capacity).
@@ -572,3 +573,19 @@ A broader MPS file exposed a stale default-execution assertion omitting the two
 existing layout options; corrected to include their `auto` defaults, focused
 recheck passed (1 test). Static catalog scheduling, sim/eval backend injection/import
 boundary, L4 and optimize are still outstanding.
+
+
+Program-schedule receipt (2026-11-13 UTC, after `f9b5a3e7`): host catalog
+packing first matched **3,248 tensors, zero differences** (`catalog-schedule.pt`).
+After fact packing and static naming routes, `all-schedules.pt` again matched
+all **3,248 tensors exactly**. Torch supplies only its CPU length-sort order to
+the shared host builder, preserving tie order; it has no second preparation.
+The full schedule is cached with the immutable admission tables, invalidated by
+buffer identity/version or configuration. Scoped inference transfers no catalog
+program rows because the scope owns that weight-only cache. No new persistent
+buffers or checkpoint keys are added.
+Program-gradient, empty/reordered catalog, naming and inference cases: **23 passed**.
+Record/layer/MLX/container checks reached **37 passed**, then the container test
+incorrectly counted new nonpersistent routes as saved state. It now compares
+state-dict buffers; all **7 general policy configurations passed**. The five update cases are byte-identical to baseline (`updates-schedules.json`);
+changed-file Ruff check/format pass.

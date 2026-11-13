@@ -22,8 +22,9 @@ from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
+from manabot.policy.prepare import CatalogPrograms
 from manabot.training.rollout.collection import SeatRoutedCollector
-from tests.model.prepared_routes import device_input, host_inputs
+from tests.model.prepared_routes import device_input, host_inputs, program_input
 
 
 def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
@@ -32,9 +33,9 @@ def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
     encoder = SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
     reference = deepcopy(encoder)
     rows = torch.tensor([1, 2, 3])
-    actual = encoder.definitions(rows)
+    actual = encoder.definitions(program_input(encoder, rows))
     expected = reference.token_embedding.weight.new_zeros(actual.shape).index_copy(
-        0, rows, reference._encode_programs(rows)
+        0, rows, reference._encode_programs(program_input(reference, rows))
     )
     torch.testing.assert_close(actual, expected, atol=0, rtol=0)
     actual.square().sum().backward()
@@ -51,15 +52,17 @@ def test_definition_join_accepts_recurrent_output_dtype(
     encoder = SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
     original = encoder._encode_programs
 
-    def reduced(rows: torch.Tensor) -> torch.Tensor:
+    def reduced(rows: CatalogPrograms[torch.Tensor]) -> torch.Tensor:
         return original(rows).to(dtype)
 
     monkeypatch.setattr(encoder, "_encode_programs", reduced)
-    table = encoder.definitions(torch.tensor([1, 2]))
+    table = encoder.definitions(program_input(encoder, torch.tensor([1, 2])))
     assert table.dtype == torch.float32
     table.sum().backward()
     assert encoder.token_embedding.weight.grad is not None
-    empty = encoder.definitions(torch.empty(0, dtype=torch.long))
+    empty = encoder.definitions(
+        program_input(encoder, torch.empty(0, dtype=torch.long))
+    )
     assert empty.dtype == table.dtype and not empty.any()
 
 
@@ -102,9 +105,13 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         host = collector._slice_obs_tensors(np.arange(2))
         obs = {key: value.cuda() for key, value in host.items()}
         with forward_precision(declared, torch.device("cuda")):
-            full = cards.definitions()
-            selected = cards.definitions(torch.tensor([1, 2], device="cuda"))
-            empty = cards.definitions(torch.empty(0, dtype=torch.long, device="cuda"))
+            full = cards.definitions(program_input(cards))
+            selected = cards.definitions(
+                program_input(cards, torch.tensor([1, 2], device="cuda"))
+            )
+            empty = cards.definitions(
+                program_input(cards, torch.empty(0, dtype=torch.long, device="cuda"))
+            )
         assert full.dtype == selected.dtype == empty.dtype == torch.float32
         assert not empty.any() and torch.isfinite(full).all()
         # Both full and selected paths retain GRU/embedding gradients.

@@ -9,14 +9,14 @@ index keeps its width.
 from __future__ import annotations
 
 from dataclasses import fields, is_dataclass, replace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, overload
 
 import numpy as np
 import torch
 from torch import Tensor, nn
 
 if TYPE_CHECKING:
-    from manabot.policy.prepare import Prepared
+    from manabot.policy.prepare import CatalogPrograms, Prepared
 
 
 def from_numpy(array: np.ndarray, device: torch.device | str = "cpu") -> Tensor:
@@ -75,9 +75,22 @@ def _replace_arrays(value: Any, moved: dict[str, Tensor], prefix: str = "") -> A
     return value
 
 
+@overload
 def on_device(
     batch: Prepared[np.ndarray], device: torch.device | str
-) -> Prepared[Tensor]:
+) -> Prepared[Tensor]: ...
+
+
+@overload
+def on_device(
+    batch: CatalogPrograms[np.ndarray], device: torch.device | str
+) -> CatalogPrograms[Tensor]: ...
+
+
+def on_device(
+    batch: Prepared[np.ndarray] | CatalogPrograms[np.ndarray],
+    device: torch.device | str,
+) -> Prepared[Tensor] | CatalogPrograms[Tensor]:
     """Move a prepared batch with one contiguous, pinned CUDA copy per dtype.
 
     CPU tensors share writable NumPy memory. Scalar metadata and packed sequence
@@ -104,4 +117,6 @@ def on_device(
             for key, part in zip(keys, block.split(sizes), strict=True):
                 moved[key] = part.view(tensors[key].shape)
         tensors = moved
-    return cast("Prepared[Tensor]", _replace_arrays(batch, tensors))
+    return cast(
+        "Prepared[Tensor] | CatalogPrograms[Tensor]", _replace_arrays(batch, tensors)
+    )

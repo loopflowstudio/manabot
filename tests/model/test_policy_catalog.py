@@ -19,6 +19,7 @@ from manabot.semantic.learning import ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
 from manabot.sim.matchup import AuthoredMatchup
 import managym
+from tests.model.prepared_routes import program_input
 
 
 @pytest.mark.parametrize("selection", ["full", "reordered", "empty"])
@@ -40,7 +41,9 @@ def test_program_execution_preserves_values_and_parameter_gradients(
         rows = torch.argsort(encoder.lengths, descending=True)[::5] + 1
     elif selection == "empty":
         rows = rows[:0]
-    actual = encoder.definitions(None if selection == "full" else rows)
+    actual = encoder.definitions(
+        program_input(encoder, None if selection == "full" else rows)
+    )
     expected = packed_definitions(reference, None if selection == "full" else rows)
     torch.testing.assert_close(actual, expected, atol=1e-12, rtol=1e-10)
     if not len(rows):
@@ -71,7 +74,7 @@ def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
     assert shape.expanded_tokens == int(encoder.lengths.sum())
     assert shape.padded_tokens == encoder.tokens.numel()
     assert encoder.token_embedding.num_embeddings == shape.unique_tokens + 1
-    definitions = encoder.definitions()
+    definitions = encoder.definitions(program_input(encoder))
     assert definitions.shape == (shape.definitions + 1, 8)
     for definition, row in pack.definition_row_by_card_def_id.items():
         assert (

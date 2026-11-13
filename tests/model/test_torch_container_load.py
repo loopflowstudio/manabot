@@ -132,7 +132,9 @@ def test_container_preserves_general_policy_and_metadata(
     for name, tensor in agent.state_dict().items():
         torch.testing.assert_close(loaded.state_dict()[name], tensor, atol=0, rtol=0)
     container = read_container(path)
-    assert set(container.buffers) == set(dict(agent.named_buffers()))
+    assert set(container.buffers) == set(agent.state_dict()) - set(
+        dict(agent.named_parameters())
+    )
 
 
 def test_container_refuses_parameter_casts(tmp_path: Path) -> None:

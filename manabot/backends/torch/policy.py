@@ -76,6 +76,11 @@ class EmbeddedObservation:
     programs: torch.Tensor | None
 
 
+def _catalog_order(lengths: np.ndarray) -> np.ndarray:
+    """Keep Torch's packed-GRU tie order, sorting only admitted host lengths."""
+    return torch.from_numpy(lengths).sort(descending=True).indices.numpy()
+
+
 class ActorCritic(nn.Module):
     """
     Shared actor/critic network that:
@@ -336,6 +341,7 @@ class ActorCritic(nn.Module):
         # detach/cpu copy is measurable in the inference hot path.
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
+        self._spec_cache: tuple[object, admission.Spec] | None = None
         self._program_cache: torch.Tensor | None = None
         self._cache_versions: tuple[tuple[int, int], ...] = ()
 
@@ -347,19 +353,33 @@ class ActorCritic(nn.Module):
         )
 
     def _admission_spec(self) -> admission.Spec:
+        key = (
+            self._binding(),
+            tuple(
+                (name, id(value), value._version)
+                for name, value in self.named_buffers()
+            ),
+        )
+        if self._spec_cache is not None and self._spec_cache[0] == key:
+            return self._spec_cache[1]
         buffers: dict[str, np.ndarray] = {}
         for name, _ in self.named_buffers():
             parent, _, field = name.rpartition(".")
             module = self.get_submodule(parent) if parent else self
             buffers[name] = to_numpy(buffer_on(module, field, torch.device("cpu")))
-        return admission.Spec(
+        spec = admission.Spec(
             self.config,
             self.observation_space,
-            Tables.from_buffers(buffers, layout(self.observation_space)),
+            replace(
+                Tables.from_buffers(buffers, layout(self.observation_space)),
+                order_lengths=_catalog_order,
+            ),
             self.card_definitions.num_embeddings
             if self.card_definitions is not None
             else 0,
         )
+        self._spec_cache = (key, spec)
+        return spec
 
     def prepare(
         self, obs: ObservationBuffers, *, inference: bool = False
@@ -412,6 +432,9 @@ class ActorCritic(nn.Module):
             value_token=self.value_token is not None,
             binding=spec.binding,
             action_capacity=capacity,
+            select_programs=torch.is_grad_enabled()
+            and not inference
+            and not self.bucketed_shapes,
         )
 
         return replace(
@@ -438,7 +461,9 @@ class ActorCritic(nn.Module):
     def cache_programs(self) -> None:
         """Cache the full catalog for an unchanged inference policy."""
         self._program_cache = (
-            self.semantic_cards.definitions()
+            self.semantic_cards.definitions(
+                on_device(self._admission_spec().tables.full_programs, device_of(self))
+            )
             if self.semantic_cards is not None
             else None
         )
@@ -681,11 +706,8 @@ class ActorCritic(nn.Module):
         definitions = None
         if self.semantic_cards is not None:
             if programs is None:
-                programs = self.semantic_cards.definitions(
-                    obs.referenced_definitions
-                    if torch.is_grad_enabled() and not self.bucketed_shapes
-                    else None
-                )
+                assert obs.programs is not None
+                programs = self.semantic_cards.definitions(obs.programs)
             definitions = self.name_candidates.public_definitions(programs)
             cards, known = self.semantic_cards(obs, definitions)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
@@ -887,7 +909,7 @@ class PolicyInference:
         self.check(self.agent)
         if any(not isinstance(value, np.ndarray) for value in obs.values()):
             raise TypeError("inference preparation requires NumPy observation buffers")
-        batch = self.agent.prepare(obs, inference=True)
+        batch = replace(self.agent.prepare(obs, inference=True), programs=None)
         self.transfers = (
             0
             if self.device.type == "cpu"

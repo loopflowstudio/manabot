@@ -57,6 +57,14 @@ class NameCandidateEncoder(nn.Module):
             definition_rows[self.definitions] if definition_rows is not None else None,
         )
 
+        # Static catalog routes are prepared once on the host; neither the
+        # route nor the derived mask is checkpoint state or a learned identity.
+        named = self.definitions != 0
+        self.register_buffer("_public_mask", named, persistent=False)
+        self.register_buffer(
+            "_public_names", named.nonzero().flatten(), persistent=False
+        )
+
     def forward(self, batch: Prepared[torch.Tensor]) -> torch.Tensor:
         """Embed legal names and the mean member vector of each naming group."""
         embedded = self.embedding(batch.name_rows)
@@ -80,16 +88,18 @@ class NameCandidateEncoder(nn.Module):
         The raw program table remains the candidate scorer's semantic input.
         """
         assert self.program_rows is not None
-        named = self.definitions != 0
+        named = self._public_mask
         if self.bucketed:
             # Definition-free names add zero to padding row 0.
             return programs.index_add(
                 0,
-                torch.where(named, self.program_rows, 0),
+                self.program_rows,
                 torch.where(named[:, None], self.embedding.weight, 0).to(
                     programs.dtype
                 ),
             )
         return programs.index_add(
-            0, self.program_rows[named], self.embedding.weight[named].to(programs.dtype)
+            0,
+            self.program_rows[self._public_names],
+            self.embedding.weight[self._public_names].to(programs.dtype),
         )

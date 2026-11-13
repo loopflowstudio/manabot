@@ -12,9 +12,9 @@ from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.policy.prepare import Prepared
+from manabot.policy.prepare import CatalogPrograms, Prepared
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
-from tests.model.prepared_routes import device_input, host_inputs
+from tests.model.prepared_routes import device_input, host_inputs, program_input
 from tests.training.test_recovery import recipe
 
 
@@ -119,11 +119,11 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     encode = semantic.definitions
     referenced: list[int] = []
 
-    def poisoned(rows: torch.Tensor | None = None) -> torch.Tensor:
+    def poisoned(programs: CatalogPrograms[torch.Tensor]) -> torch.Tensor:
         """Unreferenced rows read NaN, so any missed reference source fails."""
-        assert rows is not None
+        rows = programs.rows
         referenced.append(int(rows.unique().numel()))
-        table = encode(rows)
+        table = encode(programs)
         unreferenced = torch.ones(len(table), dtype=torch.bool)
         unreferenced[0] = False
         unreferenced[rows] = False
@@ -133,7 +133,9 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     # The reference encodes the complete catalog.
     assert full.semantic_cards is not None
     full_encode = full.semantic_cards.definitions
-    full.semantic_cards.definitions = lambda rows=None: full_encode()  # type: ignore[method-assign]
+    full.semantic_cards.definitions = lambda programs: full_encode(
+        program_input(full.semantic_cards)
+    )  # type: ignore[method-assign]
     outputs = []
     for agent in (case.agent, full):
         logits, values = agent.forward_distribution(device_input(agent, case.obs))

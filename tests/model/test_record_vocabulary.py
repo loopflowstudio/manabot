@@ -36,6 +36,7 @@ from tests.model.prepared_routes import (
     device_input,
     effect_rows,
     fact_rows,
+    program_input,
     record_vocabulary,
 )
 
@@ -118,7 +119,7 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     modification = _card_row(cards, 3, _value("Modification::AddKeywords"))
     source = int(cards.definition_rows.nonzero()[0])  # a definition id + 1
     cards.zero_grad()
-    definitions = cards.definitions()
+    definitions = cards.definitions(program_input(cards))
     out = _fact_encoder()(
         fact_rows(_granted_keyword("flying", source), torch.zeros(1, 2, WIDTH), cards),
         torch.zeros(1, 2, WIDTH),
@@ -142,7 +143,7 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     details[0, 0] = torch.tensor([1, *_halves(_value("flying"))])
     members[0, 0] = torch.tensor([2, 1])
     effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
-    definitions = cards.definitions()
+    definitions = cards.definitions(program_input(cards))
     effects(
         effect_rows(headers, details, members, torch.zeros(1, 2, WIDTH), cards),
         torch.zeros(1, 2, WIDTH),
@@ -161,7 +162,7 @@ def test_catalog_fact_inference_preserves_sparse_rows(
     torch.set_num_threads(1)
     encoder = _fact_encoder()
     source = int(cards.definition_rows.nonzero()[0])
-    definitions = cards.definitions()
+    definitions = cards.definitions(program_input(cards))
     facts = torch.cat(
         (_granted_keyword("flying", source), _granted_keyword("trample", source)), 0
     )
@@ -234,7 +235,7 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
     def reading(batched: bool) -> tuple[torch.Tensor, list[torch.Tensor | None]]:
         effects.zero_grad(set_to_none=True)
         cards.zero_grad(set_to_none=True)
-        definitions = cards.definitions()
+        definitions = cards.definitions(program_input(cards))
         if batched:
             result = effects(
                 effect_rows(headers, details, members, objects, cards),

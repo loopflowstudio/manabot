@@ -18,6 +18,7 @@ validates ids or partitions, exactly as the PyTorch forward does not.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 
@@ -109,6 +110,24 @@ class Tables:
     is_agent: Array  # [N] bool ownership of each object slot
     layout: Layout
     record_buckets: int = 4096
+    # Preserve a backend's existing tie order while sorting only host lengths.
+    order_lengths: Callable[[Array], Array] | None = None
+
+    @cached_property
+    def full_programs(self) -> "CatalogPrograms[Array]":
+        return catalog_programs(
+            self.catalog_tokens, self.catalog_lengths, order_lengths=self.order_lengths
+        )
+
+    def programs(self, rows: Array | None = None) -> "CatalogPrograms[Array]":
+        if rows is None:
+            return self.full_programs
+        return catalog_programs(
+            self.catalog_tokens,
+            self.catalog_lengths,
+            rows,
+            order_lengths=self.order_lengths,
+        )
 
     # Torch buffer name of each field.
     BUFFERS = {
@@ -234,10 +253,13 @@ class Packed[A]:
     lengths: tuple[int, ...]
 
 
-def pack(lengths: Sequence[int] | Array) -> Packed[Array]:
+def pack(
+    lengths: Sequence[int] | Array, *, order: Array | None = None
+) -> Packed[Array]:
     lengths = np.asarray(lengths, dtype=np.int64)
     offsets = np.concatenate(([0], np.cumsum(lengths)[:-1]))
-    order = np.argsort(-lengths, kind="stable")
+    if order is None:
+        order = np.argsort(-lengths, kind="stable")
     ordered = lengths[order]
     sizes: list[int] = []
     gather: list[Array] = []
@@ -253,15 +275,39 @@ def pack(lengths: Sequence[int] | Array) -> Packed[Array]:
     return Packed(flat, tuple(sizes), unpack, restore, tuple(int(n) for n in lengths))
 
 
-def catalog_schedule(tables: Tables) -> tuple[Array, Packed[Array]]:
-    """Packed token ids of every catalog program, encoded independently."""
-    lengths = tables.catalog_lengths.astype(np.int64)
-    schedule = pack(lengths)
-    width = tables.catalog_tokens.shape[1]
-    rows = np.repeat(np.arange(len(lengths)), lengths)
-    steps = np.concatenate([np.arange(n) for n in lengths])
-    flat = tables.catalog_tokens.reshape(-1)[rows * width + steps]
-    return flat[schedule.gather], schedule
+@dataclass(frozen=True)
+class CatalogPrograms[A]:
+    """Packed definition programs and their one-based output rows."""
+
+    rows: A
+    tokens: A
+    schedule: Packed[A]
+
+
+def catalog_programs(
+    tokens: Array,
+    lengths: Array,
+    rows: Array | None = None,
+    *,
+    order_lengths: Callable[[Array], Array] | None = None,
+) -> CatalogPrograms[Array]:
+    if rows is None:
+        rows = np.arange(1, len(lengths) + 1, dtype=np.int64)
+    selected_lengths = lengths[rows - 1]
+    schedule = pack(
+        selected_lengths,
+        order=None if order_lengths is None else order_lengths(selected_lengths),
+    )
+    if len(rows):
+        flat = np.concatenate(
+            [
+                tokens[row - 1, :length]
+                for row, length in zip(rows, selected_lengths, strict=True)
+            ]
+        )
+    else:
+        flat = np.zeros(0, np.int64)
+    return CatalogPrograms(rows, flat[schedule.gather], schedule)
 
 
 # -- prepared batches --------------------------------------------------------------
@@ -391,7 +437,7 @@ class Prepared[A]:
     attention_columns: A | None = None
     # Configuration identity, independent of a particular model instance.
     binding: str = ""
-    referenced_definitions: A | None = None  # catalog rows + 1 for learning
+    programs: CatalogPrograms[A] | None = None
     belief: BeliefRows[A] | None = None
     events: EventRows[A] | None = None
     live_index: A | None = None  # flat valid object slots, including value token
@@ -412,6 +458,7 @@ def prepare(
     value_token: bool = False,
     binding: str = "",
     action_capacity: int | None = None,
+    select_programs: bool = False,
 ) -> Prepared[Array]:
     """Build every index a backend forward reads from one admitted batch.
 
@@ -518,6 +565,7 @@ def prepare(
     present = validity != 0
     if value_token:
         present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
+    referenced = _referenced_definitions(obs, tables, candidates)
     return Prepared(
         batch=batch,
         legal_support=bool(legal.any(-1).all()),
@@ -562,7 +610,9 @@ def prepare(
         attention_columns=columns,
         binding=binding,
         is_agent=ownership,
-        referenced_definitions=_referenced_definitions(obs, tables, candidates),
+        programs=tables.programs(referenced if select_programs else None)
+        if tables.definition_rows is not None
+        else None,
         belief=belief,
         events=_events(obs, tables, objects),
         live_index=np.flatnonzero(present) if live_tokens else None,
@@ -664,11 +714,13 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
         source_rows=sources,
         targets=(base + (links - 1).clip(min=0)).reshape(-1),
         linked=(valid & (links > 0)).astype(np.float32),
-        programs=_fact_programs(facts, program),
+        programs=_fact_programs(facts, program, tables.order_lengths),
     )
 
 
-def _fact_programs(facts: Array, program: Array) -> FactPrograms[Array] | None:
+def _fact_programs(
+    facts: Array, program: Array, order_lengths: Callable[[Array], Array] | None = None
+) -> FactPrograms[Array] | None:
     """Preserve admitted program boundaries and raw integers for the backend GRU."""
     flat = program.reshape(-1)
     if not flat.any():
@@ -688,7 +740,9 @@ def _fact_programs(facts: Array, program: Array) -> FactPrograms[Array] | None:
         numbers=numbers,
         positions=positions,
         mask=flat,
-        schedule=pack(lengths),
+        schedule=pack(
+            lengths, order=None if order_lengths is None else order_lengths(lengths)
+        ),
     )
 
 
