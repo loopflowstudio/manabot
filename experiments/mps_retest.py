@@ -1167,7 +1167,13 @@ class CallWorker:
 
 
 def _interleaved(
-    args: argparse.Namespace, phase: str, width: int, *, size: int = 0, rep: int = 0
+    args: argparse.Namespace,
+    phase: str,
+    width: int,
+    *,
+    size: int = 0,
+    rep: int = 0,
+    paired_arm: Arm | None = None,
 ) -> None:
     """Repeat a drifting block once; select one entire quieter comparison.
 
@@ -1176,6 +1182,7 @@ def _interleaved(
     so existing latest-attempt readers never combine arms from different tries.
     """
     metadata = _provenance(args.capture, args.laptop)
+    arms = ARMS if paired_arm is None else ("cpu", paired_arm)
     # Admission belongs here, before any worker reads inputs or allocates a
     # model. Both retry attempts use the same parity evidence for every arm.
     parities = _latest_parity(args.out, metadata, width)
@@ -1191,7 +1198,7 @@ def _interleaved(
         )
         paging_error: PagingDetected | None = None
         try:
-            for arm in ARMS:
+            for arm in arms:
                 rows[arm] = {
                     **metadata,
                     "event": phase,
@@ -1204,7 +1211,11 @@ def _interleaved(
                     "block_id": block,
                     "attempt": attempt,
                     "interleaved": True,
-                    "memory_scope": "per-process; all arm models resident",
+                    "memory_scope": "per-process; CPU and one accelerator resident"
+                    if paired_arm
+                    else "per-process; all arm models resident",
+                    "comparison": "paired" if paired_arm else "resident",
+                    "paired_arm": paired_arm,
                 }
                 parity = parities[arm]
                 admitted = (
@@ -1324,7 +1335,9 @@ def replays(args: argparse.Namespace) -> None:
             if not any(r["status"] == "ok" for r in parities[arm].values()):
                 _parity(args, width, arm, 64)
         for rep in range(3):
-            _interleaved(args, "update", width, rep=rep)
+            pairs = ARMS[1:] if args.pairwise else (None,)
+            for paired_arm in pairs:
+                _interleaved(args, "update", width, rep=rep, paired_arm=paired_arm)
 
 
 @dataclass(frozen=True)
@@ -1370,6 +1383,8 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
 
 
 def _load_label(row: dict[str, Any]) -> str:
+    if row.get("paired_references"):
+        return "six pairs; see references"
     before, after = row.get("load_before"), row.get("load_after")
     label = (
         f"{before:.2f}→{after:.2f}"
@@ -1406,7 +1421,7 @@ def _details(
         "or choices disagree. Missing measurements are not zero. Memory columns are "
         "GiB: lifetime process RSS, sampled MPS driver peak (50 ms; lower bound), "
         "and MLX allocator peak. They measure different scopes and must not be summed. "
-        "All arm models are resident during timing: allocation failures describe this "
+        "Resident comparisons keep every arm; paired comparisons keep CPU and one accelerator. Allocation failures describe this "
         "shared-memory setup, not standalone arm capacity. Endpoint loads label every "
         "measurement; quieter of 2 selects the lower mean endpoint load.",
         "## Shared engine component",
@@ -1629,6 +1644,44 @@ def _details(
             replay_cells,
         )
     )
+    references = [
+        reference
+        for attempts in groups.values()
+        for row in attempts
+        if row
+        for reference in row.get("paired_references", [])
+    ]
+    if references:
+        text.extend(
+            [
+                "## Paired CPU references",
+                "Each repetition runs CPU plus one accelerator at a time. The displayed CPU "
+                "reference is the mean of six paired CPU timings within each repetition, then "
+                "the median of those three means. Accelerator bars are medians of their three "
+                "paired replays. All individual references and their loads remain below.",
+                _table(
+                    [
+                        "Model",
+                        "Streams",
+                        "Rep",
+                        "Paired accelerator",
+                        "CPU seconds",
+                        "Load start→end",
+                    ],
+                    [
+                        [
+                            f"w{r['width']}",
+                            str(r["streams"]),
+                            str(r["rep"]),
+                            LABELS[r["paired_arm"]],
+                            _number(r["seconds"]),
+                            _load_label(r),
+                        ]
+                        for r in references
+                    ],
+                ),
+            ]
+        )
     (out / f"comparisons{suffix}.md").write_text("\n\n".join(text) + "\n")
 
 
@@ -1665,7 +1718,60 @@ def _host_report(
     latest = {
         (r["event"], r["width"], r["streams"], r["rows"], r["arm"]): r for r in local
     }
-    replay_latest = {(r["width"], r["streams"], r["arm"], r["rep"]): r for r in replay}
+    replay_latest = {
+        (r["width"], r["streams"], r["arm"], r["rep"], r.get("paired_arm")): r
+        for r in replay
+    }
+
+    def selected(width: int, streams: int, arm: Arm, rep: int) -> dict[str, Any] | None:
+        matching = [
+            r
+            for r in replay_latest.values()
+            if (r["width"], r["streams"], r["arm"], r["rep"])
+            == (width, streams, arm, rep)
+        ]
+        if not matching:
+            return None
+        if len({r.get("comparison", "resident") for r in matching}) != 1:
+            raise ValueError(
+                "mixed resident and paired methods; use separate report directories"
+            )
+        if arm != "cpu" or matching[0].get("comparison") != "paired":
+            if len(matching) != 1:
+                raise ValueError("multiple references for one accelerator replay")
+            return matching[0]
+        # Each of the three repetitions contains all six CPU/accelerator pairs.
+        # The CPU bar represents the arithmetic mean of those six references;
+        # the report retains every paired CPU timing, not only this aggregate.
+        if {r["paired_arm"] for r in matching} != set(ARMS[1:]) or any(
+            r["status"] != "ok"
+            or r.get("load_retry_required")
+            and not r.get("load_retry_complete")
+            for r in matching
+        ):
+            return None
+        if len({r["learner_decisions"] for r in matching}) != 1:
+            raise ValueError("paired CPU decision counts differ")
+        result = dict(matching[0])
+        result.update(
+            comparison="paired-reference-mean",
+            paired_arm=None,
+            paired_references=matching,
+            started=min(r["started"] for r in matching),
+            ended=max(r["ended"] for r in matching),
+            load_before=None,
+            load_after=None,
+            load_retry=False,
+            load_retry_required=False,
+        )
+        for key in ("seconds", "engine", "collection_policy", "learning"):
+            result[key] = statistics.mean(r[key] for r in matching)
+        result["memory"] = {
+            key: max(r["memory"].get(key, 0) for r in matching)
+            for key in set().union(*(r["memory"] for r in matching))
+        }
+        return result
+
     missing: list[str] = [
         f"{r['event']}/w{r['width']}/{r['arm']}/load retry pending"
         for r in [*latest.values(), *replay_latest.values()]
@@ -1696,9 +1802,7 @@ def _host_report(
         if origins[0]["host"] is None or origins[0]["threads"] is None:
             missing.append(f"capture/streams{streams}/host or threads unknown")
     groups = {
-        (width, streams, arm): [
-            replay_latest.get((width, streams, arm, rep)) for rep in range(3)
-        ]
+        (width, streams, arm): [selected(width, streams, arm, rep) for rep in range(3)]
         for width in WIDTHS
         for streams in STREAMS
         for arm in ARMS
@@ -1952,7 +2056,16 @@ def _update_chart(out: Path, suffix: str, hosts: list[HostReport]) -> None:
         for c in data.summary["captures"]
     )
     caption = "\n".join(provenance)
-    caption += "\nMedian of three interleaved replays; phase stack from the median-total replay. "
+    paired = any(
+        r.get("comparison", "resident").startswith("paired")
+        for data in hosts
+        for r in data.summary["whole_updates"]
+    )
+    caption += (
+        "\nThree CPU-paired replays per accelerator; CPU is the median of three means across its six paired references. "
+        if paired
+        else "\nMedian of three interleaved replays; phase stack from the median-total replay. "
+    )
     caption += (
         "Same sampled decisions as CPU."
         if same
@@ -2067,6 +2180,11 @@ def main() -> None:
             command.add_argument("--widths", nargs="+", type=int, default=list(WIDTHS))
         if name == "update":
             command.add_argument("--rep", type=int, choices=range(3), required=True)
+    commands.choices["replays"].add_argument(
+        "--pairwise",
+        action="store_true",
+        help="interleave CPU with one accelerator at a time; retain every CPU reference",
+    )
     args = parser.parse_args()
     if args.command == "report":
         report(args.bench, args.out)
