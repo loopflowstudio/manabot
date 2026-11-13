@@ -13,11 +13,14 @@ Design the smallest experiment that answers the question.
 2. Exploratory: write `experiments/<name>.py` and one line at the top of
    `experiments/<name>.md` saying what the run is for. It needs no prediction.
 3. Finding: open `experiments/<name>.md` with one paragraph holding the
-   question, a numeric prediction, the result that would refute it and a cost
-   cap, and commit it before any scored run. That paragraph is the whole
-   preregistration. Name the control, the matching clock (learner decisions,
-   hours or dollars), independent training seeds, paired evaluation deals and
-   the strongest confound.
+   question, what is measured against what, the strongest confound and a cost
+   cap, and commit it before any scored run. Name the control, the matching
+   clock (learner decisions, hours or dollars), independent training seeds and
+   paired evaluation deals. Say what decision the result will inform and which
+   readings would favour each option, without fixing the decision: the
+   incumbent is the default, and a candidate justifies its cost after the data
+   is in. An expectation may be written down as an expectation; never a
+   threshold that decides the verdict before the result exists.
 4. An experiment is its Python module at a commit: `runs()`, `eval(state)` and
    `report()`, with recipes from `manabot.recipes.builders`, launched through
    Etude. Existing checkpoints need no placeholder training. Do not write a
