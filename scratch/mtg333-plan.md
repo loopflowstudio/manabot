@@ -508,6 +508,15 @@ state and check the role contract against explicit policy preparation.
 - `uv run python scratch/equivalence/updates.py /tmp/mtg333/updates-role.json && cmp /tmp/mtg333/updates-post514-base.json /tmp/mtg333/updates-role.json` → five cases byte-identical.
 - `uv run --extra dev --extra mlx --extra artifacts pytest tests/model/test_inference.py tests/model/test_torch_backend_protocol.py tests/model/test_prepare_rows.py tests/model/test_semantic_card_precision.py tests/training/test_update_backend_protocols.py -k 'not cuda_semantic_policy_admission' --basetemp /tmp/mtg333/role-tests -q` → **63 passed, 2 deselected (99.99 s)**. Ruff check/format and diff whitespace checks passed.
 
+Compress after concept review 2: `verify/decision_profile.py` and
+`verify/llm_game.py` now call `verify.util._tensor_observation` instead of
+repeating its preparation through a tensor round trip; their grad-mode purpose
+expression is that helper's, unchanged. Same three commands
+(`compress2-head.pt`, `updates-compress2.json`): 3,410 tensors differing 0,
+five cases byte-identical, 63 passed (108.12 s); `tests/llm/test_llm_native_game.py`
+(needs `--extra llm`), `tests/verify/test_seat_balance.py` and
+`tests/test_package_boundaries.py` pass.
+
 ## New direction, 2026-11-13
 
 Task comments 6987a723 and 8370e331, relayed for Jack Heart:

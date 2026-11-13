@@ -35,7 +35,6 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -47,6 +46,7 @@ from manabot.verify.games import (
     winner_from_info_or_obs,
 )
 from manabot.verify.util import (
+    _tensor_observation,
     build_verification_config,
     step_with_fallback,
     suppress_truncation_logs,
@@ -101,23 +101,7 @@ def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
 
 def _agent_policy(agent: ActorCritic) -> Callable[[ObservationBuffers], int]:
     def policy(obs: ObservationBuffers) -> int:
-        tensor_obs = on_device(
-            agent.prepare(
-                {
-                    key: to_numpy(value)
-                    for key, value in (
-                        {
-                            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(
-                                0
-                            )
-                            for key, value in obs.items()
-                        }
-                    ).items()
-                },
-                inference=not torch.is_grad_enabled(),
-            ),
-            device_of(agent),
-        )
+        tensor_obs = _tensor_observation(agent, obs)
         with torch.no_grad():
             action, _, _, _ = agent.get_action_and_value(
                 tensor_obs, deterministic=False

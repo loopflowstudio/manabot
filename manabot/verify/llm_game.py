@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 import torch
 
-from manabot.backends.torch.arrays import device_of, on_device, to_numpy
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
 from manabot.infra.artifacts import verify_file
@@ -39,6 +38,7 @@ from manabot.semantic.text_observation import (
 from manabot.verify.llm_opponent import (
     CheckpointOpponent as ConfiguredCheckpointOpponent,
 )
+from manabot.verify.util import _tensor_observation
 import managym
 from managym.decision import DecisionFrame, apply_semantic_command
 
@@ -159,23 +159,7 @@ class CheckpointOpponent:
         encoded = self.space.encode(raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
-        tensors = on_device(
-            self.agent.prepare(
-                {
-                    key: to_numpy(value)
-                    for key, value in (
-                        {
-                            name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(
-                                0
-                            )
-                            for name, value in encoded.items()
-                        }
-                    ).items()
-                },
-                inference=not torch.is_grad_enabled(),
-            ),
-            device_of(self.agent),
-        )
+        tensors = _tensor_observation(self.agent, encoded)
         with torch.inference_mode():
             action, _, _, _ = self.agent.get_action_and_value(tensors)
         index = int(action.item())
