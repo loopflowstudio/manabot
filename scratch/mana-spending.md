@@ -120,7 +120,8 @@ exploratory, in three parts.
    outcomes enumerated from the payment model; bound the enumeration and count
    the casts that hit the bound.
 
-Then the **small learning comparison**, sized by part 1: Elemental recipe,
+Then the **small learning comparison** (see "Open decision" below for its
+deck set): Elemental recipe,
 arm A (main) against arm B, 2 seeds each, matched updates, scored against the
 heuristic, under `--max-usd 25`. It answers only "does removing unit spending
 decisions visibly change early learning or steps per game on this recipe"; it
@@ -153,30 +154,50 @@ exceed the 64 policy slots anywhere, D needs grouping or fails.
   as an upper bound only.
 - A full learning study of the shapes here: belongs to MTG-265.
 
-## Risks and findings
+## What the frequency run showed (2026-11-13, `58e5923c53`)
 
-- Share depends on the policy. A random policy casts and holds mana
-  differently from a trained one; report each policy separately and never
-  pool them.
-- A pre-#511 checkpoint has never seen stage 31. Shapes are unchanged, but the
-  world pool grew (new cards), so the world binding may refuse it. If it does,
-  the report states that and frequency rests on heuristic and random mirrors.
-- TLA Limited "decks": use built 40-card decks from the corpus; if the corpus
-  holds pools only, sample a fixed list of decks and record the list.
+Report `experiments/mana_spending.md` holds the tables; these facts change
+the remaining work.
+
+- Spend prompts are rare on ordinary decks: 0.11–0.60% of decisions, 0.5–1.3
+  per game, 81–89% of games have none. Heartbeat: 9.7–13.8%, every game.
+- Over-tap dominates them: 51–95% of ordinary-deck spend decisions follow a
+  payment with a removable source; 8–15% of all payments over-tap (e.g.
+  Elemental heuristic 400 of 2717). Strong evidence for MTG-342 by itself.
+- Offers per spend decision are small: median 2–3, max 5. The 64-slot risk
+  does not arise in shape A; it remains open for D/E, which add land choice.
+- So the per-unit prompt is not the cost; the hidden choice of which sources
+  to tap is the unmeasured part. Part 3 must report, per cast, how often
+  sources offer ≥2 distinct "what stays available" outcomes, separately from
+  pool-receipt outcomes.
+- MTG-183 final (`4f2ad656…`, input v1) is refused with
+  `UnsupportedPolicyInput`; no checkpoint on this world exists to count with.
+  Frequency rests on heuristic and random mirrors; receipt retained.
+
+## Open decision: learning comparison deck set
+
+As planned, arm A vs arm B on Elemental differs by about 0.6 decisions per
+~200–300 (0.2%); two seeds cannot show anything there, so that comparison is
+near-certain null. The exact choice, not yet made:
+(a) keep Elemental as planned, reporting it as a check that automatic pool
+spending costs nothing on the current recipe; or
+(b) run it on a recipe that includes Heartbeat decks, where the arms differ
+by ~10% of decisions.
+Either stays under `--max-usd 25`, two seeds per arm, exploratory. Deferring
+it until after part 3 also lets the comparison test the shape part 3 favors
+rather than B. No one has chosen; the default if nobody does is (a), per the
+Task brief's Elemental recipe.
+
+## Risks
+
+- Share depends on the policy; report each policy separately, never pooled.
+  Without an admissible checkpoint there is no trained-policy row.
+- Ten TLA builds in file order and eight Heartbeat games per policy are
+  bounded convenience samples; say so wherever their rates appear.
 - Enumerating outcomes can blow up; cap it and report hits rather than
   truncate silently.
-- Engine Budget CI: a counter in `produce_mana` runs on every cast. Keep it to
-  an integer increment plus a check only when surplus exists.
-- No worktree `.venv` or built extension existed at kickoff; the first run
-  needs `uv venv --python 3.13` and the maturin build from the repo guide.
-
-## Wild success / failure
-
-Success: the report shows a number like "spend decisions are N% of decisions,
-M% of them over-tap", a table where one shape has fewer decisions and a real
-choice nearly every time it appears, and Academy mock labels a player reads at
-a glance. Failure: a design chosen before counting, or one that hides the land
-choice again behind automation and is ripped out when a card cares.
+- Engine Budget CI: the counter in `produce_mana` runs on every payment; it
+  probes removability only for surplus payments. Budget CI has not run on it.
 
 ## Scope
 
@@ -189,64 +210,51 @@ policy-input layout or frozen evidence; Academy UI changes.
 Forbidden: a second payment implementation beside `PaymentModel`; counting by
 re-deriving rules in Python; a learning claim stated as a finding.
 
-## Slices
+## Status
 
-### Delete — do not maintain
+Done (`58e5923c53`, `9f2f1b69b8`, `b63d486f81`):
 
-- Inherited MTG-324 `scratch/plan.md` and `scratch/qa.html` (already removed;
-  history at `f4e1822fa`). Preserve its shipped precision behavior and evidence.
-- No payment implementation is replaced in this diagnostic slice. Keep
-  `PaymentModel`, native spending choices, receipts and observations unchanged.
+- Native counter: `Env.info()` keys `mana_payments`,
+  `mana_payments_over_tapped`, `mana_spend_decisions_over_tapped`, computed in
+  `produce_mana` (`managym/src/flow/mana.rs`); the decision count sits in
+  `advance_mana_spend`'s offer arm. Behavior unchanged; replays verify.
+- `experiments/mana_spending.py count` (`--games` per deck, `--seed`, `--out`);
+  deck sets `elemental`, `tla`, `heartbeat`. Report sections Run it, What is
+  counted, Results, Limits; evidence published (`games.jsonl`, `decks.json`,
+  `checkpoint-admission.json`) and the manifest committed.
+- Over-tap exclusion is descriptive attribution against the original
+  denominator, not a post-MTG-342 rate; a post-fix rate needs a matched run
+  after MTG-342 lands. The report says so.
 
-### Measurement correction (implementation, 2026-11-13)
+Remaining, in order:
 
-Excluding decisions attached to over-tapped payments is descriptive attribution,
-not an exact post-MTG-342 rate. Some such payments retain strategic choices even
-without the redundant tap, and different taps change later trajectories. Report
-the non-over-tapped subset against the original denominator; a post-fix rate
-needs a separate matched replay/run after MTG-342. The draft report now states
-this distinction.
-
-1. **This slice.** Parts 1 and 2: counter, `experiments/mana_spending.py`
-   frequency run, first report section.
-   Check: `uv run python -m experiments.mana_spending count --games 8 --seed 0`
-   prints one row per (deck set, policy) with decisions/game, spend
-   decisions/game, share, and over-tap share, and exits 0.
-   Native: `cargo nextest run --manifest-path managym/Cargo.toml over_tap`
-   (debug) passes a directed test: Mountain, Mountain, Forest paying {1}{G}
-   counts one over-tap; Forest, Mountain paying {1}{G} counts none.
-2. Part 3 shape table, same games, same command with `shapes`.
-3. Learning comparison (launch under `--max-usd 25`), report, recommendation.
-
-## Docs (written 2026-11-13, describe intended behavior)
-
-- `experiments/mana_spending.md`: commands, output columns, what is counted,
-  shape table; Results and Recommended design are placeholders.
-- `experiments/README.md`: module-table row.
-
-Details the docs settle that the plan left implied: CLI flags `--games`
-(per deck), `--seed`, `--out` (default `experiments/data/mana_spending/`,
-`games.jsonl`); deck-set names `elemental`, `tla`, `heartbeat`; `Env.info()`
-keys `mana_payments`, `mana_payments_over_tapped`,
-`mana_spend_decisions_over_tapped`; shape names per unit / automatic /
-override / outcome / folded (A–E).
+1. Part 3 `shapes` subcommand on the same deals: offers per shape A–E,
+   decisions per game, offers per decision (median/p95/max), fraction with ≥2
+   distinct outcomes, cap hits; source-choice outcomes reported separately
+   from receipt outcomes. Enumerate from `PaymentModel`, not Python rules.
+   Report's Decision shapes section becomes results.
+2. Learning comparison per the open decision above; arm-B native switch in
+   `advance_mana_spend` as scaffolding; cost from the launcher.
+3. Recommended design in the report: policy input/action space and Academy
+   labels, and whether the arm-B switch stays.
 
 ## Done when
 
 `experiments/mana_spending.md` states, for Elemental and TLA Limited decks,
 spending decisions per game and their share of all decisions, with and without
-over-tap; compares the shapes on decisions and offers per decision; shows the
-small learning comparison with its cost; and recommends one design with what
-it changes for the policy and for Academy. Data is published and the manifest
-committed.
+over-tap (done); compares the shapes on decisions and offers per decision;
+shows the small learning comparison with its cost; and recommends one design
+with what it changes for the policy and for Academy. Data is published and the
+manifest committed.
 
-## Implementation checks and remaining work
+## Checks run
 
-- `cargo test --manifest-path managym/Cargo.toml --lib over_tap -j 2 -- --test-threads 2`: passed (four positions in one directed test). The initial Heartbeat fixture assumed both lands tap for {1}{G}; corrected it to {2}{G} after the run showed one doubled Forest pays exactly.
-- Discovery inventory: `uv run --extra dev pytest tests/eval/test_experiment_files.py::test_etude_finds_each_current_experiment_and_nothing_else -q`: 1 passed. This module has no Etude report/eval callback, so the inventory stays unchanged.
-- MTG-183 final (`4f2ad656…`, run `f3748bcabac8`, 331180341 transitions) was downloaded and refused with `UnsupportedPolicyInput`: input v1, while this revision supports v9/v10. Retain the admission receipt with the frequency data; do not rebind it.
-- `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`: built CPython 3.13 wheel; installed its matching extension atomically.
-- `uv run python -m experiments.mana_spending count --games 8 --seed 0` at `58e5923c53`: exit 0, 336 completed and replay-verified games. Elemental spending shares: heuristic 0.200%, random 0.254%; TLA: 0.114% / 0.598%; Heartbeat: 13.837% / 9.744%. No launcher or rental. Three evidence files published to the artifact store and recorded in the manifest.
-- `uv run --extra dev --extra artifacts pytest tests/infra/test_experiment_data_untracked.py -q`: 1 passed. Ruff, formatting and `git diff --check` passed.
-- Compress (2026-11-13): the over-tap decision count moved from `publish_action_space` into `advance_mana_spend`'s offer arm (every `begin_mana_spend` directly follows a recorded payment, so no reset or publish hook is needed). Directed `over_tap` test passed in debug; `count --games 8 --seed 0` on the rebuilt extension wrote a `games.jsonl` byte-identical to the published one (`cmp`), so evidence and the report stand.
-- This frequency/attribution slice is implemented. Shapes and the learning comparison remain later slices, before the final recommendation. Full affected suites belong to gate; the counts are not the exact rate after MTG-342.
+- `cargo test --manifest-path managym/Cargo.toml --lib over_tap` (debug):
+  passed; four positions (Mountain, Mountain, Forest for {1}{G} over-taps;
+  Forest, Mountain does not; two Heartbeat positions, the second corrected to
+  {2}{G} after the run showed one doubled Forest pays {1}{G} exactly).
+- `count --games 8 --seed 0`: exit 0, 336 games, 336 verified replays. After
+  the compress move, a rerun wrote a byte-identical `games.jsonl` (`cmp`).
+- `tests/eval/test_experiment_files.py::test_etude_finds_each_current_experiment_and_nothing_else`
+  and `tests/infra/test_experiment_data_untracked.py`: passed. Ruff, format,
+  `git diff --check` passed. Full affected suites belong to gate.
