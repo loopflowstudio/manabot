@@ -11,7 +11,7 @@ or real-MPS correctness conclusion exists yet.
 
 The operator owns the USD25 rental cap, allocation, release and cost receipt.
 Captures and all fitting arms may run on the laptop while M2 capacity is pending.
-Require load <16 before laptop blocks; record endpoint loads. Repeat >2× drift
+Start laptop blocks regardless of load; record endpoint loads. Repeat >2× drift
 once, retaining both attempts and selecting all arms from the lower mean
 endpoint-load attempt (ties keep the first). Each width/stream group still
 needs three replays per arm within one hour. Keep hosts separate. If M2 never
@@ -22,11 +22,14 @@ explicitly unmeasured. The deadline's derivation is in `questions.md`.
 
 - `manabot/backends/capture.py::capture` records the real update for both this
   experiment and the pilot. `experiments/mps_retest.py::capture` selects the
-  recipe; `_quiet` enforces the laptop load limit.
+  recipe; endpoint loads describe the shared host without gating execution.
 - `_interleaved` admits timed arms before starting workers. `_latest_parity`
   reads all arms once per block, scoped to host/software/source, capture and
   width; per-call admission also requires the row count. Retries share that
-  evidence. `bench` and `update` execute admitted calls/steps in isolated
+  evidence. Admission means parity executed, not that gradients agreed;
+  numerical agreement remains a report judgment. A refused arm retains its
+  parity failure status (including OOM) and names that prerequisite in its error.
+  `bench` and `update` execute admitted calls/steps in isolated
   persistent workers; `replays` schedules three repetitions. Workers retain
   their own provenance. All models remain resident, so OOM describes this
   shared-memory setup, not standalone arm capacity.
@@ -41,9 +44,9 @@ explicitly unmeasured. The deadline's derivation is in `questions.md`.
 
 ## Remaining execution and acceptance
 
-1. Begin the w384l8 256-stream capture when load is below 16, with four threads
+1. Begin the w384l8 256-stream capture unconditionally, with four threads
    and a configured 20 GiB budget (peak unmeasured). It needs a real Etude run
-   identity and committed executable source. Checkpoint current changes first.
+   identity and committed executable source, including the parity-status repair.
 2. Establish whether a full width/stream group fits one hour. Three complete
    blocks must fit, including interleaving gaps. A 900-second worker-call timeout
    is failure, not OOM. Preserve errors and fix implementation failures.
@@ -58,6 +61,13 @@ explicitly unmeasured. The deadline's derivation is in `questions.md`.
 Gate owns affected suites and final acceptance. Publication and Task movement
 belong to later Graph steps. No Wave is bound. Implementation checks do not
 complete this experiment.
+
+Upstream reviewed at `e82a20033`: the only new main commit prepares v0.2.3
+release metadata and upgrade docs; it changes no retest model or measurement
+behavior. Keep the measurement revision explicit if that metadata is synced.
+The initial Task description still carries the superseded adoption rule and
+laptop prohibition; the dated exact steers in `questions.md` and the experiment
+report describe the current scope.
 
 ## Delete — do not maintain
 
@@ -90,7 +100,7 @@ in `0ed4f2cb1:scratch/ci-under-8-minutes.md` and do not establish MPS acceptance
   retry selection, pending-repeat coverage, per-call resets, independent
   evolving replay state, actual pipe exchange and timeout cleanup. Rendering
   passed and the corrected full-context PNG was visually inspected.
-- Latest measurement preflight, 2026-11-13T02:01:15+00:00: load 64.67 prohibited
+- Measurement preflight, 2026-11-13T02:01:15+00:00: load 64.67 prohibited
   capture under <16. M2 access notes still had the 2026-11-12 08:47:58 PST
   modification time. No capture or timed arm started; no worker remained.
   Earlier load readings and source freezes are retained in `questions.md`.
@@ -101,3 +111,10 @@ in `0ed4f2cb1:scratch/ci-under-8-minutes.md` and do not establish MPS acceptance
   .runs/mps-steer-extra-check.py` passed the interleaving/capture/worker checks
   above after updating its admission fixtures. Ruff check/format, compilation
   and `git diff --check` passed. No model, game or measurement ran.
+- Realignment preflight, 2026-11-13T02:09:13.955809+00:00: load 63.00 still
+  prohibited capture under <16; M2 access notes were unchanged. Task comments
+  supplied no newer direction. No capture or timed arm started.
+- Realignment repair: `uv run --no-sync python .runs/mps-admission-check.py`
+  passed with assertions for preserved parity failure statuses, no worker
+  allocation, and OOM displayed as “does not fit.” Ruff check/format and
+  `git diff --check` passed. These are controlled fixtures, not MPS evidence.

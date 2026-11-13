@@ -176,3 +176,14 @@ in provenance and human labels. No real receipts used the previous name.
 
 2026-11-13T02:01:15+00:00: load 64.67 still prohibits starting the capture under the
 new <16 rule. No capture or model timing started; no worker remains running.
+
+
+## Latest direction: no laptop load threshold
+
+Comment 902d2d02-c77a-40e6-bab0-9c73aaa046b0 by Jack Heart:
+
+Operator: drop the load threshold for laptop blocks entirely. This machine hosts many agent sessions and its 1-minute load will not go under 16 tonight (41-50 with the heavy test binaries paused). Jack authorized measuring here anyway. The operator keeps Rust test binaries paused for the next four hours. Proceed now, unconditionally: freeze the source, run the w384l8 256-stream capture with four CPU threads and the 20 GiB budget, then the three interleaved replays within one hour, and so on through the matrix. Interleaving call by call and step by step is what makes the relative numbers trustworthy under shared load; record the 1-minute load at the start and end of every block and print it in the receipts, tables and chart caption. Do not stop again for host availability: if the M2 arrives (access.md changes), add its arms; if not, the laptop numbers with their load labels are the deliverable, and the report says the M2 arms were not run.
+
+<!-- loopflow-requester:"Jack Heart" -->
+
+<!-- loopflow-steer:902d2d02-c77a-40e6-bab0-9c73aaa046b0 -->

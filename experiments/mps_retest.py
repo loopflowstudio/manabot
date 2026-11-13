@@ -1,6 +1,6 @@
 """Bucketed MPS retest: real capture, isolated arm measurements and report.
 
-Run `capture` on the rented M2 or quiet laptop, then `matrix` for correctness and
+Run `capture` on the rented M2 or laptop, then `matrix` for correctness and
 per-call blocks, and `replays` for the three whole-update repetitions. `report`
 keeps incomplete matrices and unsupported arms visible. Every worker records its
 host, source revision, capture, dtype and load. Backend recommendations belong
@@ -131,13 +131,6 @@ def _host() -> dict[str, Any]:
         "cpu_threads": torch.get_num_threads(),
         "revision": source_commit([__file__]),
     }
-
-
-def _quiet(laptop: bool) -> float:
-    load = os.getloadavg()[0]
-    if laptop and load >= 16:
-        raise RuntimeError(f"not measured: laptop load {load:.2f} is not below 16")
-    return load
 
 
 def _agent(capture: Path, width: int) -> ActorCritic:
@@ -859,7 +852,7 @@ def capture(out: Path, streams: int, laptop: bool) -> None:
         raise FileExistsError(out)
     attempts: list[tuple[Path, dict[str, Any]]] = []
     for attempt in range(2):
-        before = _quiet(laptop)
+        before = os.getloadavg()[0]
         path = out.with_name(f"{out.name}-attempt-{attempt}")
         if path.exists():
             raise FileExistsError(path)
@@ -977,8 +970,6 @@ def _failure(error: Exception, arm: Arm) -> dict[str, str]:
         )
     ):
         status = "unsupported"
-    elif "laptop load" in lower:
-        status = "not_measured"
     return {"status": status, "error": f"{type(error).__name__}: {message}"}
 
 
@@ -1082,7 +1073,6 @@ def _interleaved(
     attempts: list[list[dict[str, Any]]] = []
     ledger = args.out / ("updates.jsonl" if phase == "update" else "bench.jsonl")
     for attempt in range(2):
-        _quiet(args.laptop)
         block = str(uuid.uuid4())
         workers: dict[Arm, CallWorker] = {}
         rows: dict[Arm, dict[str, Any]] = {}
@@ -1113,9 +1103,7 @@ def _interleaved(
                 )
                 if admitted is None or admitted["status"] != "ok":
                     rows[arm].update(
-                        status="unsupported"
-                        if admitted and admitted["status"] == "unsupported"
-                        else "failed",
+                        status=admitted["status"] if admitted else "failed",
                         error="parity not executable: "
                         + str(admitted and admitted.get("error")),
                     )
@@ -1142,7 +1130,7 @@ def _interleaved(
                     rows[arm].update(_failure(error, arm))
                     if arm in workers:
                         workers.pop(arm).close()
-            before = _quiet(args.laptop)
+            before = os.getloadavg()[0]
             started = time.time()
             while workers:
                 for arm, worker in list(workers.items()):
@@ -1196,7 +1184,6 @@ def matrix(args: argparse.Namespace) -> None:
     for width in args.widths:
         for size in SIZES["learner"]:
             for arm in ARMS:
-                _quiet(args.laptop)
                 _parity(args, width, arm, size)
             _interleaved(args, "learner", width, size=size)
             if size in SIZES["collection"]:
@@ -1209,7 +1196,6 @@ def replays(args: argparse.Namespace) -> None:
         parities = _latest_parity(args.out, metadata, width)
         for arm in ARMS:
             if not any(r["status"] == "ok" for r in parities[arm].values()):
-                _quiet(args.laptop)
                 _parity(args, width, arm, 64)
         for rep in range(3):
             _interleaved(args, "update", width, rep=rep)
@@ -2088,8 +2074,6 @@ def main() -> None:
                     "bench.jsonl" if args.command == "bench" else "updates.jsonl"
                 )
                 try:
-                    if not args.worker:
-                        _quiet(args.laptop)
                     for row in work:
                         if args.worker:
                             print(

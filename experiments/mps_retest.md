@@ -11,7 +11,7 @@ results and their limits after the measurements exist.
 ## Answer
 
 **Not measured yet.** The harness and controlled implementation checks are in
-place. The rented-M2 and quiet-laptop comparisons, evidence publication
+place. The rented-M2 and laptop comparisons, evidence publication
 and final recommendation remain outstanding. No speed or backend-adoption
 conclusion follows from the implementation checks.
 
@@ -27,12 +27,13 @@ numerical differences must be interpreted separately.
 The operator owns AWS allocation, access notes, release after the 24-hour
 minimum and the cost receipt. No rental lifecycle tooling is part of this
 Task. The operator reported no mac2-m2 capacity in the checked US zones at
-2026-11-13 01:20 UTC and is retrying. The quiet M4 Max may run captures and
+2026-11-13 01:20 UTC and is retrying. The M4 Max may run captures and
 all arms that fit while M2 capacity is pending. If no host arrives within
-12 hours of that direction, report the laptop evidence and mark M2 unmeasured.
-The laptop requires one-minute load below 16 before each measured block,
-with four CPU threads and call-by-call interleaving across arms. The latest
-operator direction supersedes the earlier load-under-8 rule.
+12 hours of that direction (2026-11-13 13:12:38.971 UTC), report the laptop
+evidence and mark M2 unmeasured.
+The laptop has no load threshold. Use four CPU threads and call-by-call
+interleaving across arms, retaining the start and end one-minute loads. The
+2026-11-13 02:16 UTC operator direction supersedes all earlier load thresholds.
 
 ## Named deliverable: full context
 
@@ -147,16 +148,15 @@ never chooses a backend automatically.
 (24-hour minimum, about USD 21) against the USD 25 Task cap.
 
 **Laptop host:** Apple M4 Max, 128 GiB, four CPU threads for capture and the
-CPU reference. Before starting a capture or a comparison block, require the
-one-minute load to be below 16. Otherwise stop without timing; do not wait for
-8. A comparison block is all arms at one width and per-call size/phase, or one
+CPU reference. Start captures and comparison blocks regardless of load,
+recording the one-minute load at both endpoints. A comparison block is all arms at one width and per-call size/phase, or one
 whole-update repetition. Resident isolated processes advance one collection
 call or learner step per arm in order. The start and end loads belong to the
 entire comparison; there is no mid-block load refusal that would selectively
 truncate slower arms.
 
 If start and end load differ by more than 2×, repeat the entire block once,
-starting only below 16 again. Keep the attempt with the lower arithmetic mean
+without a load threshold. Keep the attempt with the lower arithmetic mean
 of endpoint loads; a tie keeps the first. Retain both attempts and select all
 arms together. An unavailable repeat leaves coverage incomplete. Captures use
 the same repeat rule, keeping the unused capture beside the selected one.
@@ -198,7 +198,12 @@ Run a correctness cell with `bench bench --capture capture-256 --phase parity
 --width 384 --rows 256 --arm mps-bf16`. Timed work uses `matrix` or `replays`
 with `--widths 384` to select a width; single-arm serial timing is refused.
 `matrix` tries both half dtypes at every shape. `replays` checks parity for
-each width/arm before its replay blocks. Laptop commands must include
+each width/arm before its replay blocks. Admission requires an executed parity
+cell with matching host, software, source and capture, plus the row count for
+per-call timing. It does not require numerical agreement; gradient and decision
+differences remain evidence to interpret. If parity cannot execute, the timed
+cell retains that failure's status and identifies parity as its source; an OOM
+there is not a measured timed-arm allocation peak. Laptop commands must include
 `--laptop`, including `capture`; every width is allowed. CPU receipts use the
 arm name `cpu` and retain their actual thread count. No M2 measurement is
 claimed for a laptop run.
@@ -252,6 +257,16 @@ measurement follows from those checks.
 
 **2026-11-13T02:01:15+00:00 preflight:** one-minute load 64.67 remained above 16.
 No capture or timed comparison started. New M2 access is still pending.
+
+**2026-11-13 02:09 UTC realignment:** load 63.00 remained above 16 and the M2
+access notes were unchanged; no capture or timed arm started. Parity admission
+now preserves OOM and not-measured statuses instead of recasting them as generic
+failures. Upstream v0.2.3 release preparation changes metadata, not this method.
+
+**2026-11-13 02:16 UTC direction:** remove the laptop load threshold entirely;
+retain endpoint load labels, four threads, interleaving and the drift retry.
+M2 access is optional for delivery; laptop evidence is the deliverable if it
+does not arrive.
 
 **Cost:** no rental was launched by this Task. The operator's cost receipt is
 pending; this report will cite it once supplied.
