@@ -112,8 +112,8 @@ def test_dashboard_delivery_failure_retries_without_duplicate_rows(
     assert list(copied.points("rl/loss", "observation").y) == [0.5]
     settled = [
         table.row(index)
-        for table in copied.tables
+        for table in copied.columns
         for index in range(table.rows)
-        if "projection/row_sha256" in table.row(index)["values"]
+        if "projection/row_sha256" in table.row(index).values
     ]
     assert len(settled) == 1

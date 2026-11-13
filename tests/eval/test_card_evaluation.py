@@ -580,6 +580,17 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
         )
         assert pooled.runs == ("first", "second") and pooled.deals == 2
         assert pooled.games == 14 and pooled.excluded == {"crash": 2}
+        opponent = card_data(
+            db,
+            CardSelection(
+                experiment=spec.experiment,
+                subjects=(subject,),
+                opponents=(spec.players[1].player_id,),
+            ),
+        )
+        assert opponent.model_dump(exclude={"selection"}) == pooled.model_dump(
+            exclude={"selection"}
+        )
         one = card_data(
             db,
             CardSelection(
