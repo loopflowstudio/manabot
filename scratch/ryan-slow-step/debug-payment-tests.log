@@ -1,0 +1,88 @@
+   Compiling managym v0.2.2 (/Users/jack/src/manabot.ryan-bug/managym)
+   Compiling managym-cards v0.2.2 (/Users/jack/src/manabot.ryan-bug/managym/cards)
+    Finished `test` profile [optimized + debuginfo] target(s) in 25.35s
+────────────
+ Nextest run ID 7fab2ac7-ac44-4aa3-8346-e9ecdffd46e2 with nextest profile: ci
+    Starting 80 tests across 2 binaries (781 tests skipped)
+        PASS [   0.008s] ( 1/80) managym::rules_tests rules::cr_106_mana::audit_generic_and_specific_mana_boundary_matrix
+        PASS [   0.008s] ( 2/80) managym::rules_tests rules::cr_106_mana::audit_restricted_mana_never_pays_unrelated_costs
+        PASS [   0.010s] ( 3/80) managym::rules_tests rules::cr_106_mana::cr_106_4_mana_pool_empties_between_steps
+        PASS [   0.010s] ( 4/80) managym::rules_tests rules::cr_106_mana::cr_106_3_casting_uses_mana_abilities
+        PASS [   0.009s] ( 5/80) managym::rules_tests rules::cr_106_mana::cr_106_negative_spell_not_available_without_mana
+        PASS [   0.014s] ( 6/80) managym::rules_tests rules::cr_106_mana::restrictions_on_any_subtype_pay_exactly_their_purposes
+        PASS [   0.008s] ( 7/80) managym::rules_tests rules::cr_602_activated_abilities::cr_602_can_activate_shivan_when_red_mana_is_available
+        PASS [   0.007s] ( 8/80) managym::rules_tests rules::cr_602_activated_abilities::cr_602_cannot_activate_without_available_red_mana
+        PASS [   0.008s] ( 9/80) managym::rules_tests rules::engine_events::attack_tap_is_not_tapped_for_mana
+        PASS [   0.008s] (10/80) managym::rules_tests rules::engine_events::mana_activation_keeps_the_nonactive_players_priority
+        PASS [   0.008s] (11/80) managym::rules_tests rules::engine_events::tapped_for_mana_trigger
+        PASS [   0.008s] (12/80) managym::rules_tests rules::structured_offers::structured_compound_waterbend_effects_or_competing_mana_stay_sequential
+        PASS [   0.012s] (13/80) managym::rules_tests rules::structured_offers::compound_waterbend_subset_is_order_independent_and_forced_suffix_safe
+        PASS [   0.011s] (14/80) managym-cards::cards afr::a_mana_tap_can_precede_a_distinct_sacrifice_cost
+        PASS [   0.011s] (15/80) managym-cards::cards afr::removal_respects_mana_value_and_excluded_creature_types
+        PASS [   0.009s] (16/80) managym-cards::cards bro::powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells
+        PASS [   0.009s] (17/80) managym-cards::cards observability::kept_red_mana_and_no_hand_size_reach_the_player_rows
+        PASS [   0.009s] (18/80) managym-cards::cards observability::player_life_and_mana_move_their_named_columns
+        PASS [   0.009s] (19/80) managym-cards::cards observability::restricted_mana_is_encoded_by_spending_subtype
+        PASS [   0.009s] (20/80) managym-cards::cards ody::tarnished_citadel_deals_three_damage_only_with_colored_mana
+        PASS [   0.009s] (21/80) managym-cards::cards roe::audit_prism_treasure_empty_pool_activation
+        PASS [   0.008s] (22/80) managym-cards::cards roe::filtering_cannot_launder_restricted_mana_from_a_mixed_pool
+        PASS [   0.009s] (23/80) managym-cards::cards roe::nested_mana_nonmana_life_cost_is_reserved_and_paid_once
+        PASS [   0.009s] (24/80) managym-cards::cards roe::priority_prism_activation_can_use_a_treasure_for_its_upfront_cost
+        PASS [   0.008s] (25/80) managym-cards::cards roe::prism_consumes_generic_before_adding_chosen_color
+        PASS [   0.019s] (26/80) managym-cards::cards roe::prism_payment_offers_execute_and_restore_without_mutating_sibling_forks
+        PASS [   0.009s] (27/80) managym-cards::cards roe::prism_payment_preserves_required_blue_already_in_the_pool
+        PASS [   0.067s] (28/80) managym-cards::cards roe::nested_mana_every_offer_completes_replays_and_rolls_back
+        PASS [   0.009s] (29/80) managym-cards::cards roe::prism_payment_preserves_the_spells_required_green_mana
+        PASS [   0.008s] (30/80) managym-cards::cards roe::prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes
+        PASS [   0.008s] (31/80) managym-cards::cards roe::prism_upfront_payment_can_preserve_mana_already_in_the_pool
+        PASS [   0.009s] (32/80) managym-cards::cards roe::prism_upfront_payment_preserves_professors_second_green
+        PASS [   0.008s] (33/80) managym-cards::cards roe::prism_upfront_payment_search_preserves_a_required_pooled_white
+        PASS [   0.008s] (34/80) managym-cards::cards roe::training_grounds_reduces_creature_activations_to_no_less_than_one_mana
+        PASS [   0.009s] (35/80) managym-cards::cards tla::animated_land_attacks_with_haste_and_still_taps_for_mana
+        PASS [   0.013s] (36/80) managym-cards::cards tla::a_committed_nonlesson_cost_excludes_herbalists_restricted_activation
+        PASS [   0.009s] (37/80) managym-cards::cards tla::azula_has_the_opponent_exile_and_casts_with_any_mana
+        PASS [   0.008s] (38/80) managym-cards::cards tla::badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana
+        PASS [   0.008s] (39/80) managym-cards::cards tla::benders_waterskin_untaps_during_the_other_players_untap_step
+        PASS [   0.008s] (40/80) managym-cards::cards tla::barrels_of_blasting_jelly_filters_one_mana_once_each_turn
+        PASS [   0.009s] (41/80) managym-cards::cards tla::benevolent_river_spirit_requires_waterbend_five_and_scries_on_entry
+        PASS [   0.010s] (42/80) managym-cards::cards tla::committed_optional_payment_resumes_after_two_nested_mana_decisions
+        PASS [   0.009s] (43/80) managym-cards::cards tla::crashing_wave_waterbends_x_taps_up_to_x_and_distributes_three_stun_counters
+        PASS [   0.030s] (44/80) managym-cards::cards tla::committed_optional_payment_resumes_after_granted_chosen_color_mana
+        PASS [   0.012s] (45/80) managym-cards::cards tla::day_of_black_sun_strips_and_destroys_creatures_with_mana_value_x_or_less
+        PASS [   0.011s] (46/80) managym-cards::cards tla::fire_sages_counter_cost_and_firebending_mana_lifetime
+        PASS [   0.009s] (47/80) managym-cards::cards tla::flexible_waterbender_sets_base_pt_under_counters_until_end_of_turn
+        PASS [   0.011s] (48/80) managym-cards::cards tla::firebending_mana_lasts_until_end_of_combat_and_casts_spells
+        PASS [   0.011s] (49/80) managym-cards::cards tla::geyser_leaper_waterbends_to_draw_then_discard
+        PASS [   0.009s] (50/80) managym-cards::cards tla::giant_koi_waterbends_to_become_unblockable
+        PASS [   0.010s] (51/80) managym-cards::cards tla::hama_exiles_a_milled_spell_and_casts_it_by_waterbending
+        PASS [   0.010s] (52/80) managym-cards::cards tla::guide_grants_tap_mana_with_sickness_and_removes_it_on_departure
+        PASS [   0.011s] (53/80) managym-cards::cards tla::hermitic_herbalist_offers_each_two_color_combination_once
+        PASS [   0.009s] (54/80) managym-cards::cards tla::honest_work_replaces_a_printed_mana_ability_until_it_leaves
+        PASS [   0.010s] (55/80) managym-cards::cards tla::jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities
+        PASS [   0.009s] (56/80) managym-cards::cards tla::katara_bending_prodigy_waterbends_six_to_draw
+        PASS [   0.041s] (57/80) managym-cards::cards tla::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities
+        PASS [   0.008s] (58/80) managym-cards::cards tla::north_pole_patrol_untaps_another_and_waterbends_to_tap_an_opponent
+        PASS [   0.010s] (59/80) managym-cards::cards tla::katara_waterbends_x_to_set_your_creatures_base_pt
+        PASS [   0.016s] (60/80) managym-cards::cards tla::optional_decline_retains_mana_activation_costs_and_chosen_output
+        PASS [   0.009s] (61/80) managym-cards::cards tla::ozai_keeps_unspent_mana_as_red_and_flies_on_six
+        PASS [   0.009s] (62/80) managym-cards::cards tla::precision_has_a_real_four_mana_alternative
+        PASS [   0.009s] (63/80) managym-cards::cards tla::ruinous_waterbending_shrinks_everything_and_kicked_gains_life_per_death
+        PASS [   0.051s] (64/80) managym-cards::cards tla::optional_lesson_all_mana_mixed_and_all_taps_keep_the_same_continuation
+        PASS [   0.009s] (65/80) managym-cards::cards tla::rumble_arena_scries_then_filters_one_paid_mana_without_using_the_stack
+        PASS [   0.011s] (66/80) managym-cards::cards tla::secret_of_bloodbending_delegated_spell_uses_victims_mana_and_replays_atomically
+        PASS [   0.011s] (67/80) managym-cards::cards tla::secret_of_bloodbending_waterbend_taps_only_the_casters_helpers
+        PASS [   0.009s] (68/80) managym-cards::cards tla::the_last_agni_kai_adds_red_for_excess_fight_damage_and_keeps_red_mana
+        PASS [   0.010s] (69/80) managym-cards::cards tla::spirit_water_revival_waterbends_its_additional_cost
+        PASS [   0.011s] (70/80) managym-cards::cards tla::wan_shi_tong_any_type_mana_preserves_payable_x
+        PASS [   0.013s] (71/80) managym-cards::cards tla::the_unagi_wards_with_a_waterbend_the_opponent_may_pay_by_tapping
+        PASS [   0.008s] (72/80) managym-cards::cards tla::waterbend_cannot_partially_pay_then_discard
+        PASS [   0.010s] (73/80) managym-cards::cards tla::waterbend_and_mana_taps_have_distinct_bonus_accounting
+        PASS [   0.008s] (74/80) managym-cards::cards tla::waterbend_pays_entirely_with_creature_taps
+        PASS [   0.009s] (75/80) managym-cards::cards tla::waterbend_taps_do_not_trigger_badgermole_cub
+        PASS [   0.020s] (76/80) managym-cards::cards tla::waterbend_lesson_draws_before_optional_payment_and_taps_without_mana
+        PASS [   0.011s] (77/80) managym-cards::cards tla::waterbender_ascension_counts_each_connecting_creature_and_draws_at_four
+        PASS [   0.010s] (78/80) managym-cards::cards tla::waterbender_ascension_waterbends_a_creature_unblockable
+        PASS [   0.009s] (79/80) managym-cards::cards tla::waterbending_scroll_draws_for_one_less_per_island
+        PASS [   0.019s] (80/80) managym-cards::cards tle::merchant_paid_foods_are_not_offered_again_for_waterbending
+────────────
+     Summary [   0.477s] 80 tests run: 80 passed, 781 skipped

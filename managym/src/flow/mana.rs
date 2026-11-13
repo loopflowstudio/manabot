@@ -262,6 +262,8 @@ impl PaymentModel {
             if !state.resources.present[index] {
                 continue;
             }
+            // Fixed mana, tapping abilities and waterbending compete for the
+            // same tap. Non-tapping activations can still use this object later.
             let mut tap_total = 0;
             if state.resources.untapped[index] {
                 tap_total = source.fixed.as_ref().map_or(0, &usable_total);
@@ -362,23 +364,17 @@ impl PaymentModel {
                     if !state.resources.present[index] {
                         continue;
                     }
-                    // Fixed mana, tapping mana abilities and waterbending all
-                    // consume this same untapped resource. Count only the best
-                    // usable output, even though the color bound relaxes
-                    // the choice of colors. Otherwise an impossible large X
-                    // explores every subset of sources before being rejected.
-                    let mut tap_usable = 0;
                     if state.resources.untapped[index] {
                         if let Some(output) = &source.fixed {
                             optimistic.add(output);
-                            tap_usable = u64::from(output.usable_total(&cost));
+                            usable += u64::from(output.usable_total(&cost));
                         }
                         if waterbend && source.waterbend {
                             optimistic.add(&Mana {
                                 mana: [0, 0, 0, 0, 0, 1],
                                 ..Default::default()
                             });
-                            tap_usable = tap_usable.max(1);
+                            usable += 1;
                         }
                     }
                     for (ability_index, ability) in source.abilities.iter().enumerate() {
@@ -390,20 +386,14 @@ impl PaymentModel {
                         for _ in 0..uses {
                             optimistic.add(&upper);
                         }
-                        let ability_usable = uses as u64
+                        usable += uses as u64
                             * ability
                                 .outputs
                                 .iter()
                                 .map(|m| u64::from(m.usable_total(&cost)))
                                 .max()
                                 .unwrap_or(0);
-                        if ability.tap_source {
-                            tap_usable = tap_usable.max(ability_usable);
-                        } else {
-                            usable += ability_usable;
-                        }
                     }
-                    usable += tap_usable;
                 }
                 if usable < u64::from(cost.mana_value) || !optimistic.can_pay(&cost) {
                     return None;
@@ -1520,7 +1510,7 @@ mod tests {
     use crate::cards::content_pack::ContentPack;
     use crate::state::{
         game_object::{CardId, PermanentId},
-        mana::{Mana, ManaCost, ManaRestriction},
+        mana::{Mana, ManaCost, ManaRestriction, SpendingContext},
     };
 
     fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
@@ -1563,17 +1553,23 @@ mod tests {
             resources: model.resources(),
             pool: Mana::default(),
             life: 20,
-            obligations: vec![Obligation::Pay {
-                cost: ManaCost::parse("5"),
-                waterbend: true,
-            }],
+            obligations: vec![
+                Obligation::Pay {
+                    cost: ManaCost::default(),
+                    waterbend: false,
+                },
+                Obligation::Pay {
+                    cost: ManaCost::parse("5"),
+                    waterbend: true,
+                },
+            ],
             prefix: None,
         };
         assert!(model
             .witness(state, SourcePolicy::All, &mut visited)
             .is_none());
         // Count explored states instead of asserting a host-dependent duration.
-        assert_eq!(visited.len(), 1);
+        assert!(visited.is_empty());
 
         let path = model
             .plan(
@@ -1621,6 +1617,65 @@ mod tests {
             .unwrap();
         assert!(matches!(path[0], PaymentStep::Fixed(PermanentId(0))));
         assert!(matches!(path[1], PaymentStep::Activate(PermanentId(0), 0)));
+    }
+
+    #[test]
+    fn payment_bound_counts_restricted_mana_for_each_pending_purpose() {
+        let mut pool = Mana::restricted_to(ManaRestriction::spell(["Lesson"]), [0, 1, 0, 0, 0, 0]);
+        pool.add(&Mana::restricted_to(
+            ManaRestriction::spell(["Shrine"]),
+            [0, 1, 0, 0, 0, 0],
+        ));
+        let model = PaymentModel {
+            sources: Vec::new(),
+            life: 20,
+        };
+        let obligations = ["Lesson", "Shrine"]
+            .map(|subtype| Obligation::Pay {
+                cost: ManaCost {
+                    purpose: SpendingContext::cast([subtype], []),
+                    ..ManaCost::parse("U")
+                },
+                waterbend: false,
+            })
+            .to_vec();
+        assert!(model.plan(pool, obligations, SourcePolicy::All).is_some());
+    }
+
+    /// Restricted mana can finance a future activation even when it cannot
+    /// pay the current debt. That activation's output covers the debt instead.
+    #[test]
+    fn payment_bound_allows_restricted_mana_to_fund_a_filter() {
+        let mut filter = tapping_ability(vec![Mana::parse("U")]);
+        filter.cost = ManaCost {
+            purpose: SpendingContext::ability(["Ally"]),
+            ..ManaCost::parse("1")
+        };
+        let model = PaymentModel {
+            sources: vec![ManaSource {
+                permanent: PermanentId(0),
+                card: CardId(0),
+                untapped: true,
+                fixed: None,
+                abilities: vec![filter],
+                waterbend: false,
+            }],
+            life: 20,
+        };
+        let pool = Mana::restricted_to(ManaRestriction::only([], ["Ally"]), [0, 0, 0, 0, 1, 0]);
+        let path = model
+            .plan(
+                pool,
+                vec![Obligation::Pay {
+                    cost: ManaCost::parse("U"),
+                    waterbend: false,
+                }],
+                SourcePolicy::All,
+            )
+            .unwrap();
+        assert!(matches!(path[0], PaymentStep::Activate(PermanentId(0), 0)));
+        assert!(matches!(path[1], PaymentStep::Spend(_)));
+        assert!(matches!(path[2], PaymentStep::Output(0)));
     }
 
     #[test]

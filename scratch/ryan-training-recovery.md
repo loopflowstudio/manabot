@@ -1,5 +1,10 @@
 # Ryan's Jace training slow steps — recovery investigation
 
+Follow-up on 2026-11-12: the local source repair and its successful scalar,
+vector and bounded flat-search checks are recorded in
+[`ryan-slow-step/unbreak.md`](ryan-slow-step/unbreak.md). The release-only
+investigation below remains the original evidence; PyPI is still unchanged.
+
 2026-11-12, incident graph step 1 (`unbreak`). Recovery remains blocked:
 the supplied scalar workflow completes, but neither PyPI 0.2.1 nor 0.2.2
 restores normal step latency. No engine, training configuration, checkpoint,

@@ -1,3 +1,5 @@
 /Users/jack/src/manabot.ryan-bug/managym/__init__.py
 step 242 of 426: action 2 took 2.47 s
 step 243 of 426: action 2 took 1.22 s
+step 426 of 426: action 3 took 137.38 s
+slowest step: 137.38 s
