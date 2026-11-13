@@ -128,17 +128,45 @@ These are counterfactual counts on A's trajectories, not games under C–E.
 
 ## Learning comparison
 
-Planned after the frequency and shape slices: one small run on the Elemental
-recipe compares today's per-unit decisions with automatic spending: seeds
-34701 and 34702 per arm, 32 matched updates, scored against the heuristic,
-launched under the aggregate USD25 authorization. Each training job allows at
-most USD3 and one attempt; the launch uses `--max-usd 17`, reserving up to USD8
-for evaluation. The native `MANAGYM_EXPERIMENT_AUTOSPEND=1` switch takes the
-first feasible unit; A explicitly sets it to 0. Source selection stays the same.
-Evaluation uses the same switch as training, on the shared 50-pair Elemental
-heuristic panel (200 replay-checked games per final checkpoint). It asks only whether removing the
-spend decisions visibly changes early learning or steps per game on this
-recipe. Two seeds cannot support a claim about either shape.
+This exploratory pilot compares today's per-unit decisions (A) with first-feasible
+automatic pool spending (B), on the existing Elemental recipe: seeds 34701 and
+34702 per arm, 32 matched updates. Training is frozen at `00ee188998cb`.
+`MANAGYM_EXPERIMENT_AUTOSPEND` is explicitly 0 for A and 1 for B; source
+selection stays the same. Each training job allows USD3 and one attempt; the
+serial cohort `mtg347-mana-learning-serial` launched under `--max-usd 17`.
+Four training caps plus two USD4 evaluation caps total USD20, within the USD25
+authorization. These caps are limits, not measured costs.
+
+Evaluation retains each arm's spending mode on the shared 50-pair Elemental
+heuristic panel: 200 replay-checked games per final checkpoint, with native
+seats and decks swapped across four legs per pair. Evaluation source
+`4f1fdb2da3c9` includes the diagnostic constructor cleanup; it changes neither
+the frozen training input layout nor payment behavior. Model rows join through
+Etude's participant seat, rather than treating the native game seat as player
+identity. The published summary retains the SQL, query plan and timing.
+
+The pilot asks only whether removing pool-spending decisions visibly changes
+early scores or decisions per game on this recipe. Updates are matched;
+completed games and learner transitions need not be. Trajectories differ once
+the policies differ, so their decision ratios cannot isolate saved prompts.
+Two training seeds and a recipe with roughly 0.2% pool prompts do not establish
+an improvement, equivalence or a compound-decision learning result. This pilot
+does not expose fixed-source choice or implement C–E. MTG-265 owns the planned
+learning-effect study.
+
+An initial parallel launch (`518a4948ea80`) failed admission when a second L4
+was unavailable; none of its four job commands started. The acquired machine
+was deleted before the serial retry. The source and question stayed fixed.
+Final run receipts, scores and launcher costs are recorded below.
+
+A evaluation `mana-spending-A-303f5f0a6a59` completed all 100 matches (400 games),
+with no dropped or incomplete matches. It also logged `Invalid focus object ID
+81 for action 12` (ChooseMode), among similar warnings. The existing Python
+encoder emits this when a focus object has no observation join and encodes -1.
+The cause was not diagnosed in this experiment. Valid replay-checked games do
+not establish that every action feature was informative: the pilot measures the
+existing representation and procedure together. Keep that limitation separate
+from game failures; changing the encoder mid-pilot would change its question.
 
 ## Results
 
@@ -320,7 +348,7 @@ measurements.
 **Recommend a grouped native payment-outcome chooser at the fixed-source
 payment boundary (D), after the spell’s modes, targets, X and cost are known.**
 This is a design for review; implementing it is a separate Task. The learning
-pilot below does not test this chooser.
+pilot does not test this chooser.
 
 Keep one automatic plan as an explicit, bound native choice, describing the
 sources and pool it leaves. Other complete outcomes remain reachable through
@@ -333,7 +361,9 @@ merging objects. Keep existing explicit mana-ability decisions at their real
 native boundaries; do not model their costs or effects as hypothetical UI steps.
 
 For the **policy**, each group and outcome must have native action descriptors
-for what remains available, the floating pool and the relevant receipt. Carry
+for what remains available, the floating pool and the relevant receipt. Keep
+the announced source available to observation and action joins throughout the
+pending choice. Carry
 pending choice state through the same observations, learning tokens and LLM
 text in the change that adds it. Respect the supplied observation capacities;
 never use first-legal truncation to fit this chooser. Grouping can add decisions
