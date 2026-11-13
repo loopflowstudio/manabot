@@ -18,3 +18,7 @@ to the battlefield…". Inspection of main's `move_description` shows "Put it
 onto the battlefield under its owner's control" for `Moved`. Preserve that
 actual wording in the regression assertion, consistent with the instruction
 not to reword existing cards; do not change the move verb.
+
+2026-11-12: Use the descriptive `w17-token-cards` fixture suffix for the new
+Academy catalog binding. Preserve the existing `w17` files unchanged; replay
+only existing Commands and require their offer ids/labels to match.
