@@ -18,7 +18,7 @@ Run the experiment through Etude and the existing manabot owners.
 4. A change that keeps the question (a capacity limit, a crash fix, a device,
    a machine type, a retry) is fixed, relaunched and recorded as one dated line
    in the report. It is not a new protocol or a new version. A change to a
-   finding's question, prediction or decision rule is a new dated prediction
+   finding's question or to what it measures is a new dated opening
    paragraph, and the runs before it become exploratory.
 5. Cost is the launcher's number for the run, recorded once per run. Do not
    reconstruct bills, reserves or settlements. Confirm the rentals ended.
