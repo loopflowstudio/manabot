@@ -87,13 +87,13 @@ stores device `exp` output, so no cross-device `exp` comparison exists.
   (unchanged tolerances). Drops `check_probabilities` on stored weights,
   `behavior_log_probability_mismatch` and `zero_sampled_probability` (a sampled
   action is legal with a finite log). `check_probabilities` stays for the
-  reference distribution. Update the section comment at rl.py:74.
+  reference distribution. The section comment above `check_behavior` follows.
 - `collection.py::_sample_learning_rows`: sample from `logs.exp()` as now; stop
   copying `weights` to the host. `RolloutBatch.observations` drops the reshape.
 - `updates/health.py::batch_health`: `legal_probability_min` and
   `legal_underflow_count` come from host `np.exp(logs)` (float32), same
   meaning: the legal probability as float32 represents it, zeros counted.
-  `docs/training.md:504-505` wording follows ("zero sampling weight" →
+  `docs/training.md` "Sampling contract" wording follows ("zero sampling weight" →
   rounds to zero in float32).
 - `training/state/incidents.py`: no `packed_actions/probabilities`.
 - No tolerance is widened; float32 and BF16 run the same checks.
@@ -157,8 +157,8 @@ The report gives the table above as "before", the probe and the run's
 whether the evidence supports rerunning the A/B: the numerical gate's only
 recorded BF16 failure has a precision-independent cause, so the A/B's
 strength and trajectory questions are again open; the rerun needs a person's
-go-ahead naming the amount. `docs/training.md:568-574` gains one sentence
-pointing at the cause; `experiments/precision_ladder.md` is frozen evidence
+go-ahead naming the amount. The cause sentence already exists in
+`docs/training.md` "Reduced precision"; slice 3 links the report from it; `experiments/precision_ladder.md` is frozen evidence
 and is not edited.
 
 ## Docs (written ahead of the code, 2026-11-13)
