@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from multiprocessing.connection import Client
 from multiprocessing.managers import BaseManager
 from pathlib import Path
 import secrets
@@ -78,16 +79,31 @@ class CallbackEndpoint:
         )
         manager = ServerManager(address=address, authkey=authkey)
         self._server = manager.get_server()
-        self._thread = threading.Thread(target=self._serve, daemon=True)
+        self._server.stop_event = threading.Event()
+        self._thread = threading.Thread(
+            target=self._serve, name="evaluation-callback-accept", daemon=True
+        )
         self._thread.start()
         self.endpoint = InferenceEndpoint(address, authkey, runtime.execution)
 
     def _serve(self) -> None:
-        try:
-            self._server.serve_forever()
-        except SystemExit:
-            # BaseManager's process-oriented server exits even when hosted in a thread.
-            pass
+        # Server.serve_forever starts an unjoinable accepter that retries a
+        # closed listener forever. Own that loop so this thread has a lifetime.
+        while not self._server.stop_event.is_set():
+            try:
+                connection = self._server.listener.accept()
+            except OSError:
+                if self._server.stop_event.is_set():
+                    return
+                raise
+            if self._server.stop_event.is_set():
+                connection.close()
+                return
+            threading.Thread(
+                target=self._server.handle_request,
+                args=(connection,),
+                daemon=True,
+            ).start()
 
     def __enter__(self) -> InferenceEndpoint:
         return self.endpoint
@@ -99,8 +115,12 @@ class CallbackEndpoint:
         traceback: TracebackType | None,
     ) -> None:
         self._server.stop_event.set()
+        # Wake accept before closing its socket; close from another thread
+        # need not interrupt a blocking accept on every platform.
+        with Client(self.endpoint.address):
+            pass
+        self._thread.join()
         self._server.listener.close()
-        self._thread.join(timeout=1)
         self._temporary.cleanup()
 
 

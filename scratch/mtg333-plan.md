@@ -128,11 +128,8 @@ discarded metadata attempt remain in the historical receipts below.
 
 - CUDA gradients meet the Task bar (≤1e-8) but exceed the head-vs-head repeat
   floor the plan also asked for.
-- With `tests/eval/test_batched_eval.py` earlier in the same pytest process,
-  `tests/model/test_inference.py::test_prepared_collection_and_restored_continuation_match_reference`
-  hit the 300 s limit twice (16 s alone). Serving backlog followed by restored
-  collection alone passed (2 passed, 58.64 s); the full-file order is
-  undiagnosed.
+- The order-dependent 300 s timeout reproduced on main; its leaked
+  manager accept thread is fixed. The full reported order now passes (below).
 - Latest host inference preparation is 13.85 vs main 12.59 ms (+10.0%),
   and checkpoint load 78.15 vs 69.20 ms (+12.9%); parent is 13.41 / 79.37 ms.
   The PPO pipeline does not run on either path. Full ranges are in the speed
@@ -471,59 +468,29 @@ stay as recorded in `questions.md`.
 
 ## Concept review 2, 2026-11-13 (implemented)
 
-The earlier two directions are in the code: the collector slices host rows and
-`prepare_admitted` reads no grad mode. No product choice is open. One leftover
-keeps the second from being true at the call sites.
+Review found that callers still inferred preparation purpose from grad mode.
+Torch rollout now fixes it by role: inference bootstrap rows; learner
+`rows`/`minibatches`/`_prepare_rows`, with no captured mode or purpose
+parameter. Explicit no-grad sites use literal inference purpose; genuine
+dual-mode helpers may retain their expression. The original direction and
+fallback are at `2155061ffc:scratch/mtg333-plan.md`; the exactness checks
+below passed, so the cleanup is retained without a CUDA rerun.
 
-**Purpose is still computed from ambient grad mode by the callers.**
-`backends/README.md` now says the argument "chooses preparation purpose
-independently of autograd mode", yet 13 `manabot/` sites pass
-`inference=not torch.is_grad_enabled()`. Three are in the torch
-`AdmittedRollout` (`next_observation`, `rows`, `minibatches`), so a shared
-protocol method prepares different rows by the caller's grad mode on torch and
-fixed rows on MLX (`mlx/rollout.py` passes nothing), and `minibatches` still
-captures the caller's mode to hand to its worker. Each method's role already
-fixes the purpose, and production agrees: `next_observation` is read only under
-`backend.learner.no_grad()` (`ppo.py:57`, `damped_policy.py:126`); `rows` and
-`minibatches` only with gradients (`damped_policy.py:286`, `ppo.py:156`,
-`loops/minimal.py:63`).
-
-Direction:
-
-1. Torch `AdmittedRollout` states purpose by role: `next_observation` prepares
-   inference rows (`inference=True`), `rows`/`minibatches`/`_prepare_rows`
-   prepare learner rows (`inference=False`; `_prepare_rows` loses the
-   parameter and `minibatches` its captured mode). `rollout.py` then reads no
-   grad mode; docstrings and `docs/training-loop.md`'s `AdmittedRollout` row
-   say which rows each returns.
-2. A site already inside an explicit `torch.no_grad()` block writes
-   `inference=True` (`backends/parity.py:551`, `scripts/bench_breakdown.py:72`;
-   check each of the others the same way). A helper genuinely called in both
-   modes (`verify/util.py`, `tests/model/prepared_routes.py`) may keep the
-   expression, or take the purpose from its caller if that is one line.
-   Frozen experiments and `scratch/equivalence/run.py` are not edited.
-3. Production values are unchanged, so the 3,410-tensor CPU oracle, the
-   five-case update comparison and the focused suite must stay exact, and no
-   CUDA rerun follows. `test_update_backend_protocols.py` compares `rows`
-   with `minibatches`; a test that reads `rows` under `no_grad` now gets
-   learner rows by design. If any exactness check moves, revert and instead
-   state the grad-mode rule in the rollout docstrings and the README.
-
-Left alone: MLX's bootstrap rows stay learner-prepared (MLX changes are
-excluded, and its parity tolerance covers compaction order); forward-time
-grad-mode reads (program cache, `F.embedding` on CUDA, the inference guard)
-describe the forward, not preparation.
+MLX bootstrap preparation stays learner-purpose, as directed (MLX changes
+excluded). Forward-time grad reads for caching, CUDA embedding gradients and
+inference guards remain. The two verification preparations outside their
+no-grad forward blocks also retain their current values.
 
 ## Next actions
 
-0. New steer: check the order-dependent timeout on main, then determinize;
-   delete only if redundant. Role-based preparation cleanup is exact (below).
+0. Role-based preparation cleanup and the callback listener fix are implemented
+   and verified (receipts below).
 1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
    exceed the head-vs-head floor), host preparation/load costs, and the threaded
    profile limitation. PPO's no-slower-median condition now clears; main/head
    ranges overlap.
-2. Gate: broader suites, installed wheel, Python 3.12 and the full-file test order
-   that timed out (State). Publication and landing are the caller's steps.
+2. Gate: broader suites, installed wheel and Python 3.12. The previously
+   failing full-file order passes. Publication and landing are the caller's steps.
 
 ## Role-based preparation receipt, 2026-11-13
 
@@ -548,3 +515,28 @@ Task comments 6987a723 and 8370e331, relayed for Jack Heart:
 - Timeout: "delete or determinized flaky tests", then "and detemrinze or delete".
   Check the same order on main first; find leaked state and determinize.
   Delete only if redundant; a head-only hang is a regression to fix.
+
+## Callback thread leak, 2026-11-13
+
+Main `c3dfd82476`, extracted to `/tmp/mtg333/main-order-c3dfd82476`,
+used this checkout's interpreter and identical native extension (no engine
+diff). From that directory:
+`uv run --project /Users/jack/src/manabot.mtg-333-torch-forward-over --extra dev --extra mlx --extra artifacts python -m pytest tests/eval/test_batched_eval.py tests/model/test_inference.py --basetemp /tmp/mtg333/main-order-tests -q`
+→ exit 1, the restored-continuation test reached **300 s**.
+`/tmp/mtg333/main-order.log` names a live
+`multiprocessing/managers.py:194 accepter` thread; a native sample
+(`main-order.sample`) shows repeated OSError handling. This is not head-only.
+
+`CallbackEndpoint` hosted the process-oriented manager `serve_forever` in a
+thread; its separate daemon accepter ignores the stop event and retries a
+closed listener forever. Replace that entry point with one owned accept loop,
+wake its blocking accept before closing the listener, then join it. Manager
+authentication and request handling remain unchanged. The real spawned callback
+test now checks no threads survive; no test is deleted.
+
+`uv run --extra dev --extra artifacts pytest tests/eval/test_batched_eval.py::test_private_callback_endpoint_runs_complete_replayed_block tests/model/test_inference.py::test_prepared_collection_and_restored_continuation_match_reference --basetemp /tmp/mtg333/callback-fixed-tests -q`
+→ **2 passed (86.47 s)**. Ruff check/format passes.
+`uv run --extra dev --extra mlx --extra artifacts pytest tests/eval/test_batched_eval.py tests/model/test_inference.py --basetemp /tmp/mtg333/head-order-fixed-tests -q`
+→ **38 passed, 1 CUDA skip (235.99 s)**, process exited 0. Existing
+read-only-array warning in the meta transfer test; no thread-exception warning.
+Log: `/tmp/mtg333/head-order-fixed.log`. No test was deleted.

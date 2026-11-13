@@ -757,6 +757,7 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
 
     contract = arena_fixture()
     execution = EvalExecution(deadline_unix=time.time() + 120, max_active_games=2)
+    before = set(threading.enumerate())
     with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
         with CallbackEndpoint(runtime) as endpoint:
             with ProcessPoolExecutor(1, mp_context=mp.get_context("spawn")) as pool:
@@ -771,6 +772,7 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
     assert len(rows) == 2
     assert all(row["terminated"] and row["failure"] is None for row in rows)
     assert replay["passed"]
+    assert not (set(threading.enumerate()) - before)
 
 
 def test_expired_allocation_starts_no_games_and_search_stays_unbound(
