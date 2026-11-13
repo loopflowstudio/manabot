@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 
-from manabot.backends.torch.arrays import _array_fields, on_device
+from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.policy.buckets import row_needs
 from manabot.policy.prepare import Prepared
@@ -50,20 +50,17 @@ class AdmittedRollout:
             obs = rows.observation
             self.agent.check_observation(obs)
             self._admitted[chunk] = True
-            needs = (
-                self.batch.recorded.gather_needs(chunk)
-                if self.agent.bucketed_shapes
-                else None
-            )
-            if needs is None and self.agent.bucketed_shapes:
+            if not self.agent.bucketed_shapes:
+                continue
+            needs = self.batch.recorded.gather_needs(chunk)
+            if needs is None:
                 needs = row_needs(obs, self.agent.observation_space.encoder)
-            if needs is not None:
-                if self._needs is None:
-                    self._needs = np.zeros(
-                        (len(self._admitted), needs.shape[1]), np.int64
-                    )
-                self._needs[chunk] = needs
-                self._measured[chunk] = True
+            if needs is None:
+                continue
+            if self._needs is None:
+                self._needs = np.zeros((len(self._admitted), needs.shape[1]), np.int64)
+            self._needs[chunk] = needs
+            self._measured[chunk] = True
 
     def next_observation(self, device: torch.device) -> Prepared[torch.Tensor]:
         """Bootstrap observations [trajectory, ...] on `device`."""
@@ -98,4 +95,4 @@ class AdmittedRollout:
 
     def evidence(self, obs: Prepared[torch.Tensor]) -> dict[str, torch.Tensor]:
         """The arrays a rejected step retains for rows this rollout returned."""
-        return _array_fields(obs, torch.Tensor)
+        return array_fields(obs, torch.Tensor)

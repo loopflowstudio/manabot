@@ -144,8 +144,8 @@ admission's private `_key`/`_word` and fact-kind tuples (one owner:
 
 6b. **Complete** — `105e7e2aa` merged, rebuilt; fresh CPU oracle and updates exact.
 7. **CUDA equivalence captured** at `296c90f33` on A6000: numeric bar holds,
-   stricter repeat-floor condition unresolved. **Speed pending** combined
-   queued run `4b091160edbf` at `c150d5f25`, blocked so far by rental API refusals.
+   stricter repeat-floor condition unresolved. **Speed has no result**: see
+   "Speed and profile" and "Next actions".
 8. **Optimize pass pending** speed/profile output; no optimization claim yet.
 
 ### Slice 6b facts that still bind
@@ -292,6 +292,20 @@ Compress pass (after `c150d5f25`, dead names and duplicate tables only):
 `compare.py mana-base.pt compress2-head.pt` → **3,410 tensors, differing 0**;
 `cmp updates-mana-base.json updates-compress2.json` identical.
 
+Second compress pass (`array_fields` public, `admit_rows` needs branch
+flattened, plan curated): `compare.py mana-base.pt compress3-head.pt` →
+**3,410 tensors, differing 0**; `updates-compress3.json` `cmp`-identical.
+`tests/eval/test_batched_eval.py` → 22 passed, 1 skipped after repairing
+`test_queue_boundary_excludes_cold_load_and_overlapping_requests`, which
+patched the removed `serving.load_checkpoint` (now `TORCH_BACKEND.load_policy`).
+The protocol, bucketed-shape, inference, update-protocol and boundary files →
+55 passed.
+
+**Open for gate:** with `test_batched_eval.py` earlier in the same pytest
+process, `tests/model/test_inference.py::test_prepared_collection_and_restored_continuation_match_reference`
+(line 253, the restored collection) hit the 300 s limit twice; alone it takes
+16 s. Seen before and after the test repair; cause not diagnosed.
+
 ### CUDA equivalence: `047fa57e0e5e` (A6000)
 
 Succeeded; launcher cost **$0.04**. All 3,410 tensors captured in each arm.
@@ -306,55 +320,47 @@ The Task numeric CUDA bar (≤1e-8) holds; the stronger plan condition
 “no worse than the head-vs-head repeat” does **not**. Keep this contrary
 finding for gate review; speed measurement proceeds under the Task numeric
 tolerance without claiming the stricter condition passed. No gradient
-threshold or receipt was changed. Speed launch uses the same A6000 template
-and frozen source `296c90f33`.
+threshold or receipt was changed.
 
-### Speed admission
+### Speed and profile: no result; launcher request stuck
 
-Two admissions (`cb8fa16ee59e`, then `b3a50357784a` with a shorter job
-allowance) refused at the one-machine limit: the completed equivalence
-session was not reusable. Neither job started. Terminated
-`mtg333-a6000-3a2a673ba16f`; provider pod list returned `[]`. Fresh speed
-rental uses the original 2.5-hour allowance and $10 cohort cap, same A6000
-card type, both comparison arms on that single new machine.
+Every speed admission failed before a job command ran; nothing was measured:
 
-The fresh speed create (`e91a37b6f51b` / requested run `3b240dc55ea4`)
-failed with RunPod HTTP 400 before any command. Combined the speed launcher
-with the existing equivalence capture and one separate, unreported cProfile
-pass after speed summaries. Benchmark code, workload and repeats stay frozen;
-all checks can now finish on one rental without needing session reuse.
+| Request | Outcome |
+|---|---|
+| `cb8fa16ee59e`, `b3a50357784a` | refused at the one-machine limit (the finished equivalence session is not reusable); terminated `mtg333-a6000-3a2a673ba16f`, pod list `[]` |
+| `e91a37b6f51b` / run `3b240dc55ea4` | RunPod HTTP 400 at create |
+| `ff725204b789` / run `a1f656c6c77a` (combined) | HTTP 400 at create; cleanup requested for `mtg333-a6000-d90f6b127513` |
+| queued `4b091160edbf` (combined, source `c150d5f25`, cap $10) | never reached setup; cancelled, still `renting` |
 
-Combined direct admission `ff725204b789` / requested run `a1f656c6c77a`
-also failed HTTP 400 before job start. Cleanup requested for
-`mtg333-a6000-d90f6b127513`. Queued combined run `4b091160edbf`, source
-`c150d5f25`, same $10 cohort cap; one bounded queue attempt before stopping
-on external rental unavailability. No speed or optimization result yet.
+The combined launcher runs equivalence, the frozen speed benchmark (three
+alternating processes per arm) and one unreported cProfile pass on a single
+rental (2.5-hour job allowance), so no session reuse is needed. Its generated patch files are tracked
+only in `c150d5f25`.
 
-### Stop state, 2026-11-13
+`4b091160edbf`: cancellation requested `2026-11-13T16:35:59.645540Z`
+(`etude cancel` preserves it). `etude status` still reports `renting, ~$0.32,
+machine mtg333-a6000-b2d4123a77e0`, `last loop: never`. Fresh
+credential-injected waiters did not settle it (stopped with SIGINT; none
+remain). `etude terminate mtg333-a6000-b2d4123a77e0` → “still has a run on
+it”. RunPod SDK inventory for `etude-b2d4123a77e0` and the provider pod list
+show no pod for any Task session; no other workload was changed.
 
-**Implementation remains incomplete:** speed and the required optimization pass
-have no result. Do not advance on an assumed performance pass. The Task numeric
-CUDA tolerance passed, but the stricter repeat-floor condition still needs gate
-review. Gate's broader suites and consumer/wheel checks remain unrun.
+Why retrying cannot help (SDK 0.2.15): `Scheduler._observe`'s missing-receipt
+branch calls `service.find` and finishes an absent machine only after the
+rental deadline; it ignores `cancel_requested_at` there. `terminate` refuses
+unfinished allocations before its missing-receipt cleanup. SDK `rentals()`
+gives the deadline **2026-11-13T19:15:51.924571Z**. An earlier settlement
+needs an Etude cancellation fix, outside this Task. Never edit the launcher
+database or clock, and never launch over the stale request.
 
-Queued run `4b091160edbf` never reached setup during the bounded wait. Cancellation
-is recorded (`cancel_requested_at` present); CLI still reports `renting` on
-`mtg333-a6000-b2d4123a77e0`. `etude terminate` refuses while the launcher considers
-that run active. Interrupted both local waiters after cancellation; process
-inventory confirms zero waiters. A fresh coordinator did not reconcile it, so
-no further coordinator was left running. Provider inventory has no pod matching
-any Task session ID; no other workload was changed. Launcher reconciliation is
-pending; do not launch over that stale request or edit its database directly.
+### Next actions
 
-Resume by inspecting `etude status 4b091160edbf` and its retained logs under
-`ETUDE_HOME=/tmp/mtg333/launcher`, then resolving cancellation/cleanup through
-Etude. Frozen combined measurement source is `c150d5f25`; benchmark code and
-its three alternating processes per arm were not changed. The generated patch
-files were removed from the final diff; their bytes remain in that source
-commit. Retry the combined job only when rental admission works.
-
-Realign, 2026-11-13 (after `070da04ed`): `etude status 4b091160edbf` still
-reports `renting, ~$0.32, machine mtg333-a6000-b2d4123a77e0`, source
-`c150d5f25`, `last loop: never`. Reconciling that request through Etude is the
-next action before any speed launch; slices 7 (speed) and 8 (optimize) and the
-gate remain.
+1. After 19:15:52 UTC: credential-injected `etude status 4b091160edbf` under
+   `ETUDE_HOME=/tmp/mtg333/launcher`; terminate the recorded machine if still
+   listed; confirm a terminal status and `runpodctl pod list` → `[]`.
+2. Commit a launch source with regenerated patches (`manabot/` changed after
+   `c150d5f25`; CPU oracle exact at each change) and queue the combined job
+   on the A6000 template when admission works.
+3. Slice 8 from its speed/profile output; then gate, including review of the
+   repeat-floor finding, the broader suites, Python 3.12 and the wheel smoke.

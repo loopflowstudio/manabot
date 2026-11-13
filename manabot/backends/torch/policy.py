@@ -35,7 +35,7 @@ from manabot.backends.torch._semantic_cards import (
 from manabot.backends.torch._shared_effects import SharedEffectEncoder
 
 # Local imports
-from manabot.backends.torch.arrays import _array_fields, device_of, on_device, to_numpy
+from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
 from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import (
@@ -994,7 +994,7 @@ class PolicyInference:
         with measure("input_admission_and_transfer_host"):
             prepared = self.prepare(obs)
         with measure("forward_host"):
-            logits, values = self.agent(prepared)
+            logits, _ = self.agent(prepared)
         with measure("output_transfer_host"):
             return InferenceResult(
                 to_numpy(logits), self.transfer_bytes, self.transfers
@@ -1011,7 +1011,7 @@ class PolicyInference:
         arrays = (
             []
             if self.device.type == "cpu"
-            else _array_fields(batch, np.ndarray).values()
+            else array_fields(batch, np.ndarray).values()
         )
         self.transfer_bytes = sum(array.nbytes for array in arrays)
         self.transfers = len({array.dtype for array in arrays})

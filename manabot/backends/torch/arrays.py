@@ -37,7 +37,7 @@ def device_of(module: nn.Module) -> torch.device:
     return next(module.parameters()).device
 
 
-def _array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str, A]:
+def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str, A]:
     """Flatten the dataclass tree; tuples preserve their field coordinates."""
     if isinstance(value, leaf):
         return {prefix: value}
@@ -49,7 +49,7 @@ def _array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str
         return {}
     arrays: dict[str, A] = {}
     for name, child in children:
-        arrays.update(_array_fields(child, leaf, f"{prefix}/{name}"))
+        arrays.update(array_fields(child, leaf, f"{prefix}/{name}"))
     return arrays
 
 
@@ -97,7 +97,7 @@ def on_device(
     lengths remain on the host; all array leaves retain their shape and dtype.
     """
     device = torch.device(device)
-    arrays = _array_fields(batch, np.ndarray)
+    arrays = array_fields(batch, np.ndarray)
     tensors = {
         key: torch.from_numpy(value if value.flags.writeable else value.copy())
         for key, value in arrays.items()

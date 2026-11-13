@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.arrays import _array_fields, on_device
+from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic, sample_rows
 from manabot.env.match import Match
@@ -396,8 +396,8 @@ def test_service_batches_a_backlog_of_overdue_requests(
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
     case = _policy()
     host = case.agent.prepare(host_inputs(case.obs))
-    arrays = _array_fields(host, np.ndarray)
-    moved = _array_fields(on_device(host, "meta"), torch.Tensor)
+    arrays = array_fields(host, np.ndarray)
+    moved = array_fields(on_device(host, "meta"), torch.Tensor)
     assert {
         key: (value.shape, value.dtype, value.device.type)
         for key, value in moved.items()
@@ -409,7 +409,7 @@ def test_packed_transfer_makes_one_copy_per_dtype() -> None:
     assert len({value.untyped_storage()._cdata for value in moved.values()}) == len(
         {value.dtype for value in moved.values()}
     )
-    cpu = _array_fields(on_device(host, "cpu"), torch.Tensor)
+    cpu = array_fields(on_device(host, "cpu"), torch.Tensor)
     for key, value in cpu.items():
         np.testing.assert_array_equal(value.numpy(), arrays[key])
 
@@ -467,7 +467,7 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
         replace(request_for(player, execution, seed), submitted=1) for seed in (5, 7)
     ]
     clock = [10.0]
-    load = serving.load_checkpoint
+    load = TORCH_BACKEND.load_policy
 
     def delayed_load(
         filename: str, *, bucketed_shapes: bool, live_tokens: bool
@@ -478,7 +478,7 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
         clock[0] += 40  # Inject the duration; never create resource pressure.
         return result
 
-    monkeypatch.setattr(serving, "load_checkpoint", delayed_load)
+    monkeypatch.setattr(TORCH_BACKEND, "load_policy", delayed_load)
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
     client, _ = Pipe()
     _record_dispatch(perf, [_PendingRequest(r, client, 3) for r in requests], "batch")

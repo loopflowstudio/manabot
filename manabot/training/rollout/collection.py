@@ -32,7 +32,7 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 
-from manabot.backends.torch.arrays import _array_fields
+from manabot.backends.torch.arrays import array_fields
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.backends.torch.rl import NumericalError, policy_logs, require
@@ -795,7 +795,7 @@ class SeatRoutedCollector:
             error.tensors.update(
                 {
                     f"observation/{key}": value.detach()
-                    for key, value in _array_fields(obs, torch.Tensor).items()
+                    for key, value in array_fields(obs, torch.Tensor).items()
                 }
             )
             raise
