@@ -1,7 +1,7 @@
 //! Commander 2017.
 use managym_state::{
     ability::{Effect, ObjectSelector},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     effect::{EffectDuration, Modification},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -21,21 +21,24 @@ fn teferis_protection() -> CardDefinition {
     CardDefinition {
         key: "c17.teferis_protection",
         scryfall_id: "77f130c7-0138-4a1a-9f67-62d2c302dc48",
-        name: "Teferi's Protection".into(),
-        mana_cost: Some(ManaCost::parse("{2}{W}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            until_your_next_turn(Modification::LifeTotalCantChange),
-            until_your_next_turn(Modification::ProtectionFromEverything),
-            // Phasing in ends the record, not a duration (CR 702.26a).
-            Effect::ApplyContinuous {
-                affected: ObjectSelector::each_you_control(CardPredicate::default()),
-                modification: Modification::PhasedOut,
-                duration: EffectDuration::Indefinite,
-            },
-            Effect::exile(ObjectSelector::This),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Teferi's Protection".into(),
+            mana_cost: Some(ManaCost::parse("{2}{W}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                until_your_next_turn(Modification::LifeTotalCantChange),
+                until_your_next_turn(Modification::ProtectionFromEverything),
+                // Phasing in ends the record, not a duration (CR 702.26a).
+                Effect::ApplyContinuous {
+                    affected: ObjectSelector::each_you_control(CardPredicate::default()),
+                    modification: Modification::PhasedOut,
+                    duration: EffectDuration::Indefinite,
+                },
+                Effect::exile(ObjectSelector::This),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

@@ -96,14 +96,16 @@ impl CounterProvenance {
 /// Copiable values are captured before a creation can suspend. No physical
 /// token or identity exists until creation replacements have finished.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub(crate) enum TokenDefinition {
+pub(crate) enum TokenSource {
+    /// The token definition with this `token.*` key.
     Registered(String),
     Copy {
         definition_id: crate::state::card::CardDefId,
-        definition: std::sync::Arc<crate::state::card::CardDefinition>,
+        /// The copied object as it stood; the token takes its `printed`.
+        definition: crate::state::card::ObjectDefinition,
         front: Option<(
             crate::state::card::CardDefId,
-            std::sync::Arc<crate::state::card::CardDefinition>,
+            std::sync::Arc<crate::state::card::PrintedCharacteristics>,
         )>,
         copy: Option<crate::state::effect::CopyEffect>,
         exceptions: Vec<crate::state::effect::Modification>,
@@ -129,7 +131,7 @@ pub(crate) enum ProposedEvent {
         target: ObjectRef,
     },
     CreateTokens {
-        definition: Box<TokenDefinition>,
+        definition: Box<TokenSource>,
         controller: PlayerId,
         count: i32,
         entry: ZoneEntry,
@@ -654,7 +656,7 @@ impl Game {
     /// allocated outside every zone, as entry proposals under its terms.
     fn allocate_tokens(
         &mut self,
-        definition: TokenDefinition,
+        definition: TokenSource,
         controller: PlayerId,
         count: i32,
         entry: ZoneEntry,
@@ -662,8 +664,8 @@ impl Game {
         let mut entries = Vec::new();
         for _ in 0..count {
             let card = match &definition {
-                TokenDefinition::Registered(name) => self.prepare_token(name, controller),
-                TokenDefinition::Copy {
+                TokenSource::Registered(key) => self.prepare_token(key, controller),
+                TokenSource::Copy {
                     definition_id,
                     definition,
                     front,
@@ -674,7 +676,8 @@ impl Game {
                         crate::state::game_object::ObjectId(0),
                         controller,
                         *definition_id,
-                        std::sync::Arc::clone(definition),
+                        std::sync::Arc::clone(&definition.printed),
+                        true,
                     );
                     template.set_front_face(front.clone());
                     template.copy = copy.clone();

@@ -17,10 +17,10 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.learning.learner import new_learner
-from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch, collect, open_collector
+from manabot.training.updates.learner import new_learner
+from manabot.training.updates.ppo import update_iteration
 
 SOZIN = {"Swamp": 17, "The Rise of Sozin": 23}
 

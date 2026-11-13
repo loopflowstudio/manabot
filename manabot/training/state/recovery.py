@@ -29,7 +29,6 @@ import torch
 from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.clock import boot_identity
-from manabot.training.learning.learner import Learner
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.rollout.collection import Collector, CollectorStats
 
@@ -37,6 +36,7 @@ _EARLIER_SNAPSHOT = (
     "recovery snapshot was written by a revision that saved collector state; "
     "resume it from 439379869"
 )
+from manabot.training.updates.learner import Learner
 
 
 class TrainingPaused(KeyboardInterrupt):

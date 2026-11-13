@@ -169,6 +169,12 @@ def test_invalid_architecture_rejected(fields: dict[str, object]) -> None:
         ModelConfig.model_validate(fields)
 
 
+def test_saved_pooled_token_stream_names_its_removal() -> None:
+    assert ModelConfig.model_validate({"token_stream": "tables"}) == ModelConfig()
+    with pytest.raises(ValueError, match="token_stream='pooled' was removed"):
+        ModelConfig.model_validate({"token_stream": "pooled"})
+
+
 def test_missing_fields_preserve_historical_initialization() -> None:
     torch.manual_seed(19)
     implicit = ActorCritic(ObservationSpace(), ModelConfig())

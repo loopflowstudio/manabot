@@ -17,10 +17,8 @@ from manabot.infra.config import (
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
+from manabot.rl.returns import transition_gae
 from manabot.training.execution import execute_regime
-from manabot.training.learning.learner import new_learner, observation_tensors
-from manabot.training.learning.objectives import update_iteration
-from manabot.training.learning.returns import transition_gae
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
@@ -35,6 +33,8 @@ from manabot.training.rollout.collection import (
     collect_pair,
     open_collector,
 )
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import new_learner, observation_tensors
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates
@@ -323,15 +323,13 @@ def test_move_learning_consumes_complete_seat_trajectories(
     collector = _collector(agent)
     batch = collect(collector, agent, 1)
     trainer = new_learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    result = update_iteration(
+    result = update_damped_iteration(
         trainer,
         batch,
         DampedPolicyLearning(
             gradient="damped_policy", advantage_quantile=0, min_advantage=0
         ),
-        0,
-        np.random.default_rng(1),
-        iteration=1,
+        1,
     )
     assert result["rows"] == 8
     assert result["optimizer_exposures"] == result["retained"]

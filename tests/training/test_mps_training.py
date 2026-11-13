@@ -33,8 +33,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.model import semantic_cards, shared_effects
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.facts import FactEncoder
-from manabot.model.numerics import embedding_rows, float64_operand
-from manabot.model.policy_distribution import clipped_surrogate
+from manabot.model.numerics import embedding_rows
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
     RecordNamespace,
@@ -44,10 +43,9 @@ from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.baseline import baseline
 from manabot.recipes.device import accelerator
 from manabot.recipes.local import local_smoke
+from manabot.rl.losses import clipped_surrogate
+from manabot.rl.numerics import float64_operand
 from manabot.training import execution
-from manabot.training.learning import damped_policy
-from manabot.training.learning.learner import Learner, new_learner
-from manabot.training.learning.selection import UpdateDiagnostics
 from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -63,6 +61,9 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
+from manabot.training.updates import damped_policy, ppo
+from manabot.training.updates.learner import Learner, new_learner
+from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -261,34 +262,27 @@ def test_mps_one_update_and_export(
     assert isinstance(stage, TrainSelfPlay)
     stage.learning.min_advantage = 0
     observed: list[UpdateDiagnostics] = []
-    original = execution.update_iteration
+    assert isinstance(stage.learning, DampedPolicyLearning)
+    original = execution.update_damped_iteration
 
     def update(
         learner: Learner,
         batch: RolloutBatch,
-        learning: Learning | DampedPolicyLearning,
-        progress: float,
-        rng: np.random.Generator,
+        learning: DampedPolicyLearning,
+        iteration: int,
         *,
-        iteration: int = 1,
         bootstrap_agent: ActorCritic | None = None,
     ) -> UpdateDiagnostics:
         assert all(p.device.type == "mps" for p in learner.agent.parameters())
         result = original(
-            learner,
-            batch,
-            learning,
-            progress,
-            rng,
-            iteration=iteration,
-            bootstrap_agent=bootstrap_agent,
+            learner, batch, learning, iteration, bootstrap_agent=bootstrap_agent
         )
         assert all(torch.isfinite(p).all() for p in learner.agent.parameters())
         _assert_finite(result)
         observed.append(result)
         return result
 
-    monkeypatch.setattr(execution, "update_iteration", update)
+    monkeypatch.setattr(execution, "update_damped_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         run = execution.execute_regime(plan, 197, tmp_path / "mps", store)
     assert run.status == "completed", run.error
@@ -467,9 +461,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
     monkeypatch.setattr(damped_policy, "_targets", singleton)
     monkeypatch.setattr(semantic_cards, "embedding_rows", checked)
     learner = new_learner(agent, "mps", minibatch_rows=256)
-    result = execution.update_iteration(
-        learner, batch, stage.learning, 0, np.random.default_rng(197), iteration=1
-    )
+    result = damped_policy.update_damped_iteration(learner, batch, stage.learning, 1)
     assert empty_calls
     assert result["retained"] == result["optimizer_exposures"] == 1
     assert result["numerical"]["optimizer_steps"] == 1
@@ -478,7 +470,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
 
     # PPO shares the catalog owner; an empty actor filter still trains its critic.
     empty_calls.clear()
-    result = execution.update_iteration(
+    result = ppo.update_iteration(
         learner,
         batch,
         Learning(epochs=1, minibatches=1, filter_scope="actor", min_advantage=1e6),

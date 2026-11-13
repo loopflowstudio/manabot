@@ -1,1 +1,1 @@
-"""Training loops: play and update until done (see `self_play`)."""
+"""Training loops: resumable self-play (`self_play`) and a minimal example (`minimal`)."""

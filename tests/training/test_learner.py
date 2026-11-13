@@ -9,7 +9,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.training.learning.learner import new_learner
+from manabot.training.updates.learner import new_learner
 
 
 def test_checkpoint_admission_restores_training_mode(tmp_path: Path) -> None:

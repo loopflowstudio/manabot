@@ -1,10 +1,11 @@
-"""Check every card definition's Scryfall id against Scryfall (network).
+"""Check every card and token Scryfall id against Scryfall (network).
 
 Maintenance only: never run in CI or at game time. For each world pool row,
 fetch `https://api.scryfall.com/cards/<scryfall_id>` and confirm the printed
 name and that the printing's set is the one the definition's key names
-(`<set>.<card>`; tokens, keyed `token.*`, must be token printings). Rebuild
-the extension after card changes so the pool is current.
+(`<set>.<card>`; tokens, keyed `token.*`, must be token printings). A token
+with no printing has no id and is skipped. Rebuild the extension after card
+changes so the pool is current.
 
 Usage: uv run python managym/cards/tests/cards/check_scryfall.py
 """
@@ -46,9 +47,11 @@ def problems(row: dict, card: dict) -> list[str]:
 
 def main() -> int:
     failures = 0
-    # Rules fixtures have no key and no printing.
+    # Rules fixtures have no key and no printing; an unprinted token has no id.
     rows = [
-        row for row in managym.content_pool(WORLD_POOL)["definitions"] if row["key"]
+        row
+        for row in managym.content_pool(WORLD_POOL)["definitions"]
+        if row["key"] and row["scryfall_id"]
     ]
     for row in sorted(rows, key=lambda row: row["key"]):
         card = fetch(row["scryfall_id"])

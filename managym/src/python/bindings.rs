@@ -3619,6 +3619,7 @@ impl PyEnv {
         for entry in manifest.definitions {
             let definition = PyDict::new_bound(py);
             definition.set_item("card_def_id", entry.card_def_id.0)?;
+            definition.set_item("key", entry.key)?;
             definition.set_item("registry_name", entry.registry_name)?;
             definitions.append(definition)?;
         }
@@ -4371,6 +4372,14 @@ fn input_v10_state(obs: PyObservation) -> Option<&'static str> {
     crate::agent::observation_encoder::input_v10_state(&Observation::from(obs))
 }
 
+/// State in `obs` the policy input cannot represent, if any (see
+/// `observation_encoder::unrepresentable_state`); every encoder refuses it.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn unrepresentable_state(obs: PyObservation) -> Option<String> {
+    crate::agent::observation_encoder::unrepresentable_state(&Observation::from(obs))
+}
+
 #[cfg(feature = "python")]
 fn authored_setup(name: &str) -> PyResult<&'static crate::cards::setups::AuthoredSetup> {
     crate::cards::setups::authored_setup(name)
@@ -4433,7 +4442,15 @@ fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("content_digest", content.content_digest())?;
-    // Binding only: names join a manifest's CardDefIds to catalog rows.
+    // Binding only: a row's key, or its name when it has none, joins a
+    // manifest's CardDefIds to catalog rows.
+    out.set_item(
+        "keys",
+        content
+            .definitions()
+            .map(|definition| (!definition.key.is_empty()).then_some(definition.key))
+            .collect::<Vec<_>>(),
+    )?;
     out.set_item(
         "registry_names",
         content
@@ -4717,6 +4734,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
     m.add_function(wrap_pyfunction!(input_v10_state, m)?)?;
+    m.add_function(wrap_pyfunction!(unrepresentable_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<crate::agent::continuation::VisibleReference>()?;

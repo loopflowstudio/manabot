@@ -14,11 +14,12 @@ from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
-from manabot.training.learning import learner as learner_module
-from manabot.training.learning.learner import new_learner
-from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch, collect, open_collector
+from manabot.training.updates import learner as learner_module
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import new_learner
+from manabot.training.updates.ppo import update_iteration
 from tests.training.test_recovery import recipe
 
 
@@ -134,18 +135,19 @@ def test_learning_admits_each_trained_row_once(
             return admit(model, obs)
 
         monkeypatch.setattr(learner_module, "admit_observation", counting)
-        learning: Learning | DampedPolicyLearning = (
-            Learning(epochs=epochs, minibatches=2)
-            if rule == "ppo"
-            else DampedPolicyLearning(gradient="damped_policy")
-        )
-        update_iteration(
-            new_learner(agent, "cpu", minibatch_rows=2),
-            batch,
-            learning,
-            0.5,
-            np.random.default_rng(3),
-        )
+        learner = new_learner(agent, "cpu", minibatch_rows=2)
+        if rule == "ppo":
+            update_iteration(
+                learner,
+                batch,
+                Learning(epochs=epochs, minibatches=2),
+                0.5,
+                np.random.default_rng(3),
+            )
+        else:
+            update_damped_iteration(
+                learner, batch, DampedPolicyLearning(gradient="damped_policy"), 1
+            )
         # Bootstrap rows first, then trained rows in minibatch-sized chunks.
         assert rows[0] == len(batch.next_done)
         assert sum(rows[1:]) <= batch.actions.size

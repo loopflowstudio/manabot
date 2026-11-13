@@ -21,9 +21,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline_test
-from manabot.training.learning.damped_policy import _targets
-from manabot.training.learning.learner import Learner, new_learner
-from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import (
     RolloutBatch,
@@ -31,6 +28,8 @@ from manabot.training.rollout.collection import (
     collect,
     open_collector,
 )
+from manabot.training.updates.damped_policy import _targets, update_damped_iteration
+from manabot.training.updates.learner import AdmittedRollout, Learner, new_learner
 
 STREAMS = 2
 
@@ -58,7 +57,7 @@ def _trajectories(ends: np.ndarray) -> list[range]:
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = _targets(learner, batch, learning)
+    targets = _targets(learner, AdmittedRollout(learner.agent, batch), learning)
     advantages = targets.advantages.flatten().numpy()
     value_targets = targets.values.flatten().numpy()
     kept = targets.selected.flatten().numpy()
@@ -106,11 +105,10 @@ def main() -> None:
         opponent_mode="self",
     )
     learner = new_learner(agent, "cpu", minibatch_rows=STREAMS)
-    rng = np.random.default_rng(args.seed)
     try:
         for iteration in range(1, args.updates + 1):
             batch = collect(collector, agent, 64)
-            update_iteration(learner, batch, learning, 0.0, rng, iteration=iteration)
+            update_damped_iteration(learner, batch, learning, iteration)
         _report(collect(collector, agent, 64), learner, learning, args.rows)
     finally:
         close_collector(collector)

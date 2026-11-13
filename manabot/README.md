@@ -5,7 +5,9 @@ training, and verification. You train *a* manabot; this package is how.
 
 The central loop is self-play: play a batch, turn game results into per-decision
 credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
-explains it, and [training.md](../docs/training.md) covers running it.
+explains it, [training.md](../docs/training.md) covers running it, and
+[training loops](../docs/training-loop.md) lists the updates we maintain,
+their pieces and a loop to copy.
 
 ## Quickstart
 
@@ -633,8 +635,14 @@ with those packages blocked.
   reads retained run records.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
   complete-game accounting.
-- `training/learning/`: Learner, optimization rules, per-seat returns, sample
-  selection and numerical health.
+- `training/updates/`: an update learns from one collected batch. The damped
+  policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
+  and their pieces: Learner, rollout admission, the reference magnet,
+  numerical health and selection diagnostics.
+- `training/loops/`: a loop keeps playing and updating until it is done; a
+  one-page example (`minimal.py`).
+- `rl/`: model-agnostic pieces (returns, losses, selection, the gradient step
+  and EMA); they import nothing else from manabot.
 - `training/state/`: policy admission and retained game-failure state.
 - `belief/`: viewer histories, world distributions and belief models;
   `collect.py` and `train.py` are the belief recipe's steps; `sampling_fit.py`

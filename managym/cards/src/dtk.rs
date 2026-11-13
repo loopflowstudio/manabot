@@ -1,7 +1,7 @@
 //! Dragons of Tarkir.
 use managym_state::{
     ability::{Effect, ObjectSelector, Scope, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, StaticAbility},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility},
     mana::{Color, ManaCost},
     predicate::CardPredicate,
 };
@@ -16,14 +16,17 @@ fn clone_legion() -> CardDefinition {
     CardDefinition {
         key: "dtk.clone_legion",
         scryfall_id: "45c6a201-1d4d-4ae5-a84e-098e094eaf61",
-        name: "Clone Legion".into(),
-        mana_cost: Some(ManaCost::parse("{7}{U}{U}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::CreateTokenCopy {
-            of: ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
-            exceptions: vec![],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Clone Legion".into(),
+            mana_cost: Some(ManaCost::parse("{7}{U}{U}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::CreateTokenCopy {
+                of: ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
+                exceptions: vec![],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -40,15 +43,18 @@ fn rending_volley() -> CardDefinition {
     CardDefinition {
         key: "dtk.rending_volley",
         scryfall_id: "8234090e-9df1-4915-90ef-8a4bc6212655",
-        name: "Rending Volley".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        statics: vec![StaticAbility::CantBeCountered],
-        spell_effects: vec![Effect::deal_damage(
-            4,
-            ObjectSelector::Target(white_or_blue_creature),
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Rending Volley".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            statics: vec![StaticAbility::CantBeCountered],
+            spell_effects: vec![Effect::deal_damage(
+                4,
+                ObjectSelector::Target(white_or_blue_creature),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

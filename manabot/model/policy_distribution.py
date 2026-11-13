@@ -5,27 +5,10 @@ sampling weights. Underflow in the latter is counted, never repaired with a
 floor. Collection and learning share this normalization and legal mask.
 """
 
-from collections.abc import Mapping
-
 import torch
 from torch import Tensor
 
-from manabot.model.numerics import float64_operand
-
-
-class NumericalError(ValueError):
-    """An identified invariant plus tensors for bounded private failure capture."""
-
-    def __init__(self, invariant: str, tensors: Mapping[str, Tensor]) -> None:
-        super().__init__(invariant)
-        self.invariant = invariant
-        self.health: dict[str, int | float] = {}
-        self.tensors = {key: value.detach() for key, value in tensors.items()}
-
-
-def require(condition: Tensor, invariant: str, **tensors: Tensor) -> None:
-    if not bool(condition.all()):
-        raise NumericalError(invariant, {**tensors, "failed": ~condition})
+from manabot.rl.numerics import NumericalError, require
 
 
 def legal_mask(mask: Tensor) -> Tensor:
@@ -161,28 +144,4 @@ def check_behavior(
         ),
         "selected_log_mismatch",
         **tensors,
-    )
-
-
-def reverse_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
-    """KL(current || frozen target), zero terms on padding without 0 * -inf."""
-    difference = logs.masked_fill(~valid, 0) - target_logs.detach().masked_fill(
-        ~valid, 0
-    )
-    return (logs.exp() * difference).sum(-1)
-
-
-def clipped_surrogate(log_ratio: Tensor, advantages: Tensor, clip: float) -> Tensor:
-    """Negative clipped surrogate; double ratios avoid float32 exp overflow.
-
-    A sampled float32 action has log likelihood >= about -104. Float64 ratios
-    cover that range without changing clipping or dropping unbounded bad moves.
-    Nonfinite objectives/gradients are still rejected before Adam.
-    MPS returns host float64 terms with gradients connected to the input.
-    """
-    ratio = float64_operand(log_ratio).double().exp()
-    advantages = float64_operand(advantages)
-    return -torch.minimum(
-        ratio * advantages.detach(),
-        ratio.clamp(1 - clip, 1 + clip) * advantages.detach(),
     )

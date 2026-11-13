@@ -82,8 +82,9 @@ applies (see `manabot/training/mps.py`). The repository lock installs 2.15;
 with an older Torch, `--device mps` stops before training with a message
 naming both versions. An unavailable device fails explicitly. Reduced precision
 remains CUDA-only. Belief inputs and frozen opponents are unsupported on MPS.
-Evaluation and search stay on CPU. This support makes no speed or strength
-claim.
+Evaluation and search stay on CPU. A separate [MLX backend](../manabot/backends/mlx.md)
+reads the same checkpoints through the shared policy container for measurements
+on Apple Silicon; it does not train. This support makes no speed or strength claim.
 
 ### Saved regimes
 
@@ -250,9 +251,9 @@ a damping horizon fitted to the expected updates and `recover_capacity`. The
 matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 A collector opened directly with `open_collector` must be closed with `close_collector`. `bucketed_shapes`
-selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
+selects [bucketed padding](observation-and-model.md#bucketed-padding)
 and `live_tokens` selects
-[live-token attention](observation-and-model.md#live-token-attention-profiling)
+[live-token attention](observation-and-model.md#live-token-attention)
 for the collection and learner policies; both are off by default.
 
 The policy reads only the acting viewer's tensors; private labels are never

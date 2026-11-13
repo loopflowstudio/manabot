@@ -51,9 +51,11 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint as save_policy
 from manabot.model.world import validate_agent_setup
 from manabot.training.decks import UniformDecks
-from manabot.training.learning.learner import Learner, new_learner
-from manabot.training.learning.objectives import update_ema, update_iteration
-from manabot.training.learning.selection import UpdateDiagnostics
+from manabot.training.updates.learner import Learner, new_learner
+from manabot.rl.step import update_ema
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.ppo import update_iteration
+from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.training.precision import Precision, apply_matmul_precision
 from manabot.training.regime import (
     BatchClosure,
@@ -483,15 +485,24 @@ def learn(
     updates`, so for PPO the target matters.
     """
     settings = state.settings
-    metrics = update_iteration(
-        state.learner,
-        batch,
-        settings.learning,
-        state.update / updates,
-        rng,
-        iteration=state.update + 1,
-        bootstrap_agent=behavior(state),
-    )
+    if isinstance(settings.learning, DampedPolicyLearning):
+        metrics = update_damped_iteration(
+            state.learner,
+            batch,
+            settings.learning,
+            state.update + 1,
+            bootstrap_agent=behavior(state),
+        )
+    else:
+        metrics = update_iteration(
+            state.learner,
+            batch,
+            settings.learning,
+            state.update / updates,
+            rng,
+            iteration=state.update + 1,
+            bootstrap_agent=behavior(state),
+        )
     if state.ema is not None:
         assert settings.learning.ema is not None
         update_ema(state.ema, state.learner.agent, settings.learning.ema)

@@ -33,7 +33,7 @@ are in the [README](../README.md#contracts-the-code-enforces).
    types (cards, zones, mana, effects), re-exported here as `managym::state`;
    **`src/state/`** adds players, decks and the canonical match-state hash
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
-   and their tests, reached by the engine only through `managym_cards::catalog()`;
+   and their tests, reached by the engine only through `managym_cards::catalog()` and `token_catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
 5. **`src/format/`**: Format construction rules and card selection;
    `limited.rs` adds Limited pool counts and deck size rules to world admission
@@ -41,11 +41,15 @@ are in the [README](../README.md#contracts-the-code-enforces).
 7. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
-`cards/src/`, returning the engine's own `CardDefinition` in its rules types
-(`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
+`cards/src/`, returning the engine's own `CardDefinition` (key, Scryfall id and
+`PrintedCharacteristics`) in its rules types (`Effect`, `Ability`, `TargetSpec`,
+…). Tokens are not cards: each is a `TokenDefinition` in `cards/src/tokens.rs`
+with the same `PrintedCharacteristics`, keyed `token.*` and created by that
+key, with a Scryfall id unless it has no printing. The engine registers both
+as `ObjectDefinition` rows with token status and runs them directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
-support check (defined non-token cards, excluding rules fixtures) and the set
+support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
 [the content contract](../content/semantic/README.md).
@@ -277,6 +281,17 @@ Every registered mana ability must consume a finite resource. The total and
 spend-purpose bounds count repeatable outputs optimistically; every accepted
 payment still requires an identity-preserving witness with explicit tap choices.
 This is finite search, without a general large-board performance guarantee.
+
+Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
+`SpendPredicate`s naming any subtype a spell must have or an activation's
+source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
+Every cost carries a `SpendingContext`: `Cast` with the spell's announced
+subtypes and types, `Activate` with the source's zone and subtypes, or
+`Resolving`, which only exclusions admit. Observation data names each
+restriction whole. The policy input's restricted-mana columns name exactly
+Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
+mana); every encoder refuses other restricted mana (`unrepresentable_state`)
+rather than drop it.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v5: the schema-8 semantic Observation, shared native continuation frames, bound public card

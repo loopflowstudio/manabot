@@ -71,6 +71,7 @@ def unsupported_cards(names: list[str]) -> list[str]:
 
 class CatalogTokens(TypedDict):
     content_digest: str
+    keys: list[str | None]
     registry_names: list[str]
     token_kind: list[int]
     token_value: list[int]
@@ -974,6 +975,10 @@ def encode_observations_into(
 
 def input_v10_state(obs: Observation) -> str | None:
     """The state only policy input v10 holds that `obs` needs, if any."""
+    ...
+
+def unrepresentable_state(obs: Observation) -> str | None:
+    """State in `obs` that no policy input version can represent, if any."""
     ...
 
 class CardPool:

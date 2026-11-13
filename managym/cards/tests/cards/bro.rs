@@ -69,7 +69,7 @@ fn powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells() {
         let mut s = five_color_unfunded_setup(&["Cityscape Leveler", "Gray Ogre"]);
         s.force_card_in_hand(0, name);
         s.game_mut()
-            .create_token("Powerstone", PlayerId(0), false)
+            .create_token("token.powerstone", PlayerId(0), false)
             .expect("powerstone");
         s.set_player_mana_pool(0, pool);
         s.game_mut().scenario_refresh_priority().unwrap();

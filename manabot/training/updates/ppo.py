@@ -1,4 +1,9 @@
-"""Explicit self-play estimators, regularization references and sample selection."""
+"""The PPO update rule: the control the damped rule is measured against.
+
+`update_iteration` is PPO (Schulman et al. 2017) over complete-game GAE:
+shuffled minibatches, advantage filtering and normalization, a scalar value
+target and optional reference and collection KL penalties.
+"""
 
 import math
 
@@ -7,56 +12,36 @@ import torch
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
-from manabot.model.numerics import float64_operand
-from manabot.model.policy_distribution import (
-    NumericalError,
+from manabot.model.policy_distribution import legal_mask, policy_logs
+from manabot.rl.losses import (
+    clip_fraction,
     clipped_surrogate,
-    legal_mask,
-    policy_logs,
-    require,
+    entropy,
     reverse_kl,
+    squared_value_loss,
+    support_logs,
 )
-from manabot.training.learning.damped_policy import update_damped_iteration
-from manabot.training.learning.health import OptimizerHealth, batch_health
-from manabot.training.learning.learner import (
-    AdmittedRollout,
-    Learner,
-    learner_precision,
-)
-from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.returns import transition_gae
-from manabot.training.learning.selection import (
-    UpdateDiagnostics,
-    selected_mean,
-    selected_rows,
-    selection_diagnostics,
-)
-from manabot.training.regime import DampedPolicyLearning, Learning
+from manabot.rl.numerics import float64_operand, require
+from manabot.rl.returns import standardized_advantages, transition_gae
+from manabot.rl.selection import selected_mean, selected_rows
+from manabot.rl.step import gradient_step
+from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch
-
-
-@torch.no_grad()
-def update_ema(
-    averaged: torch.nn.Module, learner: torch.nn.Module, rate: float
-) -> None:
-    """Advance once per collection/update iteration, including filtered skips.
-
-    Initialize with a deep copy of the learner. Parameters are averaged;
-    buffers describe the current model and are copied exactly. The executor
-    explicitly selects raw or averaged behavior; this helper changes neither.
-    """
-    if not 0 <= rate < 1:
-        raise ValueError("EMA rate must be in [0, 1)")
-    for name, dest in averaged.named_parameters():
-        dest.lerp_(learner.get_parameter(name), 1 - rate)
-    for name, dest in averaged.named_buffers():
-        dest.copy_(learner.get_buffer(name))
+from manabot.training.updates.health import (
+    OptimizerHealth,
+    batch_health,
+    failure_tensors,
+    minibatch_tensors,
+)
+from manabot.training.updates.learner import AdmittedRollout, Learner, learner_precision
+from manabot.training.updates.references import reference_distribution
+from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
 
 
 def update_iteration(
     learner: Learner,
     batch: RolloutBatch,
-    learning: Learning | DampedPolicyLearning,
+    learning: Learning,
     progress: float,
     rng: np.random.Generator,
     *,
@@ -64,11 +49,6 @@ def update_iteration(
     bootstrap_agent: ActorCritic | None = None,
 ) -> UpdateDiagnostics:
     """Optimize one fresh collector batch on the shared learner and Adam owner."""
-    if isinstance(learning, DampedPolicyLearning):
-        return update_damped_iteration(
-            learner, batch, learning, iteration, bootstrap_agent=bootstrap_agent
-        )
-
     dev = learner.device
     track = learner.profiler.track
     with track("Batch transfer, targets and behavior checks"):
@@ -112,6 +92,7 @@ def update_iteration(
         )
         mask = torch.zeros_like(advantages, dtype=torch.bool)
         mask[selected] = True
+        residuals = returns - values.flatten()
         training_rows = (
             selected
             if learning.filter_scope == "actor_critic"
@@ -121,6 +102,8 @@ def update_iteration(
             "rows": len(advantages),
             "retained": len(selected),
             "optimizer_exposures": 0,
+            "actor_exposures": 0,
+            "critic_exposures": 0,
             "advantage_abs_mean": float(advantages.abs().mean()),
             "bootstrapped_tail_fraction": float((~ends[-1]).float().mean()),
             "learning_rate": learning.learning_rate.at(progress),
@@ -134,7 +117,7 @@ def update_iteration(
             "collection_kl_coefficient": learning.collection_kl,
             "retained_fraction": len(selected) / len(advantages),
             "return_mean": float(returns.mean()),
-            "value_residual_abs_mean": float((returns - values.flatten()).abs().mean()),
+            "value_residual_abs_mean": float(residuals.abs().mean()),
         }
         chosen_types = torch.as_tensor(
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM), device=dev
@@ -147,7 +130,7 @@ def update_iteration(
         ).tolist()
         diagnostics["selection_groups"] = selection_diagnostics(
             advantages.reshape_as(ends),
-            (returns - values.flatten()).reshape_as(ends),
+            residuals.reshape_as(ends),
             mask.reshape_as(ends),
             ends,
             chosen_types.reshape_as(ends),
@@ -159,19 +142,13 @@ def update_iteration(
             actor_only=learning.filter_scope == "actor",
         )
         diagnostics["numerical"] = health
-    observer = OptimizerHealth(
-        learner.agent, learner.optimizer, health, iteration, learner.profiler
-    )
-    diagnostics["actor_exposures"] = 0
-    diagnostics["critic_exposures"] = 0
+    observer = OptimizerHealth(health, iteration, learner.profiler)
     if not len(training_rows):
         diagnostics["skipped"] = "empty advantage filter"
         health["skipped_steps"] = learning.epochs * learning.minibatches
         return diagnostics
     if len(selected):
-        advantages = (advantages - advantages[selected].mean()) / advantages[
-            selected
-        ].std(unbiased=False).clamp_min(1e-8)
+        advantages = standardized_advantages(advantages, selected)
     for group in learner.optimizer.param_groups:
         group["lr"] = diagnostics["learning_rate"]
     size = max(1, math.ceil(len(training_rows) / learning.minibatches))
@@ -205,7 +182,7 @@ def update_iteration(
                     kl_ref = selected_mean(
                         reverse_kl(
                             logs,
-                            reference.masked_fill(~valid, 1).log(),
+                            support_logs(reference, valid),
                             valid,
                         ),
                         actor_mask,
@@ -215,7 +192,7 @@ def update_iteration(
                         actor_mask,
                     )
                     value_loss = (
-                        0.5 * (value.flatten() - returns[indices]).square().mean()
+                        0.5 * squared_value_loss(value, returns[indices]).mean()
                     )
                     loss = (
                         policy
@@ -224,45 +201,33 @@ def update_iteration(
                         + learning.collection_kl * kl_behavior
                     )
 
-                    def _failure_tensors() -> dict[str, torch.Tensor]:
-                        return {
-                            "logits": logits.detach(),
-                            "value_logits": value.detach(),
-                            "valid": valid,
-                            "actions": actions[indices],
-                            "behavior_logs": behavior_logs,
-                            "reference": reference,
-                            "advantages": advantages[indices],
-                            "value_targets": returns[indices],
-                            "actor_selected": actor_mask,
-                            "minibatch_indexes": indices,
-                            **{
-                                f"minibatch_observation/{key}": value
-                                for key, value in obs.items()
-                            },
-                        }
-
-                    try:
-                        observer.check(loss)
-                    except NumericalError as error:
-                        error.tensors.update(_failure_tensors())
-                        raise
-                try:
-                    norm = observer.step(loss, learning.max_grad_norm, checked=True)
-                except NumericalError as error:
-                    error.tensors.update(_failure_tensors())
-                    raise
-                with track("Minibatch diagnostics"):
-                    health["clip_fraction"] = float(
-                        (
-                            (
-                                float64_operand(log_ratio.detach()).double().exp() - 1
-                            ).abs()
-                            > learning.clip
+                    def _failure() -> dict[str, torch.Tensor]:
+                        return minibatch_tensors(
+                            logits=logits,
+                            value_logits=value,
+                            valid=valid,
+                            actions=actions[indices],
+                            behavior_logs=behavior_logs,
+                            reference=reference,
+                            advantages=advantages[indices],
+                            value_targets=returns[indices],
+                            actor_selected=actor_mask,
+                            indexes=indices,
+                            obs=obs,
                         )
-                        .float()
-                        .mean()
+
+                    with failure_tensors(_failure):
+                        observer.check(loss)
+                with failure_tensors(_failure):
+                    norm = gradient_step(
+                        loss,
+                        learner.agent,
+                        learner.optimizer,
+                        learning.max_grad_norm,
+                        recorder=observer,
                     )
+                with track("Minibatch diagnostics"):
+                    health["clip_fraction"] = clip_fraction(log_ratio, learning.clip)
                     diagnostics["optimizer_exposures"] += len(indices)
                     diagnostics["actor_exposures"] += int(actor_mask.sum())
                     diagnostics["critic_exposures"] += len(indices)
@@ -270,12 +235,7 @@ def update_iteration(
                         loss=float(loss.detach()),
                         policy_loss=float(policy.detach()),
                         value_loss=float(value_loss.detach()),
-                        entropy=float(
-                            -(logs.exp() * logs.masked_fill(~valid, 0))
-                            .sum(-1)
-                            .mean()
-                            .detach()
-                        ),
+                        entropy=float(entropy(logs, valid).mean().detach()),
                         gradient_norm=float(norm),
                         reference_kl=float(kl_ref.detach()),
                         collection_kl=float(kl_behavior.detach()),

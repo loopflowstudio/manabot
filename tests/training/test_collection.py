@@ -113,7 +113,7 @@ def test_collector_requires_opponent_agent_for_frozen():
 
 
 def test_terminal_credit_and_bootstrap():
-    from manabot.training.learning.returns import transition_gae
+    from manabot.rl.returns import transition_gae
 
     rewards = torch.tensor([[0.0], [1.0], [-1.0], [0.0]])
     advantages, returns = transition_gae(
