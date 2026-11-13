@@ -130,7 +130,7 @@ Use $\gamma=1$, policy trace $\lambda=.5$, and value trace $\lambda=.8$. Keep ro
 
 For categorical loss/draw/win heads, terminal targets are one-hot outcomes and nonterminal targets recursively mix next predictions and lambda returns; minimize soft-target cross-entropy. The ordinary baseline instead uses a scalar critic and MSE lambda-return loss, an explicit representation departure from Ataraxos. The value loss has unit weight. Gradients reach current policy/critic heads and their shared encoder; behavior distributions, references and targets remain fixed.
 
-\textbf{Implementation and constants.} \code{manabot/training/updates/damped\_policy.py} owns loss, targets and update grouping; \code{references.py} beside it owns the reference, and \code{manabot/rl/selection.py} selection. \code{DampedPolicyLearning} in \code{training/regime.py} sets $\epsilon=.2$, $c=.1$, gradient norm cap .267, and
+\textbf{Implementation and constants.} \code{manabot/training/updates/damped\_policy.py} owns loss, targets and update grouping; \code{references.py} beside it owns the reference, and \code{manabot/backends/torch/rl.py} selection. \code{DampedPolicyLearning} in \code{training/regime.py} sets $\epsilon=.2$, $c=.1$, gradient norm cap .267, and
 \[
  \eta_i=\operatorname{clip}(.5/i^{1.1},5\!\times\!10^{-6},10^{-4}),
  \qquad \tau_i=.05/i^{.3}.

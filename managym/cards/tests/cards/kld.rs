@@ -3,7 +3,7 @@
 use crate::support::{
     game::five_color_setup,
     inspect::tapped,
-    play::{cast_owned, settle},
+    play::{cast_owned, settle, spend_colorless},
 };
 
 #[test]
@@ -52,6 +52,7 @@ fn noxious_gearhulk_gains_the_destroyed_creatures_toughness_only_if_destroyed() 
             );
         }
         cast(&mut s, "Noxious Gearhulk");
+        spend_colorless(&mut s);
         for _ in 0..10 {
             let space = s.action_space().clone();
             if space

@@ -1,5 +1,4 @@
-"""`Execution.bucketed_shapes` and `Execution.live_tokens`: `auto` resolution,
-serialization, admission and the trained policy."""
+"""Automatic execution settings and the trained policy's forward layout."""
 
 from pathlib import Path
 from typing import Literal
@@ -7,12 +6,12 @@ from typing import Literal
 from pydantic import ValidationError
 import pytest
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.baseline import baseline, baseline_test
 from manabot.recipes.builders import with_agent
 from manabot.training import execution
@@ -21,6 +20,7 @@ from manabot.training.regime import (
     FrozenOpponent,
     Layout,
     Learning,
+    Precision,
     Stage,
     TrainingRegime,
     TrainSelfPlay,
@@ -99,22 +99,34 @@ def test_builders_resolve_auto_again_and_keep_written_values() -> None:
 
 
 @pytest.mark.parametrize("copy", [False, True])
-@pytest.mark.parametrize("field", LAYOUT)
+@pytest.mark.parametrize(
+    ("field", "declared"),
+    [
+        ("bucketed_shapes", False),
+        ("live_tokens", False),
+        ("precision", "float32"),
+        ("precision", "tf32"),
+        ("precision", "bf16"),
+    ],
+)
 def test_builder_keeps_explicit_edits_after_auto_resolution(
-    field: str, copy: bool
+    field: str, declared: bool | Precision, copy: bool
 ) -> None:
     regime = _fresh("cuda")
     stage = regime.stages[0]
     if copy:
-        stage.execution = stage.execution.model_copy(update={field: False})
+        stage.execution = stage.execution.model_copy(update={field: declared})
     else:
-        setattr(stage.execution, field, False)
-    rebuilt = with_agent(regime, id="padded", agent=regime.agent)
-    assert getattr(rebuilt.stages[0].execution, field) is False
-    other = next(name for name in LAYOUT if name != field)
+        setattr(stage.execution, field, declared)
+    rebuilt = with_agent(regime, id="explicit", agent=regime.agent)
+    assert getattr(rebuilt.stages[0].execution, field) == declared
     stages = rebuilt.authored_dump()["stages"]
     assert isinstance(stages, list)
-    assert stages[0]["execution"][other] == "auto"
+    # Disabled layouts are omitted from both authored and saved dumps.
+    for name in ("precision", *LAYOUT):
+        assert stages[0]["execution"].get(name, False) == (
+            declared if name == field else "auto"
+        )
 
 
 def test_live_tokens_require_cuda() -> None:

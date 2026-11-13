@@ -22,8 +22,9 @@ from typing import Any, Literal
 import numpy as np
 import torch
 
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.infra.identity import file_sha256
-from manabot.model.actor_critic import ActorCritic
 from manabot.training.clock import boot_identity
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.rollout.collection import (
@@ -31,7 +32,6 @@ from manabot.training.rollout.collection import (
     CollectorStats,
     SeatRoutedCollector,
 )
-from manabot.training.updates.learner import Learner
 
 
 class TrainingPaused(KeyboardInterrupt):

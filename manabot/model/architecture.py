@@ -2,9 +2,12 @@
 
 ModelConfig remains the configuration authority. This receipt versions the executable
 layout and binds resolved inputs; world/content and checkpoint bytes retain their
-separate identities. Counting never constructs a model or advances its RNG.
+separate identities. Counting never constructs a model or advances its RNG:
+a backend supplies each parameter's element count and trainability by name
+(torch: `ActorCritic.architecture_receipt`), so this module imports no framework.
 """
 
+from collections.abc import Mapping
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -12,7 +15,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.actor_critic import ActorCritic
 
 
 class ParameterCount(BaseModel):
@@ -68,22 +70,26 @@ def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
     )
 
 
-def architecture_receipt(agent: ActorCritic) -> ArchitectureReceipt:
-    """Count each distinct parameter once under its first named top-level owner.
+def architecture_receipt(
+    spec: ModelConfig,
+    space: ObservationSpace,
+    parameters: Mapping[str, tuple[int, bool]],
+) -> ArchitectureReceipt:
+    """Count each parameter under its top-level owner, the first segment of its name.
 
-    Buffers are excluded. Trainability describes the model at export, not optimizer
-    exposures; admission compares structural totals, allowing frozen consumers.
+    `parameters` maps a dotted parameter name to (element count, trainable), each
+    distinct parameter once; buffers are excluded. Trainability describes the
+    model at export, not optimizer exposures; admission compares structural
+    totals, allowing frozen consumers.
     """
     totals: dict[str, int] = {}
     trainable: dict[str, int] = {}
-    for name, parameter in agent.named_parameters():
+    for name, (size, requires_grad) in parameters.items():
         owner = name.split(".", 1)[0]
-        totals[owner] = totals.get(owner, 0) + parameter.numel()
-        trainable[owner] = trainable.get(owner, 0) + (
-            parameter.numel() if parameter.requires_grad else 0
-        )
+        totals[owner] = totals.get(owner, 0) + size
+        trainable[owner] = trainable.get(owner, 0) + (size if requires_grad else 0)
     return ArchitectureReceipt(
-        identity=architecture_identity(agent.config, agent.observation_space),
+        identity=architecture_identity(spec, space),
         parameters=ParameterCount(
             total=sum(totals.values()), trainable=sum(trainable.values())
         ),
@@ -94,10 +100,9 @@ def architecture_receipt(agent: ActorCritic) -> ArchitectureReceipt:
     )
 
 
-def validate_architecture_receipt(agent: ActorCritic, saved: object) -> None:
+def validate_architecture_receipt(actual: ArchitectureReceipt, saved: object) -> None:
     """Reject contradictory new metadata; callers allow absent historical receipts."""
     receipt = ArchitectureReceipt.model_validate(saved)
-    actual = architecture_receipt(agent)
     if receipt.parameters.trainable != sum(
         v.trainable for v in receipt.components.values()
     ):

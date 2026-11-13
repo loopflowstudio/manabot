@@ -1,4 +1,4 @@
-"""Inference players for scalar simulation; model admission lives in model.checkpoint."""
+"""Inference players for scalar simulation; model admission lives in backends.torch.checkpoint."""
 
 from enum import Enum
 from typing import Dict
@@ -6,7 +6,7 @@ from typing import Dict
 import numpy as np
 import torch
 
-from manabot.model.actor_critic import ActorCritic
+from manabot.backends.torch.policy import ActorCritic
 
 # Local imports
 from manabot.model.inference import admit_on_device

@@ -1,62 +1,54 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>QA: CI under 8 minutes (38ef25)</title>
-<style>body{font:15px/1.5 system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;color:#222}
-table{border-collapse:collapse}td,th{padding:.3rem .7rem;border-bottom:1px solid #ddd;text-align:left}td.n{text-align:right}</style></head>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-324 QA — precision auto</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#222}
+pre{background:#f5f2ea;padding:.6rem;overflow:auto;font-size:13px}td,th{border:1px solid #ccc;padding:.3rem .5rem;text-align:left;vertical-align:top}table{border-collapse:collapse}h2{margin-top:2rem}</style></head>
 <body>
-<h1>QA: CI under 8 minutes</h1>
-<p>Observed 2026-11-12, headless. Contributors need every ordinary Ubuntu job to pass below 480 s,
-job start to end including install and build. Engine Budget is exempt.</p>
+<h1>MTG-324 QA: <code>Execution.precision="auto"</code></h1>
+<p>2026-11-13, HEAD <code>0338b8a90</code> (contains <code>origin/main</code> <code>6ce618b8a</code>). I used the change the way a regime author would: the
+<code>manabot train</code> CLI, regime JSON files and the recipe builders. Outputs went to the ignored <code>.runs/qa324/</code>. I ran nothing on CUDA and
+nothing paid, so CUDA stages were built and validated but not trained.</p>
 
-<h2>Scenario 1: the final revision on hosted CI</h2>
-<p>Did: <code>gh workflow run ci.yml --ref jack-heart/38ef25-get-ci-under</code> at <code>38e3e5557</code>
-(the CPU-Torch Integration repair plus main's v0.2.3 release merge, never run before), then read job and step
-timestamps (<code>gh run view --json jobs</code>) and logs.</p>
-<p>Saw: <a href="https://github.com/loopflowstudio/manabot/actions/runs/43350950910">43350950910</a> green.
-Slowest ordinary job Integration evaluation 399 s; every Integration install 5–6 s with <code>torch==2.15.0+cpu</code>;
-experiment 130 passed, the repaired comparison 140 s.</p>
-<p>Noticed: Python unit spent 195 s of its 210 s installing. The engine build finished about 105 s in;
-the rest was 3 GB of CUDA Torch, NVIDIA and Triton downloads for 4 s of tests. It was 308 s on the merged #506 push.</p>
+<h2>1. New user: the default local recipe</h2>
+<pre>$ uv run manabot train --recipe local --device cpu --out .runs/qa324/local
+local: completed; run: b53e70f151e741d2851de76e2d5502d6        (9.9 s)
+run.json regime.stages[0].execution:
+{'device': 'cpu', 'memory_bytes': 34359738368, 'precision': 'float32', 'threads': 1, 'wall_seconds': 120.0, 'workers': 1}</pre>
+<p>The run records the resolved <code>float32</code> and never writes <code>auto</code>, as the docs say.</p>
 
-<h2>Fix: CPU Torch for Python unit</h2>
-<p><code>ef0839c9c</code> adds <code>--no-default-groups --group play-runtime</code> to that job's
-<code>uv sync</code> <em>and</em> its <code>uv run</code>; without the latter, <code>uv run</code> re-syncs the
-default CUDA group. <code>docs/development.md</code> now names both jobs. The website step is a separate project, unchanged.</p>
-<p>Re-ran: <a href="https://github.com/loopflowstudio/manabot/actions/runs/43353030839">43353030839</a> green.</p>
-<table><tr><th>Job</th><th>38e3e5557</th><th>ef0839c9c</th></tr>
-<tr><td>Rust Tests</td><td class="n">396</td><td class="n">406</td></tr>
-<tr><td>Integration evaluation</td><td class="n">399</td><td class="n">267</td></tr>
-<tr><td>Integration recovery</td><td class="n">359</td><td class="n">261</td></tr>
-<tr><td>Integration evaluation-long</td><td class="n">345</td><td class="n">248</td></tr>
-<tr><td>Integration experiment</td><td class="n">343</td><td class="n">335</td></tr>
-<tr><td>Integration training</td><td class="n">296</td><td class="n">275</td></tr>
-<tr><td>Protocol v1</td><td class="n">282</td><td class="n">244</td></tr>
-<tr><td>Academy UI</td><td class="n">273</td><td class="n">218</td></tr>
-<tr><td>Integration model</td><td class="n">233</td><td class="n">194</td></tr>
-<tr><td>Python unit</td><td class="n">210</td><td class="n">104</td></tr>
-<tr><td>Academy Integration</td><td class="n">174</td><td class="n">168</td></tr>
-<tr><td>Clean-machine Play</td><td class="n">151</td><td class="n">162</td></tr>
-<tr><td>Semantic conformance</td><td class="n">98</td><td class="n">118</td></tr>
-<tr><td>Engine Budget (exempt)</td><td class="n">906</td><td class="n">901</td></tr></table>
-<p>Python unit kept 157 passed / 1 skipped and website 21 passed, now on <code>torch==2.15.0+cpu</code>.
-Integration differences other than Python unit are runner variance; their workflow is unchanged.</p>
+<h2>2. Regime JSON through the CLI (<code>--regime</code>, CPU, seed 3)</h2>
+<table><tr><th>File</th><th>Result</th></tr>
+<tr><td><code>"precision": "auto"</code></td><td>completed; recorded <code>float32</code></td></tr>
+<tr><td>precision omitted (a regime saved before the field existed)</td><td>completed; recorded <code>float32</code></td></tr>
+<tr><td><code>"bf16"</code> on CPU</td><td>refused: <code>Value error, precision bf16 requires CUDA</code></td></tr>
+<tr><td><code>"tf32"</code> on CPU</td><td>refused: <code>Value error, precision tf32 requires CUDA</code></td></tr></table>
 
-<h2>Scenario 2: a developer running the repaired test locally</h2>
-<p><code>uv run --extra dev --extra notebook --extra artifacts --extra reports pytest
-tests/training/test_experiment_runner.py::test_tiny_comparison_evaluates_live_and_notebook_refresh_preserves_edits</code>:
-1 passed in 45.02 s. <code>actionlint</code> passed on both changed workflows; <code>uv export --frozen</code> with the
-CI flags selects <code>torch==2.15.0+cpu</code> on Linux and <code>2.15.0</code> on macOS, no NVIDIA/Triton.
-Earlier evidence (receipt assertion fails when the old workload is restored, watchdog proof, selection audit) is in
-<a href="ci-under-8-minutes.md">the active plan</a>.</p>
+<h2>3. Saved and edited regimes (the TLA frontier regime JSON loaded in Python)</h2>
+<pre>saved_as_is                -> float32 False False | authored: float32
+old_no_precision           -> float32 False False | authored: float32
+auto_cpu                   -> float32 False False | authored: auto
+auto_cuda_w384             -> float32 False False | authored: auto      (layouts explicitly false in file)
+auto_cuda_w384_layout_auto -> float32 True True   | authored: auto
+bf16_cuda                  -> bf16    False False | authored: bf16
+typo "bfloat16"            -> ValidationError: Input should be 'float32', 'tf32' or 'bf16' (plus a second union error for 'auto')</pre>
+<p>Columns: precision, bucketed_shapes, live_tokens. At w384 on CUDA, <code>auto</code> resolves to float32, matching the recorded rejection. Explicit values and saved values stay as written.</p>
 
-<h2>Result</h2>
-<p>Works: every ordinary job passes below 480 s on the final revision; max 406 s (Rust), 74 s margin.</p>
-<p>Not reached: PR-event timing and post-merge verification, which need publication.</p>
-<p>Still wrong or risky, worst first:</p>
-<ol>
-<li>Engine Budget (exempt) took 901–906 s in both runs today, against 571–685 s before; its paired benchmark step is 715 s.
-Not investigated.</li>
-<li>Rust Tests is now the slowest ordinary job (396–406 s); it was untouched by this Task.</li>
-<li>Academy Integration still installs the default runtime; its install was 18–20 s here, so it has not been changed.</li>
-</ol>
-<p>No local process remains.</p>
+<h2>4. Builders (CUDA baseline recipe, built but not trained)</h2>
+<pre>baseline cuda                w64: precision=float32 bucketed=True live=True dump=float32
+with_capacity 384            w384: precision=float32 bucketed=True live=True dump=float32
+explicit bf16                w64: precision=bf16 bucketed=True live=True dump=bf16
+explicit bf16 -> w384        w384: precision=bf16 bucketed=True live=True dump=bf16
+saved roundtrip              w64: precision=float32 bucketed=True live=True dump=float32
+baseline cuda padded         w64: precision=float32 bucketed=False live=False dump=float32</pre>
+<p>A rebuild resolves <code>auto</code> again, and an explicit BF16 choice survives a width change.</p>
+
+<h2>5. Docs and tests</h2>
+<p>The links and anchors in <code>docs/training.md</code> (<code>#validation</code>, <code>experiments/precision_ladder.md</code>, <code>experiments/cuda_precision.md</code>) exist.
+The other guides contain no stale "float32 (default)" wording. A focused check passed: <code>pytest tests/training/test_precision.py tests/training/test_bucketed_execution.py
+tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py</code>, 48 passed.</p>
+
+<h2>Outcome</h2>
+<p><b>Works:</b> fresh authoring, CLI training, saved and pre-field regimes, explicit choices, CPU refusals and builder re-resolution all behave as the docs describe. I fixed nothing; I found no defects.</p>
+<p><b>Not reached:</b> a CUDA training run (no GPU here, and no rental authorized at this step). <code>apply_matmul_precision</code> and the learner and collector
+receiving <code>resolved_precision</code> on CUDA ran only for float32 on CPU.</p>
+<p><b>Worth noting (no change made):</b> explicit <code>bf16</code> with <code>live_tokens</code> on still validates, though the A/B never admitted that combination. The docs state it as unadmitted, which is consistent with keeping explicit choices available.</p>
 </body></html>

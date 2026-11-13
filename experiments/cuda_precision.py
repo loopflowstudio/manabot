@@ -70,6 +70,7 @@ ARMS: tuple[ArmName, ...] = (
 CANDIDATES: tuple[Precision, ...] = ("tf32", "bf16")
 SIZES: dict[str, dict[str, int]] = {
     "w160l8": {},
+    "w256l8": {"hidden_dim": 256, "attention_layers": 8, "num_attention_heads": 8},
     "w384l8": {"hidden_dim": 384, "attention_layers": 8, "num_attention_heads": 8},
 }
 # Trajectory metrics the rule compares, as recorded per optimizer step.
@@ -163,7 +164,7 @@ class _Captured(TypedDict):
 @contextmanager
 def _capturing(folder: Path, probe: Probe) -> Iterator[None]:
     """Keep initial weights, collection observations and learner loss inputs."""
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.model.inference import PreparedObservation
     from manabot.training.updates.health import OptimizerHealth
 
@@ -356,8 +357,8 @@ def _agent(
     folder: Path, size: str, bucketed: bool, seed: int, device: torch.device
 ) -> Any:
     """w160l8 from the captured initial weights; larger sizes from `seed`."""
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.model.actor_critic import ActorCritic
     from manabot.training.regime import TrainingRegime
 
     regime = TrainingRegime.model_validate_json((folder / "regime.json").read_text())
@@ -402,9 +403,8 @@ def _infer(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Collection's preparation, forward and action selection
     (`SeatRoutedCollector._sample_learning_rows` up to rollout recording)."""
-    from manabot.model.policy_distribution import legal_mask, policy_logs
-    from manabot.rl.numerics import require
-    from manabot.training.precision import forward_precision
+    from manabot.backends.torch.learner import forward_precision
+    from manabot.backends.torch.rl import legal_mask, policy_logs, require
 
     prepared = scope.prepare(obs)
     with torch.no_grad():
@@ -446,12 +446,14 @@ class _Loss:
 
 def _loss(learner: Any, batch: Minibatch) -> _Loss:
     """`update_damped_iteration`'s forward and loss on one kept minibatch."""
+    from manabot.backends.torch.rl import (
+        damped_policy_loss,
+        float64_operand,
+        legal_mask,
+        selected_mean,
+    )
     from manabot.model.inference import transfer_admitted
-    from manabot.model.policy_distribution import legal_mask
-    from manabot.rl.numerics import float64_operand
-    from manabot.rl.selection import selected_mean
-    from manabot.training.updates.damped_policy import damped_policy_loss
-    from manabot.training.updates.references import reference_distribution
+    from manabot.policy.prepare import reference_distribution
 
     device = learner.device
     obs = transfer_admitted(batch.obs, device)[0]
@@ -498,9 +500,7 @@ def _loss(learner: Any, batch: Minibatch) -> _Loss:
 
 def _learn(learner: Any, observer: Any, batch: Minibatch) -> dict[str, float]:
     """One optimizer step with the learner's checks and diagnostics."""
-    from manabot.model.policy_distribution import policy_logs
-    from manabot.rl.losses import reverse_kl
-    from manabot.rl.numerics import float64_operand
+    from manabot.backends.torch.rl import float64_operand, policy_logs, reverse_kl
 
     for group in learner.optimizer.param_groups:
         group["lr"] = batch.lr
@@ -623,12 +623,10 @@ def run_arm(
     reference: Outputs | None,
 ) -> tuple[dict[str, Any], Outputs]:
     """One arm of one group; returns its receipt and fixed-weight outputs."""
+    from manabot.backends.torch.learner import Learner, apply_matmul_precision
+    from manabot.backends.torch.rl import NumericalError, policy_logs
     from manabot.model.inference import PolicyInference
-    from manabot.model.policy_distribution import policy_logs
-    from manabot.rl.numerics import NumericalError
-    from manabot.training.precision import apply_matmul_precision
     from manabot.training.updates.health import NumericalHealth, OptimizerHealth
-    from manabot.training.updates.learner import Learner
 
     device = torch.device(probe.device)
     precision: Precision = "float32" if arm.startswith("float32") else arm  # type: ignore[assignment]
@@ -960,11 +958,18 @@ def measure(probe: Probe) -> None:
     )
 
 
-def runs(revision: str, hours: float = 1.5, usd: float = 1.5) -> list[Run]:
-    """The one L4 job at `revision`."""
-    probe = Probe(source_bundle=bundle_at(ROOT, revision))
+def runs(
+    revision: str, hours: float = 1.5, usd: float = 1.5, sizes: str = ""
+) -> list[Run]:
+    """The one L4 job at `revision`; `sizes` (comma-separated `SIZES` keys)
+    replaces the default pair, as MTG-324's w256l8 step run does."""
+    chosen = tuple(s for s in sizes.split(",") if s) or Probe().sizes
+    unknown = set(chosen) - SIZES.keys()
+    if unknown:
+        raise ValueError(f"unknown sizes {sorted(unknown)}; known {sorted(SIZES)}")
+    probe = Probe(source_bundle=bundle_at(ROOT, revision), sizes=chosen)
     return Job(
-        name="mtg317-cuda-precision",
+        name="mtg317-cuda-precision" + ("" if not sizes else "-" + "-".join(chosen)),
         setup=machine_setup(""),
         command=f"{TOOLCHAIN_ENV}\nuv run --locked python -m etude.call "
         "--function experiments.cuda_precision:measure",

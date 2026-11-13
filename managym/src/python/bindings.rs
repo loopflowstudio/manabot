@@ -32,8 +32,9 @@ use crate::{
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
             ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
-            Observation, PermanentData, PlayerData, RestrictedManaData, SideboardCardData,
-            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            Observation, PermanentData, PlayerData, PooledManaClassData, RestrictedManaData,
+            SideboardCardData, StackObjectData, StackObjectKindData, StackTargetData,
+            StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         shared_effects,
@@ -1231,6 +1232,9 @@ pub struct PyPlayer {
     pub lesson_mana: [i32; 6],
     #[pyo3(get)]
     pub restricted_mana: Vec<PyRestrictedMana>,
+    /// Pooled mana with a spend effect or combat expiry, by class.
+    #[pyo3(get)]
+    pub pooled_mana_classes: Vec<PyPooledManaClass>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[pyo3(get)]
     pub hand_only_until: Option<i32>,
@@ -1442,6 +1446,50 @@ pub struct PyRestrictedMana {
     pub mana: [i32; 6],
 }
 
+/// Pooled mana of one class with a spend effect or combat expiry: its qualifiers,
+/// amounts by W/U/B/R/G/C and learning-token program.
+#[cfg(feature = "python")]
+#[pyclass(name = "PooledManaClass")]
+#[derive(Clone)]
+pub struct PyPooledManaClass {
+    #[pyo3(get)]
+    pub combat: bool,
+    #[pyo3(get)]
+    pub restriction: Option<String>,
+    #[pyo3(get)]
+    pub effect: Option<String>,
+    #[pyo3(get)]
+    pub mana: [i32; 6],
+    #[pyo3(get)]
+    pub program: Vec<(u16, i32)>,
+}
+
+#[cfg(feature = "python")]
+impl From<PooledManaClassData> for PyPooledManaClass {
+    fn from(value: PooledManaClassData) -> Self {
+        Self {
+            combat: value.combat,
+            restriction: value.restriction,
+            effect: value.effect,
+            mana: value.mana,
+            program: value.program,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyPooledManaClass> for PooledManaClassData {
+    fn from(value: PyPooledManaClass) -> Self {
+        Self {
+            combat: value.combat,
+            restriction: value.restriction,
+            effect: value.effect,
+            mana: value.mana,
+            program: value.program,
+        }
+    }
+}
+
 #[cfg(feature = "python")]
 impl From<RestrictedManaData> for PyRestrictedMana {
     fn from(value: RestrictedManaData) -> Self {
@@ -1492,6 +1540,11 @@ impl From<PlayerData> for PyPlayer {
             mana: value.mana,
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
+            pooled_mana_classes: value
+                .pooled_mana_classes
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -1529,6 +1582,11 @@ impl From<PyPlayer> for PlayerData {
             mana: value.mana,
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
+            pooled_mana_classes: value
+                .pooled_mana_classes
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -4752,6 +4810,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCard>()?;
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
+    m.add_class::<PyPooledManaClass>()?;
     m.add_class::<PyPlayerTurnHistory>()?;
     m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;

@@ -1,37 +1,37 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "7ef6ce5884782000eb8f14934dd8c2bd48a05387",
-    "date": "2026-11-12",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/43221435403",
+    "commit": "d53220d3643998e3c88335c19917c402d5555ca8",
+    "date": "2026-11-13",
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/43417765062",
     "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
-    "reason": "Accept MTG-286 cost from PR #469 CI 43221435403: the TLE rules additions (mana payment, casting, proposed events, triggers) slow bench_steps by 9.2% on the unchanged curated decks (median 7.91 s reference vs 8.71 s candidate; user CPU tracks wall time in all four samples, both candidate samples slower than both reference samples). All three search digests, the step digest and the 101650-step count are unchanged; search timings stay within budget. Preserve the 10% tolerance."
+    "reason": "Adopt MTG-297 native mana spending decisions from dedicated run 43417765062 at d53220d36. Explicit unit/class choices change all three search digests, the step digest and the step count (101650 to 102209). The previous reference reproduces all committed digests. On the same AMD EPYC 7763 runner, worst reply falls from 4.928 s to 3.611 s, total search from 169.080 s to 125.545 s, and throughput rises from 11760.9/s to 13728.0/s; all timing thresholds pass, both samples are consistent and user CPU tracks wall time. Changed decisions mean different workloads, not an isolated algorithmic speedup. Preserve the 10% tolerance."
   },
   "bench_search": {
-    "worst_s": 4.9438511625,
-    "total_s": 169.186,
+    "worst_s": 3.61075919,
+    "total_s": 125.545,
     "seeds": {
       "1": {
-        "worst_s": 4.9438511625,
-        "total_s": 70.979245555,
-        "digest": 13733780288109658817
+        "worst_s": 3.2304423695000004,
+        "total_s": 55.8216042075,
+        "digest": 16220228006789220642
       },
       "2": {
-        "worst_s": 4.562825929000001,
-        "total_s": 48.438240765499984,
-        "digest": 5337676601429031145
+        "worst_s": 3.61075919,
+        "total_s": 35.824460387,
+        "digest": 5713229298486337703
       },
       "3": {
-        "worst_s": 3.824538433,
-        "total_s": 49.7684597985,
-        "digest": 10035331835025021780
+        "worst_s": 2.5435362085,
+        "total_s": 33.8992256315,
+        "digest": 18315821755026080079
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 11693.629565908906,
-    "steps": 101650,
+    "steps_per_s": 13727.96064405928,
+    "steps": 102209,
     "games": 512,
-    "digest": 15843333459759757527
+    "digest": 17459788495858550277
   }
 }

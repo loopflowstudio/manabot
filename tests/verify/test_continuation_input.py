@@ -9,15 +9,15 @@ from pydantic import BaseModel, JsonValue, TypeAdapter
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import RELATION_ELIGIBILITY_INDEX, ObservationSpace
 from manabot.infra.config import (
     ModelConfig,
     ObservationConfig,
     UnsupportedPolicyInput,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import collision_branches, native_fixtures

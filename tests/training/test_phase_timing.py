@@ -14,6 +14,8 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
@@ -27,7 +29,6 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.store import VerifyStore
 import managym
@@ -70,10 +71,18 @@ def _update(
 ) -> dict[str, object]:
     with learner.profiler.track("Learning"):
         if isinstance(learning, DampedPolicyLearning):
-            return dict(update_damped_iteration(learner, batch, learning, 1))
+            return dict(
+                update_damped_iteration(torch_backend, learner, batch, learning, 1)
+            )
         return dict(
             update_iteration(
-                learner, batch, learning, 0.5, np.random.default_rng(3), iteration=1
+                torch_backend,
+                learner,
+                batch,
+                learning,
+                0.5,
+                np.random.default_rng(3),
+                iteration=1,
             )
         )
 

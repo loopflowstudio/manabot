@@ -91,6 +91,7 @@ fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
         attacker: None,
         inline_effects: Some(effects),
         x: 0,
+        spent: Default::default(),
     }
 }
 

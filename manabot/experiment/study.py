@@ -29,6 +29,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.observation import ObservationSpace
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
@@ -39,7 +40,6 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     source_bundle_sha256,
 )
-from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import report, valid_game, verify_saved_inputs
 from manabot.sim.matchup import SELECTED_SUITE
 from manabot.sim.registration import PlayerRegistration, SearchSemantics

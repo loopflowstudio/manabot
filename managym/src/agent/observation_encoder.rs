@@ -54,6 +54,10 @@ pub enum FactKind {
     Transforms = 9,
     /// Attacker predicate token for a combat continuation (id: frame index).
     CombatRestriction = 10,
+    /// A rules program in learning tokens (detail: token value, values:
+    /// token kind and ordinal): a copy exception's payload under its
+    /// `Modification` id, or a player's pooled mana with a spend effect or combat expiry
+    /// under `POOLED_MANA`.
     EffectProgram = 11,
     EffectiveColor = 12,
     KeywordCounterTimestamp = 13,
@@ -1298,6 +1302,10 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[out.len() - 1] = 1.0;
 }
 
+/// The id of an `EffectProgram` on a player that states pooled mana with a
+/// spend effect or combat expiry (`PooledManaClassData::program`).
+pub const POOLED_MANA: &str = "PooledMana";
+
 /// One fact row before its object join and timestamp rank are known.
 struct Fact {
     object: i32,
@@ -1454,6 +1462,21 @@ fn facts(obs: &Observation) -> Vec<Fact> {
                 values: [0.0, 0.0],
                 effect: Some((0.0, timestamp, None)),
             });
+        }
+    }
+    // Spend effects and combat expiry: one program per pooled class on its player.
+    for player in [&obs.agent, &obs.opponent] {
+        for class in &player.pooled_mana_classes {
+            for (ordinal, &(kind, value)) in class.program.iter().enumerate() {
+                out.push(Fact {
+                    object: player.id,
+                    kind: FactKind::EffectProgram,
+                    id: name_value(POOLED_MANA),
+                    detail: value,
+                    values: [f32::from(kind), ordinal as f32],
+                    effect: None,
+                });
+            }
         }
     }
     out
@@ -1849,6 +1872,7 @@ mod tests {
                 mana: [0; 6],
                 lesson_mana: [0; 6],
                 restricted_mana: Vec::new(),
+                pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
@@ -1882,6 +1906,7 @@ mod tests {
                 mana: [0; 6],
                 lesson_mana: [0; 6],
                 restricted_mana: Vec::new(),
+                pooled_mana_classes: Vec::new(),
                 hand_only_until: None,
                 no_maximum_hand_size: false,
                 effects: Vec::new(),

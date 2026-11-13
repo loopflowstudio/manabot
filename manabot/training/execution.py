@@ -18,6 +18,11 @@ import numpy as np
 import psutil
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import NumericalError
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
     collect_frozen_policy,
@@ -36,15 +41,10 @@ from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.infra.runtime import RunContext
 from manabot.infra.source import source_commit
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.rl.numerics import NumericalError
-from manabot.rl.step import update_ema
 from manabot.training.mps import mps_torch_error
-from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
@@ -96,7 +96,6 @@ from manabot.training.update_metrics import (
     time_since,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.ppo import update_iteration
 import managym
 
@@ -817,7 +816,7 @@ def _execute_regime(
             incident_learner = None
             batch = None
             torch.set_num_threads(stage.execution.threads)
-            apply_matmul_precision(stage.execution.precision)
+            apply_matmul_precision(stage.execution.resolved_precision)
             cuda = stage.execution.device == "cuda"
             mps = stage.execution.device == "mps"
             if cuda and not torch.cuda.is_available():
@@ -1289,7 +1288,7 @@ def _execute_regime(
                         device=stage.execution.device,
                         workers=stage.execution.workers,
                         adaptive=stage.adaptive,
-                        precision=stage.execution.precision,
+                        precision=stage.execution.resolved_precision,
                     )
                     producers.callback(collector.close)
                     experiment = RunContext(
@@ -1346,7 +1345,7 @@ def _execute_regime(
                         agent,
                         experiment.device,
                         minibatch_rows=stage.streams,
-                        precision=stage.execution.precision,
+                        precision=stage.execution.resolved_precision,
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
@@ -1469,6 +1468,7 @@ def _execute_regime(
                                     }
                                 elif isinstance(stage.learning, DampedPolicyLearning):
                                     diagnostic = update_damped_iteration(
+                                        torch_backend,
                                         learner,
                                         batch,
                                         stage.learning,
@@ -1477,6 +1477,7 @@ def _execute_regime(
                                     )
                                 else:
                                     diagnostic = update_iteration(
+                                        torch_backend,
                                         learner,
                                         batch,
                                         stage.learning,

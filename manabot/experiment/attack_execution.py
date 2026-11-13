@@ -17,13 +17,13 @@ import numpy as np
 from pydantic import Field
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.attacks import AttackPlan
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import authored_matchup_sha256
-from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import valid_game
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
 from manabot.sim.registration import PlayerRegistration

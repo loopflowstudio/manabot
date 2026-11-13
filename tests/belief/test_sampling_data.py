@@ -4,10 +4,10 @@ from dataclasses import replace
 import json
 from pathlib import Path
 
-from managym.decision import Observation
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling import SamplerInput, SamplerSchema
 from manabot.belief.sampling_data import (
     SamplerDataset,
@@ -23,10 +23,10 @@ from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world
 from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
+from managym.decision import Observation
 
 
 def _dataset() -> SamplerDataset:

@@ -760,6 +760,7 @@ impl Game {
             context: trigger.context,
             player: trigger.player,
             x: trigger.x,
+            spent: trigger.spent,
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
@@ -1056,17 +1057,22 @@ impl Game {
                 _ => performed_action(event).map(|(player, _)| player),
             };
             // CR 107.3m: an entering permanent's own trigger sees its spell's
-            // X; a counters trigger's X is how many were put ("that much").
-            let x = match event {
-                GameEvent::CountersPut { count, .. } => u8::try_from(*count).unwrap_or(u8::MAX),
+            // X and the mana spent to cast it; a counters trigger's X is how
+            // many were put ("that much").
+            let (x, spent) = match event {
+                GameEvent::CountersPut { count, .. } => {
+                    (u8::try_from(*count).unwrap_or(u8::MAX), Default::default())
+                }
                 GameEvent::CardMoved {
                     card,
                     to: ZoneType::Battlefield,
                     ..
                 } if *card == source_card => self.state.card_to_permanent[*card]
                     .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(0, |permanent| permanent.cast_x),
-                _ => 0,
+                    .map_or(Default::default(), |permanent| {
+                        (permanent.cast_x, permanent.cast_spent)
+                    }),
+                _ => Default::default(),
             };
             let attacker = match event {
                 GameEvent::AttackersDeclared { attackers, .. } => attackers
@@ -1091,6 +1097,7 @@ impl Game {
                 context,
                 player,
                 x,
+                spent,
                 chosen_modes: Vec::new(),
                 attacker,
                 inline_effects: granted,
@@ -1330,6 +1337,7 @@ impl Game {
             context,
             player: None,
             x: 0,
+            spent: Default::default(),
             chosen_modes: Vec::new(),
             attacker: None,
             inline_effects: Some(effects),
@@ -1391,6 +1399,7 @@ impl Game {
                 context: None,
                 player: None,
                 x: 0,
+                spent: Default::default(),
                 chosen_modes: Vec::new(),
                 attacker: None,
                 inline_effects: None,
@@ -1482,6 +1491,7 @@ impl Game {
                 context: None,
                 player: None,
                 x: 0,
+                spent: Default::default(),
                 chosen_modes: Vec::new(),
                 attacker: None,
                 inline_effects: None,

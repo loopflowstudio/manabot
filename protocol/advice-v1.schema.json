@@ -3116,6 +3116,13 @@
           "title": "Player Index",
           "type": "integer"
         },
+        "pooled_mana_classes": {
+          "items": {
+            "$ref": "#/$defs/PooledManaView"
+          },
+          "title": "Pooled Mana Classes",
+          "type": "array"
+        },
         "remaining_sideboard_counts": {
           "anyOf": [
             {
@@ -3163,6 +3170,13 @@
           ],
           "default": null,
           "title": "Sideboard Counts"
+        },
+        "spells_cast": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Spells Cast",
+          "type": "integer"
         },
         "stack": {
           "items": {
@@ -3227,6 +3241,11 @@
           },
           "title": "Abilities",
           "type": "array"
+        },
+        "except_nonartifact_spells": {
+          "default": false,
+          "title": "Except Nonartifact Spells",
+          "type": "boolean"
         },
         "mana": {
           "maxItems": 6,
@@ -3719,6 +3738,13 @@
           "title": "Land Entered",
           "type": "boolean"
         },
+        "life_lost": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Life Lost",
+          "type": "integer"
+        },
         "permanents_sacrificed": {
           "default": 0,
           "maximum": 4294967295,
@@ -3747,6 +3773,83 @@
         "probability"
       ],
       "title": "PolicyMass",
+      "type": "object"
+    },
+    "PooledManaView": {
+      "additionalProperties": false,
+      "properties": {
+        "combat": {
+          "title": "Combat",
+          "type": "boolean"
+        },
+        "effect": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effect"
+        },
+        "mana": {
+          "maxItems": 6,
+          "minItems": 6,
+          "prefixItems": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            }
+          ],
+          "title": "Mana",
+          "type": "array"
+        },
+        "restriction": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Restriction"
+        }
+      },
+      "required": [
+        "mana",
+        "combat"
+      ],
+      "title": "PooledManaView",
       "type": "object"
     },
     "PromptView": {

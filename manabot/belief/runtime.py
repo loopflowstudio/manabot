@@ -5,11 +5,10 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Mapping
 
-from managym.decision import Command, Observation, SemanticTransition
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentMemory, AgentStep, Manabot, ViewerDecision
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
@@ -22,7 +21,8 @@ from manabot.belief.state import (
     CompatibleDealBeliefModel,
     ViewerHistory,
 )
-from manabot.model.actor_critic import ActorCritic
+from managym.decision import Command, Observation, SemanticTransition
+from managym.possible_worlds import PossibleWorldSpace
 
 
 def _engine(runtime_env: Any) -> Any:
