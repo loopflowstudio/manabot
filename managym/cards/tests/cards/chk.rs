@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::{clear_summoning_sickness, five_color_unfunded_setup, move_to_hand, Scenario},
-    inspect::{card_of, tapped},
+    inspect::{card_of, permanent_named, tapped},
     play::{activate, cast_card, castable, choose, choose_mode},
 };
 use managym::{
@@ -153,15 +153,7 @@ fn heartbeat_of_spring_triggers_for_a_land_sacrificed_in_its_mana_ability() {
 #[test]
 fn heartbeat_of_spring_sacrificed_by_the_mana_ability_adds_nothing() {
     let (mut s, lands) = heartbeat_setup(0, &["Forest"]);
-    let heartbeat = s
-        .game()
-        .state
-        .permanents
-        .iter()
-        .flatten()
-        .find(|permanent| s.game().state.cards[permanent.card].name == "Heartbeat of Spring")
-        .map(|permanent| permanent.card)
-        .unwrap();
+    let heartbeat = card_of(&s, permanent_named(&s, "Heartbeat of Spring"));
     let card = card_of(&s, lands[0]);
     let abilities = &mut s.game_mut().state.cards[card].activated_abilities;
     abilities.push(ActivatedAbilityDefinition {
@@ -194,15 +186,7 @@ fn heartbeat_of_spring_type_choice_names_its_source_and_the_tapped_land() {
     let ability = add_tap_ability(&mut s, lands[0], "WU", false);
     activate(&mut s, lands[0], ability);
     take_single_output(&mut s);
-    let heartbeat = s
-        .game()
-        .state
-        .permanents
-        .iter()
-        .flatten()
-        .find(|permanent| s.game().state.cards[permanent.card].name == "Heartbeat of Spring")
-        .map(|permanent| permanent.card)
-        .unwrap();
+    let heartbeat = card_of(&s, permanent_named(&s, "Heartbeat of Spring"));
     let definition = |card: CardId| Some(s.game().state.cards[card].definition_id.0);
     let frames = s.game().continuation_frames(PlayerId(0));
     let frame = frames

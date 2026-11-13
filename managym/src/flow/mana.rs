@@ -1946,8 +1946,14 @@ impl Game {
             tail.remove(0);
         }
         let model = (!tail.is_empty()).then(|| self.payment_model(player, None));
-        let mut choices: Vec<_> = pool
-            .spending_choices(cost)
+        // When every usable unit is needed, only the first feasible ordering
+        // matters: all orders leave the same receipt and remaining pool.
+        let limit = if pool.usable_total(cost) == u16::from(cost.mana_value) {
+            1
+        } else {
+            usize::MAX
+        };
+        pool.spending_choices(cost)
             .into_iter()
             .filter(|choice| {
                 let mut remaining = pool.clone();
@@ -1967,13 +1973,8 @@ impl Game {
                     .plan(remaining, obligations, SourcePolicy::All)
                     .is_some()
             })
-            .collect();
-        // If all usable units must be consumed, their order cannot change the
-        // receipt or remaining pool. Do not ask for permutations of one payment.
-        if pool.usable_total(cost) == u16::from(cost.mana_value) {
-            choices.truncate(1);
-        }
-        choices
+            .take(limit)
+            .collect()
     }
 
     pub(crate) fn begin_mana_spend(

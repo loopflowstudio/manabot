@@ -22,7 +22,7 @@ use crate::support::{
         cast_and_resolve, cast_card, cast_only, cast_owned, castable, choose, choose_mode,
         enter_and_settle, offers_ability, pass_until, play_and_settle, play_land,
         resolve_everything, resolve_top, resolve_until_priority, select_card, settle,
-        settle_targeting_opponent, target_opponent,
+        settle_targeting_opponent, spend_colorless, spend_named, target_opponent,
     },
 };
 use managym::{
@@ -58,6 +58,7 @@ fn aangs_iceberg_exiles_until_it_leaves_and_scries_only_if_sacrificed() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let ogre_card = card_of(&s, ogre);
     cast(&mut s, "Aang's Iceberg");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let iceberg = s.battlefield_permanents_named(0, "Aang's Iceberg")[0];
     assert!(!offered_targets(&s).contains(&Target::Permanent(iceberg)));
@@ -71,10 +72,12 @@ fn aangs_iceberg_exiles_until_it_leaves_and_scries_only_if_sacrificed() {
     if s.action_space().kind != ActionSpaceKind::Priority {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     }
+    spend_colorless(&mut s);
     activate(&mut s, iceberg, 0);
     if s.action_space().kind != ActionSpaceKind::Priority {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     }
+    spend_colorless(&mut s);
     assert_eq!(s.game().state.stack_objects.len(), 2);
     let mut scries = 0;
     for _ in 0..40 {
@@ -113,6 +116,7 @@ fn aangs_journey_finds_a_basic_land_and_kicked_also_a_shrine() {
         } else {
             choose(&mut s, |a| matches!(a, Action::Decline { .. }));
         }
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         let offered = offered_cards(&s);
         assert_eq!(offered.len(), 80, "every basic land, no Gray Ogre");
@@ -143,6 +147,7 @@ fn aang_airbends_another_permanent_and_gains_lifelink_from_lessons() {
     let land = s.force_permanent_on_battlefield(1, "Plains");
     let ogre_card = card_of(&s, ogre);
     cast(&mut s, "Aang, the Last Airbender");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let aang = s.battlefield_permanents_named(0, "Aang, the Last Airbender")[0];
     let targets = offered_targets(&s);
@@ -774,6 +779,7 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
     let strike = library_card(&s, 1, "Lightning Strike");
     s.game_mut().move_card(strike, ZoneType::Graveyard);
     cast(&mut s, "Azula, Cunning Usurper");
+    spend_colorless(&mut s);
     advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(s.action_space().player, Some(PlayerId(1)));
     assert!(!s
@@ -855,13 +861,7 @@ fn badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana() {
     cast(&mut s, "Badgermole Cub");
     // The generic pip is an explicit spending choice from this mixed pool.
     assert_choice_contract(&s);
-    let frame = s.game().semantic_decision_frame().unwrap();
-    let colorless = frame
-        .offers
-        .iter()
-        .position(|offer| offer.label.contains("{C}"))
-        .expect("colorless mana can pay the generic pip");
-    s.step_action(colorless);
+    spend_named(&mut s, |label| label.contains("{C}"));
     assert_eq!(*pool(&s), Mana::parse("19WWWWUUUUBBBBRRRRGGG"));
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(forest)));
@@ -1044,6 +1044,7 @@ fn dai_li_indoctrination_reveals_a_hand_and_discards_your_pick_or_earthbends_two
     cast(&mut s, "Dai Li Indoctrination");
     choose_mode(&mut s, 0);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Discard);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     let offered = offered_cards(&s);
@@ -1087,6 +1088,7 @@ fn earth_village_ruffians_earthbends_two_when_it_dies() {
     let swamp = s.force_permanent_on_battlefield(0, "Swamp");
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ruffians)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.game().state.permanents[ruffians].is_none());
     assert_eq!(offered_targets(&s), vec![Target::Permanent(swamp)]);
@@ -1172,6 +1174,7 @@ fn an_earthbent_cave_keeps_its_land_type_out_of_its_creature_types() {
 fn elemental_teachings_finds_distinct_lands_and_the_opponent_bins_two() {
     let mut s = five_color_setup(&["Elemental Teachings"]);
     cast(&mut s, "Elemental Teachings");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let mut chosen = Vec::new();
     for name in ["Forest", "Island", "Swamp", "Mountain"] {
@@ -1215,6 +1218,7 @@ fn elemental_teachings_finds_distinct_lands_and_the_opponent_bins_two() {
     // Stopping after one land: the opponent's choice bins it.
     let mut s = five_color_setup(&["Elemental Teachings"]);
     cast(&mut s, "Elemental Teachings");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let first = offered_cards(&s)[0];
     choose(
@@ -1435,6 +1439,10 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
         .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
         .collect();
     cast(&mut s, "Hama, the Bloodbender");
+    for _ in 0..3 {
+        spend_named(&mut s, |label| label == "Spend {U} (expires at step end)");
+    }
+    spend_colorless(&mut s);
     advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
     assert_eq!(s.zone_size(1, ZoneType::Graveyard), 3);
     assert!(s
@@ -1483,6 +1491,10 @@ fn hama_casts_an_opponents_artifact_under_your_control() {
         .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
         .collect();
     cast(&mut s, "Hama, the Bloodbender");
+    for _ in 0..3 {
+        spend_named(&mut s, |label| label == "Spend {U} (expires at step end)");
+    }
+    spend_colorless(&mut s);
     advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
     choose(
         &mut s,
@@ -1693,6 +1705,7 @@ fn lost_days_owner_puts_it_second_from_top_or_on_the_bottom_and_caster_gets_a_cl
         cast(&mut s, "Lost Days");
         assert!(!offered_targets(&s).contains(&Target::Permanent(land)));
         assert!(s.choose_target(Target::Permanent(ogre)));
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::Modal);
         assert_eq!(s.action_space().player, Some(PlayerId(1)));
         choose_mode(&mut s, if second { 0 } else { 1 });
@@ -1759,6 +1772,7 @@ fn mongoose_lizard_deals_one_damage_to_any_target_on_entering() {
     let mut s = five_color_setup(&["Mongoose Lizard", "Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Mongoose Lizard");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let targets = offered_targets(&s);
     assert!(targets.contains(&Target::Player(PlayerId(1))));
@@ -1994,6 +2008,7 @@ fn sandbenders_storm_destroys_large_creatures_or_earthbends_three() {
     assert!(targets.contains(&Target::Permanent(large)));
     assert!(!targets.contains(&Target::Permanent(small)));
     assert!(s.choose_target(Target::Permanent(large)));
+    spend_colorless(&mut s);
     settle(&mut s);
     assert!(s.game().state.permanents[large].is_none());
     assert!(s.game().state.permanents[small].is_some());
@@ -2004,6 +2019,7 @@ fn sandbenders_storm_destroys_large_creatures_or_earthbends_three() {
     choose_mode(&mut s, 0);
     assert!(offered_targets(&s).contains(&Target::Permanent(small)));
     assert!(s.choose_target(Target::Permanent(small)));
+    spend_colorless(&mut s);
     settle(&mut s);
     assert!(s.game().state.permanents[small].is_none());
 
@@ -2011,6 +2027,7 @@ fn sandbenders_storm_destroys_large_creatures_or_earthbends_three() {
     cast(&mut s, "Sandbenders' Storm");
     choose_mode(&mut s, 1);
     assert!(s.choose_target(Target::Permanent(plains)));
+    spend_colorless(&mut s);
     settle(&mut s);
     assert!(is_land_creature(&s, plains));
     assert_eq!(counters(&s, plains), 3);
@@ -2188,6 +2205,7 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     on_top(&mut s, strike);
     s.force_permanent_on_battlefield(0, "Mountain");
     let solstice = cast(&mut s, "Solstice Revelations");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
     choose(
@@ -2571,6 +2589,7 @@ fn cat_gator_uses_swamps_and_lifelink_on_its_enter_trigger() {
     s.force_permanent_on_battlefield(0, "Swamp");
     s.force_permanent_on_battlefield(0, "Swamp");
     cast(&mut s, "Cat-Gator");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     settle(&mut s);
@@ -2583,6 +2602,7 @@ fn announced_enter_trigger_keeps_its_controller_when_its_source_changes_control(
     let mut s = five_color_setup(&["Cat-Gator"]);
     s.force_permanent_on_battlefield(0, "Swamp");
     cast(&mut s, "Cat-Gator");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     let source = permanent_named(&s, "Cat-Gator");
@@ -2903,6 +2923,7 @@ fn farm_animals_destroy_an_artifact_without_targeting_a_creature() {
         &mut s,
         |a| matches!(a,Action::ChooseTarget {target:Target::Permanent(id),..} if *id==food),
     );
+    spend_colorless(&mut s);
     assert!(s
         .battlefield_permanents_named(0, "Curious Farm Animals")
         .is_empty());
@@ -2917,6 +2938,7 @@ fn cycle_sacrifices_during_resolution_and_searches_two_distinct_basics() {
     let mut s = five_color_setup(&["Cycle of Renewal"]);
     let sacrificed = play_and_settle(&mut s, "Forest");
     cast(&mut s, "Cycle of Renewal");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, sacrificed);
     let one = library_card(&s, 0, "Forest");
@@ -2939,6 +2961,7 @@ fn dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters() {
     let mut s = five_color_setup(&["Dai Li Agents"]);
     let land = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Dai Li Agents");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(land)));
     assert!(s.choose_target(Target::Permanent(land)));
@@ -3403,6 +3426,8 @@ fn earth_kingdom_soldier_offers_zero_one_or_two_distinct_own_creatures() {
         let b = s.force_permanent_on_battlefield(0, "Gray Ogre");
         let opponent = s.force_permanent_on_battlefield(1, "Gray Ogre");
         cast(&mut s, "Earth Kingdom Soldier");
+        spend_named(&mut s, |label| label == "Spend {G} (expires at step end)");
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::ChooseTarget);
         assert!(!s.action_space().actions.iter().any(
             |act| matches!(act,Action::ChooseTarget{target:Target::Permanent(p),..} if *p==opponent)
@@ -3974,6 +3999,7 @@ fn gather_creates_per_plains_and_scry_can_reverse_top_cards_privately() {
     s.force_permanent_on_battlefield(0, "Plains");
     let cards = pin_top(&mut s, &["Island", "Forest"]);
     cast(&mut s, "Gather the White Lotus");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Scry);
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 2);
     assert_eq!(s.action_space().actions.len(), 4);
@@ -4007,6 +4033,7 @@ fn scry_possible_world_materialization_preserves_inspected_cards_and_order_choic
     use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
     let mut s = five_color_setup(&["Gather the White Lotus"]);
     cast(&mut s, "Gather the White Lotus");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Scry);
     for partial in [false, true] {
         if partial {
@@ -4573,6 +4600,7 @@ fn ba_sing_se_earthbends_only_at_sorcery_timing() {
     s.set_player_mana_pool(0, "2GUU");
 
     cast(&mut s, "Abandon Attachments");
+    spend_colorless(&mut s);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     assert!(
         !offers_ability(&mut s, city, 0),
@@ -6687,6 +6715,7 @@ fn possible_worlds_resample_an_opponents_foretold_card() {
             &mut s,
             |a| matches!(a, Action::Foretell { card, .. } if *card == foretold),
         );
+        spend_colorless(&mut s);
         (s, foretold)
     };
     let (s, comet) = foretell_one(true);
@@ -7058,6 +7087,8 @@ fn ally_entry_context_buffs_the_entering_ally_and_haru_earthbends() {
     s.force_permanent_on_battlefield(0, "Haru, Hidden Talent");
     let land = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Pretending Poxbearers");
+    spend_named(&mut s, |label| label == "Spend {W} (expires at step end)");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(land)));
     settle(&mut s);
@@ -7258,6 +7289,7 @@ fn flashback_is_exiled_when_countered_after_iroh_leaves() {
         &mut s,
         |a| matches!(a, Action::CastSpell { card, .. } if *card == lesson),
     );
+    spend_colorless(&mut s);
     s.game_mut().move_card(iroh, ZoneType::Graveyard);
     let counter = library_card(&s, 1, "Counterspell");
     s.game_mut().move_card(counter, ZoneType::Hand);
@@ -7434,6 +7466,10 @@ fn jet_entry_damage_and_death_choose_up_to_two_distinct_creatures() {
     let own = s.force_permanent_on_battlefield(0, "Gnarled Professor");
     let other = s.force_permanent_on_battlefield(1, "Gnarled Professor");
     cast(&mut s, "Jet, Freedom Fighter");
+    for _ in 0..3 {
+        spend_named(&mut s, |label| label == "Spend {W} (expires at step end)");
+    }
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(other)));
     settle(&mut s);
@@ -7441,6 +7477,7 @@ fn jet_entry_damage_and_death_choose_up_to_two_distinct_creatures() {
     let jet = permanent_named(&s, "Jet, Freedom Fighter");
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(jet)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(own)));
     assert!(!s.action_space().actions.iter().any(|a| matches!(a, Action::ChooseTarget { target: managym::state::target::Target::Permanent(id), .. } if *id == own)));
@@ -7843,6 +7880,7 @@ fn hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only() {
             .position(|a| matches!(a,Action::ActivateAbility{permanent,..} if *permanent==sailor))
             .unwrap();
         s.step_action(index);
+        spend_colorless(&mut s);
         settle(&mut s);
         assert_eq!(counters(&s, fox), if draw >= 2 { 1 } else { 0 });
         assert_eq!(
@@ -8040,6 +8078,7 @@ fn ostrich_mills_then_selects_only_a_milled_land_or_grows_when_declined() {
         let mut s = five_color_setup(&["Ostrich-Horse", "Lightning Strike"]);
         let top = pin_top(&mut s, &["Lightning Strike", "Forest", "Island"]);
         cast(&mut s, "Ostrich-Horse");
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         assert_eq!(s.action_space().actions.len(), 3);
         assert!(top
@@ -8146,9 +8185,11 @@ fn court_official_and_ozai_make_the_target_player_choose_discards() {
         }
         cast(&mut s, name);
         if name == "Corrupt Court Official" {
+            spend_colorless(&mut s);
             pass_until(&mut s, ActionSpaceKind::ChooseTarget);
         }
         assert!(s.choose_target(Target::Player(PlayerId(1))));
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::Discard);
         assert_eq!(s.action_space().player, Some(PlayerId(1)));
         settle(&mut s);
@@ -8445,6 +8486,7 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
             enter_and_settle(&mut s, "Ran and Shaw");
         } else {
             cast(&mut s, "Ran and Shaw");
+            spend_colorless(&mut s);
             // Resolve the creature but leave its entry trigger on the stack.
             for _ in 0..10 {
                 if s.battlefield_permanents_named(0, "Ran and Shaw").len() == 1 {
@@ -8477,6 +8519,7 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
 fn ran_and_shaw_copy_ignores_the_sources_status_counters_and_effects() {
     let mut s = ran_and_shaw_setup();
     cast(&mut s, "Ran and Shaw");
+    spend_colorless(&mut s);
     for _ in 0..10 {
         if s.battlefield_permanents_named(0, "Ran and Shaw").len() == 1 {
             break;
@@ -8609,6 +8652,7 @@ fn shared_roots_search_can_find_or_decline_without_leaking_the_library() {
     for take in [false, true] {
         let mut s = five_color_setup(&["Shared Roots", "Rumble Arena"]);
         cast(&mut s, "Shared Roots");
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         let forest = library_card(&s, 0, "Forest");
         let nonbasic = library_card(&s, 0, "Rumble Arena");
@@ -8647,6 +8691,7 @@ fn sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target() 
     s.game_mut().state.permanents[land].as_mut().unwrap().tapped = true;
     let strike = cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Player(PlayerId(1))));
+    spend_colorless(&mut s);
     cast(&mut s, "Sokka's Haiku");
     assert!(s.choose_target(Target::StackSpell(strike)));
     assert!(s.choose_target(Target::Permanent(land)));
@@ -8668,6 +8713,7 @@ fn sokkas_haiku_counters_draws_mills_and_untaps_and_needs_a_legal_target() {
         s.game_mut().state.permanents[land].as_mut().unwrap().tapped = true;
         let strike = cast(&mut s, "Lightning Strike");
         assert!(s.choose_target(Target::Player(PlayerId(1))));
+        spend_colorless(&mut s);
         cast(&mut s, "Sokka's Haiku");
         assert!(s.choose_target(Target::StackSpell(strike)));
         assert!(s.choose_target(Target::Permanent(land)));
@@ -8999,6 +9045,7 @@ fn tolls_limits_triggers_while_mayhem_sees_opponent_sacrifices() {
     play_and_settle(&mut s, "Mayhem Devil");
     let clue = permanent_named(&s, "Clue");
     activate_first(&mut s, clue);
+    spend_colorless(&mut s);
     settle_targeting_opponent(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
     assert_eq!(s.game().state.players[1].life, 19);
@@ -9008,6 +9055,7 @@ fn tolls_limits_triggers_while_mayhem_sees_opponent_sacrifices() {
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
     activate_first(&mut s, opponent_clue);
+    spend_colorless(&mut s);
     settle_targeting_opponent(&mut s);
     assert_eq!(s.game().state.players[1].life, 18);
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
@@ -9040,6 +9088,7 @@ fn toph_enters_earthbends_and_counts_counters_on_lands() {
     let mut s = five_color_setup(&["Toph, the Blind Bandit"]);
     let land = s.force_permanent_on_battlefield(0, "Forest");
     cast(&mut s, "Toph, the Blind Bandit");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(land)));
     settle(&mut s);
@@ -9622,6 +9671,7 @@ fn lesson_payment(names: &[&str], pool: &str) -> (Scenario, CardId, usize) {
     if s.action_space().kind == ActionSpaceKind::PayOrNot {
         choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     }
+    spend_colorless(&mut s);
     s.set_player_mana_pool(0, pool);
     pass_until(&mut s, ActionSpaceKind::Waterbend);
     assert_eq!(s.zone_size(0, ZoneType::Hand), before + 3);
@@ -9640,6 +9690,7 @@ fn waterbend_lesson_draws_before_optional_payment_and_taps_without_mana() {
     let before = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
     let spell = cast(&mut s, "Waterbending Lesson");
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Waterbend);
     assert_eq!(
         s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
@@ -9670,6 +9721,7 @@ fn waterbend_cannot_partially_pay_then_discard() {
     enter_and_settle(&mut s, "Prophetic Prism");
     cast(&mut s, "Waterbending Lesson");
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Waterbend);
     s.set_player_mana_pool(0, "1");
     let prism = permanent_named(&s, "Prophetic Prism");
@@ -10209,6 +10261,7 @@ fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
         let chosen = library_card(&s, 0, "Gray Ogre");
         s.game_mut().move_card(chosen, ZoneType::Hand);
         cast(&mut s, "Yuyan Archers");
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         let top = *s
             .game()
@@ -10358,6 +10411,7 @@ fn elemental_new_decisions_replay_reject_stale_commands_and_restore_exact_forks(
 
     let mut s = five_color_setup(&["Gather the White Lotus"]);
     cast(&mut s, "Gather the White Lotus");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::Scry);
     assert_choice_contract(&s);
     s.step_action(0);
@@ -10366,6 +10420,7 @@ fn elemental_new_decisions_replay_reject_stale_commands_and_restore_exact_forks(
     let mut s = five_color_setup(&["Ostrich-Horse"]);
     pin_top(&mut s, &["Forest", "Island", "Plains"]);
     cast(&mut s, "Ostrich-Horse");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     assert_choice_contract(&s);
 
@@ -11451,6 +11506,7 @@ fn appa_airbends_any_number_and_makes_an_ally_for_casts_from_exile() {
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let ogre_cards = ogres.map(|ogre| card_of(&s, ogre));
     cast(&mut s, "Appa, Steadfast Guardian");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let offered = offered_targets(&s);
     assert!(!offered.contains(&Target::Permanent(forest)));
@@ -12568,6 +12624,7 @@ fn fatal_fissure_earthbends_four_when_that_creature_dies_this_turn() {
     settle(&mut s);
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
@@ -12710,6 +12767,7 @@ fn price_of_freedom_destroys_a_land_its_controller_may_replace_and_you_draw() {
         let hand = s.zone_size(0, ZoneType::Hand);
         cast(&mut s, "Price of Freedom");
         assert!(s.choose_target(Target::Permanent(mountain)));
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::PayOrNot);
         assert_eq!(s.action_space().player, Some(PlayerId(1)));
         if search {
@@ -12780,6 +12838,7 @@ fn destined_confrontation_each_player_keeps_total_power_four() {
     let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Destined Confrontation");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     let card = card_of(&s, mine[0]);
@@ -12930,6 +12989,7 @@ fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let toph = permanent_named(&s, "Toph, Hardheaded Teacher");
     cast(&mut s, "Gray Ogre");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
@@ -12967,6 +13027,7 @@ fn sandbender_scavengers_grows_on_sacrifice_and_reanimates_within_its_power() {
 
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(scavengers)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::PayCost));
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
@@ -12997,6 +13058,7 @@ fn earth_rumble_earthbends_then_your_creature_fights_theirs() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     cast(&mut s, "Earth Rumble");
     assert!(s.choose_target(Target::Permanent(forest)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(wurm)));
     assert!(s.choose_target(Target::Permanent(ogre)));
@@ -13149,6 +13211,7 @@ fn redirect_lightning_moves_a_spell_to_another_target() {
         let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
         let strike = cast(&mut s, "Lightning Strike");
         assert!(s.choose_target(Target::Permanent(first)));
+        spend_colorless(&mut s);
         let life = s.life(0);
         cast(&mut s, "Redirect Lightning");
         assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
@@ -13159,6 +13222,7 @@ fn redirect_lightning_moves_a_spell_to_another_target() {
         }
         assert!(s.choose_target(Target::StackSpell(strike)));
         assert_eq!(s.life(0), if pay_mana { life } else { life - 5 });
+        spend_colorless(&mut s);
         resolve_top(&mut s);
         assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
         assert!(
@@ -13258,6 +13322,7 @@ fn avatar_destiny_grows_with_your_graveyard_and_returns_when_its_creature_dies()
     s.game_mut().state.permanents[ogre].as_mut().unwrap().damage = 1;
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     for card in &milled {
         assert_eq!(
@@ -13469,6 +13534,7 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
     let mut s = five_color_setup(&["Leaves from the Vine", "Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let saga_card = cast(&mut s, "Leaves from the Vine");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     let saga = s.game().state.card_to_permanent[saga_card].expect("on the battlefield");
     assert_eq!(
@@ -13612,6 +13678,7 @@ fn the_cave_of_two_lovers_is_sacrificed_only_after_its_final_chapter_resolves() 
     let mut s = five_color_setup(&["The Cave of Two Lovers", "Mountain"]);
     let land = s.force_permanent_on_battlefield(0, "Mountain");
     let cave_card = cast(&mut s, "The Cave of Two Lovers");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     settle(&mut s);
     assert_eq!(
@@ -13848,6 +13915,7 @@ fn aang_swift_savior_airbends_a_spell_and_transforms_into_aang_and_la() {
     let bolt = cast(&mut s, "Lightning Bolt");
     target_opponent(&mut s);
     let aang_card = cast(&mut s, "Aang, Swift Savior");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(offered_targets(&s).contains(&Target::StackSpell(bolt)));
     assert!(s.choose_target(Target::StackSpell(bolt)));
@@ -13910,6 +13978,7 @@ fn aang_swift_savior_entry_trigger_can_be_redirected_after_transforming() {
     let first = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let aang_card = cast(&mut s, "Aang, Swift Savior");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(first)));
     let trigger = s.game().state.stack_objects.last().unwrap().as_target();
@@ -14064,6 +14133,7 @@ fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     clear_summoning_sickness(&mut s, ogre);
     let bumi_card = cast(&mut s, "Bumi, Unleashed");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(land)));
     settle(&mut s);
@@ -14123,6 +14193,7 @@ fn aang_at_the_crossroads_finds_a_creature_and_transforms_at_the_next_upkeep() {
     let land = s.force_permanent_on_battlefield(0, "Forest");
     let top = pin_top(&mut s, &["Gray Ogre", "Craw Wurm"]);
     let aang_card = cast(&mut s, "Aang, at the Crossroads");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let offered = offered_cards(&s);
@@ -14268,6 +14339,11 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
     s.set_player_mana_pool(0, "R");
     cast(&mut s, "Lightning Bolt");
     target_opponent(&mut s);
+    // Spend firebending mana before regular red; both expiries are offered.
+    spend_named(&mut s, |label| {
+        label == "Spend {R} (expires at end of combat)"
+    });
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("R"));
     // The copy keeps the opponent as its target.
     for _ in 0..10 {
         if s.action_space().kind == ActionSpaceKind::ChooseTarget {
@@ -14339,6 +14415,7 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     s.set_player_mana_pool(0, "6");
     choose_mode(&mut s, 6);
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    spend_colorless(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     let object = s.game().current_object_ref(theirs_card).unwrap();
     assert!(
@@ -14426,6 +14503,7 @@ fn koh_the_face_stealer_takes_the_abilities_of_the_last_chosen_card() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let (duck_card, ogre_card) = (card_of(&s, duck), card_of(&s, ogre));
     let koh_card = cast(&mut s, "Koh, the Face Stealer");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(duck)));
     settle(&mut s);
@@ -14475,6 +14553,7 @@ fn koh_the_face_stealer_has_the_chosen_cards_triggered_abilities() {
     let mut s = five_color_setup(&["Koh, the Face Stealer", "Fire Lord Azula"]);
     let azula = s.force_permanent_on_battlefield(1, "Fire Lord Azula");
     let koh_card = cast(&mut s, "Koh, the Face Stealer");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(azula)));
     settle(&mut s);
@@ -14559,6 +14638,7 @@ fn abilities_on_the_stack_keep_the_face_they_came_from() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let ogre_card = card_of(&s, ogre);
     let aang_card = cast(&mut s, "Aang, Swift Savior");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(ogre)));
     let aang = s.game().state.card_to_permanent[aang_card].unwrap();
@@ -14910,6 +14990,7 @@ fn aang_swift_savior_does_not_transform_again_after_an_intervening_round_trip() 
 fn koh_inherits(s: &mut Scenario, name: &str) -> PermanentId {
     let victim = s.force_permanent_on_battlefield(1, name);
     let card = cast(s, "Koh, the Face Stealer");
+    spend_colorless(s);
     resolve_top(s);
     assert!(s.choose_target(Target::Permanent(victim)));
     settle(s);
@@ -15007,6 +15088,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         .zones
         .move_card(suki, PlayerId(0), ZoneType::Hand);
     cast_card(&mut s, suki);
+    spend_colorless(&mut s);
     assert_eq!(s.game().card_power(suki), 2);
     // A control-changing effect changes the spell's "you", not its owner.
     if let managym::state::stack_object::StackObject::Spell(spell) =
@@ -15081,6 +15163,7 @@ fn cat_gator_any_target_removes_loyalty_or_defense_and_gains_life() {
         set_counters(&mut s, victim, counter, 5);
         force_lands(&mut s, 0, "Swamp", 2);
         cast(&mut s, "Cat-Gator");
+        spend_colorless(&mut s);
         pass_until(&mut s, ActionSpaceKind::ChooseTarget);
         assert!(s.choose_target(Target::Permanent(victim)));
         settle(&mut s);
@@ -15636,6 +15719,7 @@ fn cruel_administrator_entry_raid_reads_the_entering_controller() {
     for attacked in [PlayerId(0), PlayerId(1)] {
         let mut s = five_color_setup(&["Cruel Administrator"]);
         let card = cast(&mut s, "Cruel Administrator");
+        spend_colorless(&mut s);
         s.game_mut().state.turn.history[attacked.0].attacked = true;
         let managym::state::stack_object::StackObject::Spell(spell) =
             s.game_mut().state.stack_objects.last_mut().unwrap()
@@ -15691,6 +15775,7 @@ fn doubled_battle_fan_tokens_offer_either_attachment_without_an_implicit_choice(
     let mut s = five_color_setup(&["Doubling Season", "Kyoshi Battle Fan"]);
     s.force_permanent_on_battlefield(0, "Doubling Season");
     let fan_card = cast(&mut s, "Kyoshi Battle Fan");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let fan = s.game().state.card_to_permanent[fan_card].unwrap();
     let allies = s.battlefield_permanents_named(0, "Ally");

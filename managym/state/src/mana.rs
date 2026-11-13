@@ -1,5 +1,6 @@
 // mana.rs
-// Mana costs and pools, including exact two-color hybrid payment.
+// Mana costs, pooled classes and exact unit spending. SpendingContext checks
+// restrictions; ManaSpent carries one payment's amounts and applicable riders.
 
 use std::{collections::BTreeSet, sync::Arc};
 
@@ -63,8 +64,8 @@ impl SpendPredicate {
 }
 
 /// The spending restriction that mana keeps until it is spent or lost
-/// (CR 106.6). Unrestricted mana is not a restriction: it lives in
-/// [`Mana::mana`], so every class here limits some purpose.
+/// (CR 106.6). A [`ManaClass`] can carry this restriction independently of its
+/// spend effect and expiry; ordinary mana lives in [`Mana::mana`].
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub enum ManaRestriction {
     /// Spend only on a purpose matching one of these ("spend this mana only

@@ -18,7 +18,7 @@ use crate::support::{
         put_onto_battlefield, until_end_of_turn, ur_lessons_setup, Scenario,
     },
     inspect::{card_of, library_card},
-    play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle},
+    play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle, spend_colorless},
 };
 use managym::agent::observation_layout::{
     action, card, fact, permanent, player, relation, turn_state,
@@ -3977,6 +3977,7 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
     let (mut s, ogre) = setup();
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert_eq!(waiting(&s, 0), None, "fired");
 }

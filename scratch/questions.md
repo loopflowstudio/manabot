@@ -1,5 +1,11 @@
 # MTG-297 questions
 
+- Fixture repair (2026-11-12): funded card-behavior fixtures spend ordinary
+  colorless mana for generic pips to preserve colors for later spells. Hybrid
+  pips and regular/combat expiry are chosen explicitly where they arise.
+  This is a test-player choice, not an engine payment preference; shared
+  casting, priority, mode and target helpers still expose pending decisions.
+
 - A fixed (non-activated) mana source producing two types under Heartbeat
   would need a bonus type choice inside automatic payment; the planner leaves
   such a source out. No current fixed source produces two types.

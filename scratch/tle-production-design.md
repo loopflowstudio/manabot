@@ -117,6 +117,11 @@ target remains open. The unpublished `spend_effect_mana` /
 `pooled_mana_classes` / `PooledManaClassData` / `PooledManaClass`; no alias is
 kept. `PooledManaView`, token programs and buffer layouts survive unchanged.
 
+Explicit test payments use `support/play.rs::spend_named`; the TLE-local
+selector and repeated offer-selection loops are removed. Heartbeat fixtures
+use the shared `permanent_named`/`card_of` lookup. Forced-payment feasibility
+stops after its first valid ordering instead of collecting discarded choices.
+
 ## Pooled-mana presentation decision (concept review, 2026-11-12)
 
 Implemented in `fcc7a514c`. The former `PlayerData.spend_effect_mana` /
@@ -142,9 +147,10 @@ compatibility alias; the behavior and learning representation are unchanged.
 - The obsolete "predates" comment is removed.
 
 The implementation and compression checks are recorded in
-`mtg-297-heartbeat-of-spring.md`. Current-world evidence and corpus admission now pass; publication is blocked by
-75 failures in the broader affected-file debug run, recorded there. No open product
-choice; the presentation repair is no longer pending implementation.
+`mtg-297-heartbeat-of-spring.md`. Current-world evidence and corpus admission pass. The 75 broader debug failures
+were repaired with explicit fixture payments; all 643 selected checks now pass,
+as recorded there. No open product choice or implementation blocker remains;
+the caller retains review and delivery.
 
 ## Concept review after the pooled-class rename (2026-11-12)
 

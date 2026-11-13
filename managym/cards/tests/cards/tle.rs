@@ -10,7 +10,7 @@ use crate::support::{
     },
     play::{
         activate, attack_with, cast_owned, choose, choose_mode, pass_until, resolve_everything,
-        select_card, settle,
+        select_card, settle, spend_colorless, spend_named,
     },
 };
 use managym::{
@@ -89,6 +89,7 @@ fn tle_baseline_zukos_offense_can_damage_player_or_creature() {
 fn tle_baseline_kindly_customer_draws_on_entry() {
     let mut s = five_color_setup(&["Kindly Customer"]);
     cast_owned(&mut s, "Kindly Customer");
+    spend_colorless(&mut s);
     let hand = s.zone_size(0, ZoneType::Hand);
     let library = s.zone_size(0, ZoneType::Library);
     settle(&mut s);
@@ -273,6 +274,7 @@ fn tle_baseline_toucan_puffin_pumps_only_your_creature() {
     let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.game_mut().scenario_refresh_priority().unwrap();
     cast_owned(&mut s, "Toucan-Puffin");
+    spend_colorless(&mut s);
     for _ in 0..4 {
         if !offered_targets(&s).is_empty() {
             break;
@@ -809,17 +811,6 @@ fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
         s.advance_to_step(StepKind::PostcombatMain);
         assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
     }
-}
-
-/// Submit the native offer matching its public spending description.
-fn spend_named(s: &mut Scenario, predicate: impl Fn(&str) -> bool) {
-    let frame = s.game().semantic_decision_frame().unwrap();
-    let index = frame
-        .offers
-        .iter()
-        .position(|offer| predicate(&offer.label))
-        .unwrap_or_else(|| panic!("missing spend: {:?}", frame.offers));
-    s.step_action(index);
 }
 
 #[test]

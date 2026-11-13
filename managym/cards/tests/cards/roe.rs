@@ -3,7 +3,7 @@
 use crate::support::{
     game::{five_color_setup, Scenario},
     inspect::{can_cast, library_card, permanent_named},
-    play::{activate_named, cast, choose, enter_and_settle, settle},
+    play::{activate_named, cast, choose, enter_and_settle, settle, spend_named},
 };
 use managym::{
     agent::action::Action,
@@ -448,13 +448,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
             );
             activate_named(&mut s, "Prophetic Prism", 0);
             crate::support::inspect::assert_choice_contract(&s);
-            let frame = s.game().semantic_decision_frame().unwrap();
-            let combat = frame
-                .offers
-                .iter()
-                .position(|offer| offer.label.contains("end of combat"))
-                .unwrap();
-            s.step_action(combat);
+            spend_named(&mut s, |label| label.contains("end of combat"));
             assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));

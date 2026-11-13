@@ -1,98 +1,106 @@
 # MTG-297: Heartbeat, Animal Attendant, Toph, Uncle's Musings
 
-Contract: `tle-production-design.md`; verbatim review and coordination:
-`heartbeat-design.md`. Earlier inventory: `2af8bc650:scratch/mtg-297-heartbeat-of-spring.md`.
+Contract and completed deletion list: `tle-production-design.md`; verbatim
+review and coordination: `heartbeat-design.md`; limitations: `questions.md`.
+Earlier implementation and check details are retained at
+`8d2721ab9:scratch/mtg-297-heartbeat-of-spring.md`.
 
-## Implemented approach
+## Approach and remaining work
 
-Production stays in `flow/mana.rs`: capture `TappedForMana` at tap, select live
-trigger sources at production, then resolve independent bonuses. Spending uses
-`Mana::spending_choices` with saved `SpendCompletion`s in `flow/decision.rs`;
-unit choices preserve color, restriction, rider, expiry and every saved caller.
-The receipt excludes nested activation fees and reaches `ZoneEntry` and the
-entering permanent's own triggers. Existing fact kinds 11/14 carry the pools,
-offers and receipts in v9/v10; no input shape or model kind was added.
+`flow/mana.rs` owns production, payment search and native spending. Capture
+`TappedForMana` at tap; select live trigger sources at production. Unit choices
+preserve color, restriction, rider, expiry and every saved caller. `ManaSpent`
+excludes nested activation fees and reaches `ZoneEntry` and the entering
+permanent's own triggers. Existing fact kinds 11/14 carry pools, offers and
+receipts in v9/v10; no input shape or model kind was added. The public pool
+projection is `pooled_mana_classes`, with absent qualifiers omitted.
 
-The old `Mana::payment_options` / `Game::spend_mana` first-remainder path is
-gone. Search completes both zero costs and a cost's last unit through the
-same zero-cost transition. That transition
-alone emits the Spend boundary; a unit is explored only when the remaining
-current cost is already pooled. Payment completion types live with their saved
-decisions, and owned resolution effects move directly into the frame.
-`Game::pooled_mana` uses `Mana::add_combat`, and `spend_mana_unit` debits the
-selected live pool. `Mana::spending_choices` computes the next pip once, then
-enumerates eligible classes and colors in the same order. Tap candidate scans
-are iterators; checking a saved counted-tap cost stops after enough candidates
-are found, without allocating their identities. The saved-cost pruning and
-original search-state bounds remain intact.
+The automatic first-remainder payment path is deleted. The surviving search
+emits `PaymentStep::Spend` only at the zero-cost transition and pools the whole
+current cost before unit spending. Upstream source-equivalence memoization and
+supply bounds are retained; `PaymentSearchState::usable` counts allowed rider
+and combat classes. `cards/tests/cards/tle.rs` and `roe.rs` exercise receipt,
+restriction and expiry choices with Command replay, stale rejection and forks;
+`tests/semantic/test_pooled_mana_classes_input.py` checks shared encoding.
 
-`cards/tests/cards/tle.rs` witnesses rider selection, different converge
-receipts from the same pool, additional cast costs and nested filter fees.
-`support/inspect.rs::assert_choice_contract` checks each offer's Command replay,
-stale rejection and fork isolation; TLE spending and ROE expiry cases call it.
-`tests/semantic/test_pooled_mana_classes_input.py` covers shared v9/v10 encoding,
-text and Academy projection.
+The earlier search regression visited 1,001 states, 1,000 already unable to
+meet a saved counted tap (run `877a3189-d326-44e7-a45a-7f0aa7f63fbd`). Rejecting
+those states before exploring earlier payments repaired it without changing
+the 1,000-state witness bound. Details and earlier validation are in the
+revision above. Main's MTG-242 pool types, #504 search bounds, #506 sharding and
+v0.2.3 preparation are incorporated; no dependency wait or Wave remains.
 
-The unpublished pool projection is now `pooled_mana_classes` with native
-`PooledManaClassData` and PyO3 `PooledManaClass`, including its Python stub.
-Absent restrictions/effects are optional and omitted in JSON. Text states
-amounts before qualifiers; Academy falls back to aggregate combat expiry only
-without class rows. `PooledManaView`, token programs and buffer layouts remain
-unchanged. Focused checks pass below; gate's acceptance remains open.
+Compression stops feasibility after the first valid ordering when all usable
+units must be consumed; the receipt and remaining pool are identical for all
+such orders. Explicit fixture spending shares one offer selector and checks
+`Decision::ManaSpend`, avoiding duplicate label-selection loops. Priority and
+mode helpers continue to expose pending choices. No deletion target is open.
 
-`state/card.rs::TriggeredManaOutput::alternatives` checks whether either
-restricted or unrestricted mana contains a type, without summing their u8
-amounts. The type is present even when those amounts total 256; the bounded
-CR 106.12a witness covers each type, restricted-only output and empty output.
+## Debug fixture repair (2026-11-12)
 
-## Upstream reconciliation
+Follow-up compression reuses `support/inspect.rs::permanent_named` / `card_of`
+for the two Heartbeat source lookups and `support/play.rs::spend_named` for
+Prism's expiry choice. The native `ManaSpend` assertion in that shared helper
+prevents a color predicate from choosing production instead. Existing source,
+pool, Command and outcome assertions remain. `state/mana.rs` now explains
+restriction, rider and expiry as independent class properties. No deletion
+target remains open.
 
-Main through `7cce98a00` was merged as `08164e6ef`. It includes #504's
-source-equivalence memoization and total/color
-bounds in `flow/mana.rs::PaymentSearch` / `PaymentModel`, and #506's CI
-sharding. That separate work's note is retained at
-`08164e6ef:scratch/ci-under-8-minutes.md`, outside this Task's active context.
-MTG-242 is incorporated; no dependency wait or Wave remains.
+An intermediate retry of the original 75 failures passed 63 and failed 12
+(run `4dce981b-45a6-4dba-8cbc-6c6cd1f21b2d`,
+`/tmp/mtg297-compress-fixtures.log`). Fixture edits continued during this pass;
+the later 643-test repair result below supersedes that diagnostic.
 
-The later merge `0c2a366e6` incorporates main `b53ebf6f4` and the paired
-v0.2.3 release preparation (`e82a20033`). Compared with the repaired checkpoint
-`fffbe7816`, it changes release notes, package/crate versions, locks and release
-validation guidance; mana source, card definitions and focused witnesses are
-unchanged. The earlier search repair/compression results below remain evidence
-for that source. The later pooled-class implementation and compression rebuilt
-the extension on this merged checkout and passed the focused checks recorded
-below; that rebuild is complete. Gate's broader current-world checks remain
-open. Remote main still resolves to `e82a20033` at this reconciliation; its
-release changes are already incorporated.
+The previous publication block's 75 failures are resolved. They were fixture
+assumptions about automatic payment, not engine regressions. Fixtures now
+complete native spending before priority, stack inspection, hand snapshots or
+pool replacement. Ordinary colorless pays generic costs, hybrid pips choose
+stated colors, and Azula's Bolt chooses combat red while retaining regular red.
+The repeated Sailor fixture preserves blue for all three draws. Lesson casting
+finishes before its separate resolution pool is installed; its nested-payment
+and decline assertions remain unchanged.
 
-The new bound's `PaymentSearchState::usable` still called the removed
-restriction-only pool API; the first realign debug build failed there. It now
-counts `Mana::classes()` allowed by each pending purpose, including rider and
-combat classes. Two upstream assertions still destructured the removed
-`PaymentStep::Spend(remainder)`; they now check the Spend boundary. A directed
-bound witness requires rider blue plus combat red to pay {U}{R}. Source
-canonicalization leaves pool classes intact; the bounds relax supply only for
-feasibility and do not choose the live spending unit.
+`support/play.rs` owns the shared `spend_named` offer selector and explicit
+`spend_colorless` driver. Casting, priority, mode and target helpers retain
+their behavior; no native decision is suppressed. The failure fixes require no
+engine behavior change. The deletion list remains complete; no compatibility
+path was introduced. Additional simplification stops feasibility search after
+the first feasible unit when the entire usable pool must be consumed, and the
+shared spending helpers assert the native `ManaSpend` decision directly.
+The combined source is covered by the final debug run below.
 
-## Resolved search regression
+- Fixture repair before the later simplifications: **643 passed, 492 skipped** in
+  37.453s, run `b5b039a8-a079-4a97-93cf-02cbca7c67a1`, log
+  `/tmp/mtg297-repaired-native.log`.
+- Diagnostic progression: 454 selected tests had 442 passes and 12 failures
+  (`c8897094-5c31-4a0d-9704-caa63e322bfb`); fixing explicit hybrids and later
+  payments left one unpaid Jet-fixture Lightning Strike
+  (`f42d14eb-9fcc-405d-8cfe-39877b04888c`, 11/12). The final run above includes
+  that repair and every originally failing test.
 
-The bounded-state regression is diagnosed: the diagnostic run reached 1,001
-visited states, of which 1,000 already lacked enough candidates for a saved
-counted tap (run `877a3189-d326-44e7-a45a-7f0aa7f63fbd`). The first fixed
-production tapped land 0; checking the later tap only when it reached the front
-let unit spending explore doomed branches. Search now rejects any state whose
-saved tap lacks present, untapped candidates. These resources only decrease,
-so this removes no successful witness and chooses no spending class.
-The 1,000-state limit and all source, class/expiry and production semantics
-remain unchanged. The focused debug search/card witnesses and rebuilt
-shared-observation parity passed in the runs below. The earlier iteration
-feedback's 15/16 result predates this repair; it is not the current unresolved
-state. No known implementation blocker remains.
+- Combined source, same affected debug command: **643 passed, 492 skipped**
+  in 186.728s (one slow conformance case, 181.573s), run
+  `82b74871-d7da-499e-8a32-8f254dfc3a12`, log
+  `/tmp/mtg297-combined-native.log`. The Rust diff stayed unchanged throughout
+  this run. The original 75 failures and subsequent simplifications are covered.
 
-## Publication check (2026-11-12)
+- `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -j 2 -- -D warnings`
+  — passed on the combined source (`/tmp/mtg297-combined-clippy.log`).
+- Workspace Rust formatting and diff whitespace pass. The release build,
+  atomic cp313 installation and four shared-input checks are recorded below.
 
-`lf sync` completed cleanly at `3ee971e99`. Publication is blocked: the broader
-affected-file debug run has **568 passed, 75 failed, 492 skipped** (65.362s;
+Remaining: the caller's review and delivery steps. Headless runs provide no personal demo approval.
+
+## Prior publication check (2026-11-12)
+
+Focused TLE fixture repair: Kindly Customer and Toucan-Puffin explicitly spend
+ordinary colorless mana before taking the post-cast hand snapshot or passing
+priority to the entry trigger. Their original outcome assertions are unchanged.
+`cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards -E 'test(=tle::tle_baseline_kindly_customer_draws_on_entry) | test(=tle::tle_baseline_toucan_puffin_pumps_only_your_creature)'`
+— **2 passed**, run `6a12cdc1-ed51-45ca-adf0-1468642d0433`.
+
+`lf sync` completed cleanly at `3ee971e99`. Publication was blocked: the broader
+affected-file debug run had **568 passed, 75 failed, 492 skipped** (65.362s;
 nextest run `9644df6c-0cbb-4ba7-b5e3-30fb71cb76f7`). Earlier narrow passes do
 not establish readiness. No PR was published, auto-merge enabled or Task completed.
 
@@ -102,19 +110,18 @@ Reproduce with:
 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --lib --test cards --test rules_tests --test match_state_hash_tests --test semantic_conformance_tests -E 'test(mana::tests) | test(chk::) | test(tle::) | test(roe::) | test(tla::) | test(observability::) | test(cr_106_mana) | test(cr_603_triggers) | test(cr_608_resolution) | test(cost_effect_completion_retains) | binary(match_state_hash_tests) | binary(semantic_conformance_tests)'
 ```
 
-The local full log is `/tmp/mtg297-publish-native.log`. Many failures hit
-`support/play.rs:46`, "priority pass action should be available": existing
-fixtures pass priority while a native mana-spending choice is pending. Examples:
+The prior log is `/tmp/mtg297-publish-native.log`. Many failures hit
+`support/play.rs:46`, "priority pass action should be available": fixtures
+passed priority while a native mana-spending choice was pending. Examples:
 `observability::a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires`,
 `tla::aang_airbends_another_permanent_and_gains_lifelink_from_lessons`, and
 `tla::committed_optional_payment_resumes_after_two_nested_mana_decisions`.
-Other failures need individual inspection, including
+Other failures included
 `tla::hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only`
 (unwrap at `tla.rs:7844`) and the TLE Kindly Customer/Toucan Puffin baseline
-witnesses. Do not globally skip spending decisions or weaken assertions to
-make these pass. Update fixtures to make intentional payments, distinguishing
-fixture assumptions from engine regressions, then rerun the affected checks.
-Clippy and remaining broad gate checks were not run after this blocker emerged.
+witnesses. The fixture repair above completes those payments while preserving
+all card outcome assertions and native decisions.
+Clippy and remaining broad gate checks were not run in that publication pass.
 
 The current-world evidence gap is repaired in this checkout. The original
 Academy check had **3 failed, 5 passed**: stale authority/parity state hashes
@@ -153,116 +160,47 @@ Only Lita events `2937d550424b4ec1b44c9fc30c85c418` and
 Release to Memory and Lita remain outside this Task. Production limitations
 remain in `questions.md`; no product scope was reduced.
 
-## Pooled-class presentation checks (2026-11-12)
+## Earlier check receipts
 
-- Follow-up compression: `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards --test rules_tests -E 'test(chk::) | test(cr_106_12a_produced_types) | test(observability::pooled_mana) | test(tle::animal_attendant_mana_in_the_combat_pool)'`
-  — **11 passed** (run `455597ca-896b-454a-b6a9-c4a20e7c5eb2`), including
-  the type-presence overflow witness. Changed Python/stub formatting also passes.
-  Follow-up `CARGO_BUILD_JOBS=2 uv run --no-sync --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
-  passed; matching cp313 Darwin extension installed atomically.
-  `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_pooled_mana_classes_input.py tests/academy/test_experience_protocol.py -q`
-  — **18 passed** against that extension. Rust formatting and `git diff --check`
-  passed; gate's broader checks remain open.
-- Focused debug `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards -E 'test(observability::pooled_mana) | test(tle::animal_attendant_mana_in_the_combat_pool)'`
-  — **3 passed** (run `54d1296b-ab60-42c3-b5fe-8be083ac9d53`).
-- Academy `npm run check` — zero errors/warnings; `PlayerArea.svelte.test.ts`
-  — **5 passed**, including qualifier rendering and aggregate expiry fallback.
-  Protocol conformance initially failed on the old schema's field name;
-  after regenerating all six schemas, the focused
-  `npm run test -- src/lib/protocol-conformance.test.ts` retry — **5 passed**.
+Pooled-class, search-repair and pre-merge commands and results are retained at
+`8d2721ab9:scratch/mtg-297-heartbeat-of-spring.md`, including the 18 shared-input
+checks, 14 text checks and frontend/schema passes. They establish those earlier
+sources, not the final compression diff.
+
+## Current compression checks (2026-11-12)
+
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards -E 'test(chk::) | test(roe::prism_pool_alternatives)'`
+  — **8 passed**, run `7764da1a-350a-477d-89d9-3c651e44f327`;
+  `/tmp/mtg297-compress-focused.log`.
+- `lf context` initially reported **8,807 / 12,000 tokens** and
+  **36,688 / 98,304 bytes**. Rechecks after editing failed with
+  `Task "task_e698a90fb9d9456f9495f0ca7497fb1e" is not registered`.
+  Scratch Markdown was 27,395 bytes before this receipt; limits are unchanged.
 - `CARGO_BUILD_JOBS=2 uv run --no-sync --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
-  — passed; the matching cp313 Darwin extension was installed atomically.
-- `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_pooled_mana_classes_input.py tests/academy/test_experience_protocol.py -q`
-  — **18 passed**, covering native/reference v9/v10 scalar/vector parity,
-  omitted qualifiers, text, Academy projection and protocol schema shapes.
-- `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_text_observation.py -q -k 'pooled_mana or every_native_decision_code or every_observed_field'`
-  — **14 passed**. Changed Python/stub Ruff checks, Rust formatting and
-  `git diff --check` passed. All six generated schemas use the new field and
-  optional qualifiers. `lf context` remains under both scratch limits.
+  — passed in the concurrent repair run (`/tmp/mtg297-repair-extension.log`).
+  Verified the installed cp313 Darwin extension matches the rebuilt wheel bytes.
+- `uv run --no-sync --extra dev --extra play pytest tests/semantic/test_pooled_mana_classes_input.py -q`
+  — **4 passed** against that extension (`/tmp/mtg297-compress-input.log`).
 
-## Compression checks (2026-11-12)
-
-`cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --lib --test cards --test rules_tests -E 'test(mana::tests) | test(chk::) | test(tle::animal_attendant) | test(tle::toph_) | test(tle::uncles_) | test(merchant_) | test(roe::prism_) | test(roe::filtering_) | test(the_great_henge) | test(tarnished_citadel) | test(badgermole_cub_earthbends) | test(waterbend_and_mana_taps) | test(sozins_comet_foretell_spending) | test(observability::cast_receipt) | test(observability::spend_effect_mana) | test(observability::pooled_mana_expiry) | test(cr_106_mana) | test(cost_effect_completion_retains)'`
-— **83 passed, 4 failed** (run `39f6cf0b-d5eb-49de-826f-e7bc9da3d8c6`).
-All search witnesses passed, including the unchanged 1,000-state bound.
-Three Unlucky Cabbage Merchant tests mistook Food-fee spending for the search
-mode; the waterbend/bonus witness tried to pass priority during cast spending.
-Their fixtures now pool exactly the irrelevant costs: {2} for Food, {3}{U}
-for Waterbending Lesson. Their original behavior assertions remain.
-
-The four-test retry passed the three Merchant cases (run
-`996521fb-39d9-4b21-a339-93cfde818ae1`); the Lesson fixture's initial {1}{U}
-was insufficient. Corrected to its printed {3}{U},
-`cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards -E 'test(waterbend_and_mana_taps)'`
-— **1 passed** (run `e62834b8-74b3-466f-b7ed-6517e283aace`).
-All 87 selected witnesses pass across these runs.
-
-- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
-  — passed; matching cp313 Darwin extension replaced atomically.
-- `uv run --extra dev --extra play pytest tests/semantic/test_spend_effect_mana_input.py -q`
-  — **3 passed**, native/reference scalar/vector v9/v10, text and Academy.
-- Rust formatting and `git diff --check` passed. Removing the inherited CI
-  note keeps scratch under both configured limits; `lf context` confirms it.
-
-## Search repair checks (2026-11-12)
-
-- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --lib -E 'test(payment_search_preserves_witnesses_and_counted_tap_membership)'`
-  — **1 passed**, original bounds unchanged (run `9a44b2ad-3283-4238-ae60-9ca09d41d962`).
-- Focused debug `--lib --test cards --test rules_tests`, remaining mana search,
-  CHK, TLE spending/receipt/Merchant, Prism/nested fees, Henge/Citadel,
-  Badgermole, expiry and CR 106 — **70 passed, 1 failed** (run
-  `91448ebf-3050-41cf-a8da-3b484f1e31c2`). The failure was Badgermole's
-  old fixture passing priority with the new generic spending choice pending.
-  It now explicitly spends colorless, checks the remaining mixed pool and
-  checks the Command contract before preserving all earthbend/bonus assertions.
-- Focused `--test cards -E 'test(tla::badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana)'`
-  — **1 passed** (run `37d528ba-5758-4377-b45f-459ad73f6612`).
-  All 72 distinct focused search/card/rules witnesses pass across these runs.
-- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
-  — passed; matching cp313 extension installed atomically from the wheel.
-- `uv run --extra dev --extra play pytest tests/semantic/test_spend_effect_mana_input.py -q`
-  — **3 passed**, native/reference scalar/vector v9/v10, text and Academy.
-- Rust formatting and `git diff --check` passed; `lf context` remains within
-  both scratch limits.
-
-The pre-repair realign run had 15/16 mana tests passing, plus 3/3 shared-input
-checks; it did not resolve this regression. The diagnosed failing reproduction
-is recorded above rather than treating it as successful validation.
-
-## Run evidence before merge `08164e6ef`
-
-These results establish the pre-merge implementation only. The new search
-bounds and source grouping were not present in these runs.
-
-The first compression debug build found two remaining `Mana::pay` calls in
-`tests/rules/cr_106_mana.rs`; both witnesses now use the surviving unit API.
-
-Compression check: `cargo nextest run --manifest-path managym/Cargo.toml
---profile ci --build-jobs 2 --test-threads 2 --lib --test cards --test rules_tests`
-with the mana, CHK/TLE, Prism, Henge/Citadel, foretell, receipt/expiry,
-completion and decision-code filters — **57 passed** (run
-`d6d6fff3-5628-4083-bf65-edf94c276580`).
-
-- Compression rebuild: `CARGO_BUILD_JOBS=2 uv run --extra play maturin build
-  --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`
-  — passed; matching cp313 Darwin extension replaced atomically.
-- `uv run --extra dev --extra play pytest tests/semantic/test_spend_effect_mana_input.py -q`
-  — **3 passed**, covering native/reference scalar/vector v9/v10, text and Academy projection.
+- Repeated the affected debug command above after compression:
+  **643 passed, 492 skipped**, run `bbdbab2a-e47a-4e13-8bf3-c6effbf6be3b`,
+  `/tmp/mtg297-compress-verified.log` (186.972s; conformance 182.313s).
+  Hashes of all eight changed Rust files stayed fixed through this run.
+  The initial compression diagnostic saw **632 passed, 11 failed** while
+  fixture repairs were still arriving; that diagnostic log was subsequently
+  replaced. This was intermediate evidence, superseded by the stable pass.
+- Independently verified the rebuilt cp313 wheel postdates changed runtime
+  sources and its extension bytes match the installed module. The shared-input
+  parity log above covers that extension; no further runtime edit followed.
 - `cargo fmt --manifest-path managym/Cargo.toml --all --check` and
-  `git diff --check` — passed.
+  `git diff --check` pass. A later `lf context` succeeds: **6,612 / 12,000
+  tokens, 28,571 / 98,304 bytes** before this receipt; neither limit changed.
 
-The following passes preceded this compression pass.
-
-Earlier receipts, including pre-merge checks, are retained at
-`58c12b399:scratch/mtg-297-heartbeat-of-spring.md`; they do not validate this cut.
-
-- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --test cards -E 'test(chk::) | test(tle::animal_attendant) | test(tle::toph_) | test(tle::uncles_) | test(roe::prism_) | test(tla::sozins_comet_foretell_spending) | test(the_great_henge) | test(tarnished_citadel) | test(observability::cast_receipt) | test(observability::spend_effect_mana) | test(observability::pooled_mana_expiry)'` — 37 passed on the combined source.
-- Focused `--lib --test cards` debug runs also passed the state mana tests,
-  decision-code bound, nested Command fork/restore and cost-effect completion
-  cases. The full-fee witness caught and fixed a partial-production edge case.
-- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 Darwin extension installed atomically.
-- `uv run --extra dev --extra play pytest tests/semantic/test_spend_effect_mana_input.py -q` — 3 passed; the extended text-submission witness passed again with `-k spending_choices`. Covers v9/v10 native/reference scalar and batched encoding, text, Academy projection and runtime token vocabulary. Two missing text-renderer mappings (stage and obligation 31) were found and fixed.
-- `tests/academy/test_experience_protocol.py` — 14 passed. All six embedding schemas regenerated from their authorities; no historical fixtures rewritten.
-- `uv run --extra dev --extra play pytest tests/semantic/test_text_observation.py -q -k 'every_native_decision_code or every_observed_field'` — 13 passed.
-- Academy `npm run check` — zero errors/warnings; `npm run test -- src/lib/protocol-conformance.test.ts src/lib/decision-labels.test.ts` — 9 passed.
-- Rust formatting, changed-Python Ruff checks and `git diff --check` — passed.
+- The independent final debug selection also passed: **643 passed, 492 skipped**,
+  run `da6e9270-c440-4849-8560-4cd363887cd9`,
+  `/tmp/mtg297-compress-native.log` (189.825s; conformance 184.694s).
+  Final `lf context` retry again reports the Task as unregistered; the
+  successful size receipt above remains the latest available measurement.
+- `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -j 2 -- -D warnings`
+  — passed (`/tmp/mtg297-compress-clippy.log`). Compression leaves the diff for
+  the caller; no publication or personal demo approval is inferred.
