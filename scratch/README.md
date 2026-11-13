@@ -4,7 +4,8 @@
   receipts. Prepared cutover, shared saves, the #513 port, CUDA equivalence,
   speed/profile and the optimize pass are done. Open for review: PPO is 5.2%
   slower on the final same-card check, and CUDA gradients exceed the repeat
-  floor while meeting 1e-8. Main's #514 (PPO speedup) is not merged.
+  floor while meeting 1e-8. Main's #514 (PPO speedup) is merged; the CPU
+  oracle and a same-card speed pass have not been repeated after it.
 - `speed/mtg333-results.txt`: full A40 and 5090 speed tables.
 - `questions.md`: reversible assumptions taken without asking.
 - `mtg325-torch-backend-verification.md`: inherited baseline evidence; not

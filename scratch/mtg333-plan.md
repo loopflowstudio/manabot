@@ -1,20 +1,19 @@
 # MTG-333 plan: torch forward over `Prepared`, container saves, backend rule
 
 Policy baseline: `ef28f3a58` (PR #501). Comparison baseline for every receipt:
-`105e7e2aa` (MTG-297 mana spending). Main is merged through `a289fe066` (#513)
-as `6e20654c34`. One PR. Full history of this plan, with every attempt and
+`105e7e2aa` (MTG-297 mana spending). One PR. Full history of this plan, with every attempt and
 intermediate receipt: `696e7e667c:scratch/mtg333-plan.md`; slice 1–6 receipts:
 `1f634d89b:scratch/mtg333-plan.md`; MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
-**Not merged (seen 2026-11-13 20:30 UTC):** `origin/main` has `2b0cae2ab7`
-(#514, "Speed up PPO updates 2.17x on CUDA with grouped card-program
-gradients") and `493127545a`. #514 edits `manabot/model/semantic_cards.py` and
-`manabot/model/recent_events.py`, which this branch moved to
-`manabot/backends/torch/_semantic_cards.py` and `_recent_events.py`, and
-`backends/torch/policy.py`; it adds `tests/model/test_semantic_cards.py` cases
-and `experiments/ppo_cuda.{py,md}`. Every PPO number below predates it: the
-merge must port its change into the moved encoders, repeat the CPU oracle and
-update comparison, and makes the recorded PPO ratio stale.
+**Main merged through `de39d601fb` (#514, `493127545a`) as `403996c24b`.**
+#514 routes every program-table read through `SemanticCardEncoder.lookup`
+(`F.embedding` on CUDA with gradients, indexing elsewhere); the merge carries
+it into the moved `backends/torch/_semantic_cards.py`, `_recent_events.py`,
+`_facts.py`, `_shared_effects.py` and `policy.py`. `experiments/ppo_cuda.md`
+reports it CPU-bitwise and a CUDA summation reorder; its L4 PPO update fell
+69.97→32.23 s, mostly backward. The merge also changes the engine. After it,
+the CPU oracle and update comparison have not run, and every PPO ratio below
+predates it.
 
 ## Problem
 
@@ -103,7 +102,7 @@ Slices 1–8 are implemented; nothing is pending a launch.
    initial policy captures are `.safetensors`; MLX reads `Prepared.is_agent`
    for trimmed ownership; `MLXBackend(precision=)` reaches file loads.
 8. CUDA equivalence, speed, profile and the optimize pass are measured
-   (Receipts). The optimize pass kept one change: `arrays.array_fields` and
+   (Receipts) on the pre-#514 tree. The optimize pass kept one change: `arrays.array_fields` and
    `_replace_arrays` skip scalar-only tuples.
 
 **Open for review, not waived:**
@@ -113,7 +112,9 @@ Slices 1–8 are implemented; nothing is pending a launch.
   met. In the final check PPO "Forward and loss" is 9.612 s vs 5.725 s while
   backward is 34.672 s vs 36.041 s; the limiter is large-minibatch host
   preparation in the forward, not a correctness difference or a reason to
-  restore raw forwards. #514 (above) changes PPO backward on main.
+  restore raw forwards. #514 halves PPO backward on both arms, so head's
+  extra forward time is now a larger share; the regression must be
+  remeasured against a base that contains #514 (Launching again).
 - CUDA gradients meet the Task bar (≤1e-8) but exceed the head-vs-head repeat
   floor the plan also asked for.
 - With `tests/eval/test_batched_eval.py` earlier in the same pytest process,
@@ -203,6 +204,12 @@ patches (equivalence applies `git diff BASE HEAD -- manabot` reversed; speed
 applies `git diff HEAD BASE -- manabot` forward). They are not in the tree:
 regenerate and commit them. Frozen launch commits: `cd7afaec86` (A40
 comparison), `e6cd7f59cc` (optimization), `46e3db32d7` (final check).
+
+After #514, a CUDA speed or gradient comparison against `105e7e2aa` mixes
+this Task's change with #514's CUDA reorder. Use main's `de39d601fb` as the
+CUDA base (the CPU oracle keeps `105e7e2aa`, since #514 is CPU-bitwise); its
+`manabot/` lacks `Prepared`, so the speed patch is `git diff HEAD de39d601fb
+-- manabot`, and `bench.py` must still run on both arms.
 
 Control: `ETUDE_HOME=/tmp/mtg333/launcher`, overlay
 `uv run --with 'etude-sdk[s3,eval]==0.2.15' etude …`, nested
@@ -308,18 +315,22 @@ leaf type; `MLXBackend.__init__` first): `compare.py current-shared-base.pt
 compress4-head.pt` → **3,410 tensors, differing 0**; `updates-compress4.json`
 `cmp`-identical; transfer-layout and two half-loader tests → 3 passed.
 
-Rentals at 20:32 UTC: the RunPod inventory holds two pods, both other Tasks'
-in `~/.etude` (`etude-e0f0acfca5a5` = `mtg324-l4-ab`, `etude-b0805de6f0f4` =
-`mtg347-l4`), left alone. The Task launcher lists three never-created
-requests at $0.00 (`mtg333-speed-a40-130fbf7df7b8`, `-855b55b84a3f`,
-`mtg333-opt-a6000-5e566212bb22`) whose windows end by 20:51 UTC; no Vast
-entry remains. No Vast CLI is installed locally, so Vast was read only
-through the launcher.
+Rentals at 20:38 UTC: RunPod holds two pods, both other Tasks'
+(`etude-e0f0acfca5a5` = `mtg324-l4-ab`, `etude-b0805de6f0f4` = `mtg347-l4`),
+left alone. Every MTG-333 launcher machine is a never-created request at
+$0.00 whose window has ended or ends by 20:51 UTC (`4b091160edbf` settled
+lost, $0.00). No Task rental is live.
 
 ## Next actions
 
-1. Review the PPO tradeoff and the CUDA repeat-floor finding (State).
-2. Merge main (#514) with the port described at the top, then repeat the CPU
-   oracle and update comparison.
-3. Gate: broader suites, installed wheel, Python 3.12, the full-file test
+1. Repeat the CPU oracle (fresh base and head captures, one belief corpus)
+   and the update comparison on the merged tree. The extension was rebuilt
+   for it (20:41 UTC, release, cp313 replaced atomically);
+   `tests/model/test_semantic_cards.py` → 10 passed, 8 CUDA-only skipped.
+2. One same-card CUDA speed pass, base `de39d601fb` vs head, within the
+   remaining USD 25 budget (spent so far ≈ $0.70): PPO, damped, inference,
+   collection, with the PPO section split. If PPO is still slower, the
+   untried candidates above target host preparation in the forward.
+3. Review the PPO tradeoff and the CUDA repeat-floor finding (State).
+4. Gate: broader suites, installed wheel, Python 3.12, the full-file test
    order. Publication and landing are the caller's steps.
