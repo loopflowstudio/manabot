@@ -2590,6 +2590,18 @@
    "sha256": "7471dd3676eabc33a9ea5ea7efadac8f970a6fe83f5371495291a37473b0e640",
    "bytes": 9321
   },
+  "experiments/data/bf16_behavior_logs/cpu-smoke/etude-result.json": {
+   "sha256": "b510b901e0e475ad00a6c0eae6162030a9cd10cd36557319c2fb2c24df43f070",
+   "bytes": 70
+  },
+  "experiments/data/bf16_behavior_logs/cpu-smoke/probe.json": {
+   "sha256": "a5cae50b0d32d0b970dcc1ed4423c1b76324ba211aa7eacfdd45dc56eba745c2",
+   "bytes": 3997
+  },
+  "experiments/data/bf16_behavior_logs/cpu-smoke/run.json": {
+   "sha256": "610c9da9b0b4a0cc5da9d36d538002150f14b18639d0c98beeb71a36f723323e",
+   "bytes": 12070
+  },
   "experiments/data/closure-lambda-elemental-v1/elemental_closure-rows-assembly.png": {
    "sha256": "d8fcae7aa6f56a171ba25ec044aba1b92edf1eb6c98ed626062a3c5349b9c319",
    "bytes": 163875

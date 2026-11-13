@@ -141,10 +141,13 @@ Required result: all pass; `uv run --extra dev ruff check manabot tests experime
    and quantiles of |Δ log p| of the chosen action. (b) is the quantity the
    brief asked about; it is reported, not gated, since no check compares it.
 2. **Train**: `precision_ladder.arm("bf16")` unchanged (w384l8, bucketed, no
-   live tokens, horizon 300), seed 32401, stop at 200 updates or the window.
+   live tokens, horizon 300), seed 32401, stop at the window (about 190 updates).
    The failed run paced 126 s/update, so 200 updates is 7.0 h; at an L4
    ceiling of USD 0.60/h that is USD 4.35 with setup, at 0.70/h the USD 5 cap
-   ends near update 197. Launch with the job's own `max_usd=5`.
+   ends near update 197. Launch with the job's own `max_usd=5`. Actual L4 offers are USD 0.69/h;
+   Etude adds 900 seconds startup to the job window, so the implemented window
+   is 6.99 hours, less setup/probe and finalization inside it. The 300-update
+   schedule is unchanged.
 
 Done when the run passes update 141 with `rejected_updates: 0` and reports
 how many updates carried a legal p < 1.4e-40 and were admitted (33 of 140 in
@@ -173,10 +176,11 @@ cause sentence. `docs/training-loop.md` needs no change.
 
 1. **This slice — implemented**: storage and check change with regressions.
    `collection_tail_graphs.py` already forwards `pack` arguments unchanged.
-2. Experiment file, probe smoke on CPU (`uv run python -m
+2. **Implemented**: experiment file, probe + real worker smoke on CPU (`uv run python -m
    experiments.bf16_behavior_logs smoke`), `tests/eval/test_experiment_files.py`.
-3. Launch, report, publish `experiments/data/bf16_behavior_logs/` to the
-   artifact store, docs sentence.
+3. **Partly complete; CUDA capacity unavailable**: report, docs link and CPU
+   evidence publication are done. Launch the capped L4 proof when capacity
+   returns, publish its results and finish the report.
 
 ## Exclusions
 
@@ -203,8 +207,9 @@ Final behavior/incident filter: **10 passed**. `ruff check` on changed Python
 files and `git diff --check` pass. Gate still
 owns the complete acceptance command above; CUDA proof has not run.
 
-Remaining: slices 2–3 (experiment probe/worker, CPU smoke, capped L4 run,
-artifact publication, report and report link). Precision defaults are unchanged.
+Remaining: CUDA proof launch and results (slice 3); probe/worker, CPU smoke,
+report, CPU artifact publication and report link are implemented. Precision
+defaults are unchanged.
 
 Compress (2026-11-13): `check_behavior` now calls `check_logs` for the log
 half (one owner of shape, support, finiteness, padding and normalization) and
@@ -212,3 +217,15 @@ keeps only the action checks; a log failure's incident tensors are `logs` and
 `valid` plus `minibatch_indexes`. `uv run --extra dev --extra artifacts
 --extra reports pytest tests/training/test_numerical_health.py
 tests/training/test_packed_action_rollouts.py -q`: **47 passed**.
+
+Proof implementation (2026-11-13): experiment discovery/job construction passed;
+CPU smoke completed eight forward combinations and one real worker update,
+emitting an admitted policy. Focused discovery tests: **2 passed**; changed-file
+ruff and diff checks pass. CPU receipts are published in the artifact manifest.
+Corrected job window: 6.99 h plus 900 s rental startup, job/cohort caps USD 5.
+Launch `ebd68228bef4` was refused before recording a run for "job dollars do not
+cover the hours"; both quotes, including the corrected one, returned "provider
+reports no available machines". No rental was created. CUDA acceptance remains
+open: run past update 141, report zero health rejections, quantify admitted
+subnormal updates and forward deltas, retain results and terminate the rental.
+Gate still owns the complete acceptance command.
