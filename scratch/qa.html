@@ -2,6 +2,24 @@
 <html><head><meta charset="utf-8"><title>MTG-320 QA</title>
 <style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}code,pre{background:#f4f1ea}pre{padding:.6em;overflow:auto}</style></head>
 <body>
+<h1>MTG-320 QA at 6b28b642d (after merging main 1d7b5fde9), 2026-11-13</h1>
+<p>Since the last pass, main changed nothing under <code>managym/</code> (<code>git diff --stat 22ed4a733 1d7b5fde9 -- managym</code> is empty). The branch changed three engine files: <code>action.rs</code> and <code>play.rs</code> now pass <code>CardId</code> where they used to convert it to <code>ObjectId</code> first, and <code>zone.rs</code> inlined two locals. A release cp313 build of HEAD was already current (cargo finished in 0.15 s). It was reinstalled atomically and extracted to <code>/tmp/mtg320-qa3/after-x</code>. The "before" run is the earlier run on main 22ed4a733's engine (<code>/tmp/mtg320-qa2/before.txt</code>). That engine and its Python package are byte-for-byte the same as main 1d7b5fde9's. Load averages were 170&ndash;295 from other work.</p>
+<h2>A. Same seeded games on both engines</h2>
+<p>The same <code>compare.py</code> as before: 108 authored, 30 Azula, 30 TLE-bonus (Heartbeat, Lita/Zeppelin, Release to Memory, Spectral Sailor) and 400 TLA pool games. For each decision it records a hash of both seats' <code>toJSON()</code> and <code>state_digest()</code>, plus one result line per game.</p>
+<pre>games 568, decisions 137,518, finished 567, 1 PyAgentError (both engines)
+after.txt vs before.txt, 138,086 lines after the path header: IDENTICAL
+error: pool:84736ef2-v-56f0ddb0 PyAgentError: source cannot pay tap cost (same on main)</pre>
+<h2>B. Academy table</h2>
+<p><code>./scripts/play --port 18791 --frontend-port 18792</code>, started in its own session. <code>ACADEMY_PLAY_READY</code> named this checkout's cp313 module. A headless Chromium session (Playwright from <code>academy/ui</code>, script deleted afterwards) opened the first visit, pressed New Game (UR Lessons vs GW Allies) and clicked random action-panel offers only, then Play Again. Three games across two browser sessions all reached Game Over: 85 clicks/142 s, 223 clicks/476 s and 26 clicks/148 s. There were no page or console errors. Game 1 showed a Compassionate Healer trigger on the stack (&ldquo;When this becomes tapped: You gain 1 life. Scry 1 &middot; triggered ability &middot; Seat 2&rdquo;). The GW Ally tokens attacked on the battlefield, and the graveyards held only cards. The server stopped on SIGINT to its process group, and both ports were freed.</p>
+<p>The first driver run's end-of-game check matched the hidden text &ldquo;game over&rdquo;. I fixed the QA script, not the product, to wait for the visible Play Again button to appear and close.</p>
+<p><img src="qa/head-01-first-visit.png"> <img src="qa/head-04-end-0.png"> <img src="qa/head-03-midgame-1.png"> <img src="qa/head-04-end-1.png"></p>
+<p>The midgame shot again shows the brief &ldquo;Waiting for the table &mdash; your action is being processed&rdquo; state right after a click, with &ldquo;Auto-passing&hellip;&rdquo; shown. That game continued and finished. No lasting stall occurred in this pass.</p>
+<h2>Result</h2>
+<p><b>Works:</b> HEAD behaves byte-for-byte like main over 568 seeded games, and Academy plays to Game Over three times.</p>
+<p><b>Fixed:</b> nothing in the product; nothing broke.</p>
+<p><b>Not reached:</b> Rust debug suite, Engine Budget and CI on this head (the gate owns them); a permanent-spell copy in Academy; emblems.</p>
+<p><b>Still wrong, worst first:</b> (1) main's &ldquo;source cannot pay tap cost&rdquo; agent error in one TLA pool game, which predates this change; (2) the earlier lasting Academy stall did not recur, and its cause is still unknown.</p>
+<hr>
 <h1>MTG-320 QA at 9c9124627 (after merging main 22ed4a733), 2026-11-13</h1>
 <p>The installed extension (09:29) predated the merge, so both engines were rebuilt in release (cp313): <b>before</b> = main <code>22ed4a733</code> (tree equal to main 2c47f59ae, with mana-spending choices, Heartbeat of Spring and the TLE bonus sheet) in a throwaway worktree; <b>after</b> = this head, installed atomically into <code>managym/</code>. Each run printed <code>managym.__file__</code>. Host load averages were 120&ndash;210 (other work).</p>
 <h2>A. Same seeded games on both engines</h2>

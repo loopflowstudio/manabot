@@ -116,6 +116,9 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a New Game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
+  Detect the end by a visible "Play Again" button (the page holds hidden
+  "game over" text); after clicking it, wait for the button to hide before
+  reading offers again.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
   textareas appear only then), fill both, press Check decklists, then New
