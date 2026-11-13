@@ -12,14 +12,12 @@ from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, ppo_checkpoints
 from manabot.sim.matchup import selected_match
 from manabot.training.learning import Learning, Schedule
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, refuse_frozen_execution
 import managym
 
 
 def main(*args: object, **kwargs: object) -> None:
-    raise RuntimeError(
-        "Frozen study execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def _arm(

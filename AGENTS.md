@@ -595,6 +595,10 @@ references; they are never checkpoints. Resolve a reference through its selected
 metric block's Storage and run prefix, after attempt/update supersession, so
 relocated evidence and resumed runs keep the same meaning.
 
+Etude requires every declared clock on each row, table and checkpoint. A
+missing checkpoint clock warns and skips recording; verify the recorded
+checkpoint, including downstream recipe outputs, rather than file existence.
+
 ### Etude card evaluation
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from

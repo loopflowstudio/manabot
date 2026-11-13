@@ -7,7 +7,7 @@ the loop. Evaluation is a separate Etude pass over its immutable checkpoints.
 from pathlib import Path
 from typing import Literal
 
-from etude.train.records import Step
+from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -61,7 +61,10 @@ def settings(config: BaselineConfig) -> SelfPlay:
 
 def train(config: BaselineConfig) -> None:
     with track(
-        clocks=[Step("updates", "collection/update iterations")],
+        clocks=[
+            Step("updates", "collection/update iterations"),
+            Time("training_seconds", "active collection and learning seconds"),
+        ],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:

@@ -180,32 +180,22 @@ publish, land or choose the next Graph step from here.
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
-- Training recipes: write a regime JSON from Python
-  (`TrainingRegime(...).model_dump_json()`) and run
-  `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
-  fresh `--out` each time; success prints nothing, so read `<run>/run.json`
-  (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
-  64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
-  `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
-  an empty directory to act like a new machine. To A/B an `Execution` switch
-  the CLI lacks (such as `live_tokens`), start from
-  `manabot.recipes.local.local_smoke(steps=3, device="cpu")`, set
-  `stages[0].execution.<field>`, re-validate, and dump one regime per arm with
-  the same `--seed`. Equal layouts then give `run.json` files that differ only in
-  `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
-  `bucketed_shapes` makes learning about 7× slower than padded, so time
-  bucketed arms against a bucketed control. Rebuild a regime for another
-  device from `authored_dump()`, not `model_dump()`, so `auto` fields resolve
-  again. To resume, the regime needs `recovery` (e.g.
-  `{"checkpoint_updates": 2}`); without it `--resume-from` passes the digest
-  check, then fails with "no committed recovery boundary". Resume with the same
-  regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
-  time. macOS has no `timeout`; use the tool's own timeout.
+- Training recipes: run `uv run manabot train --recipe local --updates 2 --device cpu --out /tmp/<dir>/run`.
+  Inspect `state.pt`, immutable `checkpoints/` and Etude rows under `etude/`.
+  Repeat the same output and seed to resume; extend only the target to continue.
+  For phase attribution use `scripts/bench_training_update.py` with a declared
+  small `--recipe module:function` returning `SelfPlay` without arguments.
+  It writes rows and summary with `--json`, not a `TrainingRun` receipt, and
+  requires fresh output. Regime JSON execution and `--resume-from` are retired.
+  To compare machine options, copy and validate the settings, use separate
+  outputs with the same seed, and compare raw/EMA checkpoint tensors. Keep
+  transitions and stream counts small for functional checks; a throughput
+  measurement needs the declared workload. Fetch artifacts through Doppler
+  without printing credentials. See docs/workflows.md for the output contract.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
-  `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
-  `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`. Those retained regimes are historical; run them at the named executable revision.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,
   execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
   runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting

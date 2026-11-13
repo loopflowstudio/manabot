@@ -74,7 +74,7 @@ from experiments.tla_frontier_analysis import (
     read_comparisons,
 )
 from manabot.infra.identity import StrictModel
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, refuse_frozen_execution
 
 EXPERIMENT = Path(__file__).stem
 type Vocabulary = Literal["catalog", "hashed"]
@@ -129,16 +129,12 @@ def vocabulary_regime(
 
 def runs(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def stored_continuation(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 # -- Evaluation ---------------------------------------------------------------

@@ -52,6 +52,7 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.panels import ML, PERF
+from manabot.training.regime import refuse_frozen_execution
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -189,9 +190,7 @@ def _environment(design: Design) -> Environment:
 
 def training_runs(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def scheduled_matchups(run: TrainingRun, design: Design) -> list[Matchup]:

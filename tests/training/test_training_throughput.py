@@ -1,11 +1,9 @@
 """The throughput probe, and step 2's launch legs and training digest."""
 
-import json
 import os
 from pathlib import Path
 import stat
 import subprocess
-from types import SimpleNamespace
 
 from etude.launch.job_file import read_job_file
 import pytest
@@ -15,119 +13,16 @@ from experiments import (
     training_throughput_packing as packing,
 )
 from manabot.experiment.setup import machine_setup
-from manabot.infra.host import MemoryLimit
-from manabot.training.records import TrainingRun
-from manabot.training.update_metrics import read_updates
 
 ROOT = Path(__file__).parents[2]
-RECIPE = ROOT / "experiments" / "regimes" / "elemental-long-183-v1.json"
 
 
-@pytest.mark.training
-def test_cpu_probe_writes_receipts_and_samples_for_every_child(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    output = tmp_path / "output"
-    monkeypatch.setattr(probe, "journal", lambda _: tmp_path / "journal")
-    config = probe.Probe(
-        recipe=str(RECIPE),
-        device="cpu",
-        streams=8,
-        phases=(
-            probe.Phase(name="solo", children=1, updates=2, first_seed=26001),
-            probe.Phase(name="pack-2", children=2, updates=2, first_seed=26002),
-        ),
-    )
-
-    results = probe.drive(config, output)
-
-    assert [r.status for r in results] == ["completed", "completed"]
-    for result in results:
-        folder = output / "training-throughput" / result.phase.name
-        assert json.loads((folder / "phase.json").read_text())["status"] == "completed"
-        samples = [
-            probe.Sample.model_validate_json(line)
-            for line in (folder / "samples.jsonl").read_text().splitlines()
-        ]
-        assert samples
-        assert result.peak_child_bytes and result.peak_child_bytes > 0
-        for child in result.children:
-            seed_folder = folder / f"seed-{child.seed}"
-            run = TrainingRun.model_validate_json(
-                (seed_folder / "receipt.json").read_bytes()
-            )
-            assert run.status == "completed"
-            assert run.stages[0].updates == 2
-            assert run.stages[0].collection_timings
-            # The per-update metrics run survives in the child's published folder.
-            assert run.metrics_run is not None
-            name = Path(run.metrics_run).name
-            updates = read_updates(seed_folder / "run", [run])[name]
-            assert sorted(updates) == [1, 2]
-            assert all(
-                any(k.startswith("time/") for k in row) for row in updates.values()
-            )
-        pids = {c.pid for sample in samples for c in sample.children}
-        assert len(pids) == result.phase.children
-
-
-def test_phase_is_skipped_when_packed_peak_would_exceed_memory(tmp_path: Path) -> None:
-    config = probe.Probe(recipe=str(RECIPE), device="cpu", memory_fraction=0.5)
-    phase = probe.Phase(name="pack-4", children=4, updates=1, first_seed=1)
-    machine = probe.psutil.virtual_memory().total
-
-    result = probe.run_phase(phase, config, tmp_path, previous_peak=machine // 6)
-
-    assert result.status == "skipped"
-    assert not result.children
-    assert (tmp_path / "pack-4" / "phase.json").exists()
-
-
-def test_gate_reads_the_pods_allowance_below_host_memory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    allowance = 48 * 10**9
-    monkeypatch.setattr(
-        probe, "memory_limit", lambda: MemoryLimit(bytes=allowance, source="cgroup-v2")
-    )
-    monkeypatch.setattr(
-        probe.psutil,
-        "virtual_memory",
-        lambda: SimpleNamespace(total=540 * 10**9),
-    )
-    config = probe.Probe(recipe=str(RECIPE), device="cpu")
-    phase = probe.Phase(name="pack-4", children=4, updates=1, first_seed=1)
-
-    result = probe.run_phase(phase, config, tmp_path, previous_peak=15 * 10**9)
-
-    assert result.status == "skipped"
-    assert result.machine_bytes == allowance
-    assert result.memory_source == "cgroup-v2"
-
-
-def test_gate_names_host_memory_when_no_allowance_is_readable(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(probe, "memory_limit", lambda: None)
-    config = probe.Probe(recipe=str(RECIPE), device="cpu", memory_fraction=0.5)
-    phase = probe.Phase(name="pack-4", children=4, updates=1, first_seed=1)
-    machine = probe.psutil.virtual_memory().total
-
-    result = probe.run_phase(phase, config, tmp_path, previous_peak=machine)
-
-    assert result.machine_bytes == machine
-    assert result.memory_source == "host"
-
-
-def test_children_track_locally_not_into_the_launched_run(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("ETUDE_RUN", "launched")
-    monkeypatch.setenv("ETUDE_TRACK_DIR", "/track")
-
-    environment = probe._child_environment()
-
-    assert not any(key.startswith("ETUDE_") for key in environment)
+def test_frozen_throughput_refuses_before_creating_output(tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="Frozen execution requires revision"):
+        probe.drive(probe.Probe(), tmp_path / "output")
+    with pytest.raises(RuntimeError, match="Frozen execution requires revision"):
+        probe.runs("HEAD")
+    assert not (tmp_path / "output").exists()
 
 
 # ---------------------------------------------------------------------------

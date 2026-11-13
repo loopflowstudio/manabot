@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 from typing import Literal
 
-from etude.train.records import Step
+from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import BaseModel, Field
 
@@ -48,7 +48,10 @@ def train(config: ElementalConfig) -> None:
         update={"device": config.device, "streams": config.streams}
     )
     with track(
-        clocks=[Step("updates", "collection/update iterations")],
+        clocks=[
+            Step("updates", "collection/update iterations"),
+            Time("training_seconds", "active collection and learning seconds"),
+        ],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:

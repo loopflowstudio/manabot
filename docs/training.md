@@ -126,7 +126,7 @@ gate, `validate_numerics`, is left out):
 # manabot/recipes/elemental.py
 from typing import Literal
 
-from etude.train.records import Step
+from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import BaseModel, Field
 
@@ -146,7 +146,10 @@ def train(config: ElementalConfig) -> None:
         update={"device": config.device, "streams": config.streams}
     )
     with track(
-        clocks=[Step("updates", "collection/update iterations")],
+        clocks=[
+            Step("updates", "collection/update iterations"),
+            Time("training_seconds", "active collection and learning seconds"),
+        ],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:
@@ -286,7 +289,10 @@ def train(config: BeliefConfig) -> None:
         update={"device": config.device}
     )
     with track(
-        clocks=[Step("updates", "collection/update iterations")],
+        clocks=[
+            Step("updates", "collection/update iterations"),
+            Time("training_seconds", "active collection and learning seconds"),
+        ],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:
@@ -579,6 +585,15 @@ costs, logged rows and recorded checkpoints; `state.pt` and the checkpoints
 under `run.out` are the learner. Checkpoint evaluation is a separate Etude
 evaluation that reads those checkpoints. No account is needed to train.
 
+The recipes declare `updates` and `training_seconds` clocks. Every update row,
+outcome table and checkpoint carries both. `training_seconds` is the sum of each
+completed update's `time/collection` and `time/learning`, and `state.pt` keeps it
+across attempts; startup, checkpoint writes, reporting and failed partial updates
+are excluded. In the belief recipe it measures policy self-play, not history
+collection or sampler fitting. The training report's default active-time clock
+therefore works for loop runs. No transitions clock is declared; cumulative
+learner transitions remain a metric.
+
 ### Update metrics
 
 A local run keeps its Etude record inside its output directory, under
@@ -594,9 +609,14 @@ Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
 phase seconds under `time/` (`time/collection`,
 `time/learning/minibatches/forward_and_loss`), CUDA high-water marks
 (`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
-`selection_groups/<action type>/<terminal distance>/rows`. Completed self-play
+MPS current tensor/driver allocations (`memory/allocated_mps_bytes`,
+`memory/driver_allocated_mps_bytes`), process RSS (`coordinates/rss_bytes`),
+one-minute host load (`coordinates/host_load_1m`) and
+`selection_groups/<action type>/<terminal distance>/rows`. Device metrics are
+absent on other devices. CUDA peaks cover the process lifetime; MPS allocations
+are current observations, not peaks. Completed self-play
 outcomes are a row table, logged once per update with Etude's
-`run.log_table("self_play_outcomes", rows, updates=...)`. Each row has `deck`
+`run.log_table("self_play_outcomes", rows, updates=..., training_seconds=...)`. Each row has `deck`
 and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
 `losses` and `draws`, so deck pairs add rows rather than metric columns. Etude
 stores the table as an immutable JSON file under the metric run's `artifacts/` and carries it with the
@@ -639,7 +659,7 @@ machine. `scripts/bench_training_update.py` prints the same split for one machin
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
 PPO value loss is half the squared lambda-target residual; categorical move
 learning records its own. Loss, entropy and KL describe the last optimized
-minibatch. RSS, CPU time and host load are resource observations, not
+minibatch. RSS, device allocation and host load are resource observations, not
 learning quality. Throughput is cumulative work over observed elapsed cost.
 
 ### Checkpoint cadence

@@ -29,6 +29,7 @@ from typing import Literal
 from etude.report import Curve, Matrix, Ranking, Report, Score
 
 from manabot.training.panels import ML, PERF
+from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
@@ -46,9 +47,7 @@ FINALIZATION_SECONDS = 300
 
 def runs(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def report() -> Report:

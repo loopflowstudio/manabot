@@ -1,5 +1,7 @@
 """Step 1 of the training-throughput experiment: is collection the bottleneck? (Task b015d5)
 
+Execution is retired; use the named historical revision.
+
 Protocol: experiments/protocols/training-throughput-b015d5-v1.md. One Etude run per
 rented machine runs `PHASES` in sequence on that host. Each phase starts its
 children at once as ordinary `scripts/bench_training_update.py` subprocesses on the
@@ -44,6 +46,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.host import MemoryLimit, MemorySource, memory_limit
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
+from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 BENCH = ROOT / "scripts" / "bench_training_update.py"
@@ -348,6 +351,7 @@ def collect(output: Path) -> None:
 
 def drive(probe: Probe, output: Path) -> list[PhaseResult]:
     """Run every phase in order on this host; raise after all if any failed."""
+    refuse_frozen_execution()
     root = journal(output)
     root.mkdir(parents=True, exist_ok=True)
     found: list[PhaseResult] = []
@@ -367,6 +371,7 @@ def drive(probe: Probe, output: Path) -> list[PhaseResult]:
 
 def run(probe: Probe) -> None:
     """The launched entry (`etude.call`): bind source, require the device, drive."""
+    refuse_frozen_execution()
     output = Path(os.environ["ETUDE_OUTPUT_DIR"])
     output.mkdir(parents=True, exist_ok=True)
     if probe.source_bundle is not None:
@@ -390,6 +395,7 @@ def runs(
     revision: str, machines: int = 1, hours: float = 1.5, usd_per_run: float = 1.05
 ) -> list[Run]:
     """One probe run per machine; the seed only names the run (phase seeds are fixed)."""
+    refuse_frozen_execution()
     probe = Probe(source_bundle=bundle_at(ROOT, revision))
     job = Job(
         name="training-throughput-probe",

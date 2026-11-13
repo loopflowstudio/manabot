@@ -17,6 +17,7 @@ from manabot.training.loops import self_play as loop
 from manabot.training.loops.self_play import LoopState, SelfPlay, load_state, self_play
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.selection import UpdateDiagnostics
+from scripts.bench_training_update import measure
 
 SEED = 197
 
@@ -38,11 +39,14 @@ def test_a_rerun_resumes_and_a_finished_loop_returns_at_once(tmp_path: Path) -> 
     out = tmp_path / "run"
     earlier = self_play(settings, out, seed=SEED, updates=1)
     original = earlier.read_bytes()
+    first_state = load_state(out / "state.pt", settings, SEED)
+    assert first_state is not None and first_state.counts.training_seconds > 0
 
     final = self_play(settings, out, seed=SEED, updates=2)
 
     state = load_state(out / "state.pt", settings, SEED)
     assert state is not None and state.update == 2
+    assert state.counts.training_seconds > first_state.counts.training_seconds
     assert sorted(p.name for p in (out / "checkpoints").glob("*-raw.pt")) == [
         "00000000-raw.pt",
         "00000001-raw.pt",
@@ -182,3 +186,41 @@ def test_live_ppo_requires_a_horizon_but_retained_records_omit_it() -> None:
     assert Learning.model_validate_json(fixed.model_dump_json()) == fixed
     assert fixed.learning_rate.at(1) == fixed.learning_rate.at(2)
     assert fixed.tau.at(1) == fixed.tau.at(2)
+
+
+def test_benchmark_reports_loop_phases_resources_and_active_time(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(Learning(horizon=2, epochs=1, minibatches=1))
+    measured = measure(settings, tmp_path, seed=SEED, updates=2)
+    rows = measured["rows"]
+    assert isinstance(rows, list) and len(rows) == 2
+    for row in rows:
+        assert row["time/collection/environment_step_and_encoding"] > 0
+        assert row["time/learning/minibatches/forward_and_loss"] > 0
+        assert row["coordinates/rss_bytes"] > 0
+        assert row["coordinates/host_load_1m"] >= 0
+        assert not any(key.startswith("memory/") for key in row)
+        assert row["training_seconds"] == row["coordinates/training_seconds"]
+    assert rows[1]["training_seconds"] > rows[0]["training_seconds"] > 0
+    assert rows[1]["training_seconds"] == pytest.approx(
+        sum(row["time/collection"] + row["time/learning"] for row in rows)
+    )
+    state = load_state(tmp_path / "state.pt", settings, SEED)
+    assert state is not None
+    assert state.counts.training_seconds == rows[-1]["training_seconds"]
+    with pytest.raises(ValueError, match="fresh --out"):
+        measure(settings, tmp_path, seed=SEED, updates=2)
+
+
+def test_device_memory_observations(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(torch.cuda, "max_memory_allocated", lambda: 123)
+    monkeypatch.setattr(torch.cuda, "max_memory_reserved", lambda: 456)
+    monkeypatch.setattr(torch.mps, "current_allocated_memory", lambda: 12)
+    monkeypatch.setattr(torch.mps, "driver_allocated_memory", lambda: 45)
+    cuda = loop.resource_metrics("cuda")
+    assert cuda["memory/peak_allocated_cuda_bytes"] == 123
+    assert cuda["memory/peak_reserved_cuda_bytes"] == 456
+    mps = loop.resource_metrics("mps")
+    assert mps["memory/allocated_mps_bytes"] == 12
+    assert mps["memory/driver_allocated_mps_bytes"] == 45

@@ -65,7 +65,11 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ValueAggregation
 from manabot.recipes.builders import with_capacity, with_value_aggregation
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    TrainingRegime,
+    TrainSelfPlay,
+    refuse_frozen_execution,
+)
 from manabot.training.validation import validate_regime
 import managym
 
@@ -253,9 +257,7 @@ def grid(seeds: Sequence[int], updates: int | None = None) -> list[Run]:
 
 def runs(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def _aggregation(name: str) -> ValueAggregation:
@@ -405,9 +407,7 @@ def _checkpoint(state: ExperimentState, run: str, updates: int) -> Checkpoint | 
 
 def segment(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> None:

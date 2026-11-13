@@ -12,8 +12,8 @@ the record's retained rows for every other stage.
 
 `phase_seconds` and `time_since` give each row the seconds its update spent
 in collection and learning, nested by "/" under `time/` for Etude's flame
-graph. They are differences of the stage record's cumulative phase timers, so
-the record stays the one measurement and each row its per-update share.
+graph. They read the live profilers; retained stage timers remain historical
+report data.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -25,7 +25,8 @@ from etude.run.listing import runs
 from etude.train.manifest import StoredBlock
 from etude.train.read import RunData, read
 
-from manabot.training.records import PhaseTiming, StageRecord
+from manabot.infra.profiler import Profiler
+from manabot.training.records import StageRecord
 
 type MetricValue = float | int | str | bool
 type MetricRow = dict[str, MetricValue]
@@ -84,37 +85,22 @@ def metric_row(diagnostic: Mapping[str, object]) -> MetricRow:
     return row
 
 
-def phase_seconds(record: StageRecord) -> dict[str, float]:
-    """A stage's cumulative collection and learning seconds as `time/` metric keys.
-
-    Profiler subphases nest below their phase by path, in lower snake case:
-    learning's `Minibatches/Forward and loss` is
-    `time/learning/minibatches/forward_and_loss`.
-    """
-    found = {
-        "time/collection": record.collection_seconds,
-        "time/learning": record.learning_seconds,
-    }
-    for phase, timings in (
-        ("collection", record.collection_timings),
-        ("learning", record.learning_timings),
-    ):
-        found |= _subphases(phase, timings or {})
-    return found
-
-
-def _subphases(phase: str, timings: Mapping[str, PhaseTiming]) -> dict[str, float]:
+def phase_seconds(collection: Profiler, learning: Profiler) -> dict[str, float]:
+    """Cumulative profiler seconds under the historical normalized `time/` keys."""
     return {
-        f"time/{phase}/"
+        "time/"
         + "/".join(
             re.sub(r"[^a-z0-9]+", "_", part.lower()).strip("_")
             for part in path.split("/")
-        ): timing.seconds
-        for path, timing in timings.items()
+        ): node.running_total()
+        for profiler in (collection, learning)
+        for path, node in profiler.node_cache.items()
     }
 
 
-def time_since(before: Mapping[str, float], now: Mapping[str, float]) -> MetricRow:
+def time_since(
+    before: Mapping[str, float], now: Mapping[str, float]
+) -> dict[str, float]:
     """Seconds each timer gained between two `phase_seconds` readings of one attempt."""
     return {key: value - before.get(key, 0.0) for key, value in now.items()}
 

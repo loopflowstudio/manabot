@@ -82,7 +82,11 @@ from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    TrainingRegime,
+    TrainSelfPlay,
+    refuse_frozen_execution,
+)
 from manabot.training.report import (
     against_earlier_self,
     against_fixed,
@@ -328,9 +332,7 @@ def export_updates(regime: TrainingRegime, protocol: Protocol) -> tuple[int, ...
 
 def capped_runs(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def runs(revision: str) -> list[Run]:

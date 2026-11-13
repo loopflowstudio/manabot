@@ -1,7 +1,7 @@
 """Retained regime and stage records for reading historical experiments."""
 
 from collections.abc import Mapping
-from typing import Annotated, Literal, TypedDict
+from typing import Annotated, Literal, NoReturn, TypedDict
 
 from pydantic import (
     BaseModel,
@@ -27,6 +27,15 @@ from manabot.training.learning import (
 )
 from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.state.game_errors import GameErrorPolicy
+
+FROZEN_EXECUTION_REVISION = "f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
+
+
+def refuse_frozen_execution() -> NoReturn:
+    """Refuse to translate a frozen method into the current self-play loop."""
+    raise RuntimeError(
+        f"Frozen execution requires revision {FROZEN_EXECUTION_REVISION}"
+    )
 
 
 class ArtifactReference(TypedDict):

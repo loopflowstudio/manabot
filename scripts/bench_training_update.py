@@ -1,59 +1,78 @@
 #!/usr/bin/env python3
-"""Where one training update's time goes, from the real stage on this machine.
+"""Measure a few self-play loop updates on this machine.
 
-Runs a recipe's self-play stage for a few updates through `execute_regime` and
-prints its receipt per environment decision. `--recipe` is a regime JSON file or
-a declaration `module:function` called as `function(regime_id, updates)`, such
-as `experiments.elemental_variants:elemental_recipe`. The default is the Elemental
-183 file re-pinned to the current world, so a checkout of any commit with that
-regime file gives a comparable row on the same machine; that re-pin has no
-capacity recovery, so one overflowing game ends the run. `--max-facts` narrows
-the fact axis for attribution only; it never names a recipe to train.
+`--recipe module:function` returns SelfPlay settings without arguments; the
+Elemental builder is the default. Regime JSON and TrainingRun receipts are no
+longer supported. `--json` writes per-update rows and a summary; `--out` retains
+state and immutable policies, otherwise they are temporary. Output directories
+must be fresh so the measurement covers exactly the requested updates.
+CUDA counts cover the entire run and change timing. Compare matched workloads
+on the same machine; CPU timings do not establish CUDA throughput.
 
-`--json OUT` writes the whole `TrainingRun` receipt. `--out DIR` keeps the run's
-folder (its verify store, checkpoints and the Etude metrics run that holds each
-update's rows, which the receipt's `metrics_run` names); without it the folder is
-temporary and deleted. `--cuda-counts OUT` counts CUDA kernel launches
-(`torch.profiler`) and synchronizing calls (`torch.cuda.set_sync_debug_mode("warn")`)
-as one total over the run. Divided by the receipt's updates it is a per-update
-rate; divided by one phase's `calls` it is only an upper bound for that phase,
-because every phase's launches are in the sum. The instrumentation slows the run,
-so its timings are not comparable with uninstrumented rows.
-
-Compare phase and whole-update timings on the same machine with matched workloads.
-CPU model timings do not establish CUDA throughput. On a shared machine, alternate
-the checkouts being compared and retain the timing spread.
-
-    uv run python scripts/bench_training_update.py --streams 256 --updates 3
+    uv run python scripts/bench_training_update.py --streams 4 --updates 2
 """
 
 import argparse
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager, nullcontext
+from dataclasses import dataclass, field
 import importlib
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from typing import TypedDict, cast
 import warnings
 
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.training.validation import validate_regime
-import managym
+from manabot.training.loops.self_play import SelfPlay, self_play
 
-RECIPE = Path(__file__).parents[1] / "experiments/regimes/elemental-long-183-v1.json"
-REGIME_ID = "bench-training-update"
-# Driver-side names of a kernel launch in the profiler's CPU events.
+RECIPE = "manabot.recipes.builders:elemental_self_play"
 _LAUNCHES = frozenset({"cudaLaunchKernel", "cuLaunchKernel", "cudaLaunchKernelExC"})
 
 
-def load_recipe(spec: str, updates: int) -> TrainingRegime:
-    """A regime file, or a declaration `module:function(regime_id, updates)`."""
-    if ":" in spec and not Path(spec).exists():
-        module, name = spec.split(":", 1)
-        declare: Callable[[str, int], TrainingRegime] = getattr(
-            importlib.import_module(module), name
-        )
-        return declare(REGIME_ID, updates)
-    return TrainingRegime.model_validate_json(Path(spec).read_bytes())
+class Summary(TypedDict):
+    seconds_per_update: float
+    decisions_per_update: float
+    games_per_update: float
+    phase_microseconds_per_decision: dict[str, float]
+
+
+class Measurement(TypedDict):
+    recipe_settings: dict[str, object]
+    seed: int
+    rows: list[dict[str, object]]
+    summary: Summary
+
+
+def load_recipe(spec: str) -> SelfPlay:
+    """Load an ordinary zero-argument settings builder, validating its result."""
+    module, name = spec.split(":", 1)
+    declare = cast(
+        Callable[[], SelfPlay], getattr(importlib.import_module(module), name)
+    )
+    return SelfPlay.model_validate(declare())
+
+
+@dataclass
+class Rows:
+    """An in-memory Tracker for a bounded untracked measurement."""
+
+    rows: list[dict[str, object]] = field(default_factory=list)
+
+    def log(self, values: dict[str, object], /, **clocks: float) -> None:
+        self.rows.append(values | clocks)
+
+    def log_table(
+        self, name: str, rows: list[dict[str, object]], /, **clocks: float
+    ) -> None:
+        pass
+
+    def checkpoint(
+        self, path: Path, /, *, tags: Sequence[str] = (), **clocks: float
+    ) -> None:
+        pass
+
+    def stopping(self) -> bool:
+        return False
 
 
 @contextmanager
@@ -90,70 +109,66 @@ def _cuda_counts(out: Path) -> Iterator[None]:
     out.write_text(json.dumps({"kernel_launches": launches, "synchronizations": syncs}))
 
 
+def measure(settings: SelfPlay, out: Path, *, seed: int, updates: int) -> Measurement:
+    """Return the loop's rows and summary, retaining policies at a fresh path."""
+    if (out / "state.pt").exists():
+        raise ValueError("benchmark requires a fresh --out directory")
+    tracker = Rows()
+    self_play(settings, out, seed=seed, updates=updates, run=tracker)
+    last = tracker.rows[-1]
+    decisions = int(cast(int, last["coordinates/environment_decisions"]))
+    phases = {
+        key: sum(float(cast(float, row.get(key, 0))) for row in tracker.rows)
+        for key in {
+            key for row in tracker.rows for key in row if key.startswith("time/")
+        }
+    }
+    return {
+        "recipe_settings": settings.model_dump(mode="json"),
+        "seed": seed,
+        "rows": tracker.rows,
+        "summary": {
+            "seconds_per_update": float(cast(float, last["training_seconds"]))
+            / updates,
+            "decisions_per_update": decisions / updates,
+            "games_per_update": int(cast(int, last["coordinates/games"])) / updates,
+            "phase_microseconds_per_decision": {
+                key: seconds * 1e6 / decisions
+                for key, seconds in sorted(phases.items())
+            },
+        },
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--recipe", default=str(RECIPE))
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--recipe", default=RECIPE)
+    parser.add_argument("--device", choices=("cpu", "mps", "cuda"), default="cpu")
     parser.add_argument("--streams", type=int, default=256)
     parser.add_argument("--updates", type=int, default=3)
     parser.add_argument("--seed", type=int, default=25201)
     parser.add_argument("--max-facts", type=int)
-    parser.add_argument("--json", type=Path, help="write the TrainingRun receipt")
-    parser.add_argument("--out", type=Path, help="keep the run folder here")
+    parser.add_argument("--json", type=Path, help="write update rows and summary")
+    parser.add_argument("--out", type=Path, help="keep state and checkpoints here")
     parser.add_argument("--cuda-counts", type=Path, help="write CUDA launch counts")
     args = parser.parse_args()
-
-    saved = load_recipe(args.recipe, args.updates)
-    regime = validate_regime(
-        saved.model_copy(update={"id": REGIME_ID, "world": managym.WORLD_VERSION})
-    )
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = args.updates
-    stage.streams = args.streams
-    stage.execution.device = args.device
-    stage.execution.wall_seconds = regime.wall_seconds = 3600.0
+    settings = load_recipe(args.recipe)
+    values = settings.model_dump()
+    values.update(streams=args.streams, device=args.device)
     if args.max_facts is not None:
-        regime.observation = regime.observation.model_copy(
-            update={"max_facts": args.max_facts}
-        )
-
-    run = _execute(regime, args.seed, args.out, args.cuda_counts)
+        values["observation"]["max_facts"] = args.max_facts
+    settings = SelfPlay.model_validate(values)
+    with TemporaryDirectory(prefix="manabot-update-") as temporary:
+        with _cuda_counts(args.cuda_counts) if args.cuda_counts else nullcontext():
+            result = measure(
+                settings,
+                args.out or Path(temporary),
+                seed=args.seed,
+                updates=args.updates,
+            )
     if args.json is not None:
-        args.json.write_text(run.model_dump_json())
-    if run.status != "completed":
-        raise SystemExit(f"benchmark run {run.status}: {run.error}")
-
-    record = run.stages[0]
-    decisions = record.environment_decisions
-    print(
-        json.dumps(
-            {
-                "seconds_per_update": round(
-                    (record.collection_seconds + record.learning_seconds)
-                    / record.updates,
-                    2,
-                ),
-                "decisions_per_update": decisions // record.updates,
-                "games_per_update": record.games // record.updates,
-                "host": run.host.model_dump() if run.host else None,
-            }
-        )
-    )
-    for label, timings in (
-        ("collection", record.collection_timings or {}),
-        ("learning", record.learning_timings or {}),
-    ):
-        for path, timing in timings.items():
-            micros = timing.seconds * 1e6 / decisions
-            print(f"{label:10} {path:64} {micros:9.1f} us/decision")
-
-
-def _execute(*args: object, **kwargs: object) -> None:
-    """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+        args.json.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps(result["summary"], indent=2))
 
 
 if __name__ == "__main__":

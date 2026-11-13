@@ -54,6 +54,7 @@ import torch
 from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.training.learning import DampedPolicyLearning, Precision
+from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 type ArmName = Literal["float32", "tf32", "bf16", "float32-order", "float32-repeat"]
@@ -160,9 +161,7 @@ class _Captured(TypedDict):
 
 def capture(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 # --------------------------------------------------------------------------- arms

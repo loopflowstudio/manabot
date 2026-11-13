@@ -21,13 +21,13 @@ from manabot.infra.config import MatchConfig
 from manabot.recipes import baseline, belief_sampler, elemental, local
 from manabot.recipes.device import accelerator
 from manabot.sim.sim import run_simulation
+from manabot.training.regime import FROZEN_EXECUTION_REVISION
 import managym
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
 )
 
-LEGACY_REVISION = "f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
 RECIPES = {
     "local": (local.train, local.LocalConfig),
     "baseline": (baseline.train, baseline.BaselineConfig),
@@ -121,7 +121,7 @@ def train_command(
         )
     ):
         raise typer.BadParameter(
-            f"saved-regime execution is retired; run revision {LEGACY_REVISION}. "
+            f"saved-regime execution is retired; run revision {FROZEN_EXECUTION_REVISION}. "
             "Current training uses --recipe; repeat --out to resume."
         )
     if list_recipes:

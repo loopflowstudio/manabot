@@ -22,7 +22,11 @@ from typing import Literal
 
 from experiments.elemental_grid import DECKS, Game, schedule
 from manabot.infra.identity import canonical_sha256
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    TrainingRegime,
+    TrainSelfPlay,
+    refuse_frozen_execution,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REGIME = ROOT / "experiments/regimes/elemental-long-183-v1.json"
@@ -43,16 +47,12 @@ CADENCE = 50
 
 def stage_parent(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def stage_monitoring(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def recipe(
@@ -80,9 +80,7 @@ def recipe(
 
 def segment_job(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 # ---------------------------------------------------------------------------
@@ -202,9 +200,7 @@ def pair_design(rated: tuple[int, ...], endpoint: int | None) -> list[Pair]:
 
 def main(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 if __name__ == "__main__":

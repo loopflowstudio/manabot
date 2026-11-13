@@ -70,6 +70,7 @@ from experiments.l4_step_profile import (
     _write,
     trace_windows,
 )
+from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 UPDATES = 3
@@ -102,9 +103,7 @@ def band(rows: int) -> str:
 
 
 def insitu(*args: object, **kwargs: object) -> None:
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 # --------------------------------------------------------------------------

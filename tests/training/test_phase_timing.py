@@ -16,6 +16,7 @@ from manabot.backends.torch.learner import Learner
 from manabot.infra.profiler import Profiler
 from manabot.training.learning import DampedPolicyLearning, Learning, Schedule
 from manabot.training.rollout.collection import collect
+from manabot.training.update_metrics import phase_seconds, time_since
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from tests.training.test_two_seat_learning import _agent, _collector
@@ -121,3 +122,16 @@ def test_collection_timers_leave_the_batch_identical() -> None:
     for field in ("actions", "logprobs", "rewards", "dones", "values"):
         np.testing.assert_array_equal(getattr(a, field), getattr(b, field))
     assert any(path.startswith("Collection/") for path in timed.profiler.get_stats())
+
+
+def test_phase_rows_are_update_deltas_with_historical_names() -> None:
+    collection, learning = Profiler(), Profiler()
+    collection.record("Collection/Environment step and encoding", 2.0)
+    learning.record("Learning/Minibatches/Forward and loss", 3.0)
+    before = phase_seconds(collection, learning)
+    collection.record("Collection/Environment step and encoding", 5.0)
+    learning.record("Learning/Minibatches/Forward and loss", 7.0)
+    assert time_since(before, phase_seconds(collection, learning)) == {
+        "time/collection/environment_step_and_encoding": 5.0,
+        "time/learning/minibatches/forward_and_loss": 7.0,
+    }

@@ -44,7 +44,7 @@ historical report/data readers remain. Removed the unused scheduler methods
 from the surviving record models; their fields and validators stay readable.
 The selection collector’s executor deadline callback and no-op
 `selection_unbounded` adapter are also removed: its surviving callers use the
-per-game step cap. No further deletion target is pending.
+per-game step cap. The update benchmark's frozen receipt/stub and the retired throughput driver's exclusive execution tests are also deleted (review 4). No further deletion target is pending.
 The obsolete attack executor tests now check refusal without creating a cohort.
 The former recovery CI group only held pretrained loading; it joins training.
 
@@ -140,69 +140,32 @@ Last focused check (after review 3):
 PPO fresh-run parity with horizon equal to the target is recorded in
 implementation.md.
 
-## Concept review 4: next implement direction — 2026-11-13
+## Concept review 4: implemented — 2026-11-13
 
-Proposals drawn from the design and the code, not statements anyone made.
-The walk-through was "where does an update's time go on this machine", the
-question docs/training.md (Monitoring), docs/workflows.md and the
-`experiment-measure` / `qa` skills answer with `scripts/bench_training_update.py`
-and the Perf panel. The cutover lost that path without listing it: the loss
-reviewed so far is recovery only.
+The review found unlisted monitoring loss: blank Perf phase/RSS/load panels,
+missing device memory rows, a benchmark that called the retired executor and
+no active-time clock for loop reports. Historical observations and the six-item
+implementation direction are at `5ceb2d7dc:scratch/plan.md`.
 
-Observed at `569653ccd`, against main's executor:
+- Enable collector timing in the loop; flatten live profiler totals and log
+  each update's deltas with historical `time/...` names. The profilers are the
+  one phase measurement: `training_seconds` adds each update's
+  `time/collection` + `time/learning` (compress removed a duplicate wall clock
+  that overrode those keys). Keep record timers
+  only as retained evidence. Resources are sampled once per completed update:
+  RSS, host load, process CUDA peaks and current MPS tensor/driver bytes.
+- `Counts.training_seconds` persists completed collection-and-learning time.
+  Current recipes (including batched baseline) declare Etude's Time clock;
+  rows, tables, policy and belief checkpoints carry both clocks. No reader
+  requires a transitions clock; its cumulative metric remains.
+- Benchmark takes a zero-argument SelfPlay builder, runs the loop untracked and
+  writes named settings, seed, rows and summary. Regime-file input, the
+  TrainingRun receipt and the dead executor stub are deleted. Fresh output is
+  required. The frozen throughput driver refuses before launch/spawn; remove
+  its exclusive execution tests and retain setup/packing coverage.
+- Frozen execution refusal has one constant/raising function in regime.py;
+  CLI and frozen callers use it. training/__init__.py no longer re-exports or
+  names the executor. Guide, workflows, panels and two skills match the rows.
 
-- The loop's row has `time/collection` and `time/learning` only. The executor
-  enabled the collector profiler and logged every subphase per update
-  (`time_since(phase_seconds(...))`), plus `cuda_peak_metrics`,
-  `mps_memory_metrics`, `coordinates/rss_bytes`, `coordinates/host_load_1m`,
-  `training_seconds`, and a `transitions` clock. `open_collector` now builds
-  `Profiler(enabled=False)` and nothing enables it; `phase_seconds` and
-  `time_since` have no caller; `cuda_peak_metrics` is gone.
-- `training/panels.py` still draws "Update time" from seven
-  `time/collection/...` keys, "Process memory" and "Host load"; for a run of
-  the new loop all are blank except `time/learning`. docs/training.md "Update
-  metrics" still lists `time/learning/minibatches/forward_and_loss` and the
-  CUDA high-water marks as logged rows.
-- `scripts/bench_training_update.py` parses its arguments, then `_execute`
-  raises the frozen-execution refusal; its docstring still says it runs
-  through `execute_regime`. `experiments/training_throughput.py` still spawns
-  it as its child and does not refuse.
-- Recipes declare only `Step("updates")`, so `manabot training-report`
-  (default `--training-clock training_seconds`) reports active time
-  unavailable for every new run.
-
-Direction (settled by the design: these are rows a loop logs through the
-tracker, and the docs written on this branch already promise them):
-
-1. The loop logs the per-update phase split again. Enable the collector's
-   profiler where the loop opens it; each `step` adds the seconds the collector
-   and learner profilers gained since the previous step, under the existing
-   `time/...` key spelling so new runs overlay retained ones. Make
-   `phase_seconds`/`time_since` read profiler timings rather than a
-   `StageRecord`, keeping one implementation; the retained-record reader keeps
-   what it needs. Timers only: the bitwise parity proof must still pass.
-2. The row carries the resource observations the panels and guide name: CUDA
-   (and MPS) high-water marks, process RSS and host load. One small function
-   beside the loop; no sampling thread.
-3. `bench_training_update.py` measures the loop: `--recipe` names a function
-   returning `SelfPlay` (default `elemental_self_play`), it runs a few updates
-   untracked or under `local_launch`, and prints the split from the rows of
-   item 1. Drop the regime-file form and the `TrainingRun` receipt, and say so
-   in docs/workflows.md and the two skills. Then `training_throughput.py`
-   either reads the new output or refuses like the other frozen drivers; it
-   must not spawn a child that can only fail.
-4. Check Etude `105abdd` for a time clock a run can declare. If there is one,
-   recipes declare `training_seconds` and the loop logs cumulative active
-   seconds from `state.pt` (a new `Counts` field, so it survives resume);
-   otherwise docs/training.md says the time report has no active time for loop
-   runs. Do not rebuild the `transitions` clock unless a reader needs it.
-5. One owner for the retired revision: a constant and one raising function in
-   `manabot/training/regime.py` (the module that owns saved regimes), used by
-   the CLI and the ~18 refusing entry points that each spell the SHA out.
-   Fix `manabot/training/__init__.py`, whose docstring names `execute_regime`
-   and which re-exports against the package rule; nothing imports from it.
-6. After 1–4, make panels.py's header, docs/training.md "Update metrics" and
-   "Monitoring" match exactly what the loop logs.
-
-Not changed by this review: the open CLI-config and local-follower questions
-(questions.md), the left-alone list above, and every delivery item.
+The open CLI-config/local-follower questions and all delivery obligations above
+remain. Validation and fresh-run parity results are in implementation.md.

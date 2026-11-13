@@ -113,3 +113,15 @@ Not asked of anyone: nobody was told these rows were lost; the loss reviewed
 under "do em all in this diff" was recovery. Raise it at demo with the
 recovery loss. Open, small: whether loop runs need the `transitions` clock
 back; nothing reads it today that was checked here.
+
+
+## Monitoring implementation choices — 2026-11-13
+
+Etude has a Time clock. Active time is collection plus learning for completed
+updates, excluding setup, persistence and failed partial updates. Persist it
+in Counts; no transitions clock is needed by checked readers. MPS exposes
+current tensor/driver allocation, not peaks. Benchmark uses a bounded in-memory
+Tracker, with no Etude run, and requires fresh output so cumulative counters
+cannot be mistaken for this measurement. Retire the frozen throughput driver
+rather than translate its TrainingRun contract; delete its exclusive execution
+tests while preserving machine setup and packing evidence tests.

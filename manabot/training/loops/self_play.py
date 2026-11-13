@@ -27,12 +27,12 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass, replace
 import os
 from pathlib import Path
-import time
 from typing import Literal, Protocol
 from uuid import uuid4
 
 from etude.stopping import Stopped
 import numpy as np
+import psutil
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -95,7 +95,12 @@ from manabot.training.state.game_errors import (
     open_ledger,
 )
 from manabot.training.state.incidents import save_incident
-from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
+from manabot.training.update_metrics import (
+    OUTCOME_TABLE,
+    metric_row,
+    phase_seconds,
+    time_since,
+)
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.training.updates.selection import UpdateDiagnostics
@@ -253,7 +258,7 @@ def self_play_collector(
     The caller closes it with `close_collector`. `record_attempt` persists
     each settled game when `game_errors` is set.
     """
-    return open_collector(
+    collector = open_collector(
         ObservationSpace(settings.observation),
         Match(root_match(settings)),
         Reward(RewardConfig()),
@@ -272,13 +277,16 @@ def self_play_collector(
         precision=settings.precision,
     )
 
+    collector.profiler.enabled = True
+    return collector
+
 
 # ---------------------------------------------------------------------------
 # What a loop asks of a tracker
 
 
 class Tracker(Protocol):
-    """Etude's run satisfies this; pass `None` to a loop to train untracked."""
+    """Etude run declaring updates/training_seconds, or None for untracked work."""
 
     def log(self, values: dict[str, object], /, **clocks: float) -> None: ...
 
@@ -301,6 +309,7 @@ class Tracker(Protocol):
 class Counts:
     """Cumulative work across every attempt of the loop."""
 
+    training_seconds: float = 0.0
     games: int = 0
     environment_decisions: int = 0
     learner_transitions: int = 0
@@ -573,14 +582,19 @@ def learn(
 
 
 def counted(
-    counts: Counts, base: Counts, stats: CollectorStats, metrics: UpdateDiagnostics
+    counts: Counts,
+    base: Counts,
+    stats: CollectorStats,
+    metrics: UpdateDiagnostics,
+    seconds: float,
 ) -> Counts:
-    """Counts after one more update.
+    """Counts after one more update that took `seconds` of collection and learning.
 
     `stats` are this attempt's collector totals, added to `base`, the counts
-    saved by earlier attempts; optimizer counts accumulate per update.
+    saved by earlier attempts; optimizer counts and seconds accumulate per update.
     """
     return Counts(
+        training_seconds=counts.training_seconds + seconds,
         games=base.games + stats.games,
         environment_decisions=base.environment_decisions + stats.micro_steps,
         learner_transitions=base.learner_transitions + stats.learner_transitions,
@@ -600,16 +614,21 @@ def step(
     base: Counts,
     out: Path | None = None,
 ) -> tuple[LoopState, dict[str, object]]:
-    """Collect one batch, learn from it, and return the next state and its metric row."""
+    """Collect one batch, learn from it, and return the next state and its metric row.
+
+    The collector and learner profilers are the one phase measurement: their
+    per-update deltas are the row's `time/` keys, and `time/collection` plus
+    `time/learning` is the update's active training time.
+    """
     device = state.settings.device
-    started = time.perf_counter()
+    before = phase_seconds(collector.profiler, state.learner.profiler)
     batch: RolloutBatch | None = None
     try:
         batch = collect(collector, behavior(state), state.settings.transitions)
         synchronize(device)
-        collected = time.perf_counter()
-        metrics = learn(state, batch, rng)
-        synchronize(device)
+        with state.learner.profiler.track("Learning"):
+            metrics = learn(state, batch, rng)
+            synchronize(device)
     except NumericalError as error:
         if out is not None:
             try:
@@ -626,20 +645,50 @@ def step(
             except Exception as capture_error:
                 error.add_note(f"incident capture failed: {capture_error}")
         raise
+    phases = time_since(
+        before, phase_seconds(collector.profiler, state.learner.profiler)
+    )
+    seconds = phases["time/collection"] + phases["time/learning"]
     state = replace(
         state,
         update=state.update + 1,
-        counts=counted(state.counts, base, collector.stats, metrics),
+        counts=counted(state.counts, base, collector.stats, metrics, seconds),
     )
     row = (
         metric_row(metrics)
         | {f"coordinates/{k}": v for k, v in asdict(state.counts).items()}
-        | {
-            "time/collection": collected - started,
-            "time/learning": time.perf_counter() - collected,
-        }
+        | phases
+        | resource_metrics(device)
     )
     return state, row
+
+
+def resource_metrics(device: str) -> dict[str, float | int]:
+    """Process RSS/load and device allocator observations, sampled after each update.
+
+    CUDA values are process high-water marks since process start; MPS values
+    are current tensor/driver allocations, not peaks. No sampling thread.
+    """
+    values: dict[str, float | int] = {
+        "coordinates/rss_bytes": psutil.Process().memory_info().rss,
+        "coordinates/host_load_1m": os.getloadavg()[0],
+    }
+    if device == "cuda":
+        values |= {
+            "memory/peak_allocated_cuda_bytes": torch.cuda.max_memory_allocated(),
+            "memory/peak_reserved_cuda_bytes": torch.cuda.max_memory_reserved(),
+        }
+    elif device == "mps":
+        values |= {
+            "memory/allocated_mps_bytes": torch.mps.current_allocated_memory(),
+            "memory/driver_allocated_mps_bytes": torch.mps.driver_allocated_memory(),
+        }
+    return values
+
+
+def clocks(state: LoopState) -> dict[str, float]:
+    """Coordinates shared by an update's metrics, outcome table and policies."""
+    return {"updates": state.update, "training_seconds": state.counts.training_seconds}
 
 
 def synchronize(device: str) -> None:
@@ -759,10 +808,10 @@ def self_play(
                 while state.update < updates and not (run and run.stopping()):
                     state, row = step(state, collector, rng, base=base, out=out)
                     if run:
-                        run.log(row, updates=state.update)
+                        run.log(row, **clocks(state))
                         if settings.behavior != "random":
                             outcomes = collector.stats.self_play.drain()
-                            run.log_table(OUTCOME_TABLE, outcomes, updates=state.update)
+                            run.log_table(OUTCOME_TABLE, outcomes, **clocks(state))
                     checkpoint_due = state.update < updates and is_checkpoint(
                         settings, state.update
                     )
@@ -782,5 +831,5 @@ def self_play(
 def record_checkpoint(out: Path, state: LoopState, run: Tracker | None) -> Path:
     path = save_checkpoint(out / "checkpoints", state)
     if run:
-        run.checkpoint(path, updates=state.update)
+        run.checkpoint(path, **clocks(state))
     return path

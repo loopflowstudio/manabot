@@ -157,3 +157,47 @@ Changed Python files pass Ruff format/check; git diff --check passes. No
 service, watcher, provider launch, dependency pin or publication was started.
 Release/installed-consumer and launcher/service proofs, full gate and the
 retained replay mismatch remain delivery obligations; ready for demo.
+
+## Restored monitoring and benchmark — 2026-11-13
+
+Review 4 is implemented. Collector/learner profiler deltas populate historical
+phase keys; update rows sample RSS/load, CUDA process peaks and current MPS
+allocation. Counts persists active completed-update seconds; all current
+recipes declare the Time clock, including batched baseline. Belief sampler
+checkpoints inherit the policy's complete clock coordinate. The benchmark runs
+SelfPlay builders untracked and writes rows/summary, replacing the retired
+regime/TrainingRun contract. Frozen throughput launch/drive/phase entry points
+refuse; their exclusive execution tests are removed. Frozen refusal has one
+owner in regime.py. Guides, panels and workflow skills describe these contracts.
+
+With `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training`:
+- `pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_phase_timing.py tests/training/test_training_throughput.py::test_frozen_throughput_refuses_before_creating_output tests/training/test_game_errors.py -q`: 49 passed, three previously recorded retained replay binding_mismatch failures (45.68s). A missing belief checkpoint clock warning was fixed afterward.
+- `pytest tests/training/test_recipe_etude.py::test_belief_extension_has_new_policy_histories_and_sampler tests/training/test_attack_execution.py tests/test_package_boundaries.py tests/training/test_report_helpers.py -q`: 22 passed, no warning (22.60s); sampler recording is now asserted.
+- `python scratch/parity.py`: PPO/damped raw/EMA each match all 87 tensors bitwise in checkpoints and state.pt against main `6ce618b8a`. Both processes use the rebuilt native extension SHA256 `a7de0ce098207e8a2a3ac16b59bda44e0ab3abafc729c434b1121aeb6dba56e7`. Counts: four games, 357 decisions/transitions, 23 idle steps; PPO optimizer updates/exposures 2/179, damped 60/90. This supersedes the earlier native-binary proof for this pass.
+- Actual benchmark CLI default Elemental builder, two streams/one update: JSON phase split and retained state/policies verified; temporary outputs removed.
+
+Initial recipe checks hit a stale local extension missing pooled_mana_classes.
+Rebuilt with the root maturin command and atomically installed the matching
+cp313 wheel extension; both recipe failures disappeared. Frozen replay bytes
+were unchanged. Workflow compilation passed; changed Python Ruff checks and
+formatting and git diff whitespace checks pass. No provider launch, release,
+pin, installed-consumer proof or service continuation was performed. No
+background service or watcher was started. Delivery obligations in plan.md
+remain.
+
+## Compress after review 4 — 2026-11-13
+
+`step` reads phase seconds and active time from the profilers only (the
+overriding perf_counter pair and `import time` are gone); `counted` takes the
+update's seconds. The benchmark summary reads `training_seconds`. The CLI
+names `FROZEN_EXECUTION_REVISION` directly instead of catching the refusal;
+the throughput driver's internal `run_phase` refusal is dropped (its callers
+refuse). The clock rule moved to AGENTS.md's Etude training records section;
+workflows no longer promises call counts from phase rows or host facts from
+new runs.
+
+With the same SDK override: self-play loop, phase timing, recipe/Etude,
+frozen throughput refusal, CLI retired-override and attack refusal tests: 22
+passed (48.45s). `python scratch/parity.py`: PPO/damped raw/EMA match all 87
+tensors bitwise against main `6ce618b8a`, native SHA256 `a7de0ce0…`, same
+counts. Ruff check/format and `git diff --check` pass.

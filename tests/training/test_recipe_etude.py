@@ -81,6 +81,7 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     before = observe(out / "etude", "local").run("smoke")
     assert before.final is not None
     assert before.final.clocks["updates"] == 1
+    assert before.final.clocks["training_seconds"] > 0
     extended = runner.invoke(app, command[:-1] + ["2"])
     assert extended.exit_code == 0, extended.output
     assert checkpoint.read_bytes() == original
@@ -93,6 +94,10 @@ def test_local_cli_stop_resume_and_target_only_continuation(
     assert after.final == after.checkpoints.last
     assert after.final is not None
     assert after.final.clocks["updates"] == 2
+    assert (
+        after.final.clocks["training_seconds"] > before.final.clocks["training_seconds"]
+    )
+    assert data.reached["training_seconds"] == after.final.clocks["training_seconds"]
     assert before.final in after.checkpoints
     assert all("final" not in checkpoint.tags for checkpoint in after.checkpoints)
 
@@ -119,6 +124,12 @@ def test_belief_extension_has_new_policy_histories_and_sampler(
     assert dataset.policy_identity == hashlib.sha256(later.read_bytes()).hexdigest()
     assert dataset.policy_identity != read_dataset(histories).policy_identity
     assert (tmp_path / "belief-00000002-raw.pt").exists()
+    recorded = observe(tmp_path / "etude", "belief").run(tmp_path.name)
+    samplers = [
+        checkpoint for checkpoint in recorded.checkpoints if "belief" in checkpoint.tags
+    ]
+    assert len(samplers) == 2
+    assert all(checkpoint.clocks["training_seconds"] > 0 for checkpoint in samplers)
 
 
 def test_typed_job_invokes_the_recipe_and_reports_planned_stop(tmp_path: Path) -> None:

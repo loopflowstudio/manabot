@@ -11,7 +11,7 @@ import numpy as np
 from pydantic import Field
 
 from manabot.experiment.attacks import AttackPlan
-from manabot.training.regime import Strict
+from manabot.training.regime import Strict, refuse_frozen_execution
 
 
 class AttackPoint(Strict):
@@ -85,9 +85,7 @@ def _report(plan: AttackPlan, result: AttackResult, out: Path) -> None:
 
 def execute_attack_plan(*args: object, **kwargs: object) -> None:
     """Retired frozen execution entry point; retained data and evaluation still read."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def main() -> None:

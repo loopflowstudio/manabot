@@ -42,7 +42,7 @@ from manabot.experiment.records import PlannedRun
 from manabot.infra.identity import canonical_json, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.world import checkpoint_world
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, refuse_frozen_execution
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,9 +102,7 @@ def experiment() -> Experiment:
 
 def train(revision: str) -> tuple[Run, ...]:
     """The one training run, frozen at an explicit committed revision."""
-    raise RuntimeError(
-        "Frozen execution requires revision f09f5c2919b8b1a5cf6d72c4f4f4721dac68f653"
-    )
+    refuse_frozen_execution()
 
 
 def identity() -> dict[str, object]:

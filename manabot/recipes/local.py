@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from etude.train.records import Step
+from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import Field
 
@@ -21,7 +21,10 @@ class LocalConfig(BaselineConfig):
 def train(config: LocalConfig) -> None:
     inputs = settings(config).model_copy(update={"streams": 2, "transitions": 16})
     with track(
-        clocks=[Step("updates", "collection/update iterations")],
+        clocks=[
+            Step("updates", "collection/update iterations"),
+            Time("training_seconds", "active collection and learning seconds"),
+        ],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:

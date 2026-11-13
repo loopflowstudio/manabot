@@ -6,7 +6,7 @@ running the recipe again after any failure skips the steps it finished.
 
 from typing import Literal
 
-from etude.train.records import Step
+from etude.train.records import Step, Time
 from etude.train.run import track
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,10 @@ def train(config: BeliefConfig) -> None:
         update={"device": config.device}
     )
     with track(
-        clocks=[Step("updates", "collection/update iterations")],
+        clocks=[
+            Step("updates", "collection/update iterations"),
+            Time("training_seconds", "active collection and learning seconds"),
+        ],
         seed=config.seed,
         config=config.model_dump(mode="json"),
     ) as run:
@@ -44,6 +47,9 @@ def train(config: BeliefConfig) -> None:
             updates=updates,
             run=run,
         )
+        policy_record = run.latest_checkpoint()
+        if policy_record is None:
+            raise RuntimeError("policy checkpoint was not recorded")
         histories = collect_belief(
             policy,
             run.out / f"histories-{policy.stem}.json",
@@ -58,4 +64,4 @@ def train(config: BeliefConfig) -> None:
             config.sampler,
             seed=config.seed,
         )
-        run.checkpoint(sampler, tags=("belief",), updates=updates)
+        run.checkpoint(sampler, tags=("belief",), **policy_record.at)
