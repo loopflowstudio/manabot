@@ -48,7 +48,7 @@ class BotDecision:
 
 
 class FlatSearchPolicy:
-    """Flat determinized Monte Carlo (see manabot/sim/search/flat_mc.py).
+    """Flat determinized Monte Carlo through native Env.flat_mc_scores.
 
     ``sims`` is the strength dial N: simulations per legal action, split as
     W worlds x R rollouts. Determinization never peeks at the opponent's hand:
@@ -106,7 +106,7 @@ def passive_policy(env: managym.Env, obs: managym.Observation) -> int:
     del env
     actions = obs.action_space.actions
     if not actions:
-        raise ValueError("No available actions for villain policy.")
+        raise ValueError("No available actions for bot policy.")
 
     pass_priority = int(ActionEnum.PRIORITY_PASS_PRIORITY)
     for index, action in enumerate(actions):
@@ -126,7 +126,7 @@ class RandomPolicy:
         del env
         actions = obs.action_space.actions
         if not actions:
-            raise ValueError("No available actions for villain policy.")
+            raise ValueError("No available actions for bot policy.")
         return self._rng.randrange(len(actions))
 
 
@@ -154,7 +154,7 @@ def choose_bot(
         search_scores=policy.last_scores
         if isinstance(policy, FlatSearchPolicy)
         else [],
-        unavailable="This anchor has no value head.",
+        unavailable="This bot policy has no value head.",
     )
 
 

@@ -31,7 +31,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 import managym
-from managym.bots import BotDecision, choose_bot
+from managym.bots import BotDecision, BotPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
     SemanticTransition,
@@ -143,7 +143,7 @@ from .study_runtime import (
     select_study_plan,
 )
 from .trace import GameConfig, Trace, TraceEvent
-from .villain import VillainPolicy, build_villain_policy
+from .villain import build_villain_policy
 
 # Interactive remains a lightweight mirror of manabot.verify.util. Curated
 # manifests are checked against the compiled rules setup without importing torch.
@@ -843,9 +843,7 @@ class GameSession:
     ) -> None:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self.watch_mode = watch_mode
-        self.watch_policies: (
-            tuple[villain_module.VillainPolicy, villain_module.VillainPolicy] | None
-        ) = None
+        self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
@@ -863,7 +861,7 @@ class GameSession:
         self._allow_fixture_study_evidence = allow_fixture_study_evidence
         self.env: managym.Env | None = None
         self.obs: managym.Observation | None = None
-        self.villain_policy: VillainPolicy | None = None
+        self.villain_policy: BotPolicy | None = None
         self.trace: Trace | None = None
         self.trace_id: str | None = None
         self._demo_name: str | None = None

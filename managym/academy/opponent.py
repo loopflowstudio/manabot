@@ -3,12 +3,12 @@
 The catalog lists checkpoints the researcher trained: everything under the
 manabot runs directory (``MANABOT_RUNS_DIR``, default ``./.runs``) plus the
 files, run directories and Tournament files in ``ACADEMY_PLAY_CHECKPOINTS``
-(``os.pathsep``-separated). manabot's ``manabot.model.catalog`` reads and
+(``os.pathsep``-separated). The installed bot extension reads and
 checks them; incompatible entries stay listed with the mismatch so the table
 can say why they cannot play (``opponent_catalog``, ``catalog_opponent``).
 
 Paths are server configuration; the browser only ever names a digest. The
-catalog imports Torch, so it loads lazily and ordinary play never needs it.
+extension owns training dependencies; ordinary play needs no extension.
 """
 
 from __future__ import annotations
@@ -19,7 +19,9 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from . import advice
 from .extensions import CheckpointSummary, bot_extension
+from .villain import NATIVE_WATCH_PLAYERS
 
 if TYPE_CHECKING:
     import managym
@@ -133,15 +135,14 @@ def opponent_catalog() -> dict:
     example, a play-only install without Torch).
     """
 
-    from .advice import FIXTURE_PATH
-
     extension = bot_extension()
     capabilities = {
-        "advice_available": FIXTURE_PATH.is_file(),
+        "advice_available": advice.FIXTURE_PATH.is_file(),
         "extension": extension.name if extension else None,
-        "watch_players": list(extension.watch_players)
-        if extension
-        else ["random", "search"],
+        "watch_players": [
+            *NATIVE_WATCH_PLAYERS,
+            *(extension.watch_players if extension else ()),
+        ],
     }
     if extension is None:
         return {**capabilities, "opponents": [], "catalog_error": None}

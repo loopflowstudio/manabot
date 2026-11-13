@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from managym.bots import (
     DEFAULT_SEARCH_SIMS,
-    BotPolicy as VillainPolicy,
+    BotPolicy,
     FlatSearchPolicy,
     RandomPolicy,
     passive_policy,
@@ -16,11 +16,13 @@ from .extensions import bot_extension
 
 if TYPE_CHECKING:
     from .trace import GameConfig
+
+NATIVE_WATCH_PLAYERS = ("random", "search")
 MAX_SEARCH_SIMS = 4096
 
 
-def build_villain_policy(config: "GameConfig") -> VillainPolicy:
-    """Build a villain policy from a parsed GameConfig."""
+def build_villain_policy(config: "GameConfig") -> BotPolicy:
+    """Build a bot policy from a parsed GameConfig."""
     seed = config.seed if config.seed is not None else 0
     villain_type = config.villain_type
 

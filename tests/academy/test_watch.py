@@ -260,3 +260,22 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     assert decision.action == max(
         range(len(decision.probabilities)), key=decision.probabilities.__getitem__
     )
+
+
+@pytest.mark.parametrize("kind", ["greedy", "heuristic"])
+def test_training_watch_players_keep_their_declared_identity(
+    kind: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path)
+    result = create_watch(WatchRequest(players=[kind, kind], seed=42))
+    try:
+        assert step_watch(result["id"], result["token"], 0)["revision"] == 1
+        row = inspect_watch(result["id"], 0, result["token"])
+        assert row["players"] == [kind, kind]
+        assert [player["name"] for player in row["identities"]] == [
+            kind.title(),
+            kind.title(),
+        ]
+        assert row["outputs"]["probabilities"][row["outputs"]["action"]] == 1
+    finally:
+        server._drop_session(result["id"], "test")

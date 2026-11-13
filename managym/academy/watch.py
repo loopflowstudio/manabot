@@ -5,19 +5,19 @@ view. The mixed canonical record and retained roots remain server-private.
 """
 
 from dataclasses import asdict, replace
-from typing import Any, Literal, TypedDict
+from typing import Any, TypedDict
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-from managym.bots import choose_bot
+from managym.bots import BotPolicy, choose_bot
 
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .extensions import bot_extension
 from .replay_index import DecisionAddressV2, load_canonical_replay
 from .trace import load_trace
-from .villain import VillainPolicy, build_villain_policy
+from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
 
 
 class WatchCreated(TypedDict):
@@ -32,8 +32,8 @@ class WatchStep(TypedDict):
 
 
 class WatchRequest(BaseModel):
-    players: list[Literal["random", "passive", "greedy", "heuristic", "search"]] = (
-        Field(default_factory=lambda: ["random", "random"], min_length=2, max_length=2)
+    players: list[str] = Field(
+        default_factory=lambda: ["random", "random"], min_length=2, max_length=2
     )
     hero_deck: str = "ur_lessons"
     villain_deck: str = "gw_allies"
@@ -41,10 +41,10 @@ class WatchRequest(BaseModel):
     villain_sims: int = Field(default=16, ge=1, le=4096)
 
 
-def _policy(kind: str, request: WatchRequest, seat: int) -> VillainPolicy:
-    if kind in {"greedy", "heuristic"}:
+def _policy(kind: str, request: WatchRequest, seat: int) -> BotPolicy:
+    if kind not in NATIVE_WATCH_PLAYERS:
         extension = bot_extension()
-        if extension is None:
+        if extension is None or kind not in extension.watch_players:
             raise HTTPException(400, "watch_player_unavailable")
         return extension.watch_policy(kind)
     config = server._parse_game_config({**request.model_dump(), "villain_type": kind})
@@ -71,9 +71,7 @@ def create_watch(
             server._parse_game_config(
                 {
                     **request.model_dump(),
-                    "villain_type": kind
-                    if kind not in {"greedy", "heuristic"}
-                    else "passive",
+                    "villain_type": kind if kind in NATIVE_WATCH_PLAYERS else "passive",
                 }
             )
         )

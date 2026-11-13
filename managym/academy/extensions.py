@@ -55,6 +55,7 @@ class CheckpointRegistration(Protocol):
 @runtime_checkable
 class BotExtension(Protocol):
     name: str
+    # Additional player kinds; Academy owns the native players.
     watch_players: tuple[str, ...]
 
     def discover(

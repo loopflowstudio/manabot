@@ -93,7 +93,7 @@ class CheckpointVillain:
 
 class TrainingBots:
     name = "manabot"
-    watch_players = ("random", "greedy", "heuristic", "search")
+    watch_players = ("greedy", "heuristic")
 
     def discover(
         self, paths: list[Path], runs_dir: Path
@@ -114,6 +114,9 @@ class TrainingBots:
         )
 
     def watch_policy(self, kind: str) -> BotPolicy:
+        if kind not in self.watch_players:
+            raise ValueError(f"Unsupported watch player: {kind}")
+
         from manabot.env.env import Env
         from manabot.sim.anchors import ScriptedGreedyPlayer
         from manabot.sim.heuristic import HeuristicPlayer
