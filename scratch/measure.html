@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-338 · PPO CUDA measurement</title>
+<style>
+body{font:16px/1.55 system-ui,sans-serif;color:#182536;background:#f6f7f9;max-width:1100px;margin:48px auto;padding:0 24px}h1{font-size:2rem;line-height:1.2}.verdict{background:#fff3d5;border-left:5px solid #ad750c;padding:20px}table{border-collapse:collapse;width:100%;background:white;margin:24px 0}th,td{text-align:left;vertical-align:top;padding:14px;border-bottom:1px solid #d9dfe6}th{background:#e8edf3}code{font-size:.9em}small{color:#4e5c6d}.scroll{overflow-x:auto}
+</style>
+<h1>PPO on CUDA: baseline established</h1>
+<p class="verdict"><strong>Latest verdict: inconclusive on speedup.</strong>
+No runtime candidate exists. The unchanged implementation sustains
+<strong>0.26437 optimizer steps/s</strong> on an NVIDIA L4: five warm repeats,
+range 0.26366–0.26474. Median update time is 60.521 s (60.437–60.684).</p>
+<p>256 streams × 64 transitions, both seats, Elemental w64l2, TF32, bucketed
+shapes and live tokens. Each repeat performs 16 optimizer steps and 106,684
+exposures on 53,341 learner rows. All five report zero rejected/skipped steps
+and no nonfinite values.</p>
+<p><strong>Behavior limit:</strong> final CUDA weight digests differ across all
+five repeats; maximum absolute difference from repeat 1 is 2.486 × 10<sup>−5</sup>.
+This is observed baseline drift, not an approved equivalence tolerance.</p>
+<div class="scroll"><table>
+<thead><tr><th>Commit</th><th>Value</th><th>Verdict</th><th>Hypothesis</th><th>Limiter</th></tr></thead>
+<tbody><tr><td><code>2202ad632cb5</code><br><small>Runtime: 6ce618b8a</small></td>
+<td>0.26437 optimizer steps/s<br><small>n=5; 0.26366–0.26474</small></td>
+<td>Inconclusive<br><small>Baseline only; no implementation change</small></td>
+<td>Historical ~0.26 steps/s reproduces; backward dominates.</td>
+<td>Backward + clipping: 45.975 s, 76.0% of update. Separate first-step profile:
+indexed backward kernels take 78.3% of summed GPU kernel time, chiefly definition-table reductions.</td></tr></tbody>
+</table></div>
+<p>Collection took 28.257 s once. Collection + median update is 88.777 s.
+Even eliminating all backward and clipping bounds improvement at 4.161× for
+the update and 2.074× for that combined path. These are bounds, not predictions.</p>
+<p>The easier real workload produced 8.413 steps/s on 2,035 rows (one repeat;
+no spread). Profile timings are excluded from the five clean samples.
+A candidate requires CPU equivalence, bounded CUDA differences and at least
+five alternating measurements per arm under the same conditions.</p>
+<p><small>Clean Etude run: 4a289dc30a82. Profile: e9e5a6bd4649.
+Artifacts are published; all rentals are closed.
+Full methods, limitations and receipts: <a href="../experiments/ppo_cuda.md">PPO CUDA report</a>.</small></p>
+</html>
