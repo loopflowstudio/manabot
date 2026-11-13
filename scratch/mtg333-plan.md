@@ -68,6 +68,14 @@ Slices 1–6 are implemented and pass their focused checks:
    `BackendPolicy`. Deferred imports are local Task `c2ef4a`
    (`task_c2ef4a5da9cb437b921cca1ef40e94a1`, not started; Linear sync pending).
 6. `ObservationBuffers`, `ParameterArrays`; docs describe the full PR.
+   Shipped docs (reviewed against the code 2026-11-13; re-check after the
+   optimize pass): `manabot/backends/README.md` (example, backend rule, torch
+   backend, policy checkpoints, convert, parity), `manabot/policy/README.md`,
+   `manabot/backends/mlx.md`, `docs/training-loop.md`, `docs/training.md`,
+   `docs/evaluation.md`, `docs/observation-and-model.md`, `manabot/README.md`,
+   `manabot/model/agent.md`, `docs/academy.md`, `academy/README.md`,
+   `AGENTS.md`. No unreleased release-notes section exists; the release note
+   must replace v0.2.3's `admit_observation` advice with `policy.prepare`.
 
 Last receipts (laptop, one native build from the integrated source in both
 arms; base `manabot/` extracted to `/tmp/mtg333-integrated-base`):

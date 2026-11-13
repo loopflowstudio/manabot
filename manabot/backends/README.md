@@ -238,6 +238,12 @@ built with `bucketed_shapes=True`, and packs live tokens with
 or `load_checkpoint(...)`, not checkpoint fields. Every lookup a batch needs
 is measured on the host, so the device forward reads nothing back.
 
+`prepare(obs, inference=True)` additionally drops the fact and object columns
+no row in the batch uses, which a padded CPU forward would otherwise attend
+over; simulation and search prepare this way. It changes floating-point
+summation order, not the legal logits' meaning, so learner rows are prepared
+without it.
+
 `BACKEND` is torch's `manabot.policy.protocol.Backend`: `load` returns an
 `ActorCritic` and a `Learner`, whose parameters and gradients keep torch's
 names (`torch_name` in `manabot.policy.checkpoint` maps canonical names
