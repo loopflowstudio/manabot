@@ -269,3 +269,50 @@ prose. Compress found nothing further to cut in the guide.
 Open choices (questions.md: CLI recipe-config fields, local follower) and the
 SDK release/pin, installed-consumer, launcher/service, recovery review and
 retained replay obligations are unchanged.
+
+## Concept review 9: next implement direction — 2026-11-13
+
+Proposals drawn from the design, not statements anyone made. Walked a local
+run through a crash and resume, a launched Elemental run through a retry, and
+the belief recipe through a rerun. Recipes, CLI, guide excerpts and the Etude
+table agree with the code. One recovery hole, and one guard that now checks
+nothing:
+
+1. **A milestone checkpoint can go missing without any error.** The loop
+   saves `state.pt` at a grid update, then writes and records the checkpoint
+   (`self_play.py`, `checkpoint_due`). An attempt lost between the two resumes
+   at that update, sees `state.update < updates` and trains on; the grid
+   checkpoint at that update is never written or recorded. Only update 0 and
+   the target are covered on entry. docs/training.md promises the opposite
+   ("A failed write fails the update rather than leaving a silent gap", and
+   the Recovery table keeps "every recorded checkpoint"). Elemental's
+   `eval(state)` rates on the same 50-update grid and skips an absent update
+   without saying so.
+
+   Direction: one rule in place of the update-0 special case. On entry, after
+   loading or creating the state and after the at-target return, when
+   `is_checkpoint(settings, state.update)`: `save_state`, then
+   `record_checkpoint`. The loop then always stands on a recorded checkpoint
+   whenever it stands on a grid update. Both calls are already safe to repeat:
+   `write_policy` returns an existing file untouched, and Etude's
+   `run.checkpoint` returns the existing record for the same model at the same
+   coordinate (EXP-56 `105abdd`, `train/run.py`). Update the guide's loop
+   excerpt and the `record_checkpoint` row to state the rule. Test: stop a
+   tracked run after `save_state` at a grid update with the checkpoint file
+   absent, rerun, and assert the checkpoint exists, is recorded once at that
+   coordinate, and earlier checkpoint bytes are unchanged. Fresh-run parity is
+   unaffected (update 0 behaves as before); rerun `scratch/parity.py` only if
+   the entry code changes what a fresh run executes.
+
+2. `tests/sim/test_conditional_search.py` asserts
+   `'manabot.training.execution' not in sys.modules`, a module that no longer
+   exists, so the assertion cannot fail. Name
+   `manabot.training.loops.self_play` there so search still proves it does
+   not load training.
+
+Checked and left alone: belief reads `run.latest_checkpoint()` straight after
+`self_play`, which records before every return, so it is the policy on a
+fresh run, a rerun and an extension. The CLI's environment save/restore stays
+until `local_launch` owns target and deadline. Etude PR #103 is still open at
+`105abdd`. Open choices (questions.md: CLI recipe-config fields, local
+follower) and the delivery obligations above are unchanged.
