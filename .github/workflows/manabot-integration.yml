@@ -38,14 +38,11 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: '3.13'
-          # Retain downloaded Torch/CUDA wheels instead of fetching them on
-          # every job. All groups install the same extras; one saves the cache.
-          prune-cache: false
-          save-cache: ${{ matrix.group == 'model' }}
 
       - name: Install dependencies
         run: |
           uv sync --python 3.13 --no-install-package managym \
+            --no-default-groups --group play-runtime \
             --extra dev --extra play --extra notebook --extra artifacts \
             --extra reports --extra llm --extra evaluation
 

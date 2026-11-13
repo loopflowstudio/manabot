@@ -186,9 +186,8 @@ publish, land or choose the next Graph step from here.
   pushed branch: `gh workflow run ci.yml --ref <branch>`. Read job and step
   timestamps with `gh run view <id> --json jobs`; read logs with
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
-  the same run. For dependency-cache changes, measure a miss/save and a later
-  hit/restore, including post-job save time, and inspect logs for repeated
-  downloads. See `docs/development.md` (Job time) for the budget and cache owner.
+  the same run and inspect dependency logs for unexpected downloads.
+  See `docs/development.md` (Job time) for the budget.
   To check a fixture's workload assertion, save a copy before temporarily
   restoring the old workload; confirm an assertion failure, then restore the
   copy and check `git diff`.

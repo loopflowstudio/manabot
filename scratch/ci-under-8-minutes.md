@@ -28,7 +28,7 @@ collection from scheduling. Details: `scratch/ci-post-merge-verification.md`.
 
 `tests/training/test_experiment_runner.py::demo_declaration` now bounds each
 of four real training attempts to one update of eight one-seat learner rows
-on two streams using `exact-quota`. Every saved `TrainingRun` must contain one
+per stream on two streams using `exact-quota`. Every saved `TrainingRun` must contain one
 stage, one update and 16 learner transitions. Four live complete-game evaluation
 cohorts, overlap, accounting, notebook edits/outputs and resume assertions remain.
 
@@ -47,19 +47,91 @@ The experiment job still took **549 s**: installation 181 s versus peers'
 after a pruned uv-cache hit. Every other ordinary job was at most 430 s;
 Engine Budget passed in 587 s. Full QA evidence: `scratch/qa.html`.
 
-The cache repair in `.github/workflows/manabot-integration.yml` sets
-`prune-cache: false`. All groups install the same extras and restore the cache;
-`model` alone saves it, avoiding duplicate compression/uploads. This preserves
-the existing Torch build; CPU Torch was the alternative. `docs/development.md`
-owns the cache explanation and the job-time budget. Hosted cache-repair timing
-is still pending.
+## CPU Torch implementation (2026-11-12)
 
-**Delete — do not maintain:** the inherited complete-game fixture workload,
-singleton stage loop and 30/60-second guards are replaced, as is Integration's
-implicit cache pruning. No remaining file, symbol or test deletion targets.
-Keep setup-uv as the sole dependency-cache owner, all test selections, the
-native debug build, the 300-second watchdog and the existing dependency groups
-and lockfile.
+Integration now selects the existing `play-runtime` group with default groups
+disabled and uses setup-uv defaults. The retained-wheel repair is removed.
+The fixture and all test/build commands remain unchanged. Basis measured on
+2026-11-12:
+
+- Each Integration job downloads 3,046 MiB of wheels (job log, run 43345024882).
+  About 2.8 GiB is `nvidia-*`, `triton` and `torch==2.15.0+cu132`, which a
+  hosted CPU runner cannot use. The slow job spent 2 m 59 s on them; five
+  peers took 17–30 s for the same downloads. The tail is download variance.
+- Repository Actions caches hold 8.2 GB of GitHub's 10 GB limit in 357 entries
+  (`gh api repos/loopflowstudio/manabot/actions/cache/usage`). Rust caches are
+  105–127 MB each; today's uv cache is 0–4 MB. A retained wheel cache is at
+  least the 3 GB of already-compressed wheels, saved again per ref whenever
+  `uv.lock` changes. It cannot fit without evicting the Rust caches that keep
+  the 52–80 s extension build from becoming a cold one.
+- A retained cache turns a 2 s restore into a multi-GB restore on all six
+  groups to protect against a tail on one; the median gets no faster.
+- The lockfile already resolves CPU Torch for these extras:
+  `uv export --frozen --no-default-groups --group play-runtime --extra dev
+  --extra play --extra notebook --extra artifacts --extra reports --extra llm
+  --extra evaluation` yields `torch==2.15.0+cpu` on Linux, `torch==2.15.0` on
+  macOS, and no `nvidia-*` or `triton`. `baseline.yml` installs this way now.
+  `questions.md` assumed CPU Torch "changes the build"; it needs no dependency
+  or lock change, only the two group flags on Integration's `uv sync`.
+
+### Delete — do not maintain
+
+- Removed Integration's `prune-cache: false`, matrix `save-cache` and their
+  comment; removed the matching wheel-cache ownership and cold/warm protocol
+  in `docs/development.md` and `.lf/skills/qa.md`. No exclusive tests or fixtures.
+- Preserve the bounded experiment fixture, all selected test nodes, debug
+  extension build, per-worker watchdog, dependency definitions and lockfile.
+- Preserve QA's hosted-CI commands and within-run install comparison.
+
+### Checks and remaining implementation
+
+CUDA review found no selected test requiring a CUDA-built Torch on a CPU
+runner. Actual GPU cases already guard on `torch.cuda.is_available()`;
+other cases validate declarations, mock runtime/launch boundaries or inspect
+precision contexts. The vLLM fixture uses a local tokenizer and mocked HTTP,
+not a local GPU server. The CPU build still exposes the precision controls;
+focused precision checks and hosted tests verify that boundary.
+
+Checks: `actionlint .github/workflows/manabot-integration.yml` passed;
+locked sync of the exact CI extras passed; focused file-selection, TF32/autocast
+and vLLM HTTP-boundary tests passed (13 in 3.58 s); workflow validation passed;
+`git diff --check` passed. Initial collection lacked `huggingface_hub`; syncing
+the declared CI extras resolved it. Frozen export selects Linux Torch
+`2.15.0+cpu`, with no NVIDIA/Triton dependencies. A diff audit confirms the
+build/test commands, bounded fixture, dependency definitions and lockfile
+are unchanged.
+
+Pending: one full hosted Ubuntu dispatch showing CPU Torch installation
+without NVIDIA/Triton downloads and every ordinary job below 480 s.
+PR-event and post-merge evidence belong to delivery.
+
+What survives: same Torch version, same lockfile, same test selections, debug
+extension build, watchdog. What changes on purpose: Integration stops importing
+the cu132 wheel. Python unit and Academy Integration still sync the default
+`training-runtime` group, so a hosted job still imports the Linux training
+build. Counterexample to check during implement: a selected test that needs a
+CUDA-build-only component on a CPU runner; the 17 test files that mention
+`cuda`, `torch.compile` or `triton` (`tests/llm/test_llm_vllm.py` among them)
+are the places to look. If one exists, keep that group on the default install rather than
+restoring cache retention.
+
+Known limit, not changed here: Python unit (308 s on the merged push) and
+Academy Integration (146 s) keep the 3 GiB download and its tail. The observed
+tail added 163 s, which would put Python unit at about 471 s.
+
+The fixture no longer uses complete-game training or the 30/60-second guards.
+Test selections, the native debug build, the 300-second watchdog, dependency
+groups and lockfile are unchanged. Wave memory's cache-retention bullet
+describes the superseded repair; realign should replace it with the facts above.
+
+## Reconciled with upstream (2026-11-12)
+
+The checkout includes main through `f1b0109ae` (#504, mana-payment engine
+optimization), merged here before `b8ed0970b`. A fresh fetch found no main
+commits missing from this checkout. That engine change postdates the fixture
+QA revision `4db5cd64b`; its timing cannot be inferred from the old run.
+The fixture repair remains present after the merge. The next Ubuntu run must exercise both the current engine and the CPU runtime
+change; the prior run does not establish their timing.
 
 ## Evidence and limits
 
@@ -128,11 +200,9 @@ Pre-compression investigation and command details:
 
 ## Remaining delivery
 
-Gate must record Ubuntu cache miss/save and subsequent hit/restore runs,
-including Setup uv, Install dependencies, Post Setup uv and total job seconds.
-Confirm warm installs avoid Torch/nvidia downloads, all selected tests pass
-with debug assertions, and ordinary jobs finish below 480 s. Neither a cold
-run alone nor a warm run alone establishes both costs.
+After the CPU Torch change, one hosted Ubuntu run on the current head must show
+every ordinary job below 480 s with all selected tests passing under debug
+assertions. It also supplies the first timing with #504's engine change.
 
 If the fixture's resource deadline fails again, identify the expired clock
 and charged/allowed seconds in `manabot/training/execution.py::remaining/check`
@@ -140,17 +210,10 @@ before adjusting an allowance. Its three clocks are launch, regime and stage;
 `tests/training/test_learning_state.py` retains the existing error text. This
 diagnostic change is deferred unless another failure warrants it.
 
-Publish the fixture and cache repair in Task 38ef25, retaining #506 as history.
+Publish the fixture and CPU runtime repair in Task 38ef25, retaining #506 as history.
 `scratch/pr-body.md`, `scratch/pr-title.txt` and `scratch/.pr-copy-ref` still
 describe #506 and must be rewritten at delivery. PR-event timing and successful
 post-merge verification remain necessary before completing the Task.
 
-Compression: kept the direct fixture/cache implementation; removed repeated
-plan explanations and stale QA cache guidance. Wave memory's statement that
-Ubuntu fixture timing is unproved is superseded by run 43345024882; realign
-should update it from this evidence (Wave context is read-only here).
-
-Compression checks: `uv run --no-sync python scripts/check_loopflow_workflows.py`
-— passed; `gh run view 43345024882 --json jobs` returned job/step timestamps;
-`git diff --check` — passed. No executable behavior changed in this pass, so
-tests were not rerun. `lf context` remains under both token and byte targets.
+No open product choice: nobody has asked that Integration run the CUDA build,
+and the stated outcome counts install and cache overhead against the budget.
