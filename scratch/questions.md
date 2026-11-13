@@ -12,13 +12,49 @@ Implementation choices (reversible, not quotes):
 - MPS driver peak is sampled every 50 ms and labelled a lower bound.
 - Per-call comparisons use the 256-stream capture. All three captures feed
   whole-update replays and their own parity blocks.
+- Overflow reporting will retain the shared M2 engine component and name its
+  origin beside the M4 replay phases; it cannot claim an M4-only wall time.
+  Receipts/captions now implement this; controlled rendering is checked.
 
 Unresolved execution: installed Etude SDK 0.2.16 declares rental providers
 `runpod`, `vast`, `lium` (`etude/launch/records.py::Provider.kind`), no AWS Mac
 provider. The requested USD25 capped AWS allocation/release path has not been
 identified. No host was allocated, no paid experiment launched, no timing
-performed. Local load read at 16:13 was 263.74; it was not used for timing.
-Credentials were not tested or printed; this is a launcher capability issue.
+performed. The follow-up below verified AWS read access without exposing secrets.
+
+2026-11-12 allocation/release investigation:
+- Read `~/.manabot-mps-bench/access.md` and `release.sh`. The script runs a
+  local sleep/retry loop, terminates the instance after 24 hours plus five
+  minutes, then retries host release every 15 minutes. It has no budget
+  admission, cost receipt or durable remote controller. Its retained log shows
+  an occupied-host refusal at 23:52:07Z followed by release at 23:57:51Z.
+- AWS `describe-hosts` independently returned `released` for the prior
+  h-0f052e6c1cd31bb22, ReleaseTime `2026-11-12T23:57:51+00:00`.
+  The historical SSH key was neither read nor printed.
+- `etude machine add --help` provides `--cost-usd` for already-committed cost
+  and `--expires-at` for removing SSH capacity from a pool. SDK `Machine`
+  documentation permits deletion only for rented machines; an externally
+  allocated AWS host registered as SSH is not released by expiry. `etude rent
+  --max-usd` applies to supported provider rentals, not that external host.
+- Read-only AWS `scheduler list-schedules`, `events list-rules` and
+  `lambda list-functions` returned empty lists in us-east-1. No existing AWS
+  release controller was found through those surfaces. This does not prove
+  every possible external solution unavailable; it establishes that the
+  documented local path and current Etude SSH path do not enforce the required
+  capped rental lifecycle. No services, policies, schedules or hosts were created.
+- AWS documentation confirms billing is at the Dedicated Host, allocation
+  cannot end before 24 hours, and stopping the instance alone does not end host
+  billing: [EC2 Mac](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-mac-instances.html),
+  [release](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/dedicated-hosts-releasing.html).
+  A verified launcher owning allocation, total-cap admission, durable release
+  retries and the cost receipt is still missing. Do not infer that an ordinary
+  SSH launch or copying the old local loop supplies it. No uncapped allocation
+  or laptop replacement for the main M2 comparison was made.
+
+Reversible report choice: readable comparisons are generated Markdown beside
+the PNGs (`comparisons.md`, hostname suffix for supplemental hosts), with all
+replay repetitions and the latest per-call/parity attempts. Unknown provenance
+is labelled rather than inferred; synthetic proofs stay under `.runs/`.
 
 The small CPU/MLX two-row smoke and synthetic chart checks are controlled
 implementation fixtures, not performance evidence. MPS execution is unverified.

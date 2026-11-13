@@ -4,7 +4,8 @@ Run `capture` on the rented M2, then `matrix` for isolated correctness and
 per-call blocks, and `replays` for the three whole-update repetitions. `report`
 keeps incomplete matrices and unsupported arms visible. Every worker records its
 host, source revision, capture, dtype and load. Backend recommendations belong
-to the report's interpretation, never to a hard-coded threshold.
+to the report's interpretation, never to a hard-coded threshold. `_host_report`
+selects and summarizes receipts once; tables and charts render that same evidence.
 """
 
 from __future__ import annotations
@@ -620,6 +621,17 @@ def _provenance(capture: Path, laptop: bool) -> dict[str, Any]:
             "streams"
         ],
         "capture_revision": provenance["revision"],
+        # The shared engine component was measured here, not on the replay
+        # host. Capture execution sets its own thread count after _host().
+        "capture_host": {
+            **{
+                key: value
+                for key, value in provenance.items()
+                if key not in ("capture_id", "capture_threads", "etude_run")
+            },
+            "cpu_threads": provenance["capture_threads"],
+        },
+        "capture_threads": provenance["capture_threads"],
     }
 
 
@@ -960,12 +972,641 @@ def replays(args: argparse.Namespace) -> None:
                 _child(args, "update", width, 0, arm, rep=rep)
 
 
+@dataclass(frozen=True)
+class HostReport:
+    """One validated receipt set, shared by the summary, tables and charts."""
+
+    calls: dict[tuple[str, int, int, int, str], dict[str, Any]]
+    updates: dict[tuple[int, int, str], list[dict[str, Any] | None]]
+    summary: dict[str, Any]
+
+
+def _status(row: dict[str, Any] | None) -> str:
+    if row is None:
+        return "not measured"
+    return {"oom": "does not fit", "ok": "measured"}.get(
+        row["status"], row["status"].replace("_", " ")
+    )
+
+
+def _number(value: float | None) -> str:
+    return "—" if value is None else f"{value:.6g}"
+
+
+def _memory_cells(row: dict[str, Any]) -> list[str]:
+    memory = row.get("memory", {})
+    return [
+        _number(memory[key] / 2**30) if key in memory else "—"
+        for key in ("process_peak_rss", "mps_driver_sampled_peak", "mlx_peak")
+    ]
+
+
+def _table(headers: list[str], rows: list[list[str]]) -> str:
+    def line(cells: list[str]) -> str:
+        return (
+            "| "
+            + " | ".join(c.replace("|", "\\|").replace("\n", " ") for c in cells)
+            + " |"
+        )
+
+    return "\n".join(
+        [line(headers), line(["---"] * len(headers)), *(line(r) for r in rows)]
+    )
+
+
+def _details(
+    out: Path,
+    suffix: str,
+    data: HostReport,
+) -> None:
+    """Readable comparisons retain failures and absent values, never zero-fill."""
+    summary, latest, groups = data.summary, data.calls, data.updates
+    host = summary["host"]
+    text = [
+        f"# Measurements · {host['chip']} · {host['hostname']}",
+        f"Replay: {host['memory_bytes'] / 2**30:g} GiB, "
+        f"{host['cpu_threads']} CPU threads, Python {host['python']}, "
+        f"torch {host['torch']}, MLX {host['mlx']}. Source: `{host['revision']}`.",
+        "Coverage is not a correctness verdict. Timings remain visible when gradients "
+        "or choices disagree. Missing measurements are not zero. Memory columns are "
+        "GiB: lifetime process RSS, sampled MPS driver peak (50 ms; lower bound), "
+        "and MLX allocator peak. They measure different scopes and must not be summed.",
+        "## Shared engine component",
+        _table(
+            [
+                "Streams",
+                "Capture",
+                "Capture machine",
+                "Capture threads",
+                "Capture source",
+            ],
+            [
+                [
+                    str(c["streams"]),
+                    c["capture_id"],
+                    f"{c['host']['chip']} · {c['host']['hostname']} · {c['host']['memory_bytes'] / 2**30:g} GiB"
+                    if c["host"]
+                    else "unknown",
+                    str(c["threads"]) if c["threads"] is not None else "unknown",
+                    c["revision"],
+                ]
+                for c in summary["captures"]
+            ],
+        ),
+        "Engine/host seconds are reused from capture at its stated thread count. "
+        "Collection policy and learning are measured on the replay machine. "
+        "A cross-host sum is not a measured whole update on the replay machine.",
+    ]
+    for phase, sizes in SIZES.items():
+        cells: list[list[str]] = []
+        for width in WIDTHS:
+            for size in sizes:
+                for arm in ARMS:
+                    row = latest.get((phase, width, 256, size, arm))
+                    r = row or {}
+                    cells.append(
+                        [
+                            f"w{width}l{LAYERS[width]}",
+                            str(size),
+                            LABELS[arm],
+                            _status(row),
+                            *[
+                                _number(r.get(k))
+                                for k in (
+                                    "first_seconds",
+                                    "catalog_seconds",
+                                    "median_seconds",
+                                    "rows_per_second",
+                                )
+                            ],
+                            *_memory_cells(r),
+                            r.get("error", ""),
+                        ]
+                    )
+        text.extend(
+            [
+                f"## {phase.capitalize()} · 256-stream capture",
+                "First call and catalog setup are separate from warmed median seconds. "
+                "Rates are learner rows/s or collection decisions/s.",
+                _table(
+                    [
+                        "Model",
+                        "Rows",
+                        "Arm",
+                        "Status",
+                        "First s",
+                        "Catalog s",
+                        "Warm median s",
+                        "Rate /s",
+                        "RSS GiB",
+                        "MPS GiB ≥",
+                        "MLX GiB",
+                        "Error",
+                    ],
+                    cells,
+                ),
+            ]
+        )
+    parity_cells: list[list[str]] = []
+    for width in WIDTHS:
+        for streams in STREAMS:
+            # Other captures require a parity block before replay; replays uses
+            # 64 rows unless an existing block already covers this arm.
+            sizes = sorted(
+                {
+                    r["rows"]
+                    for r in latest.values()
+                    if r["event"] == "parity"
+                    and r["width"] == width
+                    and r["streams"] == streams
+                }
+                | (set(SIZES["learner"]) if streams == 256 else {64})
+            )
+            for size in sizes:
+                for arm in ARMS:
+                    row = latest.get(("parity", width, streams, size, arm))
+                    r = row or {}
+                    loss_delta = (
+                        abs(r["loss"] - r["reference_loss"]) if "loss" in r else None
+                    )
+                    parity_cells.append(
+                        [
+                            f"w{width}l{LAYERS[width]}",
+                            str(streams),
+                            str(size),
+                            LABELS[arm],
+                            _status(row),
+                            *[
+                                _number(r.get(k))
+                                for k in (
+                                    "logits_max_abs",
+                                    "collection_logits_max_abs",
+                                    "values_max_abs",
+                                )
+                            ],
+                            _number(loss_delta),
+                            _number(r.get("reference_loss")),
+                            _number(r.get("gradient_cosine")),
+                            _number(r.get("gradient_min_cosine")),
+                            r.get("gradient_worst", "—"),
+                            str(r["sample_disagreements"])
+                            if "sample_disagreements" in r
+                            else "—",
+                            r.get("error", ""),
+                        ]
+                    )
+    text.extend(
+        [
+            "## Correctness against CPU float32",
+            "Cosines cover the full gradient and the worst tensor after the global-norm floor. "
+            "The historical 0.999 cosine reference is descriptive, not an adoption rule. "
+            "Logit/value/loss differences and common-uniform sampled-choice disagreements "
+            "need interpretation; zero disagreements cover only the recorded rows.",
+            _table(
+                [
+                    "Model",
+                    "Streams",
+                    "Rows",
+                    "Arm",
+                    "Status",
+                    "Learner logit Δ",
+                    "Collection logit Δ",
+                    "Value Δ",
+                    "Loss abs Δ",
+                    "CPU loss",
+                    "Gradient cosine",
+                    "Min tensor cosine",
+                    "Worst tensor",
+                    "Choice mismatches",
+                    "Error",
+                ],
+                parity_cells,
+            ),
+            "## Whole-update repetitions",
+            "All repetitions are listed, including failures. Charts select the median-total "
+            "replay's phases. First-call overhead is included in replay phases. "
+            "Choice mismatches here cover the complete replayed collection.",
+        ]
+    )
+    replay_cells: list[list[str]] = []
+    for (width, streams, arm), attempts in groups.items():
+        for rep, row in enumerate(attempts):
+            r = row or {}
+            replay_cells.append(
+                [
+                    f"w{width}l{LAYERS[width]}",
+                    str(streams),
+                    LABELS[arm],
+                    str(rep + 1),
+                    _status(row),
+                    *[
+                        _number(r.get(k))
+                        for k in ("engine", "collection_policy", "learning", "seconds")
+                    ],
+                    *_memory_cells(r),
+                    str(r["sample_disagreements"])
+                    if "sample_disagreements" in r
+                    else "—",
+                    r.get("error", ""),
+                ]
+            )
+    text.append(
+        _table(
+            [
+                "Model",
+                "Streams",
+                "Arm",
+                "Repeat",
+                "Status",
+                "Shared engine s",
+                "Collection s",
+                "Learning s",
+                "Sum s",
+                "RSS GiB",
+                "MPS GiB ≥",
+                "MLX GiB",
+                "Choice mismatches",
+                "Error",
+            ],
+            replay_cells,
+        )
+    )
+    (out / f"comparisons{suffix}.md").write_text("\n\n".join(text) + "\n")
+
+
+def _missing_arms(
+    prefix: str, attempts: dict[str, list[dict[str, Any] | None]]
+) -> list[str]:
+    """Coverage accepts OOM, but unsupported halves cannot replace both dtypes."""
+    statuses = {
+        arm: {r["status"] if r else "not_measured" for r in rows}
+        for arm, rows in attempts.items()
+    }
+    executed = {"ok", "oom"}
+    missing = [
+        f"{prefix}/{arm}"
+        for arm, states in statuses.items()
+        if not states <= (executed | {"unsupported"} if arm in HALF else executed)
+    ]
+    if not any(statuses[arm] <= executed for arm in HALF):
+        missing.append(f"{prefix}/no executed half arm")
+    return missing
+
+
+def _host_report(
+    local: list[dict[str, Any]], replay: list[dict[str, Any]]
+) -> HostReport:
+    """Select latest attempts and summarize evidence before any rendering."""
+    evidence = local + replay
+    hostname = evidence[0]["host"]["hostname"]
+    host = evidence[0]["host"]
+    if any(r["host"] != host for r in evidence):
+        raise ValueError(
+            "host/software/source changed; use separate report directories"
+        )
+    latest = {
+        (r["event"], r["width"], r["streams"], r["rows"], r["arm"]): r for r in local
+    }
+    replay_latest = {(r["width"], r["streams"], r["arm"], r["rep"]): r for r in replay}
+    missing: list[str] = []
+    captures: list[dict[str, Any]] = []
+    for streams in STREAMS:
+        captured = [r for r in evidence if r["streams"] == streams]
+        if not captured:
+            continue
+        if len({r["capture_id"] for r in captured}) > 1:
+            raise ValueError(
+                f"multiple captures for {hostname}/{streams}; select one explicitly"
+            )
+        origins = [
+            {
+                "streams": streams,
+                "capture_id": r["capture_id"],
+                "host": r.get("capture_host"),
+                "threads": r.get("capture_threads"),
+                "revision": r["capture_revision"],
+            }
+            for r in captured
+        ]
+        if any(origin != origins[0] for origin in origins):
+            raise ValueError("capture host/source/thread provenance changed")
+        captures.append(origins[0])
+        if origins[0]["host"] is None or origins[0]["threads"] is None:
+            missing.append(f"capture/streams{streams}/host or threads unknown")
+    groups = {
+        (width, streams, arm): [
+            replay_latest.get((width, streams, arm, rep)) for rep in range(3)
+        ]
+        for width in WIDTHS
+        for streams in STREAMS
+        for arm in ARMS
+    }
+    # Per-call comparisons use only the 256-stream capture.
+    for width in WIDTHS:
+        for phase, sizes in SIZES.items():
+            for size in sizes:
+                missing.extend(
+                    _missing_arms(
+                        f"{phase}/w{width}/b{size}",
+                        {
+                            arm: [latest.get((phase, width, 256, size, arm))]
+                            for arm in ARMS
+                        },
+                    )
+                )
+    # The median-total replay owns the phase stack, so it sums to that total.
+    medians: list[dict[str, Any]] = []
+    spans: list[dict[str, int | float]] = []
+    for width in WIDTHS:
+        for streams in STREAMS:
+            missing.extend(
+                _missing_arms(
+                    f"update/w{width}/streams{streams}",
+                    {arm: groups[(width, streams, arm)] for arm in ARMS},
+                )
+            )
+            valid_replays: list[dict[str, Any]] = []
+            for arm in ARMS:
+                complete = [
+                    r
+                    for r in groups[(width, streams, arm)]
+                    if r and r["status"] == "ok"
+                ]
+                valid_replays.extend(complete)
+                if len(complete) == 3:
+                    medians.append(sorted(complete, key=lambda r: r["seconds"])[1])
+            if valid_replays:
+                span = max(r["ended"] for r in valid_replays) - min(
+                    r["started"] for r in valid_replays
+                )
+                spans.append({"width": width, "streams": streams, "seconds": span})
+    same_hour = bool(spans) and all(r["seconds"] <= 3600 for r in spans)
+    summary = {
+        "host": host,
+        "missing": missing,
+        "complete": not missing and (same_hour or host["chip"] != "Apple M2"),
+        "captures": captures,
+        "whole_updates": medians,
+        "replay_windows": spans,
+        "same_hour": same_hour,
+    }
+    if host["chip"] != "Apple M2":
+        summary["supplemental_host"] = True
+    return HostReport(latest, groups, summary)
+
+
+def _call_charts(out: Path, suffix: str, data: HostReport) -> None:
+    import matplotlib.pyplot as plt
+
+    host = data.summary["host"]
+    hostname = host["hostname"]
+    for phase in SIZES:
+        fig, axes = plt.subplots(4, 2, figsize=(17, 21))
+        for width, axis in zip(WIDTHS, axes.flat):
+            cells = []
+            for arm in ARMS:
+                points = [
+                    data.calls.get((phase, width, 256, b, arm)) for b in SIZES[phase]
+                ]
+                axis.plot(
+                    SIZES[phase],
+                    [
+                        r["rows_per_second"] if r and r["status"] == "ok" else np.nan
+                        for r in points
+                    ],
+                    marker="o",
+                    label=LABELS[arm],
+                )
+                cells.append([_status(r) for r in points])
+            axis.set(
+                title=f"Width {width} · {LAYERS[width]} layers",
+                xlabel="Rows per call",
+                ylabel="Decisions per second"
+                if phase == "collection"
+                else "Rows per second",
+                xscale="log",
+            )
+            axis.set_xticks(SIZES[phase], [str(b) for b in SIZES[phase]])
+            table = axis.table(
+                cellText=cells,
+                rowLabels=[LABELS[a] for a in ARMS],
+                colLabels=[str(b) for b in SIZES[phase]],
+                cellLoc="center",
+                bbox=(0.32, -0.72, 0.68, 0.48),
+            )
+            table.auto_set_font_size(False)
+            table.set_fontsize(7)
+        axes.flat[-1].axis("off")
+        axes.flat[-1].legend(
+            *axes.flat[0].get_legend_handles_labels(), loc="center", fontsize=9
+        )
+        axes.flat[-1].text(
+            0,
+            0.15,
+            "Warmed medians; gaps are not zero.\n"
+            "Measured means execution completed, not correctness passed.\n"
+            f"First calls, setup, memory and correctness: comparisons{suffix}.md",
+            fontsize=9,
+            va="top",
+            wrap=True,
+        )
+        fig.suptitle(
+            f"{phase.capitalize()} · {host['chip']} · {host['memory_bytes'] / 2**30:g} GiB\n{hostname} · torch {host['torch']} · MLX {host['mlx']} · 256-stream capture"
+        )
+        fig.subplots_adjust(top=0.93, bottom=0.07, hspace=1.25, wspace=0.3)
+        fig.savefig(
+            out / f"{phase}{suffix}.png",
+            dpi=180,
+            facecolor="white",
+            bbox_inches="tight",
+        )
+        plt.close(fig)
+
+
+def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
+    from matplotlib.patches import Patch
+    import matplotlib.pyplot as plt
+
+    summary = data.summary
+    host, captures = summary["host"], summary["captures"]
+    hostname = host["hostname"]
+    medians = {
+        (r["width"], r["streams"], r["arm"]): r for r in summary["whole_updates"]
+    }
+    # One panel per model shape; three stream groups each contain all arms.
+    fig = plt.figure(figsize=(19, 22))
+    grid = fig.add_gridspec(4, 2, hspace=0.5, wspace=0.22)
+    phases = (
+        ("engine", "Shared capture engine + host work", "#808080"),
+        ("collection_policy", "Collection policy calls", "#539caf"),
+        ("learning", "Learning", "#db9250"),
+    )
+    labels = ("CPU8\nf32", "MPS\nf32", "MPS\nbf16", "MPS\nf16", "MLX\nf32")
+    for index, width in enumerate(WIDTHS):
+        sub = grid[index // 2, index % 2].subgridspec(
+            2, 1, height_ratios=(3, 1), hspace=0.12
+        )
+        axis = fig.add_subplot(sub[0])
+        rate = fig.add_subplot(sub[1], sharex=axis)
+        for si, streams in enumerate(STREAMS):
+            for ai, arm in enumerate(ARMS):
+                x = si * 6 + ai
+                attempts = data.updates[(width, streams, arm)]
+                complete = [r for r in attempts if r and r["status"] == "ok"]
+                middle = medians.get((width, streams, arm))
+                if middle is None:
+                    note = "/".join(sorted({_status(r) for r in attempts}))
+                    axis.text(
+                        x,
+                        0.03,
+                        note,
+                        rotation=90,
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                        transform=axis.get_xaxis_transform(),
+                    )
+                    continue
+                bottom = 0.0
+                for key, _, color in phases:
+                    axis.bar(
+                        x,
+                        middle[key],
+                        0.83,
+                        bottom=bottom,
+                        color=color,
+                        edgecolor="#333333",
+                        linewidth=0.4,
+                    )
+                    bottom += middle[key]
+                rate.bar(
+                    x,
+                    statistics.median(
+                        r["learner_decisions"] / r["seconds"] for r in complete
+                    ),
+                    0.83,
+                    color="#539caf",
+                    edgecolor="#333333",
+                    linewidth=0.4,
+                )
+                parity = [
+                    r
+                    for r in data.calls.values()
+                    if r["event"] == "parity"
+                    and r["width"] == width
+                    and r["streams"] == streams
+                    and r["arm"] == arm
+                    and r["status"] == "ok"
+                ]
+                worst = min((r["gradient_cosine"] for r in parity), default=None)
+                same = all(r["sample_disagreements"] == 0 for r in complete)
+                text = f"cos {worst:.4f}" if worst is not None else "parity missing"
+                if not same:
+                    text += "\nchoices differ"
+                else:
+                    text += "\nchoices match"
+                axis.annotate(
+                    text,
+                    (x, bottom),
+                    xytext=(0, 4),
+                    textcoords="offset points",
+                    ha="center",
+                    rotation=90,
+                    fontsize=6,
+                )
+        axis.set(
+            title=f"Width {width} · {LAYERS[width]} attention layers",
+            ylabel="Seconds per update",
+        )
+        axis.margins(y=0.65)
+        axis.set_ylim(bottom=0)
+        axis.set_xlim(-0.7, 16.7)
+        axis.tick_params(axis="x", labelbottom=False)
+        rate.set_ylabel("Learner decisions /\nwhole-update second", fontsize=8)
+        rate.set_xticks(
+            [si * 6 + ai for si in range(3) for ai in range(5)],
+            list(labels) * 3,
+            fontsize=7,
+        )
+        for si, streams in enumerate(STREAMS):
+            rate.text(
+                si * 6 + 2,
+                -0.6,
+                f"{streams} streams",
+                ha="center",
+                fontsize=9,
+                transform=rate.get_xaxis_transform(),
+            )
+    origins = sorted(
+        {
+            f"{c['host']['chip']} / {c['host']['hostname']} / {c['threads']} CPU threads"
+            if c["host"]
+            else "unknown capture host/threads"
+            for c in captures
+        }
+    )
+    origin_caption = "\n".join(origins) or "No capture provenance"
+    mixed_host = any(
+        c["host"] is None or c["host"]["hostname"] != hostname for c in captures
+    )
+    legend = fig.add_subplot(grid[3, 1])
+    legend.axis("off")
+    legend.text(
+        0,
+        0.95,
+        "Full context: the current training recipe",
+        fontsize=16,
+        weight="bold",
+        va="top",
+    )
+    legend.text(
+        0,
+        0.84,
+        f"Replay: {host['chip']} · {host['memory_bytes'] / 2**30:g} GiB\n{hostname} · {host['cpu_threads']} CPU threads\ntorch {host['torch']} · MLX {host['mlx']}\nShared engine/host component from capture:\n{origin_caption}\n"
+        + (
+            "Cross-host phase sum, not a measured replay-host update.\n"
+            if mixed_host
+            else ""
+        )
+        + "Both-seat self-play; one real capture per stream count.\nMedian of three replays; same inputs and recorded decisions.\nHalf arms: bfloat16; float16 with gradient scaler.\nBars identify executed dtype and median-total phase times.\nRate counts learner decisions before filtering.\nCosines vs CPU; choices use common-uniform samples.\nNeither proves identical trained policies.\nFirst calls, memory and correctness: comparisons"
+        + suffix
+        + ".md\nMissing and failed arms remain visible.\nSame-hour condition for measured groups: "
+        + ("met" if summary["same_hour"] else "NOT MET")
+        + (
+            "\nReceipt coverage: complete"
+            if summary["complete"]
+            else "\nReceipt coverage: incomplete"
+        ),
+        fontsize=9,
+        va="top",
+        linespacing=1.2,
+    )
+    legend.legend(
+        handles=[Patch(facecolor=color, label=label) for _, label, color in phases],
+        loc="upper left",
+        bbox_to_anchor=(0, -0.12),
+        fontsize=9,
+    )
+    fig.suptitle(
+        ("Cross-host phase sum · " if mixed_host else "Whole-update replay · ")
+        + host["chip"],
+        fontsize=20,
+        y=0.995,
+    )
+    fig.savefig(
+        out / f"full_context{suffix}.png",
+        dpi=180,
+        facecolor="white",
+        bbox_inches="tight",
+    )
+    plt.close(fig)
+
+
 def report(bench_dir: Path, out: Path) -> None:
     """Keep one host/source/capture set per report; mark every absent bar."""
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     rows = _rows(bench_dir / "bench.jsonl")
     updates = _rows(bench_dir / "updates.jsonl")
@@ -973,260 +1614,32 @@ def report(bench_dir: Path, out: Path) -> None:
     hosts = sorted({r["host"]["hostname"] for r in rows + updates})
     if not hosts:
         raise ValueError("no measurement receipts; refusing an empty report")
+    if (
+        len(
+            {
+                r["host"]["hostname"]
+                for r in rows + updates
+                if r["host"]["chip"] == "Apple M2"
+            }
+        )
+        > 1
+    ):
+        raise ValueError("multiple main M2 hosts; use separate report directories")
     summaries: list[dict[str, Any]] = []
     for hostname in hosts:
-        local = [r for r in rows if r["host"]["hostname"] == hostname]
-        replay = [r for r in updates if r["host"]["hostname"] == hostname]
-        evidence = local + replay
-        host = evidence[0]["host"]
-        if any(r["host"] != host for r in evidence):
-            raise ValueError(
-                "host/software/source changed; use separate report directories"
-            )
-        for streams in STREAMS:
-            captures = {r["capture_id"] for r in evidence if r["streams"] == streams}
-            if len(captures) > 1:
-                raise ValueError(
-                    f"multiple captures for {hostname}/{streams}; select one explicitly"
-                )
-        latest = {
-            (r["event"], r["width"], r["streams"], r["rows"], r["arm"]): r
-            for r in local
-        }
-        replay_latest = {
-            (r["width"], r["streams"], r["arm"], r["rep"]): r for r in replay
-        }
-        missing: list[str] = []
-        # Per-call matrix uses the 256-stream capture; the other captures are
-        # whole-update workloads, not additional per-call comparison datasets.
-        for width in WIDTHS:
-            for phase, sizes in SIZES.items():
-                for size in sizes:
-                    available_half = False
-                    for arm in ARMS:
-                        entry = latest.get((phase, width, 256, size, arm))
-                        status = entry.get("status") if entry else None
-                        if status not in ("ok", "oom", "unsupported") or (
-                            status == "unsupported" and arm not in HALF
-                        ):
-                            missing.append(f"{phase}/w{width}/b{size}/{arm}")
-                        if arm in HALF and status in ("ok", "oom"):
-                            available_half = True
-                    if not available_half:
-                        missing.append(f"{phase}/w{width}/b{size}/no executed half arm")
-        groups = {
-            (width, streams, arm): [
-                replay_latest.get((width, streams, arm, rep)) for rep in range(3)
-            ]
-            for width in WIDTHS
-            for streams in STREAMS
-            for arm in ARMS
-        }
-        for (width, streams, arm), attempts in groups.items():
-            if not all(
-                r and r["status"] in ("ok", "oom", "unsupported") for r in attempts
-            ):
-                missing.append(f"update/w{width}/streams{streams}/{arm}")
-        summary: dict[str, Any] = {
-            "host": host,
-            "missing": missing,
-            "complete": not missing,
-        }
-        summaries.append(summary)
-        is_m2 = host["chip"] == "Apple M2"
-        suffix = "" if is_m2 else "-" + hostname.replace("/", "_")
-        if not is_m2:
-            summary["supplemental_host"] = True
-        for phase in SIZES:
-            fig, axes = plt.subplots(2, 4, figsize=(17, 8))
-            for width, axis in zip(WIDTHS, axes.flat):
-                for arm in ARMS:
-                    points = [
-                        latest[(phase, width, 256, b, arm)]
-                        for b in SIZES[phase]
-                        if latest.get((phase, width, 256, b, arm), {}).get("status")
-                        == "ok"
-                    ]
-                    axis.plot(
-                        [r["rows"] for r in points],
-                        [r["rows_per_second"] for r in points],
-                        marker="o",
-                        label=LABELS[arm],
-                    )
-                axis.set(
-                    title=f"Width {width} · {LAYERS[width]} layers",
-                    xlabel="Rows per call",
-                    ylabel="Rows per second",
-                    xscale="log",
-                )
-            axes.flat[-1].axis("off")
-            axes.flat[-1].legend(
-                *axes.flat[0].get_legend_handles_labels(), loc="center", fontsize=9
-            )
-            fig.suptitle(
-                f"{phase.capitalize()} · {host['chip']} · {host['memory_bytes'] / 2**30:g} GiB\n{hostname} · torch {host['torch']} · MLX {host['mlx']} · 256-stream capture"
-            )
-            fig.tight_layout()
-            fig.savefig(out / f"{phase}{suffix}.png", dpi=180, facecolor="white")
-            plt.close(fig)
-        # One panel per model shape; three stream groups each contain all arms.
-        fig = plt.figure(figsize=(19, 22))
-        grid = fig.add_gridspec(4, 2, hspace=0.5, wspace=0.22)
-        medians: list[dict[str, Any]] = []
-        labels = ("CPU8\nf32", "MPS\nf32", "MPS\nbf16", "MPS\nf16", "MLX\nf32")
-        spans: list[dict[str, int | float]] = []
-        for index, width in enumerate(WIDTHS):
-            sub = grid[index // 2, index % 2].subgridspec(
-                2, 1, height_ratios=(3, 1), hspace=0.12
-            )
-            axis = fig.add_subplot(sub[0])
-            rate = fig.add_subplot(sub[1], sharex=axis)
-            for si, streams in enumerate(STREAMS):
-                valid_replays = [
-                    r
-                    for (w, s, _, _), r in replay_latest.items()
-                    if w == width and s == streams and r["status"] == "ok"
-                ]
-                if valid_replays:
-                    span = max(r["ended"] for r in valid_replays) - min(
-                        r["started"] for r in valid_replays
-                    )
-                    spans.append({"width": width, "streams": streams, "seconds": span})
-                for ai, arm in enumerate(ARMS):
-                    x = si * 6 + ai
-                    attempts = groups[(width, streams, arm)]
-                    complete = [r for r in attempts if r and r["status"] == "ok"]
-                    if len(complete) != 3:
-                        statuses = {
-                            r["status"] if r else "not_measured" for r in attempts
-                        }
-                        note = (
-                            "does not fit"
-                            if statuses == {"oom"}
-                            else "unsupported"
-                            if statuses == {"unsupported"}
-                            else "not measured"
-                        )
-                        axis.text(
-                            x,
-                            0.03,
-                            note,
-                            rotation=90,
-                            ha="center",
-                            va="bottom",
-                            fontsize=8,
-                            transform=axis.get_xaxis_transform(),
-                        )
-                        continue
-                    # Select the median-total replay's phases: stacks sum to
-                    # the median update, unlike independently medianed phases.
-                    middle = sorted(complete, key=lambda r: r["seconds"])[1]
-                    medians.append(middle)
-                    bottom = 0.0
-                    for key, label, color in (
-                        ("engine", "Engine + host work", "#808080"),
-                        ("collection_policy", "Collection policy calls", "#539caf"),
-                        ("learning", "Learning", "#db9250"),
-                    ):
-                        axis.bar(
-                            x,
-                            middle[key],
-                            0.83,
-                            bottom=bottom,
-                            color=color,
-                            edgecolor="#333333",
-                            linewidth=0.4,
-                            label=label if index == 0 and x == 0 else None,
-                        )
-                        bottom += middle[key]
-                    rate.bar(
-                        x,
-                        statistics.median(
-                            r["learner_decisions"] / r["seconds"] for r in complete
-                        ),
-                        0.83,
-                        color="#539caf",
-                        edgecolor="#333333",
-                        linewidth=0.4,
-                    )
-                    parity = [
-                        r
-                        for r in latest.values()
-                        if r["event"] == "parity"
-                        and r["width"] == width
-                        and r["streams"] == streams
-                        and r["arm"] == arm
-                        and r["status"] == "ok"
-                    ]
-                    worst = min((r["gradient_cosine"] for r in parity), default=None)
-                    same = all(r["sample_disagreements"] == 0 for r in complete)
-                    text = f"cos {worst:.4f}" if worst is not None else "parity missing"
-                    if not same:
-                        text += " · choices differ"
-                    axis.annotate(
-                        text,
-                        (x, bottom),
-                        xytext=(0, 4),
-                        textcoords="offset points",
-                        ha="center",
-                        rotation=90,
-                        fontsize=6,
-                    )
-            axis.set(
-                title=f"Width {width} · {LAYERS[width]} attention layers",
-                ylabel="Seconds per update",
-            )
-            axis.margins(y=0.35)
-            axis.tick_params(axis="x", labelbottom=False)
-            rate.set_ylabel("Learner decisions /\nwhole-update second", fontsize=8)
-            rate.set_xticks(
-                [si * 6 + ai for si in range(3) for ai in range(5)],
-                list(labels) * 3,
-                fontsize=7,
-            )
-            for si, streams in enumerate(STREAMS):
-                rate.text(
-                    si * 6 + 2,
-                    -0.6,
-                    f"{streams} streams",
-                    ha="center",
-                    fontsize=9,
-                    transform=rate.get_xaxis_transform(),
-                )
-        summary["whole_updates"] = medians
-        summary["replay_windows"] = spans
-        summary["same_hour"] = bool(spans) and all(r["seconds"] <= 3600 for r in spans)
-        if not summary["same_hour"] and is_m2:
-            summary["complete"] = False
-        legend = fig.add_subplot(grid[3, 1])
-        legend.axis("off")
-        legend.text(
-            0,
-            0.95,
-            "Full context: the current training recipe",
-            fontsize=16,
-            weight="bold",
-            va="top",
+        data = _host_report(
+            [r for r in rows if r["host"]["hostname"] == hostname],
+            [r for r in updates if r["host"]["hostname"] == hostname],
         )
-        legend.text(
-            0,
-            0.84,
-            f"{host['chip']} · {host['memory_bytes'] / 2**30:g} GiB\n{hostname}\ntorch {host['torch']} · MLX {host['mlx']}\nBoth-seat self-play; one real capture per stream count.\nMedian of three replays; same inputs and recorded decisions.\nHalf precision: bfloat16 and float16 autocast.\nFloat16 uses a gradient scaler.\n\nStacks show the median-total replay's phase times.\nEngine time includes non-policy collection host work.\nRate counts collected learner decisions before filtering.\nCosine labels compare gradients with CPU float32.\nCommon-uniform sampling mismatches are labelled.\nParity is not a proof of identical trained policies.\n\nMissing and failed arms remain visible.\nPer-group same-hour condition: "
-            + ("met" if summary["same_hour"] else "NOT MET"),
-            fontsize=10,
-            va="top",
-            linespacing=1.6,
+        summaries.append(data.summary)
+        suffix = (
+            ""
+            if data.summary["host"]["chip"] == "Apple M2"
+            else "-" + hostname.replace("/", "_")
         )
-        handles, names = fig.axes[0].get_legend_handles_labels()
-        legend.legend(handles, names, loc="lower left", fontsize=10)
-        fig.suptitle("Whole-update performance · " + host["chip"], fontsize=20, y=0.995)
-        fig.savefig(
-            out / f"full_context{suffix}.png",
-            dpi=180,
-            facecolor="white",
-            bbox_inches="tight",
-        )
-        plt.close(fig)
+        _call_charts(out, suffix, data)
+        _update_chart(out, suffix, data)
+        _details(out, suffix, data)
     (out / "summary.json").write_text(
         json.dumps(
             {"hosts": summaries, "measurements": rows, "updates": updates},

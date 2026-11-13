@@ -15,10 +15,21 @@ place. The rented-M2 comparison, overflow measurements, evidence publication
 and final recommendation remain outstanding. No speed or backend-adoption
 conclusion follows from the implementation checks.
 
+Per-call charts retain failed, unsupported, capacity-limited and unmeasured
+cells. Generated `comparisons.md` tables expose first-call/setup time, warmed
+rates, memory, gradient/logit/value/loss differences and sampled choices.
+Each host gets separate charts and tables; replay receipts preserve the
+capture host and its thread count. These outputs have been checked with
+synthetic receipts, not performance evidence. Receipt completeness is not a
+correctness verdict; the numerical differences must be interpreted separately.
+
 The installed Etude 0.2.16 launcher exposes RunPod, Vast and Lium rental
 providers, not an AWS dedicated-Mac provider. A capped AWS launch/release path
-is still needed for the requested fresh M2 rental. No host was allocated by
-this implementation step. This is a launch limitation, not missing credentials.
+is still needed for the requested fresh M2 rental. AWS access and the prior
+host's release were verified. The access notes' local release loop has no
+budget admission or durable release guarantee; registering SSH in Etude only
+records already-committed cost. No host was allocated by this implementation
+step. This is a launch limitation, not missing credentials.
 
 ## Named deliverable: full context
 
@@ -102,7 +113,8 @@ host preparation, device transfer where needed and synchronized completion.
 - **Whole update:** all original collection calls and learner minibatches,
   with evolving weights during learning. Engine time comes from the real
   capture, excluding policy and recording I/O time. It includes other
-  non-policy collection host work. Three replays per arm and shape produce
+  non-policy collection host work at the capture's four CPU threads; policy
+  and learner replays use eight. Three replays per arm and shape produce
   the full-context chart. Rate counts collected learner decisions before
   filtering, rather than optimizer exposures or bootstrap calls.
 
@@ -129,6 +141,11 @@ wider shapes or largest minibatches the M2 cannot hold belong here. Every
 measured block checks the one-minute load is below 8. Otherwise the command
 stops without timing; the operator must quiet the host before retrying. There
 is no indefinite wait and no artificial load generation.
+The replay path reuses the M2 capture's engine component even on the overflow
+host. Receipts, captions and tables identify its M2 origin and capture threads;
+the chart title labels a cross-host phase sum. This is not an independently
+measured M4-only whole update. Missing capture provenance leaves coverage
+incomplete; conflicting provenance is refused.
 
 **Commands** inside the frozen source environment on the M2:
 
@@ -154,7 +171,9 @@ explicit wide `--widths`. No M2 measurement is claimed for a laptop run.
 `bench.jsonl` and `updates.jsonl` retain failures, timeout/OOM distinctions,
 source, capture identity, hardware, versions, dtype and before/after load.
 CPU references retain capture and source provenance. Captures and their index
-files must be retained alongside these ledgers, `summary.json` and the charts.
+files must be retained alongside these ledgers, `summary.json`, the charts and
+`comparisons.md` (hostname-suffixed for supplemental hosts). The tables retain
+each whole-update repetition and errors, rather than only successful medians.
 Report input refuses mixed source revisions or multiple captures at one stream
 count on one host. New attempts supersede the corresponding cell in summaries;
 raw receipts remain intact. Parity labels use the latest attempts for that
