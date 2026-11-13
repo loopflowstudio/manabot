@@ -21,7 +21,7 @@ indexing and reductions on it and reads it through `arrays.to_numpy` or
 only handed back to it.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -211,6 +211,21 @@ class RolloutFile(Protocol):
     def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], AdmittedRollout]: ...
 
 
+class PPOAdmittedRollout(AdmittedRollout, Protocol):
+    def minibatches(
+        self, order: NDArray[np.int64], size: int, device: Device
+    ) -> AbstractContextManager[
+        Iterator[tuple[NDArray[np.int64], Observations, ActionRows]]
+    ]:
+        """Ordered minibatches; exit releases any preparation worker."""
+        ...
+
+
+class PPORolloutFile(RolloutFile, Protocol):
+    @property
+    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], PPOAdmittedRollout]: ...
+
+
 # -- policy and learner --------------------------------------------------------
 
 
@@ -294,3 +309,6 @@ class Backend(Protocol):
 class PPOBackend(Backend, Protocol):
     @property
     def rl(self) -> PPORL: ...
+
+    @property
+    def rollout(self) -> PPORolloutFile: ...

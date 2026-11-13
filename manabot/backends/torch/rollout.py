@@ -6,6 +6,10 @@ The updates reach it as `backend.rollout.AdmittedRollout`; every backend has
 one with these methods over its own policy input.
 """
 
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+
 import numpy as np
 from numpy.typing import NDArray
 import torch
@@ -76,6 +80,12 @@ class AdmittedRollout:
     ) -> tuple[Prepared[torch.Tensor], ActionRows]:
         """Admitted observations of flat rollout `indexes` on `device`, with
         their behavior distributions."""
+        prepared, rows = self._prepare_rows(indexes, not torch.is_grad_enabled())
+        return on_device(prepared, device), rows
+
+    def _prepare_rows(
+        self, indexes: NDArray[np.int64], inference: bool
+    ) -> tuple[Prepared[np.ndarray], ActionRows]:
         if not self._admitted[indexes].all():
             raise ValueError("rollout rows were not admitted")
         rows = self.batch.observations(indexes)
@@ -84,10 +94,55 @@ class AdmittedRollout:
             if self._needs is not None and self._measured[indexes].all()
             else None
         )
-        prepared = self.agent.prepare_admitted(
-            rows.observation, needs=needs, inference=not torch.is_grad_enabled()
-        )
-        return on_device(prepared, device), rows
+        # Grad mode is thread-local. Preserve the caller's packing/compaction
+        # choice when preparation runs on the prefetch worker.
+        with torch.set_grad_enabled(not inference):
+            prepared = self.agent.prepare_admitted(
+                rows.observation, needs=needs, inference=inference
+            )
+        return prepared, rows
+
+    @contextmanager
+    def minibatches(
+        self, order: NDArray[np.int64], size: int, device: torch.device
+    ) -> Iterator[
+        Iterator[tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]]
+    ]:
+        """Prepare one batch ahead while the caller trains the current batch.
+
+        Only immutable host input is read on the worker. Transfers and all
+        model/optimizer work stay on the caller's device stream. At most two
+        host minibatches are live; exiting joins the worker even on failure.
+        """
+        if size < 1:
+            raise ValueError("minibatch size must be positive")
+        inference = not torch.is_grad_enabled()
+        with ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="ppo-prepare"
+        ) as worker:
+
+            def batches() -> Iterator[
+                tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]
+            ]:
+                indexes = order[:size]
+                if not len(indexes):
+                    return
+                pending = worker.submit(self._prepare_rows, indexes, inference)
+                for start in range(0, len(order), size):
+                    prepared, rows = pending.result()
+                    indexes = order[start : start + size]
+                    following = order[start + size : start + 2 * size]
+                    if len(following):
+                        pending = worker.submit(
+                            self._prepare_rows, following, inference
+                        )
+                    yield indexes, on_device(prepared, device), rows
+
+            iterator = batches()
+            try:
+                yield iterator
+            finally:
+                iterator.close()
 
     def legal(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         """The 0/1 legal-action input [B,A] of rows this rollout returned."""

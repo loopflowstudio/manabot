@@ -389,6 +389,32 @@ All three successful runs used the **same physical RTX 5090 in one rental**,
 Full speed tables, timed ranges and launcher costs: `scratch/speed/mtg333-results.txt`.
 Generated patches remain only in frozen launch commits, removed from the final tree.
 
+## PPO prefetch iteration, 2026-11-13
+
+CPU profile (`/tmp/mtg333/ppo-before.prof`, five-case update corpus): two
+PPO updates total 1.610 s; admitted row reads across both update kinds total
+0.316 s, host preparation across collection/updates 0.492 s. The retained
+CUDA profile (`post514-profile/profile.ppo`) attributes 6.394 s to
+`prepare_admitted`, 10.517 s to `rows` in a 15.031 s instrumented update;
+these are pre-fact-optimization timings, not final speed samples.
+
+Choose one-minibatch host prefetch: batch-dependent trimming, packed schedules
+and catalog selection make cross-epoch row reuse a larger cut. Delete the
+serial PPO `admitted.rows` loop; preserve shuffle order, bootstrap timing,
+grad-mode packing, native choices, values and optimizer steps. Keep one
+preparation implementation (`_prepare_rows`), also used by synchronous
+`rows`. Device transfers stay on the caller; epoch exit joins the worker.
+A separate profiler section measures preparation wait plus transfer; it was
+previously inside Forward and loss, so those sections are not directly comparable.
+
+First update comparison: five cases byte-identical to post-#514 base.
+Focused prefetch/contract checks: 4 passed (30.88 s); final cleanup/profile
+changes still need their focused recheck. CPU forward oracle is running;
+CUDA run will compare main `de39d601fb`, prefetch parent `53a705735b`, and head
+on one RTX 5090 rental, three processes each, USD 10 cohort cap.
+Current SDK 0.3.2 opens a new schema-specific database beside the old one;
+register its existing template via CLI. Do not downgrade the launcher.
+
 ## Next actions
 
 1. PPO median regression (7.2%): profile one PPO update on CPU to confirm

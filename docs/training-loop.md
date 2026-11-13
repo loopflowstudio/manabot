@@ -33,7 +33,10 @@ it. Its learning record selects the update; both live in
 - **PPO self-play** (`Learning`, `update_iteration` in
   `manabot.training.updates.ppo`): the control. Shuffled minibatches, advantage
   normalization and filtering, scalar value targets and optional reference
-  and collection KL penalties. Use it as the baseline a new method must beat.
+  and collection KL penalties. Torch prepares one host minibatch ahead while
+  the current minibatch trains, with device work on the calling thread; the
+  epoch joins its preparation worker even if an update fails. Use PPO as the
+  baseline a new method must beat.
 
 Both are written once and take the backend as their first argument: the
 module `manabot.backends.torch`, not an object to configure. Then come a

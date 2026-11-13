@@ -10,9 +10,9 @@ The same rental first captures equivalence and ends with an untimed profiling
 pass, so completing a session never strands the next check behind its rental.
 
 Patches are generated, not tracked: commit them only on the launch commit
-(`git diff HEAD 105e7e2aa -- manabot > scratch/speed/base.patch`).
+(`git diff HEAD de39d601fb -- manabot > scratch/speed/base.patch`).
 
-    uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
+    uv run etude launch \\
         scratch/speed/mtg333_speed.py --rent mtg333-l4 --revision COMMIT \\
         --cohort mtg333-speed --max-usd 10
 """

@@ -153,80 +153,91 @@ def update_iteration(
         admitted.admit_rows(training_rows, size)
         for _ in range(learning.epochs):
             order = training_rows[rng.permutation(len(training_rows))]
-            for start in range(0, len(order), size):
-                rows_host = order[start : start + size]
-                indices = to_device(rows_host, dev)
-                with track("Forward and loss"):
-                    obs, rows = admitted.rows(rows_host, dev)
-                    valid = rl.legal_mask(admitted.legal(obs))
-                    behavior_logs = to_device(rows.log_probabilities, dev)
-                    reference = to_device(
-                        reference_distribution(rows.observation, learning.reference),
-                        dev,
-                    )
-                    with learner.forward_precision():
-                        logits, value = learner.agent(obs)
-                    logits, value = logits.float(), value.float()
-                    logs = rl.policy_logs(logits, valid)
-                    log_ratio = (
-                        rl.action_logs(logs, actions[indices]) - old_logs[indices]
-                    )
-                    actor_mask = mask[indices]
-                    policy = rl.selected_mean(
-                        rl.clipped_surrogate(
-                            log_ratio, advantages[indices], learning.clip
-                        ),
-                        actor_mask,
-                    )
-                    kl_ref = rl.selected_mean(
-                        rl.reverse_kl(logs, rl.reference_logs(reference, valid), valid),
-                        actor_mask,
-                    )
-                    kl_behavior = rl.selected_mean(
-                        rl.reverse_kl(logs, behavior_logs, valid),
-                        actor_mask,
-                    )
-                    value_loss = (
-                        0.5 * rl.squared_value_loss(value, returns[indices]).mean()
-                    )
-                    loss = (
-                        policy
-                        + learning.value_weight * rl.float64_operand(value_loss)
-                        + diagnostics["tau"] * kl_ref
-                        + learning.collection_kl * kl_behavior
-                    )
-
-                    def _failure() -> dict[str, Array]:
-                        return minibatch_tensors(
-                            logits=rl.constant(logits),
-                            value_logits=rl.constant(value),
-                            valid=valid,
-                            actions=actions[indices],
-                            behavior_logs=behavior_logs,
-                            reference=reference,
-                            advantages=advantages[indices],
-                            value_targets=returns[indices],
-                            actor_selected=actor_mask,
-                            indexes=indices,
-                            obs=admitted.evidence(obs),
+            with admitted.minibatches(order, size, dev) as minibatches:
+                for _ in range(0, len(order), size):
+                    with track("Preparation wait and transfer"):
+                        rows_host, obs, rows = next(minibatches)
+                    indices = to_device(rows_host, dev)
+                    with track("Forward and loss"):
+                        valid = rl.legal_mask(admitted.legal(obs))
+                        behavior_logs = to_device(rows.log_probabilities, dev)
+                        reference = to_device(
+                            reference_distribution(
+                                rows.observation, learning.reference
+                            ),
+                            dev,
+                        )
+                        with learner.forward_precision():
+                            logits, value = learner.agent(obs)
+                        logits, value = logits.float(), value.float()
+                        logs = rl.policy_logs(logits, valid)
+                        log_ratio = (
+                            rl.action_logs(logs, actions[indices]) - old_logs[indices]
+                        )
+                        actor_mask = mask[indices]
+                        policy = rl.selected_mean(
+                            rl.clipped_surrogate(
+                                log_ratio, advantages[indices], learning.clip
+                            ),
+                            actor_mask,
+                        )
+                        kl_ref = rl.selected_mean(
+                            rl.reverse_kl(
+                                logs, rl.reference_logs(reference, valid), valid
+                            ),
+                            actor_mask,
+                        )
+                        kl_behavior = rl.selected_mean(
+                            rl.reverse_kl(logs, behavior_logs, valid),
+                            actor_mask,
+                        )
+                        value_loss = (
+                            0.5 * rl.squared_value_loss(value, returns[indices]).mean()
+                        )
+                        loss = (
+                            policy
+                            + learning.value_weight * rl.float64_operand(value_loss)
+                            + diagnostics["tau"] * kl_ref
+                            + learning.collection_kl * kl_behavior
                         )
 
+                        def _failure() -> dict[str, Array]:
+                            return minibatch_tensors(
+                                logits=rl.constant(logits),
+                                value_logits=rl.constant(value),
+                                valid=valid,
+                                actions=actions[indices],
+                                behavior_logs=behavior_logs,
+                                reference=reference,
+                                advantages=advantages[indices],
+                                value_targets=returns[indices],
+                                actor_selected=actor_mask,
+                                indexes=indices,
+                                obs=admitted.evidence(obs),
+                            )
+
+                        with failure_tensors(_failure, rl.NumericalError):
+                            observer.check(loss)
                     with failure_tensors(_failure, rl.NumericalError):
-                        observer.check(loss)
-                with failure_tensors(_failure, rl.NumericalError):
-                    norm = learner.step(loss, learning.max_grad_norm, recorder=observer)
-                with track("Minibatch diagnostics"):
-                    health["clip_fraction"] = rl.clip_fraction(log_ratio, learning.clip)
-                    diagnostics["optimizer_exposures"] += len(rows_host)
-                    diagnostics["actor_exposures"] += int(actor_rows[rows_host].sum())
-                    diagnostics["critic_exposures"] += len(rows_host)
-                    diagnostics.update(
-                        loss=float(loss.detach()),
-                        policy_loss=float(policy.detach()),
-                        value_loss=float(value_loss.detach()),
-                        entropy=float(rl.entropy(logs, valid).mean().detach()),
-                        gradient_norm=float(norm),
-                        reference_kl=float(kl_ref.detach()),
-                        collection_kl=float(kl_behavior.detach()),
-                    )
+                        norm = learner.step(
+                            loss, learning.max_grad_norm, recorder=observer
+                        )
+                    with track("Minibatch diagnostics"):
+                        health["clip_fraction"] = rl.clip_fraction(
+                            log_ratio, learning.clip
+                        )
+                        diagnostics["optimizer_exposures"] += len(rows_host)
+                        diagnostics["actor_exposures"] += int(
+                            actor_rows[rows_host].sum()
+                        )
+                        diagnostics["critic_exposures"] += len(rows_host)
+                        diagnostics.update(
+                            loss=float(loss.detach()),
+                            policy_loss=float(policy.detach()),
+                            value_loss=float(value_loss.detach()),
+                            entropy=float(rl.entropy(logs, valid).mean().detach()),
+                            gradient_norm=float(norm),
+                            reference_kl=float(kl_ref.detach()),
+                            collection_kl=float(kl_behavior.detach()),
+                        )
     return diagnostics

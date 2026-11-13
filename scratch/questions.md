@@ -91,3 +91,10 @@ the initial A40 result.
 with three timed inner repeats to fit the existing same-card rental window.
 The preceding main/pre-optimization/fact-optimized check uses three processes
 per arm. Keep the final inner ranges; do not call them process spread.
+
+2026-11-13 PPO optimization: choose bounded one-minibatch host prefetch over
+cross-epoch caching: trimming, selected catalog programs and packed GRU order
+are batch-dependent. Keep transfers/model/optimizer on the caller; propagate
+caller grad mode to the worker and join it at epoch exit, including failures.
+Use current Etude 0.3.2 with a new schema-specific launcher database; register
+the existing rental template through CLI, leaving the older database untouched.

@@ -13,12 +13,15 @@ import inspect
 from types import ModuleType
 from typing import Any, get_type_hints
 
+import numpy as np
 import pytest
 import torch
 
 from manabot.backends import resolve
 from manabot.backends.parity import BACKENDS, installed_backends
+from manabot.backends.torch.arrays import array_fields
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rollout import AdmittedRollout as TorchRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -31,6 +34,7 @@ from manabot.training.updates.backend import (
     CategoricalRL,
     Learner,
     LearnerFile,
+    PPOAdmittedRollout,
     PPOBackend,
     PPOLearner,
     categorical_rl,
@@ -181,7 +185,75 @@ def test_torch_provides_what_ppo_calls(
     )
     assert _violations(module, PPOBackend, "torch") == []
     assert _violations(learner, PPOLearner, "torch.Learner") == []
+    assert (
+        _violations(
+            module.rollout.AdmittedRollout(learner.agent, captured[1]),
+            PPOAdmittedRollout,
+            "torch.AdmittedRollout",
+        )
+        == []
+    )
     assert categorical_rl(module.rl) is module.rl
+
+
+@pytest.mark.parametrize("grad_enabled", [True, False])
+def test_prefetched_minibatches_preserve_order_and_policy_input(
+    captured: tuple[PolicyCheckpoint, RolloutBatch], grad_enabled: bool
+) -> None:
+    module = resolve("torch")
+    agent = module.checkpoint.assemble(captured[0])
+    admitted = TorchRollout(agent, captured[1])
+    order = np.array([1, 0, 1], dtype=np.int64)
+    admitted.admit_rows(order, 2)
+    device = torch.device("cpu")
+    with torch.set_grad_enabled(grad_enabled):
+        with admitted.minibatches(order, 2, device) as batches:
+            for start, (indexes, prepared, rows) in zip((0, 2), batches, strict=True):
+                expected_indexes = order[start : start + 2]
+                np.testing.assert_array_equal(indexes, expected_indexes)
+                expected, expected_rows = admitted.rows(expected_indexes, device)
+                actual_fields = array_fields(prepared, torch.Tensor)
+                expected_fields = array_fields(expected, torch.Tensor)
+                assert actual_fields.keys() == expected_fields.keys()
+                for name, value in actual_fields.items():
+                    torch.testing.assert_close(
+                        value, expected_fields[name], rtol=0, atol=0
+                    )
+                np.testing.assert_array_equal(
+                    rows.log_probabilities, expected_rows.log_probabilities
+                )
+                for name in rows.observation:
+                    np.testing.assert_array_equal(
+                        rows.observation[name], expected_rows.observation[name]
+                    )
+                for actual, wanted in zip(
+                    agent(prepared), agent(expected), strict=True
+                ):
+                    torch.testing.assert_close(actual, wanted, rtol=0, atol=0)
+
+
+def test_prefetch_propagates_admission_failure_and_can_stop_early(
+    captured: tuple[PolicyCheckpoint, RolloutBatch],
+) -> None:
+    agent = resolve("torch").checkpoint.assemble(captured[0])
+    admitted = TorchRollout(agent, captured[1])
+    admitted.admit_rows(np.array([0], dtype=np.int64), 1)
+    device = torch.device("cpu")
+    order = np.array([0, 1], dtype=np.int64)
+    with admitted.minibatches(order, 1, device) as batches:
+        indexes, _, _ = next(batches)
+        np.testing.assert_array_equal(indexes, [0])
+        with pytest.raises(ValueError, match="not admitted"):
+            next(batches)
+    admitted.admit_rows(order, 1)
+    # Leaving before consuming the queued batch also joins the worker.
+    with admitted.minibatches(order, 1, device) as batches:
+        next(batches)
+    with admitted.minibatches(order[:0], 1, device) as batches:
+        assert list(batches) == []
+    with pytest.raises(ValueError, match="must be positive"):
+        with admitted.minibatches(order, 0, device):
+            pass
 
 
 def test_a_backend_without_a_categorical_critic_is_refused() -> None:
