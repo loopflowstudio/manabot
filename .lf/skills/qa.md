@@ -188,9 +188,6 @@ publish, land or choose the next Graph step from here.
   `gh run view <id> --job <job-id> --log`. Compare install time with peers in
   the same run and inspect dependency logs for unexpected downloads.
   See `docs/development.md` (Job time) for the budget.
-  To check a fixture's workload assertion, save a copy before temporarily
-  restoring the old workload; confirm an assertion failure, then restore the
-  copy and check `git diff`.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell

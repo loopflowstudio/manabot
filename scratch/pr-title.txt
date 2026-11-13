@@ -1,1 +1,0 @@
-Cut Ubuntu Integration jobs from 24 minutes to under eight

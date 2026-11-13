@@ -2,11 +2,10 @@
 
 ## Outcome and constraints
 
-Every ordinary Ubuntu PR job finishes in under 480 seconds, including install,
-build and cache overhead, demonstrated on the PR revision. Preserve coverage
-and the 300-second single-test limit; never induce load. Engine Budget retains
-its same-runner change/reference comparison and is exempt. The macOS nightly
-is outside this budget.
+Every ordinary Ubuntu PR job finishes below 480 seconds, from job start to
+job end including install, build and cache overhead. Preserve coverage and
+the 300-second single-test watchdog; never induce load. Engine Budget keeps
+its same-runner comparison and is exempt. The macOS nightly is outside the budget.
 
 Jack Heart's Task comment (2026-11-12): "Read its brief and deliver its outcome
 here; say so in the PR so MTG-263 can be closed with it."
@@ -18,104 +17,91 @@ groups or adopt pytest-xdist where tests are process-safe (check tmp dirs,
 ports, DuckDB files, subprocess fixtures). Target: no group above ~8 min wall
 time; report before/after from CI runs. Do not drop or weaken tests."
 
-## Current repair (2026-11-12)
+## Current implementation
 
-PR #506 merged at `60664d149`. Its exact push run `43341403551` failed the
-live experiment/notebook fixture with `training resource wall deadline
-exceeded` (129 passed, one failed), although every ordinary job took less than
-480 s. The error did not identify which resource clock expired or separate
-collection from scheduling. Details: `scratch/ci-post-merge-verification.md`.
+PR #506 delivered six measured Integration groups, logical-core pytest workers,
+one dependency sync/native debug build per job, the worker watchdog,
+injected-time admission checks and a two-stream real-worker size smoke.
+Its merged push failed the separate live experiment/notebook fixture.
 
-`tests/training/test_experiment_runner.py::demo_declaration` now bounds each
-of four real training attempts to one update of eight one-seat learner rows
-per stream on two streams using `exact-quota`. Every saved `TrainingRun` must contain one
-stage, one update and 16 learner transitions. Four live complete-game evaluation
-cohorts, overlap, accounting, notebook edits/outputs and resume assertions remain.
+The repair has two parts:
 
-`manabot/training/regime.py::TrainSelfPlay.batch_closure` explains the choice:
-`complete-games` treats transitions as a floor; `exact-quota` pauses at that
-many learner rows and requires one learning seat. This orchestration fixture
-needs no complete-game training (`scratch/questions.md`). Production defaults
-and the shared WDL baseline stay unchanged. Stage and regime allowances of
-120 s guard hangs; they are not work targets.
+- `tests/training/test_experiment_runner.py::demo_declaration` uses one-seat
+  `exact-quota` collection: one update, two streams, eight learner rows per
+  stream. All four saved `TrainingRun` receipts must contain one stage, one
+  update and 16 learner transitions. Four live complete-game monitoring
+  cohorts, overlap, accounting, notebook edits/outputs and resume checks remain.
+  Stage and regime allowances are 120-second hang guards. Production defaults
+  and the shared WDL baseline are unchanged. `TrainSelfPlay.batch_closure` in
+  `manabot/training/regime.py` owns the contract: complete-game transitions
+  are a floor; exact-quota needs one learning seat.
+- `.github/workflows/manabot-integration.yml` selects the existing CPU Torch
+  via `--no-default-groups --group play-runtime`, with setup-uv defaults.
+  Tests, selections, native debug build, dependency definitions and lockfile
+  are unchanged. `docs/development.md` owns the job budget and balancing;
+  `TESTING.md` owns parallel isolation; `.lf/skills/qa.md` owns hosted checks.
 
-QA dispatch [43345024882](https://github.com/loopflowstudio/manabot/actions/runs/43345024882)
-at `4db5cd64b` passed every job with Ubuntu debug assertions and xdist. The
-repaired comparison test took **151.70 s** (176.21 s and failing on the merge).
-The experiment job still took **549 s**: installation 181 s versus peers'
-17–18 s, build 66 s, tests 284 s. Logs showed slow CUDA/nvidia wheel downloads
-after a pruned uv-cache hit. Every other ordinary job was at most 430 s;
-Engine Budget passed in 587 s. Full QA evidence: `scratch/qa.html`.
-
-## CPU Torch implementation (2026-11-12)
-
-Integration now selects the existing `play-runtime` group with default groups
-disabled and uses setup-uv defaults. The retained-wheel repair is removed.
-The fixture and all test/build commands remain unchanged. Basis measured on
-2026-11-12:
-
-- Each Integration job downloaded 3,046 MiB of wheels in run 43345024882.
-  About 2.8 GiB is `nvidia-*`, `triton` and `torch==2.15.0+cu132`, which a
-  hosted CPU runner cannot use. The slow job spent 2 m 59 s on them; five
-  peers took 17–30 s for the same downloads. The tail is download variance.
-- Repository Actions caches hold 8.2 GB of GitHub's 10 GB limit in 357 entries
-  (`gh api repos/loopflowstudio/manabot/actions/cache/usage`). Rust caches are
-  105–127 MB each; today's uv cache is 0–4 MB. A retained wheel cache is at
-  least the 3 GB of already-compressed wheels, saved again per ref whenever
-  `uv.lock` changes. It cannot fit without evicting the Rust caches that keep
-  the 52–80 s extension build from becoming a cold one.
-- A retained cache turns a 2 s restore into a multi-GB restore on all six
-  groups to protect against a tail on one; the median gets no faster.
-- The lockfile already resolves CPU Torch for these extras:
-  `uv export --frozen --no-default-groups --group play-runtime --extra dev
-  --extra play --extra notebook --extra artifacts --extra reports --extra llm
-  --extra evaluation` yields `torch==2.15.0+cpu` on Linux, `torch==2.15.0` on
-  macOS, and no `nvidia-*` or `triton`. `baseline.yml` installs this way now.
-  `questions.md` assumed CPU Torch "changes the build"; it needs no dependency
-  or lock change, only the two group flags on Integration's `uv sync`.
+No selected test needed a CUDA-built Torch on a CPU host: actual GPU cases
+already guard on hardware availability; precision controls still exist on
+CPU Torch; vLLM tests use a local tokenizer and mocked HTTP. The hosted CPU
+run retained the prior model/evaluation pass and skip counts.
 
 ### Delete — do not maintain
 
-- Removed Integration's `prune-cache: false`, matrix `save-cache` and their
-  comment; removed the matching wheel-cache ownership and cold/warm protocol
-  in `docs/development.md` and `.lf/skills/qa.md`. No exclusive tests or fixtures.
-- Preserve the bounded experiment fixture, all selected test nodes, debug
-  extension build, per-worker watchdog, dependency definitions and lockfile.
-- Preserve QA's hosted-CI commands and within-run install comparison.
+Completed: removed retained-wheel cache overrides and their cold/warm protocol.
+This pass removes #506's obsolete PR-copy files, demo and post-merge notes,
+consolidating their evidence here; history remains at `e22af480b:scratch/`.
+The general QA skill no longer prescribes this fixture's one-off mutation
+experiment. No code, test or fixture deletion remains. Keep the bounded
+fixture, all selected nodes, debug assertions, watchdog and lockfile.
 
-### Implementation checks
+## Hosted evidence (observed 2026-11-12)
 
-CUDA review found no selected test requiring a CUDA-built Torch on a CPU
-runner. Actual GPU cases already guard on `torch.cuda.is_available()`;
-other cases validate declarations, mock runtime/launch boundaries or inspect
-precision contexts. The vLLM fixture uses a local tokenizer and mocked HTTP,
-not a local GPU server. The CPU build still exposes the precision controls;
-focused precision checks and hosted tests verify that boundary.
+| Actions run | Revision / event | Result and slowest ordinary job |
+|---|---|---|
+| 43312163427 | main baseline | green; Integration core 1443 s |
+| 43327574361 | `45fe9f866`, dispatch | green; experiment 404 s |
+| 43332039325 | `f90ae2893`, dispatch | green; recovery 416 s |
+| 43334548912 | `30cfcb2e6`, dispatch | green; evaluation 448 s |
+| 43337105047 | `1fc4e1b24`, PR #506 | green; recovery 349 s |
+| 43341403551 | `60664d149`, merged push | experiment failed at 433 s; others passed, max 418 s |
+| 43345024882 | `4db5cd64b`, fixture repair dispatch | green; experiment 549 s, over budget |
+| 43348710097 | `a1efea11b`, CPU Torch dispatch | green; Rust 406 s, Integration recovery 350 s |
 
-Checks: `actionlint .github/workflows/manabot-integration.yml` passed;
-locked sync of the exact CI extras passed; focused file-selection, TF32/autocast
-and vLLM HTTP-boundary tests passed (13 in 3.58 s); workflow validation passed;
-`git diff --check` passed. Initial collection lacked `huggingface_hub`; syncing
-the declared CI extras resolved it. Frozen export selects Linux Torch
-`2.15.0+cpu`, with no NVIDIA/Triton dependencies. A diff audit confirms the
-build/test commands, bounded fixture, dependency definitions and lockfile
-are unchanged.
+Runs: `https://github.com/loopflowstudio/manabot/actions/runs/<id>`.
+#506 merged at `60664d1496089dd3161813c77dad36a1928fa15f` on
+2026-11-13T00:59:22Z. No merge-queue result or human demo/approval was recorded.
+Engine Budget passed in 613 s on that PR and 685 s on its merged push.
 
-Hosted dispatch [43348710097](https://github.com/loopflowstudio/manabot/actions/runs/43348710097)
-at `a1efea11bab6669ff9dfdc06f79511f7139555f8` completed successfully.
-Every ordinary job passed below 480 s; Engine Budget passed in 571 s and
-Tests Result passed in 2 s. Integration
-installed Torch `2.15.0+cpu` in 5–6 s in every group; all six logs contain no
-NVIDIA/Triton entries. All six retain the native dev build. Model passed 823
-with 5 existing skips, training 346, recovery 49, experiment 130, evaluation
-288 with 1 existing skip, evaluation-long 66. The repaired comparison took
-138.45 s. The tests and hardware-availability guards are unchanged;
-model/evaluation pass and skip counts match prior CUDA run `43345024882`.
-The experiment dev build took 70 s and its test step 239 s, alongside the
-5 s install (previous run: build 66 s, tests 284 s, install 181 s).
-The CI observer exited 0 and was reaped; no local background process remains.
+The merged experiment group reported 129 passed, one failed in 307.66 s:
 
-| Job | Total seconds (including install/build/cache) |
+```text
+training attempt 1 failed: RuntimeError: learner exited 1: TimeoutError: training resource wall deadline exceeded
+```
+
+The comparison took 176.21 s; its 30/60-second training guards expired, not
+the 300-second watchdog. The log does not identify which resource clock
+expired or separate collection from scheduling. The bounded fixture then
+passed Ubuntu debug/xdist in 151.70 s in run 43345024882, but installation
+cost 181 s (peers 17–18 s), build 66 s and tests 284 s: 549 s total.
+
+That run downloaded 3,046 MiB per Integration job, about 2.8 GiB of CUDA Torch,
+NVIDIA and Triton wheels. A pruned uv-cache hit did not avoid those downloads.
+At investigation, Actions caches occupied 8.2 GB of a 10 GB limit in 357 entries;
+Rust caches were 105–127 MB and uv caches 0–4 MB. Retaining multi-GB wheels
+would add restore/save cost and eviction pressure. CPU Torch was already locked.
+Earlier recovery installation also took 145 s against peers' 17–31 s;
+unchanged evaluation-long tests varied from 153 to 249 s. Margin matters.
+
+[CPU dispatch 43348710097](https://github.com/loopflowstudio/manabot/actions/runs/43348710097)
+at `a1efea11bab6669ff9dfdc06f79511f7139555f8` also includes main's #504
+mana-payment optimization (`f1b0109ae`). All six groups installed Torch
+`2.15.0+cpu` in 5–6 s, with no NVIDIA/Triton log entries and native dev builds.
+Model passed 823 with 5 existing skips; training 346; recovery 49; experiment
+130; evaluation 288 with 1 existing skip; evaluation-long 66. The repaired
+comparison took 138.45 s. Experiment build took 70 s, tests 239 s, install 5 s.
+
+| Job | Total seconds including setup and cache |
 |---|---:|
 | Rust Tests | 406 |
 | Integration recovery | 350 |
@@ -134,114 +120,53 @@ The CI observer exited 0 and was reaped; no local background process remains.
 | Tests Result | 2 |
 | Engine Budget (exempt) | 571 |
 
-The ordinary maximum is 406 s, leaving 74 s. This is one measured dispatch,
-not a guarantee about runner variability. PR-event and post-merge validation
-remain delivery obligations.
+The maximum ordinary job leaves 74 s. This is dispatch evidence, not PR-event
+or post-merge proof, and does not guarantee runner timing. Python unit and
+Academy Integration still use the default CUDA runtime; the observed download
+tail of 163 s would put the merged push's 308-second Python unit job near 471 s.
 
-Python unit and Academy Integration still select the default
-`training-runtime`, retaining hosted imports of the Linux CUDA build.
+## Other retained checks
 
-Known limit, not changed here: Python unit (308 s on the merged push) and
-Academy Integration (146 s) keep the 3 GiB download and its tail. The observed
-tail added 163 s, which would put Python unit at about 471 s.
+- Exact locked CI sync, frozen export, actionlint and workflow validation passed.
+  Export selected Linux Torch `2.15.0+cpu`, macOS `2.15.0`, no NVIDIA/Triton.
+  Focused selection/TF32/autocast/vLLM checks: 13 passed in 3.58 s. Initial
+  collection lacked `huggingface_hub`; syncing the declared extras resolved it.
+- Before rebuilding the stale local cp313 extension, four learners failed with
+  `catalog_tokens.keys: expected array`. After atomic replacement, the focused
+  comparison passed in 45.42 s and the full file passed 10 in 151.36 s.
+  Local QA's experiment group passed 130 in 80.87 s; report tests 17 in 16.14 s.
+  These release-extension Mac timings do not establish Ubuntu performance.
+- Temporarily restoring complete-game/both-seat collection failed the receipt
+  assertion (`610 == 16`) in 59.90 s. The fixture was restored.
+- Controlled watchdog proof: temporary 5-second limit; five tests totaling
+  11 s passed with two workers, while a 30-second test printed stacks, crashed
+  its worker and exited 1. Serial results matched; temporary files were removed.
+- The merge audit retained all 69 original selected paths/nodes and routed all
+  six evaluation exclusions to evaluation-long. Selection tests passed 53 in
+  0.44 s. New files outside selected directories still need explicit selection.
 
-The fixture no longer uses complete-game training or the 30/60-second guards.
-Test selections, the native debug build, the 300-second watchdog, dependency
-groups and lockfile are unchanged. Wave memory's cache-retention bullet
-describes the superseded repair; realign should replace it with the facts above.
+Detailed investigation and source links: `5f9a69184:scratch/ci-under-8-minutes.md`.
+Pre-consolidation evidence, QA and delivery history: `e22af480b:scratch/`.
 
-## Reconciled with upstream (2026-11-12)
+## Remaining delivery and memory reconciliation
 
-The checkout includes main through `f1b0109ae` (#504, mana-payment engine
-optimization), merged here before `b8ed0970b`. A fresh fetch found no main
-commits missing from this checkout. That engine change postdates the fixture
-QA revision `4db5cd64b`; its timing cannot be inferred from the old run.
-The fixture repair remains present after the merge. Run `43348710097`
-exercises both the current engine and the CPU runtime change.
+Publish the fixture/CPU repair in Task 38ef25, keeping #506 as delivery history.
+Generate fresh PR copy; the removed copy described #506. Retain MTG-263 scope
+and before/after evidence. Obtain PR-event timing and successful post-merge
+verification before completing the Task. No local process remains running.
 
-## Evidence and limits
+If the resource deadline fails again, identify the expired launch/regime/stage
+clock and charged/allowed seconds in `manabot/training/execution.py::remaining/check`
+before changing an allowance. Do not add that diagnostic path speculatively.
 
-PR #506 already delivered six measured Integration groups with logical-core
-pytest workers, one dependency sync/native debug build per job, the per-worker
-watchdog, injected-time admission tests and a two-stream real-worker size smoke.
-`TESTING.md` owns process isolation.
+Wave memory is read-only in this step. Realign should replace its superseded
+cache-retention claim with: CPU Torch and setup-uv defaults passed dispatch
+43348710097 including #504; ordinary max 406 s; installs 5–6 s with no
+NVIDIA/Triton; PR-event and post-merge evidence remain outstanding.
 
-| GitHub Actions run | Revision / event | Result and slowest ordinary job |
-|---|---|---|
-| 43312163427 | main baseline | green; Integration core 1443 s |
-| 43327574361 | `45fe9f866`, dispatch | green; experiment 404 s |
-| 43332039325 | `f90ae2893`, dispatch | green; recovery 416 s |
-| 43334548912 | `30cfcb2e6`, dispatch | green; evaluation 448 s |
-| 43337105047 | `1fc4e1b24`, PR | green; recovery 349 s |
-| 43341403551 | `60664d149`, merged push | experiment failed at 433 s; other ordinary jobs passed, max 418 s |
-| 43345024882 | `4db5cd64b`, dispatch | green; experiment 549 s, over budget |
-| 43348710097 | `a1efea11b`, dispatch | green; Rust 406 s, slowest Integration recovery 350 s |
+Compression: runtime code is already direct; no behavior changes or test reruns
+are needed. Removed duplicate/stale context and the fixture-specific QA recipe.
 
-Runs: `https://github.com/loopflowstudio/manabot/actions/runs/<id>`.
-Engine Budget passed in 613 s on #506's PR and 685 s on its merged push.
-No human demo or approval was recorded. Historical green results do not
-validate the current repair.
-
-- Recovery installation previously took 145 s versus peers' 17–31 s;
-  unchanged evaluation-long tests varied from 153 to 249 s. The 32-second
-  margin in dispatch 43334548912 is not a timing guarantee.
-- Earlier failures came from complete-game collection exceeding its transition
-  floor and a threaded admission fixture's 30-second future timeout; both were
-  repaired before #506. The post-merge experiment failure was separate.
-- Controlled watchdog proof used a temporary five-second limit: five tests
-  totaling 11 s passed with two workers; a 30-second test printed stacks,
-  crashed its worker and exited 1. Serial behavior matched. Temporary fixtures
-  were removed; this remains evidence for unchanged code.
-- The merge audit retained all 69 original selected paths/nodes and ran all six
-  evaluation exclusions in evaluation-long. New files outside a selected
-  directory still require explicit selection. Eight minutes is a measured
-  target, not a hard job timeout.
-- Before rebuilding locally, four learners failed catalog admission with
-  `catalog_tokens.keys: expected array`. The matching cp313 release extension
-  was rebuilt in 46.12 s and installed atomically; no Rust source changed.
-  The focused comparison then passed in 45.42 s. The full file passed 10 tests
-  in 151.36 s (comparison 82.03 s, diagnostics 66.86 s).
-- QA's local experiment group passed 130 tests in 80.87 s with the release
-  extension; `test_experiment_report.py` passed 17 in 16.14 s. Temporarily
-  restoring complete-game/both-seat training failed the new row assertion
-  (`610 == 16`) in 59.90 s. The fixture was restored. Local elapsed time does
-  not establish Ubuntu timing.
-
-External fact checked against setup-uv v6 on 2026-11-12: `prune-cache` defaults
-to true and calls `uv cache prune --ci`. False removes the `-pruned` key
-component, separating the new cache from the old immutable cache. Keys include
-architecture, platform, Python and dependency-manifest hash. `save-cache: false`
-skips saving; exact hits skip both pruning and saving. Sources:
-[inputs](https://github.com/astral-sh/setup-uv/blob/v6/action.yml),
-[restore](https://github.com/astral-sh/setup-uv/blob/v6/src/cache/restore-cache.ts),
-[save](https://github.com/astral-sh/setup-uv/blob/v6/src/save-cache.ts).
-
-Cache implementation checks: `actionlint .github/workflows/manabot-integration.yml`
-passed; `uv run --no-sync pytest tests/infra/test_ci_selection.py::test_workflow_test_files_exist -q`
-passed (1 test); `git diff --check` passed. Removing the four cache lines
-reproduced the prior workflow exactly, including every install/build/test command.
-
-Earlier measurements and gate history: `937f4f152:scratch/ci-under-8-minutes.md`.
-Pre-compression investigation and command details:
-`5f9a69184:scratch/ci-under-8-minutes.md` and `5f9a69184:scratch/qa.html`.
-
-## Remaining delivery
-
-Implementation and hosted dispatch validation are complete. The changed
-workflow meets the timing target with #504's engine change and CPU Torch
-under native debug assertions. This evidence is for a manual dispatch;
-PR-event timing and post-merge validation have not yet happened for this repair.
-
-If the fixture's resource deadline fails again, identify the expired clock
-and charged/allowed seconds in `manabot/training/execution.py::remaining/check`
-before adjusting an allowance. Its three clocks are launch, regime and stage;
-`tests/training/test_learning_state.py` retains the existing error text. This
-diagnostic change is deferred unless another failure warrants it.
-
-Publish the fixture and CPU runtime repair in Task 38ef25, retaining #506 as history.
-`scratch/pr-body.md`, `scratch/pr-title.txt` and `scratch/.pr-copy-ref` still
-describe #506 and must be rewritten at delivery. PR-event timing and successful
-post-merge verification remain necessary before completing the Task.
-
-No open product choice: nobody has asked that Integration run the CUDA build,
-and the stated outcome counts install and cache overhead against the budget.
+Check: `uv run --no-sync python scripts/check_loopflow_workflows.py` — all
+nine graphs compiled and validation passed; `git diff --check` passed.
+`lf context` reports memory and scratch below both configured limits.

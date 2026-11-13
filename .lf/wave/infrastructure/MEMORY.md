@@ -10,8 +10,10 @@ Integration job was 1443 s. PR #506 run 43337105047 at `1fc4e1b24` passed
 with every ordinary job at or below 349 s. Its exact merged push,
 43341403551 at `60664d149`, kept every ordinary job below 480 s but failed
 the live experiment/notebook fixture's training resource deadline (129 passed,
-one failed). Engine Budget passed in 685 s. Green PR evidence does not erase
-that post-merge failure; the Task remains open for a fix-forward.
+one failed). Engine Budget passed in 685 s. The bounded fixture then passed
+Ubuntu debug/xdist in run 43345024882 at `4db5cd64b`, but its experiment job
+took 549 s, exceeding the target. Green tests and a met job budget are separate
+obligations; the fix-forward still needs cache timing and delivery evidence.
 
 - Inspect setup before adding shards: `uv sync` built the engine in release,
   then `maturin develop` built it again in dev. Syncing all needed extras with
@@ -24,10 +26,19 @@ that post-merge failure; the Task remains open for a fix-forward.
   existing one-seat `exact-quota` collector bounds learner rows while live
   monitoring still completes games. The experiment fixture repair pins one
   update and asserts all four receipts contain 16 learner transitions, with
-  120-second resource guards. Its full file passed locally with a release
-  extension (10 tests, 151.36 s); Ubuntu debug/parallel timing remains unproved.
+  120-second resource guards. The comparison passed Ubuntu debug/xdist in
+  151.70 s; temporarily restoring the old workload failed the new assertion
+  locally (`610 == 16`). Four real attempts and live monitoring remain.
   The failed run does not identify the expired clock or separate collection
   time from scheduling; a larger allowance alone is no timing evidence.
+- A dependency-cache hit need not retain downloaded wheels. Run 43345024882
+  restored a pruned uv cache, then spent 181 s installing against peers'
+  17–18 s; logs showed CUDA/nvidia downloads. Integration now retains those
+  wheels with setup-uv's `prune-cache: false`, preserving its Torch build.
+  Every group restores and `model` alone saves because their extras match.
+  This repair is not yet measured: include restore and post-job save time in
+  cold and warm Ubuntu job totals before claiming improvement. Historical
+  timing also predates the merged mana-payment engine change (#504).
 - Parallel tests need isolated files/ports and injected time at scheduling
   boundaries. A 30-second future wait failed beside other workers; the final
   admission fixture releases the gate in its injected sleep instead. The

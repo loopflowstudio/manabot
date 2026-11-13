@@ -1,134 +1,35 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>QA: CI under 8 minutes (38ef25)</title>
 <style>body{font:15px/1.5 system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;color:#222}
-table{border-collapse:collapse}td,th{padding:.2rem .7rem;border-bottom:1px solid #ddd;text-align:left}
-td.n{text-align:right;font-variant-numeric:tabular-nums}pre{background:#f5f3ee;padding:.7rem;overflow:auto}</style></head>
+table{border-collapse:collapse}td,th{padding:.3rem .7rem;border-bottom:1px solid #ddd;text-align:left}</style></head>
 <body>
-<h1>QA: experiment fixture fix-forward (4db5cd64b)</h1>
-<p>2026-11-12, headless. The people this change is for are contributors whose PRs run the
-<code>experiment</code> Integration group, which failed on merged main
-(<a href="https://github.com/loopflowstudio/manabot/actions/runs/43341403551">run 43341403551</a>).
-At this measured revision, the only code change was <code>tests/training/test_experiment_runner.py</code>.
-The later cache repair still needs hosted timing; see <code>ci-under-8-minutes.md</code>.</p>
-
-<h2>A. Hosted CI on the fix-forward head</h2>
-<p><code>gh workflow run ci.yml --ref jack-heart/38ef25-get-ci-under</code> &rarr;
-<a href="https://github.com/loopflowstudio/manabot/actions/runs/43345024882">run 43345024882</a> at
-<code>4db5cd64b</code> (workflow_dispatch, debug extension, 4 xdist workers): <b>success, every job</b>.</p>
-<table><tr><th>Job</th><th>Seconds</th></tr>
-<tr><td>Integration · experiment</td><td class="n"><b>549</b></td></tr>
-<tr><td>Integration · evaluation</td><td class="n">430</td></tr>
-<tr><td>Rust Tests</td><td class="n">396</td></tr>
-<tr><td>Integration · evaluation-long</td><td class="n">391</td></tr>
-<tr><td>Integration · training</td><td class="n">363</td></tr>
-<tr><td>Integration · model</td><td class="n">268</td></tr>
-<tr><td>Protocol v1 Conformance</td><td class="n">248</td></tr>
-<tr><td>Integration · recovery</td><td class="n">222</td></tr>
-<tr><td>Clean-machine Play</td><td class="n">180</td></tr>
-<tr><td>Academy UI</td><td class="n">169</td></tr>
-<tr><td>Academy Integration</td><td class="n">144</td></tr>
-<tr><td>Python Unit Tests</td><td class="n">126</td></tr>
-<tr><td>Semantic Kernel Conformance</td><td class="n">120</td></tr>
-<tr><td>Engine Budget (exempt)</td><td class="n">587</td></tr></table>
-<p>The repaired fixture passed on Ubuntu: <code>test_tiny_comparison_…</code> took 151.70 s (176.21 s and a
-failure on the merged push), <code>test_live_diagnostics_…</code> 122.24 s, and the test step 284 s.</p>
-<p><b>The experiment job missed the 480 s budget by 69 s.</b> Step times: install dependencies 181 s,
-build managym 66 s, tests 284 s. The peer jobs in this run installed in 17–18 s. Both restored the same pruned
-setup-uv cache (<code>setup-uv-1-…-3.13-pruned-239916d6…</code>), so every Integration job downloads the
-CUDA Torch build plus nvidia wheels (cudnn 495 MiB, cusolver 217 MiB, nccl 206 MiB, …) from scratch.
-On this runner <code>Downloaded nvidia-cublas</code> arrived 2m36s after Torch;
-<code>Prepared 167 packages in 2m 59s</code>. With a typical 18 s install the job would take about
-386 s. This is the second slow-download runner in eight runs (recovery spent 145 s in dispatch 43332039325).</p>
-
-<h2>B. Local experiment group, as CI runs it</h2>
-<pre>uv run --no-sync pytest -n logical --durations=20 tests/training/test_experiment_runner.py \
-  tests/training/test_monitor_evaluation.py tests/training/test_rl_runtime.py tests/verify/… (CI's list)
-130 passed in 80.87s   # release extension, M-series laptop; slowest: tiny comparison 75.12 s</pre>
-<p>The companion check from <code>docs/development.md</code>:
-<code>uv run --no-sync pytest tests/training/test_experiment_report.py -q</code> → 17 passed in 16.14 s.</p>
-
-<h2>C. Does the new assertion catch the old workload?</h2>
-<p>I temporarily set the fixture back to <code>learning_seats="both"</code>, <code>batch_closure="complete-games"</code>
-and ran the comparison test. It failed immediately after training, not by timing out:</p>
-<pre>&gt;  assert training.stages[0].learner_transitions == 16
-E  AssertionError: assert 610 == 16
-1 failed in 59.90s</pre>
-<p>That attempt did 610 learner rows; the repaired attempt does 16. The file was restored from a copy and
-<code>git diff -- tests</code> shows no leftover change.</p>
-
-<h2>Outcome</h2>
-<ul>
-<li><b>Works:</b> the experiment/notebook fixture that failed merged main now passes on Ubuntu debug CI under
-xdist and locally. It bounds the work by learner rows and fails loudly if that bound regresses. All jobs are green.</li>
-<li><b>Still wrong:</b> the experiment job took 549 s because CUDA wheel downloads were slow.
-The subsequent repair retains the unpruned cache, preserving the Torch build;
-switching to CPU Torch was the alternative. Cold/save and warm/restore timing remain
-unmeasured. The 284 s test step plus 66 s build leaves about 130 s for setup.</li>
-<li><b>Not reached:</b> a PR-event run of the fix-forward (no PR is published yet) and the merged push.</li>
-</ul>
-<p>No local process remains. The hosted run completed; nothing was cancelled.</p>
-
-<h1 style="margin-top:3rem">History: QA of #506</h1>
-
-<p>Historical QA at revision <code>f90ae2893</code>. Users of this change are contributors whose PRs wait on
-CI, and the people who read job times and the parallel-worker contract.</p>
-
-<p>Later PR validation at <code>1fc4e1b24</code> passed in <a href="https://github.com/loopflowstudio/manabot/actions/runs/43337105047">run 43337105047</a>: every ordinary job finished within 349 s. The merged push subsequently failed the experiment fixture in <a href="https://github.com/loopflowstudio/manabot/actions/runs/43341403551">run 43341403551</a>. This historical QA does not validate the repair; see <code>ci-under-8-minutes.md</code> for its implementation and remaining delivery checks.</p>
-<h2>1. Full CI on the QA revision</h2>
-<p>Dispatched <code>gh workflow run ci.yml --ref jack-heart/38ef25-get-ci-under</code> → run
-<a href="https://github.com/loopflowstudio/manabot/actions/runs/43332039325">43332039325</a>. It finished green.
-Times run from job start to job end:</p>
-<table><tr><th>job</th><th>seconds</th></tr>
-<tr><td>Engine Budget (exempt)</td><td class="n">683</td></tr>
-<tr><td>Integration · recovery</td><td class="n">416</td></tr>
-<tr><td>Integration · evaluation</td><td class="n">411</td></tr>
-<tr><td>Integration · experiment</td><td class="n">394</td></tr>
-<tr><td>Integration · training</td><td class="n">359</td></tr>
-<tr><td>Integration · evaluation-long</td><td class="n">309</td></tr>
-<tr><td>Integration · model</td><td class="n">268</td></tr>
-<tr><td>Rust Tests</td><td class="n">255</td></tr>
-<tr><td>Academy UI</td><td class="n">221</td></tr>
-<tr><td>Protocol v1 Conformance</td><td class="n">204</td></tr>
-<tr><td>Clean-machine Play</td><td class="n">181</td></tr>
-<tr><td>Academy Integration</td><td class="n">169</td></tr>
-<tr><td>Python Unit Tests</td><td class="n">140</td></tr>
-<tr><td>Semantic Kernel Conformance</td><td class="n">87</td></tr>
-</table>
-<p>Before this change, main run 43312163427 took 1443 s for its slowest Integration job (core).
-After it, every non-exempt job finished under 480 s, the slowest in 416 s.</p>
-<p>Recovery's <code>Install dependencies</code> step took 145 s, while the other Integration jobs took 17–31 s,
-and the same step took 33 s in the previous green run. Its tests took 184 s, compared with 186 s before. The
-difference came from one runner's download speed and used about 110 s of the margin.
-Evaluation, at 411 s, is the tightest group on test time.</p>
-
-<h2>2. The documented job-time command</h2>
-<p>I ran the command from <code>docs/development.md</code> (Job time) exactly as written:</p>
-<pre>15 min  Engine Budget / Engine Budget
-6 min  Rust Tests
-6 min  Integration / Integration (ubuntu-latest, training)
-6 min  Integration / Integration (ubuntu-latest, experiment)</pre>
-<p>Its output matches the guide's example.</p>
-
-<h2>3. Five-minute watchdog under pytest-xdist</h2>
-<p>A throwaway <code>-p</code> plugin lowered <code>LIMIT_SECONDS</code> to 5, and a throwaway test file had four 3 s tests
-plus one optional 30 s test. I removed both afterwards; <code>git status</code> showed nothing left behind.</p>
-<table><tr><th>case</th><th>result</th></tr>
-<tr><td>healthy, no <code>-n</code></td><td>5 passed, exit 0</td></tr>
-<tr><td>healthy, <code>-n 2</code> (11 s total &gt; 5 s limit)</td><td>5 passed, exit 0: the controller did not end the run</td></tr>
-<tr><td>stuck, no <code>-n</code></td><td><code>Timeout (0:00:05)!</code>, stacks printed, exit 1</td></tr>
-<tr><td>stuck, <code>-n 2</code></td><td>stacks printed, <code>worker 'gw0' crashed while running '…::test_stuck'</code>, 1 failed 4 passed, exit 1</td></tr>
-</table>
-<p>This matches what <code>TESTING.md</code> and the <code>tests/conftest.py</code> header describe.</p>
-
-<h2>4. Selection checks</h2>
-<p><code>tests/infra/test_ci_selection.py</code> passed under <code>-n logical</code> (53 tests, 10 s), and both edited workflow files parse as YAML.</p>
-
-<h2>Outcome</h2>
-<ul>
-<li>Works: every ordinary Ubuntu job on <code>f90ae2893</code> passed in 416 s or less, the watchdog works per worker, and the documented command works.</li>
-<li>At this QA step, no PR existed and this was a dispatch. The later PR run linked above closes that evidence gap.</li>
-<li>Still a concern, though not broken: the 64 s margin. Download speed alone moved one job by about 110 s, and test time for unchanged groups has varied by up to 100 s between runs. A slow runner could push a job past 480 s with no code change.</li>
-<li>Unchanged from main: a new test file outside a selected directory runs in no Integration group.</li>
-</ul>
-<p>Nothing was fixed in this pass because nothing broke.</p>
+<h1>QA: CI under 8 minutes</h1>
+<p>Observed 2026-11-12, headless. Contributors need passing Ubuntu jobs below
+480 seconds including setup. Engine Budget is exempt. No human demonstration or approval occurred.</p>
+<h2>Hosted workflow</h2>
+<p><code>gh workflow run ci.yml --ref jack-heart/38ef25-get-ci-under</code>
+exercised the real debug build and parallel tests. Job/step timestamps and dependency
+logs were inspected. The sequence matters:</p>
+<table><tr><th>Run</th><th>Observation</th></tr>
+<tr><td><a href="https://github.com/loopflowstudio/manabot/actions/runs/43341403551">43341403551</a>, merged #506</td>
+<td>The experiment fixture failed its training deadline; other ordinary jobs passed below 480 s.</td></tr>
+<tr><td><a href="https://github.com/loopflowstudio/manabot/actions/runs/43345024882">43345024882</a>, bounded fixture</td>
+<td>All tests passed, but experiment took 549 s: install 181 s, build 66 s, tests 284 s. CUDA wheel downloads dominated installation.</td></tr>
+<tr><td><a href="https://github.com/loopflowstudio/manabot/actions/runs/43348710097">43348710097</a>, CPU Torch at <code>a1efea11b</code></td>
+<td>All jobs passed. Slowest ordinary job: Rust 406 s; Integration recovery 350 s.
+Every Integration install took 5–6 s, with Torch <code>2.15.0+cpu</code> and no NVIDIA/Triton entries.</td></tr></table>
+<h2>Fixture and coverage</h2>
+<p>The repaired comparison passed in 138.45 s on the CPU run. Four real training
+attempts, live complete-game monitoring, accounting, notebook edit/output retention
+and resume checks remain. Model/evaluation pass and skip counts match the CUDA run.</p>
+<p>A prior local check restored complete-game/both-seat training temporarily:
+the new receipt assertion failed with <code>610 == 16</code> in 59.90 s, then the
+fixture was restored. The controlled worker-watchdog proof and selection audit
+are retained in <a href="ci-under-8-minutes.md">the active plan</a>.</p>
+<h2>Remaining validation</h2>
+<p>The CPU result is a manual dispatch. PR-event timing and successful post-merge
+verification remain required. Its 74-second margin is no guarantee about runner
+variability; Python unit and Academy Integration still download CUDA wheels.</p>
+<p>No local process remains. Full historical QA is preserved at
+<code>e22af480b:scratch/qa.html</code>; exact job times and commands are in the active plan.</p>
 </body></html>
