@@ -87,6 +87,20 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
+Sixth recheck (after review 5 and the #510 sync): PR #103 still open at
+`105abdd`; pins 0.2.16. Main advanced to `f4e1822fa` (#510, precision `auto`,
+new frozen `experiments/precision_ladder.py`), merged as `2f00cbbf6`. That
+merge hardcoded branch-only `2f00cbbf6` in the ladder's refusal and
+reintroduced a digest test hashing a different object than main's. Fixed:
+`FROZEN_EXECUTION_REVISION` (and guides, refusal tests) now name
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300`, the last main revision with the
+executor and precision resolution; the ladder calls `refuse_frozen_execution`.
+The digest test pins `digest_recipe()`'s hash `81ba5762…`, computed identical
+in an origin/main worktree (main's own test hashed the launched job's regime,
+`wall_seconds` 600, which refuses here). Live `SelfPlay` keeps explicit
+`precision="float32"`; at `f4e1822fa` `auto` also resolves to float32
+(`ladder_precision`), so no behavior is lost.
+
 Fifth recheck (after review 4 implementation): PR #103 still open at
 `105abdd`; origin/main still `105e7e2aa`; pins still 0.2.16. Code matches
 the review-4 section (loop phase/resource rows, `training_seconds`, the
@@ -180,8 +194,7 @@ remain. Validation and fresh-run parity results are in implementation.md.
 The previous refusal named branch-only prototype `f09f5c2919b8…`, whose
 executor differed from main; it was unsuitable as a durable execution
 reference. The constant, both guides and refusal tests now name pre-cutover
-main `105e7e2aa269b1af3946827dd6f4ab29af01f312` (verified current merge base
-and ancestor of origin/main). Exact reproductions use each experiment's own
+main (now `f4e1822fa…` after the #510 sync; see the sixth recheck). Exact reproductions use each experiment's own
 recorded revision and lock. Older collector snapshot revision `439379869`
 stays. Gate should recheck ancestry after any main sync; move the constant if
 new main commits add frozen entry points.

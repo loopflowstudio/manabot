@@ -108,7 +108,7 @@ Before recipes were functions, a run was a saved `TrainingRegime` executed by
 checkpoints stay readable: `manabot.training.records` reads every retained
 record and `load_checkpoint` loads every world-bound checkpoint as before,
 with serialized keys unchanged. They no longer execute. Their last executor revision is
-`105e7e2aa269b1af3946827dd6f4ab29af01f312`. `manabot train
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. `manabot train
 --regime FILE` and `--regime-name` refuse, naming the last revision that runs
 them. For an exact reproduction, use the experiment’s recorded revision and
 lock; the revision above retains the executor before this cutover.

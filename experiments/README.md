@@ -13,7 +13,7 @@ instruments.
 
 The CLI lists runnable recipes with `uv run manabot train --list`. Retained
 `TrainingRegime` builders are records; execute them from the pre-cutover main
-revision `105e7e2aa269b1af3946827dd6f4ab29af01f312`. Exact reproductions use
+revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. Exact reproductions use
 the experiment's recorded revision and lock ([saved regimes](../docs/training.md#saved-regimes)).
 
 | module | current role | execution |

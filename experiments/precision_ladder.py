@@ -35,7 +35,7 @@ from experiments.learning_signal import (
 from manabot.infra.runtime import regime_tag
 from manabot.training.learning import Precision
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
@@ -69,9 +69,7 @@ def regime_id(precision: Precision) -> str:
 
 def arm(precision: Precision) -> TrainingRegime:
     """Require the scored experiment's executor instead of changing its semantics."""
-    raise RuntimeError(
-        "Frozen execution requires revision 2f00cbbf6d484b8d5275f65376a52ae0d4376be6"
-    )
+    refuse_frozen_execution()
 
 
 def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> None:

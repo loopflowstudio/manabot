@@ -25,11 +25,12 @@ from manabot.training.updates.damped_policy import update_damped_iteration
 
 
 def test_float32_regimes_keep_their_bytes() -> None:
-    # The D1 packing regime omits the input version, so it resolves to v9.
+    # The D1 packing builder omits the input version, so it resolves to v9.
+    # The digest matches the same builder at f4e1822fa, before the cutover.
     d1 = packing.digest_recipe()
     assert (
         canonical_sha256(d1.model_dump(mode="json"))
-        == "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
+        == "81ba576258a66f5576e8b1440be3a22fd083ce71301aff83fefd3bb6cc8aafd2"
     )
     assert batched_baseline().stages[0].execution.precision == "float32"
 
@@ -218,5 +219,5 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
 
 
 def test_frozen_precision_ladder_refuses_before_building_or_launching() -> None:
-    with pytest.raises(RuntimeError, match="2f00cbbf6d484b8d5275f65376a52ae0d4376be6"):
+    with pytest.raises(RuntimeError, match="f4e1822faf46bbc9cdc43909293f8cbc8de4a300"):
         precision_ladder.runs("HEAD")
