@@ -19,14 +19,15 @@ li{margin:8px 0}
 @media (prefers-color-scheme:dark){:root{--paper:#1a211d;--ink:#ebece4;--muted:#b2c0b6;--line:#53685a;--accent:#add2ba}}
 @media (max-width:540px){main{padding:22px 16px}th,td{padding:8px 4px;font-size:13px}}
 </style></head><body><main>
-<header>MTG-277 · concept-review · 2026-11-13 (after both syncs with main) · built from
+<header>MTG-277 · concept-review · 2026-11-13 (second pass, at 5c6b998b4d) · built from
 scratch/questions.md, docs/engine.md, docs/evaluation.md, manabot/README.md,
 manabot/sim/{heuristic,players}.py, manabot/eval/admission.py,
 managym/src/agent/{heuristic/mod.rs,env.rs,opponent.rs,vector_env.rs},
-managym/src/python/heuristic_bindings.rs, managym/__init__.pyi</header>
-<h1>One change before gate: describe the rules where they run</h1>
+managym/src/python/heuristic_bindings.rs, managym/__init__.pyi, manabot/sim/anchors.py</header>
+<h1>One docs edit before gate: the README still defines the fallback by another player</h1>
 <p>No product choice is open. Actions, concepts and APIs below are built and unchanged by this review.
-The one mismatch is in documentation ownership, and it is proposed, not built.</p>
+The rule description moved to the native header in <code>89b732137a</code>; one copy is left in
+<code>manabot/README.md</code>. The edit is proposed, not built.</p>
 
 <table>
 <tr><th>Action</th><th>Concept</th><th>State-changing API (built)</th></tr>
@@ -38,20 +39,20 @@ The one mismatch is in documentation ownership, and it is proposed, not built.</
 
 <h2>Biggest mismatch</h2>
 <aside>
-<p><strong>Existing.</strong> The rules are described in the file that no longer runs them. The adapter
-<code>manabot/sim/heuristic.py</code> (about 30 lines of code) carries a 45-line docstring: “<code>HeuristicPlayer</code>
-keeps v1 … and adds”, “the player remembers them for the turn”. The owner,
-<code>managym/src/agent/heuristic/mod.rs</code>, has a four-line header that defines itself as
-“preserving the Python anchor's rules”, an implementation this change deletes. The two descriptions
-already drifted once (instant timing, corrected in realign).</p>
+<p><strong>Existing</strong> (<code>manabot/README.md</code>, anchors paragraph):</p>
+<p>“<code>heuristic</code> is a separately versioned anchor of rules of thumb: highest-mana-value casts,
+removal held for a kill, counters held for an opponent's spell, effect polarity derived from the semantic
+card source, attacks unless a blocker kills and survives, and value blocks. Prompts without a rule match
+<code>scripted_greedy</code>, which stays frozen with its registered source identity.”</p>
+<p>A third rule list, and a fallback defined by a different implementation. Native <code>fallback</code>
+currently chooses as <code>ScriptedGreedyPlayer.act</code> does, but nothing binds them, and
+docs/engine.md dropped the same reference in realign.</p>
 </aside>
 <div class="proposed">
-<p><strong>Proposed.</strong> The <code>//!</code> header of <code>mod.rs</code> states the rule groups, fallback, tie-breaks and
-approximations as its own. The adapter docstring says what the file is: a scalar adapter, why it sits
-outside frozen <code>anchors.py</code>, which files form the identity, and where the rules are. The
-<code>Heuristic</code> doc comment says Env clears batch memory on reset. Parity with Python source
-<code>757bb6257</code> stays evidence in the fixture, never the definition.</p>
-<p>Comments and docstrings only. The source digest moves; no registration exists under it yet.</p>
+<p><strong>Proposed.</strong> “<code>heuristic</code> is a separately versioned anchor: rules of thumb for mana,
+timing, targets, card choices and combat, described in
+<a>the engine guide</a>. Historical results keep the heuristic version they evaluated.”</p>
+<p>Docs only: not an identity file, no rebuild, no digest move. Selection sentence and MTG-152 numbers stay.</p>
 </div>
 
 <h2>Checked and kept</h2>
@@ -64,7 +65,6 @@ outside frozen <code>anchors.py</code>, which files form the identity, and where
 
 <h2>Questions</h2>
 <ol>
-<li>The Task says “keep the documented rules in the module header”. This review reads that as the module that owns the rules.
-(a) native header owns them, adapter points there — assumed; (b) keep the full list in the Python adapter as well.</li>
+<li>None open. (The earlier question, which module's header owns the rules, was taken as the native one and is built.)</li>
 </ol>
 </main></body></html>

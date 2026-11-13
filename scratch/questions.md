@@ -270,3 +270,18 @@ the header except its fallback paragraph, which named the separate frozen
 (docs only, no identity file). Remaining is unchanged: gate's full debug Rust
 suite, clippy, affected Python suites, full release training smoke and normal
 same-runner Engine Budget.
+
+## Second concept review and README correction (2026-11-13)
+
+No open product choice at `5c6b998b4d`: opponent selection, Env-owned batch
+memory, the scalar adapter, `native-v2` identity and the drift/overflow/
+unsupported-name errors need no change. `managym.Heuristic.reset()` stays:
+direct native callers and the parity test reuse one selector across games.
+
+Its one finding is fixed: `manabot/README.md` carried a third rule list and
+defined the fallback by `scripted_greedy`, though nothing binds native
+`fallback` to `ScriptedGreedyPlayer.act`. The paragraph now names the rule
+groups and links `docs/engine.md#built-in-heuristic-opponent`; selection
+sentence, historical-version statement and MTG-152 figures are intact. Prose
+only (no identity file, build or runtime test); `git diff --check` passed.
+Full suites, release smoke and Engine Budget remain for gate.

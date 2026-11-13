@@ -417,16 +417,13 @@ now belongs to `sim/action/targeting.py`.
 Select `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring, or
 `VectorEnv(..., opponent_policy="heuristic")` for a native batched opponent.
 The scalar `HeuristicPlayer` adapter and arena anchor call the same engine
-implementation; see [selection, rules and information limits](../docs/engine.md#built-in-heuristic-opponent).
-`heuristic` is a separately versioned anchor of rules of thumb: highest-mana-value casts,
-removal held for a kill, counters held for an opponent's spell, effect polarity
-derived from the semantic card source, attacks unless a blocker kills and
-survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
-stays frozen with its registered source identity. Historical results keep the
-heuristic version they evaluated. One exploratory check (MTG-152,
-GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
-0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
-cell; it is not yet a frozen anchor comparison.
+implementation. `heuristic` is a separately versioned anchor with rules of thumb
+for mana, timing, targets, card choices and combat; see
+[selection, rules and information limits](../docs/engine.md#built-in-heuristic-opponent).
+Historical results keep the heuristic version they evaluated. One exploratory
+check (MTG-152, GPU seed 12261 at 25k, 200 paired games per anchor) scored the
+checkpoint 0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower
+in every cell; it is not yet a frozen anchor comparison.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/evaluation.md#checkpoint-scenarios). Each retained
