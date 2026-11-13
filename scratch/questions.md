@@ -37,3 +37,7 @@
 - Not built here (left for the split): separate `Card`/`CardId` store, new object per zone change,
   the CR 400.7 carry-over record, the performance measurements. Steer allows "land the rename plus
   the typed ids here, and say what is left in the PR body".
+
+- Sync onto main (2026-11-12): retain the MTG-320 sections of `scratch/qa.html`;
+  assume main's deletion applies to the inherited MTG-298 report and remove that
+  section along with main's deleted screenshots. Branch QA evidence stays intact.
