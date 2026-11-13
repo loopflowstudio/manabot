@@ -107,3 +107,9 @@ Land diff (step 3), **Delete — do not maintain**:
   bitwise for PPO and damped. Docs updated (`docs/training.md`,
   `manabot/README.md`). Recipes' `try/except: run.finish("failed")` is still
   frameworky; not changed.
+
+- Etude Task filed and started 2026-11-12: EXP-56 "Give a training recipe a run
+  directory, a stop signal and a retry after a planned stop" (loopflow://etude/task/EXP-56),
+  `code` graph; its brief carries gaps 1-8 of `etude-api.md`. Jack Heart:
+  "ready to run an etude task?" / "open its task session in rex so i can
+  review its work once its done".
