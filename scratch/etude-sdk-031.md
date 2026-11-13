@@ -1,4 +1,4 @@
-# MTG-348: move to etude-sdk 0.3.1
+# MTG-348: move to etude-sdk 0.3.x (lands on 0.3.2)
 
 ## Problem
 
@@ -6,6 +6,12 @@ manabot pins etude-sdk 0.2.16. 0.3.0 and 0.3.1 rename the evaluation and
 report vocabulary and change two database schemas, so experiment files,
 reports, shared helpers and tests break on upgrade. The Task ends in one PR
 that lands once green. No paid runs.
+
+Decision (Jack Heart, 2026-11-13, Task comment): "Fix etude first". Etude will
+make `Curve(matches=Matches(seating=...))` draw a fixed-pair seating once, at
+its first seat's checkpoint, and release 0.3.2. "Hold until 0.3.2 is out, then
+move straight to 0.3.2 and draw the frontier head-to-head charts that way (no
+mirrored Small line). Do not land on 0.3.1."
 
 Brief, in its words: "Search the whole repository (experiments, reports,
 scripts, tests, docs) for every use of a renamed or removed name. Check with the
@@ -21,7 +27,8 @@ ETUDE_HOME=$(mktemp -d) doppler run -p manabot -c prd -- \
 ```
 
 writes the TLA frontier page with its four eval charts drawn from the stored
-1,120 matches, under etude-sdk 0.3.1.
+1,120 matches, under etude-sdk 0.3.2 (verified so far on 0.3.1, with the
+mirrored Small line).
 
 ## Findings (probed 2026-11-13, SDK 0.2.16 against 0.3.1 wheels)
 
@@ -189,20 +196,15 @@ The implementation must match the helper signatures the guide now shows.
   or before w160l8's hours (no exact clock position), and a seating that
   resolved a different partner would leave gaps and make `etude eval` want new
   games.
-- **Stay on 0.2.16 until Etude draws a fixed seating once.** Rejected: the
-  brief asks for 0.3.1 now, and the locked SDK already cannot open the local
-  launcher database.
+- **Land on 0.3.1 with mirrored head-to-head lines.** Overruled by the
+  2026-11-13 decision quoted under Problem; the 0.3.1 work stays on the branch
+  and moves to 0.3.2.
 - **Move `~/.etude/launcher.db` aside in this Task.** Not done: it is shared,
   in use, and holds the only launcher history of runs still referenced.
 - **Add a type checker.** Out of scope; the brief assumed one exists.
 
 ## Open, for a person
 
-- The mirrored Small line on the frontier's two head-to-head charts. Jack Heart
-  on 2026-11-11 asked for "one chart per question, with a line per model and no
-  mirrored head-to-head line" (memory `report-compares-jobs`). 0.3.1 cannot draw
-  a fixed pair once. The fix belongs in Etude (a seated curve over fixed
-  seatings, positioned at the first seat's checkpoint), then a manabot bump.
 - When to move the shared launcher database aside. Until then `uv run etude`
   launch, status and eval commands refuse it from this checkout.
 
@@ -218,7 +220,26 @@ The implementation must match the helper signatures the guide now shows.
 
 ## Remaining work
 
-Implementation and docs are committed (aefeefcaf7, synced onto main at 7fd26fc0ac; origin/main had nothing newer on 2026-11-13). The report helpers, SQL
+**Blocked on etude-sdk 0.3.2** (PyPI's newest was 0.3.1 on 2026-11-13). Then:
+
+1. Pin 0.3.2 everywhere 0.3.1 now appears (`pyproject.toml`, `uv.lock`,
+   `docs/development.md`, `scripts/release/validate.py` and
+   `tests/infra/test_release.py` fixtures); read its release notes for further
+   breaks.
+2. `manabot/training/report.py::head_to_head` draws by seating, not tag:
+   `Curve(matches=Matches(seating=...))` over the frontier's fixed-pair
+   seatings, one line positioned at the first seat (Large). Its caller is
+   `experiments/tla_frontier.py:1133-1134` (tags `equal-hours`,
+   `head-to-head`); the seatings stay as recorded, nothing is re-seated.
+   Update its docstring, `tests/training/test_report_helpers.py`, and
+   `docs/experiments.md` (example at :295-296, table row at :337, which now
+   says the lines mirror about 0.5).
+3. Rerun gate's acceptance, including the frontier report, and confirm each
+   head-to-head chart draws one line.
+
+Implementation and docs for 0.3.1 are committed (aefeefcaf7); main synced at
+27cb65bba7 (#514 adds `experiments/ppo_cuda.py`, whose
+`etude.launch.records` imports resolve on 0.3.1). The report helpers, SQL
 reads, TrainingRun fixtures, repository-module cleanup, frozen frontier outcome
 and historical panels use the surviving 0.3.1 APIs. The release validator and
 its metadata fixtures require the new dependency floor too.
@@ -262,13 +283,12 @@ CI runs the suite; nothing here needs a display or a person.
 ## Done when
 
 - `uv run etude report experiments/tla_frontier.py --source r2://manabot/jobs`
-  draws the frontier page on 0.3.1 from any machine with R2 access, with no
+  draws the frontier page on 0.3.2, one line per head-to-head chart, from any machine with R2 access, with no
   launcher database.
 - No tracked Python imports a name 0.3.1 removed, and no SQL reads a renamed
   statsdb column.
 - The Etude-facing tests and lint pass, CI is green, and the PR says which
-  three report panels 0.3.1 no longer draws and that head-to-head charts show
-  both jobs.
+  three report panels 0.3.x no longer draws.
 
 ## Delete — do not maintain
 

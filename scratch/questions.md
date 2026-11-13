@@ -2,10 +2,8 @@
 
 Reversible choices taken without asking; details in `etude-sdk-031.md`.
 
-1. The frontier's two head-to-head charts will show both jobs' lines under
-   0.3.1 (a mirrored Small line). Chosen over re-seating a frozen experiment.
-   Contradicts the 2026-11-11 "no mirrored head-to-head line" request until
-   Etude can draw a fixed pair once.
+1. Superseded 2026-11-13: Jack Heart chose "Fix etude first"; the branch
+   waits for etude-sdk 0.3.2 and draws one head-to-head line by seating.
 2. `~/.etude/launcher.db` (schema 13, in use) is left where it is. 0.3.1
    refuses it, so launch and status commands from this checkout need a person to
    move it aside first.
