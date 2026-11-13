@@ -557,14 +557,14 @@ class BoundSemanticPack:
         slots: list[int] = []
         identity_ids: list[int] = []
 
-        for role_name, cards in (
+        for role_name, rows in (
             ("agent_card", observation.agent_objects),
             ("agent_sideboard", observation.agent_sideboard),
             ("opponent_card", observation.opponent_objects),
         ):
             role = self.schema.object_roles[role_name]
-            for slot, card in enumerate(cards):
-                card_def_id = int(card.registry_key)
+            for slot, row in enumerate(rows):
+                card_def_id = int(row.registry_key)
                 definition_rows.append(self.definition_row(card_def_id))
                 roles.append(role)
                 slots.append(slot)

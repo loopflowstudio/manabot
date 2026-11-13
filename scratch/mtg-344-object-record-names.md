@@ -295,7 +295,7 @@ Not a naming gap in this Task: `is_token` is true for copies of spells and the
 text observation prints it as "token yes". The column and JSON key are frozen
 and `docs/engine.md` states the meaning ("not a card").
 
-## Concept review 2 (2026-11-13, HEAD `ce07967654`): next implement direction
+## Concept review 2 (2026-11-13, HEAD `ce07967654`): binding follow-up
 
 Published surface, aliases, stubs, docs and frozen spellings match the rename
 table; nothing in the model changes and no product choice is open.
@@ -333,3 +333,39 @@ Python only, so no extension rebuild. Recheck with the 27-test command above
 under `-W error::DeprecationWarning`, `tests/sim/test_heuristic.py`,
 `tests/verify/test_observation_parity.py`, and the digest script (expect 3,512
 decisions, `14c102e4...100a`).
+
+
+Implementation follow-up: renamed the reviewed object-row bindings end to end,
+including `_Board.objects` and its private cache and callers, `_object_name`,
+and battlefield row consumers. Sideboard/casting-only names and all emitted
+strings, schema roles, capacity labels and buffer keys stay unchanged. The
+turn-state loop uses `object_row` to avoid rebinding the player-state array.
+Ruff format and `git diff --check` pass; Ruff check reports only the existing
+I001 import-order findings in `academy/server.py` and `manabot/sim/heuristic.py`,
+reproduced from HEAD. Frozen fixture/vocabulary diff against `e363e4058e` is empty.
+
+
+Validation of this follow-up (2026-11-13):
+
+- The 27-case alias/text/layout/player-control selection plus
+  `tests/sim/test_heuristic.py` completed 64 successful cases under
+  `-W error::DeprecationWarning`; the combined run then hit the 300-second
+  limit in `tests/verify/test_observation_parity.py::test_observation_parity`,
+  inside NumPy comparison, with no mismatch reported. Split its 200 games
+  into twenty ten-game seed batches (questions.md 9); the assertions and total
+  game count are retained.
+- `uv run --no-sync pytest tests/verify/test_observation_parity.py tests/verify/test_native_buffer_capacities.py::test_first_64_legal_actions_preserve_membership_mapping_and_masks -q -W error::DeprecationWarning`
+  -> 42 passed (1024.97s total, each case within the unchanged 300-second limit).
+- `uv run --no-sync python scratch/observation_digest.py` -> 3,512 decisions,
+  SHA-256 `14c102e45341799283111bb57adec4b2df92b1742170b866a9f2334c0295100a`,
+  identical to baseline.
+
+The Concept review 2 implementation is complete. Remaining gate suites and
+publication/alias-removal follow-up remain with the caller's later steps.
+
+Compress after the binding follow-up (2026-11-13): Academy's two
+battlefield-row/permanent pairings in `academy/server.py` use `zip` (same
+truncation as the index guard), and `scenarios._object_name` scans both object
+lists in one loop. No emitted value changes; Python only.
+`uv run --no-sync pytest tests/academy/test_learn_setup.py tests/academy/test_authored_match_parity.py tests/academy/test_authored_match_authority.py tests/verify/test_competency.py tests/verify/test_checkpoint_scenarios.py -q -x -W error::DeprecationWarning`
+-> 45 passed (87.31s). The digest script does not import either file; not rerun.

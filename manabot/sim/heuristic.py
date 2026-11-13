@@ -499,24 +499,25 @@ class _Board:
         self.raw = raw
         self.own_id = int(raw.agent.id)
         # Built on first use: most priority passes never need them.
-        self._cards: dict[int, managym.Object] | None = None
+        self._objects: dict[int, managym.Object] | None = None
         self._by_key: dict[int, managym.Object] | None = None
         self._permanents: dict[int, managym.Permanent] | None = None
 
     @property
-    def cards(self) -> dict[int, managym.Object]:
-        if self._cards is None:
-            self._cards = {
-                int(c.id): c for c in self.raw.agent_objects + self.raw.opponent_objects
+    def objects(self) -> dict[int, managym.Object]:
+        if self._objects is None:
+            self._objects = {
+                int(row.id): row
+                for row in self.raw.agent_objects + self.raw.opponent_objects
             }
-        return self._cards
+        return self._objects
 
     @property
     def by_key(self) -> dict[int, managym.Object]:
         if self._by_key is None:
             self._by_key = {
-                int(c.registry_key): c
-                for c in self.raw.agent_objects + self.raw.opponent_objects
+                int(row.registry_key): row
+                for row in self.raw.agent_objects + self.raw.opponent_objects
             }
         return self._by_key
 
@@ -530,14 +531,14 @@ class _Board:
         return self._permanents
 
     def is_creature(self, permanent: managym.Permanent) -> bool:
-        card = self.by_key.get(int(permanent.registry_key))
-        if permanent.is_animated or (card is not None and card.card_types.is_creature):
+        row = self.by_key.get(int(permanent.registry_key))
+        if permanent.is_animated or (row is not None and row.card_types.is_creature):
             return True
-        return card is None and permanent.toughness > 0
+        return row is None and permanent.toughness > 0
 
     def mana_value(self, permanent: managym.Permanent) -> int:
-        card = self.by_key.get(int(permanent.registry_key))
-        return int(card.mana_cost.mana_value) if card is not None else 0
+        row = self.by_key.get(int(permanent.registry_key))
+        return int(row.mana_cost.mana_value) if row is not None else 0
 
     def creatures(self, own: bool) -> list[managym.Permanent]:
         side = self.raw.agent_permanents if own else self.raw.opponent_permanents
@@ -549,8 +550,8 @@ class _Board:
     def untapped_lands(self) -> int:
         count = 0
         for permanent in self.raw.agent_permanents:
-            card = self.by_key.get(int(permanent.registry_key))
-            if card is not None and card.card_types.is_land and not permanent.tapped:
+            row = self.by_key.get(int(permanent.registry_key))
+            if row is not None and row.card_types.is_land and not permanent.tapped:
                 count += 1
         return count
 
@@ -568,8 +569,8 @@ class _Board:
         return sum(
             1
             for p in self.raw.agent_permanents
-            if (card := self.by_key.get(int(p.registry_key))) is not None
-            and card.card_types.is_land
+            if (row := self.by_key.get(int(p.registry_key))) is not None
+            and row.card_types.is_land
         )
 
     def graveyard_lessons(self) -> int:
@@ -760,13 +761,13 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
                 return pump
         ranked = sorted(
             (
-                (-int(board.cards[card_id].mana_cost.mana_value), index, card_id)
+                (-int(board.objects[card_id].mana_cost.mana_value), index, card_id)
                 for index, card_id in casts
-                if card_id in board.cards
+                if card_id in board.objects
             )
         )
         for _, index, card_id in ranked:
-            card = board.cards[card_id]
+            card = board.objects[card_id]
             if self._timely(board, card) and self._worth_casting(board, card):
                 return index
         if not board.own_turn() and step == StepEnum.ENDING_END:
@@ -778,11 +779,11 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
     def _ability(
         self, board: _Board, activations: list[tuple[int, int]], names: frozenset[str]
     ) -> int | None:
-        """The first offered activation whose source card is one of `names`."""
+        """The first offered activation whose source object is one of `names`."""
         for index, source_id in activations:
             source = board.permanents.get(source_id)
-            card = board.by_key.get(int(source.registry_key)) if source else None
-            if card is not None and card.name in names:
+            row = board.by_key.get(int(source.registry_key)) if source else None
+            if row is not None and row.name in names:
                 return index
         return None
 
@@ -831,7 +832,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
     def _pay(self, board: _Board) -> int | None:
         raw = board.raw
         focus = list(raw.action_space.focus)
-        card = board.cards.get(int(focus[0])) if len(focus) == 1 else None
+        card = board.objects.get(int(focus[0])) if len(focus) == 1 else None
         if (
             card is not None
             and card.kicker_cost > 0
@@ -878,7 +879,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             if int(action.action_type) == ActionEnum.DECLINE_CHOICE:
                 decline = index
                 continue
-            card = board.cards.get(int(action.focus[0])) if action.focus else None
+            card = board.objects.get(int(action.focus[0])) if action.focus else None
             if card is None:
                 continue
             if card.card_types.is_land:
@@ -902,7 +903,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         )
         options: list[tuple[int, int]] = []
         for index, action in enumerate(raw.action_space.actions):
-            card = board.cards.get(int(action.focus[0])) if action.focus else None
+            card = board.objects.get(int(action.focus[0])) if action.focus else None
             if card is None or int(action.action_type) == ActionEnum.DECLINE_CHOICE:
                 continue
             if card.card_types.is_land:
@@ -986,7 +987,8 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
     def _target(self, board: _Board) -> int | None:
         raw = board.raw
         source = next(
-            (board.cards[i] for i in raw.action_space.focus if i in board.cards), None
+            (board.objects[i] for i in raw.action_space.focus if i in board.objects),
+            None,
         )
         spell = targeted_spells().get(source.name) if source is not None else None
         if spell is None or spell.polarity is None:
@@ -1034,8 +1036,8 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
         permanent = board.permanents.get(target)
         if permanent is not None:
             controller = int(permanent.controller_id)
-        elif target in board.cards:
-            controller = int(board.cards[target].owner_id)
+        elif target in board.objects:
+            controller = int(board.objects[target].owner_id)
         else:
             return None
         return "own" if controller == board.own_id else "opponent"
@@ -1055,7 +1057,7 @@ class HeuristicPlayer(ScriptedGreedyPlayer):
             # A stack spell is what a held counter or bounce waits for. A
             # player ranks below a creature that removal kills, above one it
             # does not.
-            if target in board.cards:
+            if target in board.objects:
                 return (3,)
             # Burn to the face wins outright when it is lethal.
             return (4,) if damage >= board.raw.opponent.life else (1,)

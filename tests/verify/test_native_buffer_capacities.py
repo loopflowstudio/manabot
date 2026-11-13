@@ -514,9 +514,8 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
     }
     _, after, *_ = scalar.step_semantic_command(json.dumps(command))
     assert any(
-        card.id in selected.focus
-        and int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
-        for card in after.agent_objects + after.opponent_objects
+        row.id in selected.focus and int(row.zone) == int(managym.ZoneEnum.BATTLEFIELD)
+        for row in after.agent_objects + after.opponent_objects
     )
 
 

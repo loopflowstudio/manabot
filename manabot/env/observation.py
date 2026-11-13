@@ -202,8 +202,8 @@ def _timestamp_ranks(obs: managym.Observation) -> Dict[int, float]:
 
 def _object_rows(objects: Sequence[managym.Object], sideboard: int) -> str:
     """Where a seat's object rows sit, for a capacity failure's retained text."""
-    zones = Counter(str(card.zone).rsplit(".", 1)[-1].lower() for card in objects)
-    tokens = Counter(card.name for card in objects if card.is_token)
+    zones = Counter(str(row.zone).rsplit(".", 1)[-1].lower() for row in objects)
+    tokens = Counter(row.name for row in objects if row.is_token)
     parts = [f"{zone} {count}" for zone, count in sorted(zones.items())]
     parts.append(f"sideboard {sideboard}")
     parts.append(f"tokens {sum(tokens.values())}")
@@ -383,22 +383,22 @@ class ObservationEncoder:
             ("opponent_player", obs.opponent),
         ):
             out[key] = self._encode_player_features(player, obs.turn)[np.newaxis, ...]
-        for key, cards, is_mine in (
+        for key, objects, is_mine in (
             ("agent_cards", obs.agent_objects, 1.0),
             ("opponent_cards", obs.opponent_objects, 0.0),
         ):
             out[key] = self._encode_object_rows(
-                cards, is_mine=is_mine, viewer=obs.agent.id, turn=obs.turn.turn_number
+                objects, is_mine=is_mine, viewer=obs.agent.id, turn=obs.turn.turn_number
             )
-        # Outside copies occupy explicit rows after visible owner cards. They
+        # Outside copies occupy explicit rows after visible owner objects. They
         # have no zone bits; the outside marker identifies their location.
-        for seat, (cards, player) in enumerate(
+        for seat, (objects, player) in enumerate(
             ((obs.agent_objects, obs.agent), (obs.opponent_objects, obs.opponent))
         ):
             if len(player.known_hand) > self.cards_per_player:
                 raise ValueError("known hand exceeds observation capacity")
-            for slot, card in enumerate(cards):
-                out["semantic_cards"][seat, slot] = card.registry_key + 1
+            for slot, row in enumerate(objects):
+                out["semantic_cards"][seat, slot] = row.registry_key + 1
             for slot, (definition, count) in enumerate(
                 sorted(player.known_hand.items())
             ):
@@ -420,7 +420,7 @@ class ObservationEncoder:
             out["card_turn_state"] = np.zeros(
                 (2, self.cards_per_player), dtype=np.float32
             )
-            for seat, (cards, player) in enumerate(
+            for seat, (objects, player) in enumerate(
                 ((obs.agent_objects, obs.agent), (obs.opponent_objects, obs.opponent))
             ):
                 row = out["player_turn_state"][seat]
@@ -431,9 +431,9 @@ class ObservationEncoder:
                         row[TURN_STATE_NONARTIFACT_MANA_INDEX:] += (
                             np.asarray(restricted.mana, dtype=np.float32) / 10.0
                         )
-                for slot, card in enumerate(cards):
+                for slot, object_row in enumerate(objects):
                     out["card_turn_state"][seat, slot] = float(
-                        card.from_battlefield_this_turn
+                        object_row.from_battlefield_this_turn
                     )
         outside = obs.agent_sideboard
         start = len(obs.agent_objects)

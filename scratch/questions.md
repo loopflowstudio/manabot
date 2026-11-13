@@ -23,3 +23,9 @@ Each is reversible before the PR lands.
    renamed record encoder is `_encode_object_rows`, using that existing helper.
 8. Corrected prewritten docs: object rows include battlefield objects too
    (`add_permanent` pushes them), rather than only objects outside battlefield.
+
+9. The requested full parity file hit the 300-second per-test limit in
+   `test_observation_parity`, inside NumPy buffer comparison. Split its 200
+   games into twenty ten-game batches with seeds 42–61, retaining every-buffer
+   comparisons and the total game count. The first batch retains seed 42;
+   later batches use independent seeds to stay within the mandated limit.
