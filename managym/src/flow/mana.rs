@@ -51,6 +51,15 @@ pub(crate) struct ManaPaymentStats {
     latest_over_tapped: bool,
 }
 
+impl ManaPaymentStats {
+    pub(crate) fn new(automatic: bool) -> Self {
+        Self {
+            automatic,
+            ..Self::default()
+        }
+    }
+}
+
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
 /// cycles. Witnesses retain identities and concrete typed pool remainders.

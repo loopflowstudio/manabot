@@ -1,9 +1,8 @@
-"""Count native spending decisions in bounded mirror games (MTG-347).
+"""Measure mana decision frequency, fixed-source outcomes and early learning.
 
-`count` writes exact decks and per-game stage/offer counts. Payment attribution
-comes from the engine, never from Python mana arithmetic. This exploratory
-replays enumerate bounded fixed-source counterfactuals. Etude runs compare
-today's unit spending with first-feasible automatic spending.
+`count` retains exact decks and per-game decisions. `shapes` replays them and
+enumerates bounded counterfactuals through the native payment authority. Etude
+`runs` and `eval` compare unit spending with first-feasible automatic spending.
 """
 
 from __future__ import annotations

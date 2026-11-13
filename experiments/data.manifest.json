@@ -5906,6 +5906,26 @@
    "sha256": "e8dcb9807d22396d0b35914327eaface0488dbcc8092986d6b8601f81ee3d962",
    "bytes": 545
   },
+  "experiments/data/mana_spending/current/decks.json": {
+   "sha256": "c162b785fa6849b491d6e5b063b7f1db4aedd9c1bce01f900f754389c1e535a4",
+   "bytes": 21533
+  },
+  "experiments/data/mana_spending/current/games.jsonl": {
+   "sha256": "85d6e7afcc64aca88d94d29a44101073ff8a55c8e5747fc10a21a04ef55bac5b",
+   "bytes": 487467
+  },
+  "experiments/data/mana_spending/current/shapes/metadata.json": {
+   "sha256": "cf5169fa2eabf8153a62b414d8f461a0a03d3d671a7e57d8e811d5f42543a80c",
+   "bytes": 337
+  },
+  "experiments/data/mana_spending/current/shapes/shapes.jsonl": {
+   "sha256": "f2b68a91d05ff8657c6ab6da9d8b6043276d90d0ec835a5c33ef6e41be9dff09",
+   "bytes": 6792809
+  },
+  "experiments/data/mana_spending/current/shapes/summary.json": {
+   "sha256": "e9248cbe02bc0ab3aa5f116b817a734e0679bcc1490dab3bb03e4459f500c6e0",
+   "bytes": 7481
+  },
   "experiments/data/mana_spending/decks.json": {
    "sha256": "603c7d27886fdb4e19a1c1f0b5a83ccf6ad34c8dd8bec0f64b6b6a01fc84c906",
    "bytes": 21533

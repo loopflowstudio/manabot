@@ -99,3 +99,11 @@ regenerate the frequency baseline under the instrumented current engine in
 `experiments/data/mana_spending/current/`, on the same 21 exact deck lists,
 8 games and seeds. Use that baseline for strict shape replay digest checks.
 This is a second measured baseline, not a rebind of the old trace or checkpoint.
+
+- Shape C is measured as an explicit automatic/override entry at the payment
+  boundary, followed by an outcome choice only for a nontrivial override. Its
+  decision range includes that entry. Binding override intent earlier at cast
+  selection would be another interaction design; it is not counted as free.
+- Zero-mana payments keep their existing pool and add no fixed sources in this
+  boundary measurement. Unresolved folded probes include every case without
+  exactly one immediate cast-payment row, not only target/mode announcements.

@@ -5,14 +5,14 @@ usable mana than the cost needs, the player chooses which pooled unit pays each
 pip (`mana_spend` decisions). This report counts those decisions on the decks
 people train on, separates the ones caused by automatic tapping taking more
 sources than the cost needs (MTG-342) from other payments. This first slice
-measures frequency; comparing replacement shapes and recommending a design
-remain planned work. It makes no claim about learning; the comparison of compound
+measures frequency and bounded replacement shapes; the exploratory learning pilot is
+recorded separately below. It makes no claim about learning; the comparison of compound
 and sequential decisions is MTG-265's.
 
 ## Run it
 
 ```sh
-uv run python -m experiments.mana_spending count --games 8 --seed 0
+uv run python -m experiments.mana_spending count --games 8 --seed 0 --out .runs/mana-spending-count
 ```
 
 plays mirror games locally on CPU and prints one row per deck set and policy
@@ -77,8 +77,8 @@ excluded from the summary and make the command exit nonzero; none is replaced.
 Replay the retained deals with the bounded native diagnostic:
 
 ```sh
-uv run python -m experiments.mana_spending shapes --source experiments/data/mana_spending/current --out experiments/data/mana_spending/current/shapes --cap 16384
-uv run python -m experiments.mana_spending summary --source experiments/data/mana_spending/current/shapes
+uv run python -m experiments.mana_spending shapes --source .runs/mana-spending-count --out .runs/mana-spending-shapes --cap 16384
+uv run python -m experiments.mana_spending summary --source .runs/mana-spending-shapes
 ```
 
 This enumerates fixed-source subsets at every actual payment, then native unit
@@ -94,13 +94,16 @@ entry counters; this conservatively distinguishes more than a particular spell
 may read. Distinct remainders are retained regardless of receipt relevance. Exact source identity counts expose the
 additional distinctions lost by grouping producers with equal output. Such a
 grouping is a measurement definition, not permission to hide object choices.
+Zero-mana payments retain the existing pool without adding fixed sources.
 The per-payment cap counts source-subset and receipt traversal visits. A cap hit
 retains lower bounds; incomplete rows never enter exact offer quantiles.
 
 For folded offers, every legal cast at an observed priority window is tried on
 an exact clone. Casts that reach one payment immediately supply their outcome
 count; casts that first require other announcements (targets, modes or costs)
-are marked unresolved. Windows with an unresolved or capped cast are excluded
+are marked unresolved. Any probe that does not reach exactly one immediate
+cast payment is unresolved, including payment bypasses or multiple payment
+steps. Windows with an unresolved or capped cast are excluded
 from exact folded-offer quantiles. Their lower-bound counts remain in evidence.
 Neither enumeration changes the retained trajectory; every final digest must
 match the frequency run.
@@ -246,7 +249,8 @@ beyond this flat, one-decision estimate.
 | heartbeat | random | 146.25 | 132.00 | 149.88–166.38 | 149.88 | 132.00 |
 
 Payment **offers median / p95 / maximum**, conditional on complete enumeration
-and at least two outcomes. A uses actual prompts. C is the always-override path
+and at least two outcomes. Empirical quantiles use the higher order statistic.
+A uses actual prompts. C is the always-override path
 (entry offers plus its nontrivial outcome offers). B has no payment offers.
 
 | decks | policy | A | C | D | D casts certified above 64 |
@@ -281,19 +285,82 @@ E reaches 1,552 offers even on the fully measured subset. Many ordinary-deck
 casts require targets or other announcements before their cost is payable;
 flattening those into priority would require another announcement design.
 The unresolved counts are an explicit measurement limit, not zero outcomes.
-E’s offer quantiles do not describe all priority windows.
+E’s offer quantiles do not describe all priority windows. Windows here have at
+least one cast offer; other priority windows retain their baseline offers.
 
 Evidence: `current/decks.json`, `current/games.jsonl`, and
 `current/shapes/{metadata.json,shapes.jsonl,summary.json}` under the experiment’s
 artifact directory. The earlier empty failed shape attempt remains local only.
 
+## Prior art checked
+
+Reviewed 2026-11-13, through primary documentation and static source:
+
+- **Arena.** Wizards documents auto-tap and full-control settings, and its
+  Brothers’ War note describes pausing to preview the planned mana for spells
+  whose bonuses depend on mana spent. Sources: [mobile FAQ](https://magic.wizards.com/en/news/mtg-arena/mtg-arena-mobile-faqs-2021-01-28),
+  [auto-tap flexibility](https://magic.wizards.com/en/news/mtg-arena/mtg-arena-state-game-the-brothers-war).
+- **Forge.** Its guide documents an Auto button using the AI payer, manual
+  selection of sources and pooled symbols, and retained prompts for
+  color-sensitive spells such as Sunburst and Firespout. Source:
+  [Forge user guide, Auto-Pay](https://github.com/Card-Forge/forge/wiki/user-guide#auto-pay).
+- **phase-rs.** At v0.123.0, the flat `legal_actions` list omits mana actions;
+  `legal_actions_full` preserves engine-authoritative per-object mana actions
+  for board interaction. Source: [native action projections](https://github.com/phase-rs/phase/blob/v0.123.0/crates/engine/src/ai_support/mod.rs#L2380-L2386),
+  [grouped projection](https://github.com/phase-rs/phase/blob/v0.123.0/crates/engine/src/ai_support/mod.rs#L2536-L2543).
+
+The design inference is to keep automation inspectable and source control
+explicit, with grouping owned by the engine. Academy’s shared contract requires
+all choices to remain reachable by both policy and browser. These references
+provide interaction precedents; the capacity argument comes from this report’s
+measurements.
+
 ## Recommended design
 
-Not selected in this frequency slice. The next slice must measure source-choice
-outcomes as well as pooled spending: today's low prompt rate says nothing about
-the hidden choice of which lands to leave open. The shape comparison and small
-learning comparison remain required before a final recommendation for policy
-inputs and Academy.
+**Recommend a grouped native payment-outcome chooser at the fixed-source
+payment boundary (D), after the spell’s modes, targets, X and cost are known.**
+This is a design for review; implementing it is a separate Task. The learning
+pilot below does not test this chooser.
+
+Keep one automatic plan as an explicit, bound native choice, describing the
+sources and pool it leaves. Other complete outcomes remain reachable through
+native groups, with branching that fits the 64-slot default. A uniquely
+payable outcome skips as an ordinary trivial decision. An enumerator’s work cap
+must never truncate the real legal action space. Expand groups lazily through
+`PaymentModel`; retain exact source identities, restrictions, expiry, spend
+riders and saved obligations. Equal current mana output alone does not justify
+merging objects. Keep existing explicit mana-ability decisions at their real
+native boundaries; do not model their costs or effects as hypothetical UI steps.
+
+For the **policy**, each group and outcome must have native action descriptors
+for what remains available, the floating pool and the relevant receipt. Carry
+pending choice state through the same observations, learning tokens and LLM
+text in the change that adds it. Respect the supplied observation capacities;
+never use first-legal truncation to fit this chooser. Grouping can add decisions
+beyond the flat D estimates, which already add roughly 16–24 decisions/game on
+ordinary decks. Whether that helps learning belongs to MTG-265’s study, not to
+these counts or the A-vs-B pilot.
+
+For **Academy**, render those same groups and bound Commands. Labels can say
+“leave this Forest untapped”, “float {R}”, or “spend two colors”; use visible
+object joins to distinguish equal-output sources. Show the automatic plan and
+its automation identity explicitly. Preserve keyboard access, stale rejection,
+reconnect to the actual pending decision, and replay/fork identity. Commit the
+selected sources and receipt through native payment execution once. Group
+navigation supplies no cancellation or undo of already committed costs or
+revealed information.
+
+Do not flatten outcome products into priority (E): its measured menus already
+exceed capacity, and many costs are not known at that boundary. Keeping A
+leaves the requested source choice hidden. B only removes pooled-unit prompts;
+it does not supply source control. A browser-only override would divide the
+shared policy/Academy contract.
+
+The `MANAGYM_EXPERIMENT_AUTOSPEND` switch remains an explicit reproduction
+control for this experiment’s frozen A/B revision. The recommended production
+design drops forced automatic spending: the follow-up should replace that
+switch with the bound automatic-plan choice in the shared chooser. No Academy
+code, default training behavior or production deployment is changed here.
 
 ## Limits
 

@@ -65,17 +65,15 @@ space with payment steps.
 
 ## Prior art
 
-- Arena: auto-tapper picks lands and pool spending; players override by
-  tapping lands by hand or clicking pool mana, with Full Control. Reports say
-  floating colorless is still spent automatically and restricted mana is hard
-  to direct. (Player guides and feedback.wizards.com threads; no official
-  description found.)
+- Arena: official mobile FAQ documents auto-tap/full-control settings; official
+  Brothers’ War note describes planned-mana preview for color-sensitive spells.
+  Primary source links are now in the report (verified 2026-11-13).
 - Forge: a "Pay Mana Cost" prompt where the player clicks sources, plus an
   Auto button (1.5.7 changelog). Its developer's stated reason: how you tap
   and empty the pool "is rarely of consequence strategically". Users report
   Auto tapping a mana creature they wanted to attack with.
-- phase-rs (static reading, v0.123.0, 2026-11-11): its legal-action
-  enumeration for AI omits mana actions.
+- phase-rs (static reading, v0.123.0, rechecked 2026-11-13): the flat action
+  list omits mana actions, while its native per-object grouping retains them.
 - All three: automatic by default, manual source choice as the override, no
   per-unit pool prompt in ordinary play. None offers "payment outcome" as one
   choice.
@@ -174,19 +172,14 @@ the remaining work.
   `UnsupportedPolicyInput`; no checkpoint on this world exists to count with.
   Frequency rests on heuristic and random mirrors; receipt retained.
 
-## Open decision: learning comparison deck set
+## Learning comparison decision
 
-As planned, arm A vs arm B on Elemental differs by about 0.6 decisions per
-~200–300 (0.2%); two seeds cannot show anything there, so that comparison is
-near-certain null. The exact choice, not yet made:
-(a) keep Elemental as planned, reporting it as a check that automatic pool
-spending costs nothing on the current recipe; or
-(b) run it on a recipe that includes Heartbeat decks, where the arms differ
-by ~10% of decisions.
-Either stays under `--max-usd 25`, two seeds per arm, exploratory. Deferring
-it until after part 3 also lets the comparison test the shape part 3 favors
-rather than B. No one has chosen; the default if nobody does is (a), per the
-Task brief's Elemental recipe.
+Keep Elemental as named in the Task: seeds 34701/34702 per arm, 32 matched
+updates. Its ~0.2% pool-prompt share makes this a narrow exploratory control;
+it does not test the recommended grouped source chooser or support equivalence.
+The source is `00ee188998`, with the same regime apart from arm label and the
+job’s explicit automatic-spending environment switch. Score final policies on
+the existing 50-pair Elemental heuristic panel under their own spending modes.
 
 ## Risks
 
@@ -226,17 +219,32 @@ Done (`58e5923c53`, `9f2f1b69b8`, `b63d486f81`):
   denominator, not a post-MTG-342 rate; a post-fix rate needs a matched run
   after MTG-342 lands. The report says so.
 
-Remaining, in order:
+Completed in this slice:
 
-1. Part 3 `shapes` subcommand on the same deals: offers per shape A–E,
-   decisions per game, offers per decision (median/p95/max), fraction with ≥2
-   distinct outcomes, cap hits; source-choice outcomes reported separately
-   from receipt outcomes. Enumerate from `PaymentModel`, not Python rules.
-   Report's Decision shapes section becomes results.
-2. Learning comparison per the open decision above; arm-B native switch in
-   `advance_mana_spend` as scaffolding; cost from the launcher.
-3. Recommended design in the report: policy input/action space and Academy
-   labels, and whether the arm-B switch stays.
+- Opt-in `PaymentModel` fixed-source/receipt enumeration and per-payment actual
+  spend offers; source-capability and exact-identity counts; work caps.
+- Current baseline on the original exact decks/deals: all 336 action sequences,
+  stages, offers and counters match; rebuilt merged engine uses new digests.
+  Preserve the original bytes and use current digests for shape replay checks.
+- 336 verified shape replays; 14,775 payments / 9,089 cast payments; 420 cast
+  caps. D reaches 712 exact capability outcomes, 422 casts certify >64. E
+  reaches 1,552 priority offers on its completely measured subset. Tables and
+  limits are in the report; five current-baseline/shape artifacts are published.
+- Report recommends grouped native D after announcements, retaining exact source
+  identities and complete choices shared by policy and Academy. No UI changes.
+- Arm B and Etude jobs are implemented; debug tests and local release build pass.
+
+Remaining:
+
+1. Finish the 32-update, two-seed A/B pilot and heuristic scores. The first launch
+   failed admission after the second L4 was refused; acquired machine deletion
+   was confirmed. Retry `mtg347-mana-learning-serial` is in progress, one L4 at a
+   time, source `00ee188998`, `--max-usd 17`. Runs: `8a03411493cd`,
+   `b4dbac29bda4`, `56c051d5616a`, `773f339dd238`, machine
+   `mtg347-l4-b0805de6f0f4`. Training job caps total USD12;
+   evaluation caps total USD8, within the Task’s USD25 authorization.
+2. Retain launcher cost once, publish pilot receipts/results, finish the report
+   and update this remaining work. Gate/review/publication belong to later steps.
 
 ## Done when
 
@@ -259,41 +267,19 @@ manifest committed.
   and `tests/infra/test_experiment_data_untracked.py`: passed. Ruff, format,
   `git diff --check` passed. Full affected suites belong to gate.
 
-## Implementation cut (2026-11-13)
+## Delete — do not maintain
 
-Delete — do not maintain: the report's planned-only shapes instructions, replaced
-by the native opt-in diagnostic and replay command. Preserve the frequency
-instrument, trajectories, native payment authority and published evidence.
+The report’s planned-only shapes instructions are replaced by runnable replay
+measurement and results. Preserve original frequency evidence, the native
+payment authority, existing source/action behavior, and frozen A/B revision.
+The experiment switch is a reproduction control; the recommended production
+chooser replaces forced automation with an explicit bound native plan.
 
-Reversible measurement choice: enumerate fixed-source subsets at each actual
-payment boundary (including surplus production), with a work cap per payment.
-Activated abilities stay outside this boundary; record their presence. Validate
-saved obligations using PaymentModel. Record exact-source identity counts beside
-capability counts because equal outputs need not mean strategically equal cards.
-Cast payments are labeled natively, separately from other payment purposes.
+## Launch facts (2026-11-13)
 
-Checks: debug `fixed_outcomes` — 3 passed (cap/identity collapse, receipt
-colors, saved-obligation refusal); experiment discovery — 1 passed; Ruff passed.
-`over_tap` debug check also passed, including first-feasible automatic spending
-and fork independence. Local release extension rebuild is running. Learning
-source is `00ee188998`; launcher request uses `mtg347-mana-learning`, two L4s
-at once, `--max-usd 17`. Quote: USD2.24 per first-wave run, USD4.48 first wave,
-USD12 job/cohort rental budget. This is a quote, not incurred cost; run IDs and
-actual launcher cost remain to be recorded.
-
-Launch `518a4948ea80` failed admission: the second L4 was unavailable. Run IDs
-`f2f5adec2478`, `cfff739d2db5`, `5e0ed566acd9`, `2f6bd7e98142`; no job command
-started. Launcher reported machine `mtg347-l4-71b326e7fb82` confirmed deleted,
-`mtg347-l4-620f4314c806` not acquired. Finish shapes before retrying with one
-rental at a time; retain this failed admission and its launcher cost if exposed.
-
-Baseline revision: strict replay of 58e5923c53's original digest fails after the
-main merge. Current capture on/off agrees. Recount the same exact decks/deals
-on the current engine, preserve original evidence, then run shapes against that
-new baseline. No learning launch until the shape results are recorded.
-
-Shape run complete: 336 verified replays; 14,775 payments, 9,089 cast payments;
-420 cast cap hits. Flat D has up to 712 completely enumerated capability
-outcomes; 422 casts certify >64. Conditional ordinary p95 49–59, Heartbeat
-105–132. E reaches 1,552 full priority offers on its completely measured subset.
-Report tables are generated from `current/shapes/summary.json`.
+Launch `518a4948ea80`, runs `f2f5adec2478`, `cfff739d2db5`, `5e0ed566acd9`,
+`2f6bd7e98142`: no job command started. The second L4 was unavailable.
+`mtg347-l4-71b326e7fb82` was confirmed deleted; `mtg347-l4-620f4314c806` was
+not acquired. Launcher displayed estimated cost `~$0.00` for the ended machine;
+retain the final cost observation with the pilot rather than reconstructing it.
+Serial quote: USD4.31 first-wave rental, USD12 job/cohort rental budget.

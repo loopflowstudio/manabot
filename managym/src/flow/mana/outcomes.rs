@@ -231,8 +231,8 @@ impl PaymentModel {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::flow::mana::tests::forests;
+    use crate::flow::mana::{tests::forests, Obligation, PaymentModel};
+    use crate::state::mana::{Mana, ManaCost};
 
     #[test]
     fn fixed_outcomes_collapse_equal_lands_but_retain_identity_and_cap() {
