@@ -7164,7 +7164,7 @@ index 69f06b5807..f1cfa00cb8 100644
          if code is None:
              raise TypeError(f"{name}: dtype {array.dtype} has no safetensors code")
 diff --git a/manabot/policy/prepare.py b/manabot/policy/prepare.py
-index fccd7e600b..c9d4def5e7 100644
+index b5e7ed9e64..c9d4def5e7 100644
 --- a/manabot/policy/prepare.py
 +++ b/manabot/policy/prepare.py
 @@ -1,26 +1,23 @@
@@ -7499,9 +7499,27 @@ index fccd7e600b..c9d4def5e7 100644
 -    positions: A  # [B*F] token position of each fact row
 -    mask: A  # [B*F] bool
 -    schedule: Packed[A]
--
--
--@dataclass(frozen=True)
++class FactRoutes:
++    kinds: Array  # [B,F]
++    columns: Array  # [B,F,6] numeric columns
++    id_rows: Array  # [B,F] token rows of named ids
++    id_mask: Array  # [B,F]
++    detail_rows: Array
++    detail_mask: Array
++    token_rows: Array  # program token rows
++    token_mask: Array
++    source_rows: Array  # [B,F] catalog row + 1
++    targets: Array  # [B*F] flat object index
++    linked: Array  # [B,F] float
++    # Programs (absent when the batch has none).
++    program_rows: Array | None  # [T] flat fact row of each program token
++    program_numbers: Array | None  # [T]
++    program_positions: Array | None  # [B*F] token position of each fact row
++    program_mask: Array | None  # [B*F] bool
++    program_schedule: Packed | None
+ 
+ 
+ @dataclass(frozen=True)
 -class FactRoutes[A]:
 -    kinds: A  # [B,F]
 -    columns: A  # [B,F,6] numeric columns
@@ -7515,9 +7533,25 @@ index fccd7e600b..c9d4def5e7 100644
 -    targets: A  # [B*F] flat object index
 -    linked: A  # [B,F] float
 -    programs: FactPrograms[A] | None
--
--
--@dataclass(frozen=True)
++class EffectRoutes:
++    numeric: Array  # [L,8]
++    controller: Array  # [L] flat object index
++    controller_mask: Array
++    source_object: Array
++    source_object_mask: Array
++    modification_rows: Array  # [L]
++    source_rows: Array  # [L] catalog row + 1
++    detail_rows: Array  # [Dt]
++    detail_kinds: Array  # [Dt]
++    detail_numbers: Array  # [Dt]
++    detail_is_number: Array  # [Dt] float
++    token_indexes: Array  # [sum lengths] rows of the header+detail token table
++    schedule: Packed
++    routes: Array  # [M] flat object index
++    member_records: Array  # [M]
+ 
+ 
+ @dataclass(frozen=True)
 -class EffectRoutes[A]:
 -    numeric: A  # [L,8]
 -    controller: A  # [L] flat object index
@@ -7546,27 +7580,9 @@ index fccd7e600b..c9d4def5e7 100644
 -    probabilities: A
 -    validity: A
 -    globals: A
-+class FactRoutes:
-+    kinds: Array  # [B,F]
-+    columns: Array  # [B,F,6] numeric columns
-+    id_rows: Array  # [B,F] token rows of named ids
-+    id_mask: Array  # [B,F]
-+    detail_rows: Array
-+    detail_mask: Array
-+    token_rows: Array  # program token rows
-+    token_mask: Array
-+    source_rows: Array  # [B,F] catalog row + 1
-+    targets: Array  # [B*F] flat object index
-+    linked: Array  # [B,F] float
-+    # Programs (absent when the batch has none).
-+    program_rows: Array | None  # [T] flat fact row of each program token
-+    program_numbers: Array | None  # [T]
-+    program_positions: Array | None  # [B*F] token position of each fact row
-+    program_mask: Array | None  # [B*F] bool
-+    program_schedule: Packed | None
- 
- 
- @dataclass(frozen=True)
+-
+-
+-@dataclass(frozen=True)
 -class EventRows[A]:
 -    """Public history joins and integer ages; log1p stays in the backend."""
 -
@@ -7581,25 +7597,9 @@ index fccd7e600b..c9d4def5e7 100644
 -    focus: A
 -    focus_mask: A
 -    status: A
-+class EffectRoutes:
-+    numeric: Array  # [L,8]
-+    controller: Array  # [L] flat object index
-+    controller_mask: Array
-+    source_object: Array
-+    source_object_mask: Array
-+    modification_rows: Array  # [L]
-+    source_rows: Array  # [L] catalog row + 1
-+    detail_rows: Array  # [Dt]
-+    detail_kinds: Array  # [Dt]
-+    detail_numbers: Array  # [Dt]
-+    detail_is_number: Array  # [Dt] float
-+    token_indexes: Array  # [sum lengths] rows of the header+detail token table
-+    schedule: Packed
-+    routes: Array  # [M] flat object index
-+    member_records: Array  # [M]
- 
- 
- @dataclass(frozen=True)
+-
+-
+-@dataclass(frozen=True)
 -class Prepared[A]:
 +class Prepared:
      """One admitted observation batch, ready for a backend policy."""
@@ -7777,7 +7777,7 @@ index fccd7e600b..c9d4def5e7 100644
      legal_batches, legal_slots = np.nonzero(legal)
      positions = np.zeros(legal.shape, dtype=np.int64)
      positions[legal_batches, legal_slots] = np.arange(len(legal_batches))
-@@ -558,42 +415,18 @@ def prepare(
+@@ -558,44 +415,18 @@ def prepare(
      else:
          first = last = np.zeros(len(candidates), np.int64)
  
@@ -7804,7 +7804,9 @@ index fccd7e600b..c9d4def5e7 100644
 -    present = validity != 0
 -    if value_token:
 -        present = np.concatenate((present, np.ones((batch, 1), bool)), 1)
--    referenced = _referenced_definitions(obs, tables, candidates)
+-    referenced = (
+-        _referenced_definitions(obs, tables, candidates) if select_programs else None
+-    )
      return Prepared(
          batch=batch,
 -        legal_support=bool(legal.any(-1).all()),
@@ -7826,7 +7828,7 @@ index fccd7e600b..c9d4def5e7 100644
          deck_rows=tables.rows(decklists[..., 0]),
          deck_counts=(decklists[..., 1:] / f32(60)).astype(f32),
          permanent_rows=tables.rows(permanents[..., PERMANENT_DEFINITION_INDEX]),
-@@ -609,7 +442,6 @@ def prepare(
+@@ -611,7 +442,6 @@ def prepare(
          frame_indexes=frame_indexes,
          legal=legal,
          legal_batches=legal_batches.astype(np.int64),
@@ -7834,7 +7836,7 @@ index fccd7e600b..c9d4def5e7 100644
          logit_positions=positions,
          action_features=action_rows[:, :-2].astype(f32),
          action_frames=legal_batches * relation_count + (frames - 1).clip(min=0),
-@@ -624,64 +456,17 @@ def prepare(
+@@ -626,74 +456,17 @@ def prepare(
          focus=legal_batches[:, None] * objects + focus.clip(min=0),
          focus_mask=(focus != -1).astype(f32),
          attention_columns=columns,
@@ -7849,9 +7851,9 @@ index fccd7e600b..c9d4def5e7 100644
 -        live_offsets=np.concatenate(([0], present.sum(1).cumsum()))
 -        if live_tokens
 -        else None,
--    )
--
--
+     )
+ 
+ 
 -def _referenced_definitions(
 -    obs: ObservationBuffers, tables: Tables, candidates: Array
 -) -> Array | None:
@@ -7881,16 +7883,27 @@ index fccd7e600b..c9d4def5e7 100644
 -        )
 -    referenced = np.unique(
 -        tables.rows(np.concatenate([ids.reshape(-1) for ids in references]))
-     )
+-    )
 -    return referenced[referenced > 0]
- 
- 
+-
+-
 -def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
 -    batch = len(facts)
 +def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes:
 +    batch, count, _ = facts.shape
      valid = facts[..., FACT_VALID_INDEX] == 1
-     facts = np.where(valid[..., None], facts, 0)
+-    source = facts
+-    # Index only live facts on the host. Restore padding before the forward:
+-    # its matrix shapes and gradient reduction order must remain unchanged.
+-    facts = facts[valid]
+-
+-    def padded(values: Array, fill: int = 0) -> Array:
+-        shape = (*valid.shape, *values.shape[1:])
+-        result = np.full(shape, fill, dtype=values.dtype)
+-        result[valid] = values
+-        return result
+-
++    facts = np.where(valid[..., None], facts, 0)
      kinds = facts[..., FACT_KIND_INDEX].astype(np.int64)
      duration = facts[..., FACT_DURATION_INDEX]
 -    ident, detail = (
@@ -7903,7 +7916,7 @@ index fccd7e600b..c9d4def5e7 100644
      scale = np.float32(FACT_TIMESTAMP_SCALE)
      columns = np.stack(
          [
-@@ -695,91 +480,99 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
+@@ -707,94 +480,99 @@ def _facts(facts: Array, tables: Tables, objects: int) -> FactRoutes[Array]:
          -1,
      ).astype(np.float32)
      named = (kinds > 0) & ~ordinal
@@ -7953,6 +7966,17 @@ index fccd7e600b..c9d4def5e7 100644
 -        detail_rows = detail % tables.record_buckets
 -        sources = facts[..., FACT_SOURCE_INDEX].astype(np.int64) % tables.record_buckets
 -        named = named_detail = np.ones(kinds.shape, bool)
+-    links = padded(facts[..., FACT_OBJECT_INDEX].astype(np.int64))
+-    base = np.arange(batch)[:, None] * objects
+-    all_programs = padded(program)
+-    return FactRoutes(
+-        kinds=padded(kinds),
+-        columns=padded(columns),
+-        id_rows=padded(id_rows),
+-        id_mask=padded(named.astype(np.float32), int(not tables.catalog_records)),
+-        detail_rows=padded(detail_rows),
+-        detail_mask=padded(
+-            named_detail.astype(np.float32), int(not tables.catalog_records)
 +    number = np.isin(token_kind, _NUMBER_KINDS)
 +    token_rows = np.where(
 +        number,
@@ -7961,28 +7985,26 @@ index fccd7e600b..c9d4def5e7 100644
 +            tables.record_token_keys,
 +            tables.record_token_rows,
 +            np.where(program & ~number, _key(token_kind, detail), first_token),
-+        ),
+         ),
+-        token_rows=padded(token_rows),
+-        token_mask=all_programs.astype(np.float32),
+-        source_rows=padded(sources),
 +    )
-     links = facts[..., FACT_OBJECT_INDEX].astype(np.int64)
-     base = np.arange(batch)[:, None] * objects
--    return FactRoutes(
++    links = facts[..., FACT_OBJECT_INDEX].astype(np.int64)
++    base = np.arange(batch)[:, None] * objects
 +    routes = dict(
-         kinds=kinds,
-         columns=columns,
--        id_rows=id_rows,
++        kinds=kinds,
++        columns=columns,
 +        id_rows=masked(named, id_rows),
-         id_mask=named.astype(np.float32),
--        detail_rows=detail_rows,
++        id_mask=named.astype(np.float32),
 +        detail_rows=masked(named_detail, detail_rows),
-         detail_mask=named_detail.astype(np.float32),
--        token_rows=token_rows,
++        detail_mask=named_detail.astype(np.float32),
 +        token_rows=masked(program, token_rows),
-         token_mask=program.astype(np.float32),
--        source_rows=sources,
++        token_mask=program.astype(np.float32),
 +        source_rows=tables.rows(facts[..., FACT_SOURCE_INDEX]),
          targets=(base + (links - 1).clip(min=0)).reshape(-1),
          linked=(valid & (links > 0)).astype(np.float32),
--        programs=_fact_programs(facts, program, tables.order_lengths),
+-        programs=_fact_programs(source, all_programs, tables.order_lengths),
      )
 -
 -
@@ -8057,7 +8079,7 @@ index fccd7e600b..c9d4def5e7 100644
      halves, source, links = live[:, :2], live[:, 11], live[:, [10, 12]]
      detail_indexes: list[int] = []
      member_indexes: list[int] = []
-@@ -801,16 +594,16 @@ def _effects(
+@@ -816,16 +594,16 @@ def _effects(
      kinds, ids = detail_host[:, 0], detail_host[:, 1:]
      targets = members.reshape(-1, MEMBER_DIM)[member_indexes][:, 0].astype(np.int64)
      records = np.asarray(member_records, dtype=np.int64)
@@ -8078,7 +8100,7 @@ index fccd7e600b..c9d4def5e7 100644
      if program.any():
          detail_embedding_rows[program] = tables.tokens(
              kinds[program] - 10, unsigned[program]
-@@ -822,15 +615,11 @@ def _effects(
+@@ -837,15 +615,11 @@ def _effects(
          controller_mask=(links[:, 0] > 0).astype(np.float32),
          source_object=base + (links[:, 1] - 1).clip(min=0),
          source_object_mask=(links[:, 1] > 0).astype(np.float32),
@@ -8097,7 +8119,7 @@ index fccd7e600b..c9d4def5e7 100644
          detail_is_number=((kinds == 14) | (kinds == 15)).astype(np.float32),
          token_indexes=np.asarray(token_indexes, dtype=np.int64),
          schedule=pack(lengths),
-@@ -839,44 +628,7 @@ def _effects(
+@@ -854,44 +628,7 @@ def _effects(
      )
  
  
