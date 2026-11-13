@@ -24,3 +24,13 @@
   availability read both reported no L4 capacity. Do not substitute another GPU
   for the requested L4. Restore the kept implementation under the measure skill's
   keep rule, retain the failed admission evidence, and leave no queued work.
+
+- Decision pass 1 treats the absent comparison as an evidence gap, not a rejected
+  optimization. Choose reversible recovery of the frozen candidate and harness
+  for the implementation handoff; measurement remains conditional on L4 capacity.
+  No different GPU, broader optimization or new acceptance bounds are assumed.
+
+- Measurement pass 2 launches the unchanged freeze `02c202956` only after a
+  positive availability read, using a named cohort under the same $4 cap.
+  If admission still refuses capacity, do not retry or queue: restore the kept
+  implementation and record the unavailable comparison under the keep rule.

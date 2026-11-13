@@ -1,12 +1,13 @@
 # PPO CUDA updates (MTG-338)
 
-**Inconclusive; CUDA lookup candidate reverted.** The paired comparison at
-`02c202956` could not start: RunPod reported no available L4 machines and a
-separate availability check confirmed it at **2026-11-13 10:58 UTC**. There
-are **no completed paired samples**, no CUDA equivalence result and no candidate
-rate or range. The runtime, candidate tests and comparison harness were returned
-to the kept baseline. The frozen candidate and harness remain in git at
-`02c202956`; no work is queued or running for this comparison.
+**Inconclusive; CUDA lookup candidate reverted after a second capacity failure.**
+The recovered comparison at `02c202956` could not start. A read-only L4 check
+said “rentable now” at **2026-11-13 11:08:05 UTC**, but launch admission reported
+no available machines at **11:10:12 UTC**, before recording a run or starting
+the job. There are **no completed paired samples**, no CUDA equivalence result
+and no candidate rate or range. The runtime, candidate tests and comparison
+harness are restored to `734f2cd5c`; their frozen copies remain at `02c202956`.
+No comparison work is queued or running. This is not a performance rejection.
 
 The last measured baseline remains **0.26437 optimizer steps/s** on one NVIDIA
 L4 (five repeats, **0.26366–0.26474**), or **60.521 s/update**
@@ -247,3 +248,35 @@ this hypothesis, restore the candidate and harness from `02c202956`, obtain one
 available L4 under the $4 cap, and complete the frozen CPU/CUDA correctness and
 alternating-run checks before deciding whether to keep it. No speedup, memory
 reduction, behavior equivalence or strength-per-dollar gain is established.
+
+## Measurement pass 2 (2026-11-13 UTC)
+
+All eight recovered candidate/harness files matched `02c202956` byte for byte;
+the launch requested that same source revision and unchanged paired workload.
+The expected claim and numerical bounds above stayed frozen. The read-only
+availability response at **11:08:05 UTC** was: “NVIDIA L4 with at least 6 vCPUs,
+48 GB at $0.69/hour (ceiling $0.75)”, “available”, “0 of 1 in use”, “rentable now”.
+Availability did not guarantee admission.
+
+The first command failed CLI validation because a cohort cap requires a cohort
+name; it did not reach admission. The corrected command used cohort
+`mtg338-paired-pass2`, nested Doppler `manabot/prd` and `etude/prd`, `--paired`,
+`--revision 02c202956`, `--rent mtg338-l4` and `--max-usd 4`. Requested run
+`4bacd2187ed1`, admission `db4502e2006a`, began source preparation at 11:09:15 UTC
+and failed admission at **11:10:12.624491 UTC**:
+
+> cannot launch on mtg338-l4: provider reports no available machines; etude queue would wait
+
+The retained receipt explicitly states “job command not started” and “no run
+recorded”; a cohort status read found no run. No capacity retry or queue followed,
+and this attempt allocated no rental. There is no launcher cost for a recorded
+run to report. CPU equivalence, CUDA audits, alternating timings and the candidate
+profile remain unrun. Missing samples, error counts and work counts are
+unavailable, not zero.
+
+The measure keep rule again restores the three tracked candidate paths and
+removes the five recovered comparison scripts, retaining their frozen source
+and this evidence. One successfully admitted L4 allocation under the $4 cap,
+followed by the frozen correctness checks and five alternating pairs, would
+settle the comparison. Another implementation recovery alone would add no
+performance evidence.

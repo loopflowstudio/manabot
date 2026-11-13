@@ -31,3 +31,19 @@
   equivalence result exists. No comparison work is queued or running.
 - For the next rental, nest Doppler `manabot/prd` (R2) and `etude/prd`
   (RunPod) on the command. Either alone misses a required credential.
+- Decision-pass read-only availability, 2026-11-13 11:02:39 UTC:
+  `mtg338-l4` again returned “none available”, “0 of 1 in use”,
+  “not rentable now” at $0.69/hour (ceiling $0.75). No launch or queue created.
+
+- Implementation pass 2 recovered the eight candidate/harness paths exactly
+  from `02c202956`. Focused lookup tests: 8 passed, 8 CUDA skips (27.83 s).
+  No rental, equivalence run or performance measurement was started.
+
+- Measurement pass 2, 2026-11-13: availability at 11:08:05 UTC said “available”,
+  “0 of 1 in use”, “rentable now” at $0.69/hour. Requested run `4bacd2187ed1`
+  (source `02c202956`, cohort `mtg338-paired-pass2`, cap $4) then failed admission
+  `db4502e2006a` at 11:10:12 UTC: “provider reports no available machines”.
+  Receipt: “job command not started”, “no run recorded”. No rental or queue;
+  no paired data or CUDA correctness evidence. Restored the eight candidate/
+  harness paths to `734f2cd5c` again. A rentable availability response alone
+  does not guarantee admission. Capped launch commands require `--cohort NAME`.
