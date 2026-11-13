@@ -38,7 +38,7 @@ from manabot.sim.search.branch import (
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
 if TYPE_CHECKING:
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
 
 _U64_MASK = (1 << 64) - 1
 
@@ -50,7 +50,7 @@ def puct_source_sha256() -> str:
         "manabot/sim/search/puct.py",
         "manabot/sim/search/flat_mc.py",
         "manabot/sim/search/branch.py",
-        "manabot/model/actor_critic.py",
+        "manabot/backends/torch/policy.py",
         "manabot/model/world.py",
         "manabot/env/observation.py",
     )

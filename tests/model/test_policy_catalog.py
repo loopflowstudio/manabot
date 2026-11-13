@@ -8,11 +8,11 @@ from naming_reference import packed_definitions
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.model.world import checkpoint_world
 from manabot.semantic.learning import ContentPackBindingError

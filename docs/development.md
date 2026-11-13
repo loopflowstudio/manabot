@@ -184,6 +184,16 @@ Check changed Python modules and type stubs with
 `uv run --extra dev ruff format <paths>`. Include moved `.pyi` files: the
 compatibility stub is part of the public package surface.
 
+**Policy backends.** Shared damped-update or backend changes need
+`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
+The installed-backend tests run the real update, force gradient clipping,
+compare every post-Adam weight and reject malformed raw rollout rows. MLX
+cases skip where it is unavailable; run them on Apple Silicon with the `mlx`
+extra before claiming MLX parity. For a changed forward or parameter mapping,
+also run the [captured parity check](../manabot/backends/README.md#parity-check)
+against a capture whose world binding still matches; it gates the optimizer
+step as well as forward, loss and gradients.
+
 **Loopflow workflows.** With `lf` installed, run
 `uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
 It uses real compilation/discovery and checks iteration, delivery and experiment

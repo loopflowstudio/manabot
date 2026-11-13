@@ -74,7 +74,7 @@ and paying costs. The action's own features are concatenated with the
 post-attention embeddings of the objects it names.
 
 From `_add_focus` in
-[`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py):
+[`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py):
 
 ```python
 focus_embeds = torch.gather(post_attention_focus_objects, 2, focus_indices)
@@ -144,9 +144,9 @@ batch uses includes every row a reference can name, so trimming removes only
 empty rows nothing refers to. Trimming cards and permanents renumbers object
 references; it is skipped under `historical_mean` value aggregation, whose
 average includes padding, and with belief rows. Logits keep their full action
-capacity. Inference measures the buckets on the host while preparing a batch,
-so the device forward reads nothing back to find them; learning measures them
-with one read per forward.
+capacity. Admission measures the buckets on the host
+(`manabot.policy.buckets`), before any device transfer, for inference and
+learning alike, so the device forward reads nothing back to find them.
 
 Inside the network, fact ids are looked up at the fact axis's shape instead of
 for selected rows, and learning encodes the complete card catalog instead of
@@ -633,7 +633,7 @@ is not evidence for any of them:
 
 | Part | Code |
 | --- | --- |
-| Network | `ActorCritic` in [`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py) |
+| Network | `ActorCritic` in [`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py) |
 | Observation admission | [`manabot/model/admission.py`](../manabot/model/admission.py) |
 | Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |

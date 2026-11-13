@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     PERMANENT_ATTACHED_INDEX,
     PERMANENT_LINK_INDEXES,
@@ -11,7 +12,6 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import reorder_objects
 import managym

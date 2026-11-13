@@ -14,10 +14,10 @@ import numpy as np
 from pydantic import BaseModel, JsonValue, TypeAdapter
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace, _timestamp_ranks
 from manabot.infra.config import ModelConfig
 from manabot.managym.decision_capture import DecisionInput
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import priority_root

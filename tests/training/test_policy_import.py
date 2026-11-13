@@ -7,14 +7,14 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import read_dataset
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (

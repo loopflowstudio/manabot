@@ -6,7 +6,9 @@ validity, definition and vocabulary references, permanent links, fact and
 record programs, shared-effect partitions and membership, continuation and
 naming references, recent events, belief rows, the legal-action mask and the
 object a value aggregation reads. It returns an `AdmittedObservation`, which
-keeps the tensor dictionary interface and carries the checked definition rows.
+keeps the tensor dictionary interface and carries the checked definition rows
+and, for a policy with bucketed shapes, the batch's bucket sizes, measured on
+the host (`manabot.policy.buckets`) so the forward trims without a device read.
 
 `ActorCritic.forward` and `forward_distribution` accept only admitted input
 (plain dictionaries raise `TypeError`) and perform no validation host reads;
@@ -26,17 +28,17 @@ it performs no checks and is for that owner only.
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+import numpy as np
 import torch
 
+from manabot.backends.torch.arrays import to_numpy
+from manabot.backends.torch.rl import legal_mask
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
-    PERMANENT_LINK_INDEXES,
-    RELATION_VALID_INDEX,
 )
 from manabot.model.continuation import admit_relations
 from manabot.model.facts import admit_facts
 from manabot.model.numerics import buffer_on
-from manabot.model.policy_distribution import legal_mask
 from manabot.model.recent_events import admit_recent_events
 from manabot.model.semantic_cards import (
     CardReferences,
@@ -44,9 +46,11 @@ from manabot.model.semantic_cards import (
     definition_rows,
 )
 from manabot.model.shared_effects import admit_shared_effects
+from manabot.policy import admission
+from manabot.policy.buckets import BucketSizes, row_needs, sizes_of
 
 if TYPE_CHECKING:
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
 
 
 # Object sequence order of ActorCritic: validity key per object block.
@@ -83,7 +87,12 @@ class AdmittedObservation(dict[str, torch.Tensor]):
 
     `references` holds the checked definition rows of visible cards,
     permanents, public hands and decklists; `legal` is whether every row has a
-    legal action. Construct with `admit_observation`, never by hand.
+    legal action; `buckets` holds the bucket sizes measured at admission for a
+    policy with bucketed shapes (None otherwise, after trimming, or for a
+    layout bucketing leaves untouched) and `needs` each row's needs they were
+    taken from ([B, len(AXES)], `manabot.policy.buckets.row_needs`), which a
+    collector records so the learner regroups rather than re-measures them.
+    Construct with `admit_observation`, never by hand.
     """
 
     def __init__(
@@ -92,11 +101,15 @@ class AdmittedObservation(dict[str, torch.Tensor]):
         binding: str,
         references: CardReferences,
         legal: bool,
+        buckets: BucketSizes | None = None,
+        needs: np.ndarray | None = None,
     ) -> None:
         super().__init__(tensors)
         self.binding = binding
         self.references = references
         self.legal = legal
+        self.buckets = buckets
+        self.needs = needs
 
 
 def admit_observation(
@@ -107,7 +120,29 @@ def admit_observation(
     Run it on CPU tensors before any device transfer: every check reads the
     host. Malformed input raises `ValueError` (or `NumericalError` for the
     action mask) naming the failed check; nothing is truncated or repaired.
+    A policy with bucketed shapes also has the batch's buckets measured.
     """
+    references, legal = _check(agent, obs)
+    needs = measure_row_needs(agent, obs)
+    return AdmittedObservation(
+        obs,
+        admission_binding(agent),
+        references,
+        legal,
+        None if needs is None else _sizes(agent, needs),
+        needs,
+    )
+
+
+def check_observation(agent: "ActorCritic", obs: Mapping[str, torch.Tensor]) -> None:
+    """`admit_observation`'s checks alone, for rows read later through
+    `bind_admitted` (which measures the buckets of the rows it groups)."""
+    _check(agent, obs)
+
+
+def _check(
+    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+) -> tuple[CardReferences, bool]:
     lookup = _semantic_lookup(agent, _device(obs))
     references = _references(agent, obs, lookup, check=True)
     object_count = sum(obs[key].shape[1] for key, _ in _OBJECT_KEYS)
@@ -150,22 +185,69 @@ def admit_observation(
             raise ValueError("value aggregation requires a valid object")
     legal = legal_mask(obs["actions_valid"])
     _admit_actions(agent, obs, legal, lookup, valid_count)
-    return AdmittedObservation(
-        obs, admission_binding(agent), references, bool(legal.any(-1).all())
-    )
+    return references, bool(legal.any(-1).all())
 
 
 def bind_admitted(
-    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+    agent: "ActorCritic",
+    obs: Mapping[str, torch.Tensor],
+    *,
+    needs: np.ndarray | None = None,
 ) -> AdmittedObservation:
-    """Wrap rows of a source already admitted for `agent`, without checks."""
+    """Wrap rows of a source already admitted for `agent`, without checks.
+
+    `needs` are these rows' bucket needs measured when they were admitted
+    (`measure_row_needs`); without them the batch is measured here.
+    """
     lookup = _semantic_lookup(agent, _device(obs))
+    if needs is None:
+        needs = measure_row_needs(agent, obs)
     return AdmittedObservation(
         obs,
         admission_binding(agent),
         _references(agent, obs, lookup, check=False),
         bool(obs["actions_valid"].any(-1).all()),
+        None if needs is None else _sizes(agent, needs),
+        needs,
     )
+
+
+def _sizes(agent: "ActorCritic", needs: np.ndarray) -> BucketSizes:
+    return sizes_of(
+        needs, agent.observation_space.encoder, objects=agent.object_trimming()
+    )
+
+
+def measure_row_needs(
+    agent: "ActorCritic",
+    obs: Mapping[str, torch.Tensor],
+    *,
+    recorded: np.ndarray | None = None,
+) -> np.ndarray | None:
+    """Each row's bucket needs [B, len(AXES)] (`manabot.policy.buckets.row_needs`)
+    for a policy with bucketed shapes; None otherwise or for a layout bucketing
+    leaves untouched. `recorded` are needs a collector already measured for
+    these rows, returned instead of measuring them again."""
+    if not agent.bucketed_shapes:
+        return None
+    if recorded is not None:
+        return recorded
+    return row_needs(
+        {key: to_numpy(value) for key, value in obs.items()},
+        agent.observation_space.encoder,
+    )
+
+
+def measure_buckets(
+    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+) -> BucketSizes | None:
+    """The bucket sizes of a batch for a policy with bucketed shapes.
+
+    Reads host arrays; CPU tensors are viewed without a copy. A policy without
+    bucketed shapes measures nothing.
+    """
+    needs = measure_row_needs(agent, obs)
+    return None if needs is None else _sizes(agent, needs)
 
 
 def _device(obs: Mapping[str, torch.Tensor]) -> torch.device:
@@ -265,12 +347,9 @@ def _admit_beliefs(agent: "ActorCritic", obs: Mapping[str, torch.Tensor]) -> Non
 
 def _admit_permanent_links(obs: Mapping[str, torch.Tensor], object_count: int) -> None:
     """Links are object index + 1 (zero: none) into the object sequence."""
-    for column in PERMANENT_LINK_INDEXES:
-        links = torch.cat([obs[key][..., column] for key in _PERMANENT_KEYS], dim=1)
-        if not (
-            (links == links.floor()) & (links >= 0) & (links <= object_count)
-        ).all():
-            raise ValueError("invalid permanent link object reference")
+    admission.permanent_links(
+        {key: to_numpy(obs[key]) for key in _PERMANENT_KEYS}, object_count
+    )
 
 
 def _admit_actions(
@@ -281,21 +360,13 @@ def _admit_actions(
     valid_count: int,
 ) -> None:
     """Legal rows' continuation, naming and focus references."""
-    batches, slots = legal.nonzero(as_tuple=True)
-    indexes = obs["actions"][batches, slots][..., -2]
-    if not ((indexes == indexes.floor()) & (indexes >= 0) & (indexes <= 64)).all():
-        raise ValueError("invalid action continuation reference")
-    rows = obs["relations"]
-    present = (
-        (indexes[:, None] == rows[..., 1][batches])
-        & (rows[..., RELATION_VALID_INDEX][batches] == 1)
-    ).any(-1)
-    if ((indexes != 0) & ~present).any():
-        raise ValueError("action continuation reference has no frame")
-    candidates = obs["name_candidates"][batches, slots]
-    agent.name_candidates.admit(candidates)
-    if lookup is not None:
-        admit_definition_ids(candidates[..., 1], len(lookup), lookup)
-    focus = obs["action_focus"][batches, slots]
-    if not ((focus == focus.floor()) & (focus >= -1) & (focus < valid_count)).all():
-        raise ValueError("invalid action focus reference")
+    admission.actions(
+        {
+            key: to_numpy(obs[key])
+            for key in ("actions", "relations", "name_candidates", "action_focus")
+        },
+        to_numpy(legal),
+        valid_count,
+        to_numpy(buffer_on(agent.name_candidates, "definitions", torch.device("cpu"))),
+        None if lookup is None else to_numpy(lookup),
+    )

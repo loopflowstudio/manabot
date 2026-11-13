@@ -1,15 +1,18 @@
 """What a framework backend provides: a policy, a learner and a parameter layout.
 
-A backend (`manabot.backends.<name>`) runs the policy forward and the damped
-PPO learner step in one array framework, over the `Prepared` batches of
-`manabot.policy.prepare`. Every method here takes and returns NumPy, so
-callers such as `manabot.backends.parity` never touch the framework's arrays.
-`Targets` and `Settings` are the learner's per-minibatch inputs.
+A backend (`manabot.backends.<name>`) runs the policy forward and an update's
+optimizer step in one array framework, over the `Prepared` batches of
+`manabot.policy.prepare`. `BackendPolicy.prepare` and `evaluate` and every
+`Backend` method take and return NumPy, so callers such as
+`manabot.backends.parity` compare backends without touching their arrays.
+`BackendLearner` is what an update steps: it differentiates a loss written
+once over the backend's own arrays (`manabot.training.updates`). `Targets`
+and `Settings` are one captured minibatch's constants and coefficients.
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -54,6 +57,11 @@ class BackendPolicy(Protocol):
         """Logits [B,A] (-1e8 off the legal support) and values [B]."""
         ...
 
+    def forward_distribution(self, batch: Prepared) -> tuple[Any, Any]:
+        """The training forward as the backend's own arrays, differentiable:
+        logits [B,A] and the critic's output [B,1]."""
+        ...
+
     def cache_programs(self) -> None:
         """Encode weight-only inputs once, for inference with fixed weights."""
         ...
@@ -64,21 +72,31 @@ class BackendPolicy(Protocol):
 
 
 class BackendLearner(Protocol):
-    """One optimizer over a policy's parameters, in the backend's layout."""
+    """One optimizer over a policy's parameters. Losses and norms are the
+    backend's arrays; `float()` reads them."""
 
-    def gradients(
-        self, batch: Prepared, targets: Targets, settings: Settings
-    ) -> tuple[float, dict[str, np.ndarray]]:
-        """Loss and unclipped gradients, without stepping."""
+    def set_learning_rate(self, rate: float) -> None:
+        """The rate every following optimizer step uses."""
         ...
 
-    def step(
-        self, batch: Prepared, targets: Targets, settings: Settings
-    ) -> tuple[float, float]:
-        """One clipped optimizer step: loss and pre-clip gradient norm."""
+    def loss(self, objective: Callable[[], tuple[Any, ...]]) -> tuple[Any, ...]:
+        """Evaluate `objective`, a closure over the policy forward whose first
+        result is the loss; return its results. `step` and `gradients`
+        differentiate the loss most recently returned here."""
         ...
 
-    def parameters(self) -> dict[str, np.ndarray]: ...
+    def step(self, loss: Any, max_grad_norm: float) -> Any:
+        """One clipped optimizer step on `loss`: the pre-clip gradient norm."""
+        ...
+
+    def gradients(self, loss: Any) -> dict[str, np.ndarray]:
+        """Unclipped gradients of `loss` in the backend's layout, without
+        stepping."""
+        ...
+
+    def parameters(self) -> dict[str, np.ndarray]:
+        """A host copy of the parameters in the backend's layout."""
+        ...
 
 
 class Backend(Protocol):

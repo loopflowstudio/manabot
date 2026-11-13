@@ -8,8 +8,8 @@ from typing import Dict
 
 import torch
 
+from manabot.backends.torch.policy import ActorCritic, EmbeddedObservation
 from manabot.env.observation import RELATION_VALID_INDEX
-from manabot.model.actor_critic import ActorCritic, EmbeddedObservation
 from manabot.model.semantic_cards import SemanticCardEncoder
 
 

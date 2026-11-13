@@ -17,11 +17,11 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ACTION_MODE_INDEX, NAME_DIM, ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
