@@ -21,3 +21,13 @@
   now recorded. Do not compare the old 0.256 rate as an improvement claim.
 - All four task rentals are terminated. Nine artifacts under
   `experiments/data/ppo_cuda/` are published and remain untracked.
+
+- Paired measure could not run: candidate/harness freeze `02c202956`, requested
+  run `4e50a037bd12`, admission `947aca1850c9` failed before any command or run
+  record. Provider: “no available machines”; availability at 2026-11-13
+  10:58:25 UTC: “none available”, “0 of 1 in use”, “not rentable now”.
+- Measure restored candidate runtime/tests/launcher/harness to `734f2cd5c`.
+  Full design/harness survives in `02c202956`; no candidate speed or CUDA
+  equivalence result exists. No comparison work is queued or running.
+- For the next rental, nest Doppler `manabot/prd` (R2) and `etude/prd`
+  (RunPod) on the command. Either alone misses a required credential.

@@ -19,3 +19,8 @@
   resetting the method is outside timing. Use the recovered CPU harness on the
   rental, never full game/training checks on the laptop. Retain full first-step
   raw gradients and first/final weights in separate audit runs.
+
+- Paired measurement stopped after authenticated launch admission and a separate
+  availability read both reported no L4 capacity. Do not substitute another GPU
+  for the requested L4. Restore the kept implementation under the measure skill's
+  keep rule, retain the failed admission evidence, and leave no queued work.

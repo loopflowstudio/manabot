@@ -1,12 +1,18 @@
-# PPO CUDA baseline (MTG-338)
+# PPO CUDA updates (MTG-338)
 
-**Inconclusive on speedup; baseline established.** Current PPO sustains
-**0.26437 optimizer steps/s** on one NVIDIA L4 (five warm repeats,
-**0.26366–0.26474**), or **60.521 s/update** (60.437–60.684).
-Backward and gradient clipping take 45.975 s, 76.0% of update time. A separate
-operator profile points to many-to-few indexed gradient accumulation into the
-card-definition table. These measurements precede the runtime candidate below;
-there is no before/after improvement or behavior-equivalence claim yet.
+**Inconclusive; CUDA lookup candidate reverted.** The paired comparison at
+`02c202956` could not start: RunPod reported no available L4 machines and a
+separate availability check confirmed it at **2026-11-13 10:58 UTC**. There
+are **no completed paired samples**, no CUDA equivalence result and no candidate
+rate or range. The runtime, candidate tests and comparison harness were returned
+to the kept baseline. The frozen candidate and harness remain in git at
+`02c202956`; no work is queued or running for this comparison.
+
+The last measured baseline remains **0.26437 optimizer steps/s** on one NVIDIA
+L4 (five repeats, **0.26366–0.26474**), or **60.521 s/update**
+(60.437–60.684). Backward and clipping take 76.0% of update time. These are
+prior baseline measurements, not results from the unavailable comparison.
+The indexed-gradient hypothesis is neither confirmed nor refuted.
 
 This is exploratory throughput measurement, not playing-strength evidence.
 The expectation committed before execution was: “Current PPO sustains roughly
@@ -129,16 +135,17 @@ steps/s**, with identical work. Refute that prediction if the alternating-arm
 comparison misses it; reject unexplained behavioral differences. The comparison
 uses the launcher's **$4 cap**. This remains an untested exploratory hypothesis.
 
-The [working design](../scratch/design.md) specifies the one-method change,
+The design frozen at `02c202956` specifies the one-method change,
 CPU bitwise checks, CUDA summation-order evidence and five alternating samples
 per arm. Keep a change only when its gain clears measured spread and behavior
 holds; the historical baseline drift does not establish a tolerance.
 
 Implementation, 2026-11-13 UTC: the one-method CUDA-autograd embedding candidate
-is present, with focused lookup tests for values, repeated-ID and row-zero sums,
+was prepared, with focused lookup tests for values, repeated-ID and row-zero sums,
 empty/noncontiguous/scalar indices and upstream producer gradients. CPU, MPS and
 inference retain indexing. CUDA numerical admission and the paired throughput
-comparison remain unrun; the candidate has not met the acceptance bar.
+comparison remained unrun at implementation handoff; the candidate had not met
+the acceptance bar and was subsequently reverted after rental admission failed.
 
 ## Run record and evidence
 
@@ -199,3 +206,44 @@ drift and not a claim about long-run training equivalence. Inspect gradient
 support/counts, same-arm drift and float64 repeated-sum errors as well; any
 unexplained mismatch rejects the candidate. A separate candidate profile follows
 all measurements. The launch cap remains $4, with no automatic retries.
+
+## Paired measurement outcome (2026-11-13 UTC)
+
+**Inconclusive, not a performance rejection.** The measurement source is
+`02c202956` and the last kept runtime is `734f2cd5c` (same runtime as
+`6ce618b8a`). All admissions below failed before a job command started and
+before a run was recorded. Requested IDs therefore identify launch attempts,
+not completed Etude runs. No rental or workload was left running.
+
+| Requested run ID | Admission outcome |
+| --- | --- |
+| `d2c75f320999` | `RUNPOD_API_KEY is not set`; no command started |
+| `3136e424a2a9` | Manabot Doppler config supplied storage, but no RunPod key; no command started |
+| `09737bd788b4` | Etude Doppler config supplied RunPod, but no `R2_ACCESS_KEY_ID`; no command started |
+| `4e50a037bd12` | Both configs injected; provider reported no available machines; no command started |
+
+The last admission receipt (`947aca1850c9`, 10:57:42 UTC) says:
+“cannot launch on mtg338-l4: provider reports no available machines; etude queue
+would wait”. A separate read at 10:58:25 UTC reported an L4 offer at $0.69/hour,
+“none available”, “0 of 1 in use”, and “not rentable now”. No queue was created.
+There is no launcher cost to report for a recorded run from these attempts.
+
+The available credential injection is nested Doppler execution: `manabot/prd`
+provides R2 storage and `etude/prd` provides RunPod. Keep both environments on
+launch, wait, fetch and cleanup commands; no secret values belong in evidence.
+This is operational context, not a credential or provider configuration change.
+
+The comparison source compiled, its generated baseline/paired shell commands
+passed `bash -n`, and Ruff passed for the paired harness and launcher. Those
+checks do not establish numerical behavior or performance. The recovered CPU
+harness, remote tests, float64 CUDA checks, five alternating pairs, same-arm
+numerical audits and candidate profile are **all unrun**. Previous local lookup
+checks remain 8 passed / 8 CUDA skips; they do not admit the CUDA change.
+
+Per the measurement keep rule, the unmeasured runtime candidate, its tests,
+paired launcher changes and recovered/adapted comparison scripts were removed
+from the active tree. Keep the existing baseline report and artifacts. To settle
+this hypothesis, restore the candidate and harness from `02c202956`, obtain one
+available L4 under the $4 cap, and complete the frozen CPU/CUDA correctness and
+alternating-run checks before deciding whether to keep it. No speedup, memory
+reduction, behavior equivalence or strength-per-dollar gain is established.
