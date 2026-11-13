@@ -178,9 +178,8 @@ cause sentence. `docs/training-loop.md` needs no change.
    `collection_tail_graphs.py` already forwards `pack` arguments unchanged.
 2. **Implemented**: experiment file, probe + real worker smoke on CPU (`uv run python -m
    experiments.bf16_behavior_logs smoke`), `tests/eval/test_experiment_files.py`.
-3. **Partly complete; CUDA capacity unavailable**: report, docs link and CPU
-   evidence publication are done. Launch the capped L4 proof when capacity
-   returns, publish its results and finish the report.
+3. **Running**: report, docs link and CPU evidence publication are done; the
+   capped L4 proof is live (below). Publish its results and finish the report.
 
 ## Exclusions
 
@@ -207,9 +206,6 @@ Final behavior/incident filter: **10 passed**. `ruff check` on changed Python
 files and `git diff --check` pass. Gate still
 owns the complete acceptance command above; CUDA proof has not run.
 
-Remaining: CUDA proof launch and results (slice 3); probe/worker, CPU smoke,
-report, CPU artifact publication and report link are implemented. Precision
-defaults are unchanged.
 
 Compress (2026-11-13): `check_behavior` now calls `check_logs` for the log
 half (one owner of shape, support, finiteness, padding and normalization) and
@@ -218,14 +214,30 @@ keeps only the action checks; a log failure's incident tensors are `logs` and
 --extra reports pytest tests/training/test_numerical_health.py
 tests/training/test_packed_action_rollouts.py -q`: **47 passed**.
 
-Proof implementation (2026-11-13): experiment discovery/job construction passed;
-CPU smoke completed eight forward combinations and one real worker update,
-emitting an admitted policy. Focused discovery tests: **2 passed**; changed-file
-ruff and diff checks pass. CPU receipts are published in the artifact manifest.
-Corrected job window: 6.99 h plus 900 s rental startup, job/cohort caps USD 5.
-Launch `ebd68228bef4` was refused before recording a run for "job dollars do not
-cover the hours"; both quotes, including the corrected one, returned "provider
-reports no available machines". No rental was created. CUDA acceptance remains
-open: run past update 141, report zero health rejections, quantify admitted
-subnormal updates and forward deltas, retain results and terminate the rental.
-Gate still owns the complete acceptance command.
+Proof implementation (2026-11-13): experiment discovery/job construction and
+CPU smoke (eight forward combinations, one real worker update, admitted
+policy) pass; CPU receipts are in the artifact manifest. Job window 6.99 h
+plus 900 s rental startup, job/cohort caps USD 5. Launch `ebd68228bef4` was
+refused before recording a run ("job dollars do not cover the hours", fixed by
+the window); two quotes then returned "provider reports no available
+machines".
+
+Compress 2 (2026-11-13): the proof worker called `bind_etude_source()` and
+then `run_worker()`, which binds again and raises "source manifest already
+exists" on any launched job (the smoke has no source bundle, so it passed).
+The job command is now `probe && python -m manabot.experiment.job`: the probe
+is its own process and the training worker is unmodified. The wrapper worker,
+its duplicate deadline check and SIGTERM handler are gone.
+`uv run python -m experiments.bf16_behavior_logs smoke`: completed, one
+update, admitted policy; `tests/eval/test_experiment_files.py`: **4 passed**.
+
+Launched 2026-11-13 17:07 UTC at `34b380a554`: run `b00f4500b78d`, cohort
+`mtg345-bf16-proof`, machine `mtg324-l4-ab-e0f0acfca5a5`, deadline
+2026-11-14 00:07 UTC. Probe exited 0 and training reached update 4 by 17:19
+UTC. Open: read results past update 141 (rejections, admitted subnormal
+updates, probe deltas), publish them, finish the report, and
+`etude terminate mtg324-l4-ab-e0f0acfca5a5`. Control client:
+`doppler run -p etude -c prd -- doppler run -p manabot -c prd
+--preserve-env=RUNPOD_API_KEY -- uv run --with 'etude-sdk[s3,eval]==0.2.15'
+etude ...` with `SSL_CERT_FILE` set to certifi's bundle. Gate still owns the
+complete acceptance command.
