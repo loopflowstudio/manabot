@@ -3,7 +3,10 @@
 use crate::support::{
     game::{deck, deck_of, five_color_setup, ready, Scenario},
     inspect::{library_card, permanent_named},
-    play::{activate_named, cast, cast_card, choose, enter_and_settle, resolve_top, settle},
+    play::{
+        activate_named, cast, cast_card, choose, enter_and_settle, resolve_top, settle,
+        spend_colorless,
+    },
 };
 use managym::{
     agent::{
@@ -202,6 +205,7 @@ fn clone_enters_as_a_copy_and_leaves_as_clone() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let villager = s.force_permanent_on_battlefield(0, "Wolf Cove Villager");
     let clone = cast(&mut s, "Clone");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     let offered: Vec<_> = s
@@ -251,6 +255,7 @@ fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
     let mut s = five_color_setup(&["Clone", "Wolf Cove Villager"]);
     let villager = s.force_permanent_on_battlefield(1, "Wolf Cove Villager");
     let clone = cast(&mut s, "Clone");
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert!(s.choose_target(Target::Permanent(villager)));
     settle(&mut s);
@@ -260,6 +265,7 @@ fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
     let second = library_card(&s, 0, "Clone");
     s.game_mut().move_card(second, ZoneType::Hand);
     cast_card(&mut s, second);
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     choose(&mut s, |action| matches!(action, Action::Decline { .. }));
     settle(&mut s);

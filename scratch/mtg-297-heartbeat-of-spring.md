@@ -1,185 +1,149 @@
 # MTG-297: Heartbeat, Animal Attendant, Toph, Uncle's Musings
 
-Contract: `tle-production-design.md`; verbatim review and coordination:
-`heartbeat-design.md`; implementation limits: `questions.md`. Detailed repair
-and check history is preserved at
-`ba3b05427:scratch/mtg-297-heartbeat-of-spring.md`; earlier implementation
-receipts are at `8d2721ab9:scratch/mtg-297-heartbeat-of-spring.md`.
+Contract and completed deletion list: `tle-production-design.md`. Verbatim
+review answers and coordination: `heartbeat-design.md`. Explicit limitations
+and fixture choices: `questions.md`. Prior implementation, QA, corpus and
+verification receipts are preserved at
+`39784f2c3:scratch/mtg-297-heartbeat-of-spring.md`; older implementation detail
+is at `8d2721ab9:scratch/mtg-297-heartbeat-of-spring.md`.
 
-## Outcome and implementation
+## Outcome
 
-All four cards are defined with Scryfall ids, directed behavior tests,
-observability and learning tokens. Production and spending remain in scope.
-Badgermole Cub uses the production transaction; The Great Henge and Tarnished
-Citadel retain their source-owned suffix behavior.
+All four cards are defined with Scryfall ids, directed behavior, observability
+and learning tokens. Production and spending are implemented on MTG-242's
+`ManaRestriction` / `SpendingContext`. Badgermole uses the production transaction;
+Henge/Citadel retain their source-owned suffix behavior. Native spending preserves
+color, restriction, rider, expiry and saved callers; receipts exclude nested
+activation fees. Existing fact kinds 11/14 project pools, offers and receipts in
+v9/v10. No new input shape, model kind or automatic payment preference was added.
 
-`managym/src/flow/mana.rs` captures `TappedForMana` at tap and selects live
-trigger sources at production. Native unit choices preserve color, restriction,
-rider, expiry and every saved caller. `ManaSpent` excludes nested activation
-fees and reaches `ZoneEntry` and the entering permanent's own triggers. Toph
-reads total mana spent; Uncle's Musings reads distinct non-colorless colors.
-Attendant's rider applies through entry, not a new triggered ability.
+The corpus admits 998/1,000 events, including all three Heartbeat events. Only
+the two Lita events fail; `docs/engine.md` matches. Frozen evidence is unchanged.
+Main's MTG-242 pool types, #504 search bounds, #506 sharding, CPU CI selection
+and v0.2.3 preparation are incorporated. The unrelated CI receipts in
+`ci-under-8-minutes.md` do not certify this mana change. No Wave is selected.
 
-The automatic first-remainder payment path is deleted. `PaymentSearch` emits
-`PaymentStep::Spend` at the zero-cost transition; execution pools the whole
-current cost before native unit spending. Upstream source-equivalence
-memoization and supply bounds remain; `PaymentSearchState::usable` counts
-allowed rider and combat classes. The earlier search regression visited 1,001
-states, 1,000 already unable to meet a saved counted tap (run
-`877a3189-d326-44e7-a45a-7f0aa7f63fbd`). Rejecting those states before exploring
-earlier payments repaired it without changing the 1,000-state witness bound.
+Earlier stable affected debug coverage passed 643 tests; Clippy, native/Python
+shared input, current-world arena/monitoring, model/belief, protocol and frontend
+checks are recorded in the archived plan. Headless Academy QA confirmed spending,
+reconnect, Musings and both-seat Heartbeat play (`scratch/qa.html`). Automatic
+production over-tapping also occurs on main and was filed as MTG-342. No human
+demo or approval occurred. The fixed multi-type-source and tap-predicate-snapshot
+limitations remain explicit in `questions.md`.
 
-`Game::mana_spend_choices` stops feasibility after the first valid ordering
-only when all usable units must be consumed: every ordering leaves the same
-receipt and pool. Otherwise it retains the distinct feasible unit choices.
-`cards/tests/cards/tle.rs` and `roe.rs` cover receipts, restrictions and expiry
-with Command replay, stale rejection and forks.
+## Autoreset investigation (2026-11-12)
 
-Existing fact kinds 11/14 carry pools, offers and rule-relevant receipts in
-v9/v10; no input shape or model kind was added. The public projection is
-`pooled_mana_classes`, with absent qualifiers omitted. Its rows describe
-subsets of the totals. Academy's `PlayerArea.svelte` says “including” and
-`manabot/semantic/text_observation.py` says “Of the mana above” after QA found
-wording that made those units appear additional. Shared encoding is covered
-by `tests/semantic/test_pooled_mana_classes_input.py`.
+Publication had stopped after two vector fixtures exceeded 300 seconds. Jack
+Heart's steer, verbatim:
 
-## What the fixture failures taught us
+> For the two vector_env timeouts: first time those two tests on origin/main vs this branch in debug, one at a time (no added load), and record both numbers. If the branch is materially slower, find and fix the engine cost (likely spending-choice search per step) rather than splitting the fixtures; if main is equally slow, split them without weakening contracts. Also run the Engine Budget comparison before publishing.
 
-The publication check recorded **568 passed, 75 failed, 492 skipped**
-(run `9644df6c-0cbb-4ba7-b5e3-30fb71cb76f7`). Many failures passed priority
-while a spending decision was pending; others inspected a stack or hand, or
-replaced a pool, before casting had finished. Intermediate diagnostics ran
-while repairs were arriving and do not certify a stable source revision.
+Compared unchanged fixtures at branch `39784f2c3` and `origin/main` `054e987a0`,
+sequentially with `cargo nextest run --profile ci --build-jobs 2 --test-threads 1
+--lib -E 'test(=<exact name>)'` and the appropriate manifest. Main was exported
+to `/tmp/mtg297-main-baseline`; no new Task or managed checkout was created.
+Compilation is excluded from these test durations.
 
-Commit `eca2253e9` repairs those assumptions with explicit test-player
-payments. `managym/tests/support/play.rs::spend_named` requires native
-`Decision::ManaSpend`; `spend_colorless` spends ordinary step-expiring
-colorless mana for funded generic costs. Hybrid pips select the intended
-color; Azula selects combat red while retaining regular red. Repeated Sailor
-draws preserve blue; Lesson casting completes before installing its resolution
-pool. Casting, priority, mode and target helpers do not silently pay costs.
-Existing outcome, nested-payment and decline assertions remain.
+| Fixture | Main | Branch |
+| --- | ---: | ---: |
+| `masked_mixed_setups_preserve_scalar_autoreset` | 11.571s pass | initially 300.052s timeout; uninstrumented final run 5.528s pass |
+| `restored_game_seeds_preserve_future_autoreset_stride` | 10.958s pass | 10.834s pass |
 
-The repairs needed no engine behavior change. The same commit separately
-moves the existing forced-payment truncation into `.take(limit)`, avoiding
-unneeded feasibility searches without changing which choices survive. Shared
-Heartbeat lookups and Prism's expiry selector were also consolidated.
+Logs: `/tmp/mtg297-{main,branch}-{masked,restored}.log`; final masked timing:
+`/tmp/mtg297-branch-masked-final-timing.log`, run
+`abd52d9d-20e5-47ce-b812-58818739468c` (whole command 6.11s wall, 4.37s user,
+0.23s system).
 
-The iteration feedback's 75-failure readiness gap is therefore historical:
-stable affected-file debug runs below include those failures and the final
-simplifications. This does not establish a complete CI-suite pass.
+The apparent masked regression did not survive execution without suspension.
+A diagnostic process was observed in state `T` (stopped), CPU time 4.17s after
+2m30s elapsed. Its sampled stacks were stationary, first in payment search,
+then layer/subtype lookup. A temporary 1,000-state search guard never fired;
+that run passed after resuming its owned process. The guard was removed entirely.
+A subsequent **uninstrumented** process was also stopped (`T`, 0.68s CPU after
+42s elapsed), then passed after resume. Several other owned tests in the full
+run were similarly stopped and resumed. The source of these external stops is
+unknown; those elapsed times are not engine performance measurements. No load
+was added beyond the sequential builds/tests. Both original fixtures, all
+1,000 steps, their assertions and the five-minute watchdog remain unchanged.
 
-## Reused verification
+## Remaining fixture repairs and debug coverage
 
-Affected debug selection:
-
-```sh
-cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 --lib --test cards --test rules_tests --test match_state_hash_tests --test semantic_conformance_tests -E 'test(mana::tests) | test(chk::) | test(tle::) | test(roe::) | test(tla::) | test(observability::) | test(cr_106_mana) | test(cr_603_triggers) | test(cr_608_resolution) | test(cost_effect_completion_retains) | binary(match_state_hash_tests) | binary(semantic_conformance_tests)'
-```
-
-- Final selection: **643 passed, 492 skipped** in 189.825s; run
-  `da6e9270-c440-4849-8560-4cd363887cd9`,
-  `/tmp/mtg297-compress-native.log`. Conformance was slow at 184.694s,
-  below the 300-second limit. Independent stable run
-  `bbdbab2a-e47a-4e13-8bf3-c6effbf6be3b` also passed all 643 in 186.972s;
-  hashes of all eight changed Rust files stayed fixed during that run.
-- Clippy with `--all-targets --all-features -- -D warnings` passed
-  (`/tmp/mtg297-compress-clippy.log`); workspace formatting passed.
-- Release extension rebuilt and installed atomically; installed cp313 bytes
-  matched the wheel. Shared pooled-class input tests: **4 passed** against
-  that build (`/tmp/mtg297-compress-input.log`); no later runtime edit.
-- Current-world Academy authority/parity, Learn setup and navigation:
-  **29 passed**. Authored parity: 135 Commands, 136 checkpoints, 816 viewer
-  checks, no divergence; stale-object/revision rejection retained.
-  Public commitments: 135 Commands, 66 commitments, zero gaps.
-- Semantic evidence: 14 cases, 2,715 Commands, 15 Phase rows; debug
-  reproduction is included in the final selection above.
-- Observation, action cutoff, native capacities and active training:
-  **118 passed**. Arena admission/monitoring, choice separability and belief:
-  **77 passed, one stale belief pin failed**; after refreshing only current-v3
-  pins, belief state plus model world: **32 passed**. Historical receipts stay
-  unchanged. Full original commands are in the archived plan.
-- Frontend PlayerArea, protocol conformance and decision labels: **14 passed**.
-  Changed-Python Ruff and workflow validation passed. Earlier shared-input,
-  text and schema receipts remain in the archived plan.
-
-MTG-213 corpus re-admission used original `Decklist.source` / `filename` and
-preserved historical records: **998/1,000 admit**. All three Heartbeat events
-(`af3d52fd84ed4bfab9e13dd56354de5a`, `55481e295a8d4f28ac505c982cd9af31`,
-`d88c59ee998e456cad266dbebe4c0852`) admit. Only Lita events
-`2937d550424b4ec1b44c9fc30c85c418` and `ed932f4c0dad48e3b868517f69696c4c`
-fail; `docs/engine.md` matches. Lita and Release to Memory remain outside scope.
-
-Headless Academy QA (`scratch/qa.html`) exercised all four cards, distinct
-spend offers, rider qualification, Toph's receipt and reconnect at unchanged
-revision 30 with identical offers. Bonus type choice, opponent-land bonuses
-and Musings with graveyard targets were not reached in that browser run;
-directed CHK/TLE tests cover them. No personal demo or approval occurred.
-QA also noted verbose expiry/rider labels; no wording change was selected.
-Spending the only usable rider units automatically is forced payment, consistent
-with the shared trivial-decision rule, not an omitted strategic choice.
-
-## Publication blocker (2026-11-12)
-
-`lf sync` completed cleanly. Publication review compared the change with
-`origin/main`; only QA-report trailing whitespace was changed, in `fc0574eec`.
-The earlier selected debug run does not cover the full authored-rules check.
-
-At `fc0574eec`, this command compiled successfully, then hit two five-minute
-timeouts:
+The complete debug run at unchanged runtime `39784f2c3` exposed 37 more funded
+card fixtures outside the earlier 643-test selection:
 
 ```sh
 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2
 ```
 
-- `agent::vector_env::tests::masked_mixed_setups_preserve_scalar_autoreset`:
-  300.044 seconds.
-- `agent::vector_env::tests::restored_game_seeds_preserve_future_autoreset_stride`:
-  300.032 seconds.
+Run `e1333716-1ad5-4db2-8522-638c98993a81`: **1,182 passed, 37 failed, 2 skipped**,
+821.085s; `/tmp/mtg297-final-debug.log`. No timeout. The original vector fixtures
+passed in 12.194s / 9.740s, and semantic conformance passed in 168.283s.
 
-Log: `/tmp/mtg297-publish-debug.log`. Both fixtures compare vector/scalar
-execution over 1,000 steps. This run does not isolate a runtime regression
-from fixture cost; no baseline comparison or performance acceptance occurred.
-The remaining run was interrupted after the blockers were established;
-nextest exited 100 and reaped its two running tests. Summary: 44 passed,
-2 timed out, 2 interrupted; 1,171 of 1,219 tests not run, plus 2 excluded tests.
-The interrupted tests were `shards_preserve_global_seeds_through_autoreset_and_restore`
-and `terminal_step_returns_post_reset_observation`; they were not timeouts.
+Nineteen set-test files now select native payments explicitly before inspecting
+committed costs, cast triggers or post-cast hand counts. Kellan preserves red
+for its second upgrade; Sailor completes its activation before its removal
+response. Abandon Attachments chooses blue for its hybrid pip, then ordinary
+colorless for its generic pip. The existing `spend_named` / `spend_colorless`
+helpers suffice. No assertion, production code, vector fixture, timeout, or
+shared casting/priority/target helper changed.
 
-No PR was published. Diagnose and fix or split the timeout fixtures without
-raising the watchdog or weakening their contracts, then finish debug coverage
-before retrying publication. Same-runner Engine Budget remains unverified.
+The exact failing selection passed 36/37; after the explicit hybrid choice,
+the prowess witness passed (`175352c5-2bf5-4361-ac41-559790daa727`). Final
+**70/70 tests in all 19 affected set modules passed** in 1.448s, run
+`e1ecb506-8f53-410b-9151-078c5dcbadbc`,
+`/tmp/mtg297-affected-card-sets.log`. This includes every repaired failure.
+Combined with the full run's unchanged passing tests, all 1,219 selected tests
+have passing debug evidence. This is two-run coverage, not a claimed single
+all-green final full-suite run; only test fixtures changed between the runs.
 
-## Upstream and remaining work
+- Workspace `cargo fmt --all --check` and `git diff --check` passed.
+- `cargo clippy --manifest-path managym/Cargo.toml --jobs 2 --all-targets --all-features -- -D warnings` passed; `/tmp/mtg297-fixture-clippy.log`.
+- Root `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` passed. Installed the matching cp313 arm64 extension atomically and verified its bytes against the wheel; `/tmp/mtg297-fixture-wheel.log`.
 
-Main's MTG-242 pool types, #504 search bounds, #506 sharding and v0.2.3
-preparation are incorporated. Merge `ba3b05427` also brings in
-`054e987a0`'s CPU CI dependency selection and bounded experiment smoke.
-Its changes since `eca2253e9` touch workflows, the experiment fixture and
-context/docs, not this Task's engine or Academy runtime. Its hosted timing
-receipts belong to that CI work (`scratch/ci-under-8-minutes.md`), not proof
-of this mana change's final CI result. No Wave is selected or edited here.
+## Engine Budget (local paired run, 2026-11-12)
 
-No further implementation mismatch or product decision was identified.
-The fixed multi-type source and tap-predicate snapshot limitations remain
-explicit in `questions.md`; neither is exercised by current content.
-The deletion list in the contract is complete.
+Both release builds succeeded, using the candidate's benchmark sources against
+pinned reference `7ef6ce5884782000eb8f14934dd8c2bd48a05387`. Candidate runtime is
+unchanged from `39784f2c3`; the uncommitted delta at measurement was fixtures and
+scratch only. Both binaries ran on the same macOS 26.0.1 / Apple M4 Max host
+(16 logical CPUs), in candidate/reference/reference/candidate order. No own
+build or test ran alongside them. Native cp313 import also passed after rebuild.
 
-Remaining: review/gate and delivery, including the final revision's full debug
-CI coverage and same-runner Engine Budget required by `docs/development.md`.
-The 643-test selection is affected-file evidence, not the whole suite; no
-performance acceptance or baseline update is inferred. A human demo remains
-unperformed, without blocking headless checks. Publishing, landing and Task
-completion belong to the caller.
+```sh
+uv run --no-project --python 3.13 python scripts/engine_budget.py sample --candidate managym/target/release/examples --reference /tmp/mtg297-budget-reference/managym/target/release/examples --artifact .cache/engine-budget-mtg297-autoreset
+uv run --no-project --python 3.13 python scripts/engine_budget.py compare --artifact .cache/engine-budget-mtg297-autoreset --reference .cache/engine-budget-mtg297-autoreset/reference
+```
 
-Realignment changed context only and reused the recorded runs; no tests were
-rerun. Rechecked the final debug and Clippy log summaries and the repair diff.
+Sampling completed; comparison **failed seven checks**. All reference digests
+match the committed baseline. Candidate search digests differ for all three
+seeds; step count changes from 101,650 to 102,209 and its digest changes.
+Median worst search reply is 12.975s versus reference 6.844s; search total
+238.018s versus 96.808s, both over the unchanged 10% tolerance. The median
+step-throughput check passes (9,753.8/s versus 4,864.8/s).
 
-## QA re-run on ba3b05427 (2026-11-12)
+| Pass | Steps wall / user CPU (s) | Search wall / user CPU (s) |
+| --- | ---: | ---: |
+| 0 candidate | 17.761 / 8.046 | 396.741 / 155.886 |
+| 1 reference | 38.912 / 7.360 | 118.404 / 82.047 |
+| 2 reference | 3.574 / 3.374 | 76.282 / 75.805 |
+| 3 candidate | 4.054 / 3.833 | 79.947 / 79.356 |
 
-Academy, headless (`scratch/qa.html`, top section). On the final extension:
-reload during a spend kept the revision and offers; Musings returned a
-graveyard Toph; both seats ran Heartbeat through to Game Over; no console
-errors. Found automatic payment tapping lands in battlefield order beyond the
-cost (Toph with 2 {G} floating left 2 {R} · 10 {G}). Main's build taps the
-same way, so this is not a regression. Filed as MTG-342.
+The same binaries vary substantially within this run. Candidate search has
+330,981 involuntary switches in its first sample versus 33,807 in its second;
+reference steps vary more than tenfold in elapsed time. This evidence prevents
+attributing the full median timing gap to engine work alone, but **does not
+turn the failed check into a pass**. No adaptive retry, tolerance change,
+performance acceptance or reference update was made.
+
+Raw samples, aggregation, CPU/scheduling data, provenance and comparison:
+`.cache/engine-budget-mtg297-autoreset/`; log `/tmp/mtg297-budget-sample.log`.
+The local recording is not a hosted PR artifact for baseline adoption.
+
+## Remaining
+
+Implementation/debug fixture gaps are repaired. The performance gate remains
+unresolved: obtain a dedicated-runner comparison and reconcile deliberate
+decision-digest changes through the documented PR-run reference process before
+shipping. Review and delivery belong to the caller; no publication, landing,
+Task completion or human approval is implied. Do not treat the noisy local
+comparison or unrelated CI receipts as performance acceptance.

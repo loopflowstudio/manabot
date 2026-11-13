@@ -3,7 +3,7 @@
 use crate::support::{
     game::five_color_setup,
     inspect::permanent_named,
-    play::{cast, settle},
+    play::{cast, settle, spend_colorless},
 };
 use managym::{agent::action::Action, state::game_object::Target};
 
@@ -37,6 +37,7 @@ fn savor_makes_food_with_a_real_tap_cost_and_cindermaw_prevents_its_life_gain() 
             .unwrap();
         let life = s.life(0);
         s.step_action(index);
+        spend_colorless(&mut s);
         assert!(s.game().state.permanents[food].is_none());
         settle(&mut s);
         assert_eq!(s.life(0), life + if blocked { 0 } else { 3 });
@@ -48,6 +49,7 @@ fn diresight_surveils_two_draws_two_and_loses_two_life() {
     use managym::state::zone::ZoneType;
     let mut s = five_color_setup(&["Diresight"]);
     cast(&mut s, "Diresight");
+    spend_colorless(&mut s);
     let hand = s.zone_size(0, ZoneType::Hand);
     let library = s.zone_size(0, ZoneType::Library);
     settle(&mut s);

@@ -147,12 +147,11 @@ compatibility alias; the behavior and learning representation are unchanged.
   otherwise carry expiry themselves (`PlayerArea.svelte`).
 - The obsolete "predates" comment is removed.
 
-The implementation and compression checks are recorded in
-`mtg-297-heartbeat-of-spring.md`. Current-world evidence and corpus admission pass. The 75 broader debug failures
-were repaired with explicit fixture payments; all 643 selected checks now pass,
-as recorded there. No open product choice or implementation blocker was identified. Final-revision
-full debug CI coverage, Engine Budget, review and delivery remain; the selected
-643-test run does not establish those results.
+Implementation, current-world evidence, corpus admission and validation receipts
+are recorded in `mtg-297-heartbeat-of-spring.md`. Funded fixtures use explicit
+native payments before inspecting their outcomes. That plan owns the current
+debug coverage, Engine Budget result and remaining delivery checks; historical
+selected runs do not establish a later full-suite or performance result.
 
 ## Concept review after the pooled-class rename (2026-11-12)
 

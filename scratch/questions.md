@@ -3,6 +3,8 @@
 - Fixture repair (2026-11-12): funded card-behavior fixtures spend ordinary
   colorless mana for generic pips to preserve colors for later spells. Hybrid
   pips and regular/combat expiry are chosen explicitly where they arise.
+  Abandon Attachments' prowess fixture chooses blue for its hybrid pip, then
+  colorless for its generic pip; either hybrid color exercises the same trigger.
   This is a test-player choice, not an engine payment preference; shared
   casting, priority, mode and target helpers still expose pending decisions.
 

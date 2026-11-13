@@ -2,7 +2,7 @@
 use crate::support::{
     game::five_color_setup,
     inspect::{card_of, permanent_named},
-    play::{activate, attack_with, enter_and_settle, settle},
+    play::{activate, attack_with, enter_and_settle, settle, spend_colorless},
 };
 use managym::{
     flow::turn::StepKind,
@@ -16,6 +16,7 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
     let k = permanent_named(&s, "Kellan, Planar Trailblazer");
     s.set_player_mana_pool(0, "3RR");
     activate(&mut s, k, 0);
+    spend_colorless(&mut s);
     settle(&mut s);
     let first = s.game().characteristics(k);
     assert!(first.has_subtype("Detective") && !first.has_subtype("Scout"));
