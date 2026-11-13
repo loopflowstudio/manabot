@@ -83,6 +83,8 @@ and under it `tests/eval/test_learning_signal.py` and
 playing games or training, which ends the whole run without a summary; that
 says nothing about Etude.
 
+The brief's other renames have no users here: no `Run.position`, train-report `Job`, `block.Table` or Etude mismatch exception is imported (`RunData.read_table` and `.blocks` still exist in 0.3.1).
+
 Unchanged and checked: `Result.tables`, `hold(...)` (no caller passes `share`),
 `Job(until="updates=N")` (the string still validates into `Until`).
 
@@ -216,7 +218,7 @@ The implementation must match the helper signatures the guide now shows.
 
 ## Remaining work
 
-Implementation and docs are in the working tree. The report helpers, SQL
+Implementation and docs are committed (aefeefcaf7, synced onto main at 7fd26fc0ac; origin/main had nothing newer on 2026-11-13). The report helpers, SQL
 reads, TrainingRun fixtures, repository-module cleanup, frozen frontier outcome
 and historical panels use the surviving 0.3.1 APIs. The release validator and
 its metadata fixtures require the new dependency floor too.
