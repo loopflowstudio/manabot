@@ -441,7 +441,57 @@ on batch i (previously after), so overlap can only start earlier; preparation
 order and batch contents are unchanged. An early caller exit leaves at most one
 submitted batch for the executor exit to join.
 
+## Concept review, 2026-11-13 (after PPO prefetch)
+
+The three concepts hold in docs and code: `Prepared` is the one policy input,
+the container is the one policy file, composition roots choose the backend.
+Two leftovers contradict the first, and are the next implement direction. No
+product choice is open.
+
+1. **The collector still builds a tensor dictionary.**
+   `RolloutCollector._slice_obs_tensors` (`training/rollout/collection.py`)
+   wraps host buffers in torch tensors, then unwraps them with `.numpy()` for
+   `inference.prepare`; its `dict[str, torch.Tensor]` return branch has no
+   production caller (both pass `inference`), only
+   `tests/model/test_inference.py` and `test_semantic_card_precision.py`,
+   which convert it back with `host_inputs`. Slice host rows
+   (`ObservationBuffers`, `action_focus` cast to float32 in NumPy as now) and
+   hand them to `inference.prepare`; one return type, a name that says host
+   rows, and the two tests read host rows. Values are unchanged, so the CPU
+   oracle and update comparison must stay exact and no CUDA rerun follows.
+2. **What a batch is prepared for is decided twice.** Callers pass
+   `inference=not torch.is_grad_enabled()` (rollout, verify, selection data,
+   parity), and `ActorCritic.prepare_admitted` reads the thread-local grad
+   mode again to choose referenced-versus-full catalog programs. Host
+   preparation therefore depends on ambient state: the prefetch worker has to
+   copy the caller's grad mode, and `backends/README.md` describes
+   `inference=True` only as column compaction. Make the argument the only
+   statement of purpose: learner rows (`inference=False`) select referenced
+   programs unless bucketed; inference rows do not; `prepare_admitted` reads
+   no grad mode and `_prepare_rows` drops `set_grad_enabled`. The one path
+   whose result changes is `prepare(obs)` with the default under `no_grad`
+   (full catalog today). Adopt only if the 3,410-tensor oracle, the update
+   comparison and the focused suite stay exact; if any moves, keep the code
+   and state the present rule in `backends/README.md` instead. Either way the
+   README says what `inference` selects besides compaction.
+
+Noted, not directed:
+
+- Damped walks minibatches with serial `rows`; PPO with prefetching
+  `minibatches`, behind a PPO-only `PPOAdmittedRollout` protocol. One walk
+  for both updates (taking the index chunks, synchronous on MLX) would merge
+  the protocols and extend the overlap to the damped update. It is an
+  unmeasured optimization: by this plan's rule it needs a same-card CUDA
+  pass, so it joins the candidates under "Launching again".
+- `load_mlx_policy` beside torch's `load_checkpoint` predates this Task
+  (main, `mlx.md`); renaming a published name is not this PR's.
+- `Prepared.guard` and `bucket_needs` are torch serving/collection facts on
+  the shared type; kept, per the assumptions in `questions.md`.
+
 ## Next actions
+
+0. Implement the concept review's two directions above, then rerun the CPU
+   oracle and update comparison.
 
 1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
    exceed the head-vs-head floor), host preparation/load costs, and the threaded
