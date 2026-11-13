@@ -1,15 +1,17 @@
 # scratch
 
-- `mtg333-plan.md`: active plan, receipts and remaining work; slice 6b is complete
-  (`105e7e2aa` merged; 3,410 CPU tensors and five updates exact). Next: CUDA checks.
-  `questions.md`: reversible assumptions. `mtg325-torch-backend-verification.md`:
-  baseline evidence and limits; MTG-325 merged as `ef28f3a58` (PR #501).
-- `equivalence/`: MTG-325's CPU oracle (`run.py`, 3,248 tensors;
-  `compare.py`; `updates.py`) and MTG-333 L4 launcher, restored from
-  `65fa8c7aa:scratch/`. Captures/patches are MTG-325's; regenerate for this Task.
-- `speed/`: MTG-325's L4 harness and four receipts (`run*/compare.txt`).
-  Patches are MTG-325's; script paths may name its checkout and need updating.
+- `mtg333-plan.md`: slices 1–6b implemented; `105e7e2aa` merged. Fresh CPU
+  oracle: 3,410 tensors and five update cases exact. A6000 CUDA outputs exact,
+  gradients ≤3.73e-9 but above the repeat floor. Speed/optimization remain
+  incomplete after rental API refusals; see the latest retry receipt.
+- `questions.md`: reversible assumptions.
+- `mtg325-torch-backend-verification.md`: inherited baseline evidence and limits.
+- `equivalence/`: shared CPU/CUDA oracle and launcher. Current captures are in
+  `/tmp/mtg333/mana-*.pt`; CUDA run `047fa57e0e5e` retains its full captures.
+- `speed/`: frozen benchmark and combined equivalence/speed/profile launcher.
+  `run*/compare.txt` are MTG-325 evidence, not results of this Task.
+  Integrated launch patches survive in `296c90f33` and `c150d5f25`, not the
+  final diff. Launch the latter commit or regenerate patches for changed code.
 
-Full receipts of slices 1–6: `1f634d89b:scratch/mtg333-plan.md`.
-Uncommitted notes before compress are preserved under
-`/tmp/mtg333-compress-before/`; the plan retains current decisions and results.
+Full slice 1–6 receipts: `1f634d89b:scratch/mtg333-plan.md`.
+Earlier uncommitted notes: `/tmp/mtg333-compress-before/`.

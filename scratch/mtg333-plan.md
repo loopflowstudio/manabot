@@ -140,9 +140,10 @@ Deleted predecessors are not restored; the list is in
 ## Remaining slices
 
 6b. **Complete** — `105e7e2aa` merged, rebuilt; fresh CPU oracle and updates exact.
-7. **CUDA equivalence and speed**, launch source `296c90f33`; A40 fallback
-   after L4 stock disappeared at quote.
-8. **Optimize pass**, on the card the speed check used.
+7. **CUDA equivalence captured** at `296c90f33` on A6000: numeric bar holds,
+   stricter repeat-floor condition unresolved. **Speed pending** combined
+   queued run `4b091160edbf` at `c150d5f25`, blocked so far by rental API refusals.
+8. **Optimize pass pending** speed/profile output; no optimization claim yet.
 
 ### Slice 6b: upstream `105e7e2aa` (read 2026-11-13 12:23–12:27 UTC)
 
@@ -367,3 +368,32 @@ failed with RunPod HTTP 400 before any command. Combined the speed launcher
 with the existing equivalence capture and one separate, unreported cProfile
 pass after speed summaries. Benchmark code, workload and repeats stay frozen;
 all checks can now finish on one rental without needing session reuse.
+
+Combined direct admission `ff725204b789` / requested run `a1f656c6c77a`
+also failed HTTP 400 before job start. Cleanup requested for
+`mtg333-a6000-d90f6b127513`. Queued combined run `4b091160edbf`, source
+`c150d5f25`, same $10 cohort cap; one bounded queue attempt before stopping
+on external rental unavailability. No speed or optimization result yet.
+
+### Stop state, 2026-11-13
+
+**Implementation remains incomplete:** speed and the required optimization pass
+have no result. Do not advance on an assumed performance pass. The Task numeric
+CUDA tolerance passed, but the stricter repeat-floor condition still needs gate
+review. Gate's broader suites and consumer/wheel checks remain unrun.
+
+Queued run `4b091160edbf` never reached setup during the bounded wait. Cancellation
+is recorded (`cancel_requested_at` present); CLI still reports `renting` on
+`mtg333-a6000-b2d4123a77e0`. `etude terminate` refuses while the launcher considers
+that run active. Interrupted both local waiters after cancellation; process
+inventory confirms zero waiters. A fresh coordinator did not reconcile it, so
+no further coordinator was left running. Provider inventory has no pod matching
+any Task session ID; no other workload was changed. Launcher reconciliation is
+pending; do not launch over that stale request or edit its database directly.
+
+Resume by inspecting `etude status 4b091160edbf` and its retained logs under
+`ETUDE_HOME=/tmp/mtg333/launcher`, then resolving cancellation/cleanup through
+Etude. Frozen combined measurement source is `c150d5f25`; benchmark code and
+its three alternating processes per arm were not changed. The generated patch
+files were removed from the final diff; their bytes remain in that source
+commit. Retry the combined job only when rental admission works.
