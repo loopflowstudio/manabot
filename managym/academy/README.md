@@ -72,7 +72,10 @@ uv run --no-project managym academy
 ```
 
 [Running Academy](../../docs/academy.md#running-academy) is the guide: options,
-the URL, stopping, playing, replays, trained bots and troubleshooting. The
+the URL, stopping, playing, replays, trained bots and troubleshooting.
+`managym academy play` and `managym academy replay` open a chosen game or a
+selected replay directly, and `managym.academy.launch` does the same from
+Python ([Launch from Python](../../docs/academy.md#launch-from-python)). The
 commands below are for working on Academy from a checkout.
 
 ```bash

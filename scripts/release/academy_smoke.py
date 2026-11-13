@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 from threading import Thread
+from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
 
 from websockets.sync.client import connect
@@ -29,9 +30,6 @@ DEFAULT_URL = "http://127.0.0.1:8000"
 def main() -> None:
     installed = {d.metadata["Name"].lower() for d in distributions()}
     assert not installed.intersection({"manabot", "torch", "etude-sdk"})
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        port = listener.getsockname()[1]
     with tempfile.TemporaryDirectory(prefix="academy-wheel-") as directory:
         ready: Queue[str] = Queue()
         log: list[str] = []
@@ -40,9 +38,18 @@ def main() -> None:
                 sys.executable,
                 "-m",
                 "managym.academy",
+                "play",
+                "--hero",
+                "interactive",
+                "--villain",
+                "interactive",
+                "--opponent",
+                "passive",
+                "--seed",
+                "7",
                 "--no-open",
                 "--port",
-                str(port),
+                "0",
                 "--traces-dir",
                 directory,
             ],
@@ -64,8 +71,12 @@ def main() -> None:
             record = json.loads(
                 ready.get(timeout=30).removeprefix("ACADEMY_PLAY_READY ")
             )
-            url = f"http://127.0.0.1:{port}"
-            assert record == {"traces_dir": str(Path(directory).resolve()), "url": url}
+            url = record["url"]
+            port = urlparse(url).port
+            assert port is not None
+            assert record["traces_dir"] == str(Path(directory).resolve())
+            launch_id = parse_qs(urlparse(record["open"]).query)["launch"][0]
+            assert record["open"].startswith(url + "/?launch=")
 
             def get(path: str) -> bytes:
                 with urlopen(url + path, timeout=10) as response:
@@ -81,6 +92,17 @@ def main() -> None:
             with connect(
                 url.replace("http:", "ws:") + "/ws/play", open_timeout=10
             ) as ws:
+                ws.send(
+                    json.dumps(
+                        {
+                            "type": "new_game",
+                            "config": {"launch": launch_id},
+                        }
+                    )
+                )
+                payload = json.loads(ws.recv(timeout=30))
+                assert payload["launch"] == launch_id
+                assert payload["frame"]["prompt"]
                 ws.send(
                     json.dumps(
                         {

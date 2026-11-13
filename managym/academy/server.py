@@ -303,6 +303,8 @@ class SessionRecord:
 
 
 SESSION_REGISTRY: dict[str, SessionRecord] = {}
+# Private, process-local configurations. Never included in viewer frames.
+LAUNCH_CONFIGS: dict[str, dict[str, Any]] = {}
 
 
 @dataclass(frozen=True)
@@ -918,6 +920,17 @@ class GameSession:
         self._study_attempt_seq = 0
 
     def new_game(self, raw_config: Any) -> dict[str, Any]:
+        launch_id = raw_config.get("launch") if isinstance(raw_config, dict) else None
+        if launch_id is not None:
+            if not isinstance(launch_id, str) or launch_id not in LAUNCH_CONFIGS:
+                raise ValueError(
+                    "launch_unknown: This launch is unknown; run the launch command again or choose a new game."
+                )
+            raw_config = {
+                **raw_config,
+                **LAUNCH_CONFIGS[launch_id],
+                "request_id": f"launch.{launch_id}",
+            }
         request_id = (
             raw_config.get("request_id") if isinstance(raw_config, dict) else None
         )
@@ -1080,6 +1093,8 @@ class GameSession:
             update = self._wire_message(reason="initial_connect")
         if request_id is not None:
             self._new_game_requests.add(request_id)
+        if launch_id is not None:
+            update["launch"] = launch_id
         return update
 
     def hero_action(self, raw_index: Any) -> dict[str, Any]:
@@ -2593,6 +2608,8 @@ def _response_with_participant(
     watcher_invite: str | None = None,
 ) -> dict[str, Any]:
     payload = deepcopy(response)
+    # Launch metadata belongs only to the browser that submitted the setup.
+    payload.pop("launch", None)
     payload["table"] = _table_snapshot(
         record, participant, watcher_invite=watcher_invite
     )
@@ -2962,6 +2979,14 @@ async def _send_table_response(
             recipient,
             watcher_invite=(watcher_invite if recipient is initiator else None),
         )
+        if recipient is initiator and response.get("launch") in LAUNCH_CONFIGS:
+            launch_id = response["launch"]
+            payload["launch"] = launch_id
+            payload["launch_setup"] = {
+                key: value
+                for key, value in LAUNCH_CONFIGS[launch_id].items()
+                if key != "seed"
+            }
         try:
             await socket.send_json(payload)
         except Exception:

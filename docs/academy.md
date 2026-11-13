@@ -10,7 +10,7 @@ the wire contract is
 [experience protocol v1](../protocol/experience-protocol-v1.md), with state
 digests defined by [the state hash](engine.md#forks-replay-and-determinization).
 
-- [Running Academy](#running-academy): install, launch, play, replay, trained bots, troubleshooting
+- [Running Academy](#running-academy): install, launch, chosen games and replays, Python, trained bots, troubleshooting
 - [Shared decision surface](#shared-decision-surface)
 - [Choice navigation](#choice-navigation)
 - [Presentation runtime](#presentation-runtime)
@@ -44,6 +44,19 @@ Torch, Node or Rust, and no checkout of this repository. The wheel carries the
 compiled engine, the server and the built client, and the server makes no
 network requests while you play.
 
+To skip the setup screens, name the game or the replay on the command line:
+
+```bash
+uv run --no-project managym academy play --hero ur_lessons --villain ./my-deck.txt --seed 7
+uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
+```
+
+The first opens the table already in that game; the second opens game 3 of an
+evaluation's command trace at its first decision. See
+[Start in a chosen game](#start-in-a-chosen-game),
+[Open a replay directly](#open-a-replay-directly) and
+[Launch from Python](#launch-from-python).
+
 ### Install
 
 Academy needs ordinary CPython 3.12 or 3.13 on a platform with a `managym`
@@ -75,9 +88,14 @@ uv run --no-project managym academy --port 8001 --no-open --traces-dir ~/academy
 | `--no-open` | off | Do not open a browser window |
 
 When the server is accepting connections it prints one `ACADEMY_PLAY_READY`
-line, a JSON record with the `url` to open and the `traces_dir` in use, and
-then opens that URL in your default browser. On a machine without a desktop
+line, a JSON record with the server's `url`, the `traces_dir` in use and
+`open`, the address the browser is sent to, and then opens that address in
+your default browser. `open` equals `url` for a plain launch and points into
+the game or replay for `play` and `replay`. On a machine without a desktop
 (SSH, a container) pass `--no-open` and reach the port yourself.
+
+These four options go after `academy`, `academy play` or `academy replay`
+alike.
 
 The default address is reachable only from your own machine. Academy has no
 accounts: a browser's stored credential is its player identity. Listen on
@@ -90,6 +108,144 @@ Press Ctrl-C in the terminal that runs it. The server finishes its writes,
 exits with status 0 and frees the port. A game in progress is kept: it is
 listed as interrupted, with no winner, the next time you start Academy from
 the same traces directory.
+
+### Start in a chosen game
+
+```bash
+uv run --no-project managym academy play --hero ur_lessons --villain ./my-deck.txt \
+    --opponent search --sims 64 --seed 7
+```
+
+```text
+ACADEMY_PLAY_READY {"open": "http://127.0.0.1:8000/?launch=3f9c2a7be1d04c58", "traces_dir": "/home/you/academy/traces", "url": "http://127.0.0.1:8000"}
+  Academy: http://127.0.0.1:8000/?launch=3f9c2a7be1d04c58
+  Ctrl-C stops the server
+```
+
+The browser opens with that game dealt and your first decision pending. No
+setup screen is shown, and nothing is chosen for you beyond what you named.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--hero` | `ur_lessons` | Your deck: a bundled deck name or the path of a decklist file |
+| `--villain` | `gw_allies` | The opponent's deck, named the same way |
+| `--opponent` | `search` | `search`, `random`, `passive`, or the 64-character digest of a catalog checkpoint |
+| `--sims` | `64` | Simulated playouts per decision for `search` |
+| `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
+| `--decklists` | `open` | `open` or `closed`: whether each player knows the other's list |
+
+A decklist file is the UTF-8 `.txt` or `.dek` format the table imports: one
+`count card name` per line, with optional `Main` and `Sideboard` headings.
+Decks go through the same native admission as an imported deck in the browser
+(the development format and supported cards, not tournament legality). When
+either seat is a file, the game is recorded as an imported matchup: a bundled
+deck on the other seat is admitted from its own list, and no curated asset
+pack is attached.
+
+The setup is checked before the browser opens. An unknown deck name, a
+rejected decklist or an unusable combination prints one `ACADEMY_PLAY_ERROR`
+line with the reason and exits with status 2.
+The same restrictions apply as at the table: a checkpoint opponent needs
+manabot installed and does not accept decklist files, and `search` needs open
+decklists.
+
+Reloading the page returns to the same game and its pending decision; it does
+not deal again. **New Game** returns to ordinary setup with the launched
+decks, opponent and decklist mode selected.
+
+The launch address is good for as long as that server runs. Opened in another
+browser it starts that browser's own game with the same decks, opponent and
+seed. After the server stops the address means nothing: the page says the
+launch is unknown and shows ordinary setup, so run the command again.
+
+### Open a replay directly
+
+```bash
+uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
+uv run --no-project managym academy replay <recording-id>
+```
+
+The first command opens one game of an evaluation's command trace; the second
+reopens a game already in **Games**, by the id shown there. Both land in
+**Replay** on decision 1, ready to step.
+
+An evaluation trace needs manabot installed beside Academy, at the same
+release version
+([Watch a game from an evaluation](#watch-a-game-from-an-evaluation) has the
+install command and where traces are written). Opening one verifies its
+recorded Commands and state digests and saves the game to this traces
+directory as a finished recording. It runs no policy and loads no checkpoint,
+and it never changes the trace file. Opening the same game again returns to
+the recording made the first time. `.json`, `.jsonl` and gzipped files are
+accepted. Recordings in **Games** open without manabot.
+
+A trace file usually holds many games. `--game` takes either the game's
+zero-based position in the file (the order **Recorded game** lists in the
+browser) or the first characters of its `game_trace_sha256`. A file with one
+game needs no `--game`. Leave it off a larger file to see what the file holds:
+
+```text
+ACADEMY_PLAY_ERROR {"code": "replay.ambiguous", "message": "out/traces/c41.commands.jsonl.gz holds 40 games; choose one with --game."}
+  game  deal seed   leg  players                    trace
+     0  9120443     0    w17-final vs heuristic     5be01c9a2f31
+     1  9120443     1    heuristic vs w17-final     e07a44d1c8b2
+     …
+  20 of 40 shown
+```
+
+A trace recorded in another world is refused with `replay.rejected`, naming
+the mismatch; open it with the revision that produced it.
+
+### Launch from Python
+
+`managym.academy.launch` starts the same server from a script, a notebook or
+a test, and returns the addresses instead of opening them unasked.
+
+```python
+from pathlib import Path
+
+from managym.academy.launch import serve
+
+with serve(port=0, open_browser=False) as academy:
+    game = academy.new_game(
+        hero="ur_lessons",
+        villain=Path("my-deck.txt"),
+        opponent="search",
+        sims=64,
+        seed=7,
+    )
+    replay = academy.replay(Path("out/traces/c41.commands.jsonl.gz"), game=3)
+    print(game.url)      # http://127.0.0.1:52114/?launch=3f9c2a7be1d04c58
+    print(replay.url)    # http://127.0.0.1:52114/replay?watch=1&trace=8b1e…
+    academy.open(game.url)
+    academy.wait()       # block until Ctrl-C
+```
+
+- `serve(host="127.0.0.1", port=8000, traces_dir=None, open_browser=True)`
+  starts the server on a background thread and returns once it accepts
+  connections. `port=0` takes a free port; `academy.url` and
+  `academy.traces_dir` report what is in use. With `open_browser=True` the
+  table opens as it does for `managym academy`.
+- `academy.new_game(...)` takes the options of `managym academy play`. A deck
+  given as `str` is a bundled deck name; a `pathlib.Path` is a decklist file.
+- `academy.replay(source, game=None)` takes a trace `Path` with the same
+  `game` selection as the command line, or a recording id as `str`.
+- `launch.read_games(path)` lists a trace file's games as `RecordedGame`
+  values (`index`, `deal_seed`, `leg`, `players`, `decks`,
+  `game_trace_sha256`), for choosing one in code.
+- `new_game` and `replay` return a `Launched` whose `url` opens that game or
+  replay in any browser that can reach the server. `academy.open(url)` opens
+  it in the default browser.
+
+Leaving the `with` block, or calling `academy.close()`, stops the server and
+frees the port; unfinished games are kept as interrupted, as with Ctrl-C.
+`academy.wait()` blocks until Ctrl-C and then returns, for scripts that
+should stay up while someone plays. One Academy runs per Python process:
+a second `serve` before the first is closed raises `server.running`.
+
+Every failure is an `AcademyLaunchError` with a `code` and a `message`, the
+codes listed under [Troubleshooting](#troubleshooting); nothing is opened
+when one is raised.
 
 ### Play a game
 
@@ -111,6 +267,8 @@ reported lines, choose a built-in opponent such as **Search 64**, then select
 **New Game**. Imported decks use the development format and supported cards;
 this is not tournament legality validation. Checkpoint opponents are unavailable
 for imported decks. Uncheck the import option to return to bundled decks.
+`managym academy play` starts the same game from the command line
+([Start in a chosen game](#start-in-a-chosen-game)).
 
 The table reads **Who decides / What is happening / Your choices**. Clicking a
 card inspects it and sends nothing; choosing one of the listed legal actions
@@ -144,11 +302,10 @@ holds private deal seeds; keep it private.
 ### Watch a game from an evaluation
 
 Evaluation trace import currently needs the optional manabot integration.
-Install it into the same environment as Academy, then restart the server:
+Stop any running Academy server and install it into the same environment:
 
 ```bash
 uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
-uv run --no-project managym academy
 ```
 
 Use matching `managym` and `manabot` release versions. For an unpublished
@@ -160,7 +317,11 @@ candidate, install both wheels from the same release build instead.
    command trace rather than the evaluation's metrics or summary file; see
    [automatic capture and replay](training.md#automatic-capture-and-replay)
    for the evaluation workflow.
-2. Open **Watch** at `http://127.0.0.1:8000/replay?watch=1` and use
+2. Open the game from the command line with
+   `uv run --no-project managym academy replay <trace> --game <n>`
+   ([Open a replay directly](#open-a-replay-directly)) and skip to step 4, or
+   launch `uv run --no-project managym academy`, open **Watch** at
+   `http://127.0.0.1:8000/replay?watch=1` and use
    **Open arena / Tournament game** to select the trace. Individual game JSON
    and uncompressed JSONL are also accepted.
 3. If it contains several games, select a **Recorded game** and click
@@ -208,7 +369,8 @@ package.
 ### Troubleshooting
 
 A launch that cannot start prints one `ACADEMY_PLAY_ERROR` line with a `code`
-and a message, and exits with status 2.
+and a message, and exits with status 2. From Python the same `code` and
+`message` are on the raised `AcademyLaunchError`.
 
 | What you see | Cause and fix |
 |---|---|
@@ -216,7 +378,21 @@ and a message, and exits with status 2.
 | `ACADEMY_PLAY_ERROR` with code `extra.missing` | `managym` is installed without the server dependencies. Run `uv pip install 'managym[academy]'`. |
 | `ACADEMY_PLAY_ERROR` with code `port.in_use` | Another program, often an earlier Academy, holds the port. Stop it, or run `uv run --no-project managym academy --port 8001`. |
 | `ACADEMY_PLAY_ERROR` with code `site.missing` | This `managym` was built from source without the browser client, as in a checkout. Use `./scripts/play` from the checkout, or install a released wheel. |
-| No browser window opens | Open the printed `url` yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
+| `deck.unknown` | The value is neither a bundled deck nor an existing file. The message lists the bundled names. |
+| `deck.unreadable` | The decklist file cannot be read as UTF-8 text. |
+| `deck.rejected` | Native admission refused a decklist. The message gives each seat's issues by line; fix them as you would after **Check decklists**. |
+| `setup.invalid` | The combination is not allowed, for example `--opponent search` with `--decklists closed`, or a checkpoint opponent with a decklist file. The message says which. |
+| `opponent.unavailable` | The checkpoint digest is not in the catalog, or manabot is not installed. See [Trained opponents and other bots](#trained-opponents-and-other-bots). |
+| `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path, or pass the `--traces-dir` the game was recorded in. |
+| `replay.unreadable` | The file is not a command trace: not JSON, JSONL or gzip of either, or it holds no game records. Use `traces/<cell-id>.commands.jsonl.gz`, not the metrics or summary file. |
+| `replay.ambiguous` | The trace holds several games and none was selected. Choose one of the listed games with `--game`. |
+| `replay.game_unknown` | `--game` is past the end of the file, or matches no digest or more than one. |
+| `replay.needs_manabot` | Evaluation traces are verified by manabot. Install it at the same version: `uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot`. |
+| `replay.rejected` | Verification failed: the trace was recorded in another world, or its Commands or digests do not replay. Open it with the revision that produced it. |
+| `server.running` | (Python) `serve` was called while an Academy from this process is still open. Close it first. |
+| `server.closed` | (Python) This Academy has already closed. Call `serve` again. |
+| `server.startup` / `server.shutdown` | The server could not start or finish stopping. The message names the failure. |
+| No browser window opens | Open the printed `open` address yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
 | Trained opponents are not listed | manabot is not installed in the environment that runs Academy; the Opponent menu says so. Install it there and restart. If the menu reports a catalog error instead, manabot is present but Torch failed to import. |
 | A checkpoint is listed but disabled | It was trained in another world or for other decks; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
 | Earlier games are missing from **Games** | Academy was launched from another directory. Launch from the original one or pass its `--traces-dir`. |

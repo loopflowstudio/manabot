@@ -1,7 +1,8 @@
 import { browser } from '$app/environment';
 
+import { sanitizeDeckSelection } from './decks';
 import { rememberRecordCredential } from './records';
-import { gameStore } from './game.svelte';
+import { checkpointChoice, gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
@@ -18,9 +19,22 @@ import type {
 import type {
   ClientMessage,
   FrameUpdate,
+  LaunchSetup,
   RecoveryEnvelope,
   ServerMessage,
 } from './types';
+
+const LAUNCH_STORAGE_KEY = 'academy.launch';
+
+function applyLaunchSetup(setup: LaunchSetup): void {
+  const decks = sanitizeDeckSelection({ hero: setup.hero_deck, villain: setup.villain_deck });
+  if (decks) { gameStore.setHeroDeck(decks.hero); gameStore.setVillainDeck(decks.villain); }
+  gameStore.deckImport = setup.deck_import ?? null;
+  gameStore.setDecklists(setup.decklists);
+  if (setup.villain_type === 'checkpoint' && setup.opponent_sha256) gameStore.setOpponentChoice(checkpointChoice(setup.opponent_sha256));
+  else if (setup.villain_type === 'search') gameStore.setOpponentChoice(`search-${setup.villain_sims ?? 64}`);
+  else if (setup.villain_type === 'random' || setup.villain_type === 'passive') gameStore.setOpponentChoice(setup.villain_type);
+}
 
 const RESUME_STORAGE_KEY = 'etude.gui.resume';
 const VALID_SERVER_TYPES = new Set([
@@ -113,6 +127,7 @@ export function parseServerMessage(raw: string): TableServerMessage | null {
 
 export class GameSocketController {
   private socket: WebSocket | null = null;
+  private launchId: string | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private intentionallyClosed = false;
@@ -201,8 +216,36 @@ export class GameSocketController {
     gameStore.setConnection('disconnected');
   }
 
+  // Reload resumes this tab's own launched game; anything else deals the launch.
+  launch(id: string): void {
+    this.launchId = id;
+    const session = loadResumeCredentials()?.session_id;
+    try {
+      const started = JSON.parse(sessionStorage.getItem(LAUNCH_STORAGE_KEY) ?? 'null') as
+        | { id: string; session_id: string; setup: LaunchSetup }
+        | null;
+      if (session && started?.id === id && started.session_id === session) {
+        applyLaunchSetup(started.setup);
+        this.connect();
+        return;
+      }
+    } catch {
+      sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+    }
+    this.sendNewGame({ launch: id });
+  }
+
   sendNewGame(config?: Record<string, unknown>): void {
     if (gameStore.newGamePending) return;
+    if (!config?.launch) {
+      this.launchId = null;
+      sessionStorage.removeItem(LAUNCH_STORAGE_KEY);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('launch')) {
+        url.searchParams.delete('launch');
+        window.history.replaceState(window.history.state, '', url);
+      }
+    }
     gameStore.newGamePending = true;
     gameStore.setError(null);
     const grantRevision = gameStore.table?.access.grant_revision;
@@ -421,6 +464,10 @@ export class GameSocketController {
 
     if (message.type === 'observation' || message.type === 'game_over') {
       gameStore.newGamePending = false;
+      if ('launch' in message && message.launch && message.launch_setup) {
+        sessionStorage.setItem(LAUNCH_STORAGE_KEY, JSON.stringify({ id: message.launch, session_id: message.session_id, setup: message.launch_setup }));
+        applyLaunchSetup(message.launch_setup);
+      }
       this.pendingResume = false;
       this.inFlightCommand = null;
       gameStore.endCommand();
@@ -486,6 +533,10 @@ export class GameSocketController {
       presentationPlayer.clear();
       gameStore.markResumeFailed('Previous session expired or invalid. Start a new game.');
       this.disconnect();
+      if (this.launchId) {
+        gameStore.newGamePending = false;
+        this.sendNewGame({ launch: this.launchId });
+      }
       return;
     }
 
@@ -661,8 +712,9 @@ export class GameSocketController {
 
 const controller = new GameSocketController();
 
-export function connect(): void {
-  controller.connect();
+export function connect(launchId?: string | null): void {
+  if (launchId) controller.launch(launchId);
+  else controller.connect();
 }
 
 export function disconnect(): void {

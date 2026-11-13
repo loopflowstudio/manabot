@@ -184,6 +184,16 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     if extension is None:
         raise HTTPException(400, "arena_import_unavailable")
     arena = extension.verify_arena(game_record)
+    # Verify the supplied bytes even when the source identity was imported before.
+    existing = AttemptStore(
+        server.trace_store.TRACES_DIR / "play.sqlite"
+    ).arena_recording(game_record["game_trace_sha256"])
+    if existing is not None:
+        return {
+            "id": existing,
+            "finished": True,
+            "source_sha256": game_record["game_trace_sha256"],
+        }
     request = WatchRequest(
         players=["random", "random"],
         hero_deck="interactive",

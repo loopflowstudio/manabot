@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CURATED_PACK, ELEMENTAL_WORLD_PACK } from '$lib/curated-pack';
+  import { CURATED_PACK, ELEMENTAL_WORLD_PACK, JEONG_INCREMENT_PACK } from '$lib/curated-pack';
   import { DECK_CHOICES, type DeckChoice } from '$lib/decks';
   import CardImage from './CardImage.svelte';
   import DeckIdentity from './DeckIdentity.svelte';
@@ -17,7 +17,7 @@
   let { hero, villain, disabled = false, heroLabel = 'Your deck', villainLabel = 'Opponent deck', onHeroChange, onVillainChange }: Props = $props();
   const roster = ELEMENTAL_WORLD_PACK.roster!;
   const otherDecks = DECK_CHOICES.filter((row) => !row.key.startsWith('elemental_'));
-  const allDecks = [...roster, CURATED_PACK.matchup.hero, CURATED_PACK.matchup.villain];
+  const allDecks = [...roster, CURATED_PACK.matchup.hero, CURATED_PACK.matchup.villain, JEONG_INCREMENT_PACK.matchup.hero];
   let inspected = $state<DeckChoice | null>(null);
   const inspectedKey = $derived(inspected ?? hero);
   const choice = $derived(DECK_CHOICES.find((row) => row.key === inspectedKey)!);

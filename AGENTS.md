@@ -69,6 +69,9 @@ reconnect, replay/fork identity and accessibility. Cancellation or undo needs an
 explicit shared action and cannot erase committed costs or revealed information.
 Configured priority-stop automation must remain identifiable as automation,
 separate from deliberate human decisions.
+Academy resume credentials and the started-launch marker live in browser
+`sessionStorage`. Keep them scoped together; a launch must not resume another
+tab's or another launch's game.
 This direction does not approve a particular redesign or change frozen worlds,
 checkpoints or experiment evidence.
 

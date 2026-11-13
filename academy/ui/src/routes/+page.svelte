@@ -40,6 +40,7 @@
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
   let showSetup = $state(false);
+  let launchedSetup = $state(false);
 
   let trainedOpponents = $state<TrainedOpponent[]>([]);
   // undefined until the catalog answers, so absence is never claimed early.
@@ -76,7 +77,8 @@
     }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
-    connect();
+    launchedSetup = params.has('launch');
+    connect(params.get('launch'));
 
     void loadOpponents();
     return () => {
@@ -163,6 +165,12 @@
       sendNewGame({ demo: demoName });
       return;
     }
+    if (launchedSetup && gameStore.observation && !showSetup) {
+      launchedSetup = false;
+      showSetup = true;
+      return;
+    }
+    launchedSetup = false;
     sendNewGame(gameStore.newGameConfig());
     showSetup = false;
   }

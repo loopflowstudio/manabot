@@ -21,6 +21,7 @@ from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.search import local_update
 from manabot.sim.search.flat_mc import MatchupPlayer, make_player
+from manabot.sim.search.local_update_receipt import LocalSearchConfig
 from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     LeafEvaluation,
@@ -176,7 +177,7 @@ def _build_policy_player(
             spec["checkpoint_sha256"] = registration.checkpoint_sha256
             # A registration omitting the evidence mode predates compact
             # evidence and plays with full evidence, as it was registered.
-            spec["config"] = local_update.LocalSearchConfig.from_recorded(
+            spec["config"] = LocalSearchConfig.from_recorded(
                 spec["config"]
             ).model_dump()
     player, obs_space = make_player(spec, seed=seed)

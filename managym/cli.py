@@ -1,123 +1,108 @@
-"""Engine command line: launch the packaged Academy browser UI."""
+"""Engine command line: prepare and launch the packaged Academy browser UI."""
 
 import argparse
-import errno
 import json
-import os
 from pathlib import Path
-import socket
 import sys
-import webbrowser
 
 DEFAULT_URL = "http://127.0.0.1:8000"
 GUIDE_URL = "https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy"
 
 
-def _error(code: str, message: str) -> int:
-    print(
-        "ACADEMY_PLAY_ERROR "
-        + json.dumps({"code": code, "message": message}, sort_keys=True),
-        file=sys.stderr,
-        flush=True,
-    )
-    return 2
-
-
-def _accepting(host: str, port: int) -> bool:
-    """Whether something already answers at the address Academy would print.
-
-    SO_REUSEADDR (kept so a restart can rebind over TIME_WAIT) lets macOS bind
-    127.0.0.1 beside another program's wildcard listener, which would then lose
-    its local traffic to Academy; a connection probe catches that on every
-    platform.
-    """
-    try:
-        with socket.create_connection((host, port), timeout=0.5):
-            return True
-    except OSError:
-        return False
+def _path_or_name(value: str, suffixes: set[str]) -> str | Path:
+    """A file argument is an existing or path-shaped value; anything else is a name."""
+    path = Path(value).expanduser()
+    return path if path.exists() or "/" in value or path.suffix in suffixes else value
 
 
 def academy(argv: list[str] | None = None) -> int:
+    from managym.academy.launch import AcademyLaunchError, serve
+
+    common = argparse.ArgumentParser(add_help=False)
+    # Suppressed defaults let shared options occur before or after the verb.
+    common.add_argument("--host", default=argparse.SUPPRESS)
+    common.add_argument("--port", type=int, default=argparse.SUPPRESS)
+    common.add_argument("--traces-dir", type=Path, default=argparse.SUPPRESS)
+    common.add_argument("--no-open", action="store_true", default=argparse.SUPPRESS)
     parser = argparse.ArgumentParser(
         prog="managym academy",
+        parents=[common],
         description=f"Open Academy at {DEFAULT_URL}. Launch guide: {GUIDE_URL}",
     )
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument(
-        "--traces-dir",
-        type=Path,
-        default=Path(os.environ.get("ACADEMY_TRACES_DIR", "academy/traces")),
+    commands = parser.add_subparsers(dest="command")
+    play = commands.add_parser("play", parents=[common], help="Start in a chosen game")
+    play.add_argument("--hero", default="ur_lessons")
+    play.add_argument("--villain", default="gw_allies")
+    play.add_argument("--opponent", default="search")
+    play.add_argument("--sims", type=int, default=64)
+    play.add_argument("--seed", type=int)
+    play.add_argument("--decklists", choices=["open", "closed"], default="open")
+    replay = commands.add_parser(
+        "replay", parents=[common], help="Open an evaluation trace or recording"
     )
-    parser.add_argument(
-        "--no-open", action="store_true", help="Do not open the browser"
-    )
+    replay.add_argument("source")
+    replay.add_argument("--game")
     args = parser.parse_args(argv)
     try:
-        import uvicorn
-
-        from managym.academy.site import SpaStaticFiles, frontend_directory
-    except ModuleNotFoundError as exc:
-        if exc.name and exc.name.split(".")[0] in {"fastapi", "uvicorn", "starlette"}:
-            return _error(
-                "extra.missing",
-                "Install the server dependencies: uv pip install 'managym[academy]'",
-            )
-        raise
-    directory = frontend_directory()
-    if not (directory / "index.html").is_file():
-        return _error(
-            "site.missing",
-            "Packaged frontend missing. From a checkout use ./scripts/play, or set ACADEMY_FRONTEND_BUILD to a built site.",
-        )
-    traces = args.traces_dir.expanduser().resolve()
-    os.environ["ACADEMY_TRACES_DIR"] = str(traces)
-    from managym.academy.extensions import bot_extension
-    from managym.academy.server import app
-
-    bot_extension()
-    app.mount("/", SpaStaticFiles(directory=directory, html=True), name="frontend")
-    host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
-    url = f"http://{'[' + host + ']' if ':' in host else host}:{args.port}"
-
-    class AcademyServer(uvicorn.Server):
-        async def startup(self, sockets: list[socket.socket] | None = None) -> None:
-            await super().startup(sockets=sockets)
-            if self.started:
-                print(
-                    "ACADEMY_PLAY_READY "
-                    + json.dumps(
-                        {"traces_dir": str(traces), "url": url}, sort_keys=True
-                    ),
-                    flush=True,
+        with serve(
+            host=getattr(args, "host", "127.0.0.1"),
+            port=getattr(args, "port", 8000),
+            traces_dir=getattr(args, "traces_dir", None),
+            open_browser=False,
+        ) as running:
+            target = running.url
+            if args.command == "play":
+                target = running.new_game(
+                    hero=_path_or_name(args.hero, {".txt", ".dek"}),
+                    villain=_path_or_name(args.villain, {".txt", ".dek"}),
+                    opponent=args.opponent,
+                    sims=args.sims,
+                    seed=args.seed,
+                    decklists=args.decklists,
+                ).url
+            elif args.command == "replay":
+                selection = (
+                    int(args.game)
+                    if args.game is not None and args.game.isdecimal()
+                    else args.game
                 )
-                print(f"  Academy: {url}\n  Ctrl-C stops the server", flush=True)
-                if not args.no_open:
-                    webbrowser.open(url)
-
-    if _accepting(host, args.port):
-        return _error(
-            "port.in_use", f"Port {args.port} is in use; choose --port <free-port>."
+                target = running.replay(
+                    _path_or_name(args.source, {".json", ".jsonl", ".gz"}),
+                    game=selection,
+                ).url
+            print(
+                "ACADEMY_PLAY_READY "
+                + json.dumps(
+                    {
+                        "traces_dir": str(running.traces_dir),
+                        "url": running.url,
+                        "open": target,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
+            print(f"  Academy: {target}\n  Ctrl-C stops the server", flush=True)
+            if not getattr(args, "no_open", False):
+                running.open(target)
+            running.wait()
+    except AcademyLaunchError as exc:
+        print(
+            "ACADEMY_PLAY_ERROR "
+            + json.dumps({"code": exc.code, "message": exc.message}, sort_keys=True),
+            file=sys.stderr,
+            flush=True,
         )
-    try:
-        # Own the listener so bind failures produce the documented error record.
-        family = socket.AF_INET6 if ":" in args.host else socket.AF_INET
-        with socket.socket(family) as listener:
-            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            listener.bind((args.host, args.port))
-            listener.listen(128)
-            AcademyServer(uvicorn.Config(app, host=args.host, port=args.port)).run(
-                sockets=[listener]
-            )
-    except KeyboardInterrupt:
-        pass
-    except OSError as exc:
-        if exc.errno == errno.EADDRINUSE:
-            return _error(
-                "port.in_use", f"Port {args.port} is in use; choose --port <free-port>."
-            )
-        raise
+        if exc.games:
+            print("  game  deal seed  leg  players  trace", file=sys.stderr)
+            for row in exc.games[:20]:
+                print(
+                    f"  {row.index:4}  {row.deal_seed}  {row.leg}  {' vs '.join(row.players)}  {row.game_trace_sha256[:12]}",
+                    file=sys.stderr,
+                )
+            if len(exc.games) > 20:
+                print(f"  20 of {len(exc.games)} shown", file=sys.stderr)
+        return 2
     return 0
 
 
