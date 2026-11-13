@@ -136,7 +136,11 @@ def _replay_game_inputs(
             seed=game.seed,
             seed_stride=evidence.seed_stride,
             skip_trivial=evidence.skip_trivial,
-            opponent_policy=evidence.opponent_policy,
+            **(
+                {"player_policies": evidence.player_policies}
+                if evidence.player_policies is not None
+                else {"opponent_policy": evidence.opponent_policy}
+            ),
         )
         if evidence.mode == "vector"
         else managym.Env(seed=game.seed, skip_trivial=evidence.skip_trivial)

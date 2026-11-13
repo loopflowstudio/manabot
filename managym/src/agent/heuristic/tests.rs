@@ -355,7 +355,7 @@ fn heuristic_prefix_and_empty_errors() {
 
 #[test]
 fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
-    use crate::agent::opponent::OpponentPolicy;
+    use crate::agent::opponent::PlayerPolicy;
 
     let players = ["a", "b"]
         .map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])))
@@ -364,7 +364,7 @@ fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
     env.reset(players.clone()).unwrap();
     // Select through the batch policy boundary. Kicker history must survive
     // a fork even after the lands used to estimate its cost become tapped.
-    let policy = OpponentPolicy::Heuristic;
+    let policy = PlayerPolicy::Heuristic;
     let mut obs = board(Space::PayOrNot);
     let mut spell = card(1, "Firebending Lesson", 1);
     spell.kicker_cost = 4;
@@ -392,4 +392,126 @@ fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
     assert_eq!(policy.select_action(&mut env, &obs).unwrap(), 0);
     assert_eq!(policy.select_action(&mut fork, &obs).unwrap(), 1);
     assert_eq!(policy.select_action(&mut selected, &obs).unwrap(), 1);
+}
+
+#[test]
+fn heuristic_per_seat_memory_is_independent_and_forked() {
+    use crate::agent::opponent::PlayerPolicy;
+    let players = ["a", "b"]
+        .map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])))
+        .to_vec();
+    let mut env = Env::new(42, true, false, false);
+    env.reset(players.clone()).unwrap();
+    let mut obs = board(Space::PayOrNot);
+    let mut spell = card(1, "Firebending Lesson", 1);
+    spell.kicker_cost = 4;
+    obs.agent_cards.push(spell);
+    obs.action_space.focus = vec![1];
+    obs.action_space.actions = vec![
+        offer(Action::PayCost, &[], None),
+        offer(Action::DeclineChoice, &[], None),
+    ];
+    lands(&mut obs, 5);
+    PlayerPolicy::Heuristic
+        .select_action(&mut env, &obs)
+        .unwrap();
+    assert!(env.heuristics[0].is_some());
+    assert!(env.heuristics[1].is_none());
+    obs.agent.player_index = 1;
+    PlayerPolicy::Heuristic
+        .select_action(&mut env, &obs)
+        .unwrap();
+    assert!(env.heuristics[1].is_some());
+    let fork = env.fork().unwrap();
+    env.reset(players).unwrap();
+    assert!(env.heuristics.iter().all(Option::is_none));
+    assert!(fork.heuristics.iter().all(Option::is_some));
+}
+
+#[test]
+fn heuristic_per_seat_scalar_vector_parity_and_terminal_rewards() {
+    use crate::agent::{opponent::PlayerPolicy, vector_env::VectorEnv};
+    let players = ["a", "b"]
+        .map(|name| {
+            PlayerConfig::new(
+                name,
+                BTreeMap::from([("Forest".into(), 8), ("Llanowar Elves".into(), 4)]),
+            )
+        })
+        .to_vec();
+    for policies in [
+        [PlayerPolicy::Agent, PlayerPolicy::Heuristic],
+        [PlayerPolicy::Heuristic, PlayerPolicy::Agent],
+        [PlayerPolicy::Random, PlayerPolicy::Heuristic],
+        [PlayerPolicy::Heuristic, PlayerPolicy::Heuristic],
+    ] {
+        let mut scalar = Env::new(213, true, false, false).with_player_policies(policies);
+        let mut vector = VectorEnv::new_with_player_policies(1, 213, true, policies);
+        let (mut obs, _) = scalar.reset(players.clone()).unwrap();
+        let batch = vector.reset_all(players.clone()).unwrap();
+        assert_eq!(obs.to_json(), batch[0].0.to_json());
+        let mut finished = false;
+        for _ in 0..1024 {
+            let chooser = obs.agent.player_index as usize;
+            let action = if policies[chooser] == PlayerPolicy::Agent {
+                0
+            } else {
+                -1
+            };
+            let (next, reward, done, truncated, info) = scalar.step(action).unwrap();
+            let batch = vector.step(&[action]).unwrap();
+            assert_eq!(reward, batch[0].reward);
+            assert_eq!(done, batch[0].terminated);
+            assert_eq!(truncated, batch[0].truncated);
+            if done {
+                if let Some(crate::infra::profiler::InfoValue::Int(winner)) =
+                    info.get("winner_index")
+                {
+                    assert_eq!(
+                        reward,
+                        if *winner as usize == chooser {
+                            1.0
+                        } else {
+                            -1.0
+                        }
+                    );
+                }
+                finished = true;
+                break;
+            }
+            assert_eq!(next.to_json(), batch[0].obs.to_json());
+            obs = next;
+        }
+        assert!(finished, "bounded fixture must finish: {policies:?}");
+    }
+}
+
+#[test]
+fn heuristic_builtin_steps_retain_live_event_parity() {
+    use crate::agent::opponent::PlayerPolicy;
+    let setup = crate::cards::setups::authored_setup("elemental-world-v2").unwrap();
+    let players = ["elemental_ur", "elemental_gw"]
+        .map(|key| setup.player_config(key, key).unwrap())
+        .to_vec();
+    let mut builtins =
+        Env::new(213, true, false, false).with_player_policies([PlayerPolicy::Heuristic; 2]);
+    let mut manual = Env::new(213, true, false, false);
+    builtins.reset(players.clone()).unwrap();
+    let (mut obs, _) = manual.reset(players).unwrap();
+    let mut selectors = [Heuristic::default(), Heuristic::default()];
+    for _ in 0..256 {
+        let chooser = obs.agent.player_index as usize;
+        let index = selectors[chooser].select_action(&obs, None).unwrap();
+        let expected = manual.step(index as i64).unwrap();
+        let actual = builtins.step(-1).unwrap();
+        assert_eq!(actual.0.to_json(), expected.0.to_json());
+        assert_eq!(
+            (actual.1, actual.2, actual.3),
+            (expected.1, expected.2, expected.3)
+        );
+        obs = expected.0;
+        if expected.2 || expected.3 {
+            break;
+        }
+    }
 }

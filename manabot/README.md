@@ -415,7 +415,7 @@ in Git history. Their archived inputs and receipts are indexed in
 now belongs to `sim/action/targeting.py`.
 
 Select `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring, or
-`VectorEnv(..., opponent_policy="heuristic")` for a native batched opponent.
+`VectorEnv(..., player_policies=("agent", "heuristic"))` for a native batched opponent.
 The scalar `HeuristicPlayer` adapter and arena anchor call the same engine
 implementation. `heuristic` is a separately versioned anchor with rules of thumb
 for mana, timing, targets, card choices and combat; see

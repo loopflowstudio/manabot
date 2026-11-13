@@ -24,6 +24,7 @@ import time
 import traceback
 from typing import Any, Literal
 from uuid import uuid4
+import warnings
 
 import numpy as np
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
@@ -114,6 +115,7 @@ class FailureEvidence(BaseModel):
     skip_trivial: bool = True
     # Retain historical names verbatim; native construction admits replay policies.
     opponent_policy: str = "none"
+    player_policies: tuple[str, str] | None = None
     seed_stride: int = 1
     identities: dict[str, object]
     context: dict[str, object]
@@ -551,25 +553,48 @@ class CapturedVector(_Capture):
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: str = "none",
+        opponent_policy: str | None = None,
+        player_policies: tuple[str, str] | None = None,
         seed_stride: int | None = None,
         stream_offset: int = 0,
     ) -> None:
         super().__init__()
         self.stride = seed_stride or num_envs
         self.skip_trivial = skip_trivial
-        self.opponent_policy = opponent_policy
+        if opponent_policy is not None and opponent_policy not in (
+            "none",
+            "random",
+            "heuristic",
+        ):
+            raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
+        if opponent_policy is not None and player_policies is not None:
+            raise ValueError("use player_policies or opponent_policy, not both")
+        if opponent_policy is not None:
+            warnings.warn(
+                "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self.opponent_policy = opponent_policy or "none"
+        self.player_policies = (
+            player_policies
+            if player_policies is not None
+            else (
+                "agent",
+                "agent" if self.opponent_policy == "none" else self.opponent_policy,
+            )
+        )
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             seed=seed,
             skip_trivial=skip_trivial,
-            opponent_policy=opponent_policy,
+            player_policies=self.player_policies,
             seed_stride=self.stride,
         )
         self._exposure = bool(self.scope and self.scope.training_exposure)
         self._closed = False
         if self._exposure:
-            if opponent_policy != "none" or not skip_trivial:
+            if self.player_policies != ("agent", "agent") or not skip_trivial:
                 raise ValueError(
                     "training exposure requires surfaced seats and trivial skipping"
                 )
@@ -666,6 +691,7 @@ class CapturedVector(_Capture):
             games=games,
             skip_trivial=self.skip_trivial,
             opponent_policy=self.opponent_policy,
+            player_policies=self.player_policies,
             seed_stride=self.stride,
         )
 

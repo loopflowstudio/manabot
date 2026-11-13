@@ -245,8 +245,8 @@ is scored and reset in place. By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
 
-`opponent_policy="none"` (the default) surfaces both seats' decisions to the
-caller. `opponent_policy="random"` plays the opponent's decisions natively and
+`player_policies=("agent", "agent")` (the default) surfaces both seats' decisions to the
+caller. `player_policies=("agent", "random")` plays the opponent's decisions natively and
 returns seat 0's next decision. These are the only built-in vector policies;
 `"passive"` is removed and raises an unsupported-policy `ValueError`, including
 through CapturedVector and Torch. Retained failure evidence keeps its original
@@ -261,12 +261,12 @@ search/decision digest, fails.
 
 ### Built-in heuristic opponent
 
-Use `opponent_policy="heuristic"` to step a batch against the rule-based opponent:
+Use `player_policies=("agent", "heuristic")` to step a batch against the rule-based opponent:
 
 ```python
 from manabot import managym
 
-games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="heuristic")
+games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "heuristic"))
 players = [
     managym.PlayerConfig(name, {"Forest": 20, "Llanowar Elves": 20})
     for name in ("learner", "heuristic")
@@ -286,12 +286,34 @@ per-slot Python opponent callback is needed. Terminal rewards are from the
 learner's perspective, including when the heuristic's action ends the game.
 Finished slots reset automatically, as with `random`.
 
-The default `opponent_policy="none"` leaves both seats' decisions to the caller.
-`"random"` selects uniformly from legal actions; `"heuristic"` uses the rules
-below. The Python `manabot.env.vector_env.VectorEnv` wrapper accepts the same
-option. Unsupported names raise `ValueError`.
-If an older installed extension rejects `"heuristic"`, install the matching
-package or [rebuild the extension](development.md#environment-and-commands).
+Both `managym.Env` and `managym.VectorEnv` accept the same two-seat
+`player_policies` tuple. Each seat is `"agent"` (external human, model or tool),
+`"random"` or `"heuristic"`. Defaults leave both seats external. The native
+published chooser selects the seat, including under control effects; built-ins
+receive only that chooser's live viewer observation. Game/deck configuration
+and world identities are independent of this controller configuration.
+
+With one external seat, reset and positional step advance built-ins until the external
+chooser or a terminal state. A scalar terminal must be explicitly reset; vector
+steps auto-reset finished slots. Terminal rewards belong to the acting external
+seat, including when a built-in finishes the game. Reset never silently starts
+a second game if a built-in wins before an external choice.
+
+With two built-in seats, reset only constructs a game. Call scalar `step()`
+(with no action) or vector `step([-1, ...])` to execute exactly one published
+built-in decision per game; terminal rewards belong to that decision's chooser.
+This makes autonomous games bounded and inspectable. Command and structured
+submission methods commit exactly their requested external action, preserving
+atomic receipts and stale rejection. If the resulting chooser is a built-in,
+call scalar `step()` to continue native play. Supplying an external
+index for a built-in chooser raises an error. Native trivial skipping still
+applies. Each seat owns independent heuristic memory; reset clears both and
+forks copy both.
+
+The Python training wrapper accepts the same tuple. The public vector
+`opponent_policy` argument is deprecated, warns, and will be removed in 0.3.0:
+`none` maps to `(agent, agent)`, other values to `(agent, value)`. Supplying both
+arguments or an unknown name raises `ValueError`.
 Encoding capacity failures remain errors under the configured overflow policy;
 they do not switch the opponent to random play.
 
@@ -413,7 +435,7 @@ read boundary in scalar or batched games. This is an opt-in hidden-information A
 from manabot import managym
 from manabot.env.match import Match
 
-games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="none")
+games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))
 observations = games.reset_all(Match().to_rust())
 snapshots = games.hand_snapshots([1, 0])
 

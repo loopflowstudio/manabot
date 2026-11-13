@@ -4,6 +4,7 @@ Vectorized environment wrapper backed by managym.VectorEnv.
 """
 
 from typing import Any, Dict, Optional, Tuple
+import warnings
 
 import numpy as np
 import torch
@@ -23,10 +24,33 @@ class VectorEnv:
         reward: Reward,
         device: str,
         seed: int = 0,
-        opponent_policy: str = "none",
+        opponent_policy: str | None = None,
+        *,
+        player_policies: tuple[str, str] | None = None,
     ) -> None:
         self._skip_trivial = True
-        self._policy_name = opponent_policy
+        if opponent_policy is not None and opponent_policy not in (
+            "none",
+            "random",
+            "heuristic",
+        ):
+            raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
+        if opponent_policy is not None and player_policies is not None:
+            raise ValueError("use player_policies or opponent_policy, not both")
+        if opponent_policy is not None:
+            warnings.warn(
+                "opponent_policy is deprecated; use player_policies; removal in 0.3.0",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self._player_policies = (
+            player_policies
+            if player_policies is not None
+            else (
+                "agent",
+                "agent" if opponent_policy in (None, "none") else opponent_policy,
+            )
+        )
         self._player_configs = match.to_rust()
         self.observation_space = observation_space
         self.reward = reward
@@ -57,7 +81,7 @@ class VectorEnv:
             num_envs=self.num_envs,
             seed=seed,
             skip_trivial=self._skip_trivial,
-            opponent_policy=self._policy_name,
+            player_policies=self._player_policies,
         )
 
     def _allocate_buffers(self) -> Dict[str, np.ndarray]:

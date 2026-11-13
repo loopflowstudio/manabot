@@ -66,7 +66,9 @@ def test_native_heuristic_matches_retained_python_decisions() -> None:
 @pytest.mark.parametrize("seed", [213, 2**64 - 1])
 def test_native_batch_matches_scalar_choices_rewards_and_reset(seed: int) -> None:
     configs = _players(["red", "green"])
-    batch = managym.VectorEnv(num_envs=1, seed=seed, opponent_policy="heuristic")
+    batch = managym.VectorEnv(
+        num_envs=1, seed=seed, player_policies=("agent", "heuristic")
+    )
     scalar = managym.Env(seed=seed)
     selector = managym.Heuristic()
     raw, _ = scalar.reset(configs)
@@ -141,7 +143,7 @@ def test_python_vector_wrapper_accepts_native_heuristic() -> None:
         ObservationSpace(),
         Reward(RewardConfig()),
         device="cpu",
-        opponent_policy="heuristic",
+        player_policies=("agent", "heuristic"),
     )
     try:
         obs, _ = env.reset()

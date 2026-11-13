@@ -134,6 +134,12 @@ class Env:
         skip_trivial: bool = True,
         enable_profiler: bool = False,
         enable_behavior_tracking: bool = False,
+        *,
+        player_policies: tuple[
+            Literal["agent", "random", "heuristic"],
+            Literal["agent", "random", "heuristic"],
+        ]
+        | None = None,
     ) -> None: ...
     def reset(
         self, player_configs: List[PlayerConfig]
@@ -142,7 +148,7 @@ class Env:
     def card_capture_json(self) -> str: ...
     def set_seed(self, seed: int) -> None: ...
     def step(
-        self, action: int
+        self, action: int | None = None
     ) -> Tuple[Observation, float, bool, bool, Dict[str, Any]]: ...
     def compound_offers(self) -> StructuredOfferSet: ...
     def compound_commands_json(
@@ -299,8 +305,14 @@ class VectorEnv:
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: Literal["none", "random"] = "none",
+        opponent_policy: Literal["none", "random", "heuristic"] | None = None,
         seed_stride: int | None = None,
+        *,
+        player_policies: tuple[
+            Literal["agent", "random", "heuristic"],
+            Literal["agent", "random", "heuristic"],
+        ]
+        | None = None,
     ) -> None: ...
     def reset_all(
         self, player_configs: List[PlayerConfig]
@@ -1004,7 +1016,6 @@ class CardPool:
     @property
     def counts(self) -> np.ndarray:
         """Int32 counts of shape ``[cards]``, indexed by ``card_def_id``."""
-
 
 class Heuristic:
     """Stateful, viewer-safe native opponent; reset between independent games."""

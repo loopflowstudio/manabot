@@ -133,3 +133,46 @@ def test_torch_reset_with_a_seed_restarts_and_without_continues(
         assert _seeds(vector) == [44, 45]
     finally:
         vector.close()
+
+
+@pytest.mark.parametrize(
+    "policies", [("heuristic", "agent"), ("heuristic", "heuristic")]
+)
+def test_captured_per_seat_configuration_and_terminal_rewards(
+    policies: tuple[str, str],
+) -> None:
+    vector = CapturedVector(num_envs=1, seed=213, player_policies=policies)
+    buffers = ObservationSpace().encoder.allocate(1)
+    buffers.update(
+        rewards=np.zeros(1, dtype=np.float64),
+        terminated=np.zeros(1, dtype=np.uint8),
+        truncated=np.zeros(1, dtype=np.uint8),
+    )
+    vector.set_buffers(buffers)
+    players = [
+        managym.PlayerConfig(name, {"Forest": 8, "Llanowar Elves": 4})
+        for name in ("a", "b")
+    ]
+    scalar = managym.Env(seed=213, player_policies=policies)
+    scalar.reset(players)
+    try:
+        vector.reset_all_into_buffers(players)
+        evidence = vector._evidence_for(vector.games, "step")
+        assert evidence.player_policies == policies
+        for _ in range(1024):
+            chooser = scalar.current_agent_index()
+            assert chooser is not None
+            external = policies[chooser] == "agent"
+            _, reward, done, truncated, _ = scalar.step(0 if external else None)
+            vector.step_into_buffers([0 if external else -1])
+            assert buffers["rewards"][0] == reward
+            assert bool(buffers["terminated"][0]) == done
+            assert bool(buffers["truncated"][0]) == truncated
+            if done or truncated:
+                assert vector.games[0].actions == []
+                break
+            assert vector.current_agent_indices() == [scalar.current_agent_index()]
+        else:
+            pytest.fail("bounded per-seat fixture did not terminate")
+    finally:
+        vector.close()

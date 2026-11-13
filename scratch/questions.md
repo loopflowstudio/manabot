@@ -305,3 +305,27 @@ repeat matched all 1,096 decision records. Academy Watch (heuristic v random,
 seed 42) played to "seat 1 wins" at decision 337 with no page errors; servers
 stopped. Bad names and capacities raise ValueError. Host load ≈500, so no speed
 evidence. Report: `scratch/qa.html`.
+
+## Required per-seat API (2026-11-13)
+
+Jack Heart: "Implement the requested per-seat agent/random/heuristic API before delivering PR #518".
+Steer c9370d68 additionally requires shared scalar/vector configuration, native
+chooser semantics, viewer-safe selection, independent seat memory and bounded
+two-built-in stepping. Etude eval migration belongs to Task 050eb6; no other
+checkout is edited.
+
+Reversible design choice: `player_policies=("agent", "heuristic")` belongs to
+Env/VectorEnv construction, separate from deck/rules PlayerConfig so controller
+selection never changes world hashes or frozen setup serialization. The native
+Env owns selection, settlement and memory for both scalar and vector callers.
+Delete — do not maintain: vector-only opponent advancement and one shared
+heuristic memory slot. Preserve the public old argument through a warning with
+removal in 0.3.0; retained receipt spellings remain readable.
+Two built-ins reset without playing, then advance one decision per step
+(scalar None; vector -1). Mixed games settle to the external chooser with a
+10,000-decision error bound and never loop resets. Vector terminal autoreset
+remains one replacement, and reward belongs to the originating chooser.
+
+Remaining: finish binding/caller migration, directed debug checks, matching
+release rebuild, focused installed API/parity checks. Delivery follows the
+existing Graph after implementation.

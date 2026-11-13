@@ -6,7 +6,10 @@ and `academy` (the optional play UI). Install the `managym` distribution for
 `import managym` without the training stack. `manabot` depends on the exact
 same version and keeps `manabot.managym` as a compatibility alias. Rust sources
 stay in this directory. Start with the
-[Python installation example](../docs/engine-python.md).
+[Python installation example](../docs/engine-python.md). Both `Env` and
+`VectorEnv` accept `player_policies=("agent", "heuristic")`: each native seat
+can use an external agent, random play or the built-in heuristic, without
+installing `manabot`. See [built-in play](../docs/engine.md#built-in-heuristic-opponent).
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
 `CardPool` holds the cards available, `format.Limited` holds the rules, and a
