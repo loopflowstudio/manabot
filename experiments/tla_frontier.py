@@ -533,25 +533,6 @@ def paired_matchup(
 LOST_RUNS: frozenset[str] = frozenset({"5b7d8fa7b38c"})
 
 
-# Recorded in the stored tla-frontier-c5fba4-paired-v1 and -cuda-v1 tournaments.
-# report() has no state from which to recover the equal-hours partners, and
-# later planned milestones were never played. Keep the recorded pairs only.
-EQUAL_UPDATES: tuple[int, ...] = (25, 50, 75, 100, 150, 200, 300, 400, 600, 800)
-EQUAL_HOURS: tuple[tuple[str, int], ...] = (
-    ("u25", 50),
-    ("u50", 100),
-    ("u75", 175),
-    ("u100", 225),
-    ("u150", 350),
-    ("u200", 475),
-    ("u300", 700),
-    ("u400", 875),
-    ("u600", 1200),
-    ("u800", 1525),
-    ("final u925", 1700),
-)
-
-
 def _equal_update_seating(update: int) -> str:
     return f"{LARGE} u{update} vs {SMALL} u{update}"
 
@@ -560,14 +541,30 @@ def _equal_hours_seating(point: str, partner: int) -> str:
     return f"{LARGE} {point} vs {SMALL} u{partner} at equal hours"
 
 
-def equal_update_seatings() -> tuple[str, ...]:
-    """The recorded equal-update pairs, named exactly as the schedule names them."""
-    return tuple(_equal_update_seating(update) for update in EQUAL_UPDATES)
-
-
-def equal_hours_seatings() -> tuple[str, ...]:
-    """The recorded equal-hours pairs, including the lost run's endpoint."""
-    return tuple(_equal_hours_seating(point, partner) for point, partner in EQUAL_HOURS)
+# The Large-vs-Small pairs the stored tla-frontier-c5fba4-paired-v1 and -cuda-v1
+# tournaments hold, named as the schedule named them. report() has no state from
+# which to recover the equal-hours partners, and later planned milestones were
+# never played, so the recorded pairs are listed.
+EQUAL_UPDATE_SEATINGS: tuple[str, ...] = tuple(
+    _equal_update_seating(update)
+    for update in (25, 50, 75, 100, 150, 200, 300, 400, 600, 800)
+)
+EQUAL_HOURS_SEATINGS: tuple[str, ...] = tuple(
+    _equal_hours_seating(point, partner)
+    for point, partner in (
+        ("u25", 50),
+        ("u50", 100),
+        ("u75", 175),
+        ("u100", 225),
+        ("u150", 350),
+        ("u200", 475),
+        ("u300", 700),
+        ("u400", 875),
+        ("u600", 1200),
+        ("u800", 1525),
+        ("final u925", 1700),
+    )
+)
 
 
 def with_launcher_ends(state: ExperimentState) -> ExperimentState:
@@ -1166,10 +1163,8 @@ def report() -> Report:
                 "Model vs heuristic",
                 tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
-            head_to_head(
-                "Large vs Small at fixed training time", equal_hours_seatings()
-            ),
-            head_to_head("Large vs Small at fixed # updates", equal_update_seatings()),
+            head_to_head("Large vs Small at fixed training time", EQUAL_HOURS_SEATINGS),
+            head_to_head("Large vs Small at fixed # updates", EQUAL_UPDATE_SEATINGS),
         ),
         perf=PERF,
         ml=(*learning_schedule(jobs), *ML),

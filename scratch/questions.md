@@ -2,8 +2,9 @@
 
 Reversible choices taken without asking; details in `etude-sdk-031.md`.
 
-1. The branch waits for etude-sdk 0.3.2 and draws one head-to-head line by
-   seating (Jack Heart: "Fix etude first").
+1. The branch pins etude-sdk 0.3.2 and draws one head-to-head line by
+   seating (Jack Heart: "Fix etude first"; third comment: "Move every pin
+   straight to 0.3.2").
 2. `~/.etude/launcher.db` is never moved (Jack Heart, second Task comment);
    0.3.2 keeps `launcher-17.db` beside it.
 3. `with_launcher_ends` takes the lost run `5b7d8fa7b38c` from a frozen record
@@ -17,11 +18,6 @@ Reversible choices taken without asking; details in `etude-sdk-031.md`.
    lists its 21 recorded Large-vs-Small seatings as a frozen record, because a
    tag selection is never drawn seated and `report()` sees no state. The
    alternative, teaching Etude to seat a tag, is noted and not taken.
-7. The one-line charts are built and checked against Etude main before 0.3.2
-   is released; only the pin waits.
-
-8. Docs written before the code name the frontier's functions
-   `equal_hours_seatings()` / `equal_update_seatings()` and the record
-   `EQUAL_UPDATES`, and state 0.3.2 and `launcher-17.db` as shipped. The
-   dated line in `experiments/tla-frontier-c5fba4-results.md` is left to the
-   implementation, since it records a change to the report once made.
+7. Docs state 0.3.2 and `launcher-17.db` as
+   shipped; the frontier's frozen names are `EQUAL_HOURS_SEATINGS` and
+   `EQUAL_UPDATE_SEATINGS`.

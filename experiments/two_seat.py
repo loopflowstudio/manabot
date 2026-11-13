@@ -28,9 +28,7 @@ def report() -> Report:
     """Score against the heuristic by update, by matchup and seat.
 
     Two decks make four matchups (LvA, AvL, LvL, AvA), read best as small
-    multiples. `plays` holds a row per leg and player. The former cross-job
-    direct-games chart needs an Aligned seating that these records never held,
-    so Etude 0.3.1 cannot draw it.
+    multiples. `plays` holds a row per leg and player.
     """
     return Report(
         score=Score(table="plays", value="score", reference=0.5),

@@ -297,8 +297,8 @@ def report() -> Report:
                 "Model vs heuristic",
                 tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
-            head_to_head("Large vs Small at fixed training time", equal_hours_seatings()),
-            head_to_head("Large vs Small at fixed # updates", equal_update_seatings()),
+            head_to_head("Large vs Small at fixed training time", EQUAL_HOURS_SEATINGS),
+            head_to_head("Large vs Small at fixed # updates", EQUAL_UPDATE_SEATINGS),
         ),
         perf=PERF,
         ml=(*learning_schedule(jobs), *ML),
@@ -355,24 +355,14 @@ pair's hours.
 one seat only when every part of it is `Matches(seating=NAME)`. A tag is
 always drawn per job, both seats, so a tagged head-to-head shows two lines
 mirrored about 0.5. The names must be the recorded ones, character for
-character. The frontier shares its name formats between `eval(state)` and
-`report()`, which selects the recorded pairs through `equal_update_seatings()`
-and `equal_hours_seatings()`:
-
-```python
-def _equal_update_seating(update: int) -> str:
-    return f"{LARGE} u{update} vs {SMALL} u{update}"
-
-
-def equal_update_seatings() -> tuple[str, ...]:
-    return tuple(_equal_update_seating(update) for update in EQUAL_UPDATES)
-```
+character, so the frontier formats them with the functions its `eval(state)`
+schedule uses.
 
 `report()` receives no state, so it cannot work out which pairs were played.
 A finished experiment lists them in its file as a frozen record
-(`EQUAL_UPDATES` above is the ten updates both jobs reached); listing every
-planned milestone instead would name pairs that were never played. A name
-nothing holds does not fail the build. It is a note at the top of the page,
+(`EQUAL_UPDATE_SEATINGS` covers the ten updates both jobs reached); listing
+every planned milestone instead would name pairs that were never played. A
+name nothing holds does not fail the build. It is a note at the top of the page,
 
 ```text
 A Curve panel names seating 'w160l8 u1200 vs w64 u1200', which nothing holds.

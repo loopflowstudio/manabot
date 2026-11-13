@@ -27,27 +27,49 @@ with nothing to move. Drop the "move it aside first" open question; after
 bumping to 0.3.2, confirm `uv run etude` launch/status/report work from this
 checkout with the old launcher.db still in place."
 
-## State (2026-11-13, implementation pass)
+Jack Heart, 2026-11-13, third Task comment: "etude-sdk 0.3.2 is on PyPI
+(commit 286e0c5). Move every pin straight to 0.3.2. It draws a seating of two
+fixed models at its first seat's checkpoint, so draw the frontier head-to-head
+charts with Curve(matches=tuple(Matches(seating=name) for each Large-vs-Small
+seating of that tag)): one Large line, no mirrored Small. The launcher now uses
+~/.etude/launcher-17.db beside the old launcher.db; leave the old file alone
+and drop the move-aside question. Rebuild the frontier report to confirm, then
+land."
 
-- The 0.3.1 move is committed on the branch (aefeefcaf7 and after; main synced
-  at 27cb65bba7): pins, renames, SQL reads, report helpers, the frozen lost-run
-  record, the three reduced panels, docs. Its probe table and progress log are
-  in git at fc4784d2e5 `scratch/etude-sdk-031.md`.
-- Slice 1 is implemented and checked: six focused helper tests pass; changed
-  Python files pass Ruff check and format check. The retained R2 page built
-  against Etude #109 at ba00d4c in 790 seconds, in a temporary Etude home.
-- The saved page's two head-to-head chart selections have 11 and 10 scored
-  points, all on Large (`5b7d8fa7b38c`), each 16 matches / 64 games. There
-  are no failures or missing-seating notes; only the expected recorded
-  `tournament_conflict` note remains. HTML: `/tmp/mtg348-probe/seated.html`.
-  The first probe assertion mistook panel indices for selection IDs; checking
-  the saved page via each panel's `matches` selection passes without a rebuild.
-- Newly checked equal-hours points: u600 0.500 [0.421875, 0.59375], u800
-  0.53125 [0.453125, 0.609375], u925 0.53125 [0.4375, 0.609375]. Equal-update
-  u800 is 0.65625 [0.546875, 0.765625]; the docs now use its actual hover.
-- PyPI's JSON API still reports 0.3.1 after that build. Slice 2 remains blocked
-  on 0.3.2. No launcher command was run against the real home, and no paid
-  run was launched. The project pin and lock remain 0.3.1 until the release.
+## State (2026-11-13, compress pass)
+
+- The 0.3.1 move is in git from aefeefcaf7; its probe table and progress log
+  are at fc4784d2e5 `scratch/etude-sdk-031.md`. Slice 1 (seated head-to-head)
+  is at 322ab35e40, checked against Etude #109 at ba00d4c: 11 and 10 scored
+  points, all on Large (`5b7d8fa7b38c`), 16 matches / 64 games each, only the
+  expected `tournament_conflict` note. Equal-hours u600 0.500, u800 0.531,
+  u925 0.531; equal-update u800 0.65625 [0.546875, 0.765625].
+- Slice 2 pins are done: `pyproject.toml` (three floors, the `==` pin),
+  `uv.lock`, `scripts/release/validate.py`, `tests/infra/test_release.py` are
+  on 0.3.2 (`uv lock --refresh-package etude-sdk --upgrade-package etude-sdk`;
+  without the refresh uv's cached index knew only 0.3.1). 0.3.2's notes list
+  no further break.
+- Launcher, real home, 0.3.2: `uv run etude status` exits 0 and prints
+  "last loop: 2026-11-11 04:05 UTC"; `launcher-17.db` (184 KB) now sits beside
+  `launcher.db` (1.28 GB, untouched by this client; its mtime moves because
+  0.2.15 clients are tracking live pods). `uv run etude launch
+  experiments/tla_frontier.py --quote` prints "Missing option '--revision'"
+  and rents nothing.
+- Tests on 0.3.2, one process each, temporary `ETUDE_HOME`: all pass in
+  `tests/training/{test_report_helpers,test_etude_evaluation,test_value_readout_252}.py`,
+  `tests/eval/{test_experiment_files,test_card_evaluation,test_curriculum_report,test_etude_player_migration}.py`,
+  `tests/sim/test_tracking.py`, `tests/infra/test_release.py`. The rest of
+  the acceptance list is gate's.
+- Repo-wide `ruff check .` reports 54 import-order errors and 5 unformatted
+  files in paths this branch does not touch (`academy/`, `deploy/`,
+  notebooks) under the installed ruff 0.15.4; the branch's own files pass.
+- Compress: the frontier's two tuple-returning functions became the frozen
+  name tuples `EQUAL_HOURS_SEATINGS` / `EQUAL_UPDATE_SEATINGS`; the "former
+  chart" notes left `two_seat.py` and the mtg183 report file (the PR names the
+  dropped panels). `against_fixed` and `against_earlier_self` now share a body
+  and stay two names: `against_earlier_self` is published, so merging would
+  add a deprecated alias.
+- FRONTIER_BUILD
 
 ## Demo
 
@@ -131,81 +153,27 @@ Launcher and kept files under 0.3.2 (read from #110's diff and
 
 ## Approach
 
-### Slice 1 (complete): one line per head-to-head chart
+### Slice 1 (done, 322ab35e40): one line per head-to-head chart
 
-Needs only #109, which a locked 0.3.1 does not have. The code is valid on
-0.3.1 (it draws no seated points for fixed pairs there), so tests pass on the
-current lock and the charts are checked against Etude main.
+`manabot/training/report.py::head_to_head(title, seatings)` returns
+`Curve(title=title, matches=tuple(Matches(seating=name) for name in seatings))`
+and raises `ValueError` on an empty sequence. `experiments/tla_frontier.py`
+formats names with `_equal_update_seating` / `_equal_hours_seating`, shared by
+`comparison_schedule` and the frozen tuples `report()` passes. Stored names do
+not change, so no match key moves and `etude eval` wants nothing new. Tests are
+in `tests/training/test_report_helpers.py`; the docs and the dated line in
+`experiments/tla-frontier-c5fba4-results.md` are written.
 
-1. `manabot/training/report.py::head_to_head(title, seatings)` takes the
-   seating names and returns
-   `Curve(title=title, matches=tuple(Matches(seating=name) for name in seatings))`.
-   An empty sequence raises `ValueError`. Docstring: one line, the first
-   seat's score where its checkpoint stood; the names are the ones `eval(state)`
-   gave. `against_earlier_self` and `against_fixed` keep their tags.
-2. `experiments/tla_frontier.py`:
-   - Two name functions own the formats, used by `comparison_schedule` and by
-     `report()`: equal updates `f"{LARGE} u{N} vs {SMALL} u{N}"`, equal hours
-     `f"{LARGE} {point} vs {SMALL} u{M} at equal hours"`. The stored names do
-     not change, so no match key moves and `etude eval` wants nothing new.
-   - A frozen record beside `LOST_RUNS`, citing the stored tournaments: the 10
-     equal-update milestones and the 11 equal-hours (point, partner) pairs
-     listed above.
-   - `report()` passes those names to `head_to_head`; drop the "Both jobs are
-     drawn" comment and say in the docstring that each pair is drawn once, at
-     Large's update.
-3. Tests, in `tests/training/test_report_helpers.py`: `head_to_head` builds one
-   `Matches(seating=...)` per name and no tag; the frontier `report()`'s two
-   charts name exactly 11 and 10 seatings. No page build in tests.
-4. Docs: written 2026-11-13, ahead of the code, in `docs/experiments.md`
-   ("What an experiment is" launcher paragraph; "Writing a report" example,
-   page description, helper row and the seating-name passage) and
-   `docs/development.md` (launcher sentence, two `etude-sdk>=0.3.2` mentions).
-   They describe the finished state, so the code follows them:
-   - `head_to_head(title, seatings)`; empty raises `ValueError`.
-   - The frontier's name functions are `equal_hours_seatings()` and
-     `equal_update_seatings()`, and the frozen equal-update record is
-     `EQUAL_UPDATES`; rename in the docs if the code picks other names.
-   - Hover example `0.66 · 95% interval 0.53–0.77 · 64 games · 16 matches`:
-     the 0.66 is the probed u800 point, the interval is illustrative. Replace
-     both with the built page's values.
-   - The docs say 0.3.2 while the lock holds 0.3.1 until slice 2. If 0.3.2's
-     launcher file or schema number differs from #110 (`launcher-17.db`),
-     correct the launcher paragraph.
-   - The `--with "etude-sdk[s3,eval]==0.2.15" etude status` line is the form
-     `experiments/cuda_precision.py` uses; slice 2's launcher check confirms
-     it still reads `launcher.db`.
-5. Dated line in `experiments/tla-frontier-c5fba4-results.md`: the report draws
-   Large-vs-Small by seating from 2026-11-13; no game or score changed.
+### Slice 2 (pins done; confirmation remaining)
 
-Check for this slice, before 0.3.2 exists:
-
-```bash
-ETUDE_HOME=$(mktemp -d) doppler run -p manabot -c prd -- \
-  uv run --extra artifacts --extra evaluation --extra reports \
-  --with-editable <etude checkout at main> python <probe that calls etude.page.build and prints page.points, page.notes>
-```
-
-Expected: equal-hours selection 11 points, equal-updates 10 points, every
-point's line `5b7d8fa7b38c`, the values above for the points already seen, and
-no note containing "which nothing holds".
-
-### Slice 2 (blocked on the 0.3.2 release)
-
-1. Pin 0.3.2 wherever 0.3.1 appears: `pyproject.toml` (three floors, the `==`
-   pin), `uv.lock`, `docs/development.md`, `scripts/release/validate.py`,
-   `tests/infra/test_release.py` fixtures. Read `release/v0.3.2/NOTES.md` for
-   further breaks. Leave `RELEASE_NOTES.md` and the `==0.2.15` launch lines in
-   `experiments/cuda_precision.py` and `precision_ladder.py`.
-2. Confirm beside the old launcher file, with no `ETUDE_HOME` override:
-   `uv run etude status`, `uv run etude runs`, then the Demo report, then
-   `uv run etude launch experiments/tla_frontier.py --quote` if the new file
-   has a provider (it will not until a person adds one; record what it says).
-   `~/.etude/launcher.db` keeps its name and its 0.2.15 clients keep working;
-   `launcher-17.db` appears beside it.
-3. Gate acceptance below.
-
-If 0.3.2 is not on PyPI when slice 1 is done, stop there and say so.
+1. Done: pins, lock, launcher check (see State). `RELEASE_NOTES.md` and the
+   `==0.2.15` launch lines in `experiments/cuda_precision.py` and
+   `precision_ladder.py` stay.
+2. Remaining: the Demo build on the pinned SDK (see State for its result), the
+   docs' hover example checked against that page, then gate acceptance below.
+   The `--with "etude-sdk[s3,eval]==0.2.15" etude status` line in
+   `docs/experiments.md` is the form `experiments/cuda_precision.py` uses; it
+   was not run here, to stay off the live `launcher.db`.
 
 ## Alternatives
 

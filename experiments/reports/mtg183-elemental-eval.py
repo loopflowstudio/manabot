@@ -7,9 +7,9 @@ experiment its eval runs record. It only reports; the follower
 update and its line, so the evaluation-only page draws curves over updates
 (`experiments.elemental_long_db.normalize` declares them on older records).
 
-The Opponent control selects the heuristic. The former 400-updates-earlier
-and half-updates curves cannot be selected under Etude 0.3.1: these historical
-matches carry neither seating names nor tags identifying those comparisons.
+These matches carry neither seating names nor tags, so the page cannot select
+a checkpoint's games against its earlier self; the Opponent control selects
+the heuristic.
 
     uv run --extra evaluation python -m experiments.elemental_long_db build
     ETUDE_HOME=~/.manabot/mtg183-eval-db/etude uv run --extra evaluation \\
