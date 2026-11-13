@@ -292,21 +292,16 @@ leave fixture generation, seeds, losses and output keys unchanged.
    Cover nonempty event, relation, naming and fact-program routes as their
    consumers move, retain malformed-input refusal tests, and compare CPU
    outputs/gradients rather than treating host row tests as forward evidence.
-3. Callers: backend rollout, collection, sim, verify, belief, eval, academy,
-   scripts, experiments, tests; encoders move under `backends/torch/`;
-   deletions above; `_TORCH_NOT_YET_MOVED` shrinks.
-4. **Implemented; consumer verification in progress.** General container saves,
-   metadata readers, export suffixes and editable container fixtures. Legacy
-   `.pt` readers remain and MLX support checks belong to its load.
-5. Backend rule: implement the resolver and boundary test for the already
-   documented rule; move sim/eval over `BackendPolicy`; file the explicitly
-   deferred belief/executor/optimizer-persistence/verify imports as a follow-up
-   Task. Verify the rule text against the final allowlist.
-6. Aliases sweep; docs (`policy/README.md`, `backends/README.md`,
-   `backends/mlx.md`, `docs/training-loop.md`, `manabot/README.md`,
-   `docs/training.md`, `manabot/model/agent.md`).
-7. L4 equivalence and speed (below).
-8. Optimize pass (below); delivery clears added scratch through `lf`.
+3. **Completed.** Callers moved; encoders are private modules under
+   `backends/torch/`; deletions above done.
+4. **Completed.** General container saves (`save_checkpoint` →
+   `write_container`), metadata readers, export suffixes, editable fixtures.
+   `torch.load` remains only in the legacy `.pt` readers.
+5. **Completed.** `manabot.backends.resolve`, exact-allowlist boundary test,
+   sim/eval over `BackendPolicy`; deferred imports filed as Task `c2ef4a`.
+6. **Completed.** `ObservationBuffers`, `ParameterArrays`; docs.
+7. **Remaining.** L4 equivalence and speed (below); blocked on L4 capacity.
+8. **Remaining.** Optimize pass (below); delivery clears added scratch through `lf`.
 
 ## Earlier checks
 
@@ -407,9 +402,9 @@ backend; training writes `.safetensors` policies that sim, eval and Academy
 load beside old `.pt` files; the oracle and L4 checks above hold; the speed
 table and the optimize pass's before/after are in the PR body.
 
-## Documentation contracts still to implement
+## Documentation contracts (implemented; keep aligned)
 
-Draft docs in `manabot/{backends,policy}/README.md`, `manabot/model/agent.md`
+Docs in `manabot/{backends,policy}/README.md`, `manabot/model/agent.md`
 and the training/evaluation/Academy guides describe the completed PR. They
 settle these API details:
 - `PolicyInference` imports from `manabot.backends.torch.policy`.
@@ -424,9 +419,9 @@ settle these API details:
   `training/loops/minimal.py` aligned.
 - `on_device(batch, device)` accepts a device string.
 
-After moving encoders, replace the directory links in
-`docs/observation-and-model.md` with exact files. Re-copy its “Scoring legal
-actions” and `docs/learning.md`'s “Value” excerpts from the final forward.
+`docs/observation-and-model.md` links exact encoder files. If the optimize
+pass changes the forward, re-copy its “Scoring legal actions” and
+`docs/learning.md`'s “Value” excerpts.
 
 ## Earlier host simplification
 
@@ -632,3 +627,13 @@ verify helper's NumPy→Torch→NumPy round trip is one `np.asarray`. Oracle
 `compress.pt`: **3,248 tensors, 0 differing**; `updates-compress.json`
 byte-identical to base; inference/container/prepare/protocol/value tests
 **63 passed**, MLX backend **8 passed**. L4 and optimize remain outstanding.
+
+Realign (2026-11-13 UTC): the step feedback said `backends/torch/policy.py`
+still forwards `AdmittedObservation` and `checkpoint.py` saves with
+`torch.save`. At `b2ab1738c` neither holds: the acceptance `rg` over
+`manabot academy scripts` finds no removed type (only unrelated English
+"Retained"), `ActorCritic.forward` takes `Prepared[torch.Tensor]`, and
+`save_checkpoint` calls `write_container`; `torch.load` remains only in the
+legacy readers. `origin/main` has nothing new; the Task has no new comments.
+No tests or L4 queries were rerun. Next action is unchanged: check L4
+availability, then equivalence, ABAB speed, optimize, and gate's broader suites.

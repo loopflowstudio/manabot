@@ -383,7 +383,7 @@ changed colors and keyword-counter timestamps; members keep one-based public
 object joins, and duplicate memberships survive. No rules record is deleted or
 semantically coalesced. The layout, routing and sum/normalization tradeoff are
 in the torch backend's shared-effect encoder
-([`manabot/backends/torch/`](../manabot/backends/torch/)) and
+([`manabot/backends/torch/_shared_effects.py`](../manabot/backends/torch/_shared_effects.py)) and
 [shared effect inputs](../manabot/README.md#shared-effect-inputs). The transport
 is an engineering result; it establishes no learning-quality advantage.
 
