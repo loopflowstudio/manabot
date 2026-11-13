@@ -273,14 +273,16 @@ selected tap commits before the next selection and is unavailable to nested
 costs or waterbending. Pending tap
 counts use the continuation mode field; source and ability retain their usual
 joins. Single-object costs keep their serialized definition shape.
-Every registered mana ability must consume a finite resource. The total and
-spend-purpose bounds count repeatable outputs optimistically; every accepted
-payment still requires an identity-preserving witness with explicit tap choices.
-The whole-payment bound counts only spendable outputs and takes the maximum
-of competing uses of one tap. Search memoization shares feasibility across
-interchangeable sources (including membership in every counted-tap set), while
-retaining source order and exact identities in the first witness. Repeated lands
-therefore contribute resource counts instead of all identity subsets. Distinct
+Every registered mana ability must consume a finite resource. Search bounds
+count repeatable outputs optimistically; every accepted payment still requires
+an identity-preserving witness with explicit tap choices. The whole-payment
+bound counts only outputs a pending cost could spend and takes the maximum of
+competing uses of one tap; the color-set bound applies the same supply to every
+set of owed colors, so one "U or R" source cannot cover `{U}{R}`. Search
+memoization shares feasibility across interchangeable sources (including
+membership in every counted-tap set), while retaining source order and exact
+identities in the first witness. Repeated lands therefore contribute resource
+counts instead of all identity subsets. Distinct
 source behaviors, overlapping tap sets, nested obligations and concrete pool
 remainders can still make exact search combinatorial; there is no general
 large-board work limit or truncation of legal payments.

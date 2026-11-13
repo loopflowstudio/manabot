@@ -1,6 +1,9 @@
 // mana.rs
 // One payment transition model for offers, automatic production and nested
 // mana activations. PaymentModel searches identity-preserving resource steps;
+// its witness search prunes with optimistic whole-payment and color-set
+// bounds and memoizes feasibility across interchangeable sources
+// (PaymentSearch), always returning the first concrete path in source order.
 // Game owns their events and explicit Decision continuations. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
@@ -235,6 +238,27 @@ impl PaymentSearch {
     }
 }
 
+impl PaymentSearchState {
+    /// Mana by kind that the pending payment could spend, for the optimistic
+    /// bounds: restricted mana counts if any pending cost can spend it.
+    /// Future activation costs are not owed yet; the gross outputs the bounds
+    /// add already overestimate what converting restricted mana could buy.
+    fn usable(&self, mana: &Mana) -> [u64; 6] {
+        let mut usable = mana.mana.map(u64::from);
+        for (restriction, restricted) in mana.restricted() {
+            if self.obligations.iter().any(|obligation| {
+                matches!(obligation, Obligation::Pay { cost, .. }
+                    if restriction.allows(&cost.purpose))
+            }) {
+                for (amount, more) in usable.iter_mut().zip(restricted) {
+                    *amount += u64::from(*more);
+                }
+            }
+        }
+        usable
+    }
+}
+
 struct PaymentModel {
     sources: Vec<ManaSource>,
     life: u32,
@@ -332,24 +356,8 @@ impl PaymentModel {
         }
         // Bound the whole pending payment, not just its first obligation:
         // otherwise an impossible later cost retries every way to fund an
-        // earlier one. Restricted mana counts if any pending cost can spend it.
-        // Future activation costs are not owed yet; their gross outputs below
-        // already overestimate what converting that restricted mana could buy.
-        let usable_total = |pool: &Mana| -> u64 {
-            pool.mana.iter().map(|n| u64::from(*n)).sum::<u64>()
-                + pool
-                    .restricted()
-                    .iter()
-                    .filter(|(restriction, _)| {
-                        state.obligations.iter().any(|obligation| {
-                            matches!(obligation, Obligation::Pay { cost, .. }
-                                if restriction.allows(&cost.purpose))
-                        })
-                    })
-                    .flat_map(|(_, amounts)| amounts)
-                    .map(|n| u64::from(*n))
-                    .sum::<u64>()
-        };
+        // earlier one.
+        let usable_total = |mana: &Mana| -> u64 { state.usable(mana).iter().sum() };
         let waterbend = state.obligations.iter().any(|obligation| {
             matches!(
                 obligation,
@@ -597,8 +605,8 @@ impl PaymentModel {
     /// when it is a colored or {C} pip of S or a hybrid pip with both halves
     /// in S; generic pips and waterbend taps are left to the total bound.
     ///
-    /// Supply is optimistic in the same way as the total bound: restricted
-    /// mana counts when any pending cost may spend it, one tap yields the best
+    /// Supply is optimistic in the same way as the total bound: mana counts
+    /// when the payment could spend it (`PaymentSearchState::usable`), one tap yields the best
     /// of the fixed output and the tapping abilities, and non-tapping
     /// abilities and pending outputs add their best choice. Unlike the
     /// per-cost check, each use contributes one output choice, not the union
@@ -638,20 +646,7 @@ impl PaymentModel {
         if owed_kinds == 0 || (owed_kinds.count_ones() < 2 && pays < 2) {
             return true;
         }
-        let amounts = |mana: &Mana| -> [u64; KINDS] {
-            let mut amounts = mana.mana.map(u64::from);
-            for (restriction, restricted) in mana.restricted() {
-                if state.obligations.iter().any(|obligation| {
-                    matches!(obligation, Obligation::Pay { cost, .. }
-                        if restriction.allows(&cost.purpose))
-                }) {
-                    for (amount, more) in amounts.iter_mut().zip(restricted) {
-                        *amount += u64::from(*more);
-                    }
-                }
-            }
-            amounts
-        };
+        let amounts = |mana: &Mana| state.usable(mana);
         // Each group is one exclusive choice: the supply of S is the pool
         // plus, per group, its best member counted inside S.
         let mut choices: Vec<[u64; KINDS]> = Vec::new();
@@ -1800,17 +1795,21 @@ mod tests {
         }
     }
 
+    fn source(index: usize, fixed: Option<&str>, abilities: Vec<ManaActivation>) -> ManaSource {
+        ManaSource {
+            permanent: PermanentId(index),
+            card: CardId(index),
+            untapped: true,
+            fixed: fixed.map(Mana::parse),
+            abilities,
+            waterbend: false,
+        }
+    }
+
     fn forests(count: usize) -> PaymentModel {
         PaymentModel {
             sources: (0..count)
-                .map(|index| ManaSource {
-                    permanent: PermanentId(index),
-                    card: CardId(index),
-                    untapped: true,
-                    fixed: Some(Mana::parse("G")),
-                    abilities: Vec::new(),
-                    waterbend: false,
-                })
+                .map(|index| source(index, Some("G"), Vec::new()))
                 .collect(),
             life: 20,
         }
@@ -1955,14 +1954,9 @@ mod tests {
             let mut filter = tapping_ability(vec![Mana::parse("U")]);
             filter.cost = ManaCost::parse("U");
             for index in count..count + 2 {
-                model.sources.push(ManaSource {
-                    permanent: PermanentId(index),
-                    card: CardId(index),
-                    untapped: true,
-                    fixed: None,
-                    abilities: vec![filter.clone()],
-                    waterbend: false,
-                });
+                model
+                    .sources
+                    .push(source(index, None, vec![filter.clone()]));
             }
             let state = search_state(&model, vec![pay("U")]);
             assert!(bounded_search(
@@ -2028,14 +2022,7 @@ mod tests {
         filter.cost = ManaCost::parse("1");
         filter.tap_count = 1;
         filter.tap_candidates = vec![PermanentId(0)];
-        model.sources.push(ManaSource {
-            permanent: PermanentId(4),
-            card: CardId(4),
-            untapped: true,
-            fixed: None,
-            abilities: vec![filter],
-            waterbend: false,
-        });
+        model.sources.push(source(4, None, vec![filter]));
         let state = search_state(&model, vec![pay("U")]);
         let path = bounded_search(&model, state, SourcePolicy::All, 200, true).unwrap();
         assert!(matches!(path[0], PaymentStep::Fixed(PermanentId(1))));
@@ -2078,14 +2065,9 @@ mod tests {
                 .map(|source| source.permanent)
                 .collect();
             for index in count..count + 2 {
-                model.sources.push(ManaSource {
-                    permanent: PermanentId(index),
-                    card: CardId(index),
-                    untapped: true,
-                    fixed: None,
-                    abilities: vec![counted.clone()],
-                    waterbend: false,
-                });
+                model
+                    .sources
+                    .push(source(index, None, vec![counted.clone()]));
             }
             let state = search_state(&model, vec![pay(&"U".repeat(count / 2 + 1))]);
             assert!(bounded_search(&model, state, SourcePolicy::All, 1000, count == 6).is_none());
@@ -2219,14 +2201,7 @@ mod tests {
             ..ManaCost::parse("1")
         };
         let model = PaymentModel {
-            sources: vec![ManaSource {
-                permanent: PermanentId(0),
-                card: CardId(0),
-                untapped: true,
-                fixed: None,
-                abilities: vec![filter],
-                waterbend: false,
-            }],
+            sources: vec![source(0, None, vec![filter])],
             life: 20,
         };
         let pool = Mana::restricted_to(ManaRestriction::only([], ["Ally"]), [0, 0, 0, 0, 1, 0]);
@@ -2248,14 +2223,7 @@ mod tests {
     fn modal_source(index: usize, outputs: &[&str], cost: &str) -> ManaSource {
         let mut ability = tapping_ability(outputs.iter().map(|text| Mana::parse(text)).collect());
         ability.cost = ManaCost::parse(cost);
-        ManaSource {
-            permanent: PermanentId(index),
-            card: CardId(index),
-            untapped: true,
-            fixed: None,
-            abilities: vec![ability],
-            waterbend: false,
-        }
+        source(index, None, vec![ability])
     }
 
     /// The same search without the color-set bound, as a reference.
