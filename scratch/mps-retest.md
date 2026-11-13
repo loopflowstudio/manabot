@@ -41,7 +41,9 @@ best MPS (bf16, 261 s) is not faster than MLX f32 (263 s) and MLX half is
   paging guard during isolated CPU parity.
 - Every accelerator arm exceeds the 1e-6 one-step parameter check; MLX bf16
   failed the 1% relative-loss gate (1.07%) once on two real rows and passed
-  after sync. Training equivalence is unmeasured.
+  on one two-row capture after sync. Later QA failed three of four half
+  configurations on fresh 8-row minibatches, including w64 bf16 gradient
+  cosine 0.9315. Training equivalence is unmeasured.
 
 ## Open
 
@@ -81,8 +83,21 @@ Considered and left alone:
   ("the parity check gating half by its own measured tolerance"); the guide
   and report both show the counterexample.
 
-No open product choice. Nothing is left to delete: no files, fixtures, stored
-evidence or public precision options were removed.
+## Delete — do not maintain
+
+No file or symbol deletions. Replace wording that implies general parity from
+one passing capture. Preserve precision options, measured tolerances, retained
+evidence, result tables, coverage matrix and backend recommendation.
+
+## QA follow-up 2026-11-13
+
+The report's "Later small-capture QA" table owns the four half-precision
+cases from `scratch/qa.html`; `mlx.md#compute-precision` summarizes them and
+links there. No threshold or absolute-loss floor changed (the floor is an
+open product choice, `scratch/questions.md`); no new run. Prose plus the
+`precision_dtype` refusal message and its assertion in
+`tests/model/test_mlx_backend.py` (`-k half_policy_loading`: 2 passed); gate owns the backend and
+publication checks. `git diff --check` clean.
 
 Checks: `uv run --extra dev pytest tests/training/test_update_backends.py -k
 parity -q` (4 passed); Ruff check/format clean. Against `afd3bb2ede`, every

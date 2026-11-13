@@ -97,9 +97,9 @@ diagnostics = update_damped_iteration(
 )
 ```
 
-`batch` is a `RolloutBatch` as torch collection writes it. The same batch and
-weights give the same diagnostics as the torch backend within the parity
-bars. Returns and advantage selection run on the host in NumPy
+`batch` is a `RolloutBatch` as torch collection writes it. Check diagnostics
+against the torch backend on the intended batch, weights and precision using
+the parity command below. Returns and advantage selection run on the host in NumPy
 (`manabot.policy.returns`), the surrogate ratio is float32, and the sampled
 gradient detail of `OptimizerHealth` is absent
 ([what differs](README.md#algorithms-are-written-once)).
@@ -158,17 +158,27 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
 | bfloat16 | 0.001 | 0.01 | 1% | ≥ 0.99 |
 | float16 | 0.0001 | 0.002 | 0.2% | ≥ 0.999 |
 
-These bounds cover the retained real-input w384/w768 checks in the
-[MPS retest](../../experiments/mps_retest.md), source `140eec28d`; they are
-measured-domain numerical gates, not a claim about optimization trajectories.
+These bounds were calibrated on the retained real-input w384/w768 checks in
+the [MPS retest](../../experiments/mps_retest.md), source `140eec28d`. They
+remain numerical gates; passing those cases does not establish general
+equivalence or equivalent optimization trajectories.
 Half still requires a finite clipped Adam step and reports the minimum
 per-tensor cosine and the maximum post-step parameter difference. It does not
 apply float32's 1e-6 post-step bound: the retained half deltas exceed it.
 Float32 keeps its existing per-tensor cosine and post-step gates unchanged.
 
-Run this preflight on the intended weights and inputs. The bounded real-capture
-check of the supported API passed float32 and float16 but rejected bfloat16
-at 1.07% relative loss difference against its unchanged 1% gate. That
-counterexample is retained in the report. A fresh capture after the native
-sync passes all three dtypes; support does not mean every input passes the
-numerical gate.
+Run this preflight on the intended weights and inputs: explicit half support
+means the API executes that dtype, not that an input passes its gate or trains
+equivalently. Float32 passed each real-capture check below. Half did not:
+
+- Two-row captures: bfloat16 failed once at 1.07% relative loss
+  difference against 1%, and all three dtypes passed on one later capture.
+- Four 8-row minibatches at w64l2 and w384l8: three of four half
+  configurations failed. bfloat16 at w64 reached a full-gradient cosine of
+  0.9315 against ≥ 0.99; bfloat16 at w384 failed only the relative-loss gate,
+  on near-zero losses; float16 failed at w64 and passed at w384 (0.197%
+  against 0.2%).
+
+The [report's QA table](../../experiments/mps_retest.md#later-small-capture-qa-2026-11-13)
+has each measurement. Tolerances are unchanged, and the relative-loss gate has
+no absolute floor.

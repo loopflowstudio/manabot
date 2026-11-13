@@ -44,6 +44,10 @@ All 48,064 sampled collection choices matched CPU in every selected replay,
 but every accelerator exceeded the 1e-6 one-step parameter check on these real
 inputs. Matching sampled choices does not establish matching optimization or
 playing strength. Defaults and off-CUDA precision refusals remain unchanged.
+Later small-capture QA rejected three of four MLX half configurations under
+their dtype-specific parity gates, including a w64 bfloat16 full-gradient
+cosine of 0.9315. The speed advantage does not establish general numerical
+equivalence.
 
 ## Enlarged-arm correctness at the current replay source
 
@@ -63,9 +67,11 @@ its unchanged **1%** gate; its other gates pass. The
 [validation receipts](data/mps_retest/laptop/paired-update/validation/README.md)
 retain that counterexample. Use the parity command on the intended checkpoint
 and capture before relying on a half-precision configuration. After syncing
-main and rebuilding the native extension, a fresh bounded capture passes all
-three MLX dtypes; [those receipts](data/mps_retest/laptop/paired-update/validation/after-sync/README.md)
-stay separate from the earlier counterexample and the timed evidence.
+main and rebuilding the native extension, one fresh bounded two-row capture
+passed all three MLX dtypes;
+[those receipts](data/mps_retest/laptop/paired-update/validation/after-sync/README.md)
+describe that capture only. Subsequent QA found further failures, detailed
+below. Neither validation series changes the timed evidence.
 
 | Arm | Legal logit Δ | Value Δ | Relative loss Δ | Global gradient cosine | Minimum tensor cosine | One-step parameter Δ | Choice mismatches |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -81,6 +87,28 @@ Tensor minima include tiny gradients; the exact score-bias gradient is zero.
 That does not erase observed one-step differences. Timing remains diagnostic,
 not evidence of equivalent learning trajectories.
 
+### Later small-capture QA (2026-11-13)
+
+QA used fresh current-world both-seat captures with 8 streams and 32
+transitions, bucketed shapes, and Mountain/Gray Ogre versus Forest/Llanowar
+Elves. The parity command checked four 8-row learner minibatches at w64l2
+and w384l8 (8 heads), against CPU float32. These were correctness checks
+without timing; they are separate from the retained 64-row replay checks above.
+
+| Capture | MLX float32 | MLX bfloat16 | MLX float16 |
+|---|---|---|---|
+| w64l2 | Pass | Fail: relative loss Δ 4.9% (gate 1%); full-gradient cosine 0.9315 (gate ≥ 0.99) | Fail: relative loss Δ 0.28% (gate 0.2%); full-gradient cosine 0.99880 (gate ≥ 0.999) |
+| w384l8 | Pass | Fail: relative loss Δ 10.9% (gate 1%); full-gradient cosine 0.9971 passes | Pass: relative loss Δ 0.197% (gate 0.2%) |
+
+Three of four half configurations failed. The w384 bfloat16 relative-loss
+failure compares near-zero losses (CPU −0.000526, MLX −0.000583); the w64
+bfloat16 gradient miss is a separate failure. The earlier 1.07% counterexample
+had a reference loss near −0.138. The relative-loss gates retain their measured
+tolerances, with no new absolute floor. In each failure the parity command
+exited 1 and named the failing checks. Passing the retained cases, or the single
+w384 float16 case here, does not imply other inputs pass or establish
+equivalent optimization trajectories.
+
 ## Full context: completed seven-arm comparison
 
 ![M4 Max w384l8, 256 streams: measured phase stacks and decisions per second](data/mps_retest/full_context.png)
@@ -90,11 +118,18 @@ not evidence of equivalent learning trajectories.
 [machine-readable summary](data/mps_retest/laptop/paired-update/report/summary.json).
 
 Data bytes live in the team's authenticated artifact store, not GitHub. Restore
-the PNG and the detailed evidence from the committed manifest:
+the chart and the rendered tables from the committed manifest (about 2 MB):
 
 ```sh
-uv run --extra artifacts python -m manabot.data fetch experiments/data/mps_retest/full_context.png experiments/data/mps_retest/laptop/paired-update
+uv run --extra artifacts python -m manabot.data fetch experiments/data/mps_retest/full_context.png experiments/data/mps_retest/laptop/paired-update/report
 ```
+
+The whole `experiments/data/mps_retest/laptop/paired-update` folder adds the
+receipts, ledgers and recorded reference tensors (about 1.25 GB, mostly the
+w384 and w768 `.npz` references). With it, `uv run python
+experiments/mps_retest.py report --bench
+experiments/data/mps_retest/laptop/paired-update/bench <out>` redraws the
+report files byte for byte.
 
 
 The primary chart includes only the completed current-source panel. Each bar
@@ -627,9 +662,10 @@ launcher sources and terminal Etude receipts remain under
 native extension, 81 affected backend, capture, inference, bucket-shape,
 experiment-discovery and artifact tests pass. The focused package-boundary,
 capture, discovery, CI-selection and release checks also pass (111 tests).
-Ruff and diff checks pass. The public parity path passes all three MLX dtypes
-on a new two-row real capture; the earlier bfloat16 loss-gate failure is
-retained above. Injected reporting checks confirm incomplete repetitions and
+Ruff and diff checks pass. The public parity path passed all three MLX dtypes
+on one new two-row real capture; later small-capture QA rejected three of four
+half configurations, as detailed above. The earlier bfloat16 loss-gate failure
+is also retained. Injected reporting checks confirm incomplete repetitions and
 pending retries never become bars. Native rules changes came from main; this
 Task makes no Rust changes, and the native suite remains CI's responsibility.
 

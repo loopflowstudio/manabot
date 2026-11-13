@@ -332,6 +332,9 @@ def test_half_policy_loading_and_float32_action_logs(
     policy.set_precision("float32")
     assert policy.programs().dtype == mx.float32
     assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
+    # Torch regimes spell "bf16"; the refusal names MLX's dtype spellings.
+    with pytest.raises(ValueError, match="expected one of float32, bfloat16, float16"):
+        policy.set_precision("bf16")  # type: ignore[arg-type]
 
     logits = mx.array(
         [[0.123, 0.124, 20], [-3, 2, 0]], dtype=precision_dtype(precision)

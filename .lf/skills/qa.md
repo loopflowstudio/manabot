@@ -155,15 +155,24 @@ publish, land or choose the next Graph step from here.
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
 - MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
-  run it on the Mac that owns the measurement, not on a shared laptop. Convert a w160l8
-  checkpoint (the published `experiments/data/mlx_pilot/capture/initial.pt`;
-  `local` recipe checkpoints use FiLM and are refused), load it with
+  run it on the Mac that owns the measurement, not on a shared laptop. The
+  published `experiments/data/mlx_pilot/capture/initial.pt` is now refused by
+  the parity CLI's world binding (written at `b62ac3127`). Make a current
+  capture instead with `manabot.backends.torch.capture.capture(out, regime,
+  seed, experiment=...)`, using the regime of
+  `tests/model/test_backend_capture.py` with `hidden_dim=384`,
+  `attention_layers=8`, `num_attention_heads=8`, 8 streams and 32 transitions
+  (about 2 minutes on CPU; `hidden_dim=64` takes 20 s). Convert its
+  `initial.pt` with `python -m manabot.backends.convert` (`local` recipe
+  checkpoints use FiLM and are refused), load it with
   `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
   admitting each batch with `admit_observation` and comparing against torch
   `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
   `policy.evaluate`; untrained-policy argmax
   differences are exact ties). `python -m manabot.backends.parity <initial.pt>
-  --capture <capture dir>` on the published subset takes about 50 s on an M2.
+  --capture <capture dir> --backend mlx --precision <dtype> --minibatches 4`
+  takes seconds; `--json` keeps per-minibatch `loss_torch`/`loss_backend`, which
+  show when a relative-loss failure comes from a near-zero loss.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter

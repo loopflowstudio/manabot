@@ -43,3 +43,9 @@ history through that supported integration rather than raw git rebase.
   specifies. Reopening BF16 admission needs another learning result.
 - Earlier A/B choices and launch history remain in git `e181224e7` and the
   experiment report. No new rental, experiment, or numerical-guard change.
+
+2026-11-13 QA: fresh small real captures (8-row minibatches) failed MLX half
+gates in 3 of 4 cases (bf16 at w64 and w384, f16 at w64); the w384 bf16 loss
+failure was a near-zero denominator (-0.000526 v -0.000583). Thresholds left
+unchanged; an absolute floor for the relative-loss gate is a product choice.
+Details in scratch/qa.html.
