@@ -68,3 +68,11 @@ advertises that command as the way to run the current recipe locally.
 ## Implement choices — 2026-11-13
 
 The hidden CLI alias `--steps` warns that removal is in Manabot 0.3.0 (the next minor release after current 0.2.3); no release bump is part of this pass. Both target flags together refuse, avoiding ambiguous precedence.
+
+## Concept review 2 — 2026-11-13
+
+Reversible, taken without asking: PPO schedules read a horizon fixed in the
+recipe's learning settings, not the launch target (plan.md, item 1). The
+alternative, refusing a changed target for PPO, was not chosen because it
+removes extension for one learning rule only. Still open, unchanged: whether
+the CLI should accept any field of a recipe's Pydantic config.

@@ -127,3 +127,37 @@ Loop helpers have descriptive function names without private prefixes, matching
 the recorded naming direction. Recipe clock labels say collection/update
 iterations; optimizer-step counts remain separate metrics. No serialized keys,
 learner calculations or frozen evidence changed.
+
+## Concept review 2 — 2026-11-13: next implement direction
+
+Reviewed recipes, loop, CLI and docs/training.md at `7bbeb4b8c`. The model
+holds. One interaction breaks its own promise; the rest is doc drift. These
+are proposals drawn from the design, not statements anyone made.
+
+1. Extending a PPO run changes what it already learned from. `learn` gives
+   PPO `state.update / updates`, where `updates` is the launch target. Run
+   the belief recipe to 64 and then `--updates 128`: the first leg decays its
+   rates over 64, the second restarts at half progress, so the result is
+   neither a 64- nor a 128-update run, and nothing refuses (the target is not
+   in `state.pt`). docs/training.md uses exactly this recipe to show
+   extension. Damped policy already has the right contract
+   (`IterationSchedule`: "continuation must retain the original horizon").
+   Give PPO the same: an optional `Learning.horizon` (omitted from
+   serialization when unset, as `iteration_schedule` is, so retained regime
+   records keep their bytes); `SelfPlay` refuses PPO without it; progress is
+   `state.update / horizon`; `step` and `learn` lose `updates=`. The horizon
+   then sits in the resume identity. `gray_ogre_self_play` and belief set it
+   from the recipe's own update count. With horizon equal to the target the
+   fresh-run parity fixture is unchanged; rerun `scratch/parity.py` for PPO.
+   Drop the "for PPO the target matters" sentences from the loop docstring,
+   training.md and questions.md.
+2. docs/training.md shows recipes that differ from the code: the clock label
+   is "optimizer updates" (code: "collection/update iterations", and the
+   README explains they are not optimizer calls); the Elemental excerpt omits
+   `device`/`streams`; the belief excerpt shows seed 421, 64 updates, 256
+   games and `sampler_config()` (code: 197, 1, 3, `config.sampler`). Make
+   the excerpts match the files, or say they are abridged where they are.
+
+Left alone on purpose: `training/state/` (game errors and incidents) keeps
+its name; the CLI's local/baseline-only flags wait on the open question in
+questions.md (should the CLI set any field of a recipe's config).
