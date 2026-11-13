@@ -144,3 +144,35 @@ parity or timed arm started. The access file still names the released pilot
 host; no new M2 access was supplied. Executable source is now frozen at
 `849769d6f`. The next block is still the w384l8 256-stream capture, four
 CPU threads, configured 20 GiB budget (actual peak unknown).
+
+2026-11-13 01:42 UTC realign preflight: one-minute load was 43.36. The
+operator's access file still had its 2026-11-12 08:47 local modification time;
+no updated M2 access was present. No capture or timed arm started. Compression
+is now committed in `78c11da39` and the current source revision is `3a7937232`
+after syncing main; the earlier `849769d6f` freeze describes the 01:36
+preflight, not a measurement run. Refreshed Task comments contain no newer
+direction than the measurement-window steer above.
+
+
+## Current laptop method, superseding the load-under-8 direction
+
+Comment 56378d1f-34d4-45ce-a9dc-e5657089acab by Jack Heart:
+
+Operator: the load-under-8 rule cannot be met on this laptop tonight; other sessions keep starting Rust test runs (the one running now is paused again under Jack's authorization, but new ones appear). Relax the rule for the laptop blocks: start a timed block when the 1-minute load is under 16 (one per core), run the arms interleaved call by call and step by step as the MTG-321 method did so shared-host drift lands on every arm alike, record the 1-minute load at the start and end of every block in the receipt, and label every laptop number with that load in the report and chart caption. Use 4 CPU threads for the capture and the CPU reference arm. If a block's start and end loads differ by more than 2x, repeat it once and keep the quieter one, saying so. Do not wait for load 8 again; proceed now with the w384l8 256-stream capture. The M2 arms stay queued for the rental.
+
+<!-- loopflow-requester:"Jack Heart" -->
+
+<!-- loopflow-steer:56378d1f-34d4-45ce-a9dc-e5657089acab -->
+
+Reversible implementation choices: a timed block is all arms at one width and
+per-call size/phase, or one whole-update repetition. “Quieter” means the lower
+arithmetic mean of start/end loads, ties choosing the first attempt. Repeat
+the complete block from initial state, retain both attempts, and select every
+arm from the same attempt. Captures use the same rule. Separate persistent
+processes keep inference/optimizer state isolated while advancing one call or
+step per arm; all models remain resident, so OOM describes this setup rather
+than standalone arm capacity. The CPU arm is named `cpu`; thread count lives
+in provenance and human labels. No real receipts used the previous name.
+
+2026-11-13T02:01:15+00:00: load 64.67 still prohibits starting the capture under the
+new <16 rule. No capture or model timing started; no worker remains running.

@@ -2,7 +2,7 @@
 
 ## Outcome and constraints
 
-Measure the bucketed recipe across CPU8 float32, MPS float32, both working MPS
+Measure the bucketed recipe across CPU float32 (CPU4 laptop / CPU8 M2), MPS float32, both working MPS
 half dtypes and MLX float32. `experiments/mps_retest.md` owns the full matrix
 and deliverables; `questions.md` preserves the exact steers. Torch is the
 incumbent. Recommend from measurements, without an adoption rule or defaults
@@ -10,7 +10,7 @@ change. No performance or real-MPS correctness conclusion exists yet.
 
 The operator owns the USD25 rental cap, allocation, release and cost receipt.
 The newest steer permits captures and all fitting arms on the quiet laptop
-while M2 capacity is pending. Use separate host evidence; require load <8
+while M2 capacity is pending. Use separate host evidence; require load <16
 before laptop blocks. Each width/stream group still needs three replays per
 arm within one hour. If M2 never arrives within 12 hours, report laptop-only
 measurements with M2 explicitly unmeasured (deadline in `questions.md`).
@@ -37,7 +37,7 @@ coverage is separate from correctness; timings with differing gradients remain
 visible and require interpretation.
 
 Receipts carry capture host and actual capture threads separately from replay
-host. The shared engine component uses four CPU threads; replay uses eight.
+host. The shared engine component uses four CPU threads; replay uses four on the laptop, eight on M2.
 Cross-host charts explicitly name the M2 engine origin. Unknown provenance
 leaves coverage incomplete; conflicting capture origins are refused. Host
 charts remain separate. Phase legends survive missing first-width bars.
@@ -64,24 +64,22 @@ Ruff passed for `mps_retest.py` and the pilot (one empty section header removed)
 
 ## Remaining execution and acceptance
 
-1. Checkpoint the compression diff after `849769d6f` before real captures;
-   use an Etude run identity (`main` refuses dirty executable source). Begin with
-   w384l8 at 256 streams: four capture threads, configured 20 GiB budget, peak
-   unmeasured. Parity, per-call timing and triple replays follow at selected
-   widths. The resumed preflight at 01:36 UTC measured load 33.41, so the next
-   capture still needs a quiet window. Launcher preparation and access observations are preserved
-   in `questions.md`; they are not measurement receipts.
+1. Begin the w384l8 256-stream capture when one-minute load is below 16,
+   with four capture threads and a configured 20 GiB budget (peak unmeasured).
+   The capture needs a real Etude run identity; `main` refuses dirty executable
+   source. The current method changes must be checkpointed before any run.
+   Parity, per-call timing and triple replays follow at selected widths.
 2. Establish whether a complete width/stream group fits the one-hour window.
-   `replays` runs serially: five working arms require 15 replay processes,
-   including their startup/input-reading overhead. No observed durations
-   support this schedule yet. A group exceeding one hour remains incomplete;
-   changing the timeout or omitting arms cannot satisfy that constraint.
+   `replays` advances isolated persistent arms one call or learner step at a
+   time. Three complete blocks must still fit the same hour. A >2× endpoint
+   load drift repeats the entire block once, retaining both attempts and
+   selecting the lower mean endpoint load. All arms share that selection.
 3. Capture 512/1024 streams; attempt both MPS half dtypes and the full matrix.
    Preserve errors; fix implementation failures. A 900-second timeout is
    failure, not OOM. Real MPS dtype support and gradient agreement are unverified.
 4. Run the M2 comparison when the operator supplies access; cite its cost
    receipt. Keep per-host captures/charts separate. If no M2 arrives before
-   the deadline, report laptop measurements and M2 not run.
+   2026-11-13 13:12:38.971 UTC, report laptop measurements and M2 not run.
 5. Publish captures, receipts, tables and actual charts with `manabot.data`;
    embed the named full-context chart and explain measured results/limits and
    recommendation in the report and backend README. No default changes.
@@ -93,6 +91,16 @@ acceptance).
 Gate owns affected suites and final acceptance. No Wave is bound. Publication
 and Task movement belong to later Graph steps. Implementation checks do not
 complete this experiment.
+
+2026-11-13 realign: refreshed `origin/main`; no additional upstream commits
+are missing from this checkout. Task comments add no direction beyond the
+measurement-window steer already quoted in `questions.md`. Rechecked capture,
+parity admission, replay ordering, coverage and source-freeze paths against
+the plan; no executable repair was needed. Existing controlled checks remain
+implementation evidence only. No model or game ran in this pass. The next
+uncertainties are real capture completion, MPS half support/gradient agreement
+and whether a full replay group fits one hour; no new product decision is
+needed unless measurements expose a conflict with those constraints.
 
 2026-11-12 realign: refreshed `origin/main`; it adds no commits beyond this
 checkout. Task comments still end with the operator's rental/laptop direction.
@@ -126,6 +134,9 @@ Ruff and `git diff --check` passed. No models, games or measurements ran.
 
 Removed the reference writer's immediate disk reread and repeated host/capture
 probes during replay admission. Workers still record their own provenance.
+Removed the serial timed-arm comparison path; `bench` and `update` are
+worker generators driven by the one interleaving coordinator. Single-arm
+timing is refused at the CLI. Retain the isolated parity path and CPU arrays.
 No further deletion is planned. The shared capture owner remains
 `manabot/backends/capture.py`; preserve prior evidence and the production
 off-CUDA refusals. No alternate capture or rental implementation.
@@ -142,3 +153,22 @@ metadata once, keeping fresh parity-ledger reads and all worker load checks.
 round-trip, provenance refusal, no writer reread and two-width replay ordering;
 `.runs/mps-simplify-check.py` also passed. Compilation, Ruff check/format and
 `git diff --check` passed. Only controlled fixtures ran, no models or games.
+
+2026-11-13 method update: implemented the latest operator steer (exact quote
+in `questions.md`). Load admission is <16, laptop threads are four, workers
+interleave calls/steps, and capture/comparison retries preserve both attempts
+and select the quieter complete block. Tables and chart captions label loads.
+`uv run --no-sync python .runs/mps-steer-check.py` passed injected boundary,
+interleave order, retry selection, pending-repeat coverage, worker cleanup,
+actual pipe handshake and evolving replay-state checks; no model/game ran.
+
+2026-11-13T02:01:15+00:00 preflight: one-minute load 64.67, above the new 16 limit. No
+capture or timed arm started. M2 access notes still have the 2026-11-12
+08:47:58 PST modification time. No measurement process is running. The next
+block remains the four-thread w384l8 256-stream capture, configured 20 GiB.
+`uv run --no-sync python .runs/mps-steer-extra-check.py` passed per-call resets,
+independent evolving replay state, actual worker pipe exchange, injected timeout
+cleanup and parity timeout classification. The rendering check passed and the
+corrected full-context PNG was visually inspected; labels no longer overlap
+neighboring panels. Ruff, compilation and `git diff --check` passed. All proofs
+use controlled fixtures, not model/game timings. Gate still owns affected suites.

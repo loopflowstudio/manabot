@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 import platform
 import resource
+import select
 import statistics
 import subprocess
 import sys
@@ -40,15 +41,15 @@ if TYPE_CHECKING:
     from manabot.model.actor_critic import ActorCritic
     from manabot.policy.protocol import Settings, Targets
 
-Arm = Literal["cpu8", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32"]
-ARMS: tuple[Arm, ...] = ("cpu8", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32")
+Arm = Literal["cpu", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32"]
+ARMS: tuple[Arm, ...] = ("cpu", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32")
 HALF = ("mps-bf16", "mps-f16")
 WIDTHS = (64, 96, 160, 384, 512, 768, 1024)
 STREAMS = (256, 512, 1024)
 LAYERS = {64: 2, 96: 4, 160: 8, 384: 8, 512: 8, 768: 8, 1024: 8}
 SIZES = {"learner": (64, 256, 512, 1024, 2048), "collection": (64, 256, 512)}
 LABELS = {
-    "cpu8": "PyTorch CPU8 · float32",
+    "cpu": "PyTorch CPU · float32",
     "mps-f32": "PyTorch MPS · float32",
     "mps-bf16": "PyTorch MPS · bfloat16",
     "mps-f16": "PyTorch MPS · float16",
@@ -134,8 +135,8 @@ def _host() -> dict[str, Any]:
 
 def _quiet(laptop: bool) -> float:
     load = os.getloadavg()[0]
-    if laptop and load >= 8:
-        raise RuntimeError(f"not measured: laptop load {load:.2f} is not below 8")
+    if laptop and load >= 16:
+        raise RuntimeError(f"not measured: laptop load {load:.2f} is not below 16")
     return load
 
 
@@ -220,7 +221,7 @@ class TorchRunner:
     def __init__(self, agent: ActorCritic, arm: Arm) -> None:
         import torch
 
-        self.agent = agent.to("cpu" if arm == "cpu8" else "mps").train()
+        self.agent = agent.to("cpu" if arm == "cpu" else "mps").train()
         self.device = next(agent.parameters()).device
         self.dtype = {"mps-bf16": torch.bfloat16, "mps-f16": torch.float16}.get(arm)
         self.initial = {k: v.detach().clone() for k, v in agent.state_dict().items()}
@@ -660,7 +661,7 @@ def bench(
     arm: Arm,
     laptop: bool,
     repeats: int,
-) -> None:
+) -> Iterator[dict[str, Any] | None]:
     metadata = _provenance(capture, laptop)
     row: dict[str, Any] = {
         "event": phase,
@@ -671,7 +672,7 @@ def bench(
         "layers": LAYERS[width],
         **metadata,
         "started": time.time(),
-        "load_before": _quiet(laptop),
+        "load_before": os.getloadavg()[0],
     }
     # Receipt admission needs no model, device allocation or capture arrays.
     if phase != "parity":
@@ -685,7 +686,7 @@ def bench(
                     load_after=os.getloadavg()[0],
                     ended=time.time(),
                 )
-                _emit(out / "bench.jsonl", row)
+                yield row
                 return
             raise ValueError(
                 "run parity for this host, revision, capture, width, rows and arm first"
@@ -701,6 +702,7 @@ def bench(
         }
     batch = _batch(capture, "learner" if phase == "parity" else phase, size)
     with _runner(capture, width, arm) as runner:
+        yield None  # All workers allocate before the coordinator admits the block.
         if phase == "parity":
             result = runner.evaluate(batch)
             path = _reference_path(out, metadata, width, size)
@@ -718,7 +720,7 @@ def bench(
                     "loss": np.asarray(result.loss),
                     **{f"grad/{k}": v for k, v in result.gradients.items()},
                 }
-                if arm == "cpu8"
+                if arm == "cpu"
                 else None,
             )
             collection_reference = arrays["collection_logits"]
@@ -748,7 +750,6 @@ def bench(
             )
         else:
             times: list[float] = []
-            _quiet(laptop)
             tick = time.perf_counter()
             scope = (
                 runner.collection()
@@ -758,15 +759,16 @@ def bench(
             with scope as call:
                 if phase == "collection":
                     row["catalog_seconds"] = time.perf_counter() - tick
+                yield None
                 for rep in range(repeats + 1):
                     if phase == "learner":
                         runner.reset()
                     runner.sync()
-                    _quiet(laptop)
                     tick = time.perf_counter()
                     call(batch)
                     runner.sync()
                     times.append(time.perf_counter() - tick)
+                    yield None
             row.update(
                 first_seconds=times[0],
                 seconds=times[1:],
@@ -779,17 +781,17 @@ def bench(
             load_after=os.getloadavg()[0],
             ended=time.time(),
         )
-        _emit(out / "bench.jsonl", row)
+        yield row
 
 
 def update(
     out: Path, capture: Path, width: int, arm: Arm, laptop: bool, rep: int
-) -> None:
+) -> Iterator[dict[str, Any] | None]:
     """Replay original calls and minibatches; weights evolve only in learning."""
     meta = json.loads((capture / "capture.json").read_text())
     provenance = _provenance(capture, laptop)
-    _quiet(laptop)
     with _runner(capture, width, arm) as runner:
+        yield None
         row: dict[str, Any] = {
             "event": "update",
             "arm": arm,
@@ -799,16 +801,15 @@ def update(
             "layers": LAYERS[width],
             **provenance,
             "started": time.time(),
-            "load_before": _quiet(laptop),
+            "load_before": os.getloadavg()[0],
         }
-        _quiet(laptop)
         tick = time.perf_counter()
         calls = decisions = 0
         sampled: list[np.ndarray] = []
         with runner.collection() as collect:
             policy_seconds = time.perf_counter() - tick
+            yield None
             for batch in _batches(capture, "collection"):
-                _quiet(laptop)
                 tick = time.perf_counter()
                 logits = collect(batch)
                 policy_seconds += time.perf_counter() - tick
@@ -819,10 +820,11 @@ def update(
                 )
                 calls += 1
                 decisions += batch.rows
+                yield None
         actions = np.concatenate(sampled)
         sample_path = _reference_path(out, provenance, width, 0)
         expected_actions = _reference(
-            sample_path, provenance, {"actions": actions} if arm == "cpu8" else None
+            sample_path, provenance, {"actions": actions} if arm == "cpu" else None
         )["actions"]
         if actions.shape != expected_actions.shape:
             raise ValueError("whole-update call rows differ")
@@ -830,12 +832,12 @@ def update(
         learning_seconds = 0.0
         steps = learner_rows = 0
         for batch in _batches(capture, "learner"):
-            _quiet(laptop)
             tick = time.perf_counter()
             runner.step(batch)
             learning_seconds += time.perf_counter() - tick
             steps += 1
             learner_rows += batch.rows
+            yield None
         engine = float(meta["engine"])
         row.update(
             status="ok",
@@ -852,7 +854,7 @@ def update(
             ended=time.time(),
             load_after=os.getloadavg()[0],
         )
-        _emit(out / "updates.jsonl", row)
+        yield row
 
 
 def capture(out: Path, streams: int, laptop: bool) -> None:
@@ -875,38 +877,71 @@ def capture(out: Path, streams: int, laptop: bool) -> None:
         wall_seconds=7200,
     )
     data["wall_seconds"] = 7200
-    provenance = {
-        **_host(),
-        "capture_id": str(uuid.uuid4()),
-        "capture_threads": 4,
-        "etude_run": os.environ.get("ETUDE_RUN"),
-        "laptop": laptop,
-        "load_before": _quiet(laptop),
-    }
-    record(
-        out,
-        TrainingRegime.model_validate(data),
-        protocol.training_seed,
-        experiment="mps_retest",
+    if out.exists():
+        raise FileExistsError(out)
+    attempts: list[tuple[Path, dict[str, Any]]] = []
+    for attempt in range(2):
+        before = _quiet(laptop)
+        path = out.with_name(f"{out.name}-attempt-{attempt}")
+        if path.exists():
+            raise FileExistsError(path)
+        provenance = {
+            **_host(),
+            "capture_id": str(uuid.uuid4()),
+            "capture_threads": 4,
+            "etude_run": os.environ.get("ETUDE_RUN"),
+            "laptop": laptop,
+            "load_before": before,
+            "started": time.time(),
+        }
+        try:
+            record(
+                path,
+                TrainingRegime.model_validate(data),
+                protocol.training_seed,
+                experiment="mps_retest",
+            )
+        finally:
+            provenance.update(load_after=os.getloadavg()[0], ended=time.time())
+            if path.exists():
+                (path / "provenance.json").write_text(json.dumps(provenance, indent=2))
+        attempts.append((path, provenance))
+        if not laptop or not _unstable(before, provenance["load_after"]) or attempt:
+            break
+    chosen = min(
+        range(len(attempts)),
+        key=lambda i: attempts[i][1]["load_before"] + attempts[i][1]["load_after"],
     )
-    provenance["load_after"] = os.getloadavg()[0]
-    (out / "provenance.json").write_text(json.dumps(provenance, indent=2))
+    selected = {
+        **attempts[chosen][1],
+        "load_retry": len(attempts) == 2,
+        "load_retry_complete": len(attempts) == 2,
+        "selected_attempt": chosen,
+    }
+    (attempts[chosen][0] / "provenance.json").write_text(json.dumps(selected, indent=2))
+    attempts[chosen][0].rename(out)
+    (out / "selection.json").write_text(
+        json.dumps(
+            {
+                "selected_attempt": chosen,
+                "load_retry": len(attempts) == 2,
+                "selection": "lower mean endpoint load",
+                "attempts": [
+                    {"path": str(out if i == chosen else path), **receipt}
+                    for i, (path, receipt) in enumerate(attempts)
+                ],
+            },
+            indent=2,
+        )
+    )
 
 
-def _child(
-    args: argparse.Namespace,
-    phase: Literal["parity", "learner", "collection", "update"],
-    width: int,
-    arm: Arm,
-    *,
-    size: int = 0,
-    rep: int = 0,
-) -> None:
-    command = "update" if phase == "update" else "bench"
+def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:
+    """Correctness runs in isolation before the timed resident comparison."""
     cmd = [
         sys.executable,
         str(Path(__file__).resolve()),
-        command,
+        "bench",
         str(args.out),
         "--capture",
         str(args.capture),
@@ -914,23 +949,18 @@ def _child(
         str(width),
         "--arm",
         arm,
+        "--phase",
+        "parity",
+        "--rows",
+        str(size),
     ]
-    if command == "bench":
-        cmd += ["--phase", phase, "--rows", str(size)]
-        if phase != "parity":
-            cmd += ["--repeats", str(args.repeats)]
-    else:
-        cmd += ["--rep", str(rep)]
     if args.laptop:
         cmd += ["--laptop"]
-    ledger = args.out / ("bench.jsonl" if command == "bench" else "updates.jsonl")
+    ledger = args.out / "bench.jsonl"
     before = len(_rows(ledger))
-    # A hard timeout is retained as a failed cell, never inferred to be OOM.
     try:
         result = subprocess.run(cmd, timeout=args.timeout, check=False)
-        if result.returncode == 0:
-            return
-        if len(_rows(ledger)) > before:
+        if result.returncode == 0 or len(_rows(ledger)) > before:
             return
         reason = f"worker exit {result.returncode}"
     except subprocess.TimeoutExpired:
@@ -938,11 +968,10 @@ def _child(
     _emit(
         ledger,
         {
-            "event": phase,
+            "event": "parity",
             "width": width,
             "rows": size,
             "arm": arm,
-            "rep": rep,
             "status": "failed",
             "error": reason,
             **_provenance(args.capture, args.laptop),
@@ -950,20 +979,240 @@ def _child(
     )
 
 
+def _unstable(before: float, after: float) -> bool:
+    return max(before, after) > 2 * min(before, after)
+
+
+def _failure(error: Exception, arm: Arm) -> dict[str, str]:
+    message = str(error)
+    lower = message.lower()
+    status = "failed"
+    if isinstance(error, MemoryError) or "out of memory" in lower:
+        status = "oom"
+    elif arm in HALF and (
+        ("autocast" in lower and isinstance(error, UserWarning))
+        or (
+            any(dtype in lower for dtype in ("bfloat16", "float16", "half"))
+            and any(
+                t in lower for t in ("not supported", "unsupported", "not implemented")
+            )
+        )
+    ):
+        status = "unsupported"
+    elif "laptop load" in lower:
+        status = "not_measured"
+    return {"status": status, "error": f"{type(error).__name__}: {message}"}
+
+
+class CallWorker:
+    """One resident arm, blocked on stdin between synchronized calls.
+
+    Each arm owns its model, optimizer, inference scope and allocator. Only one
+    worker computes at a time; retained models still share physical host memory.
+    """
+
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        phase: str,
+        width: int,
+        arm: Arm,
+        size: int,
+        rep: int,
+    ) -> None:
+        command = "update" if phase == "update" else "bench"
+        cmd = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            command,
+            str(args.out),
+            "--capture",
+            str(args.capture),
+            "--width",
+            str(width),
+            "--arm",
+            arm,
+            "--worker",
+        ]
+        if command == "bench":
+            cmd += [
+                "--phase",
+                phase,
+                "--rows",
+                str(size),
+                "--repeats",
+                str(args.repeats),
+            ]
+        else:
+            cmd += ["--rep", str(rep)]
+        if args.laptop:
+            cmd += ["--laptop"]
+        self.process = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1
+        )
+        self.timeout = args.timeout
+
+    def receive(self) -> dict[str, Any] | None:
+        assert self.process.stdout is not None
+        deadline = time.monotonic() + self.timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if (
+                remaining <= 0
+                or not select.select([self.process.stdout], [], [], remaining)[0]
+            ):
+                raise TimeoutError(f"worker call timeout after {self.timeout}s")
+            line = self.process.stdout.readline()
+            if not line:
+                raise RuntimeError(f"worker exited {self.process.poll()}")
+            if line.startswith("MPS_REPLY "):
+                return json.loads(line.removeprefix("MPS_REPLY "))
+            print(line, end="", file=sys.stderr)
+
+    def advance(self) -> dict[str, Any] | None:
+        assert self.process.stdin is not None
+        self.process.stdin.write("next\n")
+        self.process.stdin.flush()
+        return self.receive()
+
+    def close(self) -> None:
+        if self.process.poll() is None:
+            self.process.terminate()
+        try:
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+        for pipe in (self.process.stdin, self.process.stdout):
+            if pipe is not None:
+                pipe.close()
+
+
+def _interleaved(
+    args: argparse.Namespace, phase: str, width: int, *, size: int = 0, rep: int = 0
+) -> None:
+    """Repeat a drifting block once; select one entire quieter comparison.
+
+    Quieter means the lower arithmetic mean of endpoint loads. Both attempts
+    remain in the ledger; a selection receipt republishes the chosen rows last
+    so existing latest-attempt readers never combine arms from different tries.
+    """
+    metadata = _provenance(args.capture, args.laptop)
+    attempts: list[list[dict[str, Any]]] = []
+    ledger = args.out / ("updates.jsonl" if phase == "update" else "bench.jsonl")
+    for attempt in range(2):
+        _quiet(args.laptop)
+        block = str(uuid.uuid4())
+        workers: dict[Arm, CallWorker] = {}
+        rows: dict[Arm, dict[str, Any]] = {}
+        try:
+            for arm in ARMS:
+                rows[arm] = {
+                    **metadata,
+                    "event": phase,
+                    "width": width,
+                    "layers": LAYERS[width],
+                    "rows": size,
+                    "arm": arm,
+                    "rep": rep,
+                    "etude_run": os.environ.get("ETUDE_RUN"),
+                    "block_id": block,
+                    "attempt": attempt,
+                    "interleaved": True,
+                    "memory_scope": "per-process; all arm models resident",
+                }
+                parity = _latest_parity(args.out, metadata, width, arm)
+                admitted = (
+                    parity.get(size)
+                    if size
+                    else next(
+                        (r for r in parity.values() if r["status"] == "ok"),
+                        next(iter(parity.values()), None),
+                    )
+                )
+                if admitted is None or admitted["status"] != "ok":
+                    rows[arm].update(
+                        status="unsupported"
+                        if admitted and admitted["status"] == "unsupported"
+                        else "failed",
+                        error="parity not executable: "
+                        + str(admitted and admitted.get("error")),
+                    )
+                    continue
+                try:
+                    worker = CallWorker(args, phase, width, arm, size, rep)
+                    workers[arm] = worker
+                    ready = worker.receive()
+                    if ready is not None:
+                        rows[arm].update(ready)
+                        worker.close()
+                        del workers[arm]
+                except Exception as error:
+                    rows[arm].update(_failure(error, arm))
+                    if arm in workers:
+                        workers.pop(arm).close()
+            before = _quiet(args.laptop)
+            started = time.time()
+            while workers:
+                for arm, worker in list(workers.items()):
+                    try:
+                        result = worker.advance()
+                        if result is None:
+                            continue
+                        rows[arm].update(result)
+                    except Exception as error:
+                        rows[arm].update(_failure(error, arm))
+                    worker.close()
+                    del workers[arm]
+            after = os.getloadavg()[0]
+            ended = time.time()
+        finally:
+            for worker in workers.values():
+                worker.close()
+        for row in rows.values():
+            row.update(
+                load_before=before,
+                load_after=after,
+                started=started,
+                ended=ended,
+                load_retry=attempt > 0,
+                load_retry_required=args.laptop and _unstable(before, after),
+            )
+            _emit(ledger, row)
+        attempts.append(list(rows.values()))
+        if not args.laptop or not _unstable(before, after) or attempt:
+            break
+    if len(attempts) == 2:
+        chosen = min(
+            range(2),
+            key=lambda i: attempts[i][0]["load_before"] + attempts[i][0]["load_after"],
+        )
+        for row in attempts[chosen]:
+            _emit(
+                ledger,
+                {
+                    **row,
+                    "load_retry": True,
+                    "selected_attempt": chosen,
+                    "load_retry_complete": True,
+                    "selection": "lower mean endpoint load",
+                    "attempt_blocks": [a[0]["block_id"] for a in attempts],
+                },
+            )
+
+
 def matrix(args: argparse.Namespace) -> None:
     for width in args.widths:
         for size in SIZES["learner"]:
             for arm in ARMS:
                 _quiet(args.laptop)
-                _child(args, "parity", width, arm, size=size)
-                _child(args, "learner", width, arm, size=size)
-                if size in SIZES["collection"]:
-                    _child(args, "collection", width, arm, size=size)
+                _parity(args, width, arm, size)
+            _interleaved(args, "learner", width, size=size)
+            if size in SIZES["collection"]:
+                _interleaved(args, "collection", width, size=size)
 
 
 def replays(args: argparse.Namespace) -> None:
-    # Interleave arms by repetition to reduce temporal drift. All four arm
-    # families are required, and both half dtypes are attempted.
     metadata = _provenance(args.capture, args.laptop)
     for width in args.widths:
         for arm in ARMS:
@@ -972,11 +1221,9 @@ def replays(args: argparse.Namespace) -> None:
                 for r in _latest_parity(args.out, metadata, width, arm).values()
             ):
                 _quiet(args.laptop)
-                _child(args, "parity", width, arm, size=64)
+                _parity(args, width, arm, 64)
         for rep in range(3):
-            for arm in ARMS:
-                _quiet(args.laptop)
-                _child(args, "update", width, arm, rep=rep)
+            _interleaved(args, "update", width, rep=rep)
 
 
 @dataclass(frozen=True)
@@ -1021,6 +1268,28 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
     )
 
 
+def _load_label(row: dict[str, Any]) -> str:
+    if not row.get("laptop"):
+        return "not laptop"
+    before, after = row.get("load_before"), row.get("load_after")
+    label = (
+        f"{before:.2f}→{after:.2f}"
+        if before is not None and after is not None
+        else "load unknown"
+    )
+    if row.get("load_retry"):
+        label += " (quieter of 2)" if row.get("load_retry_complete") else " (retry)"
+    elif row.get("load_retry_required"):
+        label += " (retry pending)"
+    return label
+
+
+def _arm_label(arm: Arm, host: dict[str, Any]) -> str:
+    return (
+        f"PyTorch CPU{host['cpu_threads']} · float32" if arm == "cpu" else LABELS[arm]
+    )
+
+
 def _details(
     out: Path,
     suffix: str,
@@ -1037,7 +1306,10 @@ def _details(
         "Coverage is not a correctness verdict. Timings remain visible when gradients "
         "or choices disagree. Missing measurements are not zero. Memory columns are "
         "GiB: lifetime process RSS, sampled MPS driver peak (50 ms; lower bound), "
-        "and MLX allocator peak. They measure different scopes and must not be summed.",
+        "and MLX allocator peak. They measure different scopes and must not be summed. "
+        "All arm models are resident during timing: allocation failures describe this "
+        "shared-memory setup, not standalone arm capacity. Endpoint loads label every "
+        "laptop measurement; quieter of 2 selects the lower mean endpoint load.",
         "## Shared engine component",
         _table(
             [
@@ -1046,6 +1318,7 @@ def _details(
                 "Capture machine",
                 "Capture threads",
                 "Capture source",
+                "Laptop load start→end",
             ],
             [
                 [
@@ -1056,6 +1329,7 @@ def _details(
                     else "unknown",
                     str(c["threads"]) if c["threads"] is not None else "unknown",
                     c["revision"],
+                    _load_label(c["host"] or {}),
                 ]
                 for c in summary["captures"]
             ],
@@ -1075,8 +1349,9 @@ def _details(
                         [
                             f"w{width}l{LAYERS[width]}",
                             str(size),
-                            LABELS[arm],
+                            _arm_label(arm, host),
                             _status(row),
+                            _load_label(r),
                             *[
                                 _number(r.get(k))
                                 for k in (
@@ -1101,6 +1376,7 @@ def _details(
                         "Rows",
                         "Arm",
                         "Status",
+                        "Laptop load start→end",
                         "First s",
                         "Catalog s",
                         "Warm median s",
@@ -1141,8 +1417,9 @@ def _details(
                             f"w{width}l{LAYERS[width]}",
                             str(streams),
                             str(size),
-                            LABELS[arm],
+                            _arm_label(arm, host),
                             _status(row),
+                            _load_label(r),
                             *[
                                 _number(r.get(k))
                                 for k in (
@@ -1176,6 +1453,7 @@ def _details(
                     "Rows",
                     "Arm",
                     "Status",
+                    "Laptop load start→end",
                     "Learner logit Δ",
                     "Collection logit Δ",
                     "Value Δ",
@@ -1203,9 +1481,10 @@ def _details(
                 [
                     f"w{width}l{LAYERS[width]}",
                     str(streams),
-                    LABELS[arm],
+                    _arm_label(arm, host),
                     str(rep + 1),
                     _status(row),
+                    _load_label(r),
                     *[
                         _number(r.get(k))
                         for k in ("engine", "collection_policy", "learning", "seconds")
@@ -1225,6 +1504,7 @@ def _details(
                 "Arm",
                 "Repeat",
                 "Status",
+                "Laptop load start→end",
                 "Shared engine s",
                 "Collection s",
                 "Learning s",
@@ -1275,7 +1555,11 @@ def _host_report(
         (r["event"], r["width"], r["streams"], r["rows"], r["arm"]): r for r in local
     }
     replay_latest = {(r["width"], r["streams"], r["arm"], r["rep"]): r for r in replay}
-    missing: list[str] = []
+    missing: list[str] = [
+        f"{r['event']}/w{r['width']}/{r['arm']}/load retry pending"
+        for r in [*latest.values(), *replay_latest.values()]
+        if r.get("load_retry_required") and not r.get("load_retry_complete")
+    ]
     captures: list[dict[str, Any]] = []
     for streams in STREAMS:
         captured = [r for r in evidence if r["streams"] == streams]
@@ -1382,9 +1666,19 @@ def _call_charts(out: Path, suffix: str, data: HostReport) -> None:
                         for r in points
                     ],
                     marker="o",
-                    label=LABELS[arm],
+                    label=_arm_label(arm, host),
                 )
-                cells.append([_status(r) for r in points])
+                cells.append(
+                    [
+                        _status(r)
+                        + (
+                            "\nL " + _load_label(r).replace(" (quieter of 2)", "*")
+                            if r and r.get("laptop")
+                            else ""
+                        )
+                        for r in points
+                    ]
+                )
             axis.set(
                 title=f"Width {width} · {LAYERS[width]} layers",
                 xlabel="Rows per call",
@@ -1396,7 +1690,7 @@ def _call_charts(out: Path, suffix: str, data: HostReport) -> None:
             axis.set_xticks(SIZES[phase], [str(b) for b in SIZES[phase]])
             table = axis.table(
                 cellText=cells,
-                rowLabels=[LABELS[a] for a in ARMS],
+                rowLabels=[_arm_label(a, host) for a in ARMS],
                 colLabels=[str(b) for b in SIZES[phase]],
                 cellLoc="center",
                 bbox=(0.32, -0.72, 0.68, 0.48),
@@ -1411,6 +1705,8 @@ def _call_charts(out: Path, suffix: str, data: HostReport) -> None:
             0,
             0.15,
             "Warmed medians; gaps are not zero.\n"
+            "L = laptop block start→end 1-minute load, shown per point.\n"
+            "* = quieter of two blocks (lower mean endpoint load).\n"
             "Measured means execution completed, not correctness passed.\n"
             f"First calls, setup, memory and correctness: comparisons{suffix}.md",
             fontsize=9,
@@ -1448,7 +1744,13 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
         ("collection_policy", "Collection policy calls", "#539caf"),
         ("learning", "Learning", "#db9250"),
     )
-    labels = ("CPU8\nf32", "MPS\nf32", "MPS\nbf16", "MPS\nf16", "MLX\nf32")
+    labels = (
+        f"CPU{host['cpu_threads']}\nf32",
+        "MPS\nf32",
+        "MPS\nbf16",
+        "MPS\nf16",
+        "MLX\nf32",
+    )
     for index, width in enumerate(WIDTHS):
         sub = grid[index // 2, index % 2].subgridspec(
             2, 1, height_ratios=(3, 1), hspace=0.12
@@ -1512,6 +1814,11 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
                     text += "\nchoices differ"
                 else:
                     text += "\nchoices match"
+                if middle.get("laptop"):
+                    text += "\n" + "\n".join(
+                        f"L{i + 1} " + _load_label(r).replace(" (quieter of 2)", "*")
+                        for i, r in enumerate(complete)
+                    )
                 axis.annotate(
                     text,
                     (x, bottom),
@@ -1553,6 +1860,11 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
         }
     )
     origin_caption = "\n".join(origins) or "No capture provenance"
+    origin_caption += "".join(
+        f"\n{c['streams']} streams capture load: {_load_label(c['host'] or {})}"
+        for c in captures
+        if (c["host"] or {}).get("laptop")
+    )
     mixed_host = any(
         c["host"] is None or c["host"]["hostname"] != hostname for c in captures
     )
@@ -1577,7 +1889,7 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
         )
         + "Both-seat self-play; one real capture per stream count.\nMedian of three replays; same inputs and recorded decisions.\nHalf arms: bfloat16; float16 with gradient scaler.\nBars identify executed dtype and median-total phase times.\nRate counts learner decisions before filtering.\nCosines vs CPU; choices use common-uniform samples.\nNeither proves identical trained policies.\nFirst calls, memory and correctness: comparisons"
         + suffix
-        + ".md\nMissing and failed arms remain visible.\nSame-hour condition for measured groups: "
+        + ".md\nL = each replay block start→end 1-minute load.\nLoads label all phase stacks and associated rates.\n* = lower mean endpoint load after >2× drift.\nAll arm models resident; memory capacity is shared.\nMissing and failed arms remain visible.\nSame-hour condition for measured groups: "
         + ("met" if summary["same_hour"] else "NOT MET")
         + (
             "\nReceipt coverage: complete"
@@ -1591,7 +1903,7 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
     legend.legend(
         handles=[Patch(facecolor=color, label=label) for _, label, color in phases],
         loc="upper left",
-        bbox_to_anchor=(0, -0.12),
+        bbox_to_anchor=(0, -0.42),
         fontsize=9,
     )
     fig.suptitle(
@@ -1673,6 +1985,9 @@ def main() -> None:
         if name in ("bench", "update"):
             command.add_argument("--width", type=int, choices=WIDTHS, required=True)
             command.add_argument("--arm", choices=ARMS, required=True)
+            command.add_argument(
+                "--worker", action="store_true", help=argparse.SUPPRESS
+            )
         if name == "bench":
             command.add_argument(
                 "--phase", choices=("parity", "learner", "collection"), required=True
@@ -1693,7 +2008,7 @@ def main() -> None:
         return
     import torch
 
-    torch.set_num_threads(8)
+    torch.set_num_threads(4 if args.laptop else 8)
     if not str(torch.__version__).startswith("2.15."):
         parser.error("measurements require pinned torch 2.15")
     if platform.system() != "Darwin":
@@ -1713,6 +2028,12 @@ def main() -> None:
         and args.rows not in SIZES["collection"]
     ):
         parser.error("collection rows are 64, 256 or 512")
+    if (
+        args.command in ("bench", "update")
+        and not args.worker
+        and (args.command == "update" or args.phase != "parity")
+    ):
+        parser.error("timed comparisons use matrix or replays, interleaved across arms")
     # New evidence must name committed executable source. Report edits may
     # proceed independently, but source edits require a new freeze.
     if not host["revision"]:
@@ -1752,21 +2073,46 @@ def main() -> None:
             )
             if args.command == "capture":
                 capture(args.out, args.streams, args.laptop)
-            elif args.command == "bench":
-                bench(
-                    args.out,
-                    args.capture,
-                    args.phase,
-                    args.width,
-                    args.rows,
-                    args.arm,
-                    args.laptop,
-                    args.repeats,
+            elif args.command in ("bench", "update"):
+                work = (
+                    bench(
+                        args.out,
+                        args.capture,
+                        args.phase,
+                        args.width,
+                        args.rows,
+                        args.arm,
+                        args.laptop,
+                        args.repeats,
+                    )
+                    if args.command == "bench"
+                    else update(
+                        args.out,
+                        args.capture,
+                        args.width,
+                        args.arm,
+                        args.laptop,
+                        args.rep,
+                    )
                 )
-            elif args.command == "update":
-                update(
-                    args.out, args.capture, args.width, args.arm, args.laptop, args.rep
+                ledger = args.out / (
+                    "bench.jsonl" if args.command == "bench" else "updates.jsonl"
                 )
+                try:
+                    if not args.worker:
+                        _quiet(args.laptop)
+                    for row in work:
+                        if args.worker:
+                            print(
+                                "MPS_REPLY " + json.dumps(row, allow_nan=False),
+                                flush=True,
+                            )
+                            if row is None and sys.stdin.readline().strip() != "next":
+                                break
+                        elif row is not None:
+                            _emit(ledger, row)
+                finally:
+                    work.close()
             elif args.command == "matrix":
                 matrix(args)
             else:
@@ -1774,38 +2120,24 @@ def main() -> None:
     except Exception as error:
         if args.command not in ("bench", "update"):
             raise
-        message = str(error)
-        lower = message.lower()
-        status = "failed"
-        if isinstance(error, MemoryError) or "out of memory" in lower:
-            status = "oom"
-        elif args.arm in HALF and (
-            ("autocast" in lower and isinstance(error, UserWarning))
-            or (
-                any(dtype in lower for dtype in ("bfloat16", "float16", "half"))
-                and any(
-                    term in lower
-                    for term in ("not supported", "unsupported", "not implemented")
-                )
+        row = {
+            "event": getattr(args, "phase", "update"),
+            "width": args.width,
+            "rows": getattr(args, "rows", 0),
+            "arm": args.arm,
+            "rep": getattr(args, "rep", 0),
+            **_failure(error, args.arm),
+            "load_after": os.getloadavg()[0],
+            **_provenance(args.capture, args.laptop),
+        }
+        if args.worker:
+            print("MPS_REPLY " + json.dumps(row, allow_nan=False), flush=True)
+        else:
+            _emit(
+                args.out
+                / ("bench.jsonl" if args.command == "bench" else "updates.jsonl"),
+                row,
             )
-        ):
-            status = "unsupported"
-        elif "laptop load" in lower:
-            status = "not_measured"
-        _emit(
-            args.out / ("bench.jsonl" if args.command == "bench" else "updates.jsonl"),
-            {
-                "event": getattr(args, "phase", "update"),
-                "width": args.width,
-                "rows": getattr(args, "rows", 0),
-                "arm": args.arm,
-                "rep": getattr(args, "rep", 0),
-                "status": status,
-                "error": f"{type(error).__name__}: {message}",
-                "load_after": os.getloadavg()[0],
-                **_provenance(args.capture, args.laptop),
-            },
-        )
         raise SystemExit(1) from error
 
 

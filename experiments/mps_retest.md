@@ -30,7 +30,9 @@ Task. The operator reported no mac2-m2 capacity in the checked US zones at
 2026-11-13 01:20 UTC and is retrying. The quiet M4 Max may run captures and
 all arms that fit while M2 capacity is pending. If no host arrives within
 12 hours of that direction, report the laptop evidence and mark M2 unmeasured.
-The laptop still requires one-minute load below 8 before each measured block.
+The laptop requires one-minute load below 16 before each measured block,
+with four CPU threads and call-by-call interleaving across arms. The latest
+operator direction supersedes the earlier load-under-8 rule.
 
 ## Named deliverable: full context
 
@@ -40,7 +42,7 @@ stacked into engine/host work, collection policy calls and learning, with
 **collected learner decisions per whole-update wall-second** alongside.
 
 There is one panel per model shape and a group per 256, 512 and 1,024 streams.
-Every group includes CPU8 float32, MPS float32, each supported MPS half dtype,
+Every group includes CPU float32 (four threads on the laptop, eight on M2), MPS float32, each supported MPS half dtype,
 and MLX float32. Bars show the median-total replay of three repetitions and
 its component times, so their stacks sum to the median total. Each group must
 be measured on the same host within one hour. Does-not-fit, unsupported and
@@ -60,7 +62,7 @@ whole-Task cap; the Apple harness does not implement that optional arm.
 
 | Arm | Precision |
 |---|---|
-| PyTorch CPU, 8 threads | float32; correctness and timing reference |
+| PyTorch CPU, 4 laptop / 8 M2 threads | float32; correctness and timing reference |
 | PyTorch MPS | float32 |
 | PyTorch MPS half | bfloat16 autocast |
 | PyTorch MPS half | float16 autocast with a gradient scaler |
@@ -106,7 +108,10 @@ host preparation, device transfer where needed and synchronized completion.
   logits return to the host. Catalog setup and first-call time are separate.
 - **Memory:** process lifetime peak RSS; MLX allocator peak; MPS driver peak
   sampled every 50 ms. The sampled peak is a lower bound, not an exact allocator
-  high-water mark. Each arm/shape/phase runs in a fresh process.
+  high-water mark. Each arm/shape/phase runs in a fresh process. During a comparison all
+  arm models remain resident, although only one process computes at a time.
+  An allocation failure is a limit of this interleaved setup, not proof that
+  the arm cannot fit alone.
 - **Correctness:** legal-logit and value differences, full-gradient cosine,
   minimum tensor cosine and worst tensor against CPU float32. MLX comparisons
   use its independent parameter layout (including folded GRU biases). Tiny
@@ -117,7 +122,7 @@ host preparation, device transfer where needed and synchronized completion.
   with evolving weights during learning. Engine time comes from the real
   capture, excluding policy and recording I/O time. It includes other
   non-policy collection host work at the capture's four CPU threads; policy
-  and learner replays use eight. Three replays per arm and shape produce
+  and learner replays use four threads on the laptop, eight on M2. Three replays per arm and shape produce
   the full-context chart. Rate counts collected learner decisions before
   filtering, rather than optimizer exposures or bootstrap calls.
 
@@ -141,12 +146,24 @@ never chooses a backend automatically.
 `release.sh`. Cite the operator's allocation/release timestamps and cost receipt
 (24-hour minimum, about USD 21) against the USD 25 Task cap.
 
-**Laptop host:** Apple M4 Max, 128 GiB, at most eight CPU threads. The full
-matrix and real captures are allowed here while M2 capacity is pending. Every
-measured block checks the one-minute load is below 8. Otherwise the command
-stops without timing; the operator must quiet the host before retrying. There
-is no indefinite wait and no artificial load generation. Captures record
-before/after load and use four CPU threads; replays use eight.
+**Laptop host:** Apple M4 Max, 128 GiB, four CPU threads for capture and the
+CPU reference. Before starting a capture or a comparison block, require the
+one-minute load to be below 16. Otherwise stop without timing; do not wait for
+8. A comparison block is all arms at one width and per-call size/phase, or one
+whole-update repetition. Resident isolated processes advance one collection
+call or learner step per arm in order. The start and end loads belong to the
+entire comparison; there is no mid-block load refusal that would selectively
+truncate slower arms.
+
+If start and end load differ by more than 2×, repeat the entire block once,
+starting only below 16 again. Keep the attempt with the lower arithmetic mean
+of endpoint loads; a tie keeps the first. Retain both attempts and select all
+arms together. An unavailable repeat leaves coverage incomplete. Captures use
+the same repeat rule, keeping the unused capture beside the selected one.
+Every laptop table row and chart point/bar carries the block's endpoint loads;
+whole-update captions also give the reused engine capture's loads. Repeated
+blocks are identified. This reduces shared-host drift; it does not make a busy
+laptop equivalent to a dedicated host. No artificial load is generated.
 
 Keep each host's captures and ledgers in separate directories. Capture locally
 for a same-host whole-update comparison. A replay of another host's capture
@@ -160,13 +177,12 @@ run identity. The operator supplies M2 access when available. These are
 measurement commands, not rental commands. Start with a selected width to
 establish replay durations before scheduling the full matrix; the default
 worker timeout is 900 seconds and a timeout is a failed attempt, not OOM.
-The three-replay, same-hour requirement remains unchanged. Its feasibility is
-unmeasured: `replays` runs arms serially, interleaved by repetition. With both
-half dtypes supported, each width/stream group needs 15 replay processes plus
-startup and input-reading overhead within that hour. Establish their durations
-before scheduling a complete group; raising the worker timeout does not relax
-the comparison window. If a group cannot fit, retain that limitation for review
-without claiming a complete same-hour comparison.
+The three-replay, same-hour requirement remains unchanged. Each repetition
+interleaves all executable arms call by call and step by step. Their total
+elapsed span, including the gaps spent running the other arms, determines the
+window; phase sums exclude those gaps. Establish durations at a selected width
+before scheduling the full matrix. The timeout applies to an individual worker
+call, not a complete update. Increasing it never relaxes the one-hour window.
 
 ```sh
 uv run --extra mlx python experiments/mps_retest.py capture capture-256 --streams 256
@@ -179,13 +195,14 @@ uv run --extra mlx python experiments/mps_retest.py replays bench --capture capt
 uv run --extra reports python experiments/mps_retest.py report experiments/data/mps_retest --bench bench
 ```
 
-One cell can be rerun with `bench bench --capture capture-256 --phase learner
---width 384 --rows 256 --arm mps-bf16`; its same-source, same-host parity receipt
-must exist first. `--phase parity` writes that receipt. The full matrix tries
-both half dtypes. `replays` checks parity for each width/arm before its replay
-blocks. `--widths` selects shapes for a partial run. Laptop measurement commands
-must include `--laptop`, including `capture`; every width is allowed. No M2
-measurement is claimed for a laptop run.
+Run a correctness cell with `bench bench --capture capture-256 --phase parity
+--width 384 --rows 256 --arm mps-bf16`. Timed work uses `matrix` or `replays`
+with `--widths 384` to select a width; single-arm serial timing is refused.
+`matrix` tries both half dtypes at every shape. `replays` checks parity for
+each width/arm before its replay blocks. Laptop commands must include
+`--laptop`, including `capture`; every width is allowed. CPU receipts use the
+arm name `cpu` and retain their actual thread count. No M2 measurement is
+claimed for a laptop run.
 
 `bench.jsonl` and `updates.jsonl` retain failures, timeout/OOM distinctions,
 source, capture identity, hardware, versions, dtype and before/after load.
@@ -195,7 +212,9 @@ files must be retained alongside these ledgers, `summary.json`, the charts and
 each whole-update repetition and errors, rather than only successful medians.
 Report input refuses mixed source revisions or multiple captures at one stream
 count on one host. New attempts supersede the corresponding cell in summaries;
-raw receipts remain intact. Parity labels use the latest attempts for that
+raw receipts remain intact. Load retries retain both attempts and append an
+explicit selection of the quieter whole block. Captures retain `selection.json`
+and each attempt’s `provenance.json`; publish the unused attempt too. Parity labels use the latest attempts for that
 stream count. A sole host uses `full_context.png`; in a combined report the M2
 uses that name and other hosts have a hostname suffix. Host identity remains
 in every chart and table regardless of filename.
@@ -220,6 +239,20 @@ is queued. The default launcher's incompatible database was left untouched.
 `849769d6f`. Between 01:34 and 01:36 UTC, one-minute load fell from 63.49 to
 33.41 but remained above 8; no capture or timed arm started. New M2 access
 was still pending.
+
+**2026-11-13 01:42 UTC:** compression and the main merge are committed at
+`3a7937232`. Load was 43.36 and the M2 access notes were unchanged; no capture
+or timed arm started. The next block remains the 256-stream capture above.
+
+**2026-11-13 updated laptop method:** the operator changed the admission
+threshold to load <16, capture/reference threads to four, and comparisons to
+call-by-call interleaving. The harness now records both endpoint loads, repeats
+>2× drift once, and labels laptop numbers with their loads. Controlled checks
+exercise scheduling and selection without models or games. No performance
+measurement follows from those checks.
+
+**2026-11-13T02:01:15+00:00 preflight:** one-minute load 64.67 remained above 16.
+No capture or timed comparison started. New M2 access is still pending.
 
 **Cost:** no rental was launched by this Task. The operator's cost receipt is
 pending; this report will cite it once supplied.
