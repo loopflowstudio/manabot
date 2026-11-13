@@ -25,7 +25,7 @@ fn fetch_land_counts_the_found_land_and_triggers_tracker_twice() {
     let found = library_card(&s, 0, "Forest");
     select_card(&mut s, found);
     settle(&mut s);
-    let id = s.game().state.card_to_permanent[found].unwrap();
+    let id = s.game().state.object_to_permanent[found].unwrap();
     assert!(!s.game().state.permanents[id].as_ref().unwrap().tapped);
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 2);
 }

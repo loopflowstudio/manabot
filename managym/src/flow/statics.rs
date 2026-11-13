@@ -14,7 +14,7 @@ use crate::{
             ActivatedAbilityDefinition, CardTypes, Keyword, Keywords, PowerCda, Restriction,
             StaticAbility, StaticScope,
         },
-        game_object::{CardId, ObjectRef, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -403,47 +403,55 @@ impl Game {
             None,
         )
     }
-    /// Power in the card's current zone (CR 604.3). On the stack "you"
+    /// Power in the object's current zone (CR 604.3). On the stack "you"
     /// means the spell's controller; elsewhere off the battlefield it means
     /// the owner (CR 109.5), including owned outside-game copies.
-    pub fn card_power(&self, card_id: CardId) -> i32 {
-        if let Some(permanent) = self.state.card_to_permanent[card_id] {
+    pub fn object_power(&self, object_id: impl Into<ObjectId>) -> i32 {
+        let object_id: ObjectId = object_id.into();
+        if let Some(permanent) = self.state.object_to_permanent[object_id] {
             return self.characteristics(permanent).power;
         }
-        let card = &self.state.cards[card_id];
-        let Some(cda) = card.power_cda() else {
-            return card.power.unwrap_or(0);
+        let object = &self.state.objects[object_id];
+        let Some(cda) = object.power_cda() else {
+            return object.power.unwrap_or(0);
         };
-        let controller = self.stack_spell_controller(card_id).unwrap_or(card.owner);
+        let controller = self
+            .stack_spell_controller(object_id)
+            .unwrap_or(object.owner);
         self.cda_power(cda, controller)
     }
 
     /// Contextual predicates must read CDA power rather than a printed star's
     /// placeholder. Layer computation itself uses its explicit board context.
-    pub(crate) fn card_matches_predicate(&self, card: CardId, predicate: &CardPredicate) -> bool {
+    pub(crate) fn object_matches_predicate(
+        &self,
+        object_id: impl Into<ObjectId>,
+        predicate: &CardPredicate,
+    ) -> bool {
+        let object_id: ObjectId = object_id.into();
         if predicate.from_battlefield_this_turn {
-            let Some(object) = self.current_object_ref(card) else {
+            let Some(object) = self.current_object_ref(object_id) else {
                 return false;
             };
-            return self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+            return self.state.zones.zone_of(object_id) == Some(ZoneType::Graveyard)
                 && self.state.turn.graveyard_from_battlefield.contains(&object)
-                && self.card_matches_predicate(
-                    card,
+                && self.object_matches_predicate(
+                    object_id,
                     &CardPredicate {
                         from_battlefield_this_turn: false,
                         ..predicate.clone()
                     },
                 );
         }
-        if let Some(permanent) = self.state.card_to_permanent[card] {
+        if let Some(permanent) = self.state.object_to_permanent[object_id] {
             return self.permanent_matches_predicate(permanent, predicate);
         }
         let power = if predicate.reads_power() {
-            self.card_power(card)
+            self.object_power(object_id)
         } else {
             0
         };
-        predicate.matches_card_with_power(&self.state.cards[card], power)
+        predicate.matches_object_with_power(&self.state.objects[object_id], power)
     }
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {
@@ -477,14 +485,14 @@ impl Game {
                 )
             })
     }
-    pub(crate) fn spell_keywords(&self, card: CardId, controller: PlayerId) -> Keywords {
-        let mut keywords = self.state.cards[card].keywords;
+    pub(crate) fn spell_keywords(&self, object: ObjectId, controller: PlayerId) -> Keywords {
+        let mut keywords = self.state.objects[object].keywords;
         for (_, owner, view) in self.static_sources() {
             for ability in &view.static_abilities {
                 if let StaticAbility::KeywordGrant(grant) = ability {
                     if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
                         if owner == controller
-                            && self.card_matches_predicate(card, predicate)
+                            && self.object_matches_predicate(object, predicate)
                             && grant
                                 .condition
                                 .as_ref()
@@ -577,15 +585,16 @@ impl Game {
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
-    pub(crate) fn has_instant_timing(&self, player: PlayerId, card: CardId) -> bool {
+    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: impl Into<ObjectId>) -> bool {
+        let object: ObjectId = object.into();
         let granted_flash = self
-            .exile_grant(player, card)
+            .exile_grant(player, object)
             .is_some_and(|grant| grant.flash);
-        let card = &self.state.cards[card];
+        let object = &self.state.objects[object];
         granted_flash
-            || card.is_instant_speed()
-            || (card.types.is_creature() && self.has_next_creature_cast_flash(player))
-            || card
+            || object.is_instant_speed()
+            || (object.types.is_creature() && self.has_next_creature_cast_flash(player))
+            || object
                 .flash_if()
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
@@ -680,7 +689,7 @@ impl Game {
                 self.iter_battlefield_permanents(controller)
                     .filter(|&id| {
                         self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                            self.state.cards[permanent.card].owner != controller
+                            self.state.objects[permanent.object].owner != controller
                         })
                     })
                     .take(*count)
@@ -746,12 +755,12 @@ impl Game {
             }
             Condition::CardsThisWayMatch(predicate) => frame.is_some_and(|frame| {
                 frame.this_way.iter().any(|object| {
-                    self.card_matches_predicate(CardId::from(object.entity), predicate)
+                    self.object_matches_predicate(ObjectId::from(object.entity), predicate)
                 })
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
                 frame.and_then(|frame| frame.context_target),
-                Some(Target::StackSpell(card)) if self.card_matches_predicate(card, predicate)
+                Some(Target::StackSpell(object_id)) if self.object_matches_predicate(object_id, predicate)
             ),
             Condition::TargetCardExiled(predicate) => {
                 let Some(Target::GraveyardCard(object)) =
@@ -759,10 +768,10 @@ impl Game {
                 else {
                     return false;
                 };
-                let card = CardId::from(object.entity);
-                self.current_object_ref(card) != Some(object)
-                    && self.state.zones.zone_of(card) == Some(ZoneType::Exile)
-                    && self.card_matches_predicate(card, predicate)
+                let object_id = ObjectId::from(object.entity);
+                self.current_object_ref(object_id) != Some(object)
+                    && self.state.zones.zone_of(object_id) == Some(ZoneType::Exile)
+                    && self.object_matches_predicate(object_id, predicate)
             }
             Condition::TargetDealtDamageThisTurn => {
                 let Some(Target::Permanent(permanent_id)) =

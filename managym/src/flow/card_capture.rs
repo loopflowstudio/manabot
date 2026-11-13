@@ -11,7 +11,7 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::game::Game,
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -64,7 +64,8 @@ pub struct CardSnapshot {
 #[derive(Debug, Serialize)]
 pub struct CardMove {
     pub sequence: usize,
-    pub card: CardSnapshot,
+    #[serde(rename = "card")]
+    pub object: CardSnapshot,
     pub from: Option<ZoneType>,
     pub controller: usize,
     pub cause: &'static str,
@@ -81,46 +82,44 @@ pub struct CardCapture {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exposure: Option<ExposureCapture>,
     #[serde(skip)]
-    pub(crate) drawing: Option<CardId>,
+    pub(crate) drawing: Option<ObjectId>,
 }
 
-fn snapshot(game: &Game, card: CardId) -> CardSnapshot {
-    let data = &game.state.cards[card];
+fn snapshot(game: &Game, object: ObjectId) -> CardSnapshot {
+    let data = &game.state.objects[object];
     let player = &game.state.players[data.owner.0];
     let original = game
         .card_capture
         .as_ref()
-        .and_then(|capture| capture.original(card));
+        .and_then(|capture| capture.original(object));
     CardSnapshot {
-        copy: card.0,
-        definition: original.map_or(data.definition_id.0, |card| card.definition),
-        name: original.map_or_else(|| data.name.clone(), |card| card.name.clone()),
-        incarnation: game.state.object_incarnations[card].0,
+        copy: object.0,
+        definition: original.map_or(data.definition_id.0, |object| object.definition),
+        name: original.map_or_else(|| data.name.clone(), |object| object.name.clone()),
+        incarnation: game.state.object_incarnations[object].0,
         owner: data.owner.0,
-        zone: game.state.zones.zone_of(card),
-        origin: if player.deck.contains(&card) {
-            "deck"
-        } else if player.sideboard.contains(&card) {
-            "outside"
-        } else {
-            "generated"
+        zone: game.state.zones.zone_of(object),
+        origin: match game.state.card_id(object) {
+            Some(card) if player.deck.contains(&card) => "deck",
+            Some(card) if player.sideboard.contains(&card) => "outside",
+            _ => "generated",
         },
     }
 }
 
 pub(crate) fn snapshots(game: &Game) -> Vec<CardSnapshot> {
-    (0..game.state.cards.len())
-        .map(|i| snapshot(game, CardId(i)))
+    (0..game.state.objects.len())
+        .map(|i| snapshot(game, ObjectId(i)))
         .collect()
 }
 
 impl CardCapture {
     /// Physical-copy identity is fixed at setup/creation, not by its current face.
-    fn original(&self, card: CardId) -> Option<&CardSnapshot> {
+    fn original(&self, object: ObjectId) -> Option<&CardSnapshot> {
         self.initial
             .iter()
-            .chain(self.moves.iter().map(|m| &m.card))
-            .find(|snapshot| snapshot.copy == card.0)
+            .chain(self.moves.iter().map(|m| &m.object))
+            .find(|snapshot| snapshot.copy == object.0)
     }
 
     pub(crate) fn new(game: &Game) -> Self {
@@ -131,7 +130,7 @@ impl CardCapture {
             opening: std::array::from_fn(|seat| {
                 game.state
                     .zones
-                    .zone_cards(ZoneType::Hand, PlayerId(seat))
+                    .zone_objects(ZoneType::Hand, PlayerId(seat))
                     .iter()
                     .map(|c| c.0)
                     .collect()
@@ -166,21 +165,21 @@ impl Game {
                         .into_iter()
                         .filter_map(|id| {
                             self.state
-                                .cards
+                                .objects
                                 .iter()
                                 .enumerate()
-                                .find(|(_, card)| card.id == id)
-                                .map(|(index, _)| CardId(index))
+                                .find(|(_, object_id)| object_id.id == id)
+                                .map(|(index, _)| ObjectId(index))
                                 .or_else(|| {
                                     self.state
                                         .permanents
                                         .iter()
                                         .flatten()
                                         .find(|p| p.id == id)
-                                        .map(|p| p.card)
+                                        .map(|p| p.object)
                                 })
                         })
-                        .map(|card| snapshot(self, card))
+                        .map(|object_id| snapshot(self, object_id))
                         .collect();
                     ExposureOption {
                         action_type: action.action_type(),
@@ -196,7 +195,7 @@ impl Game {
         // changes do not turn this into a count of executed mechanic programs.
         let definition = frame.source.and_then(|source| {
             let capture = self.card_capture.as_ref()?;
-            capture.original(source).map(|card| card.definition)
+            capture.original(source).map(|object| object.definition)
         });
         if let Some(exposure) = self
             .card_capture
@@ -212,9 +211,9 @@ impl Game {
         }
     }
 
-    pub(crate) fn capture_card_move(
+    pub(crate) fn capture_object_move(
         &mut self,
-        card: CardId,
+        object: ObjectId,
         from: Option<ZoneType>,
         to: Option<ZoneType>,
         controller: PlayerId,
@@ -222,11 +221,11 @@ impl Game {
         if self.card_capture.is_none() {
             return;
         }
-        let data = snapshot(self, card);
+        let data = snapshot(self, object);
         let capture = self.card_capture.as_mut().expect("capture enabled");
         // Only the actual committed movement caused by draw_cards consumes this
         // marker. Triggered movements during its processing cannot inherit it.
-        let drawn = capture.drawing == Some(card)
+        let drawn = capture.drawing == Some(object)
             && from == Some(ZoneType::Library)
             && to == Some(ZoneType::Hand);
         if drawn {
@@ -247,7 +246,7 @@ impl Game {
         };
         capture.moves.push(CardMove {
             sequence: capture.moves.len(),
-            card: data,
+            object: data,
             from,
             controller: controller.0,
             cause,
@@ -304,15 +303,15 @@ mod tests {
     #[test]
     fn selection_bounce_and_redraw_keep_distinct_causes() {
         let mut game = Game::new_capturing(configs(), 18, true);
-        let card = game
+        let object = game
             .state
             .zones
             .top(ZoneType::Library, PlayerId(0))
             .unwrap();
-        game.move_card(card, ZoneType::Hand); // selection, not draw
-        game.move_card(card, ZoneType::Battlefield);
-        game.move_card(card, ZoneType::Hand); // return, not draw
-        game.move_card(card, ZoneType::Library);
+        game.move_object(object, ZoneType::Hand); // selection, not draw
+        game.move_object(object, ZoneType::Battlefield);
+        game.move_object(object, ZoneType::Hand); // return, not draw
+        game.move_object(object, ZoneType::Library);
         // ZoneManager appends to the library's top.
         game.draw_cards(PlayerId(0), 1);
         let moves = &game.card_capture.as_ref().unwrap().moves;
@@ -320,8 +319,8 @@ mod tests {
             moves.iter().map(|m| m.cause).collect::<Vec<_>>(),
             ["selection", "move", "return", "move", "draw"]
         );
-        assert_eq!(moves.last().unwrap().card.copy, card.0);
-        assert_eq!(moves.last().unwrap().card.incarnation, 5);
+        assert_eq!(moves.last().unwrap().object.copy, object.0);
+        assert_eq!(moves.last().unwrap().object.incarnation, 5);
     }
     #[test]
     fn exposure_distinguishes_declined_countered_and_completed() {
@@ -338,16 +337,16 @@ mod tests {
             );
             game.scenario_force_card_in_hand(PlayerId(0), "Gray Ogre")
                 .unwrap();
-            let card = *game
+            let object_id = *game
                 .state
                 .zones
-                .zone_cards(ZoneType::Hand, PlayerId(0))
+                .zone_objects(ZoneType::Hand, PlayerId(0))
                 .iter()
-                .find(|card| game.state.cards[**card].name == "Gray Ogre")
+                .find(|object_id| game.state.objects[**object_id].name == "Gray Ogre")
                 .unwrap();
             // Synthetic free, untargeted spell isolates capture from card rules.
-            game.state.cards[card].mana_cost = None;
-            game.state.cards[card]
+            game.state.objects[object_id].mana_cost = None;
+            game.state.objects[object_id]
                 .keywords
                 .insert(crate::state::card::Keyword::Flash);
             game.card_capture = Some(CardCapture::new(&game));
@@ -358,7 +357,7 @@ mod tests {
                 actions: vec![
                     Action::CastSpell {
                         player: PlayerId(0),
-                        card,
+                        object: object_id,
                     },
                     Action::PassPriority {
                         player: PlayerId(0),
@@ -366,10 +365,10 @@ mod tests {
                 ],
                 focus: Vec::new(),
             });
-            let source = game.current_object_ref(card).unwrap();
+            let source = game.current_object_ref(object_id).unwrap();
             game.step(usize::from(outcome == "declined")).unwrap();
             if outcome == "countered" {
-                game.counter_spell(card, None, ZoneType::Graveyard);
+                game.counter_spell(object_id, None, ZoneType::Graveyard);
             }
             if outcome == "completed" {
                 game.resolve_top_of_stack();
@@ -409,20 +408,20 @@ mod tests {
     fn exposure_capture_keeps_physical_identity_across_face_changes() {
         use std::sync::Arc;
         let mut game = Game::new_capturing(configs(), 17, true);
-        let card = game.state.zones.zone_cards(ZoneType::Hand, PlayerId(0))[0];
-        let before = snapshot(&game, card);
+        let object = game.state.zones.zone_objects(ZoneType::Hand, PlayerId(0))[0];
+        let before = snapshot(&game, object);
         // A controlled face switch uses two real definitions without asserting
         // that this synthetic double-faced land is a playable card.
         let content = default_content_pack();
         let back = content.definition_id("Forest").unwrap();
-        game.state.cards[card]
+        game.state.objects[object]
             .turn_back_face_up((back, Arc::clone(&content.definition(back).unwrap().printed)));
-        let after = snapshot(&game, card);
-        assert_eq!(game.state.cards[card].name, "Forest");
+        let after = snapshot(&game, object);
+        assert_eq!(game.state.objects[object].name, "Forest");
         assert_eq!(after.name, before.name);
         assert_eq!(after.definition, before.definition);
         assert_eq!(after.incarnation, before.incarnation);
-        game.move_card(card, ZoneType::Battlefield);
+        game.move_object(object, ZoneType::Battlefield);
         let moved = &game
             .card_capture
             .as_ref()
@@ -430,7 +429,7 @@ mod tests {
             .moves
             .last()
             .unwrap()
-            .card;
+            .object;
         assert_eq!(moved.name, before.name);
         assert_eq!(moved.definition, before.definition);
         assert_eq!(moved.incarnation, before.incarnation + 1);

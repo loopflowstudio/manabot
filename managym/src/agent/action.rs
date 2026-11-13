@@ -1,5 +1,5 @@
 use crate::state::{
-    game_object::{CardId, ObjectId, PermanentId, PlayerId},
+    game_object::{ObjectId, PermanentId, PlayerId, PublicId},
     target::Target,
 };
 
@@ -42,11 +42,13 @@ pub enum Action {
     },
     PlayLand {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
     },
     CastSpell {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
     },
     ActivateAbility {
         player: PlayerId,
@@ -58,7 +60,8 @@ pub enum Action {
     /// is the card, as for casting it.
     ActivateCardAbility {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         ability_index: usize,
     },
     /// The foretell special action (CR 702.143a): pay {2} and exile this
@@ -66,7 +69,8 @@ pub enum Action {
     /// (a card ability functioning from hand); its focus is the card.
     Foretell {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
     },
     PassPriority {
         player: PlayerId,
@@ -88,21 +92,25 @@ pub enum Action {
     /// Scry decision for the current top revealed card.
     ScryCard {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         to_bottom: bool,
     },
     LearnTakeLesson {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
     },
     LearnDiscard {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
     },
     /// Select a card in a look-and-select decision.
     SelectCard {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
     },
     /// Decline / finish the current optional choice.
     Decline {
@@ -212,7 +220,7 @@ pub struct ActionSpace {
     pub player: Option<PlayerId>,
     pub kind: ActionSpaceKind,
     pub actions: Vec<Action>,
-    pub focus: Vec<ObjectId>,
+    pub focus: Vec<PublicId>,
 }
 
 impl ActionSpace {

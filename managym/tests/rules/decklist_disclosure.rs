@@ -31,13 +31,13 @@ fn by_name(game: &Game, counts: &BTreeMap<u32, u32>) -> BTreeMap<String, u32> {
     counts
         .iter()
         .map(|(definition, count)| {
-            let card = game
+            let object = game
                 .state
-                .cards
+                .objects
                 .iter()
-                .find(|card| card.definition_id.0 == *definition)
+                .find(|object| object.definition_id.0 == *definition)
                 .expect("definition has a card");
-            (card.name.clone(), *count)
+            (object.name.clone(), *count)
         })
         .collect()
 }
@@ -89,7 +89,7 @@ fn open_decklists_show_both_lists_to_both_viewers() {
 fn a_revealed_hand_card_leaves_unseen_counts_but_stays_in_the_pool() {
     let mut game = Game::new(configs(DecklistDisclosure::Open), 7, true);
     let (viewer, opponent) = (PlayerId(0), PlayerId(1));
-    let revealed = &game.state.cards[game.state.zones.zone_cards(ZoneType::Hand, opponent)[0]];
+    let revealed = &game.state.objects[game.state.zones.zone_objects(ZoneType::Hand, opponent)[0]];
     let (definition, name) = (revealed.definition_id, revealed.name.clone());
     game.state.players[opponent.0]
         .known_hand

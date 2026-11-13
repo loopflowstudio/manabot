@@ -15,7 +15,7 @@
 // boundary in `flow/effects.rs`.
 //
 // A copy effect (CR 707, layer 1) is not a record: it is `CopyEffect` on
-// the copy's `Card`, and its exceptions are the same `Modification`
+// the copy's `Object`, and its exceptions are the same `Modification`
 // vocabulary, applied once into the copy's definition (its copiable values).
 
 use std::collections::BTreeMap;
@@ -26,7 +26,7 @@ use super::{
         ActivatedAbilityDefinition, CardDefId, CardType, Keywords, PrintedCharacteristics,
         StaticAbility,
     },
-    game_object::{ObjectId, ObjectRef, PlayerId},
+    game_object::{ObjectRef, PlayerId, PublicId},
     mana::{Color, Colors},
 };
 
@@ -269,7 +269,7 @@ impl Modification {
 }
 
 /// A copy effect (CR 707.2) on the object it makes a copy: what it copies
-/// and the exceptions that are part of its copiable values. `Card`'s
+/// and the exceptions that are part of its copiable values. `Object`'s
 /// definition is the result; this keeps the inputs for observation.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct CopyEffect {
@@ -311,7 +311,7 @@ pub enum Affected {
 pub struct ContinuousEffect {
     /// From the game's object-id clock, shared with permanents' timestamps
     /// (CR 613.7).
-    pub timestamp: ObjectId,
+    pub timestamp: PublicId,
     /// The definition of the spell or ability's source, kept after the
     /// source leaves (last-known information).
     pub source: Option<CardDefId>,
