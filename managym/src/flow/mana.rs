@@ -44,6 +44,8 @@ use crate::{
 /// upfront activation fees are payments of their own.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ManaPaymentStats {
+    /// MTG-347's comparison arm, and the one field here that changes play:
+    /// spend the first feasible pooled unit instead of offering the choice.
     pub automatic: bool,
     pub payments: usize,
     pub over_tapped: usize,

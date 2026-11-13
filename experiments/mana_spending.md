@@ -2,12 +2,23 @@
 
 Exploratory. A cast taps its lands automatically; when the pool then holds more
 usable mana than the cost needs, the player chooses which pooled unit pays each
-pip (`mana_spend` decisions). This report counts those decisions on the decks
-people train on, separates the ones caused by automatic tapping taking more
-sources than the cost needs (MTG-342) from other payments. This experiment
-measures frequency, bounded replacement shapes and a small exploratory learning
-pilot. It makes no claim about learning; the comparison of compound
-and sequential decisions is MTG-265's.
+pip (`mana_spend` decisions). Three measurements, on the decks people train on:
+
+- **How often the prompt appears.** 0.11–0.60% of decisions on Elemental and
+  TLA Limited mirrors; 51–95% of those prompts follow a payment that tapped a
+  source it did not need (MTG-342). [Results](#results).
+- **What other decision shapes would offer on the same deals.** The choice the
+  prompt hides, which sources stay untapped, differs in 63–73% of completely
+  enumerated casts. One flat choice per cast exceeds the 64 policy slots, and
+  folding it into the cast action is larger still.
+  [Matched payment-shape results](#matched-payment-shape-results).
+- **A small learning pilot**, per-unit prompts against automatic pool spending:
+  two seeds per arm, about USD1.4 of rental, no resolved difference.
+  [Learning comparison](#learning-comparison).
+
+It ends with a [recommended design](#recommended-design) for review. It makes
+no claim about learning; the comparison of compound and sequential decisions
+is MTG-265's.
 
 ## Run it
 
@@ -110,11 +121,11 @@ match the frequency run.
 
 | shape | what the player decides |
 | --- | --- |
-| per unit | which pooled unit pays each pip, after automatic tapping (today) |
-| automatic | nothing; the first feasible unit pays |
-| override | nothing, unless payments differ in outcome; then one choice per cast |
-| outcome | one choice among distinct outcomes: what stays untapped or floating, and what the spell's receipt records (colors spent, spend effects) |
-| folded | the outcome is part of the cast action ("cast X, leaving Forest") |
+| A, per unit | which pooled unit pays each pip, after automatic tapping (today) |
+| B, automatic | nothing; the first feasible unit pays |
+| C, override | nothing, unless payments differ in outcome; then one choice per cast |
+| D, outcome | one choice among distinct outcomes: what stays untapped or floating, and what the spell's receipt records (colors spent, spend effects) |
+| E, folded | the outcome is part of the cast action ("cast X, leaving Forest") |
 
 The comparison reports decisions per game, offers per decision (median, 95th
 percentile, maximum), real choices and cap hits. A and B count all spending

@@ -130,14 +130,11 @@ branch and the report names whether the recommended design keeps or drops it.
 The report ends with one recommended design for review, covering both players
 of the shared contract: policy input/action space and Academy.
 
-### Leading hypothesis (to test, not decided)
+### Leading hypothesis, as tested
 
-D, with B's automation for casts with one outcome. It is the only shape that
-exposes the land choice Jack named, removes per-pip steps, and stays one
-ordinary native decision that Academy can label ("leave Forest untapped",
-"spend {R}{G}: converge 2"). Its risk is offer count on five-color boards with
-many distinct sources; part 3 measures that. If p95 offers per decision
-exceed the 64 policy slots anywhere, D needs grouping or fails.
+D with B's automation for single-outcome casts. Part 3 answered its risk: flat
+D exceeds the 64 policy slots (422 casts certified above 64), so the report
+recommends D grouped natively.
 
 ## Alternatives considered
 
@@ -204,50 +201,30 @@ re-deriving rules in Python; a learning claim stated as a finding.
 
 ## Status
 
-Done (`58e5923c53`, `9f2f1b69b8`, `b63d486f81`):
+Implementation and experiment work are complete; gate, review and PR delivery
+remain. Tables, receipts, costs and limits are in the report.
 
-- Native counter: `Env.info()` keys `mana_payments`,
-  `mana_payments_over_tapped`, `mana_spend_decisions_over_tapped`, computed in
-  `produce_mana` (`managym/src/flow/mana.rs`); the decision count sits in
-  `advance_mana_spend`'s offer arm. Behavior unchanged; replays verify.
-- `experiments/mana_spending.py count` (`--games` per deck, `--seed`, `--out`);
-  deck sets `elemental`, `tla`, `heartbeat`. Report sections Run it, What is
-  counted, Results, Limits; evidence published (`games.jsonl`, `decks.json`,
-  `checkpoint-admission.json`) and the manifest committed.
-- Over-tap exclusion is descriptive attribution against the original
-  denominator, not a post-MTG-342 rate; a post-fix rate needs a matched run
-  after MTG-342 lands. The report says so.
-
-Completed in this slice:
-
-- Opt-in `PaymentModel` fixed-source/receipt enumeration and per-payment actual
-  spend offers; source-capability and exact-identity counts; work caps.
-- Current baseline on the original exact decks/deals: all 336 action sequences,
-  stages, offers and counters match; rebuilt merged engine uses new digests.
-  Preserve the original bytes and use current digests for shape replay checks.
-- 336 verified shape replays; 14,775 payments / 9,089 cast payments; 420 cast
-  caps. D reaches 712 exact capability outcomes, 422 casts certify >64. E
-  reaches 1,552 priority offers on its completely measured subset. Tables and
-  limits are in the report; five current-baseline/shape artifacts are published.
-- Report recommends grouped native D after announcements, retaining exact source
-  identities and complete choices shared by policy and Academy. No UI changes.
-- Arm B and Etude jobs are implemented; debug tests and local release build pass.
-
-Implementation and experiment work are complete:
-
-- Four runs at `00ee188998cb` succeeded at 32 updates. Evaluation runs
-  `mana-spending-A-303f5f0a6a59` and `mana-spending-B-fe362b5c294d` completed
-  100 matches each; all 800 games valid and replay-checked, no replacements.
-- Seed 34701: A 26.0%, B 27.0%; seed 34702: A 28.5%, B 32.5%. These two early
-  seeds cannot establish an improvement or equivalence, and do not test D.
-- Both evaluation logs show missing-focus ChooseMode warnings. Three recovered
-  training resource-limit failures discarded 915 samples. Full receipts and
-  limitations are retained in the report; no encoder change was made mid-pilot.
-- The report recommends grouped native D with exact source choices and a bound
+- Frequency (`58e5923c53`, `9f2f1b69b8`, `b63d486f81`): native counters in
+  `Env.info()` computed in `produce_mana`, the decision count in
+  `advance_mana_spend`'s offer arm; behavior unchanged. Over-tap exclusion is
+  attribution against the original denominator, not a post-MTG-342 rate.
+- Shapes: opt-in `PaymentModel` enumeration (`flow/mana/outcomes.rs`). The
+  merged engine changed final digests, so `current/` is a second baseline on
+  the same decks and deals; all 336 action sequences, stages, offers and
+  counters match the original, whose bytes are preserved. 14,775 payments,
+  9,089 cast payments, 420 cast caps; D reaches 712 exact outcomes, E 1,552
+  priority offers on its completely measured subset.
+- Pilot: four runs at `00ee188998cb`, 32 updates each. Evaluations
+  `mana-spending-A-303f5f0a6a59` and `mana-spending-B-fe362b5c294d`: 800 valid
+  replay-checked games. Seed 34701: A 26.0%, B 27.0%; seed 34702: A 28.5%,
+  B 32.5%. Neither an improvement nor equivalence is established, and D is
+  untested. Both evaluation logs show missing-focus ChooseMode warnings; three
+  recovered training resource-limit failures discarded 915 samples. No encoder
+  change was made mid-pilot.
+- Recommendation: grouped native D with exact source choices and a bound
   automatic plan, shared by policy and Academy. Defaults stay unchanged.
-- Final launcher costs and ended-rental confirmations are recorded in the report.
-  All 24 pilot evidence artifacts are published and manifest entries retained.
-  Gate/review/PR delivery remain the caller's later steps.
+- All 24 pilot artifacts and five baseline/shape artifacts are published with
+  manifest entries.
 
 ## Done when
 
@@ -261,16 +238,20 @@ manifest committed.
 ## Checks run
 
 - `cargo test --manifest-path managym/Cargo.toml --lib over_tap` (debug):
-  passed; four positions (Mountain, Mountain, Forest for {1}{G} over-taps;
-  Forest, Mountain does not; two Heartbeat positions, the second corrected to
-  {2}{G} after the run showed one doubled Forest pays {1}{G} exactly).
-- `count --games 8 --seed 0`: exit 0, 336 games, 336 verified replays. After
-  the compress move, a rerun wrote a byte-identical `games.jsonl` (`cmp`).
-- `tests/eval/test_experiment_files.py::test_etude_finds_each_current_experiment_and_nothing_else`
-  and `tests/infra/test_experiment_data_untracked.py`: passed. Ruff, format,
-  `git diff --check` passed. Full affected suites belong to gate.
-
-Final publication check: `uv run --no-sync --extra dev pytest tests/infra/test_experiment_data_untracked.py -q` — 1 passed in 2.73s after publishing all 24 pilot artifacts.
+  passed; the second Heartbeat position was corrected to {2}{G} after the run
+  showed one doubled Forest pays {1}{G} exactly.
+- `count --games 8 --seed 0`: exit 0, 336 games, 336 verified replays.
+- Compress (2026-11-13) refactored `experiments/mana_spending.py` only (one
+  owner for arm mode, provenance and the evidence directory; shape rows written
+  through their read types). `summary` on a copy of `current/shapes/shapes.jsonl`
+  wrote a byte-identical `summary.json`; `shapes` on the first six games wrote
+  byte-identical rows. Native code changed by one doc comment; no rebuild.
+- `tests/eval/test_experiment_files.py`: the discovery test passes.
+  `test_a_tracked_self_play_run_draws_every_named_metric` failed once in the
+  four-test run and passed alone in 121 s; it does not read this experiment.
+  Gate should rerun it.
+- `uv run --no-sync --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`:
+  1 passed after publishing all 24 pilot artifacts.
 
 ## Delete — do not maintain
 

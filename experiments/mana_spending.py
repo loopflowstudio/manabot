@@ -127,6 +127,23 @@ def decks() -> list[Deck]:
     return result
 
 
+def _new_evidence_dir(out: Path) -> None:
+    """Never silently replace an earlier exploratory run's evidence."""
+    out.mkdir(parents=True, exist_ok=True)
+    if any(out.iterdir()):
+        raise SystemExit(f"{out} is not empty; choose a new --out")
+
+
+def _provenance() -> dict[str, str]:
+    return {
+        "revision": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True
+        ).strip(),
+        "native_sha256": file_sha256(Path(managym._managym.__file__)),
+        "source_sha256": file_sha256(Path(__file__)),
+    }
+
+
 def play(deck: Deck, policy: Policy, seed: int) -> GameCounts:
     row = GameCounts(deck.set, deck.name, policy, seed)
     env = managym.Env(seed=seed, skip_trivial=True)
@@ -219,10 +236,24 @@ def summarize(rows: list[GameCounts]) -> None:
         )
 
 
-def runs(revision: str, updates: int = 32, hours: float = 1.5) -> list["Run"]:
+def _in_spending_mode(job: Job, arm: Literal["A", "B"]) -> Job:
+    """Pin the arm's native spending mode in the command; B spends automatically."""
+    return job.model_copy(
+        update={
+            "command": f"export MANAGYM_EXPERIMENT_AUTOSPEND={int(arm == 'B')}\n"
+            + job.command,
+            "max_attempts": 1,
+        }
+    )
+
+
+_ARMS: tuple[Literal["A", "B"], ...] = ("A", "B")
+
+
+def runs(revision: str, updates: int = 32, hours: float = 1.5) -> list[Run]:
     """Two seeds per arm on the current Elemental recipe; automatic pool spending only."""
     result: list[Run] = []
-    for arm in ("A", "B"):
+    for arm in _ARMS:
         regime = elemental_recipe(f"mana-spending-{arm}", updates)
         regime.wall_seconds = hours * 3600 - 1200
         stage = regime.stages[0]
@@ -233,39 +264,26 @@ def runs(revision: str, updates: int = 32, hours: float = 1.5) -> list["Run"]:
             experiment="mana_spending",
             finalization_seconds=180,
         ).job(repo=ROOT, revision=revision, max_hours=hours, max_usd=Decimal("3"))
-        job = job.model_copy(
-            update={
-                "command": f"export MANAGYM_EXPERIMENT_AUTOSPEND={int(arm == 'B')}\n"
-                + job.command,
-                "max_attempts": 1,
-            }
-        )
-        result.extend(job.runs(34701, 34702))
+        result.extend(_in_spending_mode(job, arm).runs(34701, 34702))
     return result
 
 
 def eval(state: ExperimentState) -> list[Job]:
     """Replay-checked heuristic scores, each arm retaining its native spending mode."""
     jobs: list[Job] = []
-    for arm in ("A", "B"):
+    for arm in _ARMS:
         matchups = tuple(
             matchup
             for run in state.runs
             if run.final is not None and f"regime:mana-spending-{arm}" in run.final.tags
             for matchup in scheduled_matchups(run, ELEMENTAL_PAIRS)
         )
-        for job in benchmark_jobs(
-            matchups, f"mana-spending-{arm}", ELEMENTAL_PAIRS, hours=1.5, usd=4
-        ):
-            jobs.append(
-                job.model_copy(
-                    update={
-                        "command": f"export MANAGYM_EXPERIMENT_AUTOSPEND={int(arm == 'B')}\n"
-                        + job.command,
-                        "max_attempts": 1,
-                    }
-                )
+        jobs += [
+            _in_spending_mode(job, arm)
+            for job in benchmark_jobs(
+                matchups, f"mana-spending-{arm}", ELEMENTAL_PAIRS, hours=1.5, usd=4
             )
+        ]
     return jobs
 
 
@@ -289,30 +307,41 @@ class ShapeCounts:
     cap_hit: bool
 
 
+@dataclass(frozen=True)
+class FoldedCounts:
+    original: int
+    expanded: int
+    cast_offers: int
+    unresolved: int
+    capped: int
+
+
+@dataclass(frozen=True)
+class ShapeGame:
+    deck_set: str
+    deck: str
+    policy: Policy
+    seed: int
+    decisions: int
+    spend_offers: list[int]
+    casts: int
+    payments: list[ShapeCounts]
+    folded: list[FoldedCounts]
+    replay_verified: bool
+
+
 def shapes(source: Path, out: Path, cap: int) -> None:
     """Replay the retained decisions; enumerate counterfactuals without acting on them."""
-    metadata = json.loads((source / "decks.json").read_text())
     population = {
-        (deck["set"], deck["name"]): Deck(**deck) for deck in metadata["decks"]
+        (deck["set"], deck["name"]): Deck(**deck)
+        for deck in json.loads((source / "decks.json").read_text())["decks"]
     }
-    out.mkdir(parents=True, exist_ok=True)
-    if any(out.iterdir()):
-        raise ValueError(f"{out} is not empty; choose a new --out")
-    (out / "metadata.json").write_text(
-        json.dumps(
-            {
-                "revision": subprocess.check_output(
-                    ["git", "rev-parse", "HEAD"], text=True
-                ).strip(),
-                "native_sha256": file_sha256(Path(managym._managym.__file__)),
-                "source_sha256": file_sha256(Path(__file__)),
-                "games_sha256": file_sha256(source / "games.jsonl"),
-                "cap": cap,
-            },
-            indent=2,
-        )
-        + "\n"
-    )
+    _new_evidence_dir(out)
+    metadata = _provenance() | {
+        "games_sha256": file_sha256(source / "games.jsonl"),
+        "cap": cap,
+    }
+    (out / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     with (out / "shapes.jsonl").open("w") as output:
         for line in (source / "games.jsonl").read_text().splitlines():
             game = GameCounts(**json.loads(line))
@@ -322,7 +351,7 @@ def shapes(source: Path, out: Path, cap: int) -> None:
             env = managym.Env(seed=game.seed, skip_trivial=True)
             raw, _ = env.reset(deck.players())
             env.capture_payment_shapes(cap)
-            folded: list[dict[str, int]] = []
+            folded: list[FoldedCounts] = []
             for action in game.actions:
                 cast_actions = [
                     i
@@ -349,13 +378,13 @@ def shapes(source: Path, out: Path, cap: int) -> None:
                             expanded += max(1, alternatives[0].outcomes)
                             capped += alternatives[0].cap_hit
                     folded.append(
-                        {
-                            "original": len(raw.action_space.actions),
-                            "expanded": expanded,
-                            "cast_offers": len(cast_actions),
-                            "unresolved": unresolved,
-                            "capped": capped,
-                        }
+                        FoldedCounts(
+                            original=len(raw.action_space.actions),
+                            expanded=expanded,
+                            cast_offers=len(cast_actions),
+                            unresolved=unresolved,
+                            capped=capped,
+                        )
                     )
                 raw, _, _, _, _ = env.step(action)
             payments = [
@@ -373,23 +402,19 @@ def shapes(source: Path, out: Path, cap: int) -> None:
                 raise ValueError(
                     "an actual payment has no enumerated fixed-source outcome"
                 )
-            output.write(
-                json.dumps(
-                    {
-                        "deck_set": game.deck_set,
-                        "deck": game.deck,
-                        "policy": game.policy,
-                        "seed": game.seed,
-                        "decisions": sum(game.stages.values()),
-                        "spend_offers": game.spend_offers,
-                        "casts": game.casts,
-                        "payments": [asdict(row) for row in payments],
-                        "folded": folded,
-                        "replay_verified": True,
-                    }
-                )
-                + "\n"
+            row = ShapeGame(
+                deck_set=game.deck_set,
+                deck=game.deck,
+                policy=game.policy,
+                seed=game.seed,
+                decisions=sum(game.stages.values()),
+                spend_offers=game.spend_offers,
+                casts=game.casts,
+                payments=payments,
+                folded=folded,
+                replay_verified=True,
             )
+            output.write(json.dumps(asdict(row)) + "\n")
             output.flush()
             print(
                 f"{game.deck_set} {game.policy} {game.deck} {game.seed}: {len(payments)} payments",
@@ -397,27 +422,11 @@ def shapes(source: Path, out: Path, cap: int) -> None:
             )
 
 
-@dataclass(frozen=True)
-class FoldedCounts:
-    original: int
-    expanded: int
-    cast_offers: int
-    unresolved: int
-    capped: int
-
-
-@dataclass(frozen=True)
-class ShapeGame:
-    deck_set: str
-    deck: str
-    policy: Policy
-    seed: int
-    decisions: int
-    spend_offers: list[int]
-    casts: int
-    payments: list[ShapeCounts]
-    folded: list[FoldedCounts]
-    replay_verified: bool
+def _quantiles(values: list[int]) -> list[float] | None:
+    """Median, p95 and maximum, each an observed value (higher order statistic)."""
+    if not values:
+        return None
+    return [float(np.quantile(values, q, method="higher")) for q in (0.5, 0.95, 1)]
 
 
 def summarize_shapes(source: Path) -> None:
@@ -437,14 +446,11 @@ def summarize_shapes(source: Path) -> None:
         cast_spend = sum(len(p.spend_offers) for p in casts)
         folded = [f for g in games for f in g.folded]
         folded_exact = [f for f in folded if not f.unresolved and not f.capped]
-
-        def quantiles(values: list[int]) -> list[float] | None:
-            return (
-                [float(np.quantile(values, q, method="higher")) for q in (0.5, 0.95, 1)]
-                if values
-                else None
-            )
-
+        # Cast payments stop prompting per unit under C-E; a capped row may or
+        # may not hold a real choice, which separates the lower and upper counts.
+        without_cast_spend = decisions - cast_spend
+        certified_real = sum(p.outcomes > 1 for p in casts)
+        possibly_real = sum(p.outcomes > 1 or p.cap_hit for p in casts)
         row = {
             "deck_set": deck_set,
             "policy": policy,
@@ -457,45 +463,38 @@ def summarize_shapes(source: Path) -> None:
             "casts_with_saved_obligations": sum(p.saved_obligations > 0 for p in casts),
             "exact_casts": len(exact),
             "exact_real_casts": len(real),
-            "certified_real_casts": sum(p.outcomes > 1 for p in casts),
+            "certified_real_casts": certified_real,
             "exact_untapped_choices": sum(p.untapped_outcomes > 1 for p in exact),
             "exact_receipt_choices": sum(p.receipt_outcomes > 1 for p in exact),
             "exact_identity_loss": sum(p.identity_outcomes > p.outcomes for p in exact),
             "A_decisions_per_game": decisions / len(games),
-            "A_offers": quantiles(spend),
+            "A_offers": _quantiles(spend),
             "B_decisions_per_game": (decisions - len(spend)) / len(games),
-            "C_decisions_per_game_lower": (
-                decisions - cast_spend + sum(p.outcomes > 1 for p in casts)
-            )
+            "C_decisions_per_game_lower": (without_cast_spend + certified_real)
             / len(games),
             "C_decisions_per_game_upper": (
-                decisions
-                - cast_spend
-                + sum(p.outcomes > 1 or p.cap_hit for p in casts)
+                without_cast_spend
+                + possibly_real
                 + sum(p.outcomes > 2 or p.cap_hit for p in casts)
             )
             / len(games),
-            "D_decisions_per_game_lower": (
-                decisions - cast_spend + sum(p.outcomes > 1 for p in casts)
-            )
+            "D_decisions_per_game_lower": (without_cast_spend + certified_real)
             / len(games),
-            "D_decisions_per_game_upper": (
-                decisions - cast_spend + sum(p.outcomes > 1 or p.cap_hit for p in casts)
-            )
+            "D_decisions_per_game_upper": (without_cast_spend + possibly_real)
             / len(games),
-            "C_worst_path_exact_offers": quantiles(
+            "C_worst_path_exact_offers": _quantiles(
                 [2 for p in real] + [p.outcomes - 1 for p in real if p.outcomes > 2]
             ),
-            "D_exact_offers": quantiles([p.outcomes for p in real]),
+            "D_exact_offers": _quantiles([p.outcomes for p in real]),
             "D_exact_over64": sum(p.outcomes > 64 for p in exact),
             "D_certified_over64": sum(p.outcomes > 64 for p in casts),
-            "E_decisions_per_game": (decisions - cast_spend) / len(games),
+            "E_decisions_per_game": without_cast_spend / len(games),
             "E_priority_windows": len(folded),
             "E_exact_windows": len(folded_exact),
-            "E_unresolved_cast_offers": sum(int(f.unresolved) for f in folded),
-            "E_capped_cast_offers": sum(int(f.capped) for f in folded),
-            "E_exact_offers": quantiles([int(f.expanded) for f in folded_exact]),
-            "E_original_offers": quantiles([int(f.original) for f in folded_exact]),
+            "E_unresolved_cast_offers": sum(f.unresolved for f in folded),
+            "E_capped_cast_offers": sum(f.capped for f in folded),
+            "E_exact_offers": _quantiles([f.expanded for f in folded_exact]),
+            "E_original_offers": _quantiles([f.original for f in folded_exact]),
         }
         summaries.append(row)
         print(json.dumps(row), flush=True)
@@ -535,20 +534,16 @@ def main() -> None:
     if args.games < 1 or args.seed < 0:
         parser.error("games must be positive and seed nonnegative")
     population = decks()
-    args.out.mkdir(parents=True, exist_ok=True)
-    # Never silently replace an earlier exploratory run's evidence.
-    if any(args.out.iterdir()):
-        parser.error(f"{args.out} is not empty; choose a new --out")
+    _new_evidence_dir(args.out)
+    provenance = _provenance()
     metadata = {
-        "revision": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True
-        ).strip(),
+        "revision": provenance["revision"],
         "dirty": bool(
             subprocess.check_output(["git", "status", "--porcelain"], text=True)
         ),
         "world": managym.WORLD_VERSION,
-        "native_sha256": file_sha256(Path(managym._managym.__file__)),
-        "source_sha256": file_sha256(Path(__file__)),
+        "native_sha256": provenance["native_sha256"],
+        "source_sha256": provenance["source_sha256"],
         "tla_source_sha256": file_sha256(TLA),
         "games_per_deck": args.games,
         "seed": args.seed,
