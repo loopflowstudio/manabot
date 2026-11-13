@@ -435,7 +435,11 @@ gone; same preparation order and at most one batch ahead):
 `cmp updates-post514-base.json updates-compress6.json` → identical;
 `pytest tests/training/test_update_backend_protocols.py` → 8 passed (55.98 s).
 The forward oracle and CUDA speed were not rerun: `_prepare_rows`, transfers
-and the PPO loop are unchanged, so the numbers above predate this edit.
+and the PPO loop are unchanged, so the numbers above predate this edit. One
+timing difference: the worker now receives batch i+1 before the caller waits
+on batch i (previously after), so overlap can only start earlier; preparation
+order and batch contents are unchanged. An early caller exit leaves at most one
+submitted batch for the executor exit to join.
 
 ## Next actions
 
