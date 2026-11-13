@@ -67,16 +67,17 @@ installed atomically, and a fresh import passed. Final-head conformance, replay
 bytes and Engine Budget (unchanged
 digests) still belong to gate. Existing seeded QA below predates this pass.
 
-## Final-head QA
+## Seeded QA before the conversion cleanup and main merge
 
 538 seeded random games (authored setups, Fire Lord Azula copies, 400 TLA pool human builds; 118,781 decisions) produce byte-identical observations for both seats and identical state digests on this branch and main 6ce618b8a, including four matching `PyAgentError` endings. That comparison first caught a regression in Kyoshi Battle Fan's token attach, fixed here. Two Academy games played to Game Over. Details: `scratch/qa.html` (not published).
 
 ## Remaining before review
 
-Current-head suites/conformance, seeded final-head QA, Engine Budget, a clean
-Academy game to completion and authored reviews remain. The private
-projection renames and typed library/hand storage are implemented; focused
-validation is recorded in `scratch/mtg-320-plan.md`.
+Main 2c47f59ae is merged (c653e5dc0f), with main's explicit mana-spending
+fixtures adapted to runtime object ids (91ba66c3a4); two focused debug tests
+passed after it. Current-head suites/conformance, seeded QA against main
+2c47f59ae, Engine Budget, a clean Academy game to completion and authored
+reviews remain. Focused validation is recorded in `scratch/mtg-320-plan.md`.
 
 ## Left for later
 
@@ -124,8 +125,9 @@ Integration and Clean-machine Play; Rust Tests failed to compile the four
 fixtures since repaired. Engine Budget and all Integration groups passed;
 [package run 43369147921](https://github.com/loopflowstudio/manabot/actions/runs/43369147921)
 completed successfully. These results cover 8e5e8e62b only. Final paired QA
-must compare with main 6ce618b8a so both engines include the two upstream
-payment optimizations; include TLA pool builds as well as authored setups.
+must compare with current main 2c47f59ae so both engines include its payment
+optimizations and mana-spending redesign; include TLA pool builds as well as
+authored setups.
 
 Earlier evidence, **not validation of typed ids or compression**:
 

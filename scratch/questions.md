@@ -17,8 +17,6 @@
   to inherited MTG-298 QA; the MTG-320 sections and screenshots were retained.
 - Inherited definition-design notes are historical MTG-298 context, not changes
   to frozen evidence in this task. Full notes: `df58f2bff:scratch/questions.md`.
-  Pre-compression uncommitted notes were moved to
-  `/tmp/mtg320-context-before-compress/` before curation.
 - Compression choice (2026-11-12): keep `ZoneObjects` as a borrowed collection
   with explicit `iter()` and `cards()` scans. No separate cursor or
   card-zone-only reader; stored entry kinds, bytes and order remain authoritative.
@@ -60,19 +58,6 @@ do not keep a known obsolete "only Heartbeat missing" expectation. Seed new
 the combined catalog, because main's mana spending redesign changed Commands.
 The managed `lf sync` plan selected merge_target for this branch; preserve
 history through that supported integration rather than raw git rebase.
-
-## Historical precision notes from main
-
-# Assumptions and scope
-
-- The numerical rejection at attempted update 141 is decisive under the frozen
-  rule. The paid strength evaluation was omitted because it cannot admit BF16;
-  the report states M = 75 and the absence of strength and trajectory comparisons.
-- Keep `BF16_MIN_HIDDEN_DIM = 256` as the measured speed crossover, with
-  `ladder_precision` returning float32 everywhere after rejection, as the Task
-  specifies. Reopening BF16 admission needs another learning result.
-- Earlier A/B choices and launch history remain in git `e181224e7` and the
-  experiment report. No new rental, experiment, or numerical-guard change.
 
 ## MTG-320 sync resolution (2026-11-13)
 

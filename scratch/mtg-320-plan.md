@@ -93,14 +93,17 @@ keep card names rather than acquiring runtime-object terminology.
 
 No implementation or deletion target remains in the accepted slice. Gate owns,
 on the final head: affected suites and Semantic Kernel Conformance, paired
-seeded observation/state-byte comparison against main 6ce618b8a (it includes
-both payment optimizations; the MTG-298 comparison alone cannot establish
-compatibility), Engine Budget search/step numbers with unchanged digests
-recorded in the PR body, and the selected reviews. The last seeded QA predates
-the conversion cleanup and zone-store compression, so it does not validate them.
-Delivery refreshes the PR body from `scratch/pr-491-body.md`, keeping its Task
-context block, and stops at review with auto-merge disabled. No Wave is bound.
-No evidence was regenerated for the rename.
+seeded observation/state-byte comparison against current main 2c47f59ae (tree
+equal to sync target 22ed4a733; it adds main's mana-spending redesign 105e7e2aa
+and the TLE bonus sheet, so the 6ce618b8a comparison no longer covers the
+merged code), Engine Budget search/step numbers with unchanged digests recorded
+in the PR body, a clean Academy game to Game Over, and the selected reviews.
+The last seeded QA predates the conversion cleanup, zone-store compression and
+the 22ed4a733 merge, so it does not validate them. CI run 43476080828 on head
+97269988b was pending at the 2026-11-13 realign readback. Delivery refreshes
+the PR body from `scratch/pr-491-body.md`, keeping its Task context block, and
+stops at review with auto-merge disabled. No Wave is bound. No evidence was
+regenerated for the rename.
 
 Open: the historical Academy table stall's cause is unknown; the payment-search
 merge is not proof of a fix. The earlier Python failure attribution and
