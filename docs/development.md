@@ -540,16 +540,14 @@ cargo run --release --features benchmark --example bench_states \
 The line above illustrates the JSON-lines format, not a measurement. Each row
 is one state, size, decision checkpoint and layer. Read down a layer's rows:
 work that grows much faster than size is a cell to investigate. Without a name
-the harness runs every state. Defaults are 4, 8 and 16 copies; `restricted-filter`
-uses 2, 3 and 4 because its nested-filter search already grows sharply there.
-`distinct-restrictions` uses 2, 3 and 4 different restrictions beside a paid
-Prism filter: the catalog has only Tea Shop, Hideout, Herbalist and Powerstone
-restrictions. It accepts sizes 2–4 and cannot model arbitrary N distinct
-restrictions or establish a theoretical exponential growth rate.
-`recorded` has one size. `--sizes 8,16` overrides other constructed-state sizes
-(1–64), `--layers actions,step` selects layers, and `--list` names the cards and
-known expensive shapes. Do not increase a known expensive cell just to make it
-run longer.
+the harness runs every state. Defaults are 4, 8 and 16 copies. `restricted-filter`
+and `distinct-restrictions` default to 2, 3 and 4: nested-filter search already
+grows sharply there, and the catalog has only four spending restrictions, so
+`distinct-restrictions` accepts no other size and cannot establish a growth
+rate in the number of restrictions. `recorded` has one size. `--sizes 8,16`
+overrides the other states' sizes (1–64), `--layers actions,step` selects
+layers, and `--list` names the cards and known expensive shapes. Do not
+increase a known expensive cell just to make it run longer.
 
 **States.** Each uses defined cards or registered tokens and is deterministic.
 `--list` names every state with its cards and known growth; the list lives in
@@ -607,8 +605,8 @@ It adds `encode-py` (the Python policy-input encoder) and `text` (the LLM text
 renderer) time rows. `--recipes` exports the exact native observation and
 atomic decision capture beside each recipe, so both consumers see the same
 checkpoint, including separately serialized continuation frames via
-`Observation.from_json(..., continuation_json=...)`. Text capture is outside the Python renderer timing. Academy frame
-construction requires a live Academy session and is not measured here.
+`Observation.from_json(..., continuation_json=...)`. Academy frame construction
+requires a live Academy session and is not measured here.
 `--recipes-file <path>` reuses an export; `--layers encode-py` selects one
 consumer. The script uses the installed extension, so rebuild after Rust changes.
 A renderer stage it cannot represent prints `unavailable`, an audit finding
@@ -619,9 +617,9 @@ neither truncates actions or facts.
 **Using it.** When a change adds or alters payment, choice, targeting,
 enumeration or continuous-effect behavior, run the states whose shape it could
 make expensive on the base commit and on the change, and put both tables in
-the PR. A cell that grows much faster than its size is fixed there; when the fix is larger than the change, the state's `--list`
-line names the growth so the next reader finds it measured rather than
-rediscovers it.
+the PR. A cell that grows much faster than its size is fixed there; when the
+fix is larger than the change, the state's `--list` line names the growth so
+the next reader finds it measured rather than rediscovers it.
 Preserve legal actions, first payment witnesses and the `bench_steps` and
 `bench_search` digests, and validate in debug: debug builds recompute cached
 views and assert they match.

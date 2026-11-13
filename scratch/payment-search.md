@@ -107,12 +107,18 @@ do not present their numbers as a source-built audit of the merged HEAD.
 
 ## Optimization pass (2026-11-13)
 
-`PaymentModel::uses` no longer scans every source when an activation has no
-counted tap cost. Single-use counted costs stop after finding enough candidates
-for one activation; repeatable costs still count every available candidate.
+`PaymentModel::uses` reads the board only for a counted tap cost, and only as
+far as its use cap needs: a tapped, sacrificed or limited source stops after
+one activation's candidates; repeatable costs still count every candidate.
 The transition order, resource model, bounds and memo are unchanged. There is
-no new runtime cache or schema. Delete target: the unconditional candidate scan
-inside `uses`; retain finite-resource checks and exact counted-tap bounds.
+no new runtime cache or schema.
+
+Compress pass (2026-11-13): the bound is one cap and one bounded count instead
+of two nested branches; stress-state docs merged the two restricted-size
+paragraphs. `bench_states counted-tap diverse-mana restricted-filter mixed`
+(release, rebuilt) reproduces all 320 rows' digest `dcd55c3f…46df`; debug
+`cargo test --lib flow::mana::tests` passes 21. The installed CPython
+extension predates this behavior-preserving edit; gate rebuilds it.
 
 Controlled release comparison: `.runs/mtg337/optimization-before.jsonl` and
 `optimization-after.jsonl`, rebuilt from HEAD and the optimized source with

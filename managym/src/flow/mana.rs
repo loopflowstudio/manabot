@@ -430,25 +430,20 @@ impl PaymentModel {
         {
             return 0;
         }
-        let single_use = ability.tap_source || ability.sacrifice_source || ability.limited;
-        // Ordinary activations have no counted taps: do not scan the board
-        // just to divide by zero. For a single-use ability, finding enough
-        // candidates for one activation is sufficient. Repeatable counted
-        // costs still need the full count for an optimistic production bound.
-        let uses = if ability.tap_count == 0 {
-            if single_use {
-                1
-            } else {
-                usize::MAX
-            }
+        // A tapped, sacrificed or limited source activates at most once.
+        let cap = if ability.tap_source || ability.sacrifice_source || ability.limited {
+            1
         } else {
-            let limit = if single_use {
-                ability.tap_count
-            } else {
-                usize::MAX
-            };
+            usize::MAX
+        };
+        // Only a counted tap cost reads the board, and only as far as `cap`
+        // activations need: a repeatable cost counts every candidate for its
+        // optimistic production bound.
+        let uses = if ability.tap_count == 0 {
+            cap
+        } else {
             self.tap_candidates(resources, &ability.tap_candidates)
-                .take(limit)
+                .take(cap.saturating_mul(ability.tap_count))
                 .count()
                 / ability.tap_count
         };

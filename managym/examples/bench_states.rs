@@ -400,10 +400,7 @@ fn combat(root: &Env, block: bool) -> Option<Env> {
                 .iter()
                 .position(|a| matches!(a, Action::PassPriority { .. }))
         };
-        let Some(index) = index else {
-            return None;
-        };
-        env.step(index as i64).unwrap();
+        env.step(index? as i64).unwrap();
         if env.benchmark_game_mut().state.turn.turn_number > 1 {
             return None;
         }
