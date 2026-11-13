@@ -247,37 +247,26 @@ JSON keys, buffer fields/keys, token vocabulary and evidence as listed above.
   `CARGO_BUILD_JOBS=2 cargo check --manifest-path managym/Cargo.toml --features benchmark --examples`
   -> pass. No other old-name use outside aliases, their test, serde renames,
   frozen JSON keys and fixtures.
-- Not yet rerun at the merged HEAD: extension rebuild, digest script (expect
-  `14c102e4...100a`; `de39d601fb` changes payment scans, not observations) and
-  the gate suites above.
 - Left as is, outside this Task's observation/Python scope: engine runtime
   `managym/state/src/stack_object.rs::StackObject::source_card_registry_key()`
   (serialized key frozen by `match_state_hash_tests.rs:250`). Its source may be a
   token, so it is a candidate for the alias-removal Task or an engine rename.
 
-## Concept review (2026-11-13): next implement direction
+## Concept review (2026-11-13) and follow-up
 
 The published surface matches the rename table: one record (`ObjectData` /
 `managym.Object`), three warning aliases, frozen JSON and buffer keys. No second
 representation, and `manabot.managym` is the same module object, so the class
 alias reaches it too. Nothing in the model changes.
 
-One rule above is not yet applied: "only functions and parameters that take the
-records are renamed". These signatures take `managym.Object` / `ObjectData` rows
-under a card name; rename the parameter (and the locals bound from it) to
-`row`/`rows` or `obj`/`objects`, never the builtin `object`:
-
-- `managym/experience_projection.py`: `_serialize_object(card)` L83, the
-  `card: managym.Object | None` parameter L118, `cards: list[managym.Object]`
-  L229 and L472, `battlefield_cards` L241. Emitted dictionary keys are wire
-  spellings and stay.
-- `manabot/env/match.py`: `_count_battlefield_lands(cards)` L204,
-  `_count_battlefield_creatures(cards)` L213.
-- `manabot/semantic/text_observation.py`: the `card` loop variable over
-  `agent_objects + opponent_objects` in `_Renderer.__init__` (~L433) and
-  `_objects_lines` (~L808). Output text unchanged; `C<n>` labels stay.
-- `managym/src/agent/observation_encoder.rs` L1999: test helper `make_card`
-  returns `ObjectData` -> `make_object`.
+The review found `managym.Object` / `ObjectData` rows still bound to card names.
+Renamed to `row`/`rows`/`objects` in Python (never the builtin `object`) and
+`object`/`objects` in Rust: `managym/experience_projection.py` (`_serialize_object`,
+`_serialize_permanent`, `_serialize_player`, `_permanent_names`, which now zips
+permanents with battlefield rows), `manabot/env/match.py` battlefield counters,
+`manabot/semantic/text_observation.py` row loops, and
+`managym/src/agent/observation_encoder.rs` row loops and test helper
+`make_object`. Emitted dictionary keys, output text and `C<n>` labels unchanged.
 
 Left as card, because the value is a card where it is used:
 `manabot/sim/heuristic.py` `can_kick`, `_timely`, `_worth_casting` (hand cards
@@ -285,9 +274,14 @@ considered for casting); `observation.rs::card_event_data` (writes
 `EventEntityKind::Card`); encoder `cards_len` / `card_turn_state_len` (buffer
 lengths under frozen keys).
 
-No bytes move, so the check is the existing one: the alias, text-field-guard
-and named-layout tests with `-W error::DeprecationWarning`, and the digest
-(`14c102e4...100a`) after the rebuild already owed at the merged HEAD.
+Checks at the merged HEAD (`d1554835be` base) with these renames:
+
+- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` -> pass (8m29s); cp313 extension installed atomically. `cargo fmt ... --all`, `git diff --check` -> pass.
+- The alias, text-field-guard, Joo Dee text-decision and named-layout tests with `-W error::DeprecationWarning` (command under Implementation progress) -> 21 passed (10.20s).
+- `uv run --no-sync python scratch/observation_digest.py` -> 3,512 decisions, SHA-256 `14c102e4...100a`, identical to baseline.
+- Frozen fixture/vocabulary diff against `d1554835be` -> empty.
+- Compress: after the `_permanent_names` zip (Python only, no rebuild), the same tests plus `tests/semantic/test_player_control.py` -> 27 passed (8.16s).
+- Remaining gate suites (Acceptance at gate) and the alias-removal Task stay with later delivery steps.
 
 Constraint for the alias-removal Task filed at landing: `v0.2.3` is the latest
 tag and already carries the `learning_*` aliases; these three first ship in the

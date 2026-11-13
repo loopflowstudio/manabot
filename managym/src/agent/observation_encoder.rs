@@ -654,7 +654,7 @@ pub fn encode_into(
     out.actions_valid.fill(0.0);
     out.events_valid.fill(0.0);
 
-    for (seat, (cards, player)) in [
+    for (seat, (objects, player)) in [
         (&obs.agent_objects, &obs.agent),
         (&obs.opponent_objects, &obs.opponent),
     ]
@@ -668,9 +668,9 @@ pub fn encode_into(
                 actual: player.known_hand.len(),
             });
         }
-        for (slot, card) in cards.iter().enumerate() {
+        for (slot, object) in objects.iter().enumerate() {
             out.semantic_cards[seat * config.max_cards_per_player + slot] =
-                (card.registry_key + 1) as f32;
+                (object.registry_key + 1) as f32;
         }
         for (slot, (definition, count)) in player.known_hand.iter().enumerate() {
             let offset = (seat * config.max_cards_per_player + slot) * known_hand::WIDTH;
@@ -860,7 +860,7 @@ fn encode_turn_state(
     players: &mut [f32],
     cards: &mut [f32],
 ) {
-    for (seat, (player, seat_cards)) in [
+    for (seat, (player, seat_objects)) in [
         (&obs.agent, &obs.agent_objects),
         (&obs.opponent, &obs.opponent_objects),
     ]
@@ -879,9 +879,9 @@ fn encode_turn_state(
                 row[turn_state::NONARTIFACT_MANA_WHITE + slot] += class.mana[slot] as f32 / 10.0;
             }
         }
-        for (slot, card) in seat_cards.iter().enumerate() {
+        for (slot, object) in seat_objects.iter().enumerate() {
             cards[seat * config.max_cards_per_player + slot] =
-                bool_to_f32(card.from_battlefield_this_turn);
+                bool_to_f32(object.from_battlefield_this_turn);
         }
     }
 }
@@ -981,13 +981,13 @@ pub fn unrepresentable_state(obs: &Observation) -> Option<String> {
 
 /// The v10-only state this observation needs, if any: a definition visible
 /// to the viewer reads it and it is present. V9 refuses such an observation
-/// before writing a buffer rather than hide state a visible card reads.
+/// before writing a buffer rather than hide state a visible object reads.
 pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
     let players = [&obs.agent, &obs.opponent];
-    let cards = || obs.agent_objects.iter().chain(&obs.opponent_objects);
+    let objects = || obs.agent_objects.iter().chain(&obs.opponent_objects);
     let visible_reads = || {
-        cards()
-            .map(|card| card.registry_key)
+        objects()
+            .map(|object| object.registry_key)
             .chain(
                 obs.agent_permanents
                     .iter()
@@ -1008,7 +1008,7 @@ pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
     {
         return Some("life lost this turn");
     }
-    if cards().any(|card| card.from_battlefield_this_turn)
+    if objects().any(|object| object.from_battlefield_this_turn)
         && visible_reads().any(|reads| reads.from_battlefield)
     {
         return Some("a card put into a graveyard from the battlefield this turn");
@@ -1884,8 +1884,8 @@ mod tests {
             },
             agent_sideboard: Vec::new(),
             agent_objects: vec![
-                make_card(111, ZoneType::Hand, true, 2, 2, 1),
-                make_card(112, ZoneType::Battlefield, true, 3, 3, 2),
+                make_object(111, ZoneType::Hand, true, 2, 2, 1),
+                make_object(112, ZoneType::Battlefield, true, 3, 3, 2),
             ],
             stack_objects: vec![],
             agent_permanents: vec![make_permanent(333, true)],
@@ -1916,7 +1916,7 @@ mod tests {
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
-            opponent_objects: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
+            opponent_objects: vec![make_object(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
             policy_history: Default::default(),
             recent_events: vec![
@@ -1996,7 +1996,7 @@ mod tests {
         assert_eq!(&encoded.actions_valid[..2], &[1.0, 1.0]);
     }
 
-    fn make_card(
+    fn make_object(
         id: i32,
         zone: ZoneType,
         mine: bool,

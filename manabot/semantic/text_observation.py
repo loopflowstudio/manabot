@@ -430,13 +430,13 @@ class _Renderer:
         ):
             self.names[player.id] = label
             self.seats[player.player_index] = label
-        for index, card in enumerate(
+        for index, row in enumerate(
             self.state.agent_objects + self.state.opponent_objects
         ):
-            label = f"C{index + 1} ({card.name})"
-            self.names[card.id] = label
-            link = capture.objects[str(card.id)]
-            self.objects[card.id, link.incarnation] = label
+            label = f"C{index + 1} ({row.name})"
+            self.names[row.id] = label
+            link = capture.objects[str(row.id)]
+            self.objects[row.id, link.incarnation] = label
             if link.permanent_id is not None:
                 self.names[link.permanent_id] = label
                 self.objects[link.permanent_id, link.incarnation] = label
@@ -805,7 +805,7 @@ class _Renderer:
     def _objects_lines(self) -> list[str]:
         state = self.state
         lines: list[str] = []
-        for card in state.agent_objects + state.opponent_objects:
+        for row in state.agent_objects + state.opponent_objects:
             flags = ", ".join(
                 key.removeprefix("is_").replace("_", " ")
                 for key in (
@@ -822,21 +822,21 @@ class _Renderer:
                     "is_kindred",
                     "is_battle",
                 )
-                if getattr(card.card_types, key)
+                if getattr(row.card_types, key)
             )
             optional = f"; type flags {flags}" if flags else ""
-            if keywords := _keywords(card.keywords):
+            if keywords := _keywords(row.keywords):
                 optional += f"; keywords {keywords}"
-            if card.face_down:
+            if row.face_down:
                 optional += "; foretold, face down (hidden from other players)"
-            if card.x is not None:
-                optional += f"; announced X {card.x}"
-            if card.from_battlefield_this_turn:
+            if row.x is not None:
+                optional += f"; announced X {row.x}"
+            if row.from_battlefield_this_turn:
                 optional += "; put into the graveyard from the battlefield this turn"
-            if card.cast_permission is not None:
-                optional += "; " + self._cast_permission(card.cast_permission)
+            if row.cast_permission is not None:
+                optional += "; " + self._cast_permission(row.cast_permission)
             lines.append(
-                f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; object power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
+                f"{self.name(row.id)} [{self.definition(row.registry_key)}]: owner {self.name(row.owner_id)}; zone {_enum(_ZONES, int(row.zone))}; object power/toughness {row.power}/{row.toughness}; cost {_mana(row.mana_cost)}; mana value {row.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(row.is_token)}; legendary {_yes(row.is_legendary)}; Ally {_yes(row.is_ally)}; Lesson {_yes(row.is_lesson)}; ward mana value {row.ward_cost}; kicker mana value {row.kicker_cost}. Rules: {row.text_box or '(empty)'}"
             )
         if not state.agent_objects and not state.opponent_objects:
             lines.append("Empty.")
@@ -1072,7 +1072,7 @@ class _Renderer:
             for relation in capture.frames
         )
         if not (searching_opponent or controls_opponent) and any(
-            card.zone == 1 for card in state.opponent_objects
+            row.zone == 1 for row in state.opponent_objects
         ):
             raise TextEncodingError("opponent hand identity in capture")
         lines = [

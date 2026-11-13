@@ -201,19 +201,19 @@ class Reward:
         return phi
 
     @staticmethod
-    def _count_battlefield_lands(cards: list[managym.Object]) -> int:
+    def _count_battlefield_lands(objects: list[managym.Object]) -> int:
         return sum(
             1
-            for card in cards
-            if int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
-            and bool(card.card_types.is_land)
+            for row in objects
+            if int(row.zone) == int(managym.ZoneEnum.BATTLEFIELD)
+            and bool(row.card_types.is_land)
         )
 
     @staticmethod
-    def _count_battlefield_creatures(cards: list[managym.Object]) -> int:
+    def _count_battlefield_creatures(objects: list[managym.Object]) -> int:
         return sum(
             1
-            for card in cards
-            if int(card.zone) == int(managym.ZoneEnum.BATTLEFIELD)
-            and bool(card.card_types.is_creature)
+            for row in objects
+            if int(row.zone) == int(managym.ZoneEnum.BATTLEFIELD)
+            and bool(row.card_types.is_creature)
         )
