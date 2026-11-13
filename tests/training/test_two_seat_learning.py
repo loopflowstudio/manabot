@@ -12,6 +12,7 @@ from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
+from manabot.backends.torch.rollout import observation_tensors
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -29,7 +30,6 @@ from manabot.training.regime import (
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.backends.torch.rollout import observation_tensors
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates

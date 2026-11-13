@@ -5,6 +5,9 @@ does not depend on a framework. **This package never imports an array
 framework** (PyTorch, MLX, JAX); it uses NumPy only
 (`tests/test_package_boundaries.py` enforces it).
 
+- `admission.py` owns the definition and vocabulary checks, fact programs,
+  shared-effect partitions, continuation, naming and action joins. Both
+  backends validate raw rows before converting validity masks or indexing.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes and inference column compaction. A

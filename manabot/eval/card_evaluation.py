@@ -34,7 +34,6 @@ from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
 from pydantic import Field, model_validator
 
-from manabot.infra.artifacts import local_checkpoint_file
 from manabot.eval.card_metrics import (
     CARD_ROLLUPS,
     METRIC_VERSION,
@@ -54,6 +53,7 @@ from manabot.eval.evaluate import (
 )
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
+from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.source import source_commit, source_dirty

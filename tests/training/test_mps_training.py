@@ -19,6 +19,7 @@ import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import clipped_surrogate, float64_operand
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
@@ -58,7 +59,6 @@ from manabot.training.regime import (
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates import damped_policy, ppo
-from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.training.updates.selection import UpdateDiagnostics
 from manabot.verify.store import VerifyStore
 import managym

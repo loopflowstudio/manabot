@@ -307,7 +307,7 @@ def test_policy_contract_imports_no_array_framework() -> None:
     probe = textwrap.dedent(
         f"""
         import sys
-        import manabot.policy.checkpoint, manabot.policy.prepare, manabot.policy.protocol
+        import manabot.policy.admission, manabot.policy.checkpoint, manabot.policy.prepare, manabot.policy.protocol
         loaded = sorted(m for m in sys.modules if m.split(".")[0] in {_FRAMEWORKS!r})
         assert not loaded, loaded
         """

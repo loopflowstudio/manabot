@@ -3,8 +3,8 @@ MLX policy reads them.
 
 The updates reach `AdmittedRollout` as `backend.rollout.AdmittedRollout`, with
 the methods of the torch backend's. The MLX policy reads `Prepared` batches,
-so "admitting" a row is preparing it on the host; nothing is kept between
-minibatches.
+and uses the same host admission checks as torch before preparing indexes.
+Admission is recorded per row, so later epochs do not repeat the checks.
 """
 
 from dataclasses import fields
@@ -29,21 +29,30 @@ class AdmittedRollout:
     def __init__(self, agent: MLXActorCritic, batch: "RolloutBatch") -> None:
         self.agent = agent
         self.batch = batch
+        self._admitted = np.zeros(batch.actions.size, dtype=bool)
+        self._next = agent.prepare(batch.next_obs)
 
     def admit_rows(self, indexes: NDArray[np.int64], chunk_rows: int) -> None:
-        """Nothing to check ahead of time: `rows` prepares what it returns."""
+        """Validate learner rows in bounded chunks, once across all epochs."""
+        pending = np.unique(indexes[~self._admitted[indexes]])
+        for start in range(0, len(pending), chunk_rows):
+            chunk = pending[start : start + chunk_rows]
+            self.agent.check_observation(self.batch.observations(chunk).observation)
+            self._admitted[chunk] = True
 
     def next_observation(self, device: object) -> Prepared:
         """Bootstrap observations [trajectory, ...]."""
-        return self.agent.prepare(self.batch.next_obs)
+        return self._next
 
     def rows(
         self, indexes: NDArray[np.int64], device: object
     ) -> "tuple[Prepared, ActionRows]":
         """Prepared observations of flat rollout `indexes`, with their behavior
         distributions."""
+        if not self._admitted[indexes].all():
+            raise ValueError("rollout rows were not admitted")
         rows = self.batch.observations(indexes)
-        return self.agent.prepare(rows.observation), rows
+        return self.agent.prepare_admitted(rows.observation), rows
 
     def legal(self, obs: Prepared) -> mx.array:
         """The legal-action mask [B,A] of rows this rollout returned."""

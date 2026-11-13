@@ -16,6 +16,7 @@ from torch import Tensor
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
@@ -23,7 +24,6 @@ from manabot.training.regime import BatchClosure, DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import _targets, update_damped_iteration
-from manabot.backends.torch.rollout import AdmittedRollout
 
 Kind = Literal["scalar", "categorical_wdl"]
 Seats = Literal["one", "both"]

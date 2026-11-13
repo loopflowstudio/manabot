@@ -113,7 +113,9 @@ def load_checkpoint(
         path = str(materialize_artifact(path))
     if not _is_torch_file(Path(path)):
         try:
-            agent, obs_space = _load_container(Path(path), bucketed_shapes)
+            agent, obs_space = _load_container(
+                Path(path), bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+            )
         except NotAContainer as error:
             raise NotAContainer(
                 f"{path} is neither a PyTorch checkpoint (a zip archive) nor a "
@@ -169,7 +171,7 @@ def _is_torch_file(path: Path) -> bool:
 
 
 def _load_container(
-    path: Path, bucketed_shapes: bool
+    path: Path, *, bucketed_shapes: bool, live_tokens: bool
 ) -> tuple[ActorCritic, ObservationSpace]:
     """An eval-mode policy from a container. `read_container` has validated
     the world binding and refused unsupported configurations, so no belief
@@ -179,7 +181,9 @@ def _load_container(
         key: json.loads(container.metadata[key])
         for key in ("world_binding", "source", "architecture")
     }
-    agent = assemble(container, bucketed_shapes=bucketed_shapes)
+    agent = assemble(
+        container, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+    )
     world_binding = validate_checkpoint_world(record, container.space)
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding
@@ -192,12 +196,18 @@ def _load_container(
 
 
 def assemble(
-    checkpoint: PolicyCheckpoint, *, bucketed_shapes: bool = False
+    checkpoint: PolicyCheckpoint,
+    *,
+    bucketed_shapes: bool = False,
+    live_tokens: bool = False,
 ) -> ActorCritic:
     """An `ActorCritic` holding a container's parameters and buffers; binds
     no world (`load_checkpoint` validates the binding)."""
     agent = ActorCritic(
-        checkpoint.space, checkpoint.model, bucketed_shapes=bucketed_shapes
+        checkpoint.space,
+        checkpoint.model,
+        bucketed_shapes=bucketed_shapes,
+        live_tokens=live_tokens,
     )
     torch_names = {canonical_name(name): name for name in agent.state_dict()}
     arrays = {**checkpoint.parameters, **checkpoint.buffers}

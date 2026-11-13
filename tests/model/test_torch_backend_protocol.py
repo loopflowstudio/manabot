@@ -3,8 +3,8 @@
 import numpy as np
 import torch
 
-import manabot.backends.torch as torch_backend
 from manabot.backends.parity import minibatch_loss
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match

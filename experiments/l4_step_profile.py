@@ -580,11 +580,11 @@ def learn_once(
         reverse_kl,
         selected_mean,
     )
+    from manabot.backends.torch.rollout import observation_tensors
     from manabot.model.admission import admit_observation
     from manabot.model.inference import transfer_admitted
     from manabot.policy.prepare import reference_distribution
     from manabot.training.regime import DampedPolicyLearning
-    from manabot.backends.torch.rollout import observation_tensors
 
     device = learner.device
     learning = DampedPolicyLearning.model_validate(payload["learning"])

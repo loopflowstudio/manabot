@@ -19,6 +19,7 @@ import torch
 import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
@@ -26,7 +27,6 @@ from manabot.recipes.baseline import baseline_test
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import _targets, update_damped_iteration
-from manabot.backends.torch.rollout import AdmittedRollout
 
 STREAMS = 2
 
