@@ -17,9 +17,9 @@
 - Over-tap attribution is observational, not a prediction of post-fix play;
   the non-over-tapped subset retains the original decision denominator.
 - Realign (2026-11-13): spend prompts are 0.2% of Elemental decisions, so the
-  planned Elemental A-vs-B learning run is near-certain null. Left open in the
-  plan (Elemental vs a Heartbeat-including recipe); default stays Elemental,
-  as the Task brief names it, and the run waits until after part 3.
+  Elemental pilot has little exposure to the changed decision. The final choice
+  stayed Elemental, as the Task brief names it; the finished two-seed pilot
+  reports that limitation without inferring equivalence.
 
 ## Sync resolution (2026-11-13)
 

@@ -118,8 +118,7 @@ exploratory, in three parts.
    outcomes enumerated from the payment model; bound the enumeration and count
    the casts that hit the bound.
 
-Then the **small learning comparison** (see "Open decision" below for its
-deck set): Elemental recipe,
+Then the **small learning comparison** (Elemental, as recorded below): Elemental recipe,
 arm A (main) against arm B, 2 seeds each, matched updates, scored against the
 heuristic, under `--max-usd 25`. It answers only "does removing unit spending
 decisions visibly change early learning or steps per game on this recipe"; it
@@ -234,14 +233,21 @@ Completed in this slice:
   identities and complete choices shared by policy and Academy. No UI changes.
 - Arm B and Etude jobs are implemented; debug tests and local release build pass.
 
-Remaining:
+Implementation and experiment work are complete:
 
-1. All four 32-update training jobs succeeded. A evaluation
-   `mana-spending-A-303f5f0a6a59` completed 100 matches / 400 valid replay-checked
-   games (seed scores 26.0%, 28.5%). B evaluation remains, using only the two B
-   final checkpoints and the same 50 paired deals, max USD4.
-2. Retain final launcher cost once, publish pilot receipts/results, finish the
-   report and update this remaining work. Gate/review/publication belong later.
+- Four runs at `00ee188998cb` succeeded at 32 updates. Evaluation runs
+  `mana-spending-A-303f5f0a6a59` and `mana-spending-B-fe362b5c294d` completed
+  100 matches each; all 800 games valid and replay-checked, no replacements.
+- Seed 34701: A 26.0%, B 27.0%; seed 34702: A 28.5%, B 32.5%. These two early
+  seeds cannot establish an improvement or equivalence, and do not test D.
+- Both evaluation logs show missing-focus ChooseMode warnings. Three recovered
+  training resource-limit failures discarded 915 samples. Full receipts and
+  limitations are retained in the report; no encoder change was made mid-pilot.
+- The report recommends grouped native D with exact source choices and a bound
+  automatic plan, shared by policy and Academy. Defaults stay unchanged.
+- Final launcher costs and ended-rental confirmations are recorded in the report.
+  All 24 pilot evidence artifacts are published and manifest entries retained.
+  Gate/review/PR delivery remain the caller's later steps.
 
 ## Done when
 
@@ -264,6 +270,8 @@ manifest committed.
   and `tests/infra/test_experiment_data_untracked.py`: passed. Ruff, format,
   `git diff --check` passed. Full affected suites belong to gate.
 
+Final publication check: `uv run --no-sync --extra dev pytest tests/infra/test_experiment_data_untracked.py -q` — 1 passed in 2.73s after publishing all 24 pilot artifacts.
+
 ## Delete — do not maintain
 
 The report’s planned-only shapes instructions are replaced by runnable replay
@@ -277,6 +285,6 @@ chooser replaces forced automation with an explicit bound native plan.
 Launch `518a4948ea80`, runs `f2f5adec2478`, `cfff739d2db5`, `5e0ed566acd9`,
 `2f6bd7e98142`: no job command started. The second L4 was unavailable.
 `mtg347-l4-71b326e7fb82` was confirmed deleted; `mtg347-l4-620f4314c806` was
-not acquired. Launcher displayed estimated cost `~$0.00` for the ended machine;
-retain the final cost observation with the pilot rather than reconstructing it.
+not acquired. Final launcher cost observations are retained with the pilot rather than
+reconstructing billing from elapsed time.
 Serial quote: USD4.31 first-wave rental, USD12 job/cohort rental budget.

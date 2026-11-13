@@ -139,10 +139,11 @@ authorization. These caps are limits, not measured costs.
 
 Evaluation retains each arm's spending mode on the shared 50-pair Elemental
 heuristic panel: 200 replay-checked games per final checkpoint, with native
-seats and decks swapped across four legs per pair. Evaluation source
-`4f1fdb2da3c9` includes the diagnostic constructor cleanup; it changes neither
-the frozen training input layout nor payment behavior. Model rows join through
-Etude's participant seat, rather than treating the native game seat as player
+seats and decks swapped across four legs per pair. Evaluation sources are
+`4f1fdb2da3c9` (A) and `a29783f42e36` (B); their difference is report/scratch
+text only. Both include the diagnostic constructor cleanup after training; it
+changes neither the frozen training input layout nor payment behavior. Model
+rows join through Etude's participant seat, rather than treating the native game seat as player
 identity. The published summary retains the SQL, query plan and timing.
 
 The pilot asks only whether removing pool-spending decisions visibly changes
@@ -150,8 +151,7 @@ early scores or decisions per game on this recipe. Updates are matched;
 completed games and learner transitions need not be. The training decision/game
 ratio divides all recorded environment decisions by completed games, including
 decisions from unfinished or failed episodes; it is not mean completed-game length.
-Trajectories differ once
-the policies differ, so their decision ratios cannot isolate saved prompts.
+Trajectories differ once the policies differ, so their decision ratios cannot isolate saved prompts.
 Two training seeds and a recipe with roughly 0.2% pool prompts do not establish
 an improvement, equivalence or a compound-decision learning result. This pilot
 does not expose fixed-source choice or implement C–E. MTG-265 owns the planned
@@ -162,14 +162,68 @@ was unavailable; none of its four job commands started. The acquired machine
 was deleted before the serial retry. The source and question stayed fixed.
 Final run receipts, scores and launcher costs are recorded below.
 
-A evaluation `mana-spending-A-303f5f0a6a59` completed all 100 matches (400 games),
-with no dropped or incomplete matches. It also logged `Invalid focus object ID
-81 for action 12` (ChooseMode), among similar warnings. The existing Python
+| arm | seed | training run | updates | completed games | environment decisions | learner transitions | decisions/completed game |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| A | 34701 | `8a03411493cd` | 32 | 8,593 | 1,414,495 | 1,413,716 | 164.61 |
+| A | 34702 | `b4dbac29bda4` | 32 | 8,573 | 1,388,371 | 1,388,371 | 161.95 |
+| B | 34701 | `56c051d5616a` | 32 | 8,526 | 1,544,456 | 1,544,320 | 181.15 |
+| B | 34702 | `773f339dd238` | 32 | 8,570 | 1,399,363 | 1,399,363 | 163.29 |
+
+All four jobs completed. A/34701 recovered two resource-limit game failures and
+discarded 779 samples; B/34701 recovered one and discarded 136. Both 34702 runs
+had none. No games were abandoned. These are the native training receipts'
+counts, retained alongside their full error summaries; failed attempts are not
+silently counted as completed games. The higher B decision ratios are an
+observation of different early trajectories, not evidence that skipping prompts
+increases game length or compute cost.
+
+Evaluations `mana-spending-A-303f5f0a6a59` and
+`mana-spending-B-fe362b5c294d` each completed all 100 matches / 400 games.
+**All 800 games were valid and replay-checked; no dropped, incomplete or failed
+matches.** No evaluation game was replaced. Each cell below is 200 games;
+there were no draws.
+
+| training seed | A wins / games | A score | B wins / games | B score | B − A |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 34701 | 52 / 200 | 26.0% | 54 / 200 | 27.0% | +1.0 pp |
+| 34702 | 57 / 200 | 28.5% | 65 / 200 | 32.5% | +4.0 pp |
+
+B scored higher on these two early checkpoints. Two training seeds do not
+resolve a learning effect, especially on a recipe where pool prompts are rare;
+this does not establish that automatic spending improves learning. It supplies
+no comparison of the proposed grouped source chooser. Retain A's defaults for
+now and take the source-control design to review. The offline aggregation's
+`EXPLAIN` uses scans and hash joins over only this fixed 800-game panel (1,600
+participant rows), taking 0.0029 seconds; it is not a growing application query.
+
+Both evaluation logs include `Invalid focus object ID 81 for action 12`
+(ChooseMode), among similar warnings. The existing Python
 encoder emits this when a focus object has no observation join and encodes -1.
 The cause was not diagnosed in this experiment. Valid replay-checked games do
 not establish that every action feature was informative: the pilot measures the
 existing representation and procedure together. Keep that limitation separate
 from game failures; changing the encoder mid-pilot would change its question.
+
+Launcher cost observations after all acquired rentals ended (2026-11-13):
+
+| use | rental | launcher cost |
+| --- | --- | ---: |
+| failed parallel admission | `mtg347-l4-71b326e7fb82` | USD0.0013 billed |
+| all four training runs | `mtg347-l4-b0805de6f0f4` | USD0.8642 billed |
+| A evaluation | `mtg347-cpu32-499f433305cc` | ~USD0.26 |
+| B evaluation | `mtg347-cpu32-d193458ef8af` | ~USD0.29 |
+
+These are the launcher's retained rental observations, recorded once; `~` is
+its estimate, not a reconstructed bill. The other initial L4 placeholder was
+never acquired. All six successful jobs finished and all four acquired rentals
+were confirmed ended. The authorized USD25 cap was not approached.
+
+Pilot evidence is under `experiments/data/mana_spending/learning/`: four native
+training receipts, the original evaluation blocks and worker receipts, selected
+warning log excerpts, frozen command-mode/source provenance, the training and
+score summaries, and `launcher-costs.txt`. The artifact manifest publishes these
+bytes; the original checkpoints and full replay traces remain in Etude's R2
+records under the run IDs above.
 
 ## Results
 

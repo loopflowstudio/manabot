@@ -5934,6 +5934,102 @@
    "sha256": "44716b890e22e9c1fd6d2bd6b07a08989f3f9482151fbfb32d6cdb6d5f7ec6f9",
    "bytes": 487467
   },
+  "experiments/data/mana_spending/learning/56c051d5616a/run.json": {
+   "sha256": "19a71487151ca9753270a59406949c38242c2cf58c64bc1e26a9aa7125087154",
+   "bytes": 50667
+  },
+  "experiments/data/mana_spending/learning/773f339dd238/run.json": {
+   "sha256": "637383888c90a9dee8bb51bca68750761b465c25b25a317c94b2c25d6d5be8a6",
+   "bytes": 50620
+  },
+  "experiments/data/mana_spending/learning/8a03411493cd/run.json": {
+   "sha256": "4ae60d64dfabc17f38af896667663f8600b139b657718043c281a39e4e321503",
+   "bytes": 50683
+  },
+  "experiments/data/mana_spending/learning/b4dbac29bda4/run.json": {
+   "sha256": "e2ce303220cdad5c2be6f55ce601cd81c9c81e8c2e532a3faf659a3645a52cc2",
+   "bytes": 50624
+  },
+  "experiments/data/mana_spending/learning/evaluation-A-log-excerpt.txt": {
+   "sha256": "cc55b9bee5fcbc0df47f033e2c25660e3b79ab4bfedbcc60fd4e3c6ae6db400a",
+   "bytes": 1995
+  },
+  "experiments/data/mana_spending/learning/evaluation-B-log-excerpt.txt": {
+   "sha256": "9b985bfc9d98ef22fb416044ca3cb1a99887806c534d8020935e460fe551c2b5",
+   "bytes": 1428
+  },
+  "experiments/data/mana_spending/learning/evaluation-summary.json": {
+   "sha256": "c647f9cc2627dcc883f83f7aaf903ac7007028c751743bad722d9cb9f1635125",
+   "bytes": 7644
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-A-303f5f0a6a59/blocks/01794600912546754833.227c8cb420bc/block.json": {
+   "sha256": "858d8843d7cf19ebe331b835afd884e83b7c6ba2e9dfe5c09806748ea8bd11d4",
+   "bytes": 134651
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-A-303f5f0a6a59/blocks/01794600912546754833.227c8cb420bc/plays.parquet": {
+   "sha256": "ad9b75188bb67fcece162ce68e79cda4b22d4cfb642f263365aa97eed5b86192",
+   "bytes": 12429
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-A-303f5f0a6a59/environment.json": {
+   "sha256": "62655ffbf3cb89c61275c1d6a89276669b9ae29f857c9911e2c81e487dc55a67",
+   "bytes": 158
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-A-303f5f0a6a59/run.json": {
+   "sha256": "c0768e9296f79a5ac1065e80af73e0395c442d6141f5d10b7114f133dd9f3a0a",
+   "bytes": 347
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-A-303f5f0a6a59/state.json": {
+   "sha256": "c2619e357f537dbfe3cd3eed0e073c9ddd773ae328d69c92ccf890e295bf0805",
+   "bytes": 84
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-A-303f5f0a6a59/tournament.json": {
+   "sha256": "93ca14bef4ac124529e973ae6f4ec96c5fbc62ab7b1635659db98e583c447216",
+   "bytes": 13018
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-B-fe362b5c294d/blocks/01794603301773324844.dffe74388291/block.json": {
+   "sha256": "4dce4ae08c7442d628658bbd21113e20c8ee52f7a991fb22657c9372242e7cf4",
+   "bytes": 134651
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-B-fe362b5c294d/blocks/01794603301773324844.dffe74388291/plays.parquet": {
+   "sha256": "833758ae33a0d5fdf7c3be0997a12ca40f42d971e48e094f313ca3ccb5d2e708",
+   "bytes": 12370
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-B-fe362b5c294d/environment.json": {
+   "sha256": "62655ffbf3cb89c61275c1d6a89276669b9ae29f857c9911e2c81e487dc55a67",
+   "bytes": 158
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-B-fe362b5c294d/run.json": {
+   "sha256": "fd7f497fb645bce9794471b34f079781fc32c41713755bcdf79853d4108e0615",
+   "bytes": 347
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-B-fe362b5c294d/state.json": {
+   "sha256": "eb9c857de0f04eb39412756acc1980f89f63c6c2ab99d23ef15ec6b40381b9fb",
+   "bytes": 84
+  },
+  "experiments/data/mana_spending/learning/evaluation/mana-spending-B-fe362b5c294d/tournament.json": {
+   "sha256": "2ecffc561ff14f17a5b2cef7e81c7cc8126cb7bd6d4a8462f2d327759b8d917a",
+   "bytes": 13022
+  },
+  "experiments/data/mana_spending/learning/launcher-costs.txt": {
+   "sha256": "5073e5767f9c12eb120e121b597bf000592f0263b3dee4e005bd6e696a6e80f5",
+   "bytes": 494
+  },
+  "experiments/data/mana_spending/learning/provenance.json": {
+   "sha256": "30c4f54eef86a0d9582621b11918879c0d022c7cef540f81a01c0f48d781fd3f",
+   "bytes": 1743
+  },
+  "experiments/data/mana_spending/learning/training-summary.json": {
+   "sha256": "a742eaa791ad492c1f965ff86e29032a1eb3ae909f14fbe23ec5419cf7bc8c9f",
+   "bytes": 1883
+  },
+  "experiments/data/mana_spending/learning/worker/mana-spending-A-303f5f0a6a59/attempts/d621491fa138.json": {
+   "sha256": "56868f38ee019543fe6a196fd5f509e7dad6cbd470ce1215f2433a30199ae9d3",
+   "bytes": 198626
+  },
+  "experiments/data/mana_spending/learning/worker/mana-spending-B-fe362b5c294d/attempts/75ef8fc52ea5.json": {
+   "sha256": "f960651d024fe158f607bb4f61eee1f8df45d38b12006544d48de0917888864e",
+   "bytes": 198640
+  },
   "experiments/data/mlx_pilot/bench-overlapped-collection-and-first-sweep.jsonl": {
    "sha256": "2d273833dc2d43a874688fd8c16a457128192ae2355c0957e3346ecd729ae69d",
    "bytes": 11747
