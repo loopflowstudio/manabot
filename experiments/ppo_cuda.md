@@ -37,3 +37,9 @@ and verify behavior; this baseline alone cannot establish a speedup.
   each update, and a separate diagnostic invocation enables periodic internal
   stack dumps plus the operator profile. The five timing repeats run in a
   separate process without either profiler or traceback timer.
+- Before a clean comparison, the restored harness also needs the production
+  runtime settings it omitted: `torch.set_num_threads(stage.execution.threads)`
+  (one in this recipe, as in `training/execution.py`) and `seed_random`'s
+  deterministic cuDNN setup. The forthcoming baseline records these settings.
+  This corrects the measuring instrument, not the PPO implementation; no
+  speedup relative to the historical harness can be claimed from it.

@@ -14,7 +14,7 @@ from etude.launch.records import Job, Run
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 
 
-def runs(revision: str) -> list[Run]:
+def runs(revision: str, hours: float = 1) -> list[Run]:
     """One bounded L4 baseline; no retries or other tasks on this allocation."""
     command = f"""{TOOLCHAIN_ENV}
 set -eu
@@ -30,7 +30,7 @@ tar -czf "$out/measurement.tar.gz" -C "$out" baseline.json diagnostic.json easie
         command=command,
         repo=str(Path(__file__).resolve().parents[1]),
         revision=revision,
-        max_hours=1,
+        max_hours=hours,
         max_usd=Decimal("4"),
         max_attempts=1,
     ).runs(0)

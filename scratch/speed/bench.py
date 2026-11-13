@@ -40,6 +40,7 @@ import manabot
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
+from manabot.infra.runtime import seed_random
 from manabot.model.inference import PolicyInference
 from manabot.training.execution import validate_regime
 from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
@@ -155,9 +156,10 @@ def main() -> None:
     )
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
+    torch.set_num_threads(stage.execution.threads)
     space = ObservationSpace(regime.observation)
     match = Match(regime.root_match)
-    torch.manual_seed(25201)
+    seed_random(25201)
     agent = ActorCritic(space, regime.agent, bucketed_shapes=True, live_tokens=True).to(
         device
     )
@@ -191,6 +193,8 @@ def main() -> None:
         "device": str(device),
         "gpu": torch.cuda.get_device_name() if device.type == "cuda" else None,
         "torch": torch.__version__,
+        "torch_threads": torch.get_num_threads(),
+        "cudnn_deterministic": torch.backends.cudnn.deterministic,
         "cuda": torch.version.cuda,
         "precision": precision,
         "streams": args.streams,
