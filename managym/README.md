@@ -325,7 +325,7 @@ portable schema-8 viewer JSON is validated by the native observation types.
 `Game::object_power` reads contextual power in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
-filters use `card_matches_predicate`; printed-only matching belongs to
+filters use `object_matches_predicate`; printed-only matching belongs to
 structural definition checks and private layer stages. `LookAndSelect` names
 whether the remainder is random; chosen order suspends on native
 `OrderLibrary`, placing cards first-to-draw first through ordinary SelectCard

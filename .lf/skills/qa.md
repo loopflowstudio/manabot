@@ -143,6 +143,19 @@ publish, land or choose the next Graph step from here.
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
   game end is a "Game Over" dialog with "Play Again".
+- "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
+  <before>`, build it with `maturin build --release -i .venv/bin/python -m
+  /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into
+  `/tmp/<x>/managym/`, and run one seeded script against each tree
+  (`sys.path.insert(0, root)` before `import managym`). Per decision, write a
+  hash of both seats' `toJSON()` plus `env.state_digest()`; `cmp` the files.
+  Use `random.Random(seed).randrange(env.action_count())` for actions.
+  `managym.authored_deck_keys(pack)` / `authored_deck_setup(pack, key)` give
+  the authored decks. Remove the worktree afterwards.
+- Check `uptime` before the Academy table. At load averages in the hundreds
+  Vite fails startup (`ready.timeout`, "transport was disconnected") and the
+  search villain stalls the table at "Waiting for the table"; those runs show
+  nothing about the change.
 - Python-only library changes (no engine change): `uv build --wheel --package
   manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
   venv with `uv pip install <wheel> --index-url https://pypi.org/simple

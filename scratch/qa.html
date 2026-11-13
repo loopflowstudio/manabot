@@ -2,6 +2,44 @@
 <html><head><meta charset="utf-8"><title>MTG-320 QA</title>
 <style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}code,pre{background:#f4f1ea}pre{padding:.6em;overflow:auto}</style></head>
 <body>
+<h1>MTG-320 QA at a45df9d4b (current head)</h1>
+<p>The installed extension (13:37) was older than the last commits (helper renames, sorted stack comparison, merge of 4bc48211e). I rebuilt it in release (cp313) and replaced it atomically. For a "before" engine I used the MTG-298 parent 4bc48211e (later MTG-298 commits change only scratch), built in a throwaway worktree.</p>
+
+<h2>A. Same seeded games before and after: byte comparison</h2>
+<p>One script, run against each build. Five authored packs (tla-baseline-v1, ur-lessons-vs-gw-allies, elemental-world-v2, elemental-temur-v1, elemental-sacrifice-v1), 8 games each, random legal actions from a seeded RNG. At every decision it records a hash of <b>both seats'</b> viewer observation JSON and the engine's full <code>state_digest()</code>.</p>
+<pre>before: 11558 lines   after: 11558 lines   cmp: IDENTICAL</pre>
+<p>Fire Lord Azula (the code path this change moves: spell copies and permanent-spell copies). Constructed 4-of decks with Azula, Lightning Bolt, Firebending Lesson, Combustion Technique, Fists of Flame, Spectral Sailor and lands, built with <code>PlayerConfig(..., WORLD_SETUP)</code>. A scripted policy declares attacks and casts spells whenever it can.</p>
+<pre>150/150 finished (both builds)
+copies on the stack: Fists of Flame 2, Combustion Technique 4, Lightning Bolt 4, Firebending Lesson 6
+Spectral Sailor token sightings on the battlefield: 15 (permanent-spell copy became a token)
+token or copy outside battlefield/stack at a decision: 0
+before vs after, 14174 decision lines incl. state_digest: IDENTICAL</pre>
+<p>So for these games, observations and full engine state match the pre-change engine byte for byte, including the hash bytes for copies.</p>
+
+<h2>B. Random play over the five packs on the new build</h2>
+<pre>60/60 finished in 102 s, no errors
+tokens seen: Ally 5002, Clue 608, Human Soldier 364, Food 260, Treasure 102, Ran and Shaw 25
+token outside battlefield/stack at a decision: Treasure in a graveyard at a Modal (mana colour) decision, 32 times; nothing else</pre>
+<p>The Treasure case is the same one the earlier pass saw, and it is correct: a mana ability resolves without priority, so SBAs haven't run yet (CR 704.3).</p>
+
+<h2>C. Academy table</h2>
+<p><code>./scripts/play --port 18741 --frontend-port 18742</code>. <code>ACADEMY_PLAY_READY</code> named the rebuilt cp313 module. In headless Chromium: first visit, New Game (UR Lessons against GW Allies with the default Search-64 villain), then clicks on action-panel offers only.</p>
+<p><img src="qa/mtg320-01-first-visit.png"><br><img src="qa/mtg320-03-turn.png"></p>
+<p>The game played 24 decisions with no page or console errors. Then it stopped at "Waiting for the table — your action is being processed", with every choice disabled:</p>
+<p><img src="qa/mtg320-04-end.png"></p>
+<p>The server log had no error. A native sample showed the event loop idle in <code>kevent</code> and not deadlocked. A second browser's WebSocket handshake to the same server timed out, and its second command ("Play Island") got no reply. <code>uptime</code> reported <b>load averages around 300</b>, from other work on the machine (several rustc builds), not from this QA. Restarting the table with the pre-change extension, to compare, failed twice in Vite startup (<code>ready.timeout</code>, "transport was disconnected"). Under this load the table run says nothing about the change, either way.</p>
+<p>The engine evidence covers what Academy reads: A shows the frames come from byte-identical observations. The change touches no Academy code. The earlier pass on 79aa9881e played four Academy games to Game Over, and saw this same stall once.</p>
+
+<h2>Fixed</h2>
+<p>Nothing in the product. <code>managym/README.md</code> had an uncommitted fix (<code>card_matches_predicate</code> → <code>object_matches_predicate</code>); I confirmed <code>object_matches_predicate</code> exists at <code>managym/src/flow/statics.rs:425</code> and left the edit in place. The QA skill now describes the before/after byte comparison and the load check before running the table.</p>
+
+<h2>Result</h2>
+<ul>
+<li><b>Works:</b> the no-behavior-change claim holds byte for byte against MTG-298 for 190 seeded games (25,732 decisions), including spell copies and Sailor tokens; 60 random games over every pack finish.</li>
+<li><b>Not reached:</b> a clean Academy game to Game Over on this head (machine load); a token copy of a permanent spell in Academy (no Academy matchup has Azula); bouncing a spell copy (no card does it); emblems (none defined).</li>
+<li><b>Still wrong, worst first:</b> the Academy "Waiting for the table" stall has now shown twice, and both times its cause is unknown. Today's case coincided with extreme load and a Search-64 villain. Rerun on an idle machine; if it reproduces there, it is an Academy issue for its own Task, not part of this change.</li>
+</ul>
+<hr>
 <h1>MTG-320 QA: runtime object kinds</h1>
 <p>Build under test: branch head <code>79aa9881e</code>. Release extension rebuilt from it and installed into
 <code>managym/_managym.cpython-313-darwin.so</code> (the previous build predated the last commits).</p>
