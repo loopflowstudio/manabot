@@ -1,9 +1,25 @@
 # Framework backends
 
+```python
+from manabot.backends.torch.checkpoint import load_checkpoint
+
+policy, space = load_checkpoint(".runs/example/self-play-raw.safetensors")
+batch = policy.prepare(obs)              # NumPy in: the buffers VectorEnv produces
+logits, values = policy.evaluate(batch)  # NumPy out: logits [B,A], values [B]
+```
+
+`obs` is the dictionary of NumPy observation buffers for `B` decisions.
+`prepare` checks it and does every integer lookup on the host, returning a
+`Prepared` batch (`manabot.policy.prepare`); `evaluate` runs the forward and
+returns logits, -1e8 off the legal actions, and each row's value. Every
+backend reads the same `Prepared` batch and the same checkpoint file, so the
+MLX lines differ only in the import and the loader's name
+([mlx.md](mlx.md)).
+
 A backend runs the manabot policy forward and the learner step of its
 updates in one array framework. Backends share the framework-free contract in
-[`manabot.policy`](../policy/README.md): host preparation of observation
-batches, the checkpoint container and the `BackendPolicy`,
+[`manabot.policy`](../policy/README.md): observation admission, host
+preparation, the checkpoint container and the `BackendPolicy`,
 `BackendLearner` and `Backend` protocols. Training, evaluation and the CLI
 run the PyTorch backend, which is also the reference every other backend is
 checked against.
@@ -17,26 +33,52 @@ checked against.
 
 Every backend is one package, `manabot/backends/<name>/`, with at least these
 files; a backend may add private modules that its `policy.py` uses (torch's
-`live_tokens.py`):
+encoders and `live_tokens.py`):
 
 | File | Holds |
 | --- | --- |
 | `__init__.py` | the import guard naming the optional extra, and the files below as attributes loaded on first use (`backend.rl`) |
 | `arrays.py` | conversion to and from NumPy, the float dtype, the device |
-| `policy.py` | the forward over a `Prepared` batch: logits and values |
+| `policy.py` | the policy: `prepare`, and the forward over a `Prepared` batch (logits and values) |
 | `rl.py` | the policy terms, losses, returns and selection the updates call, over the framework's arrays |
 | `learner.py` | `Learner`: the optimizer, the differentiated loss, the guarded step and precision |
 | `rollout.py` | `AdmittedRollout`: a collected batch's observations as the policy reads them |
-| `checkpoint.py` | the map from canonical names to the backend's layout, loading, and `BACKEND` |
+| `checkpoint.py` | the map from canonical names to the backend's layout, loading (torch also saves), and `BACKEND` |
 
 `BACKEND` in `checkpoint.py` implements `manabot.policy.protocol.Backend`, the
 one object `parity` needs. A backend imports its own framework,
 `manabot.policy` and the configuration and observation modules; it never
 imports another backend (`tests/test_package_boundaries.py` enforces it).
-Nothing outside `manabot/backends/` imports a backend other than torch, and
-outside `manabot/backends/torch/` only the modules the boundary test lists by
-name import torch; that list shrinks as training and evaluation become
-backend-generic.
+
+## Who chooses a backend
+
+Library code receives a backend; it does not import one. An update takes the
+backend module as its first argument, and simulation and evaluation take a
+policy that satisfies `BackendPolicy`. Only the code that starts a program
+chooses:
+
+- `experiments/` and `scripts/`;
+- recipe entry points and the CLI;
+- Academy's opponent loader (`academy/villain.py`);
+- the backends' own tests.
+
+They name a backend once, by import or through the resolver:
+
+```python
+import manabot.backends
+
+backend = manabot.backends.resolve("torch")  # the module manabot.backends.torch
+learner = backend.learner.Learner(policy, "cpu", minibatch_rows=64)
+```
+
+`resolve` imports the framework on first use. A backend whose optional extra
+is not installed raises `ImportError` naming the extra; an unknown name raises
+`ValueError` listing the backends.
+
+`tests/test_package_boundaries.py` refuses an import of `manabot.backends.*`
+anywhere else. The modules that still import the torch backend directly
+(belief models, verification, the executor, optimizer persistence) are listed
+there by name; the list is compared exactly, so it can shrink and never grow.
 
 ## Algorithms are written once
 
@@ -90,8 +132,9 @@ backend against them:
   steps (`step`); `forward_precision` is the context a forward runs in,
   `no_grad` the one for constants and `check_objective` the loss's refusal.
 - `backend.rollout`: `AdmittedRollout(agent, batch)` returns a batch's rows as
-  the policy reads them (`rows`, `next_observation`), their legal mask
-  (`legal`) and the arrays a rejected step retains (`evidence`).
+  `Prepared` batches on the learner's device (`rows`, `next_observation`),
+  their legal mask (`legal`) and the arrays a rejected step retains
+  (`evidence`: the prepared batch's arrays by field name, in NumPy).
 
 An update writes its minibatch loss as a closure over the policy forward and
 hands it to the learner, because a functional framework differentiates a
@@ -147,43 +190,122 @@ documents them. A backend never carries its own copy of an update's loss:
 
 | Module | Names |
 | --- | --- |
-| `manabot.backends.torch.policy` | `ActorCritic` |
+| `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
 | `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
-| `manabot.backends.torch.rollout` | `AdmittedRollout`, `observation_tensors` |
-| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `device_of` |
+| `manabot.backends.torch.rollout` | `AdmittedRollout` |
+| `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `device_of`, `on_device` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
 
+`ActorCritic` is the torch `BackendPolicy`: `load_checkpoint` returns it, and
+`prepare` and `evaluate` are its methods. `evaluate` takes the NumPy batch,
+moves it to the model's device and runs without gradients. Training calls the
+module itself, which reads a `Prepared` batch whose arrays are already
+tensors on the model's device:
+
 ```python
+from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 
-agent, obs_space = load_checkpoint(".runs/example/checkpoint.pt")
-learner = Learner(agent, "cpu", minibatch_rows=64)
+agent, obs_space = load_checkpoint(".runs/example/self-play-raw.safetensors")
+learner = Learner(agent, "cuda", minibatch_rows=64)
+
+batch = on_device(agent.prepare(obs), "cuda")  # one pinned copy per dtype
+logits, value = agent(batch)                   # tensors: logits [B,A], value [B]
 ```
 
-`load_checkpoint` reads a `.pt` file or a container, telling them apart by
-their first bytes; `save_checkpoint` writes `.pt` until the container carries
-every configuration the torch policy runs (belief inputs, history, FiLM and
-the rest refused below).
-Both formats honor the `bucketed_shapes` and `live_tokens` execution options
-passed to `load_checkpoint`.
-Only ZIP-format `.pt` files are recognized; older non-ZIP PyTorch serialization
-is reported as `NotAContainer`.
+`agent(batch)` and `forward_distribution(batch)` do no validation and no
+lookups; `prepare` did both. They raise `TypeError` for anything but a
+`Prepared` batch of tensors (an observation dictionary, or the NumPy batch
+before `on_device`) and `ValueError` for a batch prepared by a policy with
+another model or observation configuration. A batch belongs to a
+configuration, not to one instance: a restored, target or averaged copy of
+the model reads it.
 
-`BACKEND` is torch's `manabot.policy.protocol.Backend`, beside the native
-torch API: `load` returns a `TorchPolicy` and a `Learner`, whose parameters
-and gradients keep torch's names (`torch_name` in `manabot.policy.checkpoint`
-maps canonical names back). Until `ActorCritic` reads `Prepared` indices, its
-`prepare` builds the shared `Prepared` and keeps the admitted torch
-observation on it (`Retained`), so parity can run torch against its own torch
-reference.
+`prepare` trims a batch's variable axes to bucket sizes when the policy was
+built with `bucketed_shapes=True`, and packs live tokens with
+`live_tokens=True`. Both are execution options passed to `ActorCritic(...)`
+or `load_checkpoint(...)`, not checkpoint fields. Every lookup a batch needs
+is measured on the host, so the device forward reads nothing back.
+
+`BACKEND` is torch's `manabot.policy.protocol.Backend`: `load` returns an
+`ActorCritic` and a `Learner`, whose parameters and gradients keep torch's
+names (`torch_name` in `manabot.policy.checkpoint` maps canonical names
+back).
 
 The reusable pieces in `rl.py`, `learner.py` and `arrays.py` depend only on
 their own backend, the shared host returns and the profiler at runtime;
 they load neither the policy network nor the training configuration.
 
-## Convert a PyTorch checkpoint
+## Policy checkpoints
+
+```python
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.env.match import Match
+
+save_checkpoint(
+    agent, agent.observation_space, "policy.safetensors",
+    player_configs=Match().to_rust(),
+)
+agent, obs_space = load_checkpoint("policy.safetensors")
+```
+
+A policy is saved as one file, the shared container, which every backend
+loads. Training writes its policy files with the `.safetensors` suffix
+(`self-play-raw.safetensors`, `monitor-3.safetensors`). The file is a
+[safetensors](https://huggingface.co/docs/safetensors) archive holding:
+
+- the float32 parameters under canonical names. These are the PyTorch
+  state-dict names with two framework idioms renamed: a GRU holds
+  `input_weight`, `hidden_weight`, `input_bias` and `hidden_bias` (gates
+  reset, update, new), and attention's packed in-projection is `qkv_weight` /
+  `qkv_bias` (query, key, value);
+- every other state entry (catalog programs, record vocabulary, naming joins)
+  under `buffer/<name>`, in its own dtype;
+- metadata, as JSON strings: the model and observation configuration
+  (`hypers`), the `world_binding`, the `architecture` receipt, the `source`
+  record of the revision that wrote it, `global_step`, the `bc` record with
+  the critic's `value_semantic`, and for a belief policy
+  `belief_schema_identity` and `belief_content_manifest_identity`.
+
+The container carries every configuration the torch policy runs: belief
+inputs, policy history, FiLM, either critic, hashed or catalog record ids and
+both policy inputs. Saving never casts or truncates a tensor; a parameter
+that is not float32 fails the save, naming it.
+
+`save_checkpoint` binds the policy to the setups in `player_configs`, or to
+the world itself when that is `None`, so the policy may play any deck the
+world admits. It writes the container whatever the path's suffix; name policy
+files `.safetensors`.
+
+`load_checkpoint` reads a container or a `.pt` file written by an earlier
+revision, telling them apart by their first bytes, never by name. Both give
+the same policy: world binding, architecture receipt, `value_semantic` and
+belief binding are validated the same way and fail with the same errors, and
+a refusal names the revision that wrote the file. Both honor the
+`bucketed_shapes` and `live_tokens` options. A file that is neither (a
+truncated download, an older non-ZIP PyTorch serialization) raises
+`NotAContainer`.
+
+Code that needs a checkpoint's configuration but not its weights reads the
+header, without importing a framework:
+
+```python
+from manabot.policy.checkpoint import read_metadata
+
+metadata = read_metadata("policy.safetensors")
+metadata["world_binding"], metadata["hypers"]["agent_hypers"]
+```
+
+Optimizer state, update snapshots and incident tensors are PyTorch files and
+keep the `.pt` suffix; they are not policy checkpoints and no other backend
+reads them.
+
+### Convert an older `.pt` checkpoint
+
+`load_checkpoint` reads old `.pt` policies directly, so the torch backend
+needs no conversion. Another backend reads only the container:
 
 ```sh
 uv run python -m manabot.backends.convert .runs/example/checkpoint.pt
@@ -194,33 +316,15 @@ read   .runs/example/checkpoint.pt  (180 tensors)
 wrote  .runs/example/checkpoint.safetensors
 ```
 
-The converter reads the `.pt` file with PyTorch and writes the shared
-container beside it: one [safetensors](https://huggingface.co/docs/safetensors)
-file of float32 parameters under canonical names, the integer lookup buffers
-(catalog programs, record vocabulary, naming joins) under `buffer/<name>`, and
-metadata holding the checkpoint's model, observation and world configuration,
-its architecture receipt and the `source` record of the revision that wrote it,
-as JSON strings, with the torch file under `converted_from`. Canonical names
-are the PyTorch state-dict names with two framework idioms renamed: a GRU holds
-`input_weight`, `hidden_weight`, `input_bias` and `hidden_bias` (gates reset,
-update, new), and attention's packed in-projection is `qkv_weight` /
-`qkv_bias` (query, key, value). Every torch tensor becomes one parameter or
-buffer, or conversion fails naming the key.
+The converter reads the `.pt` file with PyTorch and writes the container
+beside it, with the original file's name under `converted_from`. Every torch
+tensor becomes one parameter or buffer, or conversion fails naming the key.
+It converts any configuration and refuses a `.safetensors` input.
 
-Loading a container validates the same world binding as
-`manabot.backends.torch.checkpoint.load_checkpoint` and fails with the same errors; a
-refusal names the revision that wrote the original torch checkpoint. A file
-that is not a container (a `.pt`, or a conversion without the metadata) raises
-`NotAContainer`, saying to convert the `.pt`; `convert` refuses a `.safetensors`
-input. Backends
-cover what the w160l8 regime uses: a catalog world with catalog record ids,
-table attention, a masked-mean scalar critic and policy input v9. A checkpoint
-that enables anything else (belief inputs, policy history, another critic,
-FiLM, input v10) is refused with every unsupported
-field named (`UnsupportedPolicy`), rather than run partially. Checkpoints of
-the `local` recipe use FiLM and are refused.
-Conversion also currently omits the scalar critic's `value_semantic` metadata;
-PUCT refuses that converted scalar policy. Use the original `.pt` for PUCT.
+A backend refuses what it does not implement when it loads, not when the file
+is written: the [MLX backend](mlx.md#what-the-backend-covers) raises
+`UnsupportedPolicy` naming every unsupported field, rather than running a
+policy partially.
 
 ## Parity check
 

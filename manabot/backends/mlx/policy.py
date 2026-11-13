@@ -18,7 +18,7 @@ are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`
 (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import mlx.core as mx
@@ -27,7 +27,7 @@ import numpy as np
 
 from manabot.backends.mlx.arrays import to_numpy
 from manabot.backends.mlx.rl import legal_mask
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.policy import admission
 from manabot.policy.checkpoint import Dimensions
@@ -116,7 +116,7 @@ class PackedGRU(nn.Module):
         return mx.concatenate(outputs), mx.concatenate(finished[::-1])
 
 
-def packed_steps(rows: np.ndarray, schedule: Packed) -> list[mx.array]:
+def packed_steps(rows: np.ndarray, schedule: Packed[np.ndarray]) -> list[mx.array]:
     """Split packed-order `rows` into the schedule's steps (`PackedGRU.run`)."""
     return [mx.array(part) for part in np.split(rows, np.cumsum(schedule.sizes)[:-1])]
 
@@ -231,7 +231,7 @@ class _Static:
     """Per-model constants derived from `Tables`, kept off the parameter tree."""
 
     catalog_steps: list[mx.array]  # token ids of each catalog GRU step
-    catalog: Packed
+    catalog: Packed[np.ndarray]
     named_rows: mx.array  # program rows of names that have a definition
     named_names: mx.array  # their name rows
     sign: mx.array  # [1,N,1]
@@ -303,70 +303,32 @@ class MLXActorCritic(nn.Module):
         )
 
     def prepare(
-        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
-    ) -> Prepared:
+        self, obs: ObservationBuffers, *, inference: bool = False
+    ) -> Prepared[np.ndarray]:
         """Admit and index raw host observations; malformed inputs are refused."""
         self.check_observation(obs)
         return self.prepare_admitted(obs, inference=inference)
 
     def prepare_admitted(
-        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
-    ) -> Prepared:
+        self, obs: ObservationBuffers, *, inference: bool = False
+    ) -> Prepared[np.ndarray]:
         """Index unchanged rows previously checked for this policy's configuration."""
-        return prepare(obs, self._static.tables, inference=inference)
+        return prepare(
+            obs,
+            self._static.tables,
+            inference=inference,
+            binding=admission.Spec(
+                self.config, self._static.space, self._static.tables, 0
+            ).binding,
+        )
 
-    def check_observation(self, obs: Mapping[str, np.ndarray]) -> None:
+    def check_observation(self, obs: ObservationBuffers) -> None:
         """The shared admission checks on raw rows, before booleans or lookups."""
         tables = self._static.tables
-        lookup = tables.definition_rows
-        for ids in (
-            obs["semantic_cards"],
-            np.stack(
-                [
-                    obs[key][..., PERMANENT_DEFINITION_INDEX]
-                    for key in ("agent_permanents", "opponent_permanents")
-                ],
-                axis=1,
-            ),
-            obs["known_hand"][..., 0],
-            obs["decklists"][..., 0],
-        ):
-            admission.definition_ids(ids, len(lookup), lookup)
-        objects = tables.layout.objects
-        catalog = admission.Catalog(
-            lookup, tables.record_name_keys, tables.record_token_keys
-        )
-        admission.permanent_links(obs, objects)
-        admission.facts(
-            obs["facts"], self._static.space.encoder.config.max_facts, objects, catalog
-        )
-        admission.shared_effects(
-            obs["effects"],
-            obs["effect_details"],
-            obs["effect_members"],
-            objects,
-            catalog,
-        )
-        admission.definition_ids(obs["relations"][..., [5, 23]], len(lookup), lookup)
-        admission.relations(obs["relations"], self.dims.relation, objects)
-        validity = np.concatenate(
-            [
-                obs[key]
-                for key in (
-                    "agent_player_valid",
-                    "opponent_player_valid",
-                    "agent_cards_valid",
-                    "opponent_cards_valid",
-                    "agent_permanents_valid",
-                    "opponent_permanents_valid",
-                )
-            ],
-            axis=1,
-        )
-        if (validity.sum(1) == 0).any():
-            raise ValueError("value aggregation requires a valid object")
         legal = to_numpy(legal_mask(mx.array(obs["actions_valid"])))
-        admission.actions(obs, legal, objects, tables.name_definitions, lookup)
+        admission.check(
+            obs, admission.Spec(self.config, self._static.space, tables, 0), legal
+        )
 
     # Programs ----------------------------------------------------------------------
 
@@ -389,13 +351,15 @@ class MLXActorCritic(nn.Module):
     def clear_cache(self) -> None:
         self._static.cache.clear()
 
-    def evaluate(self, batch: Prepared) -> tuple[np.ndarray, np.ndarray]:
+    def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
         """Evaluated logits [B,A] and values [B] as NumPy (`BackendPolicy.evaluate`)."""
         logits, values = self(batch)
         mx.eval(logits, values)
         return to_numpy(logits), to_numpy(values)[:, 0]
 
-    def forward_distribution(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+    def forward_distribution(
+        self, batch: Prepared[np.ndarray]
+    ) -> tuple[mx.array, mx.array]:
         """The training forward the updates differentiate: `__call__`."""
         return self(batch)
 
@@ -407,9 +371,14 @@ class MLXActorCritic(nn.Module):
 
     # Forward -----------------------------------------------------------------------
 
-    def __call__(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+    def __call__(self, batch: Prepared[np.ndarray]) -> tuple[mx.array, mx.array]:
         """Policy logits [B,A] (-1e8 off the legal support) and critic [B,1]."""
+        if not isinstance(batch, Prepared):
+            raise TypeError("policy forward requires a Prepared batch")
         static: _Static = self._static
+        expected = admission.Spec(self.config, static.space, static.tables, 0).binding
+        if batch.binding != expected:
+            raise ValueError("prepared batch belongs to another policy configuration")
         dims = self.dims
         hidden = dims.hidden
         b = batch.batch
@@ -427,9 +396,9 @@ class MLXActorCritic(nn.Module):
 
         # Objects: players, cards and permanents with their programs.
         card_programs = defs(batch.card_rows)
-        known = (defs(batch.known_rows) * mx.array(batch.known_counts)[..., None]).sum(
-            2
-        )
+        known = (
+            defs(batch.known_rows) * mx.array(batch.known_counts)[..., None] / 60
+        ).sum(2)
         pooled = mx.einsum(
             "bsrh,bsrc->bsch", defs(batch.deck_rows), mx.array(batch.deck_counts)
         ).reshape(b, 2, 4 * hidden)
@@ -578,7 +547,7 @@ class MLXActorCritic(nn.Module):
         pooled_value = projected.sum(1) / validity.sum(1, keepdims=True)
         return logits, value[5](value[4](value[3](pooled_value)))
 
-    def _links(self, batch: Prepared, objects: mx.array) -> mx.array:
+    def _links(self, batch: Prepared[np.ndarray], objects: mx.array) -> mx.array:
         """`ActorCritic._join_permanent_links`."""
         b, count, hidden = objects.shape
         start = 2 + 2 * batch.agent_cards.shape[1]
@@ -608,7 +577,7 @@ class MLXActorCritic(nn.Module):
 
     def _facts(
         self,
-        batch: Prepared,
+        batch: Prepared[np.ndarray],
         objects: mx.array,
         tokens: mx.array,
         definitions: mx.array,
@@ -633,25 +602,20 @@ class MLXActorCritic(nn.Module):
             + ids
             + facts.numeric(mx.array(routes.columns))
         )
-        if routes.program_schedule is not None:
-            assert (
-                routes.program_rows is not None and routes.program_numbers is not None
-            )
-            assert (
-                routes.program_positions is not None and routes.program_mask is not None
-            )
-            schedule = routes.program_schedule
+        programs = routes.programs
+        if programs is not None:
+            schedule = programs.schedule
             flat = hidden_rows.reshape(-1, hidden)
-            program = _take(
-                flat, mx.array(routes.program_rows)
-            ) + facts.program_numeric(mx.array(routes.program_numbers)[:, None])
+            program = _take(flat, mx.array(programs.rows)) + facts.program_numeric(
+                _program_number(mx.array(programs.numbers))[:, None]
+            )
             states, _ = facts.program_sequence.run(
                 program, packed_steps(schedule.gather, schedule)
             )
             program = program + _take(states, mx.array(schedule.unpack))
             flat = mx.where(
-                mx.array(routes.program_mask)[:, None],
-                _take(program, mx.array(routes.program_positions)),
+                mx.array(programs.mask)[:, None],
+                _take(program, mx.array(programs.positions)),
                 flat,
             )
             hidden_rows = flat.reshape(*shape, hidden)
@@ -667,7 +631,7 @@ class MLXActorCritic(nn.Module):
 
     def _effects(
         self,
-        batch: Prepared,
+        batch: Prepared[np.ndarray],
         objects: mx.array,
         tokens: mx.array,
         definitions: mx.array,
@@ -697,7 +661,9 @@ class MLXActorCritic(nn.Module):
         detail = (
             _take(tokens, mx.array(routes.detail_rows))
             + effects.detail_kind(mx.array(routes.detail_kinds))
-            + effects.detail_number(mx.array(routes.detail_numbers)[:, None])
+            + effects.detail_number(
+                _program_number(mx.array(routes.detail_numbers))[:, None]
+            )
             * mx.array(routes.detail_is_number)[:, None]
         )
         table = mx.concatenate(
@@ -721,3 +687,8 @@ class MLXActorCritic(nn.Module):
             .add(_take(encoded, mx.array(routes.member_records)))
         )
         return objects + delta.reshape(b, count, hidden)
+
+
+def _program_number(value: mx.array) -> mx.array:
+    """Signed log magnitude in the framework graph, matching Torch's order."""
+    return mx.sign(value) * mx.log1p(mx.abs(value)) / 10

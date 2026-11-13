@@ -3,31 +3,36 @@
 `manabot.backends.mlx` runs a saved `ActorCritic` policy, and the damped
 update that trains it, in [MLX](https://ml-explore.github.io/mlx/) on Apple
 Silicon. It loads
-the shared checkpoint container ([backends](README.md#convert-a-pytorch-checkpoint))
+the policy files training writes ([policy checkpoints](README.md#policy-checkpoints))
 and must agree with PyTorch numerically before it is used for any timing
 ([parity check](README.md#parity-check)). Training, evaluation and the CLI
 still run the PyTorch model; nothing in the PyTorch path imports MLX.
 
-```sh
-uv run python -m manabot.backends.convert .runs/example/checkpoint.pt
-```
-
 ```python
 from manabot.backends.mlx.checkpoint import load_mlx_policy
 
-policy, obs_space = load_mlx_policy(".runs/example/checkpoint.safetensors")
+policy, obs_space = load_mlx_policy(".runs/example/self-play-raw.safetensors")
 policy.cache_programs()  # inference with fixed weights: encode the catalog once
 logits, values = policy.evaluate(policy.prepare(observation, inference=True))
 ```
 
-`observation` is the dictionary of numpy buffers `VectorEnv` already produces,
-admitted as for the PyTorch policy; `prepare` (`manabot.policy.prepare`) does
-every integer lookup (definition rows, record vocabulary, legal actions, packed
-GRU schedules, shared-effect routes) on the host, so the MLX graph holds only
-gathers, scatters and arithmetic. `inference=True` drops the object and fact
+`observation` is the dictionary of numpy buffers `VectorEnv` already produces.
+`prepare` checks it as the PyTorch policy does and builds the same `Prepared`
+batch (`manabot.policy.prepare`): every integer lookup (definition rows, record
+vocabulary, legal actions, packed GRU schedules, shared-effect routes) happens
+on the host, so the MLX graph holds only gathers, scatters and arithmetic.
+`inference=True` drops the object and fact
 columns no row uses, exactly as PyTorch CPU inference does. `evaluate` returns
 NumPy logits `[B,A]` (-1e8 off the legal support) and values `[B]`, like the
 PyTorch policy; calling `policy(batch)` returns MLX arrays, with values `[B,1]`.
+
+`load_mlx_policy` reads only the container. An older `.pt` policy raises
+`NotAContainer`, saying to
+[convert it](README.md#convert-an-older-pt-checkpoint) first:
+
+```sh
+uv run python -m manabot.backends.convert .runs/example/checkpoint.pt
+```
 
 ## Install
 
@@ -42,6 +47,14 @@ extra. It is the only package that imports MLX, and no other manabot module
 imports it, eagerly or lazily (`tests/test_package_boundaries.py` enforces this).
 
 ## What the backend covers
+
+The backend runs what the w160l8 recipe uses: a catalog world with catalog
+record ids, table attention, a masked-mean scalar critic and policy input v9.
+The container carries every configuration, so `load_mlx_policy` is where the
+rest is refused: a checkpoint that enables belief inputs, policy history,
+another critic, FiLM or input v10 raises `UnsupportedPolicy` naming every
+unsupported field, rather than running partially. Checkpoints of the `local`
+recipe use FiLM and are refused.
 
 The modules of `policy.py` mirror the PyTorch model one to one, so a parameter
 path in MLX names the same component as in the torch state dict:

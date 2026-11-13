@@ -4,6 +4,7 @@ Apple Silicon only (the optional `mlx` extra); elsewhere the module is skipped.
 Whole-policy parity on real checkpoints is `manabot.backends.parity`.
 """
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -37,6 +38,7 @@ from manabot.policy.checkpoint import (  # noqa: E402
     write_safetensors,
 )
 from manabot.policy.prepare import Tables, pack  # noqa: E402
+import managym  # noqa: E402
 
 
 def _mlx_names(torch_named: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -175,3 +177,14 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     assert "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in str(
         refused.value
     )
+
+
+def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
+    _, target, _ = _converted(tmp_path)
+    policy, space = load_mlx_policy(target)
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    obs = space.encode(env.observation_for_player(env.current_agent_index()))
+    batch = policy.prepare({key: value[None] for key, value in obs.items()})
+    with pytest.raises(ValueError, match="another policy configuration"):
+        policy(replace(batch, binding="another model"))

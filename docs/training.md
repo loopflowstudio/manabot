@@ -69,7 +69,7 @@ host with gradients preserved; no automatic operator fallback is enabled.
 Reduced precision remains CUDA-only. MPS process recovery, belief
 inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
 for this workflow. A separate [MLX backend](../manabot/backends/mlx.md) of the policy
-and the damped update reads the same checkpoints, converted to the shared container,
+and the damped update reads the same policy files
 for measurement on Apple Silicon; no recipe runs on it. The baseline coordinator reserves a CPU evaluator thread
 alongside accelerator training. Monitoring exports do not require process
 recovery; accelerator runs cannot resume a stopped learner. This support makes
@@ -250,7 +250,7 @@ policy = ImportPolicy(
     source_run={"path": "/artifacts/producer/run.json",
                 "sha256": run_sha256, "bytes": run_bytes},
     source_stage="producer",
-    checkpoint={"path": "/artifacts/producer/producer-ema.pt",
+    checkpoint={"path": "/artifacts/producer/producer-ema.safetensors",
                 "sha256": checkpoint_sha256, "bytes": checkpoint_bytes},
     weights="ema",
 )
@@ -470,8 +470,10 @@ checkpoints; experiment results are published with
 TrainingRun manifests remain readable as `StoredArtifact`
 (`manabot.infra.artifacts`), which `load_checkpoint` accepts directly, caching
 under `MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`) and rehashing
-on every hit. Storage never relaxes world, architecture or setup admission;
-load only trusted producers' Torch files.
+on every hit. Storage never relaxes world, architecture or setup admission.
+A policy file is a [safetensors container](../manabot/backends/README.md#policy-checkpoints)
+of arrays and JSON; policies saved by earlier revisions are `.pt` pickles,
+which still load, so load only trusted producers' `.pt` files.
 
 ## Numerical health
 

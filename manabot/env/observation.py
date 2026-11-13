@@ -16,21 +16,10 @@ Additional updates in this version:
 """
 
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
-
-# Many modules import the enum mirrors from here; managym.enums owns them.
-from managym.enums import (  # noqa: F401
-    ActionEnum,
-    ActionSpaceEnum,
-    EventEntityKindEnum,
-    EventTypeEnum,
-    PhaseEnum,
-    StepEnum,
-    ZoneEnum,
-)
 import numpy as np
 
 # Local imports
@@ -42,6 +31,20 @@ from manabot.env.shared_effects import (
 from manabot.infra.config import ObservationConfig, UnsupportedPolicyInput
 from manabot.infra.log import getLogger
 import managym
+
+# Many modules import the enum mirrors from here; managym.enums owns them.
+from managym.enums import (  # noqa: F401
+    ActionEnum,
+    ActionSpaceEnum,
+    EventEntityKindEnum,
+    EventTypeEnum,
+    PhaseEnum,
+    StepEnum,
+    ZoneEnum,
+)
+
+# Host observations at policy, simulation and rollout boundaries.
+type ObservationBuffers = Mapping[str, np.ndarray]
 
 # Native action tensor: family, declaration, mode/ability selectors, validity.
 ACTION_TYPE_DIM = len(ActionEnum)

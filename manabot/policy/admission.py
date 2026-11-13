@@ -7,7 +7,6 @@ turns validity into booleans or performs lookups. Padding keeps the same meaning
 in both paths: ignored where a validity column owns it, checked otherwise.
 """
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -31,9 +30,12 @@ from manabot.env.observation import (
     FACT_USED_ABILITY,
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
+    PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
     RELATION_ROWS,
     RELATION_VALID_INDEX,
+    ObservationBuffers,
+    ObservationSpace,
 )
 from manabot.env.shared_effects import (
     DETAIL_DIM,
@@ -43,6 +45,85 @@ from manabot.env.shared_effects import (
     MEMBER_DIM,
     MEMBER_ROWS,
 )
+from manabot.infra.config import ModelConfig
+from manabot.policy.prepare import Tables
+
+
+@dataclass(frozen=True)
+class Spec:
+    """Configuration and immutable vocabularies shared by admission and preparation."""
+
+    model: ModelConfig
+    space: ObservationSpace
+    tables: Tables
+    definition_count: int
+
+    @property
+    def binding(self) -> str:
+        return (
+            self.model.model_dump_json()
+            + "\n"
+            + self.space.encoder.config.model_dump_json()
+        )
+
+
+def check(obs: ObservationBuffers, spec: Spec, legal: np.ndarray) -> None:
+    """Admit raw rows before masking or trimming; legal-mask errors belong to the backend."""
+    lookup = spec.tables.definition_rows
+    size = spec.definition_count if lookup is None else len(lookup)
+    ids = [
+        obs["semantic_cards"],
+        np.stack(
+            [
+                obs[k][..., PERMANENT_DEFINITION_INDEX]
+                for k in ("agent_permanents", "opponent_permanents")
+            ],
+            1,
+        ),
+    ]
+    if lookup is not None:
+        ids.extend((obs["known_hand"][..., 0], obs["decklists"][..., 0]))
+    for values in ids:
+        definition_ids(values, size, lookup)
+    keys = (
+        "agent_player",
+        "opponent_player",
+        "agent_cards",
+        "opponent_cards",
+        "agent_permanents",
+        "opponent_permanents",
+    )
+    objects = sum(obs[k].shape[1] for k in keys)
+    validity = np.concatenate([obs[k + "_valid"] for k in keys], 1)
+    if spec.model.belief_count_buckets:
+        beliefs(obs, spec.model)
+        objects += obs["belief_card_def_ids"].shape[1] + 1
+    permanent_links(obs, objects)
+    catalog = None
+    if spec.model.catalog_records():
+        assert lookup is not None
+        catalog = Catalog(
+            lookup, spec.tables.record_name_keys, spec.tables.record_token_keys
+        )
+    facts(obs["facts"], spec.space.encoder.config.max_facts, objects, catalog)
+    shared_effects(
+        obs["effects"], obs["effect_details"], obs["effect_members"], objects, catalog
+    )
+    definition_ids(obs["relations"][..., [5, 23]], size, lookup)
+    relations(obs["relations"], spec.space.encoder.relation_dim, objects)
+    if spec.model.recent_events:
+        assert lookup is not None
+        recent_events(obs, objects, lookup)
+    if (
+        spec.model.value_aggregation != "historical_mean"
+        and not spec.model.belief_count_buckets
+        and (validity.sum(1) == 0).any()
+    ):
+        raise ValueError("value aggregation requires a valid object")
+    valid_objects = validity.shape[1]
+    if spec.model.belief_count_buckets:
+        valid_objects += obs["belief_validity"].shape[1] + 1
+    actions(obs, legal, valid_objects, spec.tables.name_definitions, lookup)
 
 
 def definition_ids(
@@ -297,7 +378,7 @@ def names(candidates: np.ndarray, definitions: np.ndarray) -> None:
             raise ValueError("invalid naming group span")
 
 
-def permanent_links(obs: Mapping[str, np.ndarray], objects: int) -> None:
+def permanent_links(obs: ObservationBuffers, objects: int) -> None:
     """Validate one-based links into the policy's full object sequence."""
     for column in PERMANENT_LINK_INDEXES:
         links = np.concatenate(
@@ -312,7 +393,7 @@ def permanent_links(obs: Mapping[str, np.ndarray], objects: int) -> None:
 
 
 def actions(
-    obs: Mapping[str, np.ndarray],
+    obs: ObservationBuffers,
     legal: np.ndarray,
     objects: int,
     name_definitions: np.ndarray,
@@ -339,3 +420,90 @@ def actions(
     focus = obs["action_focus"][batches, slots]
     if not ((focus == np.floor(focus)) & (focus >= -1) & (focus < objects)).all():
         raise ValueError("invalid action focus reference")
+
+
+def recent_events(
+    obs: ObservationBuffers, object_count: int, definition_rows: np.ndarray
+) -> None:
+    """Reject malformed public history v1 before any forward; padding is ignored."""
+    if "events" not in obs or "events_valid" not in obs:
+        raise ValueError("recent-event ActorCritic requires events and events_valid")
+    events, valid = obs["events"], obs["events_valid"]
+    if events.ndim != 3 or events.shape[-1] != 12 or valid.shape != events.shape[:2]:
+        raise ValueError("public history v1 requires [batch, events, 12]")
+    if not ((valid == 0) | (valid == 1)).all():
+        raise ValueError("event validity must be binary")
+    rows = np.where(valid.astype(bool)[..., None], events, 0)
+    if not np.isfinite(rows).all():
+        raise ValueError("public history must be finite")
+
+    def categorical(values: np.ndarray, size: int) -> None:
+        if not ((values == np.floor(values)) & (values >= 0) & (values < size)).all():
+            raise ValueError("invalid public history categorical field")
+
+    categorical(rows[..., 0], 6)
+    for start in (2, 7):
+        ids, owner, zone, focus, status = (rows[..., start + i] for i in range(5))
+        if not (
+            (ids == np.floor(ids)) & (ids >= 0) & (ids < len(definition_rows))
+        ).all():
+            raise ValueError("unadmitted historical definition")
+        if (definition_rows[ids.astype(np.int64)] < 0).any():
+            raise ValueError("unadmitted historical definition")
+        if not (
+            (focus == np.floor(focus)) & (focus >= -1) & (focus < object_count)
+        ).all():
+            raise ValueError("invalid historical context reference")
+        categorical(owner, 3)
+        categorical(zone, 8)
+        categorical(status, 3)
+
+
+def beliefs(obs: ObservationBuffers, model: ModelConfig) -> None:
+    """Admit explicit semantic belief rows, retaining their normalization contract."""
+    keys = (
+        "belief_card_def_ids",
+        "belief_owner_role_ids",
+        "belief_hidden_zone_ids",
+        "belief_count_probabilities",
+        "belief_validity",
+        "belief_globals",
+    )
+    missing = sorted(set(keys).difference(obs))
+    if missing:
+        raise ValueError(f"belief-enabled ActorCritic is missing inputs: {missing}")
+    card_ids = obs[keys[0]].astype(np.int64)
+    owner_ids = obs[keys[1]].astype(np.int64)
+    zone_ids = obs[keys[2]].astype(np.int64)
+    probabilities = obs[keys[3]].astype(np.float32)
+    validity = obs[keys[4]].astype(np.float32)
+    globals_ = obs[keys[5]].astype(np.float32)
+    if card_ids.ndim != 2:
+        raise ValueError("belief ids must have shape [batch, rows]")
+    expected_ids = card_ids.shape
+    if owner_ids.shape != expected_ids or zone_ids.shape != expected_ids:
+        raise ValueError("belief semantic ids must share shape [batch, rows]")
+    if probabilities.shape != (*expected_ids, model.belief_count_buckets):
+        raise ValueError(
+            "belief count probabilities must have shape [batch, rows, buckets]"
+        )
+    if validity.shape != expected_ids:
+        raise ValueError("belief validity must have shape [batch, rows]")
+    if globals_.shape != (expected_ids[0], 2):
+        raise ValueError("belief globals must have shape [batch, 2]")
+    if not np.isfinite(probabilities).all() or (probabilities < 0).any():
+        raise ValueError("belief probabilities must be finite and non-negative")
+    if not np.isfinite(globals_).all():
+        raise ValueError("belief globals must be finite")
+    valid_rows = validity > 0
+    if valid_rows.any() and not np.allclose(
+        probabilities.sum(axis=-1)[valid_rows], 1, atol=1e-5, rtol=0
+    ):
+        raise ValueError("valid belief rows must be normalized")
+    for ids, size, label in (
+        (card_ids, model.belief_card_vocab_size, "card definition"),
+        (owner_ids, model.belief_owner_role_vocab_size, "owner role"),
+        (zone_ids, model.belief_hidden_zone_vocab_size, "hidden zone"),
+    ):
+        if (ids < 0).any() or (ids >= size).any():
+            raise ValueError(f"belief {label} id is outside the model vocabulary")

@@ -152,77 +152,81 @@ This updated design document reflects both the current implementation and our st
 
 The policy is split by what depends on an array framework:
 
-- [`manabot/policy/`](../policy/README.md): host preparation (definition rows,
-  record vocabulary, legal actions, packed GRU schedules, shared-effect
-  routes, column compaction, bucket selection) and the checkpoint container.
-  NumPy only.
-- [`manabot/backends/torch/policy.py`](../backends/torch/policy.py):
-  `ActorCritic`, the forward over a prepared batch. Other frameworks sit
-  beside it under [`manabot/backends/`](../backends/README.md).
-- This directory: the torch model's components, admission, inference
-  preparation, architecture receipts and world binding.
+- [`manabot/policy/`](../policy/README.md): observation admission, bucket
+  trimming, host preparation (definition rows, record vocabulary, legal
+  actions, packed GRU schedules, shared-effect routes, column compaction) and
+  the checkpoint container. NumPy only.
+- [`manabot/backends/torch/`](../backends/README.md#the-torch-backend):
+  `ActorCritic` (`policy.py`) and its encoders, the forward over a prepared
+  batch. Other frameworks sit beside it under
+  [`manabot/backends/`](../backends/README.md).
+- This directory: architecture receipts ([`architecture.py`](architecture.py)),
+  the checkpoint catalog ([`catalog.py`](catalog.py)) and world binding
+  ([`world.py`](world.py)).
 
 ## Observation admission
 
-A policy forward reads only admitted observations. Admission
-([`admission.py`](admission.py)) validates a batch once, on CPU, where it
-enters a model; `forward`, `forward_distribution`, `get_action_and_value` and
-`get_value` then do no validation of their own:
+A policy forward reads only a `Prepared` batch. The policy's `prepare`
+validates a batch of NumPy observation buffers once, on the host, and builds
+every index the forward reads; `forward`, `forward_distribution`,
+`get_action_and_value` and `get_value` then do no validation and no lookups
+of their own:
 
 ```python
-from manabot.model.admission import admit_observation
+from manabot.backends.torch.arrays import on_device
 
-admitted = admit_observation(agent, obs)  # CPU tensors, one batch
-logits, value = agent(admitted)           # logits [B,A], value [B]
+prepared = agent.prepare(obs)                    # NumPy: checked, trimmed, indexed
+logits, value = agent(on_device(prepared, "cpu"))  # logits [B,A], value [B]
 ```
 
-`admit_observation` returns an `AdmittedObservation`, which keeps the tensor
-dictionary interface. It checks the observation, not the weights: shapes,
-binary validity, definition and vocabulary references, action focus and
-continuation references, permanent links, fact and record programs,
+Admission (`manabot.policy.admission.check`) reads the observation, not the
+weights: shapes, binary validity, definition and vocabulary references, action
+focus and continuation references, permanent links, fact and record programs,
 shared-effect partitions, naming spans, recent events, belief rows, the
 legal-action mask and, when the value aggregation needs one, a valid object in
 every row. Malformed input raises `ValueError` naming the check (a malformed
 action mask is `NumericalError` `invalid_action_mask`); nothing is truncated or
-repaired. Admission records whether every row has a legal action, so
+repaired. The prepared batch records whether every row has a legal action, so
 `get_action_and_value` rejects an empty row with `No valid actions available`
-without reading the batch again.
+without reading the batch again. The MLX policy runs the same checks.
 
-A plain tensor dictionary passed to a forward raises `TypeError`. An admitted
-observation belongs to the `ModelConfig` and observation configuration that
-admitted it, not to one instance: a restored, target or bootstrap copy reads
-it, and a model with another configuration raises `ValueError`. Admitted
-tensors are read-only; assembling an `AdmittedObservation` by hand is outside
-the contract.
+An observation dictionary, or a prepared batch still in NumPy, passed to a
+forward raises `TypeError`. A prepared batch belongs to the `ModelConfig` and
+observation configuration that prepared it, not to one instance: a restored,
+target or bootstrap copy reads it, and a model with another configuration
+raises `ValueError`. Its arrays are read-only; assembling a `Prepared` by hand
+is outside the contract.
 
-Host preparation (`manabot.policy.prepare`) then compacts data-dependent
-structure per batch: legal action rows, the object and fact columns in use,
-packed card programs and shared-effect CSR routes. Those reads choose the
-work; they are not validation.
+Preparation also chooses the batch's data-dependent structure: legal action
+rows, bucket sizes, the object and fact columns in use, packed card programs,
+live-token offsets and shared-effect CSR routes. Those reads choose the work;
+they are not validation, and they happen on the host so the device forward
+reads nothing back.
 
-Each observation path admits once per batch:
+Each observation path prepares once per batch:
 
-- Collection and search serving admit inside `PolicyInference.prepare` (below).
+- Collection and search serving prepare inside `PolicyInference.prepare`
+  (below).
 - Learning wraps each rollout batch in `AdmittedRollout`
-  ([`rollout.py`](../backends/torch/rollout.py)): it admits the bootstrap
+  ([`rollout.py`](../backends/torch/rollout.py)): it checks the bootstrap
   rows and then the rows an update trains, in minibatch-sized chunks; rows the
-  advantage filter drops are never admitted, and epochs re-read admitted rows
-  without checks.
-- Other callers admit CPU tensors with `admit_observation`, or use
-  `admit_on_device` from [`inference.py`](inference.py) to admit and move a
-  batch to the model's device.
+  advantage filter drops are never checked, and epochs prepare admitted rows
+  again without repeating the checks.
+- Other callers use `agent.prepare(obs)` and `on_device`, or
+  `agent.evaluate(agent.prepare(obs))` for NumPy logits and values.
 
 ## Inference preparation
 
-Ordinary seat-routed collection uses `PolicyInference` from
-[`inference.py`](inference.py) for one unchanged behavior-policy interval.
-`prepare` admits a CPU batch, transfers it to the model's device and lazily
-reuses semantic catalog embeddings. Its `PreparedObservation` is an
-`AdmittedObservation` owned by that scope; it must not be mutated or used after
-the scope closes. Normal parameter updates, tensor replacement,
-model-mode/configuration changes and gradient-enabled use are rejected. Unsafe
-mutation through `.data` aliases is outside this contract. A fresh scope follows
-every collection/update boundary.
+Ordinary seat-routed collection uses `PolicyInference`
+([`policy.py`](../backends/torch/policy.py)) for one unchanged
+behavior-policy interval. Its `prepare` takes NumPy observation buffers,
+prepares them and moves the batch to the model's device; the policy lazily
+encodes the semantic catalog once and reuses it for the interval. A batch it
+returns must not be mutated or used after the scope closes. Normal parameter
+updates, tensor replacement, model-mode/configuration changes and
+gradient-enabled use are rejected. Unsafe mutation through `.data` aliases is
+outside this contract. A fresh scope follows every collection/update
+boundary. The cached catalog is never part of the state dict or a checkpoint.
 
 ## Capacity identity and accounting
 

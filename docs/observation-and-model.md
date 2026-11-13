@@ -38,11 +38,12 @@ frozen input version never silently falls behind the rules.
 
 ## What the network does
 
-Every observation batch is admitted once, on CPU, before any forward:
-`admit_observation(agent, obs)` checks shapes, references, programs and the
-legal-action mask and returns an `AdmittedObservation`. The forward reads only
-admitted input, raises `TypeError` for a plain tensor dictionary and does no
-validation of its own
+Every observation batch is prepared once, on the host, before any forward:
+`agent.prepare(obs)` checks shapes, references, programs and the legal-action
+mask of the NumPy buffers, does every integer lookup and returns a `Prepared`
+batch, the same one every [backend](../manabot/backends/README.md) reads. The
+forward reads only a prepared batch on its device, raises `TypeError` for an
+observation dictionary and does no validation or lookups of its own
 ([observation admission](../manabot/model/agent.md#observation-admission)).
 
 1. **Embed.** Each visible object gets a typed projection. A card's rules tokens
@@ -243,10 +244,9 @@ live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
 as a reduced precision does.
 
 Packing needs one host read per forward, the batch's total number of valid
-objects, to size the packed sequence. Collection measures it on the host while
-preparing a batch, as it does for buckets, so the device forward reads nothing
-back; learning reads it once per forward. The layout adds no other
-data-dependent reads.
+objects, to size the packed sequence. The policy's `prepare` measures it on the
+host with the token offsets, as it does bucket sizes, for collection and
+learning alike, so the device forward reads nothing back.
 
 The setting resolves, serializes and reaches policies exactly as
 [bucketed shapes](#bucketed-padding) do, and the two are independent: either
@@ -383,7 +383,8 @@ tokens, including granted, copy-exception and captured continuation programs,
 changed colors and keyword-counter timestamps; members keep one-based public
 object joins, and duplicate memberships survive. No rules record is deleted or
 semantically coalesced. The layout, routing and sum/normalization tradeoff are
-in [`manabot/model/shared_effects.py`](../manabot/model/shared_effects.py) and
+in the torch backend's shared-effect encoder
+([`manabot/backends/torch/`](../manabot/backends/torch/)) and
 [shared effect inputs](../manabot/README.md#shared-effect-inputs). The transport
 is an engineering result; it establishes no learning-quality advantage.
 
@@ -607,10 +608,10 @@ is not evidence for any of them:
 | Part | Code |
 | --- | --- |
 | Network | `ActorCritic` in [`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py) |
-| Observation admission | [`manabot/model/admission.py`](../manabot/model/admission.py) |
+| Observation admission and host preparation | [`manabot/policy/admission.py`](../manabot/policy/admission.py), [`prepare.py`](../manabot/policy/prepare.py) |
 | Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |
-| Recent events | [`manabot/model/recent_events.py`](../manabot/model/recent_events.py) |
-| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), [`manabot/model/semantic_cards.py`](../manabot/model/semantic_cards.py) |
+| Recent events | the recent-event encoder in [`manabot/backends/torch/`](../manabot/backends/torch/) |
+| Card rules tokens | [`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs), the card encoder in [`manabot/backends/torch/`](../manabot/backends/torch/) |
 | Capacity and architecture receipts | [`manabot/model/agent.md`](../manabot/model/agent.md#capacity-identity-and-accounting) |

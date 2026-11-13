@@ -152,11 +152,12 @@ Allies/Lessons setup:
 
 ```sh
 uv run python -m manabot.eval.local \
-  --checkpoint .runs/small/policy.pt --opponent heuristic \
+  --checkpoint .runs/small/policy.safetensors --opponent heuristic \
   --deal-seed 101 --out .runs/local-check --seconds 300 --workers 2
 ```
 
-- `--opponent` also accepts another local `.pt`, `scripted_greedy` or `random`.
+- `--opponent` also accepts another local policy file, `scripted_greedy` or
+  `random`. Policy files are `.safetensors`, or `.pt` from an earlier revision.
 - Repeat `--deal-seed` for more blocks; `--include-mirrors` plays all eight legs;
   `--matchup` takes an `AuthoredMatchup` JSON for another admitted roster. The
   checkpoint must already admit that setup; nothing is converted.

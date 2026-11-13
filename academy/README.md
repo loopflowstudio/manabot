@@ -143,10 +143,11 @@ covers the built same-origin server, feedback, and read-only SQL.
 
 Any trained checkpoint is selectable from the Opponent menu. The table
 lists every policy checkpoint under `MANABOT_RUNS_DIR` (default `./.runs`)
-and in `ACADEMY_PLAY_CHECKPOINTS` — `.pt` files, run directories and
+and in `ACADEMY_PLAY_CHECKPOINTS` — policy files (`.safetensors`, or `.pt`
+from earlier revisions), run directories and
 Tournament files, separated by `:` — with world, model shape, training step
-and producer. manabot's `manabot.model.catalog` reads them with Torch's
-weights-only loader and checks each world binding against the running engine;
+and producer. manabot's `manabot.model.catalog` reads each file's metadata
+header (Torch's weights-only loader for a `.pt`) and checks each world binding against the running engine;
 an incompatible checkpoint stays listed, disabled, with the mismatch (for
 example `trained in w5, engine is w6`), and the server refuses it with the same
 sentence. The browser sends only a digest; the server re-hashes the bytes,
