@@ -271,7 +271,7 @@ engine a second time. Each Integration group runs one pytest worker per logical 
 (`pytest -n logical`; [TESTING.md](../TESTING.md) says what that asks of a test)
 and prints its 20 slowest tests (`--durations=20`) at the end of its test step.
 
-Integration installs the locked CPU Torch with
+Integration and Python unit install the locked CPU Torch with
 `--no-default-groups --group play-runtime` because hosted Ubuntu runners have no GPU.
 
 When a job passes 8 minutes, in order of preference:

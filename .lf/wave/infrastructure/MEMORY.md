@@ -12,8 +12,11 @@ with every ordinary job at or below 349 s. Its exact merged push,
 the live experiment/notebook fixture's training resource deadline (129 passed,
 one failed). Engine Budget passed in 685 s. The bounded fixture then passed
 Ubuntu debug/xdist in run 43345024882 at `4db5cd64b`, but its experiment job
-took 549 s, exceeding the target. Green tests and a met job budget are separate
-obligations; the fix-forward still needs cache timing and delivery evidence.
+took 549 s, exceeding the target. CPU Torch dispatch 43348710097 at
+`a1efea11b`, including main's mana-payment optimization (#504), then passed:
+ordinary max 406 s, Integration max 350 s. Green tests and a met job budget
+are separate obligations; this dispatch supplies both, but PR-event and
+successful post-merge verification of the repair remain outstanding.
 
 - Inspect setup before adding shards: `uv sync` built the engine in release,
   then `maturin develop` built it again in dev. Syncing all needed extras with
@@ -31,14 +34,16 @@ obligations; the fix-forward still needs cache timing and delivery evidence.
   locally (`610 == 16`). Four real attempts and live monitoring remain.
   The failed run does not identify the expired clock or separate collection
   time from scheduling; a larger allowance alone is no timing evidence.
-- A dependency-cache hit need not retain downloaded wheels. Run 43345024882
-  restored a pruned uv cache, then spent 181 s installing against peers'
-  17–18 s; logs showed CUDA/nvidia downloads. Integration now retains those
-  wheels with setup-uv's `prune-cache: false`, preserving its Torch build.
-  Every group restores and `model` alone saves because their extras match.
-  This repair is not yet measured: include restore and post-job save time in
-  cold and warm Ubuntu job totals before claiming improvement. Historical
-  timing also predates the merged mana-payment engine change (#504).
+- Match dependencies to the runner before retaining large caches. Run
+  43345024882 restored a pruned uv cache but downloaded about 2.8 GiB of
+  CUDA Torch/NVIDIA/Triton wheels per Integration job; one install took 181 s
+  against peers' 17–18 s. Integration now selects the existing locked CPU
+  Torch with `--no-default-groups --group play-runtime` and setup-uv defaults;
+  wheel-retention overrides were removed. All six installs in 43348710097
+  took 5–6 s with Torch `2.15.0+cpu`, no NVIDIA/Triton log entries and
+  unchanged model/evaluation pass and skip counts. This establishes CPU CI
+  coverage, not GPU admission. Python unit and Academy Integration still
+  use the default runtime, so their download variability remains relevant.
 - Parallel tests need isolated files/ports and injected time at scheduling
   boundaries. A 30-second future wait failed beside other workers; the final
   admission fixture releases the gate in its injected sleep instead. The

@@ -46,14 +46,9 @@ already guard on hardware availability; precision controls still exist on
 CPU Torch; vLLM tests use a local tokenizer and mocked HTTP. The hosted CPU
 run retained the prior model/evaluation pass and skip counts.
 
-### Delete — do not maintain
-
-Completed: removed retained-wheel cache overrides and their cold/warm protocol.
-This pass removes #506's obsolete PR-copy files, demo and post-merge notes,
-consolidating their evidence here; history remains at `e22af480b:scratch/`.
-The general QA skill no longer prescribes this fixture's one-off mutation
-experiment. No code, test or fixture deletion remains. Keep the bounded
-fixture, all selected nodes, debug assertions, watchdog and lockfile.
+Retained-wheel cache overrides and their cold/warm protocol were removed.
+Superseded #506 PR copy, demo and verification notes remain in
+`e22af480b:scratch/`; their relevant evidence is consolidated below.
 
 ## Hosted evidence (observed 2026-11-12)
 
@@ -122,8 +117,26 @@ comparison took 138.45 s. Experiment build took 70 s, tests 239 s, install 5 s.
 
 The maximum ordinary job leaves 74 s. This is dispatch evidence, not PR-event
 or post-merge proof, and does not guarantee runner timing. Python unit and
-Academy Integration still use the default CUDA runtime; the observed download
-tail of 163 s would put the merged push's 308-second Python unit job near 471 s.
+Academy Integration still use the default CUDA runtime. Adding the observed
+163-second download tail to the merged push's 308-second Python unit job
+would put it near 471 s; that is a timing-risk estimate, not an observed job.
+
+## Reconciled revision
+
+After the CPU dispatch, main's `e82a20033` release preparation was merged into
+this checkout (`38e3e5557`). It changes package/crate versions from 0.2.2 to
+0.2.3, the matching managym requirement, lockfile workspace versions and release
+documentation. It changes neither the Torch selection nor engine/training
+behavior. The workflow and repaired fixture match the measured revision;
+the version and lock changes can still affect build/cache timing, so dispatch
+43348710097 does not certify the final PR revision.
+
+GitHub inspection on 2026-11-12 confirmed main at `e82a20033`, dispatch
+43348710097 successful at `a1efea11b`, and only merged #506 for this branch.
+The CPU installation change, docs and hosted QA guidance requested in the
+iteration feedback are implemented. No further implementation mismatch or
+open product decision was found. Infrastructure memory now records the CPU
+result and removes the superseded cache-retention guidance.
 
 ## Other retained checks
 
@@ -148,25 +161,20 @@ tail of 163 s would put the merged push's 308-second Python unit job near 471 s.
 Detailed investigation and source links: `5f9a69184:scratch/ci-under-8-minutes.md`.
 Pre-consolidation evidence, QA and delivery history: `e22af480b:scratch/`.
 
-## Remaining delivery and memory reconciliation
+## Remaining delivery
 
 Publish the fixture/CPU repair in Task 38ef25, keeping #506 as delivery history.
 Generate fresh PR copy; the removed copy described #506. Retain MTG-263 scope
-and before/after evidence. Obtain PR-event timing and successful post-merge
-verification before completing the Task. No local process remains running.
+and before/after evidence. Obtain PR-event timing on the final revision and
+successful post-merge verification before completing the Task: every selected
+ordinary Ubuntu job must pass below 480 s including setup and cache overhead.
+Retain the six Integration groups' CPU install logs and job totals; Engine
+Budget remains exempt. No additional implementation is currently identified.
 
 If the resource deadline fails again, identify the expired launch/regime/stage
 clock and charged/allowed seconds in `manabot/training/execution.py::remaining/check`
 before changing an allowance. Do not add that diagnostic path speculatively.
 
-Wave memory is read-only in this step. Realign should replace its superseded
-cache-retention claim with: CPU Torch and setup-uv defaults passed dispatch
-43348710097 including #504; ordinary max 406 s; installs 5–6 s with no
-NVIDIA/Triton; PR-event and post-merge evidence remain outstanding.
-
-Compression: runtime code is already direct; no behavior changes or test reruns
-are needed. Removed duplicate/stale context and the fixture-specific QA recipe.
-
-Check: `uv run --no-sync python scripts/check_loopflow_workflows.py` — all
-nine graphs compiled and validation passed; `git diff --check` passed.
+Reconciliation reused the existing focused and hosted checks; no tests were
+rerun for these context-only corrections. Check: `git diff --check` passed;
 `lf context` reports memory and scratch below both configured limits.
