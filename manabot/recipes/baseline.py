@@ -33,7 +33,7 @@ class BaselineConfig(BaseModel):
 
 
 def settings(config: BaselineConfig) -> SelfPlay:
-    """The recipe horizon fixes its rates; a launch target only extends that horizon."""
+    """The recipe horizon fixes its rates; a later launch target runs past it at the final rates."""
     return SelfPlay(
         match=selected_match(),
         model=ModelConfig(

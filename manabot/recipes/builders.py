@@ -365,12 +365,12 @@ def elemental_self_play() -> SelfPlay:
     )
 
 
-def gray_ogre_self_play() -> SelfPlay:
+def gray_ogre_self_play(*, horizon: int) -> SelfPlay:
     """A tiny PPO self-play policy on the Gray Ogre matchup, for belief pilots."""
     return SelfPlay(
         match=gray_ogre_match(),
         model=ModelConfig(hidden_dim=16, num_attention_heads=2),
-        learning=Learning(epochs=1, minibatches=1),
+        learning=Learning(horizon=horizon, epochs=1, minibatches=1),
         streams=2,
         transitions=16,
     )

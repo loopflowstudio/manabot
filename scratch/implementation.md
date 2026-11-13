@@ -137,3 +137,22 @@ learner-setting serialization; clarified loop helper names and recipe clock
 labels. Required resume, selection and failure-capture behavior is unchanged.
 
 `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_automatic_game_capture.py::test_semantic_training_retains_rejected_command_and_offer_frame -q`: 12 passed (20.72s). Changed production files pass Ruff and compileall; `git diff --check` passes. `lf context` is within both scratch limits. No background service or provider launch was started; delivery obligations above remain.
+
+## Fixed PPO horizon — 2026-11-13
+
+PPO now reads a recipe-owned `Learning.horizon`, validated by SelfPlay,
+serialized in learner settings and named in resume refusals. Belief supplies
+its own update count; the builder requires it. Unset horizons remain absent
+from retained learning records. Removed target arguments from step/learn and
+the unusable implicit SelfPlay learning default. Docs already describe this
+contract. The parity harness now imports historical types from their original
+module in the reference archive and supplies horizon=2 only to the candidate.
+
+With `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training`:
+- `pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_pretrained.py -q`: 13 passed (24.65s), including raw/EMA first-update equality across launch targets, horizon refusal, planned stop/resume, immutable checkpoints and belief extension.
+- `python scratch/parity.py`: PPO and damped-policy raw/EMA each match all 87 tensors bitwise against main `6ce618b8a`, in policies and state.pt; same native SHA256 and counts as the earlier proof.
+- `pytest tests/training/test_builders.py::test_current_regime_files_round_trip_to_their_bytes tests/training/test_builders.py::test_checkpoint_builders_chain_stages_with_independent_settings tests/training/test_regimes.py::test_frozen_regimes_read_their_pack_selectors_as_world -q`: 3 passed (1.86s).
+Changed Python files pass Ruff format/check; git diff --check passes. No
+service, watcher, provider launch, dependency pin or publication was started.
+Release/installed-consumer and launcher/service proofs, full gate and the
+retained replay mismatch remain delivery obligations; ready for demo.

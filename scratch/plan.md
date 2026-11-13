@@ -168,18 +168,42 @@ Changed doc paths: `docs/training.md` (Elemental and belief excerpts match the
 recipe files; loop excerpt and piece table drop `updates=` from `step`/`learn`;
 "Schedules and clocks" states the fixed PPO horizon; belief extension example
 uses the real defaults, `--updates 2`) and `docs/learning.md` (PPO paragraph).
-These describe intended behavior; the code is not yet changed. The docs fix
+These describe the implemented behavior (see follow-through below). The docs fix
 three details the plan left to implement: the builder call is
 `gray_ogre_self_play(horizon=config.updates)`; a run extended past its horizon
 trains on at the final rates (what `Schedule.at` and `IterationSchedule.at`
 already do by clamping) rather than refusing; a changed horizon is refused on
 resume as a learner setting. `SelfPlay.learning` defaults to `Learning()`, so
 "refuses PPO without a horizon" makes that default unusable: implement must
-either drop the default or accept that a bare `SelfPlay(...)` refuses.
+either drop the default or accept that a bare `SelfPlay(...)` refuses. The implementation
+below drops the default.
 Second docs pass (same day): reread both files against the recipe code; the
 only edit is one sentence in `docs/training.md` saying the belief example's
 second update lies past its one-update horizon and uses the final rates. The
 changed doc paths are still `docs/training.md` and `docs/learning.md`.
-The loop docstring (`learn`: "for PPO the target matters") and questions.md's
-"PPO rates still depend on the requested update count" line still need the
-implement step's edit (questions.md line done).
+The loop docstring and questions.md now state the fixed-horizon contract.
+
+## Concept review 2 implementation — 2026-11-13
+
+Implemented `Learning.horizon` as an optional positive strict integer omitted
+when unset, preserving retained regime bytes. Live `SelfPlay` requires an
+explicit learning record and refuses PPO without its horizon. The Gray Ogre
+builder requires a horizon; belief supplies `config.updates`. `learn` and
+`step` no longer take a target. PPO progress reads the saved learning horizon,
+so target extension does not revise prior rates; schedules clamp at final
+rates past the horizon. Changed horizons refuse with saved/requested values.
+The existing docs excerpts now match implementation.
+
+Deletion addition: the target argument on `step`/`learn` and the implicit
+`SelfPlay.learning` default are removed; there is no second scheduling path.
+Focused validation and parity results are recorded in implementation.md.
+Release/pin, installed consumers, gate, recovery review and launcher/service
+proof remain as listed above. Stop at demo before shipping.
+
+## Compress after concept review 2 — 2026-11-13
+
+The horizon change was already minimal; no deletion target remains. Reworded
+the `Learning` and baseline `settings` docstrings, which said a target
+"extends that horizon", to state the contract: rates read `update / horizon`,
+clamped, so a later target runs past it at the final rates.
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_self_play_loop.py tests/training/test_pretrained.py -q`: 7 passed (6.34s).

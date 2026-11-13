@@ -28,7 +28,9 @@ class BeliefConfig(BaseModel):
 
 
 def train(config: BeliefConfig) -> None:
-    settings = gray_ogre_self_play().model_copy(update={"device": config.device})
+    settings = gray_ogre_self_play(horizon=config.updates).model_copy(
+        update={"device": config.device}
+    )
     with track(
         clocks=[Step("updates", "collection/update iterations")],
         seed=config.seed,

@@ -160,7 +160,7 @@ def test_selection_step_keeps_replayed_population_and_refuses_stale_output(
     tmp_path: Path,
 ) -> None:
 
-    settings = gray_ogre_self_play()
+    settings = gray_ogre_self_play(horizon=1)
     policy = save_checkpoint(tmp_path / "policy", new_state(settings, 197))
     population = tuple(
         SelectionGameSpec(

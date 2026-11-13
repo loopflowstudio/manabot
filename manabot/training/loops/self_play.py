@@ -125,7 +125,7 @@ class SelfPlay(BaseModel):
     deck_source: UniformDecks | None = None
     observation: ObservationConfig = ObservationConfig()
     model: ModelConfig = ModelConfig()
-    learning: Learning | DampedPolicyLearning = Learning()
+    learning: Learning | DampedPolicyLearning
     behavior: Literal["current-self", "ema-self", "random"] = "current-self"
     streams: int = Field(default=4, ge=2)
     transitions: int = Field(default=256, ge=1)
@@ -150,6 +150,8 @@ class SelfPlay(BaseModel):
 
     @model_validator(mode="after")
     def valid_settings(self) -> "SelfPlay":
+        if isinstance(self.learning, Learning) and self.learning.horizon is None:
+            raise ValueError("PPO self-play requires a learning horizon")
         if self.world != managym.WORLD_VERSION:
             raise ValueError("self-play world differs from native runtime")
         if (self.match is None) == (self.deck_source is None):
@@ -534,13 +536,13 @@ def save_checkpoint(directory: Path, state: LoopState) -> Path:
 
 
 def learn(
-    state: LoopState, batch: RolloutBatch, rng: np.random.Generator, *, updates: int
+    state: LoopState, batch: RolloutBatch, rng: np.random.Generator
 ) -> UpdateDiagnostics:
     """Learn from one batch in place: the update its learning record selects, then EMA.
 
     The update made is `state.update + 1`. Damped-policy schedules read that
-    absolute iteration; PPO schedules read the fraction `state.update /
-    updates`, so for PPO the target matters.
+    absolute iteration; PPO schedules read `state.update / learning.horizon`.
+    Both keep the recipe horizon when a launch extends its target.
     """
     settings = state.settings
     if isinstance(settings.learning, DampedPolicyLearning):
@@ -553,12 +555,13 @@ def learn(
             bootstrap_agent=behavior(state),
         )
     else:
+        assert settings.learning.horizon is not None
         metrics = update_iteration(
             torch_backend,
             state.learner,
             batch,
             settings.learning,
-            state.update / updates,
+            state.update / settings.learning.horizon,
             rng,
             iteration=state.update + 1,
             bootstrap_agent=behavior(state),
@@ -594,7 +597,6 @@ def step(
     collector: Collector,
     rng: np.random.Generator,
     *,
-    updates: int,
     base: Counts,
     out: Path | None = None,
 ) -> tuple[LoopState, dict[str, object]]:
@@ -606,7 +608,7 @@ def step(
         batch = collect(collector, behavior(state), state.settings.transitions)
         synchronize(device)
         collected = time.perf_counter()
-        metrics = learn(state, batch, rng, updates=updates)
+        metrics = learn(state, batch, rng)
         synchronize(device)
     except NumericalError as error:
         if out is not None:
@@ -753,9 +755,7 @@ def self_play(
                     save_state(out / "state.pt", state)
                     record_checkpoint(out, state, run)
                 while state.update < updates and not (run and run.stopping()):
-                    state, row = step(
-                        state, collector, rng, updates=updates, base=base, out=out
-                    )
+                    state, row = step(state, collector, rng, base=base, out=out)
                     if run:
                         run.log(row, updates=state.update)
                         if settings.behavior != "random":

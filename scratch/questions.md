@@ -33,8 +33,8 @@ wanted remains a product question; the old monitor worker is deleted.
   so a second default smoke actually trains. Same out resumes deliberately.
 - Planned stops exit 75, matching Etude. Target extension uses run.until and
   does not mutate recipe config. Damped and PPO rates both read a horizon
-  fixed in the recipe's learning settings (PPO: concept review 2, below; docs
-  written, code pending).
+  fixed in the recipe's learning settings (PPO: concept review 2, below;
+  implemented and validated).
 - Device, workers and threads may change on resume. Other learner settings
   refuse. RNG/native streams restart at the saved update; Adam/EMA/counts resume.
 
@@ -82,6 +82,6 @@ the CLI should accept any field of a recipe's Pydantic config.
 
 Reversible, written into docs/training.md without asking: a PPO run extended
 past its `Learning.horizon` trains on at the final rates (the clamp both
-schedules already have); it is not refused. Open for implement: `SelfPlay`'s
-`learning` field defaults to `Learning()`, which a required horizon makes
-unusable as a default.
+schedules already have); it is not refused. Implemented choice: `SelfPlay.learning` is required, avoiding an unusable
+implicit PPO default. `gray_ogre_self_play` requires an explicit horizon,
+provided by the belief recipe's own update count.

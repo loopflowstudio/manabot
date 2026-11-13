@@ -12,7 +12,7 @@ from manabot.training.loops.self_play import new_state, self_play
 def test_pretrained_weights_start_with_fresh_optimizer_and_counts(
     tmp_path: Path,
 ) -> None:
-    settings = gray_ogre_self_play()
+    settings = gray_ogre_self_play(horizon=1)
     path = self_play(settings, tmp_path / "parent", seed=197, updates=1)
     state = new_state(settings.model_copy(update={"pretrained": path}), 198)
     saved = torch.load(path, weights_only=False)["model_state_dict"]

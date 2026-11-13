@@ -24,6 +24,15 @@ class Schedule(Strict):
 
 
 class Learning(Strict):
+    """PPO settings. Schedules read `update / horizon`, clamped at 1.
+
+    Live self-play requires the horizon, so extending a run's target leaves
+    earlier rates unchanged. Retained regime records omit it and keep their bytes.
+    """
+
+    horizon: int | None = Field(
+        default=None, ge=1, strict=True, exclude_if=lambda value: value is None
+    )
     gradient: Literal["ppo"] = "ppo"
     gamma: float = Field(default=1, ge=0, le=1)
     policy_lambda: float = Field(default=0.95, ge=0, le=1)

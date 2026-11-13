@@ -22,10 +22,16 @@ def train(root: Path, out: Path, method: str, reference: bool) -> None:
     sys.path.insert(0, str(root))
     from manabot.infra.config import ModelConfig
     from manabot.recipes.builders import gray_ogre_match
-    from manabot.training.learning import DampedPolicyLearning, Learning
+
+    if reference:
+        from manabot.training.regime import DampedPolicyLearning, Learning
+    else:
+        from manabot.training.learning import DampedPolicyLearning, Learning
 
     learning = (
-        Learning(epochs=1, minibatches=1, ema=0.9)
+        Learning(
+            epochs=1, minibatches=1, ema=0.9, **({} if reference else {"horizon": 2})
+        )
         if method == "ppo"
         else DampedPolicyLearning(gradient="damped_policy")
     )
