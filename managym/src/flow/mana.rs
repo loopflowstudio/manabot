@@ -14,6 +14,8 @@
 // player's sources across the questions of a `PaymentScan`. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
+use std::num::NonZeroUsize;
+
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
@@ -87,6 +89,7 @@ struct SourceReservation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "benchmark", derive(serde::Serialize))]
 enum PaymentStep {
     Fixed(PermanentId),
     Activate(PermanentId, usize),
@@ -429,16 +432,23 @@ impl PaymentModel {
         {
             return 0;
         }
-        // No counted tap cost leaves this bound open (usize::MAX) for the
-        // finite-resource limits below.
-        let mut uses = self
-            .tap_candidates(resources, &ability.tap_candidates)
-            .count()
-            .checked_div(ability.tap_count)
-            .unwrap_or(usize::MAX);
-        if ability.tap_source || ability.sacrifice_source || ability.limited {
-            uses = uses.min(1);
-        }
+        // A tapped, sacrificed or limited source activates at most once.
+        let cap = if ability.tap_source || ability.sacrifice_source || ability.limited {
+            1
+        } else {
+            usize::MAX
+        };
+        // Only a counted tap cost reads the board, and only as far as `cap`
+        // activations need: a repeatable cost counts every candidate for its
+        // optimistic production bound.
+        let uses = if let Some(tap_count) = NonZeroUsize::new(ability.tap_count) {
+            self.tap_candidates(resources, &ability.tap_candidates)
+                .take(cap.saturating_mul(tap_count.get()))
+                .count()
+                / tap_count.get()
+        } else {
+            cap
+        };
         assert_ne!(
             uses,
             usize::MAX,
@@ -914,7 +924,7 @@ impl PaymentModel {
         crate::benchmark_payments::begin_plan(self.sources.len());
         let path = self.search_after_tap(pool, obligations, permanent);
         #[cfg(feature = "benchmark")]
-        crate::benchmark_payments::end_plan();
+        crate::benchmark_payments::end_plan(&path);
         path
     }
 
@@ -973,7 +983,7 @@ impl PaymentModel {
             None => self.search(pool, obligations, policy),
         };
         #[cfg(feature = "benchmark")]
-        crate::benchmark_payments::end_plan();
+        crate::benchmark_payments::end_plan(&path);
         path
     }
 
