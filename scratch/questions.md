@@ -94,28 +94,10 @@ targets. Original uncommitted notes were copied to
   backend selection. sim/eval forward, sampling and checkpoint consumers move
   here. Selection reporting uses the existing shared NumPy helpers.
 
-- **L4 hourly quote (2026-11-13).** Shared `l4` refuses the current $0.69/hour
-  quote under its $0.60 ceiling. Use a Task-specific one-machine template at
-  $0.75/hour, preserving the $3 equivalence/$10 speed cohort caps and $25 total.
-  Leave the shared rental configuration unchanged.
-
-- **Card when L4 is out of stock (kickoff, 2026-11-13 12:20 UTC).** The brief
-  names L4; RunPod and Vast had none and RunPod's list omitted it. If L4 is
-  not rentable at launch, equivalence, speed and optimize run on one RunPod
-  A40 (`mtg333-a40`, $0.59/hour quoted, same ceiling and cohort caps). Base
-  and head run on the same machine, so the comparison holds; MTG-325's L4
-  figures become a reference. Rerunning on L4 later is one capped launch.
-
-- **Upstream engine change before the CUDA launch (kickoff, 2026-11-13 12:27
-  UTC).** `105e7e2aa` changes seeded games and adds pooled-mana program rows.
-  Merge it first and take the base arm from `105e7e2aa`'s `manabot/` rather
-  than `ef28f3a58`, so both arms share one engine and one observation
-  encoder; the oracle gains a synthetic pooled-mana case. The rented runs are
-  not repeated for later engine-only merges.
-
-- **Retry, 2026-11-13.** L4 became rentable at 16:00 UTC under the existing
-  Task ceiling, but disappeared at launch quote; use the already planned A40
-  fallback. No change to cohort or total spend caps.
+- **Card (2026-11-13).** Resolved by comments 73b0776e and 688982cb, quoted in
+  the plan's "What people said": any rentable CUDA card, with both arms on one
+  card in one rental. The earlier L4/A40/$0.75-template notes are at
+  `405ebb85f:scratch/questions.md`.
 
 - **Sync, 2026-11-13.** Retain main’s MTG-313 QA report and source facts.
   Combine its local supervised witness (SGD 0.01, no greedy-convergence

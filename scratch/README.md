@@ -3,8 +3,9 @@
 - `mtg333-plan.md`: slices 1–6b implemented; `105e7e2aa` merged. Fresh CPU
   oracle: 3,410 tensors and five update cases exact. A6000 CUDA outputs exact,
   gradients ≤3.73e-9 but above the repeat floor. Speed/optimization remain
-  incomplete: the queued rental is stuck until its 19:15:52 UTC deadline; see
-  the plan's "Next actions".
+  incomplete. Per the steers, speed launches now on any CUDA card, under a new
+  template name. Main's #513 still needs a merge that ports `torch/capture.py`
+  to `Prepared`. See the plan's "Next actions".
 - `questions.md`: reversible assumptions. MTG-324's `plan.md`, `qa.html` and
   questions section arrived with main's #510 merge and were removed here; they
   remain at `f4e1822fa`.

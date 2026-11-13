@@ -5,7 +5,9 @@ receipt below: `105e7e2aa` (MTG-297 mana spending), merged as `9db3f1373`.
 `f4e1822fa` (#510, training precision: `manabot/training/{execution,regime}.py`,
 no policy or engine file) is merged at `070da04ed`; `origin/main` had nothing
 further at 2026-11-13 realign. That merge changes no `manabot/` policy code, so
-no capture is repeated for it.
+no capture is repeated for it. `a289fe066` (#513, MLX half precision and shared
+Torch captures, 2026-11-13 18:03 UTC) is on main and **not merged here**; see
+"Upstream #513".
 One PR. Earlier full plan with every receipt: `1f634d89b:scratch/mtg333-plan.md`;
 MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
@@ -16,7 +18,7 @@ bookkeeping on device tensors read from a tensor dictionary, while MLX read
 `manabot.policy.prepare.Prepared`. Two input representations, two admission
 orchestrations, and `save_checkpoint` wrote a format only torch reads.
 
-## What people said (Task thread; no new comments at 2026-11-13 12:19 UTC)
+## What people said (Task thread, read 2026-11-13 18:05 UTC)
 
 - Task brief, outcome 5, Jack Heart 2026-11-12: "if it is slower, and frankly
   even if it isnt. go ahead and do an /optimize path at the end of the second
@@ -36,6 +38,21 @@ orchestrations, and `save_checkpoint` wrote a format only torch reads.
   np.ndarray] get an alias?", then "thats fine" to: `ObservationBuffers` in
   `manabot.env.observation`, `ParameterArrays` in `manabot.policy.checkpoint`,
   Python 3.12 `type` statements, other uses stay plain, no behaviour change.
+- Comment 73b0776e (2026-11-13), relayed for Jack Heart: "can we widen our gpu
+  serach". Any CUDA card RunPod can rent now is acceptable for speed and the
+  optimize pass if base and head (ABAB) run on the same card in one rental; try
+  by price L4, A5000, A6000, RTX 4090, L40S, A40, A100, H100, secure and
+  community cloud, any region. Record the card as a dated line; MTG-325's L4
+  numbers are a reference only. Keep the USD 10 speed cap (USD 25 total). "If
+  the stuck run 4b091160edbf still holds the one-machine template slot, use a
+  separate template/machine name rather than waiting for its 19:15:51Z
+  deadline, but never leave two rentals running for this Task."
+- Comment 688982cb (2026-11-13), same relay: at 18:05Z RunPod A6000 $0.69 and
+  A40 $0.59 rentable, RunPod L4 none, Vast RTX 5090 $0.83 ("a new on-demand at
+  <=$1.00 is fine"), Vast 3090 none. "Earlier RunPod A40/A6000 failures were
+  HTTP 400 at pod create, not stock: read the 400 body (region/volume/image/cloud
+  type) before treating it as unavailability, and try Vast in parallel rather
+  than only RunPod. Still one rental at a time for this Task."
 
 ## Demo
 
@@ -163,13 +180,15 @@ admission's private `_key`/`_word` and fact-kind tuples (one owner:
 
 ### Card
 
-The brief names L4. L4 was not rentable at any launch attempt (probes
-2026-11-13 12:19 and 16:00–16:10 UTC; quotes $0.69/hour refused for stock);
-A40 creation failed HTTP 400; the equivalence ran on **RTX A6000**
-(`mtg333-a6000`, $0.69/hour, ceiling $0.75, same image/storage). Base and
-head run on one machine, so the card does not change the question; it is a
-dated line in the PR body and MTG-325's L4 numbers stay a reference. Speed
-and the optimize pass use the same card type.
+Equivalence ran on RTX A6000 (`mtg333-a6000`) after L4 refusals and an A40
+HTTP 400. Speed and the optimize pass take the first card in the steer's order
+that rents, on a new Task template (for example `mtg333-cuda`) with a ceiling
+covering that card, since `mtg333-a6000` may still be held by 4b091160edbf.
+Vast (RTX 5090 at ≤$1.00/hour on-demand) is an equal option; on an HTTP 400,
+read the provider body before calling it stock. The earlier 400s'
+bodies were not recorded.
+The optimize pass's before/after uses that same card type. One Task rental at
+a time.
 
 ### Mechanics
 
@@ -354,13 +373,41 @@ gives the deadline **2026-11-13T19:15:51.924571Z**. An earlier settlement
 needs an Etude cancellation fix, outside this Task. Never edit the launcher
 database or clock, and never launch over the stale request.
 
+18:05 UTC check: `etude status 4b091160edbf` → still `renting, ~$1.08`
+(launcher accrual; no pod exists for it), `last loop: never`. The only
+RunPod pod is `etude-e0f0acfca5a5`, i.e. MTG-324's `mtg324-l4-ab-e0f0acfca5a5`
+in `~/.etude` ($0.69/hour, another Session waiting on it): not this Task's,
+left alone.
+
+### Upstream #513 (`a289fe066`, not merged)
+
+Trial `git merge-tree HEAD origin/main` conflicts in `manabot/policy/{prepare,protocol}.py`,
+`manabot/policy/README.md`, `manabot/backends/{parity.py,mlx/checkpoint.py,mlx/learner.py,mlx/policy.py}`,
+`tests/model/test_mlx_backend.py` and modify/delete of `scratch/questions.md`.
+Breakage beyond conflicts: new `manabot/backends/torch/capture.py` (and
+`tests/model/test_backend_capture.py`) imports the deleted
+`manabot.model.admission.AdmittedObservation` and
+`manabot.model.inference.PreparedObservation` and hooks
+`ActorCritic.forward(AdmittedObservation)`; it must move to `Prepared`. The new
+`test_half_precision_head_keeps_finite_public_logits` calls
+`admit_observation`; port it to `policy.prepare`. `Prepared` gains
+`ownership` [N] (bucket-trimmed coordinates), used by MLX; torch's `.float()` on
+`policy_head` scores is a no-op at float32, so the CPU oracle against the
+`105e7e2aa` base should stay exact. This needs a recapture to confirm.
+
 ### Next actions
 
-1. After 19:15:52 UTC: credential-injected `etude status 4b091160edbf` under
-   `ETUDE_HOME=/tmp/mtg333/launcher`; terminate the recorded machine if still
-   listed; confirm a terminal status and `runpodctl pod list` → `[]`.
-2. Commit a launch source with regenerated patches (`manabot/` changed after
-   `c150d5f25`; CPU oracle exact at each change) and queue the combined job
-   on the A6000 template when admission works.
-3. Slice 8 from its speed/profile output; then gate, including review of the
-   repeat-floor finding, the broader suites, Python 3.12 and the wheel smoke.
+1. Launch speed/profile now, without waiting for 19:15:52 UTC: commit a launch
+   source with patches regenerated against `105e7e2aa` (the `manabot/` code
+   changed after `c150d5f25`), on a new Task template per the steer, cohort
+   `mtg333-speed`, `--max-usd 10`. Before launching, confirm the provider pod
+   list has no Task pod. Later, `etude terminate` the
+   `4b091160edbf` machine once Etude settles it, then confirm `runpodctl pod list`
+   shows no Task pod. The speed question predates #513, so the launch does
+   not wait for that merge.
+2. While it runs, merge #513 (above), port `torch/capture.py` and its tests to
+   `Prepared`, then rerun the CPU oracle and update comparison against the
+   `105e7e2aa` base, and run the parity CLI.
+3. Slice 8 runs from the speed/profile output on the merged code, with the
+   same card. Then gate: review the repeat-floor finding and run the broader
+   suites, Python 3.12 and the wheel smoke.
