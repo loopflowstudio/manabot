@@ -137,3 +137,11 @@ which contains its executor and original builder. Its report/evaluation readers
 remain. This follows the existing frozen-workflow cutover rather than adapting
 the scored experiment to a different loop. Branch scratch plans stay the active
 context; MTG-324's scratch history remains on the pinned main commit.
+
+## Token-card main sync — 2026-11-13
+
+Keep this Task's review notes as the working context. Main's token-card naming,
+Scryfall facts and fixture assumptions remain at
+`22ed4a733484d27db2fd51274d1b4e23245a6741:scratch/questions.md`.
+The incoming token-card implementation is preserved without changing the
+execution cutover or its outstanding delivery obligations.

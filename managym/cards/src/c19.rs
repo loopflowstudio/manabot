@@ -35,10 +35,13 @@ fn dockside_extortionist() -> CardDefinition {
                 },
                 effects: vec![Effect::create_tokens(
                     "token.treasure",
-                    EffectValue::Objects(Box::new(ObjectSelector::each(
-                        Scope::OpponentsControl,
-                        artifacts_and_enchantments,
-                    ))),
+                    EffectValue::Objects {
+                        of: Box::new(ObjectSelector::each(
+                            Scope::OpponentsControl,
+                            artifacts_and_enchantments,
+                        )),
+                        predicate: None,
+                    },
                 )],
             }],
             text_box: text_box.into(),
