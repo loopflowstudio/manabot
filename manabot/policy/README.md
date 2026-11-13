@@ -10,7 +10,9 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
   backends validate raw rows before converting validity masks or indexing.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
-  GRU schedules, shared-effect routes and inference column compaction. A
+  GRU schedules, shared-effect routes and inference column compaction. Object
+  joins and ownership follow each admitted batch's actual axes, including
+  bucket-trimmed inputs whose references were remapped by the caller. A
   backend's graph then holds only gathers, scatters and arithmetic.
   `reference_distribution` is the magnet a reverse KL pulls toward, `[B,A]`
   float32 from the legal-action buffers.

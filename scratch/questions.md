@@ -66,3 +66,11 @@ is recoverable from target `22ed4a733484d27db2fd51274d1b4e23245a6741`.
 Keep incoming source facts above as historical context. Combine the runtime
 object rename with main's explicit mana-spending fixtures, receipts and
 triggered production. Foretell completion retains checked `CardId`.
+
+## Scratch deletion during sync (2026-11-13)
+
+Pinned main `1d7b5fde9ef411b6d52cb286c74f94ed776b231f` deletes
+`scratch/qa.html` and `scratch/questions.md` as part of its completed backend
+work. Retain this branch's versions: they hold MTG-320's current QA evidence
+and scoped decisions. This reversible resolution follows the earlier scratch
+preservation choice; incoming backend code remains as merged.
