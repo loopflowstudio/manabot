@@ -84,6 +84,9 @@ device; without it a recipe uses CUDA when available and CPU otherwise.
 `manabot.recipes`, and each experiment module's recipe functions as
 `<experiment>` for modules exposing `train(config)`. An explicitly named
 `<experiment>:<function>` also accepts a function with one typed Pydantic config.
+Its run records under the experiment module's name, with a default output
+directory of `.runs/<experiment>-<function>-<seed>` so different functions keep
+separate runs.
 Frozen zero-argument regime builders are data readers, not executable recipes.
 
 CPU is the default and recommended device on Apple Silicon. On a quiet Apple

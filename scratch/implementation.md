@@ -200,3 +200,8 @@ Compress: guide and comment wording only; same override,
 `pytest tests/training/test_recipe_etude.py tests/training/test_self_play_loop.py tests/sim/test_conditional_search.py::test_import_does_not_reach_training_only_dependencies -q`: 17 passed (23.07s).
 Ruff check/format and `git diff --check` pass. No provider launch, dependency pin, installed-consumer proof or
 background service was started. Remaining delivery obligations are unchanged.
+
+## Concept review 10 CLI naming — 2026-11-13
+
+`uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_cli_function_recipes_track_under_the_module_in_distinct_directories -q`: failed before the fix with EtudeError unsafe_run_or_experiment_name; passed after it (0.70s). Two explicit functions record finished runs under the module name in separate default directories. Ruff and git diff --check pass. No training, provider launch or background service ran. Installed-wheel smoke remains gated on SDK release/pin; the other delivery obligations remain.
+Compress: nothing to reduce in this one-line fix, its test or the guide sentence; no edits, no rerun.

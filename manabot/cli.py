@@ -183,7 +183,7 @@ def train_command(
     previous = {key: os.environ.get(key) for key in environment}
     os.environ.update(environment)
     try:
-        with local_launch(out=directory, experiment=recipe):
+        with local_launch(out=directory, experiment=recipe.partition(":")[0]):
             recipe_train(config)
     except Stopped as error:
         typer.echo(str(error), err=True)

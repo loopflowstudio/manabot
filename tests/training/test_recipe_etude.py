@@ -45,6 +45,44 @@ def test_cli_lists_recipes_and_refuses_saved_execution() -> None:
     assert "f4e1822faf" in retired.output
 
 
+def test_cli_function_recipes_track_under_the_module_in_distinct_directories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Config(BaseModel):
+        seed: int
+        device: str
+
+    def train(config: Config) -> None:
+        with track(
+            clocks=[Step("updates", "completed updates")], seed=config.seed
+        ) as run:
+            run.log({"seed": config.seed}, updates=1)
+
+    module = ModuleType("experiments.cli_tracking_fixture")
+    module.train = train
+    module.alternate = train
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    for function in ("train", "alternate"):
+        result = runner.invoke(
+            app,
+            [
+                "train",
+                "--recipe",
+                f"cli_tracking_fixture:{function}",
+                "--device",
+                "cpu",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        name = f"cli_tracking_fixture-{function}-197"
+        data = read(tmp_path / ".runs" / name / "etude", "cli_tracking_fixture", name)
+        assert data.file is not None
+        assert data.reached["updates"] == 1
+        assert data.state is not None and data.state.state == "finished"
+
+
 def test_local_cli_stop_resume_and_target_only_continuation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

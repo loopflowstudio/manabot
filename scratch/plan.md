@@ -287,34 +287,16 @@ Validation for this pass is in implementation.md. SDK release/pin, installed
 consumers, actual launcher/service proofs, recovery review and retained replay
 mismatch remain later delivery obligations; open choices are unchanged.
 
-## Concept review 10: next implement direction — 2026-11-13
+## Concept review 10: implemented — 2026-11-13
 
-Proposal drawn from the design, not a statement anyone made. Walking local
-train/stop/resume/extend, `--list`, the nightly call and the belief rerun found
-them agreeing with the guides, with one path that cannot run:
+The CLI passes the module name to local_launch for module:function recipes;
+function-specific default output directories remain distinct. The training
+guide describes both names. The regression exercises two function selections
+through the CLI and reads their real Etude runs under the module experiment.
+It reproduced unsafe_run_or_experiment_name before the fix, then passed.
+Validation is in implementation.md. No learner behavior changed.
 
-- `manabot train --recipe <experiment>:<function>` (docs/training.md, "Run
-  training") passes the whole `module:function` string to
-  `local_launch(experiment=recipe)`. Etude refuses the colon before training.
-  Probe with the EXP-56 source override, the same call the CLI makes:
-  `local_launch(out=..., experiment="batched_baseline:train")` then `track(...)`
-  raised `EtudeError: unsafe_run_or_experiment_name` from `run_directory`.
-  No test invokes a colon recipe through the CLI; `--list` names only modules,
-  and all five listed names resolve.
-- Direction: the run belongs to the experiment file, as the guide already says
-  of launches ("Runs track under the experiment file's stem, so that file's
-  `eval(state)` and `report()` find them"). Pass the module name
-  (`recipe.partition(":")[0]`) as the experiment; keep the default out
-  directory `.runs/<module>-<function>-<seed>` so two functions of one file do
-  not share a run. Add one CLI test that runs an `<experiment>:<function>`
-  recipe and reads the run back under the module's experiment. Say in the
-  guide's sentence on `<experiment>:<function>` that the run records under
-  the experiment file's name.
-
-Checked and left alone: after a finished belief run is run again,
-`run.latest_checkpoint()` is the sampler's record, not the policy's; both sit
-at the same coordinate, so the sampler is recorded where it was. A finished
-belief run's `TrainingRun.final` is the sampler (its last checkpoint); no
-`eval(state)` reads a belief run. Open choices (questions.md: CLI
-recipe-config fields, local follower) and the delivery obligations are
-unchanged.
+The original counterexample and direction are retained at
+`751deeb2fd0f6a2177217cbcefed803d05a2eec1:scratch/plan.md`. Open CLI-config/local-follower choices and SDK release/pin,
+installed-consumer, launcher/service, recovery review and retained replay
+obligations remain unchanged.
