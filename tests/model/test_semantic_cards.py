@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from tests.semantic.test_learn_contract import learn_root  # noqa: F401

@@ -1,24 +1,26 @@
 """Local numerical health, independent of tracker availability and RNG.
 
 Batch measurements cover every collected row (`batch_health`). An
-`OptimizerHealth` is the player's `StepRecorder` (`manabot.rl.step`): passed
+`OptimizerHealth` is the player's `StepRecorder` (`manabot.backends.torch.learner`): passed
 to `gradient_step`, it counts steps and samples gradient and parameter detail,
 including the critic readout's share, at iteration 1 and every 25th iteration.
 Safety checks run on every step, observed or not; absent samples remain absent.
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import numpy as np
+from numpy.typing import NDArray
 import torch
 from torch import Tensor, nn
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.rl import float64_operand
 from manabot.infra.profiler import Profiler
-from manabot.rl.numerics import NumericalError, float64_operand
-from manabot.rl.step import check_objective
 from manabot.training.rollout.actions import PackedActions
+from manabot.training.updates.backend import Backend
 
 HEALTH_INTERVAL = 25
 # ActorCritic parameter prefixes that only the critic output reads, in every
@@ -73,14 +75,15 @@ class NumericalHealth(TypedDict, total=False):
     clip_fraction: float
 
 
-@torch.no_grad()
 def batch_health(
     action_data: PackedActions,
-    advantages: Tensor,
-    selected: Tensor,
+    advantages: NDArray[np.floating],
+    selected: NDArray[np.bool_],
     *,
     actor_only: bool,
 ) -> NumericalHealth:
+    """Measurements over every collected row; `advantages` and `selected` are
+    host rows of any one shape."""
     logs, probabilities = action_data.log_probabilities, action_data.probabilities
     starts = action_data.offsets[:-1]
     gaps = np.maximum.reduceat(logs, starts) - np.minimum.reduceat(logs, starts)
@@ -92,7 +95,7 @@ def batch_health(
         forced_rows=int((np.diff(action_data.offsets) == 1).sum()),
         zero_advantage_rows=int((advantages == 0).sum()),
         actor_rows=int(selected.sum()),
-        critic_rows=selected.numel() if actor_only else int(selected.sum()),
+        critic_rows=selected.size if actor_only else int(selected.sum()),
         empty_actor_batch=int(not selected.any()),
         optimizer_steps=0,
         skipped_steps=0,
@@ -110,6 +113,10 @@ class OptimizerHealth:
 
     `check` rejects a detached or nonfinite objective; it waits for the loss on
     the device, so a caller timing its forward pass ends that timer there.
+    `backend` is the module whose learner steps (`manabot.backends.torch` when
+    omitted): its `learner.check_objective` and `rl.NumericalError` are the
+    check and the refusal counted. The gradient and parameter samples read
+    torch modules; a backend whose step takes none leaves them absent.
     With a profiler, `gradient_step` times backward and the optimizer step
     separately; each ends at a finite check that already waits for the device,
     so timing adds no synchronization.
@@ -122,8 +129,12 @@ class OptimizerHealth:
         health: NumericalHealth,
         iteration: int,
         profiler: Profiler | None = None,
+        *,
+        backend: Backend = torch_backend,
     ) -> None:
         self.health = health
+        self._check_objective: Callable[[Any], None] = backend.learner.check_objective
+        self._refusal: type[Exception] = backend.rl.NumericalError
         self.measure = iteration == 1 or iteration % HEALTH_INTERVAL == 0
         self.profiler = profiler or Profiler(enabled=False)
         self._critic_norms = None
@@ -131,18 +142,18 @@ class OptimizerHealth:
     def track(self, section: str) -> AbstractContextManager[object]:
         return self.profiler.track(section)
 
-    def check(self, loss: Tensor) -> None:
+    def check(self, loss: Any) -> None:
         with self.rejecting():
-            check_objective(loss)
+            self._check_objective(loss)
 
     @contextmanager
     def rejecting(self) -> Iterator[None]:
         """Count a NumericalError as a rejected step and attach the record."""
         try:
             yield
-        except NumericalError as error:
+        except self._refusal as error:
             self.health["rejected_steps"] += 1
-            error.health = dict(self.health)
+            error.health = dict(self.health)  # type: ignore[attr-defined]
             raise
 
     def sampling(self) -> bool:
@@ -221,36 +232,41 @@ def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
 
 
 @contextmanager
-def failure_tensors(tensors: Callable[[], dict[str, Tensor]]) -> Iterator[None]:
-    """Attach `tensors()` to a NumericalError raised inside, then re-raise it.
+def failure_tensors(
+    tensors: Callable[[], Mapping[str, Any]],
+    refusal: type[Exception],
+) -> Iterator[None]:
+    """Attach `tensors()` to a `refusal` (the backend's `rl.NumericalError`)
+    raised inside, then re-raise it.
 
     The callable runs only on failure, so a healthy step builds no evidence.
     """
     try:
         yield
-    except NumericalError as error:
-        error.tensors.update(tensors())
+    except refusal as error:
+        error.tensors.update(tensors())  # type: ignore[attr-defined]
         raise
 
 
 def minibatch_tensors(
     *,
-    logits: Tensor,
-    value_logits: Tensor,
-    valid: Tensor,
-    actions: Tensor,
-    behavior_logs: Tensor,
-    reference: Tensor,
-    advantages: Tensor,
-    value_targets: Tensor,
-    actor_selected: Tensor,
-    indexes: Tensor,
-    obs: dict[str, Tensor],
-) -> dict[str, Tensor]:
-    """The evidence a rejected update step retains: its minibatch and outputs."""
+    logits: Any,
+    value_logits: Any,
+    valid: Any,
+    actions: Any,
+    behavior_logs: Any,
+    reference: Any,
+    advantages: Any,
+    value_targets: Any,
+    actor_selected: Any,
+    indexes: Any,
+    obs: Mapping[str, Any],
+) -> dict[str, Any]:
+    """The evidence a rejected update step retains: its minibatch and outputs,
+    as the backend's arrays. `logits` and `value_logits` arrive as constants."""
     return {
-        "logits": logits.detach(),
-        "value_logits": value_logits.detach(),
+        "logits": logits,
+        "value_logits": value_logits,
         "valid": valid,
         "actions": actions,
         "behavior_logs": behavior_logs,

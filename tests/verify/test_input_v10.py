@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     TURN_STATE_DIM,
@@ -26,7 +27,6 @@ from manabot.infra.config import (
     RewardConfig,
     UnsupportedPolicyInput,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.verify.text_observation import priority_root
 import managym
 

@@ -49,19 +49,18 @@ import types
 from typing import Literal, ParamSpec, Sequence, TypedDict, TypeVar, cast
 from unittest.mock import patch
 
-from managym.decision import Observation
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import TypeAdapter
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.local_update import (
     LocalSearchConfig,
@@ -69,7 +68,7 @@ from manabot.sim.search.local_update import (
     LocalUpdateTeacher,
 )
 import managym
-
+from managym.decision import Observation
 
 RolloutEvidence = Literal["full", "compact"]
 # Search defaults: compact evidence with native frontier encoding.
@@ -322,7 +321,7 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
                     name = group
                     break
         elif code.co_qualname == "ActorCritic.forward" and code.co_filename.endswith(
-            "model/actor_critic.py"
+            "backends/torch/policy.py"
         ):
             name = "network"
         elif code.co_name == "snapshot" and code.co_filename.endswith(
@@ -339,7 +338,7 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
             name = "observation_allocation"
         elif code.co_name == "stack" and "numpy" in code.co_filename:
             name = "tensor_assembly"
-        elif code.co_filename.endswith("model/actor_critic.py") and code.co_name in (
+        elif code.co_filename.endswith("backends/torch/policy.py") and code.co_name in (
             "_gather_object_embeddings",
             "_attend_objects",
             "_gather_informed_actions",
@@ -623,7 +622,9 @@ def main() -> None:
             ),
         )
 
-    reference_model = reference_module(args.reference, "manabot/model/actor_critic.py")
+    reference_model = reference_module(
+        args.reference, "manabot/backends/torch/policy.py"
+    )
     reference_facts = reference_module(args.reference, "manabot/model/facts.py")
     reference_model.FactEncoder = reference_facts.FactEncoder
     match = _bench_match()
@@ -643,7 +644,9 @@ def main() -> None:
         config = LocalSearchConfig(
             depth=20, decision_seconds=120, rollout_evidence=evidence
         )
-        with patch("manabot.model.checkpoint.ActorCritic", reference_model.ActorCritic):
+        with patch(
+            "manabot.backends.torch.checkpoint.ActorCritic", reference_model.ActorCritic
+        ):
             before = reference(checkpoint, digest, _reference_config(config))
         teachers = {
             "before": before,

@@ -14,7 +14,9 @@ from enum import IntEnum
 import torch
 from torch import nn
 
+from manabot.backends.torch.arrays import to_numpy
 from manabot.model.numerics import buffer_on, embedding_rows
+from manabot.policy import admission
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -93,14 +95,6 @@ def _lookup(
     return rows[torch.searchsorted(keys, query).clamp_max(len(keys) - 1)]
 
 
-def _require_keys(keys: torch.Tensor, query: torch.Tensor, message: str) -> None:
-    if len(query) == 0:
-        return
-    index = torch.searchsorted(keys, query).clamp_max(len(keys) - 1)
-    if not torch.equal(keys[index], query):
-        raise ValueError(message)
-
-
 @dataclass(frozen=True)
 class CatalogShape:
     """Separate catalog dimensions; lengths include expanded definition references.
@@ -129,18 +123,21 @@ def admit_definition_ids(
     ids: torch.Tensor, size: int, lookup: torch.Tensor | None = None
 ) -> torch.Tensor:
     """Check transport IDs before indexing; optionally resolve semantic rows."""
-    kind = "semantic" if lookup is not None else "card"
-    message = f"policy received an unadmitted {kind} definition"
-    if (
-        not torch.equal(ids, ids.floor())
-        or bool((ids < 0).any())
-        or bool((ids >= size).any())
-    ):
-        raise ValueError(message)
-    rows = definition_rows(ids, lookup)
-    if lookup is not None and bool((rows < 0).any()):
-        raise ValueError(message)
-    return rows
+    host = None if lookup is None else to_numpy(lookup)
+    rows = admission.definition_ids(to_numpy(ids), size, host)
+    return torch.from_numpy(rows).to(ids.device)
+
+
+def admission_catalog(cards: "SemanticCardEncoder | None") -> admission.Catalog | None:
+    """The shared validator's immutable host lookup tables, without model weights."""
+    if cards is None:
+        return None
+    cpu = torch.device("cpu")
+    return admission.Catalog(
+        to_numpy(buffer_on(cards, "definition_rows", cpu)),
+        to_numpy(buffer_on(cards, "record_name_keys", cpu)),
+        to_numpy(buffer_on(cards, "record_token_keys", cpu)),
+    )
 
 
 @dataclass(frozen=True)
@@ -323,22 +320,19 @@ class SemanticCardEncoder(nn.Module):
     def require_record_names(
         self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
     ) -> None:
-        _require_keys(
-            buffer_on(self, "record_name_keys", words.device),
-            record_key(torch.as_tensor(namespace), words).reshape(-1),
-            "policy received an id outside the record vocabulary",
+        catalog = admission_catalog(self)
+        assert catalog is not None
+        host_namespace = (
+            to_numpy(namespace)
+            if isinstance(namespace, torch.Tensor)
+            else int(namespace)
         )
+        catalog.require_names(host_namespace, to_numpy(words))
 
     def require_record_tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> None:
-        kinds, words = kinds.long().reshape(-1), words.reshape(-1)
-        number = (kinds == NUMBER_TOKEN_KINDS[0]) | (kinds == NUMBER_TOKEN_KINDS[1])
-        if bool(((kinds < 1) | (kinds > 9)).any()):
-            raise ValueError("policy received an invalid program token kind")
-        _require_keys(
-            buffer_on(self, "record_token_keys", words.device),
-            record_key(kinds[~number], words[~number]),
-            "policy received a program token outside the vocabulary",
-        )
+        catalog = admission_catalog(self)
+        assert catalog is not None
+        catalog.require_tokens(to_numpy(kinds), to_numpy(words))
 
     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
         return definition_rows(ids, self.definition_rows)

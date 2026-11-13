@@ -1,14 +1,11 @@
 """Hand-calculated transition-end credit counterexamples from the audit."""
 
+import numpy as np
 import pytest
 import torch
 
-from manabot.rl.returns import (
-    categorical_lambda_returns,
-    reverse_waves,
-    terminal_distances,
-    transition_gae,
-)
+from manabot.backends.torch.rl import categorical_lambda_returns, transition_gae
+from manabot.policy.returns import reverse_waves, terminal_distances
 
 
 def _row_by_row_gae(
@@ -74,7 +71,7 @@ class TestTrajectoryParallelism:
             torch.rand(rows, columns, generator=torch.Generator().manual_seed(1)) < cut
         )
         order = torch.full((rows, columns), -1)
-        for wave, (steps, cols) in enumerate(reverse_waves(ends)):
+        for wave, (steps, cols) in enumerate(reverse_waves(ends.numpy())):
             assert (order[steps, cols] == -1).all()
             order[steps, cols] = wave
         assert (order >= 0).all()
@@ -122,7 +119,9 @@ class TestTrajectoryParallelism:
         ends = (
             torch.rand(rows, columns, generator=torch.Generator().manual_seed(2)) < cut
         )
-        assert torch.equal(terminal_distances(ends), _row_by_row_distances(ends))
+        assert np.array_equal(
+            terminal_distances(ends.numpy()), _row_by_row_distances(ends).numpy()
+        )
 
 
 class TestGAE:

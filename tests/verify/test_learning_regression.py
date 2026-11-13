@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.checkpoint_evaluation import checkpoint_manifest
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.recipes.baseline import baseline_test
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.verify.action_cases import decision_case
