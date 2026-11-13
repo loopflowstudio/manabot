@@ -45,6 +45,10 @@ name = "bench_execution"
 required-features = ["benchmark"]
 
 [[example]]
+name = "bench_payment"
+required-features = ["benchmark"]
+
+[[example]]
 name = "bench_search"
 test = true
 

@@ -27,6 +27,8 @@ fn main() {
     let games = seeds.end - seeds.start;
     #[cfg(feature = "benchmark")]
     managym::benchmark_layers::reset();
+    #[cfg(feature = "benchmark")]
+    managym::benchmark_payments::reset();
     let mut steps = 0u64;
     let mut digest = 0u64;
     let mut capped = 0u64;
@@ -72,5 +74,10 @@ fn main() {
     println!(
         "{}",
         serde_json::json!({"layer_metrics":managym::benchmark_layers::snapshot()})
+    );
+    #[cfg(feature = "benchmark")]
+    println!(
+        "{}",
+        serde_json::json!({"payment_metrics":managym::benchmark_payments::snapshot()})
     );
 }
