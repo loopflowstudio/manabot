@@ -45,14 +45,21 @@ def _at_width(regime: TrainingRegime, width: int) -> TrainingRegime:
     return with_capacity(regime, id=f"w{width}", width=width, depth=8, heads=8)
 
 
-@pytest.mark.parametrize("width", [BF16_MIN_HIDDEN_DIM - 8, BF16_MIN_HIDDEN_DIM, 384])
-def test_rejected_learning_gate_keeps_float32_on_both_sides_of_threshold(
-    width: int,
+@pytest.mark.parametrize(
+    ("width", "expected"),
+    [
+        (BF16_MIN_HIDDEN_DIM - 8, "float32"),
+        (BF16_MIN_HIDDEN_DIM, "bf16"),
+        (384, "bf16"),
+    ],
+)
+def test_auto_is_bf16_on_cuda_from_the_threshold_width(
+    width: int, expected: Precision
 ) -> None:
     base = batched_baseline()
     assert base.stages[0].execution.device == "cuda"
     wide = _at_width(base, width)
-    assert wide.stages[0].execution.resolved_precision == "float32"
+    assert wide.stages[0].execution.resolved_precision == expected
     # A narrower rebuild of a wide regime resolves the ladder again.
     assert _at_width(wide, 128).stages[0].execution.resolved_precision == "float32"
 
@@ -70,10 +77,13 @@ def test_ladder_is_float32_off_cuda(device: str) -> None:
 def test_regimes_serialize_the_resolved_precision() -> None:
     wide = _at_width(batched_baseline(), BF16_MIN_HIDDEN_DIM)
     saved = wide.model_dump(mode="json")
-    assert saved["stages"][0]["execution"]["precision"] == "float32"
+    assert saved["stages"][0]["execution"]["precision"] == "bf16"
     assert '"auto"' not in wide.model_dump_json()
     assert TrainingRegime.model_validate(saved) == wide
-    assert wide.stages[0].execution.resolved_precision == "float32"
+    # A record that omits precision predates `auto` and ran float32.
+    del saved["stages"][0]["execution"]["precision"]
+    restored = TrainingRegime.model_validate(saved)
+    assert restored.stages[0].execution.resolved_precision == "float32"
     with pytest.raises(ValueError, match="resolved by the regime"):
         Execution().resolved_precision
 
