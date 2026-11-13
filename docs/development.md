@@ -259,7 +259,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
-| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v2` |
+| Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v3` |
 | Academy UI | `npm test`, `npm run check`, `npm run test:e2e:release` |
 | Clean-machine Play | `./scripts/verify-clean-machine` |
 | Engine Budget | `engine-budget.yml` (release `bench_search` and `bench_steps`, candidate against the reference commit of `managym/perf/baseline.json` on one runner) |

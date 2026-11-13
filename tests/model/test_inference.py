@@ -73,6 +73,31 @@ def _policy(*, semantic: bool = True, history: bool = False) -> PolicyFixture:
     return PolicyFixture(agent, collector, collector._slice_obs_tensors(np.arange(2)))
 
 
+def test_half_precision_head_keeps_finite_public_logits() -> None:
+    """The output boundary handles half scores without overflowing -1e8."""
+    case = _policy()
+
+    def half_scores(
+        module: torch.nn.Module, args: tuple[torch.Tensor, ...], output: torch.Tensor
+    ) -> torch.Tensor:
+        return output.half()
+
+    # Inject the autocast head's output dtype without depending on a GPU or
+    # running unrelated encoder operators in CPU half precision.
+    handle = case.agent.policy_head.register_forward_hook(half_scores)
+    try:
+        logits, _ = case.agent(admit_observation(case.agent, case.obs))
+        legal = case.obs["actions_valid"].bool()
+        assert logits.dtype == torch.float32
+        assert torch.isfinite(logits).all()
+        assert (logits[~legal] == -1e8).all()
+        logits[legal].sum().backward()
+        parameter = case.agent.policy_head[-1].weight
+        assert parameter.grad is not None and torch.isfinite(parameter.grad).all()
+    finally:
+        handle.remove()
+
+
 @pytest.mark.parametrize("semantic", [False, True])
 def test_preparation_preserves_forward_and_training_gradients(semantic: bool) -> None:
     case = _policy(semantic=semantic)

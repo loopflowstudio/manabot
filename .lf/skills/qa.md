@@ -116,6 +116,14 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a New Game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
+  To play specific cards, open **Import decklist files**, check "Use imported
+  decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
+  textareas appear only then), fill both, press Check decklists, then New
+  Game; `POST /api/decklists/validate` answers the same check. During the
+  opponent's turn the offers stay rendered but disabled, so click only enabled
+  buttons, or every click times out while the bot plays on. Hover a card name
+  to read `[data-testid=card-rules-text]`. Search 64 with a fast creature deck
+  usually wins before a slow card is used; give the opponent a light deck.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
@@ -147,15 +155,24 @@ publish, land or choose the next Graph step from here.
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
 - MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
-  run it on the Mac that owns the measurement, not on a shared laptop. Convert a w160l8
-  checkpoint (the published `experiments/data/mlx_pilot/capture/initial.pt`;
-  `local` recipe checkpoints use FiLM and are refused), load it with
+  run it on the Mac that owns the measurement, not on a shared laptop. The
+  published `experiments/data/mlx_pilot/capture/initial.pt` is now refused by
+  the parity CLI's world binding (written at `b62ac3127`). Make a current
+  capture instead with `manabot.backends.torch.capture.capture(out, regime,
+  seed, experiment=...)`, using the regime of
+  `tests/model/test_backend_capture.py` with `hidden_dim=384`,
+  `attention_layers=8`, `num_attention_heads=8`, 8 streams and 32 transitions
+  (about 2 minutes on CPU; `hidden_dim=64` takes 20 s). Convert its
+  `initial.pt` with `uv run python -m manabot.backends.convert` (`local` recipe
+  checkpoints use FiLM and are refused), load it with
   `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
   admitting each batch with `admit_observation` and comparing against torch
   `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
   `policy.evaluate`; untrained-policy argmax
-  differences are exact ties). `python -m manabot.backends.parity <initial.pt>
-  --capture <capture dir>` on the published subset takes about 50 s on an M2.
+  differences are exact ties). `uv run python -m manabot.backends.parity <initial.pt>
+  --capture <capture dir> --backend mlx --precision <dtype> --minibatches 4`
+  takes seconds; `--json` keeps per-minibatch `loss_torch`/`loss_backend`, which
+  show when a relative-loss failure comes from a near-zero loss.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter

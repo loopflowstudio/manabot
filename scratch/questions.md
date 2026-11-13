@@ -24,3 +24,5 @@ Active plan: `scratch/payment-search.md`. Reversible assumptions taken headless:
   fix the renderer.
 - The recorded-state choice is settled as (b) by comment `9f42783b` (quoted in
   the plan), which also approved shipping.
+- Sync onto main (2026-11-13): retain this Task's assumptions despite main's
+  deletion of the shared scratch path; these notes belong to the active branch.

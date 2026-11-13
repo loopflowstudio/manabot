@@ -6058,6 +6058,318 @@
    "sha256": "2ad0af50153e0641cb5f3691946008967230167513ee21a734bfa6580629be5a",
    "bytes": 26617
   },
+  "experiments/data/mps_retest/bench.jsonl": {
+   "sha256": "cd9c9f21a1f217bdcb15b91c0c68ab92529a4e2f87f5723df8813754b55251f8",
+   "bytes": 34493
+  },
+  "experiments/data/mps_retest/collection-Jacks-MacBook-Pro-2.local.png": {
+   "sha256": "8a07b14b1d26a1197097a2cef98f5cfaf474c502da3473fbd7dce8663c675ded",
+   "bytes": 582485
+  },
+  "experiments/data/mps_retest/collection.png": {
+   "sha256": "5986a27ea2f361ee34f638dab50b94e90867bf4106627494ad532c0f4b6dab89",
+   "bytes": 577811
+  },
+  "experiments/data/mps_retest/comparisons-Jacks-MacBook-Pro-2.local.md": {
+   "sha256": "5ec0b8f5cbaf0507bb592ec1646a8fe997ff6dea1e72d3cd30cda88dc4a503eb",
+   "bytes": 113949
+  },
+  "experiments/data/mps_retest/comparisons.md": {
+   "sha256": "db78f783bf7fcbc2e591d97c4afde3896de6651dea2c4b20166f37699f69f450",
+   "bytes": 112998
+  },
+  "experiments/data/mps_retest/full_context-Jacks-MacBook-Pro-2.local.png": {
+   "sha256": "d78f7c6743e66716631e6f85e460132dbdc817674f0299e31c79306a094b0b4b",
+   "bytes": 164084
+  },
+  "experiments/data/mps_retest/full_context-fa23fc364.png": {
+   "sha256": "27834f524ecec42457438a18b40b3ed6fd7dffdcd3ec1e480bf858d243fe36d3",
+   "bytes": 223984
+  },
+  "experiments/data/mps_retest/full_context.png": {
+   "sha256": "733bdae1219a71868345808aaef4e2a1505da0250e5151a1a5a7411affb5ba49",
+   "bytes": 126993
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/bench.jsonl": {
+   "sha256": "9b4a806d49804057da59a2cef0f1e22b81441effa591f7925a39a3c97032f31a",
+   "bytes": 17451
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b0.json": {
+   "sha256": "9a52db21e29f2ae63e267d43ca31c3f75ea827c64d9441bcd1a187f8ac8516d6",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b0.npz": {
+   "sha256": "4122feb988b4588cca91d86aa47cabd6eb9ae6e7cecc5f3cceca0df288b133f1",
+   "bytes": 384780
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.json": {
+   "sha256": "9a52db21e29f2ae63e267d43ca31c3f75ea827c64d9441bcd1a187f8ac8516d6",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.npz": {
+   "sha256": "35c9663a0fa4d977665926344e13125477f4a2767c5db480a9ff11f52100cf7e",
+   "bytes": 126270350
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b0.json": {
+   "sha256": "9a52db21e29f2ae63e267d43ca31c3f75ea827c64d9441bcd1a187f8ac8516d6",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b0.npz": {
+   "sha256": "a081628ef82db5333d774197ebf281f0a6095f7e01a6bda718cce1fa32e1c2a3",
+   "bytes": 384780
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b64.json": {
+   "sha256": "9a52db21e29f2ae63e267d43ca31c3f75ea827c64d9441bcd1a187f8ac8516d6",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b64.npz": {
+   "sha256": "f02f8a4f92af76db99bf98cefbe2f2b1e21e67056c3aab2a1f9c0cd43721882c",
+   "bytes": 1962070
+  },
+  "experiments/data/mps_retest/laptop/bench-back-to-back/updates.jsonl": {
+   "sha256": "3da1e13be7cbe74fde2cba6e9a23e616ee6a1a1b6a625975b25fb8a5d916f495",
+   "bytes": 94246
+  },
+  "experiments/data/mps_retest/laptop/bench/bench.jsonl": {
+   "sha256": "5dd9ba10b4394e0ceaefa81b92f2fb5827e35daf50886bfade03e4926071ae0b",
+   "bytes": 8742
+  },
+  "experiments/data/mps_retest/laptop/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b0.json": {
+   "sha256": "8ea395c48765f7e2fe7a8470b5621bd5d67569b53d49b44cd264cb6f75cc8936",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b0.npz": {
+   "sha256": "4122feb988b4588cca91d86aa47cabd6eb9ae6e7cecc5f3cceca0df288b133f1",
+   "bytes": 384780
+  },
+  "experiments/data/mps_retest/laptop/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.json": {
+   "sha256": "8ea395c48765f7e2fe7a8470b5621bd5d67569b53d49b44cd264cb6f75cc8936",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.npz": {
+   "sha256": "4640761ab45d3cf8869ab5c73c79d13a9fc72beea546891d1652dfd7467d1b96",
+   "bytes": 126270350
+  },
+  "experiments/data/mps_retest/laptop/bench/updates.jsonl": {
+   "sha256": "8c3f276ce6e3b0be553034da57323331159160f3f30e4e2d3e52780f7f2ceafb",
+   "bytes": 9248
+  },
+  "experiments/data/mps_retest/laptop/capture-failures-fa23fc364.tar.gz": {
+   "sha256": "2e9f7cacc6f98ed37242d04764f08737d5ca35c1a0df8fa8ce145556cff980c1",
+   "bytes": 305838563
+  },
+  "experiments/data/mps_retest/laptop/captures-99210bf8d.tar.gz": {
+   "sha256": "91aa075c5f633f82bf3188e8f2e6ecb2c57d5e97e2c246898731cfea36ff516a",
+   "bytes": 837481419
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/bench.jsonl": {
+   "sha256": "04640f2319edb4cd7a0741b89d1c2b879b57ad77065deaf8fa42d7165fd56d99",
+   "bytes": 39562
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b0.json": {
+   "sha256": "bef5594540460e5a6da75164d86530aa61906bc61cc9fb9cf3e4a1f8aa08932f",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b0.npz": {
+   "sha256": "4122feb988b4588cca91d86aa47cabd6eb9ae6e7cecc5f3cceca0df288b133f1",
+   "bytes": 384780
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.json": {
+   "sha256": "bef5594540460e5a6da75164d86530aa61906bc61cc9fb9cf3e4a1f8aa08932f",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.npz": {
+   "sha256": "02a9a99bf6c47613cee6e520d679edb5dd2a5f793b40f06fcec35d2867f44ff8",
+   "bytes": 252506652
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b0.json": {
+   "sha256": "bef5594540460e5a6da75164d86530aa61906bc61cc9fb9cf3e4a1f8aa08932f",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b0.npz": {
+   "sha256": "a081628ef82db5333d774197ebf281f0a6095f7e01a6bda718cce1fa32e1c2a3",
+   "bytes": 384780
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b64.json": {
+   "sha256": "bef5594540460e5a6da75164d86530aa61906bc61cc9fb9cf3e4a1f8aa08932f",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w64-b64.npz": {
+   "sha256": "0b5ef1f6d5fc8bee693040ddecc440f4b0cb4a53ba3831b744e1ee87383641e7",
+   "bytes": 3890092
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w768-b64.json": {
+   "sha256": "bef5594540460e5a6da75164d86530aa61906bc61cc9fb9cf3e4a1f8aa08932f",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w768-b64.npz": {
+   "sha256": "e35a4cfad0e3e31ea5cb26449760ef6c0768965c047a3554932a651a2cda1804",
+   "bytes": 990892572
+  },
+  "experiments/data/mps_retest/laptop/paired-update/bench/updates.jsonl": {
+   "sha256": "a51aace26fa5507b998bc1e3eb095b3ab42a2dc5e3c101c79a91700e9e0a1641",
+   "bytes": 122715
+  },
+  "experiments/data/mps_retest/laptop/paired-update/receipts/4c3b4b17a851.json": {
+   "sha256": "caedfd2a2e25c5dbb1a8ef27c0d000e9cf557116264caecb540212e8c6853518",
+   "bytes": 1046
+  },
+  "experiments/data/mps_retest/laptop/paired-update/receipts/6b7892940c26.json": {
+   "sha256": "e71a7bb9116200207da614a60213cd5007d679decdf4e933a8540c3b10ae84fd",
+   "bytes": 1014
+  },
+  "experiments/data/mps_retest/laptop/paired-update/receipts/f11d5fa70f69.json": {
+   "sha256": "ebb5463e3374bf4c4a587488116affdec313c06dbbf3d3569f8317604a36357d",
+   "bytes": 1014
+  },
+  "experiments/data/mps_retest/laptop/paired-update/receipts/mps-launch-paired.py": {
+   "sha256": "2dcc6d8b84e55677de03ee1043518ebf018f9ac70bd97f8f41f210f8990e638f",
+   "bytes": 976
+  },
+  "experiments/data/mps_retest/laptop/paired-update/receipts/mps-launch-remainder.py": {
+   "sha256": "32fe27292f68fe79680bfb1129e18c1b0b15b105189ae3d359f3f1b39442564d",
+   "bytes": 1224
+  },
+  "experiments/data/mps_retest/laptop/paired-update/receipts/mps-parity-768.py": {
+   "sha256": "8ee0da3f33ec7d4a6863bbec0ec5fbd93c70f9e2e775bd0260c89884eb2d3827",
+   "bytes": 865
+  },
+  "experiments/data/mps_retest/laptop/paired-update/report/collection.png": {
+   "sha256": "498d0b8d005b6fb156fcf7288c779b65d8117578452cfab97f58dee0caa1e189",
+   "bytes": 677439
+  },
+  "experiments/data/mps_retest/laptop/paired-update/report/comparisons.md": {
+   "sha256": "e5a1a30568d1afbab5de37f62eeba35123e5f43609d989933d37765612345d5b",
+   "bytes": 162346
+  },
+  "experiments/data/mps_retest/laptop/paired-update/report/full_context.png": {
+   "sha256": "733bdae1219a71868345808aaef4e2a1505da0250e5151a1a5a7411affb5ba49",
+   "bytes": 126993
+  },
+  "experiments/data/mps_retest/laptop/paired-update/report/learner.png": {
+   "sha256": "d8f0bd9719adafc2a3c562cb354f1aa39ff39b897c9fcf164d5316f0062584d4",
+   "bytes": 820295
+  },
+  "experiments/data/mps_retest/laptop/paired-update/report/summary.json": {
+   "sha256": "7db705b2c7b8862ab127f4c66912a07002fbe33147cd04c1727e6d2bcd81fa25",
+   "bytes": 267277
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/README.md": {
+   "sha256": "cac06d0af16b2f2470a321decc48521a91c72b1830361850277748187688e0ef",
+   "bytes": 557
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/after-sync/README.md": {
+   "sha256": "765a031442d7efe369c0545d55fe7d175efe20e02852ed27e9ab456ad4bbc322",
+   "bytes": 610
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/after-sync/bfloat16.json": {
+   "sha256": "a36023f422d8d9959ab897471aae4c23bc8970833d4dceedfb1c4a4b00c19199",
+   "bytes": 1352
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/after-sync/float16.json": {
+   "sha256": "81a6f9eeb7f5a1c2bb6cdac72d6d1a3a7307b731acd3d761cf41f511b037eac8",
+   "bytes": 1354
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/after-sync/float32.json": {
+   "sha256": "2fcfb10a45acf7064e41cf8c6fad7de60a7a6a939a8428ce9d2bf3ca58c08f9b",
+   "bytes": 1374
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/bf16.json": {
+   "sha256": "eaf78992d549020fbf7117649fdc5c70b85b18e46b331c29c202fba8a906daf7",
+   "bytes": 1417
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/f16.json": {
+   "sha256": "4b802be14cfe88320d08c4b86649f2e84dac7058afd984a76e3e46bf5fa227f7",
+   "bytes": 1451
+  },
+  "experiments/data/mps_retest/laptop/paired-update/validation/f32.json": {
+   "sha256": "3901b98781f894c8c2b8476b3dd2753340cb48cf181dd38355b1bc551a23e54a",
+   "bytes": 1454
+  },
+  "experiments/data/mps_retest/laptop/run-receipts/5bd37fb3abaa.log": {
+   "sha256": "c1bbed280ffee00b66e17bf7de414d0ad9c1479120f6e4f4ba44a57e34f57fbf",
+   "bytes": 37740
+  },
+  "experiments/data/mps_retest/laptop/run-receipts/7fb121dc08a6.log": {
+   "sha256": "ce400354f468607970429f78326eb2a6da89172337bb96d42c048e3e6446cffd",
+   "bytes": 76459
+  },
+  "experiments/data/mps_retest/laptop/run-receipts/88dd067a2d9b.log": {
+   "sha256": "a42eb9943895d8e251bbcc4d08d493640b6361272459b0c0e9b1d20156614157",
+   "bytes": 3282
+  },
+  "experiments/data/mps_retest/laptop/run-receipts/dcf93e86b142.log": {
+   "sha256": "0d15bd665c1a1d649205959b4ece92df13a43db877131141de0e6e3ea6a74a01",
+   "bytes": 3282
+  },
+  "experiments/data/mps_retest/laptop/run-receipts/status.txt": {
+   "sha256": "a37ae310c89ef133f13f356187c4b777f93003db4112667719f1dd5fc1f25b0d",
+   "bytes": 2112
+  },
+  "experiments/data/mps_retest/laptop/shared-update/bench-back-to-back/bench.jsonl": {
+   "sha256": "35f23ae845c1a2159c892574dd13cf0d72ee586d55ffd2a3c1b66fdb5089c191",
+   "bytes": 13197
+  },
+  "experiments/data/mps_retest/laptop/shared-update/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.json": {
+   "sha256": "b4b490ae9851121430feb11fdaec7da1488076a46d3846c98ed5ce5cb029512c",
+   "bytes": 1071
+  },
+  "experiments/data/mps_retest/laptop/shared-update/bench-back-to-back/references/a1501967-558e-4413-a61a-17e99f739a5b/Jacks-MacBook-Pro-2.local/w384-b64.npz": {
+   "sha256": "099427c5cda01d5feff78c0b7e2803665828829b68710c0c57a08cae12927405",
+   "bytes": 252506652
+  },
+  "experiments/data/mps_retest/laptop/shared-update/capture-512-failed-7924086ad.tar.gz": {
+   "sha256": "302d394c206b812997fa725c21baaf534b81ece532df4bbf3fad85f371e7175e",
+   "bytes": 189889428
+  },
+  "experiments/data/mps_retest/laptop/shared-update/capture-512-receipt.txt": {
+   "sha256": "5c437cfc9aae5019f5bdf1103e348876b57e541eba4787ae72363da1f953ec09",
+   "bytes": 2266
+  },
+  "experiments/data/mps_retest/laptop/shared-update/host-observations.jsonl": {
+   "sha256": "7acc8581e7cb50e4b001b6022732303c9d996683c86d6eb433e4fb88c148406d",
+   "bytes": 1465
+  },
+  "experiments/data/mps_retest/laptop/shared-update/w384-resident-receipt.txt": {
+   "sha256": "d294d6fd3b4a3bda43e8c4837bb9b5bd06ee83899efade51d51eaff18dbb00bb",
+   "bytes": 13390
+  },
+  "experiments/data/mps_retest/learner-Jacks-MacBook-Pro-2.local.png": {
+   "sha256": "6c89a9d6291126cd2f34e09df5831c7741f5364835f18eae9f97f8f95ed9eb6d",
+   "bytes": 686654
+  },
+  "experiments/data/mps_retest/learner.png": {
+   "sha256": "a7b6ed1023ed18e772f00cbadb9eda7458dc994819727721b91fd1347dd4d6b3",
+   "bytes": 681229
+  },
+  "experiments/data/mps_retest/m2-evidence-fa23fc364.tar.gz": {
+   "sha256": "264ef59f82285682e3bb656b3f670d6a23f01eea12c25a0bd2a4c6436ec831b9",
+   "bytes": 973417926
+  },
+  "experiments/data/mps_retest/m2-shared-update-7b07ee0ab.tar.gz": {
+   "sha256": "604c525b0d48fbee54bbadd43e8238eba1fdf9560515c78ab7dbcb1c3fd8dd94",
+   "bytes": 1632
+  },
+  "experiments/data/mps_retest/m2/bench-back-to-back/bench.jsonl": {
+   "sha256": "46fc39df5a3cd0f77013c9f328400a6ebb463f2c622e6a3a46a903dcc292ba0d",
+   "bytes": 17042
+  },
+  "experiments/data/mps_retest/m2/bench-back-to-back/updates.jsonl": {
+   "sha256": "bd13426e8e2113940ddbc51f5395a4ec6787561a0f1a9510bdb3cfedd238a6a1",
+   "bytes": 27069
+  },
+  "experiments/data/mps_retest/m2/host-observations.jsonl": {
+   "sha256": "696f46a59da61f1a0c64a74af3d5db15fd02e7020cd616f460b32c0190dbc932",
+   "bytes": 14577
+  },
+  "experiments/data/mps_retest/summary.json": {
+   "sha256": "aee353d012cb6347e687de2b14e21a20e0d195ab4430aff6ccb9cbf9c659cf64",
+   "bytes": 275298
+  },
+  "experiments/data/mps_retest/updates.jsonl": {
+   "sha256": "c414b0d150e5291c28fe1637d38b54d91ea9f8201ec266198983cffda5e59d25",
+   "bytes": 121315
+  },
   "experiments/data/mtg174/admission-native-legality-v1/attempted-elemental-eval.py": {
    "sha256": "d44659a290522d02d467b95c50da385467e622e7674bb26bd5e6458e7c7ad2af",
    "bytes": 4724
@@ -40537,6 +40849,138 @@
   "experiments/data/pooling-filter/evidence.json": {
    "sha256": "5fd1af3f1c6897e87fd1014b30f79102b4fee4102a43a9f40773954c13a4219d",
    "bytes": 403261
+  },
+  "experiments/data/ppo_cuda/baseline/baseline.json": {
+   "sha256": "07cf5a5c88c6fd1a5d900b586f9d0cb297e449e275f940f98cc3a5db332ca31d",
+   "bytes": 182772
+  },
+  "experiments/data/ppo_cuda/baseline/easier.json": {
+   "sha256": "590d8ba438948ee52b199d55da8cb50e08acc0ee0a035c25459fa72c7f3a5c45",
+   "bytes": 30334
+  },
+  "experiments/data/ppo_cuda/paired-all/baseline-0.pt": {
+   "sha256": "ba52eb1b06e34ea53c5bd557168b2ec63bda0d226a691c96a53c44cd1132a959",
+   "bytes": 11790609
+  },
+  "experiments/data/ppo_cuda/paired-all/baseline-1.pt": {
+   "sha256": "92394bbab61deebd89494acec93ef36550e5e4fb07ac9e3d8d9537747d26c3cd",
+   "bytes": 11790609
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-0.pt": {
+   "sha256": "045d788d757431ecbb2594048fc13a8b7121cc3ca3b77189c60f6671ba2fbf90",
+   "bytes": 11790935
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-1.pt": {
+   "sha256": "e819117b644b2aa3e1c7e83f93690dcb34ae988d8177840b831b40e0b22d5e64",
+   "bytes": 11790935
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-profile.json": {
+   "sha256": "4567b19a347f26240743a18676b88ccfdf815dc61e6077930319101f4d9aeac5",
+   "bytes": 39597
+  },
+  "experiments/data/ppo_cuda/paired-all/candidate-profile.ppo.txt": {
+   "sha256": "eff11c2b376aa8ade8bf910cc6ef713c4956566c06ea33b5c163fd2cb7d99a92",
+   "bytes": 9226
+  },
+  "experiments/data/ppo_cuda/paired-all/cpu-comparison.txt": {
+   "sha256": "8bee60ebc154d004ce76da54593d9854c58e8551a1fa2eb78424310666b67ffa",
+   "bytes": 147
+  },
+  "experiments/data/ppo_cuda/paired-all/differences.json": {
+   "sha256": "82089d0832cb27768650e6b0815b0283c9ff40dd68c837202cf0daa82b944a42",
+   "bytes": 294913
+  },
+  "experiments/data/ppo_cuda/paired-all/paired.json": {
+   "sha256": "97a4ea2e2d30f4376083c71d947958ce313e3187fbac56f6a5c72fd36e96498c",
+   "bytes": 487283
+  },
+  "experiments/data/ppo_cuda/paired-all/tests.txt": {
+   "sha256": "0e15d1ed55ea67fab7405767363bd65f478c9da2e6d82163910a973af7be146b",
+   "bytes": 949
+  },
+  "experiments/data/ppo_cuda/paired-all/updates-baseline.json": {
+   "sha256": "cb46f7033aced778bd38d4e7fccc2637a0ebe6fc2b6d2c940681f6689e9071c0",
+   "bytes": 42828
+  },
+  "experiments/data/ppo_cuda/paired-all/updates-candidate.json": {
+   "sha256": "cb46f7033aced778bd38d4e7fccc2637a0ebe6fc2b6d2c940681f6689e9071c0",
+   "bytes": 42828
+  },
+  "experiments/data/ppo_cuda/paired/baseline-0.pt": {
+   "sha256": "76bca20c44cfb17e88ddec0291b73c082f93dc978777ad1ed86c401f51901bf7",
+   "bytes": 11321489
+  },
+  "experiments/data/ppo_cuda/paired/baseline-1.pt": {
+   "sha256": "227123089fc14f7a3fcffee15c309f711ba0fcf3effe11a2c17b42ace9f09c92",
+   "bytes": 11321489
+  },
+  "experiments/data/ppo_cuda/paired/candidate-0.pt": {
+   "sha256": "4cfe8366909b024fea99ee765238f33ad4322b7b08d455e67f55db5aa97ee0b2",
+   "bytes": 11321815
+  },
+  "experiments/data/ppo_cuda/paired/candidate-1.pt": {
+   "sha256": "91ef012650ae923d5e35a834d7f74b20b1f13df0f513010d9eefb83bfef58465",
+   "bytes": 11321815
+  },
+  "experiments/data/ppo_cuda/paired/candidate-profile.json": {
+   "sha256": "6c284646a7c1362b0bae86233a03e8d2156bb23c674b4b7ad1a471146068215a",
+   "bytes": 39454
+  },
+  "experiments/data/ppo_cuda/paired/candidate-profile.ppo.txt": {
+   "sha256": "df82d8894003eecfdf81ef0e21ce77fef972f1b3c831109e7f1e55f33cdfa545",
+   "bytes": 9331
+  },
+  "experiments/data/ppo_cuda/paired/cpu-comparison.txt": {
+   "sha256": "8bee60ebc154d004ce76da54593d9854c58e8551a1fa2eb78424310666b67ffa",
+   "bytes": 147
+  },
+  "experiments/data/ppo_cuda/paired/differences.json": {
+   "sha256": "3dc6323ba3c6c513008fd48eac241fc9b7a54bc5257ee0730283b55ea251fc00",
+   "bytes": 294182
+  },
+  "experiments/data/ppo_cuda/paired/paired.json": {
+   "sha256": "90f1ba388355cce12edb624788b2920fb37b91d0a39c5ff0535451a6d396d7e3",
+   "bytes": 485445
+  },
+  "experiments/data/ppo_cuda/paired/tests.txt": {
+   "sha256": "c885f82223394f2eaf7fa7a8f2e0926aef3d3174219e38536974dc9830c69dfc",
+   "bytes": 938
+  },
+  "experiments/data/ppo_cuda/paired/updates-baseline.json": {
+   "sha256": "5f332735383f02d69a1aa12181105a15f064e14e673687742065715cb1163ae5",
+   "bytes": 43444
+  },
+  "experiments/data/ppo_cuda/paired/updates-candidate.json": {
+   "sha256": "5f332735383f02d69a1aa12181105a15f064e14e673687742065715cb1163ae5",
+   "bytes": 43444
+  },
+  "experiments/data/ppo_cuda/profile/diagnostic.json": {
+   "sha256": "63619f249b488777d4f6c288c4901f93402d0011769d4207b68090854894f7af",
+   "bytes": 39463
+  },
+  "experiments/data/ppo_cuda/profile/profile.ppo": {
+   "sha256": "4a40bf1be16da16e81c4a94da2655147aba22604a8cdc7ad3a712426ae8f26ad",
+   "bytes": 143003
+  },
+  "experiments/data/ppo_cuda/profile/profile.ppo.trace.json.gz": {
+   "sha256": "0cda86668da7eef613fa8d5b49ba16307e1574d9e55d612ac55d127786bced84",
+   "bytes": 28555106
+  },
+  "experiments/data/ppo_cuda/profile/profile.ppo.txt": {
+   "sha256": "c6cb714f10c8db927e61a7bd3caa70bfa3e6074b902ef9ca8c2ba39fa6afda4b",
+   "bytes": 9304
+  },
+  "experiments/data/ppo_cuda/profile/source-mapping.json": {
+   "sha256": "84584f51882bdb9e9e5743feb843148efb7da33079f77ed0b718424d8fef067f",
+   "bytes": 11643
+  },
+  "experiments/data/ppo_cuda/profile/trace-summary.json": {
+   "sha256": "76c52558b8078df48a2c7dfd85d94cf6ecf12761263f7b3b224248244933ca69",
+   "bytes": 165848
+  },
+  "experiments/data/ppo_cuda/profile/untuned-0fd992b8d6c3.log": {
+   "sha256": "06ae6606ed376a681a955a9d25e901b20b2de139edd49966e9d7cca0071e70e4",
+   "bytes": 7175
   },
   "experiments/data/precision_ladder/07f84834e617/run.json": {
    "sha256": "2e249face778508c83499e46763a562c43d92ca9f067e4286c07183698278fe2",
