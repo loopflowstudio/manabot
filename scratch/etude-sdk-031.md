@@ -305,6 +305,10 @@ Fixed the stale `tla_frontier.report()` docstring (equal-hours is drawn at each
 job's own update, not w160l8's) and collapsed two calls. No behavior change.
 `uv run --extra dev ruff check` and `ruff format --check` on both files: passed.
 
+Second pass at 5619659598 reread the whole diff, its callers, tests and docs:
+nothing further to reduce, no code edits, no rerun. `lf context`: scratch
+5565/12000 tokens.
+
 Left for a person: `against_earlier_self`, `against_fixed` and `head_to_head`
 in `manabot/training/report.py` now build the same tagged `Curve` and have one
 caller (the frontier). Kept per "Keep the three names; they state the
