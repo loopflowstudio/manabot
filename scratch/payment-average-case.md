@@ -88,3 +88,13 @@ Nothing upstream since e82a20033 touched `managym/src`, `managym/perf` or
   `.runs/qa339/bench/`.
 - On main too: pool games seed 340067 (`not enough automatic mana`) and
   340431 (`no legal targets`) end in PyAgentError; no bug Task filed yet.
+
+## Published (2026-11-12): PR #509
+
+- Synced onto main at ef28f3a58 (no change under `managym/`). On that tree:
+  `cargo fmt --all -- --check` clean, `cargo clippy --workspace --all-targets
+  -- -D warnings` clean, `cargo nextest run --workspace --profile ci` (debug)
+  1195 passed, 2 skipped.
+- Still open: adopt the PR's own Engine Budget run as the reference after CI;
+  `scratch/` (24 MB of baseline binaries and samples) is on the branch until
+  the pre-land clear.
