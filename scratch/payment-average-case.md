@@ -98,3 +98,16 @@ Nothing upstream since e82a20033 touched `managym/src`, `managym/perf` or
 - Still open: adopt the PR's own Engine Budget run as the reference after CI;
   `scratch/` (24 MB of baseline binaries and samples) is on the branch until
   the pre-land clear.
+
+## Gate (2026-11-12, second pass)
+
+- `managym/` was byte-identical to the tree of the published gate above, so
+  its debug suite and clippy results stand and were not rerun.
+- One edit: the `benchmark_payments` module doc now says a directly answered
+  `payable` question is not counted as a plan (comment only).
+- `cargo fmt --manifest-path managym/Cargo.toml --all -- --check` clean;
+  `cargo check -p managym --features benchmark --examples` builds;
+  `uv run python scripts/check_loopflow_workflows.py` valid (`.lf/skills/qa.md`
+  changed).
+- CI on PR #509 was pending at this pass (Rust Tests, Engine Budget); nothing
+  is deferred to it beyond the Engine Budget reference adoption.
