@@ -5902,6 +5902,18 @@
    "sha256": "fa11d7b0e98f67e2929ec74227541c07ee4cca5da3b91f92c5415cb457e5c5b2",
    "bytes": 147775
   },
+  "experiments/data/mana_spending/checkpoint-admission.json": {
+   "sha256": "e8dcb9807d22396d0b35914327eaface0488dbcc8092986d6b8601f81ee3d962",
+   "bytes": 545
+  },
+  "experiments/data/mana_spending/decks.json": {
+   "sha256": "603c7d27886fdb4e19a1c1f0b5a83ccf6ad34c8dd8bec0f64b6b6a01fc84c906",
+   "bytes": 21533
+  },
+  "experiments/data/mana_spending/games.jsonl": {
+   "sha256": "44716b890e22e9c1fd6d2bd6b07a08989f3f9482151fbfb32d6cdb6d5f7ec6f9",
+   "bytes": 487467
+  },
   "experiments/data/mlx_pilot/bench-overlapped-collection-and-first-sweep.jsonl": {
    "sha256": "2d273833dc2d43a874688fd8c16a457128192ae2355c0957e3346ecd729ae69d",
    "bytes": 11747
