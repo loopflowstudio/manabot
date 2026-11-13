@@ -549,3 +549,19 @@ opponents, interrupt/resume, parity on a fresh small capture: pass.
 Fixed: `mlx_pilot.py capture` (stale `self.optimizer`, and `targets` read
 before flattening), `load_checkpoint`'s message for a file in neither format,
 `uv run` in the container remedy, parity's requires_grad warning.
+
+## Update protocols (steer 15003b86, 2026-11-13)
+
+Jack Heart on the updates' torch `TYPE_CHECKING` imports: "do we not have
+protocols or something for this?". `manabot/training/updates/backend.py`
+states the surface as Protocols (`Backend`, `RL`, `CategoricalRL`,
+`PPOBackend`, `Learner` extending `policy.protocol.BackendLearner`, `Policy`,
+`AdmittedRollout`; opaque `Array`/`Device`/`Observations`); the updates,
+`OptimizerHealth` and `parity.minibatch_loss` take them and import no torch,
+so ppo/damped left `_TORCH_NOT_YET_MOVED` and the boundary test no longer
+exempts `TYPE_CHECKING`. `categorical_rl` refuses a backend without a WDL
+critic (MLX). Checks: `test_update_backend_protocols.py` (torch + MLX
+modules, learners, policies, admitted rollouts; 5 passed); one-off `uvx
+pyright` assignment of torch/MLX files and classes to the Protocols: 0 errors
+(not in CI; no type checker is configured); `updates.py` JSON byte-identical
+before vs after (`cmp`).

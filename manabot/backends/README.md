@@ -67,7 +67,12 @@ diagnostics = update_damped_iteration(
 )
 ```
 
-Inside an update, array math goes only through the backend's modules:
+Inside an update, array math goes only through the backend's modules. The
+Protocols in `manabot/training/updates/backend.py` state this surface
+(`Backend` for the damped update; `PPOBackend`, torch only, adds what PPO
+calls; `CategoricalRL`, torch only, the categorical critic), and
+`tests/training/test_update_backend_protocols.py` checks every installed
+backend against them:
 
 - `backend.arrays`: moving host rows in and out (`from_numpy`, `to_numpy`)
   and `float32` for a forward output.
@@ -112,9 +117,10 @@ the returns and selection recursions (`returns.py`), which both backends'
 `transition_gae` wrap; torch keeps advantage selection on the minibatch's
 device (`selected_rows`, `torch.quantile`), matching `returns.quantile` bit
 for bit. The
-update modules import no framework and no backend at runtime
-(`tests/test_package_boundaries.py` enforces it); the torch types they name
-are annotations only.
+update modules import no framework and no backend, even for annotations
+(`tests/test_package_boundaries.py` enforces it); they name the backend's
+arrays, devices and observation batches as the opaque `Array`, `Device` and
+`Observations`.
 
 A function has the same name, arguments, shapes and per-row results in every
 backend that has it; the torch backend's signatures are the reference, and

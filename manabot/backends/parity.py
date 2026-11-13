@@ -61,6 +61,7 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
+from manabot.training.updates.backend import Backend as UpdateBackend
 from manabot.training.updates.damped_policy import minibatch_objective
 
 LOGIT_TOLERANCE = 1e-4
@@ -91,7 +92,7 @@ def backend(name: str) -> Backend:
 
 
 def minibatch_loss(
-    module: ModuleType,
+    module: UpdateBackend,
     policy: BackendPolicy,
     learner: BackendLearner,
     batch: Prepared,

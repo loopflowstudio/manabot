@@ -9,7 +9,6 @@ Safety checks run on every step, observed or not; absent samples remain absent.
 
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager
-from types import ModuleType
 from typing import Any, TypedDict
 
 import numpy as np
@@ -21,6 +20,7 @@ import manabot.backends.torch as torch_backend
 from manabot.backends.torch.rl import float64_operand
 from manabot.infra.profiler import Profiler
 from manabot.training.rollout.actions import PackedActions
+from manabot.training.updates.backend import Backend
 
 HEALTH_INTERVAL = 25
 # ActorCritic parameter prefixes that only the critic output reads, in every
@@ -130,7 +130,7 @@ class OptimizerHealth:
         iteration: int,
         profiler: Profiler | None = None,
         *,
-        backend: ModuleType = torch_backend,
+        backend: Backend = torch_backend,
     ) -> None:
         self.health = health
         self._check_objective: Callable[[Any], None] = backend.learner.check_objective

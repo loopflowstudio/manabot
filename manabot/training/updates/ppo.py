@@ -3,14 +3,13 @@
 `update_iteration` is PPO (Schulman et al. 2017) over complete-game GAE:
 shuffled minibatches, advantage filtering and normalization, a scalar value
 target and optional reference and collection KL penalties. Like the damped
-rule it is written once over a backend module (`manabot.backends.torch`):
-array math through `backend.rl`, `backend.learner` and `backend.arrays`, row
-bookkeeping in NumPy.
+rule it is written once over a backend module: array math through
+`backend.rl`, `backend.learner` and `backend.arrays`, row bookkeeping in
+NumPy. It needs a `PPOBackend` (`manabot.training.updates.backend`), which
+only `manabot.backends.torch` provides.
 """
 
 import math
-from types import ModuleType
-from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -18,6 +17,7 @@ from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.updates.backend import Array, PPOBackend, PPOLearner, PPOPolicy
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
@@ -26,29 +26,21 @@ from manabot.training.updates.health import (
 )
 from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
 
-if TYPE_CHECKING:
-    # The torch backend's types are the reference signatures.
-    from torch import Tensor
-
-    from manabot.backends.torch.learner import Learner
-    from manabot.backends.torch.policy import ActorCritic
-
 
 def update_iteration(
-    backend: ModuleType,
-    learner: "Learner",
+    backend: PPOBackend,
+    learner: PPOLearner,
     batch: RolloutBatch,
     learning: Learning,
     progress: float,
     rng: np.random.Generator,
     *,
     iteration: int = 1,
-    bootstrap_agent: "ActorCritic | None" = None,
+    bootstrap_agent: PPOPolicy | None = None,
 ) -> UpdateDiagnostics:
     """Optimize one fresh collector batch on the shared learner and Adam owner.
 
-    `backend` is the module whose arrays `learner` holds
-    (`manabot.backends.torch`).
+    `backend` is the module whose arrays `learner` holds.
     """
     rl, to_device = backend.rl, backend.arrays.from_numpy
     dev = learner.device
@@ -204,7 +196,7 @@ def update_iteration(
                         + learning.collection_kl * kl_behavior
                     )
 
-                    def _failure() -> "dict[str, Tensor]":
+                    def _failure() -> dict[str, Array]:
                         return minibatch_tensors(
                             logits=rl.constant(logits),
                             value_logits=rl.constant(value),

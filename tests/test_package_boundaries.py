@@ -409,9 +409,7 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/training/state/incidents.py",
         "manabot/training/state/learning_state.py",
         "manabot/training/state/recovery.py",
-        "manabot/training/updates/damped_policy.py",
         "manabot/training/updates/health.py",
-        "manabot/training/updates/ppo.py",
         "manabot/verify/action_cases.py",
         "manabot/verify/checkpoint_scenarios.py",
         "manabot/verify/choice_corpus.py",
@@ -510,34 +508,21 @@ def test_generic_learning_pieces_import_without_the_player() -> None:
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
 
 
-# The updates are written once and take the backend module as an argument, so
-# at runtime they import neither a framework nor a backend; the torch types
-# they name are annotations only (under TYPE_CHECKING).
+# The updates are written once and take the backend module as an argument,
+# typed by the Protocols in `manabot.training.updates.backend`, so they import
+# neither a framework nor a backend, not even for annotations.
 _WRITTEN_ONCE = (
+    "manabot/training/updates/backend.py",
     "manabot/training/updates/damped_policy.py",
     "manabot/training/updates/ppo.py",
 )
-
-
-def _runtime_imports(tree: ast.Module) -> list[str]:
-    """Imports outside the module's top-level `if TYPE_CHECKING:` blocks."""
-    tree.body = [
-        node
-        for node in tree.body
-        if not (
-            isinstance(node, ast.If)
-            and isinstance(node.test, ast.Name)
-            and node.test.id == "TYPE_CHECKING"
-        )
-    ]
-    return [module for _, module in _imported_modules(tree)]
 
 
 def test_updates_take_the_backend_as_an_argument() -> None:
     violations = [
         f"{relative}: {module}"
         for relative in _WRITTEN_ONCE
-        for module in _runtime_imports(
+        for _, module in _imported_modules(
             ast.parse((REPO_ROOT / relative).read_text(), relative)
         )
         if module.split(".")[0] in _FRAMEWORKS or module.startswith("manabot.backends")
