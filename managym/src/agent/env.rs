@@ -909,6 +909,20 @@ impl Env {
         let mut info = empty_info_dict();
         self.add_profiler_info(&mut info);
         self.add_behavior_info(&mut info);
+        let stats = self.game.as_ref().map(|game| &game.mana_payment_stats);
+        for (name, value) in [
+            ("mana_payments", stats.map_or(0, |s| s.payments)),
+            (
+                "mana_payments_over_tapped",
+                stats.map_or(0, |s| s.over_tapped),
+            ),
+            (
+                "mana_spend_decisions_over_tapped",
+                stats.map_or(0, |s| s.spend_decisions_over_tapped),
+            ),
+        ] {
+            insert_info(&mut info, name, InfoValue::Int(value as i64));
+        }
         info
     }
 

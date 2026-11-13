@@ -118,6 +118,7 @@ impl Game {
         }
 
         let mut game = Self {
+            mana_payment_stats: Default::default(),
             derived: Default::default(),
             payment_sources: Default::default(),
             state: TrackedState::new(GameState {

@@ -35,6 +35,17 @@ use crate::{
     },
 };
 
+/// Per-game diagnostics, outside rules state, hashes and policy observations.
+/// A spend cannot start a nested payment, so attribution lives until that
+/// spend completes; upfront activation fees get their own attribution.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ManaPaymentStats {
+    pub payments: usize,
+    pub over_tapped: usize,
+    pub spend_decisions_over_tapped: usize,
+    pub active_over_tapped: bool,
+}
+
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
 /// cycles. Witnesses retain identities and concrete typed pool remainders.
@@ -1932,9 +1943,9 @@ impl Game {
         {
             return Ok(());
         }
-        for step in path {
+        for step in &path {
             match step {
-                PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, source),
+                PaymentStep::Fixed(source) => self.tap_fixed_mana_source(player, *source),
                 PaymentStep::Spend => break,
                 _ => unreachable!("validated automatic prefix"),
             }
@@ -1942,6 +1953,7 @@ impl Game {
         let cost = self.characteristics(permanent).activated_abilities[ability_index]
             .mana_cost
             .clone();
+        self.record_mana_payment(player, &cost, &model, &path);
         let caller = self.state.suspended_decision_mut().take().unwrap();
         self.begin_mana_spend(
             player,
@@ -2196,8 +2208,8 @@ impl Game {
         player: PlayerId,
         cost: &ManaCost,
     ) -> Result<(), AgentError> {
-        let path = self
-            .payment_model(player, None)
+        let model = self.payment_model(player, None);
+        let path = model
             .plan(
                 self.pooled_mana(player),
                 vec![Obligation::Pay {
@@ -2207,13 +2219,70 @@ impl Game {
                 SourcePolicy::FixedOnly,
             )
             .ok_or_else(|| AgentError("not enough automatic mana".into()))?;
-        for step in path {
+        for step in &path {
             if let PaymentStep::Fixed(source) = step {
-                self.tap_fixed_mana_source(player, source);
+                self.tap_fixed_mana_source(player, *source);
             }
         }
+        self.record_mana_payment(player, cost, &model, &path);
 
         Ok(())
+    }
+
+    /// Attribute this automatic prefix without changing it. Remove each
+    /// source's complete modeled output (including triggered bonuses) in turn.
+    /// The current cost must still be pooled, and saved callers must remain
+    /// feasible on the actual post-tap board. No search runs for exact pools.
+    fn record_mana_payment(
+        &mut self,
+        player: PlayerId,
+        cost: &ManaCost,
+        model: &PaymentModel,
+        path: &[PaymentStep],
+    ) {
+        let pool = self.pooled_mana(player);
+        let over_tapped = pool.usable_total(cost) > u16::from(cost.mana_value)
+            && path
+                .iter()
+                .take_while(|step| !matches!(step, PaymentStep::Spend))
+                .any(|step| {
+                    let PaymentStep::Fixed(id) = step else {
+                        return false;
+                    };
+                    let output = model
+                        .sources
+                        .iter()
+                        .find(|source| source.permanent == *id)
+                        .and_then(|source| source.fixed.as_ref())
+                        .expect("fixed witness source has an output");
+                    let mut remaining = pool.clone();
+                    remaining.spend(output, &cost.purpose);
+                    if !remaining.can_pay(cost) {
+                        return false;
+                    }
+                    let mut obligations = self.payment_obligations(player);
+                    if !obligations.is_empty() {
+                        obligations.remove(0);
+                    }
+                    if obligations.is_empty() {
+                        return true;
+                    }
+                    obligations.insert(
+                        0,
+                        Obligation::Pay {
+                            cost: cost.clone(),
+                            waterbend: false,
+                        },
+                    );
+                    self.payment_model(player, None).payable(
+                        remaining,
+                        obligations,
+                        SourcePolicy::All,
+                    )
+                });
+        self.mana_payment_stats.payments += 1;
+        self.mana_payment_stats.over_tapped += usize::from(over_tapped);
+        self.mana_payment_stats.active_over_tapped = over_tapped;
     }
 
     /// Commit precisely the selected unit, retaining its expiry identity.
@@ -2334,6 +2403,7 @@ impl Game {
                 continue;
             }
             let suspended = self.state.suspended_decision_mut().take().unwrap();
+            self.mana_payment_stats.active_over_tapped = false;
             let Decision::ManaSpend {
                 spent, completion, ..
             } = suspended.decision
@@ -2532,6 +2602,88 @@ mod tests {
         game_object::{CardId, PermanentId},
         mana::{Mana, ManaCost, ManaRestriction, SpendEffect, SpendingContext},
     };
+
+    #[test]
+    fn over_tap_diagnostics_keep_production_spending_and_forks() {
+        use crate::flow::{
+            decision::{EffectFrame, PaymentProgress, SpendCompletion},
+            game::Game,
+        };
+        use crate::state::{ability::PaymentCost, game_object::PlayerId, player::PlayerConfig};
+        use std::collections::BTreeMap;
+
+        for (lands, heartbeat, expected_over, expected_choices) in [
+            (vec!["Mountain", "Mountain", "Forest"], false, 1, 0),
+            (vec!["Mountain", "Island", "Forest"], false, 1, 1),
+            (vec!["Forest", "Mountain"], false, 0, 0),
+            (vec!["Forest", "Mountain"], true, 0, 1),
+        ] {
+            let deck = BTreeMap::from([
+                ("Mountain".into(), 8),
+                ("Island".into(), 8),
+                ("Forest".into(), 8),
+                ("Heartbeat of Spring".into(), 4),
+            ]);
+            let mut game = Game::new(
+                vec![
+                    PlayerConfig::new("p0", deck.clone()),
+                    PlayerConfig::new("p1", deck),
+                ],
+                347,
+                true,
+            );
+            let player = PlayerId(0);
+            for land in lands {
+                game.scenario_force_battlefield(player, land, true).unwrap();
+            }
+            if heartbeat {
+                game.scenario_force_battlefield(player, "Heartbeat of Spring", true)
+                    .unwrap();
+            }
+            // {1}{G} needs only one doubled Forest, leaving no surplus.
+            // {2}{G} needs both sources and leaves a genuine color choice.
+            let cost = ManaCost::parse(if heartbeat { "2G" } else { "1G" });
+            game.produce_mana(player, &cost).unwrap();
+            assert_eq!(game.mana_payment_stats.payments, 1);
+            assert_eq!(game.mana_payment_stats.over_tapped, expected_over);
+            assert_eq!(
+                game.pooled_mana(player).usable_total(&cost),
+                if heartbeat {
+                    4
+                } else {
+                    2 + expected_over as u16
+                }
+            );
+            let completion = SpendCompletion::Resolution(PaymentProgress::new(
+                player,
+                PaymentCost::Mana(cost.clone()),
+                vec![],
+                vec![],
+            ));
+            game.begin_mana_spend(player, cost, completion, EffectFrame::new(player, vec![]))
+                .unwrap();
+            if let Some(space) = game.suspended_decision_action_space() {
+                assert_eq!(expected_choices, 1);
+                game.publish_action_space(space);
+                assert_eq!(
+                    game.mana_payment_stats.spend_decisions_over_tapped,
+                    expected_over
+                );
+                let mut fork = game.clone();
+                fork.advance_mana_spend(Some(0)).unwrap();
+                assert!(!fork.mana_payment_stats.active_over_tapped);
+                assert!(game.state.suspended_decision.is_some());
+                game.advance_mana_spend(Some(0)).unwrap();
+            } else {
+                assert_eq!(expected_choices, 0);
+            }
+            assert!(!game.mana_payment_stats.active_over_tapped);
+            assert_eq!(
+                game.mana_payment_stats.spend_decisions_over_tapped,
+                expected_over * expected_choices
+            );
+        }
+    }
 
     fn tapping_ability(outputs: Vec<Mana>) -> ManaActivation {
         ManaActivation {
