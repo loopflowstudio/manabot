@@ -14,9 +14,9 @@ import shutil
 
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_decks, validate_agent_setup
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (

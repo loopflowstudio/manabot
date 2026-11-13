@@ -40,71 +40,6 @@ def test_manabot_never_imports_academy() -> None:
     assert violations == []
 
 
-_FRAMEWORKS = ("torch", "mlx", "jax", "jaxlib", "flax")
-_BACKENDS = REPO_ROOT / "manabot/backends"
-
-
-def _manabot_imports() -> list[tuple[Path, int, str]]:
-    return [
-        (path, line, module)
-        for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
-        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
-    ]
-
-
-def test_policy_contract_imports_no_array_framework() -> None:
-    policy = REPO_ROOT / "manabot/policy"
-    violations = [
-        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path, line, module in _manabot_imports()
-        if policy in path.parents
-        and (
-            module.split(".")[0] in _FRAMEWORKS
-            or module == "manabot.backends"
-            or module.startswith("manabot.backends.")
-        )
-    ]
-    assert violations == []
-    # Transitively too: the shared preparation and container load no framework.
-    probe = textwrap.dedent(
-        f"""
-        import sys
-        import manabot.policy.checkpoint, manabot.policy.prepare, manabot.policy.protocol
-        loaded = sorted(m for m in sys.modules if m.split(".")[0] in {_FRAMEWORKS!r})
-        assert not loaded, loaded
-        """
-    )
-    subprocess.run([sys.executable, "-c", probe], check=True, cwd=REPO_ROOT)
-
-
-def test_only_the_mlx_backend_imports_mlx() -> None:
-    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
-    # every other module import neither it nor any backend, eagerly or lazily.
-    mlx = _BACKENDS / "mlx"
-    violations = [
-        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path, line, module in _manabot_imports()
-        if (module.split(".")[0] == "mlx" and mlx not in path.parents)
-        or (
-            (module == "manabot.backends" or module.startswith("manabot.backends."))
-            and _BACKENDS not in path.parents
-        )
-    ]
-    assert violations == []
-
-
-def test_backends_never_import_each_other() -> None:
-    violations = [
-        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path, line, module in _manabot_imports()
-        if _BACKENDS in path.parents
-        and path.parent != _BACKENDS
-        and module.startswith("manabot.backends.")
-        and module.split(".")[2] != path.relative_to(_BACKENDS).parts[0]
-    ]
-    assert violations == []
-
-
 class _RefuseAcademy(importlib.abc.MetaPathFinder):
     """Fail any attempt to import academy, as if it were not installed."""
 
@@ -260,8 +195,8 @@ def test_simulation_imports_and_plays_without_training() -> None:
         from manabot.env.match import Match, Reward
         from manabot.env.observation import ObservationSpace
         from manabot.infra.config import ModelConfig, RewardConfig
-        from manabot.model.actor_critic import ActorCritic
-        from manabot.model.checkpoint import save_checkpoint
+        from manabot.backends.torch.policy import ActorCritic
+        from manabot.backends.torch.checkpoint import save_checkpoint
         from manabot.sim.search.flat_mc import make_player
         match, space = Match(), ObservationSpace()
         model = ActorCritic(space, ModelConfig())
@@ -343,18 +278,195 @@ def test_engine_imports_without_training_or_academy() -> None:
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
 
 
-# Model-agnostic learning pieces: a deck builder or any other role reuses them
-# unchanged, so they never reach the game, its observations, the player model,
-# collection or the engine.
-def test_generic_learning_pieces_import_only_themselves() -> None:
+_FRAMEWORKS = ("torch", "mlx", "jax", "jaxlib", "flax")
+_BACKENDS = REPO_ROOT / "manabot/backends"
+
+
+def _manabot_imports() -> list[tuple[Path, int, str]]:
+    return [
+        (path, line, module)
+        for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
+        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
+    ]
+
+
+def test_policy_contract_imports_no_array_framework() -> None:
+    policy = REPO_ROOT / "manabot/policy"
     violations = [
         f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path in sorted((REPO_ROOT / "manabot/rl").rglob("*.py"))
-        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
-        if module.split(".")[0] in {"managym", "academy", "etude"}
-        or (module.startswith("manabot") and not module.startswith("manabot.rl"))
+        for path, line, module in _manabot_imports()
+        if policy in path.parents
+        and (
+            module.split(".")[0] in _FRAMEWORKS
+            or module == "manabot.backends"
+            or module.startswith("manabot.backends.")
+        )
     ]
     assert violations == []
+    # Transitively too: the shared preparation and container load no framework.
+    probe = textwrap.dedent(
+        f"""
+        import sys
+        import manabot.policy.admission, manabot.policy.checkpoint, manabot.policy.prepare, manabot.policy.protocol
+        loaded = sorted(m for m in sys.modules if m.split(".")[0] in {_FRAMEWORKS!r})
+        assert not loaded, loaded
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], check=True, cwd=REPO_ROOT)
+
+
+def test_backends_never_import_each_other() -> None:
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if _BACKENDS in path.parents
+        and path.parent != _BACKENDS
+        and module.startswith("manabot.backends.")
+        and module.split(".")[2] != path.relative_to(_BACKENDS).parts[0]
+    ]
+    assert violations == []
+
+
+def test_only_the_mlx_backend_imports_mlx() -> None:
+    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
+    # every other module import neither it nor its backend, eagerly or lazily.
+    # Outside `manabot/backends/`, only the torch backend is imported.
+    mlx = _BACKENDS / "mlx"
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if (module.split(".")[0] == "mlx" and mlx not in path.parents)
+        or (
+            module.startswith("manabot.backends.")
+            and module.split(".")[2] != "torch"
+            and _BACKENDS not in path.parents
+        )
+    ]
+    assert violations == []
+
+
+# Modules outside the torch backend that still import torch. Training,
+# evaluation, search and the model's components move behind a backend in later
+# changes; the list only shrinks, and a module that stops importing torch
+# leaves it.
+_TORCH_NOT_YET_MOVED = frozenset(
+    (
+        # The converter and parity check read the PyTorch reference.
+        "manabot/backends/convert.py",
+        "manabot/backends/parity.py",
+        "manabot/belief/agent.py",
+        "manabot/belief/checkpoint.py",
+        "manabot/belief/demo.py",
+        "manabot/belief/encoding.py",
+        "manabot/belief/likelihood.py",
+        "manabot/belief/population.py",
+        "manabot/belief/runtime.py",
+        "manabot/belief/sampling.py",
+        "manabot/belief/sampling_data.py",
+        "manabot/belief/sampling_fit.py",
+        "manabot/env/vector_env.py",
+        "manabot/eval/evaluate.py",
+        "manabot/eval/local.py",
+        "manabot/eval/serving_benchmark.py",
+        "manabot/experiment/attack_execution.py",
+        "manabot/experiment/evaluation_queue.py",
+        "manabot/experiment/numerics.py",
+        "manabot/experiment/runner.py",
+        "manabot/experiment/study.py",
+        "manabot/infra/runtime.py",
+        "manabot/infra/torch.py",
+        "manabot/llm/transformers_runtime.py",
+        "manabot/model/admission.py",
+        "manabot/model/catalog.py",
+        "manabot/model/continuation.py",
+        "manabot/model/facts.py",
+        "manabot/model/inference.py",
+        "manabot/model/name_candidates.py",
+        "manabot/model/numerics.py",
+        "manabot/model/recent_events.py",
+        "manabot/model/records.py",
+        "manabot/model/semantic_cards.py",
+        "manabot/model/shared_effects.py",
+        "manabot/recipes/device.py",
+        "manabot/reports/belief.py",
+        "manabot/reports/selection.py",
+        "manabot/sim/guidance.py",
+        "manabot/sim/native_game.py",
+        "manabot/sim/player.py",
+        "manabot/sim/rollout.py",
+        "manabot/sim/search/local_update.py",
+        "manabot/sim/search/puct.py",
+        "manabot/sim/search/sampling.py",
+        "manabot/sim/search/value.py",
+        "manabot/sim/serving.py",
+        "manabot/training/execution.py",
+        "manabot/training/loops/minimal.py",
+        "manabot/training/mps.py",
+        "manabot/training/rollout/actions.py",
+        "manabot/training/rollout/collection.py",
+        "manabot/training/rollout/selection_data.py",
+        "manabot/training/state/admission.py",
+        "manabot/training/state/incidents.py",
+        "manabot/training/state/learning_state.py",
+        "manabot/training/state/recovery.py",
+        "manabot/training/updates/health.py",
+        "manabot/verify/action_cases.py",
+        "manabot/verify/checkpoint_scenarios.py",
+        "manabot/verify/choice_corpus.py",
+        "manabot/verify/competency.py",
+        "manabot/verify/decision_profile.py",
+        "manabot/verify/learning_regression.py",
+        "manabot/verify/llm_game.py",
+        "manabot/verify/llm_opponent.py",
+        "manabot/verify/record_coverage.py",
+        "manabot/verify/util.py",
+    )
+)
+
+
+def test_only_listed_modules_import_torch_outside_its_backend() -> None:
+    torch_backend = _BACKENDS / "torch"
+    importing = {
+        str(path.relative_to(REPO_ROOT))
+        for path, _, module in _manabot_imports()
+        if module.split(".")[0] == "torch" and torch_backend not in path.parents
+    }
+    assert sorted(importing - _TORCH_NOT_YET_MOVED) == []
+    assert sorted(_TORCH_NOT_YET_MOVED - importing) == []
+
+
+# The standard RL functions: a deck builder or any other role reuses them
+# unchanged, so they never reach the game, its observations, the player model,
+# collection or the engine.
+_GENERIC = (
+    "manabot/backends/torch/rl.py",
+    "manabot/backends/torch/learner.py",
+    "manabot/backends/torch/arrays.py",
+)
+_GENERIC_ALLOWED = (
+    "manabot.backends.torch.rl",
+    "manabot.backends.torch.arrays",
+    "manabot.infra.profiler",
+    "manabot.policy.returns",
+)
+
+
+def test_generic_learning_pieces_import_only_themselves() -> None:
+    violations = [
+        f"{relative}: {module}"
+        for relative in _GENERIC
+        for _, module in _imported_modules(
+            ast.parse((REPO_ROOT / relative).read_text(), relative)
+        )
+        if module.split(".")[0] in {"managym", "academy", "etude"}
+        or (module.startswith("manabot") and module not in _GENERIC_ALLOWED)
+    ]
+    # The learner names the player's network and its precision in annotations
+    # only (under TYPE_CHECKING); the runtime probe below holds it to that.
+    assert violations == [
+        "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
+        "manabot/backends/torch/learner.py: manabot.training.regime",
+    ]
 
 
 class _RefuseRoles(importlib.abc.MetaPathFinder):
@@ -365,10 +477,18 @@ class _RefuseRoles(importlib.abc.MetaPathFinder):
         target: ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
         root = fullname.split(".")[0]
+        allowed = {
+            "manabot",
+            "manabot.backends",
+            "manabot.backends.torch",
+            "manabot.infra",
+            "manabot.policy",
+            *_GENERIC_ALLOWED,
+        }
         if root in {"managym", "academy", "etude"} or (
             root == "manabot"
-            and fullname != "manabot"
-            and not fullname.startswith("manabot.rl")
+            and fullname not in allowed
+            and fullname.replace(".", "/") + ".py" not in _GENERIC
         ):
             raise ImportError(f"generic learning pieces must not import {fullname}")
         return None
@@ -378,13 +498,33 @@ def test_generic_learning_pieces_import_without_the_player() -> None:
     probe = textwrap.dedent(
         """
         import importlib
-        import pkgutil
         import sys
-        from tests.test_package_boundaries import _RefuseRoles
+        from tests.test_package_boundaries import _GENERIC, _RefuseRoles
         sys.meta_path.insert(0, _RefuseRoles())
-        import manabot.rl
-        for module in pkgutil.walk_packages(manabot.rl.__path__, 'manabot.rl.'):
-            importlib.import_module(module.name)
+        for path in _GENERIC:
+            importlib.import_module(path.removesuffix(".py").replace("/", "."))
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+# The updates are written once and take the backend module as an argument,
+# typed by the Protocols in `manabot.training.updates.backend`, so they import
+# neither a framework nor a backend, not even for annotations.
+_WRITTEN_ONCE = (
+    "manabot/training/updates/backend.py",
+    "manabot/training/updates/damped_policy.py",
+    "manabot/training/updates/ppo.py",
+)
+
+
+def test_updates_take_the_backend_as_an_argument() -> None:
+    violations = [
+        f"{relative}: {module}"
+        for relative in _WRITTEN_ONCE
+        for _, module in _imported_modules(
+            ast.parse((REPO_ROOT / relative).read_text(), relative)
+        )
+        if module.split(".")[0] in _FRAMEWORKS or module.startswith("manabot.backends")
+    ]
+    assert violations == []

@@ -1,23 +1,20 @@
 """`ActorCritic` in MLX: the same encoder, attention stack, action heads and critic.
 
-`MLXActorCritic` mirrors `manabot.model.actor_critic.ActorCritic` module for
+`MLXActorCritic` mirrors `manabot.backends.torch.policy.ActorCritic` module for
 module, for the configurations `require_supported` admits (the w160l8 regime's: a
 catalog world with catalog record ids, table attention, masked-mean scalar
 critic, policy input v9). Its float arithmetic follows the PyTorch forward line
 by line; the integer bookkeeping comes precomputed in a `Prepared` batch
 (`manabot.policy.prepare`).
 
-Two departures, both exact up to float rounding:
-
-- The catalog GRU always encodes every definition. PyTorch learning encodes
-  only the rows a batch references; the others never reach the loss, so their
-  outputs receive no gradient either way.
-- `PackedGRU` folds the reset and update hidden biases into the input bias
-  (the layout of `mlx.nn.GRU`), since those gates add both before the sigmoid.
+The catalog GRU always encodes every definition. PyTorch learning encodes
+only the rows a batch references; the others never reach the loss, so their
+outputs receive no gradient either way. GRU input and recurrent biases remain
+separate parameters, preserving Adam state and global gradient-norm clipping.
 
 Parameter paths equal the PyTorch state-dict names except where MLX containers
 differ: `nn.Sequential` children live under `layers`, attention in-projections
-are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `b`, `bhn`
+are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `input_bias`, `hidden_bias`
 (`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
@@ -29,6 +26,10 @@ import mlx.nn as nn
 import numpy as np
 
 from manabot.backends.mlx.arrays import to_numpy
+from manabot.backends.mlx.rl import legal_mask
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
+from manabot.infra.config import ModelConfig
+from manabot.policy import admission
 from manabot.policy.checkpoint import Dimensions
 from manabot.policy.prepare import (
     Packed,
@@ -55,14 +56,14 @@ class Projection(nn.Module):
 
 
 def _gru_cell(
-    x: mx.array, previous: mx.array, recurrent_weight: mx.array, new_bias: mx.array
+    x: mx.array, previous: mx.array, recurrent_weight: mx.array, hidden_bias: mx.array
 ) -> mx.array:
     """One GRU step: `x` [L,3H] (input projection with bias), `previous` [L,H]."""
     hidden = previous.shape[1]
-    recurrent = previous @ recurrent_weight.T
+    recurrent = previous @ recurrent_weight.T + hidden_bias
     gates = mx.sigmoid(x[:, : 2 * hidden] + recurrent[:, : 2 * hidden])
     reset, update = gates[:, :hidden], gates[:, hidden:]
-    new = mx.tanh(x[:, 2 * hidden :] + reset * (recurrent[:, 2 * hidden :] + new_bias))
+    new = mx.tanh(x[:, 2 * hidden :] + reset * recurrent[:, 2 * hidden :])
     return (1 - update) * new + update * previous
 
 
@@ -71,14 +72,23 @@ def _gru_cell(
 _compiled_gru_cell = mx.compile(_gru_cell)
 
 
-class PackedGRU(nn.GRU):
+class PackedGRU(nn.Module):
     """A one-layer GRU over packed variable-length sequences (`Packed`).
 
     Gates are reset, update, new, as in PyTorch and `mlx.nn.GRU`:
-    r, z = sigmoid(x Wx[:2H]^T + b[:2H] + h Wh[:2H]^T),
-    n = tanh(x Wx[2H:]^T + b[2H:] + r * (h Wh[2H:]^T + bhn)),
+    r, z = sigmoid(x Wx[:2H]^T + input_bias[:2H] + h Wh[:2H]^T + hidden_bias[:2H]),
+    n = tanh(x Wx[2H:]^T + input_bias[2H:] + r * (h Wh[2H:]^T + hidden_bias[2H:])),
     h' = (1 - z) n + z h. Every sequence starts from a zero state.
     """
+
+    def __init__(self, input_size: int, hidden_size: int) -> None:
+        super().__init__()
+        self.hidden_size = hidden_size
+        bound = hidden_size**-0.5
+        self.Wx = mx.random.uniform(-bound, bound, (3 * hidden_size, input_size))
+        self.Wh = mx.random.uniform(-bound, bound, (3 * hidden_size, hidden_size))
+        self.input_bias = mx.zeros((3 * hidden_size,))
+        self.hidden_bias = mx.zeros((3 * hidden_size,))
 
     def run(
         self, table: mx.array, steps: Sequence[mx.array]
@@ -97,8 +107,8 @@ class PackedGRU(nn.GRU):
         finished: list[mx.array] = []
         for step, index in enumerate(steps):
             live = index.shape[0]
-            x = mx.take(table, index, axis=0) @ self.Wx.T + self.b
-            state = _compiled_gru_cell(x, state[:live], self.Wh, self.bhn)
+            x = mx.take(table, index, axis=0) @ self.Wx.T + self.input_bias
+            state = _compiled_gru_cell(x, state[:live], self.Wh, self.hidden_bias)
             outputs.append(state)
             following = steps[step + 1].shape[0] if step + 1 < len(steps) else 0
             if following < live:
@@ -226,13 +236,23 @@ class _Static:
     named_names: mx.array  # their name rows
     sign: mx.array  # [1,N,1]
     tables: Tables
+    space: ObservationSpace
     cache: dict[str, mx.array] = field(default_factory=dict)
 
 
 class MLXActorCritic(nn.Module):
-    def __init__(self, dims: Dimensions, tables: Tables) -> None:
+    def __init__(
+        self,
+        dims: Dimensions,
+        tables: Tables,
+        config: ModelConfig,
+        space: ObservationSpace,
+    ) -> None:
         super().__init__()
         self.dims = dims
+        # The model configuration the weights were trained under, as the
+        # torch policy carries it; the updates read its `value_kind`.
+        self.config = config
         hidden = dims.hidden
         self.semantic_cards = SemanticCards(dims)
         self.player_embedding = Projection(dims.player, hidden)
@@ -278,15 +298,75 @@ class MLXActorCritic(nn.Module):
                 mx.array(named),
                 mx.array(sign[None, :, None]),
                 tables,
+                space,
             ),
         )
 
     def prepare(
         self, obs: Mapping[str, np.ndarray], *, inference: bool = False
     ) -> Prepared:
-        """Index one admitted numpy observation batch for this policy
-        (`inference`: compact as PyTorch CPU inference does)."""
+        """Admit and index raw host observations; malformed inputs are refused."""
+        self.check_observation(obs)
+        return self.prepare_admitted(obs, inference=inference)
+
+    def prepare_admitted(
+        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
+    ) -> Prepared:
+        """Index unchanged rows previously checked for this policy's configuration."""
         return prepare(obs, self._static.tables, inference=inference)
+
+    def check_observation(self, obs: Mapping[str, np.ndarray]) -> None:
+        """The shared admission checks on raw rows, before booleans or lookups."""
+        tables = self._static.tables
+        lookup = tables.definition_rows
+        for ids in (
+            obs["semantic_cards"],
+            np.stack(
+                [
+                    obs[key][..., PERMANENT_DEFINITION_INDEX]
+                    for key in ("agent_permanents", "opponent_permanents")
+                ],
+                axis=1,
+            ),
+            obs["known_hand"][..., 0],
+            obs["decklists"][..., 0],
+        ):
+            admission.definition_ids(ids, len(lookup), lookup)
+        objects = tables.layout.objects
+        catalog = admission.Catalog(
+            lookup, tables.record_name_keys, tables.record_token_keys
+        )
+        admission.permanent_links(obs, objects)
+        admission.facts(
+            obs["facts"], self._static.space.encoder.config.max_facts, objects, catalog
+        )
+        admission.shared_effects(
+            obs["effects"],
+            obs["effect_details"],
+            obs["effect_members"],
+            objects,
+            catalog,
+        )
+        admission.definition_ids(obs["relations"][..., [5, 23]], len(lookup), lookup)
+        admission.relations(obs["relations"], self.dims.relation, objects)
+        validity = np.concatenate(
+            [
+                obs[key]
+                for key in (
+                    "agent_player_valid",
+                    "opponent_player_valid",
+                    "agent_cards_valid",
+                    "opponent_cards_valid",
+                    "agent_permanents_valid",
+                    "opponent_permanents_valid",
+                )
+            ],
+            axis=1,
+        )
+        if (validity.sum(1) == 0).any():
+            raise ValueError("value aggregation requires a valid object")
+        legal = to_numpy(legal_mask(mx.array(obs["actions_valid"])))
+        admission.actions(obs, legal, objects, tables.name_definitions, lookup)
 
     # Programs ----------------------------------------------------------------------
 
@@ -314,6 +394,10 @@ class MLXActorCritic(nn.Module):
         logits, values = self(batch)
         mx.eval(logits, values)
         return to_numpy(logits), to_numpy(values)[:, 0]
+
+    def forward_distribution(self, batch: Prepared) -> tuple[mx.array, mx.array]:
+        """The training forward the updates differentiate: `__call__`."""
+        return self(batch)
 
     def _public(self, programs: mx.array) -> mx.array:
         """`NameCandidateEncoder.public_definitions`: add names to their programs."""

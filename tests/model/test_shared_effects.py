@@ -7,11 +7,11 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.shared_effects import SharedEffectEncoder, admit_shared_effects
 from manabot.recipes.local import local_smoke
 from manabot.sim.rollout import BatchedSampler

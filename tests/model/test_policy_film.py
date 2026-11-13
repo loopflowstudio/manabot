@@ -8,9 +8,9 @@ give state-conditioned offer choices a gradient.
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.recipes.baseline import baseline_test
 from manabot.recipes.local import local_smoke

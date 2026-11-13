@@ -11,12 +11,12 @@ from typing import Literal
 
 from pydantic import JsonValue
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.sim import anchors
 from manabot.sim.heuristic import heuristic_source_paths

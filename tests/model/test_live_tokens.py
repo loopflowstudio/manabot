@@ -3,10 +3,10 @@
 import pytest
 import torch
 
-from manabot.model.actor_critic import OBJECT_VALIDITY_KEYS, ActorCritic
+from manabot.backends.torch.live_tokens import LiveTokens
+from manabot.backends.torch.policy import OBJECT_VALIDITY_KEYS, ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
-from manabot.model.live_tokens import LiveTokens
 from tests.model.test_inference import PolicyFixture, _policy
 
 

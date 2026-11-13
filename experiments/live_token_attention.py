@@ -1,6 +1,6 @@
 """MTG-319: live-token attention against bucketed shapes on one rented L4.
 
-Exploratory pilot of `ActorCritic(..., live_tokens=True)` (`manabot.model.live_tokens`).
+Exploratory pilot of `ActorCritic(..., live_tokens=True)` (`manabot.backends.torch.live_tokens`).
 It reuses MTG-301's profile (`experiments/l4_step_profile.py`): one in-situ w160l8
 update keeps collection observations and learner minibatches, and those inputs replay
 through four arms in separate processes, interleaved with baseline repeats:

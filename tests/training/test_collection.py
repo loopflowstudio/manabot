@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.training.rollout.collection import (
     RolloutBatch,
@@ -113,7 +113,7 @@ def test_collector_requires_opponent_agent_for_frozen():
 
 
 def test_terminal_credit_and_bootstrap():
-    from manabot.rl.returns import transition_gae
+    from manabot.backends.torch.rl import transition_gae
 
     rewards = torch.tensor([[0.0], [1.0], [-1.0], [0.0]])
     advantages, returns = transition_gae(

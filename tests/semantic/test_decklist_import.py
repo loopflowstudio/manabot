@@ -13,6 +13,8 @@ import torch
 from typer.testing import CliRunner
 
 from manabot import cli
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -21,8 +23,6 @@ from manabot.infra.config import (
     RuntimeConfig,
     SimulationConfig,
 )
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.sim.player import ModelPlayer
 from manabot.sim.sim import load_player, simulate_models

@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.training.rollout.collection import SeatRoutedCollector
 
