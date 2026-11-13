@@ -14,7 +14,7 @@ use managym_state::{
         PrintedCharacteristics, ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics,
         SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
         StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant, TapCost,
-        TargetCostReduction, TriggeredManaAbility,
+        TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
     },
     mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
@@ -1600,11 +1600,12 @@ fn badgermole_cub() -> CardDefinition {
                 }],
             }],
             triggered_mana_abilities: vec![TriggeredManaAbility {
+                who: Actor::You,
                 predicate: CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
                 },
-                mana: Mana::parse("G"),
+                output: TriggeredManaOutput::Fixed(Mana::parse("G")),
             }],
             text_box: text_box.into(),
             ..Default::default()

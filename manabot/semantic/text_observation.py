@@ -12,6 +12,9 @@ import json
 import re
 from typing import Callable
 
+from pydantic import ValidationError
+
+import managym
 from managym.decision import Command, SemanticContractError, SemanticTransition
 from managym.decision_capture import (
     CardReference,
@@ -24,9 +27,6 @@ from managym.decision_capture import (
     PlayerReference,
     UnavailableReference,
 )
-from pydantic import ValidationError
-
-import managym
 
 REPRESENTATION_VERSION = "manabot-text-6"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
@@ -92,6 +92,7 @@ _STAGES = frozenset(
         "mana_payment",
         "tap_payment",
         "mana_color",
+        "mana_spend",
         "resolution_choice",
         "private_search",
         "learn",
@@ -207,6 +208,7 @@ _OBLIGATIONS = (
     "select cards",
     "order replacements",
     "enter as a copy",
+    "spend mana",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -730,6 +732,22 @@ class _Renderer:
                         if count
                     )
                     + "."
+                )
+            for pooled in player.pooled_mana_classes:
+                lines.append(
+                    "Of the mana above: "
+                    + ", ".join(
+                        f"{symbol} {count}"
+                        for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
+                        if count
+                    )
+                    + (f"; only for {pooled.restriction}" if pooled.restriction else "")
+                    + (f"; puts {pooled.effect}" if pooled.effect else "")
+                    + (
+                        "; expires at end of combat."
+                        if pooled.combat
+                        else "; expires at step end."
+                    )
                 )
             if player.hand_only_until is not None:
                 lines.append(

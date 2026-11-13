@@ -24,7 +24,7 @@ use crate::{
     state::{
         ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
-        mana::ManaCost,
+        mana::{ManaCost, ManaSpent},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -44,9 +44,11 @@ pub enum FrameCompletion {
         next: Box<FrameCompletion>,
     },
     CombatNormal,
+    /// `spent` is the mana the announced cost actually took (CR 601.2h).
     Paid {
         player: PlayerId,
         payment: Payment,
+        spent: ManaSpent,
     },
     Activated {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
@@ -132,6 +134,10 @@ pub struct EffectFrame {
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
+    /// The mana spent to cast the resolving spell, or the permanent whose
+    /// entering triggered the resolving ability; empty otherwise.
+    #[serde(skip_serializing_if = "crate::state::mana::ManaSpent::is_empty")]
+    pub spent: ManaSpent,
     /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
@@ -216,6 +222,7 @@ impl EffectFrame {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            spent: Default::default(),
             excess_damage: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
@@ -247,6 +254,7 @@ impl EffectFrame {
             resolutions_this_turn: self.resolutions_this_turn,
             kicked: self.kicked,
             x: self.x,
+            spent: self.spent,
             targets: self.targets.clone(),
             active_requirement: self.active_requirement,
             context_target: self.context_target,
@@ -381,6 +389,61 @@ pub enum ResolutionCastOffer {
     Cascade { card: CardId, exiled: Vec<CardId> },
 }
 
+/// The operation completed by a mana payment. It owns its saved caller;
+/// nested fees cannot contribute to an outer spell's receipt.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum SpendCompletion {
+    Announced {
+        payment: Payment,
+        sacrifice: Option<PermanentId>,
+        waterbend: bool,
+    },
+    Upfront(Box<Decision>),
+    Resolution(PaymentProgress),
+    Foretell(CardId),
+}
+
+/// What a `ManaChoice` adds mana for.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ManaProduction {
+    /// The mana ability's output, from `source` (absent for a choice with no
+    /// permanent source). `tapped` is present when the ability tapped
+    /// `source` for mana (CR 106.12); the triggered mana abilities that
+    /// triggers are read from the board when this output is produced
+    /// (CR 106.12a).
+    Output {
+        source: Option<ObjectRef>,
+        tapped: Option<TappedForMana>,
+    },
+    /// The type that `source`'s triggered mana ability adds after
+    /// `tapped`'s ability produced `produced`, chosen by the tapping player.
+    /// `pending` are the triggered mana abilities of the same production
+    /// still to resolve after this choice (CR 605.4a).
+    Bonus {
+        source: ObjectRef,
+        tapped: ObjectRef,
+        produced: crate::state::mana::Mana,
+        pending: Vec<PendingManaBonus>,
+    },
+}
+
+/// A permanent tapped for mana, as it was once tapped (CR 106.12): the
+/// triggered mana ability predicates on the board then that it matched. A
+/// permanent the same ability sacrifices answers those triggers from this
+/// record, its last known information.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct TappedForMana {
+    pub matched: Vec<CardPredicate>,
+}
+
+/// A triggered mana ability's output waiting to resolve after a production
+/// (CR 605.4a), with the permanent whose ability it is.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PendingManaBonus {
+    pub source: ObjectRef,
+    pub output: crate::state::card::TriggeredManaOutput,
+}
+
 /// A pending mid-resolution decision, including its own bookkeeping so a
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
@@ -435,6 +498,13 @@ pub enum Decision {
         remaining: usize,
     },
     Payment(PaymentProgress),
+    /// Spend one exact mana unit. Every option preserves saved obligations.
+    ManaSpend {
+        player: PlayerId,
+        cost: ManaCost,
+        spent: ManaSpent,
+        completion: Box<SpendCompletion>,
+    },
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
         player: PlayerId,
@@ -444,9 +514,13 @@ pub enum Decision {
         tap_remaining: usize,
         resume: Option<Box<Decision>>,
     },
+    /// A choice of mana to add during a mana production: the mana ability's
+    /// own output, or a triggered mana ability's type after it
+    /// (`production`).
     ManaChoice {
         player: PlayerId,
         choices: Vec<crate::state::mana::Mana>,
+        production: ManaProduction,
         resume: Option<Box<Decision>>,
     },
     /// `player` chooses a permanent they control matching `predicate` for
@@ -644,6 +718,7 @@ impl Decision {
             | Decision::SearchNamed { player, .. }
             | Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
+            | Decision::ManaSpend { player, .. }
             | Decision::ChooseObject { player, .. }
             | Decision::KeepCreatures { player, .. }
             | Decision::ChooseToExile { player, .. }
@@ -700,6 +775,7 @@ impl Decision {
             | Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
+            | Decision::ManaSpend { .. }
             | Decision::ChooseObject { .. }
             | Decision::KeepCreatures { .. }
             | Decision::ChooseToExile { .. }
@@ -786,6 +862,11 @@ impl SuspendedResolution {
             out.push(ResolutionRef::Frame(frame));
         }
         fn decision_chain<'a>(decision: &'a Decision, out: &mut Vec<ResolutionRef<'a>>) {
+            if let Decision::ManaSpend { completion, .. } = decision {
+                if let SpendCompletion::Upfront(next) = completion.as_ref() {
+                    decision_chain(next, out);
+                }
+            }
             if let Decision::ManaUpfront {
                 resume: Some(parent),
                 ..
@@ -1184,7 +1265,11 @@ impl Game {
                         frame.completion = FrameCompletion::Continue;
                         continue;
                     }
-                    FrameCompletion::Paid { player, payment } => {
+                    FrameCompletion::Paid {
+                        player,
+                        payment,
+                        spent,
+                    } => {
                         let Payment::Spell {
                             card,
                             cast,
@@ -1201,6 +1286,7 @@ impl Game {
                             self.state.stack_objects_mut().last_mut()
                         {
                             spell.mode = mode;
+                            spell.spent = spent;
                         }
                     }
                     FrameCompletion::Activated {
@@ -1232,6 +1318,17 @@ impl Game {
                                     crate::flow::proposed_event::ZoneEntry {
                                         controller: Some(frame.controller),
                                         x: frame.x,
+                                        // Spend effects that applied to
+                                        // this spell as it was cast.
+                                        counters: {
+                                            let mut counters =
+                                                crate::state::permanent::Counters::default();
+                                            counters.change(
+                                                crate::state::permanent::CounterKind::PlusOnePlusOne,
+                                                i32::from(frame.spent.entry_counters),
+                                            );
+                                            counters
+                                        },
                                         ..Default::default()
                                     },
                                 )
@@ -1489,6 +1586,20 @@ impl Game {
                     focus: source_focus,
                 }
             }
+            Decision::ManaSpend { player, cost, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                focus: source_focus,
+                actions: self
+                    .mana_spend_choices(*player, cost)
+                    .iter()
+                    .enumerate()
+                    .map(|(mode, _)| Action::ChooseMode {
+                        player: *player,
+                        mode,
+                    })
+                    .collect(),
+            },
             Decision::ManaChoice {
                 player, choices, ..
             } => ActionSpace {
@@ -1825,6 +1936,11 @@ impl Game {
                 return self.pay_mana_tap_cost(*player, *card);
             }
         }
+        if let (Decision::ManaSpend { .. }, Action::ChooseMode { mode, .. }) =
+            (&suspended.decision, action)
+        {
+            return self.advance_mana_spend(Some(*mode));
+        }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
             (Decision::EnterAsCopy { candidates, .. }, choice) => {
@@ -1938,23 +2054,19 @@ impl Game {
             }
             (Decision::Payment(payment), Action::PayCost { .. }) => {
                 let cost = payment.remaining.mana_cost();
-                if let Err(error) = self
-                    .produce_mana(payment.player, &cost)
-                    .and_then(|()| self.spend_mana(payment.player, &cost))
-                {
+                if let Err(error) = self.produce_mana(payment.player, &cost) {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(error);
                 }
-                if let Some(key) = payment.spends {
-                    self.spend_once_each_turn(key);
-                }
-                if matches!(payment.remaining, PaymentCost::Waterbend { .. }) {
-                    self.record_bending(payment.player, crate::flow::turn::Bending::Water);
-                }
-                let effects = std::mem::take(&mut payment.if_paid);
-                suspended.frame.prepend_effects(effects.into_iter());
-                self.run_frame(suspended.frame);
-                Ok(())
+                let Decision::Payment(payment) = suspended.decision else {
+                    unreachable!()
+                };
+                self.begin_mana_spend(
+                    payment.player,
+                    cost,
+                    SpendCompletion::Resolution(payment),
+                    suspended.frame,
+                )
             }
             (Decision::ChooseObject { optional: true, .. }, Action::Decline { .. }) => {
                 self.run_frame(suspended.frame);
@@ -1979,20 +2091,48 @@ impl Game {
                 Decision::ManaChoice {
                     player,
                     choices,
+                    production,
                     resume,
                 },
                 Action::ChooseMode { mode, .. },
             ) => {
                 let mana = &choices[*mode];
                 self.state.mana_pool_mut(*player).add(mana);
-                if let Some(resume) = resume.take() {
-                    suspended.decision = *resume;
+                let player = *player;
+                // The output is produced: its triggered mana abilities
+                // trigger now (CR 106.12a) and resolve at once (CR 605.4a).
+                let next = match production {
+                    ManaProduction::Output {
+                        source: Some(source),
+                        tapped: Some(tapped),
+                    } => {
+                        let bonuses = self.production_bonuses(player, tapped);
+                        self.resolve_mana_bonuses(player, *source, mana, bonuses, resume.take())
+                    }
+                    ManaProduction::Output { .. } => resume.take(),
+                    ManaProduction::Bonus {
+                        tapped,
+                        produced,
+                        pending,
+                        ..
+                    } => self.resolve_mana_bonuses(
+                        player,
+                        *tapped,
+                        produced,
+                        std::mem::take(pending),
+                        resume.take(),
+                    ),
+                };
+                if let Some(next) = next {
+                    suspended.decision = *next;
                     *self.state.suspended_decision_mut() = Some(suspended);
+                    // Only an upfront payment advances here; a bonus choice
+                    // stays suspended for the chooser.
                     self.advance_mana_upfront()?;
                 } else {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
-                    self.state.priority_mut().on_non_pass_action(*player);
+                    self.state.priority_mut().on_non_pass_action(player);
                 }
                 Ok(())
             }

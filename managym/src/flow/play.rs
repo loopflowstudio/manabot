@@ -13,7 +13,7 @@
 use crate::{
     agent::action::AgentError,
     flow::{
-        decision::{EffectFrame, FrameCompletion},
+        decision::{EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
         proposed_event::ProposedEvent,
@@ -23,7 +23,7 @@ use crate::{
         ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
+        mana::{ManaCost, ManaSpent, SpellSnapshot, SpendingContext, SpendingObject},
         stack_object::ActivatedAbilityOnStack,
         zone::ZoneType,
     },
@@ -1931,7 +1931,27 @@ impl Game {
         self.produce_mana(player, &cost)?;
         // Commit the complete announced cost once, before sacrifice triggers
         // can observe a departing permanent or a spell reaches the stack.
-        self.spend_mana(player, &cost)?;
+        self.pending_choice = None;
+        self.begin_mana_spend(
+            player,
+            cost,
+            SpendCompletion::Announced {
+                payment,
+                sacrifice,
+                waterbend,
+            },
+            EffectFrame::new(player, Vec::new()),
+        )
+    }
+
+    pub(crate) fn complete_announced_payment(
+        &mut self,
+        player: PlayerId,
+        payment: Payment,
+        sacrifice: Option<PermanentId>,
+        waterbend: bool,
+        spent: ManaSpent,
+    ) -> Result<(), AgentError> {
         let mut events = Vec::new();
         if let Some(target) = sacrifice.and_then(|id| self.permanent_object_ref(id)) {
             events.push(ProposedEvent::Sacrifice { target });
@@ -1939,9 +1959,12 @@ impl Game {
         if waterbend {
             self.record_bending(player, crate::flow::turn::Bending::Water);
         }
-        self.pending_choice = None;
         let completion = match payment {
-            Payment::Spell { .. } => FrameCompletion::Paid { player, payment },
+            Payment::Spell { .. } => FrameCompletion::Paid {
+                player,
+                payment,
+                spent,
+            },
             Payment::Activation {
                 source,
                 ability_index,

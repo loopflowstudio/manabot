@@ -13,12 +13,12 @@ use serde::Serialize;
 
 use crate::{
     agent::{
-        ability_description::effects_description,
+        ability_description::{effects_description, mana_description},
         continuation::{ContinuationFrame, VisibleReference},
     },
     cards::{content_pack::default_content_pack, tokens::TokenWriter},
     flow::{
-        decision::{Decision, EffectFrame, FrameCompletion},
+        decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
         game::{ActivationSource, Game, Payment},
         proposed_event::{
@@ -27,7 +27,9 @@ use crate::{
     },
     state::{
         ability::Effect,
+        card::CardDefId,
         game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+        mana::{Mana, ManaSpent},
     },
 };
 
@@ -77,6 +79,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "distinct name search",
     "effect execution",
     "end batch",
+    "entering card",
     "entering definition",
     "enters face down",
     "enters tapped",
@@ -115,7 +118,11 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "linked exile",
     "linked return",
     "linked source",
+    "mana spent",
+    "spending option",
+    "cost sacrifice",
     "maximum total power",
+    "may copy",
     "mode",
     "moved",
     "moving object",
@@ -417,45 +424,18 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
-            FrameCompletion::Paid { player, payment } => {
+            FrameCompletion::Paid {
+                player,
+                payment,
+                spent,
+            } => {
                 self.paid_summary();
+                if !spent.is_empty() {
+                    self.receipt(spent);
+                }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
-                match payment {
-                    Payment::Spell {
-                        card,
-                        cast,
-                        mode,
-                        targets,
-                        target_req_indices,
-                    } => {
-                        self.card("paid spell", *card);
-                        self.field("cast choices", cast);
-                        self.field("mode", mode);
-                        self.field("target clauses", target_req_indices);
-                        for target in targets {
-                            self.target("target", *target);
-                        }
-                    }
-                    Payment::Activation {
-                        source,
-                        ability_index,
-                        targets,
-                        x,
-                    } => {
-                        match source {
-                            ActivationSource::Permanent(id) => {
-                                self.target("paid source", Target::Permanent(*id))
-                            }
-                            ActivationSource::Card(card) => self.card("paid source", *card),
-                        }
-                        self.field("ability", ability_index);
-                        self.field("X", x);
-                        for target in targets {
-                            self.target("target", *target);
-                        }
-                    }
-                }
+                self.payment(payment);
             }
             FrameCompletion::Activated {
                 ability,
@@ -485,6 +465,62 @@ impl<'a> Projection<'a> {
                 }
             }
         }
+    }
+
+    fn payment(&mut self, payment: &Payment) {
+        match payment {
+            Payment::Spell {
+                card,
+                cast,
+                mode,
+                targets,
+                target_req_indices,
+            } => {
+                self.card("paid spell", *card);
+                self.field("cast choices", cast);
+                self.field("mode", mode);
+                self.field("target clauses", target_req_indices);
+                for target in targets {
+                    self.target("target", *target);
+                }
+            }
+            Payment::Activation {
+                source,
+                ability_index,
+                targets,
+                x,
+            } => {
+                match source {
+                    ActivationSource::Permanent(id) => {
+                        self.target("paid source", Target::Permanent(*id))
+                    }
+                    ActivationSource::Card(card) => self.card("paid source", *card),
+                }
+                self.field("ability", ability_index);
+                self.field("X", x);
+                for target in targets {
+                    self.target("target", *target);
+                }
+            }
+        }
+    }
+
+    /// The mana actually spent to cast (CR 601.2h) and the entry counters
+    /// its spend effects add.
+    fn receipt(&mut self, spent: &ManaSpent) {
+        self.field("mana spent", spent);
+        self.summary(|| {
+            let mana = mana_description(&Mana {
+                mana: spent.amounts,
+                ..Default::default()
+            });
+            match spent.entry_counters {
+                0 => format!("Mana spent to cast: {mana}."),
+                counters => format!(
+                    "Mana spent to cast: {mana}; it enters with {counters} additional +1/+1 counter(s)."
+                ),
+            }
+        });
     }
 
     fn paid_summary(&mut self) {
@@ -779,6 +815,45 @@ impl<'a> Projection<'a> {
     }
 }
 
+/// Whether a rule still reads `spent`, the mana spent to cast the spell that
+/// is, or became the source of, the object defined by `definition`: its
+/// definition counts that mana (Toph, converge), or a spend effect applied
+/// (Animal Attendant's counter). Other receipts are not projected.
+pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) -> bool {
+    static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
+    if spent.is_empty() {
+        return false;
+    }
+    if spent.entry_counters > 0 {
+        return true;
+    }
+    let reads = READS.get_or_init(|| {
+        // The catalog iterates definitions in CardDefId order.
+        default_content_pack()
+            .definitions()
+            .map(|definition| {
+                let json = serde_json::to_string(definition).expect("serializable definition");
+                json.contains("ManaSpentToCast") || json.contains("ColorsSpentToCast")
+            })
+            .collect()
+    });
+    definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
+}
+
+/// Project the cast receipt of a stack spell, or of the stack ability an
+/// entering permanent's own trigger became.
+pub(crate) fn project_receipt(
+    game: &Game,
+    spent: &ManaSpent,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    let mut out = Projection::new(game, viewer, text);
+    out.receipt(spent);
+    out.finish(frame);
+}
+
 /// Project a suspended effect frame's retained work. `text` additionally
 /// renders its description and summaries; the policy occurrence is identical
 /// either way.
@@ -824,6 +899,12 @@ pub(crate) fn project_frame(
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);
     }
+    let source_definition = effect
+        .source
+        .map(|card| game.state.cards[card].definition_id);
+    if receipt_matters(&effect.spent, source_definition) {
+        out.receipt(&effect.spent);
+    }
     if let Some(player) = effect.triggering_player {
         out.field("triggering player", &player);
     }
@@ -862,6 +943,50 @@ pub(crate) fn project_decision(
 ) {
     let mut out = Projection::new(game, viewer, text);
     match decision {
+        Decision::ManaSpend {
+            player,
+            cost,
+            spent,
+            completion,
+        } => {
+            out.field("mana spent", spent);
+            out.summary(|| {
+                format!(
+                    "Mana already spent in this payment: {}.",
+                    mana_description(&crate::state::mana::Mana {
+                        mana: spent.amounts,
+                        ..Default::default()
+                    })
+                )
+            });
+            for (mode, choice) in game.mana_spend_choices(*player, cost).iter().enumerate() {
+                out.field("mode", &mode);
+                out.field("spending option", &choice.unit);
+            }
+            match completion.as_ref() {
+                SpendCompletion::Announced {
+                    payment, sacrifice, ..
+                } => {
+                    out.payment(payment);
+                    if let Some(permanent) = sacrifice {
+                        out.target(
+                            "cost sacrifice",
+                            crate::state::game_object::Target::Permanent(*permanent),
+                        );
+                    }
+                }
+                SpendCompletion::Resolution(payment) => {
+                    out.effects("if paid", &payment.if_paid);
+                    out.objects("waterbend contributions", &payment.waterbend_paid);
+                    if let Some(key) = payment.spends {
+                        out.object("once each turn source", key.0);
+                        out.field("once each turn ability", &key.1);
+                    }
+                }
+                SpendCompletion::Foretell(card) => out.card("cast from hand", *card),
+                SpendCompletion::Upfront(_) => {}
+            }
+        }
         Decision::SelectCards {
             selected,
             min,
