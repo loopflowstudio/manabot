@@ -99,3 +99,121 @@ head ppo timed steps/s: {'median': 0.34181404000649573, 'min': 0.340952220440006
 
 PPO remains slower in the final check; no no-regression pass is claimed.
 CPU oracle: 3,410 tensors exact; five update cases exact. Final CUDA max gradient difference 2.561137080192566e-9; repeat 2.0954757928848267e-9. Task <=1e-8 bar passes; stricter repeat-floor condition remains open.
+
+Post-#514 main versus Prepared: RTX 5090; source 5cc7c121bc; base de39d601fb; Etude 1caf1c9a7f4f; launcher cost ~$0.31.
+Three alternating processes per arm, three timed inner repeats.
+base: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+head: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+base: forward sync warnings [24, 24, 24]
+head: forward sync warnings [1, 1, 1]
+damped steps/s     base 16.31 [16.16, 17.81]  head 17.84 [17.32, 18.41]  head/base 1.094  within spread
+ppo steps/s        base 1.358 [1.319, 1.384]  head 1.084 [1.081, 1.098]  head/base 0.798  REGRESSION
+inference obs/s    base 9305 [9284, 9766]  head 1.005e+04 [9127, 1.028e+04]  head/base 1.080  within spread
+host preparation s base 0.01271 [0.01222, 0.01334]  head 0.01429 [0.01349, 0.01461]  head/base 1.125  REGRESSION
+save s             base 0.02101 [0.02017, 0.02135]  head 0.01831 [0.01788, 0.02076]  head/base 0.872  within spread
+load s             base 0.0676 [0.0656, 0.06809]  head 0.07829 [0.07448, 0.08235]  head/base 1.158  REGRESSION
+collection s       base 24.2 [24.03, 51.26]  head 23.97 [22.9, 24.25]  head/base 0.991  within spread
+damped Batch transfer and behavior checks                      base 0.699  head 0.782
+damped Minibatches                                             base 12.178  head 11.290
+damped Minibatches/Backward and gradient clipping              base 5.281  head 5.002
+damped Minibatches/Forward and loss                            base 5.720  head 5.155
+damped Minibatches/Minibatch diagnostics                       base 0.121  head 0.118
+damped Minibatches/Optimizer step                              base 0.239  head 0.236
+damped Selection and health diagnostics                        base 0.020  head 0.021
+damped Targets                                                 base 0.027  head 0.030
+ppo Batch transfer, targets and behavior checks             base 0.728  head 0.732
+ppo Minibatches                                             base 11.017  head 14.054
+ppo Minibatches/Backward and gradient clipping              base 3.459  head 2.102
+ppo Minibatches/Forward and loss                            base 5.553  head 10.115
+ppo Minibatches/Minibatch diagnostics                       base 0.007  head 0.006
+ppo Minibatches/Optimizer step                              base 0.029  head 0.023
+ppo Selection and health diagnostics                        base 0.021  head 0.022
+
+Post-#514 host preparation optimization: RTX 5090, same rental as preceding check; source e98109b8f8; Etude d70a7d515116; launcher cost ~$0.32.
+base=de39d601fb; before=5cc7c121bc; head=7aaebdaa82 (skip unused catalog scans, prepare live facts then restore padding).
+Three alternating processes per arm, three timed inner repeats.
+base: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+before: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+head: 3 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+base: forward sync warnings [24, 24, 24]
+before: forward sync warnings [1, 1, 1]
+head: forward sync warnings [1, 1, 1]
+damped steps/s     base 15.91 [14.97, 17.4]  before 18.36 [16.91, 18.92]  before/base 1.154  within spread
+damped steps/s     base 15.91 [14.97, 17.4]  head 18.57 [18.51, 19.2]  head/base 1.167  within spread
+ppo steps/s        base 1.324 [1.21, 1.387]  before 1.102 [1.032, 1.128]  before/base 0.832  REGRESSION
+ppo steps/s        base 1.324 [1.21, 1.387]  head 1.197 [1.145, 1.237]  head/base 0.904  within spread
+inference obs/s    base 9170 [6884, 9792]  before 9892 [8910, 1.004e+04]  before/base 1.079  within spread
+inference obs/s    base 9170 [6884, 9792]  head 9628 [9283, 1.013e+04]  head/base 1.050  within spread
+host preparation s base 0.01334 [0.01244, 0.01988]  before 0.01459 [0.01367, 0.01551]  before/base 1.094  within spread
+host preparation s base 0.01334 [0.01244, 0.01988]  head 0.01402 [0.01325, 0.0147]  head/base 1.051  within spread
+save s             base 0.0226 [0.02061, 0.02638]  before 0.01839 [0.01787, 0.01918]  before/base 0.814  within spread
+save s             base 0.0226 [0.02061, 0.02638]  head 0.01813 [0.018, 0.01825]  head/base 0.802  within spread
+load s             base 0.07118 [0.0681, 0.0906]  before 0.07714 [0.07527, 0.08517]  before/base 1.084  within spread
+load s             base 0.07118 [0.0681, 0.0906]  head 0.07384 [0.07211, 0.07739]  head/base 1.037  within spread
+collection s       base 25 [23.41, 26.25]  before 23.6 [23.02, 26.27]  before/base 0.944  within spread
+collection s       base 25 [23.41, 26.25]  head 22.39 [22.37, 24.21]  head/base 0.896  within spread
+damped Batch transfer and behavior checks                      base 0.717  before 0.727  head 0.719
+damped Minibatches                                             base 12.825  before 10.606  head 10.912
+damped Minibatches/Backward and gradient clipping              base 5.529  before 4.578  head 4.835
+damped Minibatches/Forward and loss                            base 6.018  before 4.965  head 4.993
+damped Minibatches/Minibatch diagnostics                       base 0.137  before 0.116  head 0.118
+damped Minibatches/Optimizer step                              base 0.259  before 0.231  head 0.248
+damped Selection and health diagnostics                        base 0.021  before 0.021  head 0.021
+damped Targets                                                 base 0.027  before 0.057  head 0.029
+ppo Batch transfer, targets and behavior checks             base 0.746  before 0.726  head 0.779
+ppo Minibatches                                             base 11.296  before 13.770  head 12.552
+ppo Minibatches/Backward and gradient clipping              base 3.492  before 2.101  head 2.088
+ppo Minibatches/Forward and loss                            base 5.862  before 9.806  head 8.594
+ppo Minibatches/Minibatch diagnostics                       base 0.008  before 0.006  head 0.006
+ppo Minibatches/Optimizer step                              base 0.032  before 0.024  head 0.024
+ppo Selection and health diagnostics                        base 0.021  before 0.021  head 0.022
+
+Final metadata experiment: RTX 5090, same rental; source f955a49a31; Etude 3abae50ac468; launcher cost ~$0.12.
+base=de39d601fb; before=retained final host preparation (e98109b8f8); head=DISCARDED host-only field metadata (bf6ed1a9f1).
+One process per arm, three timed inner repeats. The comparison script's zero between-process spread is not a variance estimate.
+base: 1 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+before: 1 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+head: 1 processes, learner rows {55391}, damped steps {(217, 217, 217)}
+base: forward sync warnings [24]
+before: forward sync warnings [1]
+head: forward sync warnings [1]
+damped steps/s     base 17.31 [17.31, 17.31]  before 17.83 [17.83, 17.83]  before/base 1.030  within spread
+damped steps/s     base 17.31 [17.31, 17.31]  head 17.13 [17.13, 17.13]  head/base 0.990  REGRESSION
+ppo steps/s        base 1.314 [1.314, 1.314]  before 1.219 [1.219, 1.219]  before/base 0.928  REGRESSION
+ppo steps/s        base 1.314 [1.314, 1.314]  head 1.221 [1.221, 1.221]  head/base 0.930  REGRESSION
+inference obs/s    base 8740 [8740, 8740]  before 1.004e+04 [1.004e+04, 1.004e+04]  before/base 1.149  within spread
+inference obs/s    base 8740 [8740, 8740]  head 9524 [9524, 9524]  head/base 1.090  within spread
+host preparation s base 0.0143 [0.0143, 0.0143]  before 0.01382 [0.01382, 0.01382]  before/base 0.966  within spread
+host preparation s base 0.0143 [0.0143, 0.0143]  head 0.01389 [0.01389, 0.01389]  head/base 0.972  within spread
+save s             base 0.02438 [0.02438, 0.02438]  before 0.01642 [0.01642, 0.01642]  before/base 0.674  within spread
+save s             base 0.02438 [0.02438, 0.02438]  head 0.01673 [0.01673, 0.01673]  head/base 0.686  within spread
+load s             base 0.08036 [0.08036, 0.08036]  before 0.07981 [0.07981, 0.07981]  before/base 0.993  within spread
+load s             base 0.08036 [0.08036, 0.08036]  head 0.07443 [0.07443, 0.07443]  head/base 0.926  within spread
+collection s       base 23.47 [23.47, 23.47]  before 23.4 [23.4, 23.4]  before/base 0.997  within spread
+collection s       base 23.47 [23.47, 23.47]  head 22.75 [22.75, 22.75]  head/base 0.969  within spread
+damped Batch transfer and behavior checks                      base 0.708  before 0.714  head 0.732
+damped Minibatches                                             base 11.774  before 11.404  head 11.732
+damped Minibatches/Backward and gradient clipping              base 5.133  before 5.030  head 5.128
+damped Minibatches/Forward and loss                            base 5.461  before 5.179  head 5.389
+damped Minibatches/Minibatch diagnostics                       base 0.118  before 0.126  head 0.143
+damped Minibatches/Optimizer step                              base 0.228  before 0.254  head 0.279
+damped Selection and health diagnostics                        base 0.020  before 0.021  head 0.021
+damped Targets                                                 base 0.027  before 0.031  head 0.030
+ppo Batch transfer, targets and behavior checks             base 0.725  before 0.744  head 0.753
+ppo Minibatches                                             base 11.378  before 12.369  head 12.347
+ppo Minibatches/Backward and gradient clipping              base 3.541  before 2.091  head 2.087
+ppo Minibatches/Forward and loss                            base 5.842  before 8.468  head 8.406
+ppo Minibatches/Minibatch diagnostics                       base 0.009  before 0.006  head 0.006
+ppo Minibatches/Optimizer step                              base 0.039  before 0.025  head 0.024
+ppo Selection and health diagnostics                        base 0.021  before 0.021  head 0.023
+base damped timed steps/s: {'median': 17.309502926227818, 'min': 17.305454509463285, 'max': 17.31923247030318, 'all': [17.305454509463285, 17.309502926227818, 17.31923247030318]}
+base ppo timed steps/s: {'median': 1.3139569788101109, 'min': 1.2982266057189602, 'max': 1.3191192003543988, 'all': [1.3139569788101109, 1.2982266057189602, 1.3191192003543988]}
+before damped timed steps/s: {'median': 17.829958127452166, 'min': 17.425347164182757, 'max': 19.070394219672863, 'all': [19.070394219672863, 17.425347164182757, 17.829958127452166]}
+before ppo timed steps/s: {'median': 1.2189102433210433, 'min': 1.2177550196555655, 'max': 1.2329324847091068, 'all': [1.2189102433210433, 1.2329324847091068, 1.2177550196555655]}
+head damped timed steps/s: {'median': 17.127773615501084, 'min': 16.837452820365932, 'max': 17.33840335608725, 'all': [16.837452820365932, 17.127773615501084, 17.33840335608725]}
+head ppo timed steps/s: {'median': 1.22133282525463, 'min': 1.2189366032163376, 'max': 1.2253400589571695, 'all': [1.22133282525463, 1.2253400589571695, 1.2189366032163376]}
+
+Retained final code is exactly the preceding run's head and this run's before arm.
+Final retained PPO 1.218910 [1.217755, 1.232932] vs main 1.313957 [1.298227, 1.319119] steps/s: 7.2% slower.
+Metadata's PPO gain was only 0.2%, with damped median 3.9% lower than before; discarded.
+No no-slower-median pass is claimed. Both earlier three-process CUDA captures retain the strict repeat-floor finding for review.

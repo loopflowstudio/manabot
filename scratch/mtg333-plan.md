@@ -1,7 +1,8 @@
 # MTG-333 plan: torch forward over `Prepared`, container saves, backend rule
 
-Policy baseline: `ef28f3a58` (PR #501). Comparison baseline for every receipt:
-`105e7e2aa` (MTG-297 mana spending). One PR. Full history of this plan, with every attempt and
+Policy baseline: `ef28f3a58` (PR #501). CPU/historical CUDA baseline:
+`105e7e2aa` (MTG-297 mana spending). Post-#514 CUDA baseline: `de39d601fb`.
+One PR. Full history of this plan, with every attempt and
 intermediate receipt: `696e7e667c:scratch/mtg333-plan.md`; slice 1–6 receipts:
 `1f634d89b:scratch/mtg333-plan.md`; MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
@@ -11,9 +12,9 @@ intermediate receipt: `696e7e667c:scratch/mtg333-plan.md`; slice 1–6 receipts:
 it into the moved `backends/torch/_semantic_cards.py`, `_recent_events.py`,
 `_facts.py`, `_shared_effects.py` and `policy.py`. `experiments/ppo_cuda.md`
 reports it CPU-bitwise and a CUDA summation reorder; its L4 PPO update fell
-69.97→32.23 s, mostly backward. The merge also changes the engine. After it,
-the CPU oracle and update comparison have not run, and every PPO ratio below
-predates it.
+69.97→32.23 s, mostly backward. The merge also changes the engine. Fresh
+post-merge CPU captures match all 3,410 tensors and five update cases exactly
+(2026-11-13). The post-#514 comparison below now isolates this Task.
 
 ## Problem
 
@@ -78,7 +79,10 @@ optimize pass's before/after.
 
 ## State
 
-Slices 1–8 are implemented; nothing is pending a launch.
+Slices 1–8 are implemented. The post-#514 CPU oracle and updates are exact.
+All CUDA jobs have ended; the successful rental was terminated and provider
+inventory confirms both allocations absent. Two host optimizations are retained;
+the metadata experiment was discarded. **PPO's no-slower-median condition is still unmet** (below).
 
 1. `prepare` covers every torch configuration on the host (`Prepared[A]`,
    catalog-free and hashed-record `Tables`, NumPy trimming, belief/event
@@ -107,14 +111,16 @@ Slices 1–8 are implemented; nothing is pending a launch.
 
 **Open for review, not waived:**
 
-- PPO is slower: 7.7% on A40 (three processes per arm, outside spread), 5.2%
-  in the final same-5090 check. The plan's no-slower-median condition is not
-  met. In the final check PPO "Forward and loss" is 9.612 s vs 5.725 s while
-  backward is 34.672 s vs 36.041 s; the limiter is large-minibatch host
-  preparation in the forward, not a correctness difference or a reason to
-  restore raw forwards. #514 halves PPO backward on both arms, so head's
-  extra forward time is now a larger share; the regression must be
-  remeasured against a base that contains #514 (Launching again).
+- Post-#514 PPO was 20.2% slower in the initial three-process check.
+  Skipping unused catalog scans and preparing only live fact rows (restoring
+  identical padding before the forward) improved PPO 8.6% vs pre-optimization
+  in a three-process same-card check; head remained 9.6% below main, within
+  process spread. The final same-card check's retained arm is **7.2% slower**:
+  1.218910 [1.217755, 1.232932] vs main 1.313957 [1.298227, 1.319119]
+  steps/s (one process each, three timed repeats). Forward/loss is still
+  8.468 vs 5.842 s; backward 2.091 vs 3.541 s. This needs a review decision;
+  no speed acceptance is claimed. Host-only metadata yielded only 0.2% PPO
+  gain and lowered damped median 3.9%; it was discarded.
 - CUDA gradients meet the Task bar (≤1e-8) but exceed the head-vs-head repeat
   floor the plan also asked for.
 - With `tests/eval/test_batched_eval.py` earlier in the same pytest process,
@@ -176,6 +182,10 @@ admission's private `_key`/`_word` and fact-kind tuples (one owner:
 `_numeric_permanent_columns` (read `policy.checkpoint.layout`), `pack(order=)`
 (takes `order_lengths`).
 
+Post-#514: remove unconditional `_referenced_definitions` scans, full padded-fact
+integer work (the graph still gets identical padded rows). The attempted
+host-only metadata markers were discarded, not shipped.
+
 ## Facts that still bind
 
 - `105e7e2aa` changes seeded games (102,209 steps over the budget's 512
@@ -224,7 +234,7 @@ Rental facts from this Task: L4 quotes were refused ("provider reports no
 available machines"). RunPod A40/A6000 creates returned HTTP 400 whose body
 was "There are no longer any instances available with the requested
 specifications. Please refresh and try again." (stock, 19:33–19:38 UTC). Vast
-RTX 5090 rented both times it was asked. A cancelled, never-created request
+RTX 5090 rented both earlier times it was asked. A cancelled, never-created request
 (`4b091160edbf`) showed provisional accrual and blocked its template until its
 rental deadline, then settled **lost (create_unconfirmed), $0.00**: SDK 0.2.15
 `Scheduler._observe` finishes an absent machine only after the deadline and
@@ -233,8 +243,7 @@ That is an Etude fix outside this Task; never edit the launcher database.
 
 Optimize candidates not tried (unmeasured): vectorize `prepare._effects`'
 per-record loop; int32 index arrays; `Packed.gather` for fact programs; host
-compaction on CUDA inference (summation order: tolerance, not bitwise); skip
-unused definition-reference collection (0.928 s of the PPO profile); avoid
+compaction on CUDA inference (summation order: tolerance, not bitwise); avoid
 full-capacity temporaries before trimming. Each kept change reruns the CPU
 oracle, the update comparison and one same-card speed pass.
 
@@ -321,16 +330,44 @@ left alone. Every MTG-333 launcher machine is a never-created request at
 $0.00 whose window has ended or ends by 20:51 UTC (`4b091160edbf` settled
 lost, $0.00). No Task rental is live.
 
+## Post-#514 refresh, 2026-11-13
+
+- CPU: fresh base `105e7e2aa` and merged head, shared
+  `/tmp/mtg333/post514-belief.pt` → **3,410 tensors, differing 0**, five
+  update cases byte-identical. Retained optimizations also pass:
+  `compare.py post514-base.pt post514-facts-head.pt` → same;
+  `cmp updates-post514-{base,facts}.json` → identical. Final `manabot/` is exactly
+  `e98109b8f8` (confirmed by an empty diff after discarding metadata).
+- Focused checks: `test_prepare_rows.py` → 27 passed; packed transfer and
+  `test_torch_backend_protocol.py` → 6 passed, repeated after discarding the
+  metadata change. Ruff check/format passed. Broader validation stays at gate.
+- `5545e3f17584`: lost before bootstrap, `machine_lost_before_start`, launcher
+  ~$0.01, deletion confirmed. No second Task rental was live.
+- `1caf1c9a7f4f` (`5cc7c121bc`): initial post-#514 comparison against
+  `de39d601fb`, three processes each; PPO −20.2%, damped +9.4%, inference
+  +8.0%. CUDA outputs/losses/CPU-trained weights exact, 52 gradients differ,
+  max 1.396984e-9; repeat 6 gradients, max 1.862645e-9. Profile: preparation
+  5.134 s, facts 1.682 s, unused catalog scan 0.387 s, device traversal/copy
+  1.434 s per PPO update.
+- `d70a7d515116` (`e98109b8f8`): three processes each of main, pre-optimization,
+  and retained host optimization; PPO 1.324 / 1.102 / 1.197 steps/s. CUDA
+  outputs/losses/CPU-trained weights exact, 52 gradients differ, max
+  1.862645e-9; repeat 8 gradients, max 3.259629e-9. The stricter repeat-floor
+  finding remains for review.
+- `3abae50ac468` (`f955a49a31`): main / retained facts / metadata attempt,
+  one process each, three timed repeats. Metadata attempt discarded (State).
+  Retained PPO −7.2%, damped +3.0%, inference +14.9%, collection 23.47→23.40 s,
+  save 0.02438→0.01642 s, load 0.08036→0.07981 s. These are this check's
+  numbers, not cross-run ratios.
+
+All three successful runs used the **same physical RTX 5090 in one rental**,
+`mtg333-opt-vast5090-9ff43be26b3e`; each includes both comparison arms.
+Full speed tables, timed ranges and launcher costs: `scratch/speed/mtg333-results.txt`.
+Generated patches remain only in frozen launch commits, removed from the final tree.
+
 ## Next actions
 
-1. Repeat the CPU oracle (fresh base and head captures, one belief corpus)
-   and the update comparison on the merged tree. The extension was rebuilt
-   for it (20:41 UTC, release, cp313 replaced atomically);
-   `tests/model/test_semantic_cards.py` → 10 passed, 8 CUDA-only skipped.
-2. One same-card CUDA speed pass, base `de39d601fb` vs head, within the
-   remaining USD 25 budget (spent so far ≈ $0.70): PPO, damped, inference,
-   collection, with the PPO section split. If PPO is still slower, the
-   untried candidates above target host preparation in the forward.
-3. Review the PPO tradeoff and the CUDA repeat-floor finding (State).
-4. Gate: broader suites, installed wheel, Python 3.12, the full-file test
-   order. Publication and landing are the caller's steps.
+1. Review the remaining PPO median regression and the CUDA repeat-floor finding.
+   The scoped host optimizations helped, but do not meet the accepted speed bar.
+2. Gate: broader suites, installed wheel, Python 3.12 and the full-file test order
+   that timed out (State). Publication and landing are the caller's steps.

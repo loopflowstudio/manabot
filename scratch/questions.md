@@ -86,3 +86,8 @@ again.” Provider inventory confirmed no pods; their windows were terminated.
 Use the authorized Vast 5090 fallback: run 267f945d54a0, one card/rental for
 both optimization arms. Absolute times are not compared across cards with
 the initial A40 result.
+
+2026-11-13 post-#514: the final host-metadata check uses one process per arm
+with three timed inner repeats to fit the existing same-card rental window.
+The preceding main/pre-optimization/fact-optimized check uses three processes
+per arm. Keep the final inner ranges; do not call them process spread.

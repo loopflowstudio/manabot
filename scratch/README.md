@@ -1,11 +1,11 @@
 # scratch
 
-- `mtg333-plan.md`: state, open findings, binding facts, gate acceptance and
-  receipts. Prepared cutover, shared saves, the #513 port, CUDA equivalence,
-  speed/profile and the optimize pass are done. Open for review: PPO is 5.2%
-  slower on the final same-card check, and CUDA gradients exceed the repeat
-  floor while meeting 1e-8. Main's #514 (PPO speedup) is merged; the CPU
-  oracle and a same-card speed pass have not been repeated after it.
+- `mtg333-plan.md`: state, binding facts, open review findings and receipts.
+  Prepared cutover, shared saves and #513/#514 integration are implemented.
+  Fresh CPU oracle: 3,410 tensors and five updates exact. Two measured host
+  optimizations retained; metadata attempt discarded. PPO remains 7.2% slower
+  in the final same-card check; speed acceptance, strict CUDA repeat floor and
+  the order-dependent test timeout remain for review. Broader checks are at gate.
 - `speed/mtg333-results.txt`: full A40 and 5090 speed tables.
 - `questions.md`: reversible assumptions taken without asking.
 - `mtg325-torch-backend-verification.md`: inherited baseline evidence; not
