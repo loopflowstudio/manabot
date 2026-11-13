@@ -272,3 +272,88 @@ Launch `518a4948ea80`, runs `f2f5adec2478`, `cfff739d2db5`, `5e0ed566acd9`,
 not acquired. Final launcher cost observations are retained with the pilot rather than
 reconstructing billing from elapsed time.
 Serial quote: USD4.31 first-wave rental, USD12 job/cohort rental budget.
+
+## Concept review (2026-11-13, at `9dbe3f78df`) — next implement direction
+
+No code changed here. Status above ("complete; gate, review and PR remain") is
+superseded by this section until the direction below is done.
+
+### Biggest mismatch: a redundant tap is a defect in part 2 and a choice in part 3
+
+Part 2 calls a payment that taps a removable source an over-tap, MTG-342's
+bug. Part 3's enumeration (`fixed_outcomes`) counts every such payment as a
+distinct outcome ("includes deliberately producing surplus mana"): three
+Forests paying {G} are 3 outcomes, 1 without surplus. The case against flat D
+(712 outcomes, 422 casts certified above 64, the 420 cap hits) and E's 1,552
+all rest on that counting definition. The shape rows hold no count that
+excludes redundant taps, so the report cannot say whether one flat choice of
+"what stays untapped" fits 64 slots. The recommendation's grouping machinery
+follows from an unmeasured premise.
+
+Consequence if surplus is excluded and every tapped unit is spent: the pool
+remainder is unchanged and the receipt is fixed by the sources tapped, so the
+outcome is the set of sources left untapped, the choice the Task quotes
+("choosing which lands to leave untapped"). Pool and receipt choices remain
+only where a source makes more than the cost needs (Heartbeat) or mana was
+already floating, which is where shape A's prompt appears today.
+
+Direction:
+
+1. Add one count per payment to the existing capture: outcomes over
+   non-redundant source sets (no tapped source removable with the cost still
+   payable and saved obligations feasible; the same test as
+   `record_mana_payment`), by capability and by identity, with the same cap
+   and cap-hit rule. Same `PaymentModel` authority; no second payment
+   implementation. Rerun `shapes`/`summary` on the `current/` baseline (local
+   CPU, USD0), publish, and keep the surplus-inclusive rows as they are.
+2. In the report, give D and E both ways: offers median/p95/max, casts above
+   64 and cap hits, with and without surplus. State the recommendation from
+   those numbers. If non-redundant flat D fits 64 everywhere measured, the
+   grouped chooser is not implied by the evidence and the report says so.
+
+### Names that hide what happens
+
+- The recommended design is shape C's entry (a bound automatic plan against
+  everything else) in front of shape D's outcomes. The report calls it
+  "grouped D" and quotes flat D's decision row (+16–24 decisions/game) while
+  noting grouping "can add decisions". Its cost row is C's range (e.g.
+  Elemental heuristic 324.69–341.57 against A's 306.18). Name it by what the
+  player does and quote that row.
+- "Identity collapse loses distinctions" (60–70%) counts two untouched basic
+  Forests as different outcomes, alongside the case that matters (a mana
+  creature against a land). The report then tells Academy to "use visible
+  object joins to distinguish equal-output sources", which offers subsets of
+  identical lands. Split the count: sources differing only in object identity
+  (same definition and state) against sources that differ in anything else.
+  If the capture cannot tell them apart cheaply, say that the 60–70% is an
+  upper bound and why.
+- The automatic plan in the recommendation is today's first-feasible witness,
+  which over-taps in 8–15% of payments. Say that the bound automatic plan
+  presupposes MTG-342's fix, or that it would show a plan with a stray float.
+
+### Open product choices (for the report's review questions; none settled)
+
+The Task's deliverable is a recommendation for review, so these go to the end
+of the report as numbered questions with the measurements each depends on.
+Nobody has answered them; the report must not state an answer as decided.
+
+1. Does the payment chooser offer deliberate surplus tapping (tap a land the
+   cost does not need, float the mana)? The engine offers no such action
+   today. It is legal in the rules and occasionally matters; including it is
+   what pushes flat D past 64. Matters because it decides between one flat
+   choice and a grouped chooser.
+2. Which sources are the same choice? Exact object always (the report's
+   current stance), or equal definition and state. Matters because exact
+   identity multiplies offers for identical lands on both the policy and
+   Academy, while capability alone merges a mana creature with a land.
+3. Is a payment decision at 63–73% of casts (about +5–8% decisions per game,
+   mostly answered "automatic") the accepted price of exposing source choice,
+   against today's 0.11–0.60% prompts? The alternative noted in
+   `scratch/questions.md` (binding override intent at cast selection) is
+   uncounted. Learning effects of either stay with MTG-265.
+
+### What must survive
+
+Original and `current/` evidence bytes, the frozen A/B pilot revision and its
+switch as a reproduction control, `PaymentModel` as the one payment authority,
+no change to defaults, policy input or Academy.
