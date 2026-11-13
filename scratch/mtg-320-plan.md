@@ -156,3 +156,16 @@ every entry, with complete commands: `29423d3fdf:scratch/mtg-320-plan.md`
 - **Compression review (2026-11-13).** Read `state/src/zone.rs`, the `CardId`
   boundary in `state/src/game_object.rs` and the uncommitted docs edit: nothing
   further to reduce in code. No Rust changed, so nothing was rebuilt or rerun.
+
+- **Sync conflict resolution (2026-11-13).** Integrated pinned main
+  `22ed4a733484d27db2fd51274d1b4e23245a6741` through the owned `lf sync`
+  sequencer (merge `c653e5dc0f`, compatibility repair `91ba66c3a4`). Preserved
+  the runtime object boundary and main's mana-spending behavior and fixtures.
+  Focused debug nextest run `cd2a8bf7-a9a0-482e-a19a-a19476dbe152` passed
+  both `every_decision_code_is_within_the_validated_bound` and
+  `lita_creates_a_zeppelin_that_crews_until_end_of_turn` (2 passed, 1238
+  skipped; build 7m, tests 0.029s). Command: `CARGO_BUILD_JOBS=2 cargo nextest
+  run --manifest-path managym/Cargo.toml --profile ci --test-threads 2 -E
+  'test(lita_creates_a_zeppelin_that_crews_until_end_of_turn) or
+  test(every_decision_code_is_within_the_validated_bound)'`. No release rebuild
+  or wider gate checks in this conflict-recovery run; nothing pushed.
