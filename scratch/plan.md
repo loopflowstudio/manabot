@@ -23,6 +23,14 @@ Those prototype results predate the main/backend merge; they do not prove
 post-merge parity. The old final.pt, local stub and nested recipe config are
 superseded by immutable checkpoint paths and ordinary typed train functions.
 
+Fresh-run parity after the backend merge is proved against the retired
+executor at main `6ce618b8a` for bounded PPO and damped-policy runs: raw and
+EMA weights match bitwise, with no numerical difference. Persistence and
+tracking differ intentionally (immutable update-named policies and state.pt;
+fresh native/RNG streams on resume). Details are in implementation.md. Commit
+`0621262c5`, after that proof, changed only the self_play docstring and
+removed unused record-model scheduler methods, so the proof still applies.
+
 ## Delete — do not maintain
 
 Deleted the executor, stage/recovery admission, recovery state, local scheduler,
@@ -75,19 +83,11 @@ boundary tests. Three variants of
 matched main, whose CI was green. This pass leaves frozen evidence unchanged;
 gate must resolve or explicitly report the failure, not regenerate it away.
 
-Fresh-run parity after the backend merge is now proved for the bounded PPO
-and damped-policy cases; raw and EMA weights match bitwise. No numerical
-difference was needed. Check details are recorded once in implementation.md.
-
 ## Realign observations — 2026-11-13
 
-Etude PR #103 remains OPEN at `105abdd323016b7f7baaaf57aaaa7f5d896c71bf`
-(`mergedAt: null`); the release dependency has not cleared. Remote main and
-local `origin/main` both name `6ce618b8adacee3a4894d05572399853680bb9fe`,
-already incorporated in this checkout. No new upstream reconciliation was
-needed. Requirements and runtime pin in `pyproject.toml` remain 0.2.16.
-
-Reviewed `self_play`, `save_state`, `save_checkpoint` and the recipe calls to
-`run.until`: state is saved before publishing policies, and target extension
-leaves recipe settings unchanged. Existing results in implementation.md were
-reused; no training test was rerun for this documentation reconciliation.
+Rechecked this pass: Etude PR #103 is still OPEN at
+`105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (`mergedAt: null`), so the release
+dependency has not cleared. `origin/main` is still
+`6ce618b8adacee3a4894d05572399853680bb9fe`, already incorporated. Requirements
+and the runtime pin in `pyproject.toml` remain 0.2.16. No training test was
+rerun for this reconciliation; earlier results in implementation.md stand.
