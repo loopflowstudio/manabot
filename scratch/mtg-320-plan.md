@@ -63,9 +63,11 @@ graveyard/exile per read. The Task brief quotes "plenty of places that should
 hold cards ... like decks, graveyards" and "basically anything but stack and
 battlefield"; steer f81d37a0, the latest scope, names "Library, hand,
 decklists/sideboards and effects that say \"card\"". This change follows the
-steer. Typing graveyard/exile entries would make the four card zones one shape
-and remove `mixed_objects_mut`'s unreachable arm, at twice the entry width in
-state that search clones; nobody has said to do it here.
+steer. Typing graveyard/exile entries would make the four card zones one shape,
+at twice the entry width in state that search clones; nobody has said to do it
+here. `ZoneManager::store_mut` returns the zone's backing list as
+`ZoneStore::Cards` or `Objects`, the one place that maps a zone to its shape
+for mutation; it replaced `mixed_objects_mut` and its unreachable arm.
 
 ## Delete — do not maintain
 
@@ -88,6 +90,15 @@ appends. Scry reuses `put_on_top_of_library`. Card-name witnesses and definition
 keep card names rather than acquiring runtime-object terminology.
 
 ## Validation and remaining work
+
+Implementation handoff at `9dd3907703` (2026-11-13): the conversion cleanup,
+compression and documentation are committed; no further implementation target
+remains in the accepted slice. Confirmed the retained 44-test debug receipt
+`c94d50c5-a56e-4e7d-99d5-5fe63f105d06` (zero failures/errors, 1.242 s)
+against `managym/target/nextest/ci/junit.xml`. Code has not changed since that
+receipt; no passing build or test was repeated. Gate still owns final-head
+compatibility, Engine Budget and the selected reviews. References below to
+local/unpublished implementation describe earlier passes, not this handoff.
 
 Compression passed 31 focused debug tests, workspace Clippy, formatting,
 whitespace checks, and the matching extension rebuild/import before the latest
@@ -316,3 +327,14 @@ first. The retained-site count stays 41; the PR table's line numbers are current
   rustfmt and `git diff --check` passed.
 - Release wheel rebuilt (cp313/arm64 0.2.3, 2m 33s), its `EXT_SUFFIX` member
   installed with `os.replace`; fresh `import managym._managym` loaded it.
+
+### Zone store compression (2026-11-13)
+
+`state/src/zone.rs`: remove, move, reposition, swap and both shuffles match
+once on `store_mut`'s `ZoneStore` instead of repeating library/hand/other arms.
+Same entries, order and RNG calls; local, not committed or published.
+The focused nextest command of "Compression validation" plus `test(battle_fan)`:
+31 passed, 1075 skipped (0.831 s). Workspace all-target/all-feature Clippy with
+warnings denied, rustfmt and `git diff --check` passed.
+Release wheel rebuilt (cp313/arm64 0.2.3, 3m 53s), its `EXT_SUFFIX` member
+installed with `os.replace`; fresh `import managym._managym` loaded it.

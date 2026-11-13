@@ -43,6 +43,13 @@ impl CardZoneEntry {
     }
 }
 
+/// One zone's backing list: typed entries for library and hand, object ids
+/// elsewhere. Every mutation goes through this so both shapes stay in step.
+enum ZoneStore<'a> {
+    Cards(&'a mut Vec<CardZoneEntry>),
+    Objects(&'a mut Vec<ObjectId>),
+}
+
 /// Borrowed ordered objects, without allocating a second zone representation.
 #[derive(Clone, Copy, Debug)]
 pub struct ZoneObjects<'a> {
@@ -148,12 +155,9 @@ impl ZoneManager {
         let Some(holder) = self.holder_in(object, zone) else {
             return;
         };
-        match zone {
-            ZoneType::Library => self.library[holder.0].retain(|entry| *entry.object() != object),
-            ZoneType::Hand => self.hand[holder.0].retain(|entry| *entry.object() != object),
-            _ => self
-                .mixed_objects_mut(zone, holder)
-                .retain(|candidate| *candidate != object),
+        match self.store_mut(zone, holder) {
+            ZoneStore::Cards(entries) => entries.retain(|entry| *entry.object() != object),
+            ZoneStore::Objects(objects) => objects.retain(|candidate| *candidate != object),
         }
     }
 
@@ -184,10 +188,9 @@ impl ZoneManager {
         if let Some(old_zone) = self.zone_of(object) {
             self.remove_from_zone(object, old_zone);
         }
-        match to_zone {
-            ZoneType::Library => self.library[holder.0].push(CardZoneEntry::new(objects, object)),
-            ZoneType::Hand => self.hand[holder.0].push(CardZoneEntry::new(objects, object)),
-            _ => self.mixed_objects_mut(to_zone, holder).push(object),
+        match self.store_mut(to_zone, holder) {
+            ZoneStore::Cards(entries) => entries.push(CardZoneEntry::new(objects, object)),
+            ZoneStore::Objects(zone) => zone.push(object),
         }
         self.object_zones[object.0] = Some(to_zone);
     }
@@ -224,15 +227,16 @@ impl ZoneManager {
         view
     }
 
-    fn mixed_objects_mut(&mut self, zone: ZoneType, player: PlayerId) -> &mut Vec<ObjectId> {
+    fn store_mut(&mut self, zone: ZoneType, player: PlayerId) -> ZoneStore<'_> {
         let idx = player.0;
         match zone {
-            ZoneType::Library | ZoneType::Hand => unreachable!("typed card zone"),
-            ZoneType::Battlefield => &mut self.battlefield[idx],
-            ZoneType::Graveyard => &mut self.graveyard[idx],
-            ZoneType::Stack => &mut self.stack[idx],
-            ZoneType::Exile => &mut self.exile[idx],
-            ZoneType::Command => &mut self.command[idx],
+            ZoneType::Library => ZoneStore::Cards(&mut self.library[idx]),
+            ZoneType::Hand => ZoneStore::Cards(&mut self.hand[idx]),
+            ZoneType::Battlefield => ZoneStore::Objects(&mut self.battlefield[idx]),
+            ZoneType::Graveyard => ZoneStore::Objects(&mut self.graveyard[idx]),
+            ZoneType::Stack => ZoneStore::Objects(&mut self.stack[idx]),
+            ZoneType::Exile => ZoneStore::Objects(&mut self.exile[idx]),
+            ZoneType::Command => ZoneStore::Objects(&mut self.command[idx]),
         }
     }
 
@@ -253,29 +257,20 @@ impl ZoneManager {
         else {
             return;
         };
-        match zone {
-            ZoneType::Library | ZoneType::Hand => {
-                let entries = if zone == ZoneType::Library {
-                    &mut self.library[player.0]
-                } else {
-                    &mut self.hand[player.0]
-                };
-                let entry = entries.remove(old);
-                entries.insert(index.min(entries.len()), entry);
-            }
-            _ => {
-                let objects = self.mixed_objects_mut(zone, player);
-                let object = objects.remove(old);
-                objects.insert(index.min(objects.len()), object);
-            }
+        fn reinsert<T>(occupants: &mut Vec<T>, old: usize, index: usize) {
+            let occupant = occupants.remove(old);
+            occupants.insert(index.min(occupants.len()), occupant);
+        }
+        match self.store_mut(zone, player) {
+            ZoneStore::Cards(entries) => reinsert(entries, old, index),
+            ZoneStore::Objects(objects) => reinsert(objects, old, index),
         }
     }
 
     pub fn swap(&mut self, zone: ZoneType, player: PlayerId, a: usize, b: usize) {
-        match zone {
-            ZoneType::Library => self.library[player.0].swap(a, b),
-            ZoneType::Hand => self.hand[player.0].swap(a, b),
-            _ => self.mixed_objects_mut(zone, player).swap(a, b),
+        match self.store_mut(zone, player) {
+            ZoneStore::Cards(entries) => entries.swap(a, b),
+            ZoneStore::Objects(objects) => objects.swap(a, b),
         }
     }
 
@@ -285,10 +280,9 @@ impl ZoneManager {
         player: PlayerId,
         rng: &mut R,
     ) {
-        match zone {
-            ZoneType::Library => self.library[player.0].shuffle(rng),
-            ZoneType::Hand => self.hand[player.0].shuffle(rng),
-            _ => self.mixed_objects_mut(zone, player).shuffle(rng),
+        match self.store_mut(zone, player) {
+            ZoneStore::Cards(entries) => entries.shuffle(rng),
+            ZoneStore::Objects(objects) => objects.shuffle(rng),
         }
     }
 
@@ -302,14 +296,9 @@ impl ZoneManager {
         player: PlayerId,
         rng: &mut R,
     ) {
-        match zone {
-            ZoneType::Library => {
-                self.library[player.0].sort_unstable_by_key(|entry| entry.object().0)
-            }
-            ZoneType::Hand => self.hand[player.0].sort_unstable_by_key(|entry| entry.object().0),
-            _ => self
-                .mixed_objects_mut(zone, player)
-                .sort_unstable_by_key(|object| object.0),
+        match self.store_mut(zone, player) {
+            ZoneStore::Cards(entries) => entries.sort_unstable_by_key(|entry| entry.object().0),
+            ZoneStore::Objects(objects) => objects.sort_unstable_by_key(|object| object.0),
         }
         self.shuffle(zone, player, rng);
     }
