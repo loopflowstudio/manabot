@@ -40534,6 +40534,54 @@
    "sha256": "590d8ba438948ee52b199d55da8cb50e08acc0ee0a035c25459fa72c7f3a5c45",
    "bytes": 30334
   },
+  "experiments/data/ppo_cuda/paired/baseline-0.pt": {
+   "sha256": "76bca20c44cfb17e88ddec0291b73c082f93dc978777ad1ed86c401f51901bf7",
+   "bytes": 11321489
+  },
+  "experiments/data/ppo_cuda/paired/baseline-1.pt": {
+   "sha256": "227123089fc14f7a3fcffee15c309f711ba0fcf3effe11a2c17b42ace9f09c92",
+   "bytes": 11321489
+  },
+  "experiments/data/ppo_cuda/paired/candidate-0.pt": {
+   "sha256": "4cfe8366909b024fea99ee765238f33ad4322b7b08d455e67f55db5aa97ee0b2",
+   "bytes": 11321815
+  },
+  "experiments/data/ppo_cuda/paired/candidate-1.pt": {
+   "sha256": "91ef012650ae923d5e35a834d7f74b20b1f13df0f513010d9eefb83bfef58465",
+   "bytes": 11321815
+  },
+  "experiments/data/ppo_cuda/paired/candidate-profile.json": {
+   "sha256": "6c284646a7c1362b0bae86233a03e8d2156bb23c674b4b7ad1a471146068215a",
+   "bytes": 39454
+  },
+  "experiments/data/ppo_cuda/paired/candidate-profile.ppo.txt": {
+   "sha256": "df82d8894003eecfdf81ef0e21ce77fef972f1b3c831109e7f1e55f33cdfa545",
+   "bytes": 9331
+  },
+  "experiments/data/ppo_cuda/paired/cpu-comparison.txt": {
+   "sha256": "8bee60ebc154d004ce76da54593d9854c58e8551a1fa2eb78424310666b67ffa",
+   "bytes": 147
+  },
+  "experiments/data/ppo_cuda/paired/differences.json": {
+   "sha256": "3dc6323ba3c6c513008fd48eac241fc9b7a54bc5257ee0730283b55ea251fc00",
+   "bytes": 294182
+  },
+  "experiments/data/ppo_cuda/paired/paired.json": {
+   "sha256": "90f1ba388355cce12edb624788b2920fb37b91d0a39c5ff0535451a6d396d7e3",
+   "bytes": 485445
+  },
+  "experiments/data/ppo_cuda/paired/tests.txt": {
+   "sha256": "c885f82223394f2eaf7fa7a8f2e0926aef3d3174219e38536974dc9830c69dfc",
+   "bytes": 938
+  },
+  "experiments/data/ppo_cuda/paired/updates-baseline.json": {
+   "sha256": "5f332735383f02d69a1aa12181105a15f064e14e673687742065715cb1163ae5",
+   "bytes": 43444
+  },
+  "experiments/data/ppo_cuda/paired/updates-candidate.json": {
+   "sha256": "5f332735383f02d69a1aa12181105a15f064e14e673687742065715cb1163ae5",
+   "bytes": 43444
+  },
   "experiments/data/ppo_cuda/profile/diagnostic.json": {
    "sha256": "63619f249b488777d4f6c288c4901f93402d0011769d4207b68090854894f7af",
    "bytes": 39463

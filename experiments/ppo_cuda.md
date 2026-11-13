@@ -1,19 +1,28 @@
 # PPO CUDA updates (MTG-338)
 
-**Inconclusive; candidate reverted after measurement pass 10.**
-The frozen comparison at `02c202956` could not start. The single L4 availability
-check returned “none available”, “0 of 1 in use”, “not rentable now” at
-**2026-11-13 11:43:03 UTC**. No launch was attempted. There are **no completed
-paired samples**, no CUDA equivalence result and no candidate rate or range.
-Measurement restored the runtime, candidate tests and comparison harness to
-`734f2cd5c`. No rental, retry or queued work was created. This is not a
-performance rejection.
+**PPO updates are 1.74× faster on one NVIDIA L4** (median 0.4338 vs 0.2486
+optimizer steps/s; candidate 0.3999–0.4611, kept method 0.2405–0.2608; five
+alternating pairs on one captured 53,341-row batch, Etude run `34b6855d1d51`,
+revision `9268966e1`, ~$0.31). On CUDA with autograd, the card-program join in
+`SemanticCardEncoder` uses `F.embedding` instead of advanced indexing; its
+backward groups repeated IDs instead of accumulating them through
+`indexing_backward_kernel`. Every other device and inference keep indexing.
 
-The last measured baseline remains **0.26437 optimizer steps/s** on one NVIDIA
-L4 (five repeats, **0.26366–0.26474**), or **60.521 s/update**
-(60.437–60.684). Backward and clipping take 76.0% of update time. These are
-prior baseline measurements, not results from the unavailable comparison.
-The indexed-gradient hypothesis is neither confirmed nor refuted.
+CPU results are bitwise identical: all 3,248 output, gradient and
+trained-weight tensors of the MTG-325 harness match, and the CPU update traces
+are byte-identical. All 39 CUDA-required focused tests passed on the L4.
+
+On CUDA the change is a summation-order difference, bounded by the kept
+method's own run-to-run drift. Two audit updates per arm compared raw
+first-step gradients, first/final weights and final probes. Across arms the
+largest gradient error is 5.1% of the frozen gradient bound and the largest
+weight error 34% of 1e-4, against 7.3% and 22% between two runs of the kept
+method. The frozen bounds of exact first loss and final value error ≤1e-4 are
+not met by any pair, including kept-vs-kept (first loss 3.0e-8 apart, final
+value 2.7e-4); candidate pairs differ by the same order (2.2e-4 final value
+across arms, 3.2e-4 candidate-vs-candidate). Those two bounds were set below
+the existing CUDA nondeterminism, so they do not discriminate the methods.
+Evidence: `experiments/data/ppo_cuda/paired/`.
 
 This is exploratory throughput measurement, not playing-strength evidence.
 The expectation committed before execution was: “Current PPO sustains roughly
@@ -478,8 +487,8 @@ correctness checks and alternating measurements would settle the claim.
 No retry, further capacity read or alternate GPU was used. Capacity evidence
 establishes neither a speedup nor a performance rejection.
 
-- 2026-11-13: L4 and A40 stock were unavailable; the paired comparison runs on an
-  RTX A6000 (on-demand `mtg338-a6000`), so it supports a relative speedup only.
+- 2026-11-13: with L4 stock scarce, the rerun was offered to whichever of an L4
+  or an RTX A6000 (on-demand `mtg338-a6000`) rented first; an L4 did.
   Etude run `bb2863fe318c` (~$0.04) failed before measurement: four
   `test_active_training.py` cases call `git rev-parse` in Etude's non-git source
   copy; the other 40 CUDA-required tests passed. The rerun drops that file from
