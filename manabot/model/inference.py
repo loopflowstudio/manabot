@@ -100,6 +100,7 @@ def transfer_admitted(
         ),
         admitted.legal,
         admitted.buckets,
+        admitted.needs,
     ), transfers
 
 
@@ -135,6 +136,7 @@ class PreparedObservation(AdmittedObservation):
             admitted.references,
             admitted.legal,
             admitted.buckets,
+            admitted.needs,
         )
         self.scope = scope
         self.transfers = transfers

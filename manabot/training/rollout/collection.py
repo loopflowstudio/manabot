@@ -40,7 +40,9 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
+from manabot.model.admission import AdmittedObservation
 from manabot.model.inference import PolicyInference
+from manabot.policy.buckets import AXES
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
@@ -93,7 +95,10 @@ class _ObservationRows:
     (incidents, recovery) while the next update records; appends never write
     rows a batch already views. Capacity starts a quarter above the larger of
     the previous update's rows and the closure's row floor; growth doubles and
-    copies used rows once.
+    copies used rows once. Beside the observation fields it keeps each row's
+    bucket needs as admission measured them for the acting policy
+    (`manabot.policy.buckets.row_needs`; -1 where none were measured), so the
+    learner regroups them instead of measuring the rows again.
     """
 
     def __init__(
@@ -104,6 +109,7 @@ class _ObservationRows:
         self.rows = 0
         self.capacity = max(capacity, 1)
         self._arrays = self._allocate(self.capacity)
+        self._needs = np.full((self.capacity, len(AXES)), -1, np.int64)
 
     def _allocate(self, capacity: int) -> dict[str, np.ndarray]:
         # Untouched np.empty pages are not resident, so spare capacity is cheap.
@@ -115,8 +121,9 @@ class _ObservationRows:
             for key in self._keys
         }
 
-    def append(self, rows: np.ndarray) -> int:
-        """Copy buffer `rows` to the end of the store; return the first store row."""
+    def append(self, rows: np.ndarray, needs: np.ndarray | None = None) -> int:
+        """Copy buffer `rows` (and their bucket `needs`, when measured) to the end
+        of the store; return the first store row."""
         start, stop = self.rows, self.rows + len(rows)
         if stop > self.capacity:
             self.capacity = max(2 * self.capacity, stop)
@@ -124,6 +131,10 @@ class _ObservationRows:
             for key, array in self._arrays.items():
                 grown[key][:start] = array[:start]
             self._arrays = grown
+            grown_needs = np.full((self.capacity, len(AXES)), -1, np.int64)
+            grown_needs[:start] = self._needs[:start]
+            self._needs = grown_needs
+        self._needs[start:stop] = -1 if needs is None else needs
         for key, array in self._arrays.items():
             # `clip` writes `out` directly; `raise` would buffer. Rows are in range.
             np.take(
@@ -135,6 +146,10 @@ class _ObservationRows:
     def arrays(self) -> dict[str, np.ndarray]:
         """Used rows as views; rows of discarded failed games stay unreferenced."""
         return {key: array[: self.rows] for key, array in self._arrays.items()}
+
+    def needs(self) -> np.ndarray:
+        """Used rows' bucket needs [rows, len(AXES)], -1 where unmeasured."""
+        return self._needs[: self.rows]
 
 
 @dataclass
@@ -171,11 +186,21 @@ class RecordedObservations:
 
     rows: dict[str, np.ndarray]
     index: np.ndarray
+    # Recorded rows' bucket needs [N, len(AXES)], -1 where unmeasured.
+    needs: np.ndarray | None = None
 
     def gather(self, indexes: np.ndarray) -> dict[str, np.ndarray]:
         """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
         recorded = self.index[indexes]
         return {key: value[recorded] for key, value in self.rows.items()}
+
+    def gather_needs(self, indexes: np.ndarray) -> np.ndarray | None:
+        """Bucket needs of rollout `indexes` measured at collection, or None if
+        any of those rows has none."""
+        if self.needs is None:
+            return None
+        needs = self.needs[self.index[indexes]]
+        return needs if bool((needs >= 0).all()) else None
 
     def ordered(self, shape: tuple[int, ...]) -> dict[str, np.ndarray]:
         """Every rollout row gathered into `shape` (time, trajectory) order."""
@@ -1439,7 +1464,8 @@ class SeatRoutedCollector:
             logprobs = logprob_t.cpu().numpy()
             values = value_t.view(-1).cpu().numpy()
         with self.profiler.track("Rollout recording"):
-            first = self._observations.append(rows)
+            needs = obs_t.needs if isinstance(obs_t, AdmittedObservation) else None
+            first = self._observations.append(rows, needs)
             packed = PackedActions.pack(
                 {
                     key: self._buffers[key][rows]
@@ -1554,7 +1580,9 @@ class SeatRoutedCollector:
 
         return RolloutBatch(
             recorded=RecordedObservations(
-                self._observations.arrays(), obs_rows.reshape(-1)
+                self._observations.arrays(),
+                obs_rows.reshape(-1),
+                self._observations.needs(),
             ),
             actions=actions,
             logprobs=logprobs,

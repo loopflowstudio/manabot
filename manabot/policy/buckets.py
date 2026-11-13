@@ -276,14 +276,16 @@ AXES: tuple[str, ...] = (
 
 
 def row_needs(
-    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder, *, objects: bool
+    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder
 ) -> np.ndarray | None:
     """Rows each batch row needs on every variable axis, [B, len(AXES)] int64.
 
     A batch's need on an axis is the maximum over its rows, so needs measured
-    once per row serve any later grouping of those rows (`sizes_of`). None for
-    a batch whose keys or shapes differ from the declared layout: it is not
-    trimmed, so the model rejects it exactly as it would without buckets.
+    once per row serve any later grouping of those rows (`sizes_of`). Object
+    axes always count the rows references name, so the same needs serve a
+    policy with or without object trimming. None for a batch whose keys or
+    shapes differ from the declared layout: it is not trimmed, so the model
+    rejects it exactly as it would without buckets.
     """
     shapes = encoder.shapes
     if any(
@@ -328,9 +330,8 @@ def row_needs(
             "relations",
             _reference_extent(obs[key][..., column], capacities["relations"]),
         )
-    if objects:
-        for axis, rows in _object_extents(_object_references(obs), capacities).items():
-            need(axis, rows)
+    for axis, rows in _object_extents(_object_references(obs), capacities).items():
+        need(axis, rows)
     return np.stack([needs[axis] for axis in AXES], axis=1)
 
 
@@ -354,7 +355,7 @@ def bucket_sizes(
     obs: Mapping[str, np.ndarray], encoder: ObservationEncoder, *, objects: bool
 ) -> BucketSizes | None:
     """Measure one batch's buckets; None leaves it untouched (`row_needs`)."""
-    needs = row_needs(obs, encoder, objects=objects)
+    needs = row_needs(obs, encoder)
     return None if needs is None else sizes_of(needs, encoder, objects=objects)
 
 
