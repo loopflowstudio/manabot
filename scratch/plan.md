@@ -533,7 +533,7 @@ the code diff against #474 was 4,332 / 2,500.
   [min, max] base vs head: damped 6.16 [6.04, 6.19] vs 4.57 [4.56, 4.68]
   steps/s (0.742); PPO 0.2196 vs 0.157 (0.715); inference 822 vs 1,087 obs/s
   (1.32); save 0.032 vs 0.032 s; load 0.169 vs 0.168 s. Same 52,226 learner
-  rows and 204 damped steps in every process. Launcher cost ~$0.27.
+  rows and 204 damped steps in every process. Launcher cost $0.58 (final).
 - Pass 2 queued as Etude e978886d15e5: revision bb7c3e6a0 (base main a343904ee), cohort
   `mtg325-speed-2`, `--max-usd 9` (pass 1 counts against the USD10).
 
@@ -551,3 +551,15 @@ measurement explains about half (67 ms per 3,300 rows on the laptop, every
 epoch). Pass 3 (Etude cohort `mtg325-speed-3`, revision f3b7fbaa4) adds a
 `backend` arm (#503's tree) and the learner's profiler sections, to place
 the rest in #503 or #501.
+
+## PPO fix (#503 ee01ec9df, "bucket needs measured once and regrouped")
+
+`row_needs` measures each row once (reading only the prefix the batch uses;
+97.5 ms per 3,300 rows on the laptop vs 69 ms for one batch measurement);
+`AdmittedRollout.admit_rows` stores the needs and `bind_admitted(needs=)`
+buckets every epoch's minibatches from them (`sizes_of`, 0.015 ms). PPO's 4
+epochs measure once instead of 4 times; the damped update pays ~2 ms more per
+256-row step. Sizes identical on the parity harness; new
+`test_row_needs_regroup_to_the_measured_buckets`; forward 0 differ; updates
+byte-identical to `before.json` (#503) and `after.json` (#501). Pass 3
+(4668724056dc) measures the code before this fix; pass 4 validates it.
