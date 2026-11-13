@@ -6,7 +6,7 @@ import torch
 
 from manabot.backends.parity import minibatch_loss
 import manabot.backends.torch as torch_backend
-from manabot.backends.torch.arrays import on_device
+from manabot.backends.torch.arrays import array_fields, on_device
 from manabot.backends.torch.checkpoint import BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -144,3 +144,37 @@ def test_host_admission_retains_invalid_mask_evidence(bad: float) -> None:
     np.testing.assert_array_equal(
         error.value.tensors["mask"].numpy(), obs["actions_valid"]
     )
+
+
+@pytest.mark.parametrize("inference", [False, True])
+@pytest.mark.parametrize("bucketed", [False, True])
+def test_preparation_purpose_is_independent_of_grad_mode(
+    inference: bool, bucketed: bool
+) -> None:
+    model = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(hidden_dim=8, world=managym.WORLD_SETUP),
+        bucketed_shapes=bucketed,
+    ).eval()
+    obs = _batch(model.observation_space, 3)
+    with torch.enable_grad():
+        learner = model.prepare(obs, inference=inference)
+    with torch.no_grad():
+        frozen = model.prepare(obs, inference=inference)
+    expected = array_fields(learner, np.ndarray)
+    actual = array_fields(frozen, np.ndarray)
+    assert expected.keys() == actual.keys()
+    for name, value in expected.items():
+        np.testing.assert_array_equal(value, actual[name])
+    assert learner.programs is not None
+    assert model.semantic_cards is not None
+    count = len(learner.programs.rows)
+    total = model.semantic_cards.catalog_shape.definitions
+    if inference or bucketed:
+        assert count == total
+    else:
+        assert 0 < count < total
+    for wanted, output in zip(
+        model.evaluate(learner), model.evaluate(frozen), strict=True
+    ):
+        np.testing.assert_array_equal(wanted, output)

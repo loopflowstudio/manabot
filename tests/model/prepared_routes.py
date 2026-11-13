@@ -1,5 +1,6 @@
 """Prepare standalone encoder fixtures through the policy's host routing code."""
 
+from collections.abc import Mapping
 from dataclasses import fields, is_dataclass, replace
 from typing import Any, cast
 
@@ -90,7 +91,7 @@ def effect_rows(
     )
 
 
-def host_inputs(obs: dict[str, torch.Tensor | np.ndarray]) -> dict[str, np.ndarray]:
+def host_inputs(obs: Mapping[str, torch.Tensor | np.ndarray]) -> dict[str, np.ndarray]:
     """Fixture tensors re-enter the public host boundary before each preparation."""
     return {
         key: value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else value
@@ -99,7 +100,7 @@ def host_inputs(obs: dict[str, torch.Tensor | np.ndarray]) -> dict[str, np.ndarr
 
 
 def device_input(
-    agent: "ActorCritic", obs: dict[str, torch.Tensor | np.ndarray]
+    agent: "ActorCritic", obs: Mapping[str, torch.Tensor | np.ndarray]
 ) -> Prepared[torch.Tensor]:
     return on_device(
         agent.prepare(host_inputs(obs), inference=not torch.is_grad_enabled()),

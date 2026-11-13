@@ -417,7 +417,11 @@ class ActorCritic(nn.Module):
         inference: bool = False,
         needs: np.ndarray | None = None,
     ) -> Prepared[np.ndarray]:
-        """Prepare unchanged rows of an already admitted source."""
+        """Prepare unchanged admitted rows for learning or inference.
+
+        `inference` selects compaction and catalog coverage independently of
+        autograd mode; bucketed batches always use the full catalog schedule.
+        """
         spec = self._admission_spec()
         capacity = obs["actions_valid"].shape[1]
         if self.bucketed_shapes:
@@ -441,9 +445,7 @@ class ActorCritic(nn.Module):
             value_token=self.value_token is not None,
             binding=spec.binding,
             action_capacity=capacity,
-            select_programs=torch.is_grad_enabled()
-            and not inference
-            and not self.bucketed_shapes,
+            select_programs=not inference and not self.bucketed_shapes,
         )
 
         return replace(

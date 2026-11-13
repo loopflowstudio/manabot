@@ -94,12 +94,9 @@ class AdmittedRollout:
             if self._needs is not None and self._measured[indexes].all()
             else None
         )
-        # Grad mode is thread-local. Preserve the caller's packing/compaction
-        # choice when preparation runs on the prefetch worker.
-        with torch.set_grad_enabled(not inference):
-            prepared = self.agent.prepare_admitted(
-                rows.observation, needs=needs, inference=inference
-            )
+        prepared = self.agent.prepare_admitted(
+            rows.observation, needs=needs, inference=inference
+        )
         return prepared, rows
 
     @contextmanager

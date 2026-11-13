@@ -250,11 +250,14 @@ built with `bucketed_shapes=True`, and packs live tokens with
 or `load_checkpoint(...)`, not checkpoint fields. Every lookup a batch needs
 is measured on the host, so the device forward reads nothing back.
 
-`prepare(obs, inference=True)` additionally drops the fact and object columns
-no row in the batch uses, which a padded CPU forward would otherwise attend
-over; simulation and search prepare this way. It changes floating-point
-summation order, not the legal logits' meaning, so learner rows are prepared
-without it.
+`prepare(obs, inference=True)` prepares inference rows with the complete
+catalog program schedule, and on CPU drops the fact and object columns no
+row in the batch uses. Simulation and search prepare this way. Column
+compaction changes floating-point summation order, so learner rows use the
+default `inference=False`: they retain those columns and select only referenced
+catalog programs unless bucketed shapes require the full schedule. The argument
+chooses preparation purpose independently of autograd mode; `no_grad` does not
+change a default learner batch into an inference batch.
 
 `BACKEND` is torch's `manabot.policy.protocol.Backend`: `load` returns an
 `ActorCritic` and a `Learner`, whose parameters and gradients keep torch's

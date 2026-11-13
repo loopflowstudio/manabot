@@ -24,7 +24,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.policy.prepare import CatalogPrograms
 from manabot.training.rollout.collection import SeatRoutedCollector
-from tests.model.prepared_routes import device_input, host_inputs, program_input
+from tests.model.prepared_routes import device_input, program_input
 
 
 def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
@@ -102,8 +102,7 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         recovery_max_microsteps=10000,
     )
     try:
-        host = collector._slice_obs_tensors(np.arange(2))
-        obs = {key: value.cuda() for key, value in host.items()}
+        host = collector._slice_obs_rows(np.arange(2))
         with forward_precision(declared, torch.device("cuda")):
             full = cards.definitions(program_input(cards))
             selected = cards.definitions(
@@ -124,16 +123,19 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
             torch.no_grad(),
             forward_precision(declared, torch.device("cuda")),
         ):
-            prepared = scope.prepare(host_inputs(host))
+            prepared = scope.prepare(host)
             first = agent.forward_distribution(prepared)
             second = agent.forward_distribution(prepared)
             for a, b in zip(first, second, strict=True):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
         optimizer = torch.optim.Adam(agent.parameters())
         with forward_precision(declared, torch.device("cuda")):
-            logits, values = agent.forward_distribution(device_input(agent, obs))
+            logits, values = agent.forward_distribution(device_input(agent, host))
         loss = (
-            logits[obs["actions_valid"].bool()].float().square().mean()
+            logits[torch.from_numpy(host["actions_valid"]).cuda().bool()]
+            .float()
+            .square()
+            .mean()
             + values.float().square().mean()
         )
         assert torch.isfinite(loss)
@@ -151,8 +153,8 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         restored.load_state_dict(torch.load(checkpoint, weights_only=True))
         with torch.no_grad(), forward_precision(declared, torch.device("cuda")):
             for a, b in zip(
-                agent.forward_distribution(device_input(agent, obs)),
-                restored.forward_distribution(device_input(restored, obs)),
+                agent.forward_distribution(device_input(agent, host)),
+                restored.forward_distribution(device_input(restored, host)),
                 strict=True,
             ):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)

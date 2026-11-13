@@ -199,6 +199,11 @@ Post-#514: remove unconditional `_referenced_definitions` scans, full padded-fac
 integer work (the graph still gets identical padded rows). The attempted
 host-only metadata markers were discarded, not shipped.
 
+Concept cleanup: delete `_slice_obs_tensors` and its optional tensor-dictionary
+return branch; `_slice_obs_rows` retains host values and the action-focus cast.
+Delete the grad-mode read in `prepare_admitted` and the worker's grad-mode
+context; caller-selected preparation purpose and exact learning results survive.
+
 ## Facts that still bind
 
 - `105e7e2aa` changes seeded games (102,209 steps over the budget's 512
@@ -445,8 +450,8 @@ submitted batch for the executor exit to join.
 
 The three concepts hold in docs and code: `Prepared` is the one policy input,
 the container is the one policy file, composition roots choose the backend.
-Two leftovers contradict the first, and are the next implement direction. No
-product choice is open.
+Two leftovers contradicted the first; their implementation is recorded below.
+No product choice is open.
 
 1. **The collector still builds a tensor dictionary.**
    `RolloutCollector._slice_obs_tensors` (`training/rollout/collection.py`)
@@ -488,10 +493,32 @@ Noted, not directed:
 - `Prepared.guard` and `bucket_needs` are torch serving/collection facts on
   the shared type; kept, per the assumptions in `questions.md`.
 
-## Next actions
+## Concept cleanup implementation, 2026-11-13
 
-0. Implement the concept review's two directions above, then rerun the CPU
-   oracle and update comparison.
+The collector slices `ObservationBuffers` directly, retaining the float32
+`action_focus` cast, and both production callers pass them to
+`inference.prepare`. Its device agreement check runs once at collection entry
+for both behavior scopes. The two test consumers now read host rows.
+`prepare_admitted` chooses referenced programs from `inference` and bucketed
+shapes only; the prefetch worker no longer sets grad mode. The backend README
+states catalog coverage, CPU compaction and default learner purpose explicitly.
+`EQUIV_BELIEF_INPUT=/tmp/mtg333/post514-belief.pt uv run python scratch/equivalence/run.py /tmp/mtg333/concept-head.pt`
+then `uv run python scratch/equivalence/compare.py /tmp/mtg333/post514-base.pt /tmp/mtg333/concept-head.pt`
+→ **3,410 tensors, differing 0**. `uv run python scratch/equivalence/updates.py /tmp/mtg333/updates-concept.json`
+then `cmp /tmp/mtg333/updates-post514-base.json /tmp/mtg333/updates-concept.json`
+→ identical across five update cases.
+`uv run --extra dev --extra mlx --extra artifacts pytest tests/model/test_inference.py tests/model/test_torch_backend_protocol.py tests/model/test_prepare_rows.py tests/model/test_semantic_card_precision.py tests/training/test_update_backend_protocols.py -k 'not cuda_semantic_policy_admission' --basetemp /tmp/mtg333/concept-tests -q`
+→ **63 passed, 2 CUDA cases deselected (103.30 s)**. This includes four explicit
+preparation-purpose cases across grad modes and buckets, seeded collection and
+restored continuation, plus synchronous/prefetched row equivalence. Ruff
+check/format passed for all seven changed Python files. The purpose change is
+retained because all three required checks hold. Compress found nothing further
+to reduce and reran the same three commands on the unchanged tree
+(`/tmp/mtg333/compress-head.pt`, `updates-compress.json`): 3,410 tensors
+differing 0, updates identical, 63 passed (88.20 s). No CUDA rerun is required by
+this cleanup's direction; existing CUDA review findings stay open.
+
+## Next actions
 
 1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
    exceed the head-vs-head floor), host preparation/load costs, and the threaded

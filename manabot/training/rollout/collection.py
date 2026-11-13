@@ -775,7 +775,7 @@ class SeatRoutedCollector:
         self, agent: ActorCritic, rows: np.ndarray, inference: PolicyInference
     ) -> np.ndarray:
         if self.opponent_mode == "self":
-            obs = self._slice_obs_tensors(rows, inference)
+            obs = inference.prepare(self._slice_obs_rows(rows))
             with torch.inference_mode():
                 with forward_precision(self.precision, self.device):
                     logits, _ = agent.forward(obs)
@@ -800,24 +800,12 @@ class SeatRoutedCollector:
             )
             raise
 
-    def _slice_obs_tensors(
-        self, rows: np.ndarray, inference: PolicyInference | None = None
-    ) -> Prepared[torch.Tensor] | dict[str, torch.Tensor]:
-        obs = {}
-        for key in self.observation_space.shapes:
-            tensor = torch.from_numpy(self._buffers[key][rows])
-            if key == "action_focus":
-                # Training convention (VectorEnv): action_focus as float32.
-                tensor = tensor.float()
-            obs[key] = tensor
-        if inference is not None:
-            if inference.device.type != self.device.type or (
-                self.device.index is not None
-                and inference.device.index != self.device.index
-            ):
-                raise ValueError("collector and inference policy devices differ")
-            return inference.prepare({key: value.numpy() for key, value in obs.items()})
-        return {key: tensor.to(self.device) for key, tensor in obs.items()}
+    def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
+        """Host observation rows with the training action-focus dtype."""
+        obs = {key: self._buffers[key][rows] for key in self.observation_space.shapes}
+        # Training convention (VectorEnv): action_focus as float32.
+        obs["action_focus"] = obs["action_focus"].astype(np.float32)
+        return obs
 
     def _count_action_types(
         self, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray
@@ -905,6 +893,15 @@ class SeatRoutedCollector:
         opponent_inference: PolicyInference | None = None,
     ) -> RolloutBatch | tuple[RolloutBatch, RolloutBatch]:
 
+        for scope in (inference, opponent_inference):
+            if scope is not None and (
+                scope.device.type != self.device.type
+                or (
+                    self.device.index is not None
+                    and scope.device.index != self.device.index
+                )
+            ):
+                raise ValueError("collector and inference policy devices differ")
         if self._needs_assignment or self._results:
             raise ValueError("commit adaptive targets before the next collection")
         start = time.perf_counter()
@@ -1438,7 +1435,7 @@ class SeatRoutedCollector:
         inference: PolicyInference,
     ) -> np.ndarray:
         with self.profiler.track("Observation preparation"):
-            obs_t = self._slice_obs_tensors(rows, inference)
+            obs_t = inference.prepare(self._slice_obs_rows(rows))
         with self.profiler.track("Policy inference and action selection"):
             with torch.no_grad():
                 outcomes: np.ndarray | None = None

@@ -95,6 +95,11 @@ per arm. Keep the final inner ranges; do not call them process spread.
 2026-11-13 PPO optimization: choose bounded one-minibatch host prefetch over
 cross-epoch caching: trimming, selected catalog programs and packed GRU order
 are batch-dependent. Keep transfers/model/optimizer on the caller; propagate
-caller grad mode to the worker and join it at epoch exit, including failures.
+caller preparation purpose to the worker and join it at epoch exit, including failures.
 Use current Etude 0.3.2 with a new schema-specific launcher database; register
 the existing rental template through CLI, leaving the older database untouched.
+
+2026-11-13 concept cleanup: keep the existing collector/policy device mismatch
+refusal at collection entry now that row slicing is host-only. The preparation
+argument defines purpose even under `no_grad`; focused checks cover learner and
+inference rows, with and without buckets, under both grad modes.
