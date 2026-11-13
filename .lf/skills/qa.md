@@ -182,6 +182,12 @@ publish, land or choose the next Graph step from here.
   the Rust is unchanged), and run the driver with
   `PYTHONPATH=/private/tmp/<x>`; use the resolved `/private` path, or
   `_source()`'s `relative_to(ROOT)` fails. Remove the worktree afterwards.
+- CI workflow or test-timing changes: the user surface is hosted CI on the
+  pushed branch: `gh workflow run ci.yml --ref <branch>`. Read job and step
+  timestamps with `gh run view <id> --json jobs`; read logs with
+  `gh run view <id> --job <job-id> --log`. Compare install time with peers in
+  the same run and inspect dependency logs for unexpected downloads.
+  See `docs/development.md` (Job time) for the budget.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
