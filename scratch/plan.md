@@ -62,7 +62,9 @@ revision; it is not translated to different learning semantics.
 
 1. Release EXP-56, raise every Etude requirement and the runtime pin together,
    refresh uv.lock and verify isolated/installed consumers. SDK 0.2.16 cannot
-   run this branch. No local dependency path is committed. Etude must also
+   run this branch: QA saw every `manabot` subcommand fail importing
+   `etude.stopping`, and `etude smoke experiments/elemental.py` fail the same
+   way after building the revision's locked venv (nothing submitted). No local dependency path is committed. Etude must also
    distinguish refused admission and interrupted attempts from real failures;
    the boundary investigation below identifies the current status overwrite.
 2. Gate the affected suites, including the retained game-error replay issue
@@ -91,6 +93,10 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 Full recheck history is retained at
 `9eb98a6aaee9f9eeaabea17ec40dd56717b63f22:scratch/plan.md`.
+Eleventh recheck (after QA follow-through `2d9fcf85c`): origin/main has
+nothing new, Etude PR #103 still open at `105abdd`, no release, pins 0.2.16.
+QA's actionable items (Ctrl-C guidance, guide cadence, conditional error
+directories, Elemental arguments, reused-out error) are all implemented.
 Tenth recheck (after review 10, merge `fe3c794e1`): Etude PR #103 still open
 at `105abdd`; pins remain 0.2.16; origin/main has nothing new. The main merge
 left cli.py, the recipe tests, docs/training.md, training/ and the lock
