@@ -193,8 +193,8 @@ impl Game {
         while let Some(object) = self.state.stack_objects.last() {
             match object {
                 StackObject::Spell(spell) => {
-                    let card = spell.card;
-                    self.move_card(card, ZoneType::Exile);
+                    let object_id = spell.object;
+                    self.move_object(object_id, ZoneType::Exile);
                 }
                 _ => {
                     self.state.stack_objects_mut().pop();

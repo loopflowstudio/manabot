@@ -6,7 +6,7 @@ use crate::state::binding::ObjectBinding;
 
 use crate::state::{
     ability::{DelayedExpiry, DelayedFrequency, Effect},
-    game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+    game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, Target},
     predicate::CardPredicate,
 };
 
@@ -56,7 +56,8 @@ pub struct PendingTrigger {
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<ObjectBinding>,
-    pub source_card: CardId,
+    #[serde(rename = "source_card")]
+    pub source_object: ObjectId,
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
     pub requirement_index: usize,
@@ -91,7 +92,7 @@ pub struct PendingTrigger {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub chosen_modes: Vec<usize>,
     /// Delayed triggers carry their effects inline instead of referencing
-    /// `Card::abilities` (`ability_index` is unused when set).
+    /// `Object::abilities` (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
 }
 
@@ -105,7 +106,8 @@ pub struct DelayedTrigger {
     pub remembered: Vec<ObjectBinding>,
     pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
-    pub source_card: CardId,
+    #[serde(rename = "source_card")]
+    pub source_object: ObjectId,
     pub source_ref: Option<ObjectRef>,
     pub effects: Vec<Effect>,
     pub frequency: DelayedFrequency,
@@ -141,7 +143,8 @@ pub enum DelayedTriggerEvent {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
     pub source: ObjectRef,
-    pub exiled_card: CardId,
+    #[serde(rename = "exiled_card")]
+    pub exiled_object: ObjectId,
     /// The card returns as the source leaves the battlefield.
     #[serde(skip_serializing_if = "is_true")]
     pub returns: bool,

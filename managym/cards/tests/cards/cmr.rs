@@ -9,7 +9,7 @@ use managym::{
     agent::action::{Action, ActionSpaceKind},
     state::{
         card::StaticAbility,
-        game_object::{CardId, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, Target},
         zone::ZoneType,
     },
 };
@@ -24,7 +24,7 @@ const DECK: [&str; 5] = [
 
 /// Cast Volcanic Torrent from hand over `top` (first on top) and resolve
 /// cascade's trigger up to its first decision.
-fn cascade_over(s: &mut Scenario, top: &[&str]) -> Vec<CardId> {
+fn cascade_over(s: &mut Scenario, top: &[&str]) -> Vec<ObjectId> {
     let torrent = move_to_hand(s, "Volcanic Torrent");
     let pinned = pin_top(s, top);
     cast_card(s, torrent);
@@ -38,20 +38,23 @@ fn cascade_over(s: &mut Scenario, top: &[&str]) -> Vec<CardId> {
     pinned
 }
 
-fn bottom(s: &Scenario, count: usize) -> Vec<CardId> {
-    let mut cards = s
+fn bottom(s: &Scenario, count: usize) -> Vec<ObjectId> {
+    let mut objects = s
         .game()
         .state
         .zones
-        .zone_cards(ZoneType::Library, PlayerId(0))[..count]
-        .to_vec();
-    cards.sort();
-    cards
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .iter()
+        .take(count)
+        .copied()
+        .collect::<Vec<_>>();
+    objects.sort();
+    objects
 }
 
-fn sorted(mut cards: Vec<CardId>) -> Vec<CardId> {
-    cards.sort();
-    cards
+fn sorted(mut objects: Vec<ObjectId>) -> Vec<ObjectId> {
+    objects.sort();
+    objects
 }
 
 /// Cascade passes a land and a nonland of equal mana value, offers the first
@@ -68,7 +71,7 @@ fn volcanic_torrent_cascades_past_costly_cards_and_counts_spells_cast() {
     let hit = pinned[2];
     choose(
         &mut s,
-        |a| matches!(a, Action::SelectCard { card, .. } if *card == hit),
+        |a| matches!(a, Action::SelectCard { object, .. } if *object == hit),
     );
     assert_eq!(zone_of(&s, hit), Some(ZoneType::Stack));
     assert_eq!(bottom(&s, 2), sorted(pinned[..2].to_vec()));
@@ -106,11 +109,18 @@ fn volcanic_torrent_cascade_without_a_castable_hit_bottoms_everything() {
     let mut s = five_color_setup(&DECK);
     let torrent = move_to_hand(&mut s, "Volcanic Torrent");
     let kept = pin_top(&mut s, &["Island", "Volcanic Torrent"]);
-    s.game_mut()
+    let removed = s
+        .game()
         .state
         .zones
-        .zone_cards_mut(ZoneType::Library, PlayerId(0))
-        .retain(|card| kept.contains(card));
+        .zone_objects(ZoneType::Library, PlayerId(0))
+        .iter()
+        .copied()
+        .filter(|object| !kept.contains(object))
+        .collect::<Vec<_>>();
+    for object in removed {
+        s.game_mut().state.zones.remove_object(object);
+    }
     cast_card(&mut s, torrent);
     spend_colorless(&mut s);
     s.pass_priority();
@@ -163,7 +173,7 @@ fn sakashima_copies_a_legend_you_control_and_both_stay() {
         s.battlefield_permanents_named(0, "Rhys the Redeemed").len(),
         2
     );
-    let copy = s.game().state.card_to_permanent[sakashima].expect("entered");
+    let copy = s.game().state.object_to_permanent[sakashima].expect("entered");
     assert!(s
         .game()
         .characteristics(copy)

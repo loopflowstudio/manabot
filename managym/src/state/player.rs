@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::{
     card::CardDefId,
     deck::Deck,
-    game_object::{CardId, ObjectId},
+    game_object::{CardId, PublicId},
     mana::Mana,
 };
 
@@ -90,7 +90,7 @@ impl PlayerConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Player {
-    pub id: ObjectId,
+    pub id: PublicId,
     pub index: usize,
     pub deck: Vec<CardId>,
     /// Immutable owned outside-game roster; availability is derived from zones.
@@ -111,7 +111,7 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new(id: ObjectId, index: usize, name: impl Into<String>) -> Self {
+    pub fn new(id: PublicId, index: usize, name: impl Into<String>) -> Self {
         Self {
             id,
             index,

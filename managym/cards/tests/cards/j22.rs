@@ -75,7 +75,7 @@ fn lita_creates_a_zeppelin_that_crews_until_end_of_turn() {
         let card = card_of(&s, crew);
         choose(
             &mut s,
-            |a| matches!(a, Action::SelectCard { card: c, .. } if *c == card),
+            |a| matches!(a, Action::SelectCard { object: c, .. } if *c == card),
         );
     }
     settle(&mut s);

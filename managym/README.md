@@ -46,7 +46,11 @@ Each card is a function in the file of its first printing's set under
 …). Tokens are not cards: each is a `TokenDefinition` in `cards/src/tokens.rs`
 with the same `PrintedCharacteristics`, keyed `token.*` and created by that
 key, with a Scryfall id unless it has no printing. The engine registers both
-as `ObjectDefinition` rows with token status and runs them directly, and
+as `ObjectDefinition` rows with token status. In a game every object has a kind
+(`ObjectKind::Card`, `Token` or `SpellCopy`): a token is never a card, and
+each zone holds only the objects the Comprehensive Rules allow it
+([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values
+directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
 support check (defined cards, excluding tokens and rules fixtures) and the set
@@ -78,7 +82,7 @@ The policy input factors resolved `EffectRecords` through `agent/shared_effects.
 before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
 source incarnation, timestamps, fixed affected sets and duplicate edges survive.
-Public object IDs are joins; private card storage IDs do not enter this view.
+Public object IDs are joins; private object storage IDs (`ObjectId`) do not enter this view.
 Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
 active effects.
@@ -329,7 +333,10 @@ does it classify the sources and apply both to every state, so ordinary small
 payments pay nothing for them. Distinct
 source behaviors, overlapping tap sets, nested obligations and concrete pool
 remainders can still make exact search combinatorial; there is no general
-large-board work limit or truncation of legal payments.
+large-board work limit or truncation of legal payments. The
+[stress states](../docs/development.md#stress-states) measure payment and every
+other engine layer on large duplicative and large diverse boards; run them when
+changing this search.
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
@@ -356,6 +363,12 @@ The opaque native capture binds an Env and reset generation. Use
 current-digest validation plus ordinary semantic execution. Portable capture JSON
 is evidence, not execution authority; clones need their own live capture.
 
+Frozen viewer JSON omits continuation frames. To reconstruct a complete
+stateless policy observation, use
+`Observation.from_json(viewer_json, continuation_json=frames_json)`; the frames
+pass through the same canonical validator as retained decision captures.
+Neither input creates an executable decision binding.
+
 
 The policy input has configurable fact capacity (512 by default). It keeps
 trigger-placement action joins and retained
@@ -367,10 +380,10 @@ layout, checkpoint admission and measurement commands are documented in
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 
-`Game::card_power` reads contextual power in every zone: the layered view on
+`Game::object_power` reads contextual power in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
-filters use `card_matches_predicate`; printed-only matching belongs to
+filters use `object_matches_predicate`; printed-only matching belongs to
 structural definition checks and private layer stages. `LookAndSelect` names
 whether the remainder is random; chosen order suspends on native
 `OrderLibrary`, placing cards first-to-draw first through ordinary SelectCard

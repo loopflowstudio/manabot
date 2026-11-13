@@ -37,9 +37,9 @@ fn tle_baseline_vanilla_creatures_cast_and_deal_printed_combat_damage() {
         ("Warship Scout", 2, 1),
     ] {
         let mut s = five_color_setup(&[name]);
-        let card = cast_owned(&mut s, name);
+        let object = cast_owned(&mut s, name);
         settle(&mut s);
-        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        let permanent = s.game().state.object_to_permanent[object].unwrap();
         let view = s.game().characteristics(permanent);
         assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
         assert!(!tapped(&s, permanent), "{name}");
@@ -114,9 +114,9 @@ fn tle_baseline_koala_sheep_gains_three_on_entry() {
 #[test]
 fn tle_baseline_wolf_cove_villager_enters_tapped_and_untaps_normally() {
     let mut s = five_color_setup(&["Wolf Cove Villager"]);
-    let card = cast_owned(&mut s, "Wolf Cove Villager");
+    let object = cast_owned(&mut s, "Wolf Cove Villager");
     settle(&mut s);
-    let permanent = s.game().state.card_to_permanent[card].unwrap();
+    let permanent = s.game().state.object_to_permanent[object].unwrap();
     assert!(tapped(&s, permanent));
     s.advance_to_active_step(1, StepKind::Main);
     assert!(tapped(&s, permanent));
@@ -145,9 +145,9 @@ fn tle_baseline_keyword_creatures_have_printed_body_and_keyword() {
         ("Sokka, Wolf Cove's Protector", 3, 3, Keyword::Vigilance),
     ] {
         let mut s = five_color_setup(&[name]);
-        let card = cast_owned(&mut s, name);
+        let object = cast_owned(&mut s, name);
         settle(&mut s);
-        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        let permanent = s.game().state.object_to_permanent[object].unwrap();
         let view = s.game().characteristics(permanent);
         assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
         assert!(view.keywords.has(keyword), "{name}");
@@ -157,9 +157,9 @@ fn tle_baseline_keyword_creatures_have_printed_body_and_keyword() {
 #[test]
 fn tle_baseline_dragon_moose_attacks_the_turn_it_enters() {
     let mut s = five_color_setup(&["Dragon Moose"]);
-    let card = cast_owned(&mut s, "Dragon Moose");
+    let object = cast_owned(&mut s, "Dragon Moose");
     settle(&mut s);
-    let moose = s.game().state.card_to_permanent[card].unwrap();
+    let moose = s.game().state.object_to_permanent[object].unwrap();
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     attack_with(&mut s, moose);
     s.advance_to_step(StepKind::EndOfCombat);
@@ -244,9 +244,9 @@ fn tle_baseline_katara_heroic_healer_counters_each_other_creature_you_control() 
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.game_mut().scenario_refresh_priority().unwrap();
-    let card = cast_owned(&mut s, "Katara, Heroic Healer");
+    let object = cast_owned(&mut s, "Katara, Heroic Healer");
     settle(&mut s);
-    let katara = s.game().state.card_to_permanent[card].unwrap();
+    let katara = s.game().state.object_to_permanent[object].unwrap();
     assert_eq!(counters(&s, ogre), 1);
     assert_eq!(counters(&s, katara), 0);
     assert_eq!(counters(&s, foe), 0);
@@ -371,11 +371,11 @@ fn merchant_repeats_with_four_foods_and_preserves_exact_tap_commands() {
         assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
         for food in pair {
             assert_choice_contract(&s);
-            let card = card_of(&s, *food);
-            assert!(offered_cards(&s).contains(&card));
-            select_card(&mut s, card);
+            let object = card_of(&s, *food);
+            assert!(offered_cards(&s).contains(&object));
+            select_card(&mut s, object);
             assert!(tapped(&s, *food));
-            assert!(!offered_cards(&s).contains(&card));
+            assert!(!offered_cards(&s).contains(&object));
         }
         assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
         assert_choice_contract(&s);
@@ -396,8 +396,8 @@ fn merchant_three_foods_fund_only_one_activation() {
     assert!(!can_cast(&s, prism));
     activate(&mut s, source, 0);
     for food in &foods[..2] {
-        let card = card_of(&s, *food);
-        select_card(&mut s, card);
+        let object = card_of(&s, *food);
+        select_card(&mut s, object);
     }
     choose_mode(&mut s, 4);
     assert!(!can_activate(&s, source));
@@ -423,8 +423,8 @@ fn merchant_cannot_reuse_the_food_reserved_for_its_own_activation() {
         for food in pair {
             assert!(!offered_cards(&s).contains(&payer_card));
             assert_choice_contract(&s);
-            let card = card_of(&s, *food);
-            select_card(&mut s, card);
+            let object = card_of(&s, *food);
+            select_card(&mut s, object);
         }
         choose_mode(&mut s, 4);
     }
@@ -452,8 +452,8 @@ fn merchant_tap_count_reaches_the_acting_viewer_and_policy() {
             }
             encode(&observation, &Default::default()).unwrap();
         }
-        let card = card_of(&s, *food);
-        select_card(&mut s, card);
+        let object = card_of(&s, *food);
+        select_card(&mut s, object);
     }
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
 }
@@ -493,8 +493,8 @@ fn merchant_sacrifices_a_food_for_each_creature_dealing_combat_damage_to_you() {
     for food in foods {
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         assert_choice_contract(&s);
-        let card = card_of(&s, food);
-        select_card(&mut s, card);
+        let object = card_of(&s, food);
+        select_card(&mut s, object);
     }
     settle(&mut s);
     assert!(s.battlefield_permanents_named(0, "Food").is_empty());
@@ -513,8 +513,8 @@ fn merchant_paid_foods_are_not_offered_again_for_waterbending() {
     pass_until(&mut s, ActionSpaceKind::Waterbend);
     activate(&mut s, source, 0);
     for food in &foods[..2] {
-        let card = card_of(&s, *food);
-        select_card(&mut s, card);
+        let object = card_of(&s, *food);
+        select_card(&mut s, object);
     }
     choose_mode(&mut s, 4);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
@@ -543,13 +543,13 @@ fn only_pool(s: &mut Scenario, mana: &str) {
     s.set_player_mana_pool(0, mana);
 }
 
-fn spell_spent(s: &Scenario, card: managym::state::game_object::CardId) -> ManaSpent {
+fn spell_spent(s: &Scenario, object: managym::state::game_object::ObjectId) -> ManaSpent {
     s.game()
         .state
         .stack_objects
         .iter()
-        .find_map(|object| match object {
-            StackObject::Spell(spell) if spell.card == card => Some(spell.spent),
+        .find_map(|stack| match stack {
+            StackObject::Spell(spell) if spell.object == object => Some(spell.spent),
             _ => None,
         })
         .expect("spell on the stack")
@@ -603,7 +603,7 @@ fn toph_put_onto_the_battlefield_earthbends_zero() {
         ZoneType::Battlefield,
     );
     s.game_mut().scenario_refresh_priority().unwrap();
-    let permanent = s.game().state.card_to_permanent[toph].unwrap();
+    let permanent = s.game().state.object_to_permanent[toph].unwrap();
     assert!(s.game().state.permanents[permanent]
         .as_ref()
         .unwrap()
@@ -700,7 +700,7 @@ fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
         assert_eq!(spent.entry_counters, attendants as u8);
         assert_eq!(spent.total(), 3);
         settle(&mut s);
-        let permanent = s.game().state.card_to_permanent[sheep].unwrap();
+        let permanent = s.game().state.object_to_permanent[sheep].unwrap();
         assert_eq!(counters(&s, permanent), attendants as i32);
         assert!(s.game().state.players[0].mana_pool.classes().is_empty());
     }
@@ -713,10 +713,10 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
     let attendant = attendant_mana(&mut s, "1W", 1)[0];
     let card = card_of(&s, attendant);
-    s.game_mut().move_card(card, ZoneType::Graveyard);
+    s.game_mut().move_object(card, ZoneType::Graveyard);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
     settle(&mut s);
-    let permanent = s.game().state.card_to_permanent[sheep].unwrap();
+    let permanent = s.game().state.object_to_permanent[sheep].unwrap();
     assert_eq!(counters(&s, permanent), 1);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
@@ -724,7 +724,7 @@ fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() 
     let guard = cast_owned(&mut s, "Capital Guard");
     assert_eq!(spell_spent(&s, guard).entry_counters, 0);
     settle(&mut s);
-    let permanent = s.game().state.card_to_permanent[guard].unwrap();
+    let permanent = s.game().state.object_to_permanent[guard].unwrap();
     assert_eq!(counters(&s, permanent), 0);
 
     let mut s = five_color_unfunded_setup(&["Animal Attendant", "Explosive Shot", "Craw Wurm"]);
@@ -757,12 +757,12 @@ fn animal_attendant_counter_does_not_follow_the_card_to_a_later_entry() {
     attendant_mana(&mut s, "1W", 1);
     let sheep = cast_owned(&mut s, "Koala-Sheep");
     settle(&mut s);
-    let permanent = s.game().state.card_to_permanent[sheep].unwrap();
+    let permanent = s.game().state.object_to_permanent[sheep].unwrap();
     assert_eq!(counters(&s, permanent), 1);
 
-    s.game_mut().move_card(sheep, ZoneType::Graveyard);
-    s.game_mut().move_card(sheep, ZoneType::Battlefield);
-    let returned = s.game().state.card_to_permanent[sheep].unwrap();
+    s.game_mut().move_object(sheep, ZoneType::Graveyard);
+    s.game_mut().move_object(sheep, ZoneType::Battlefield);
+    let returned = s.game().state.object_to_permanent[sheep].unwrap();
     assert_eq!(counters(&s, returned), 0);
     assert!(s.game().state.permanents[returned]
         .as_ref()
@@ -834,7 +834,7 @@ fn animal_attendant_spending_can_keep_or_use_the_rider_for_the_same_creature() {
             u8::from(!use_rider)
         );
         settle(&mut s);
-        let permanent = s.game().state.card_to_permanent[sheep].unwrap();
+        let permanent = s.game().state.object_to_permanent[sheep].unwrap();
         assert_eq!(counters(&s, permanent), i32::from(use_rider));
     }
 }
@@ -881,13 +881,13 @@ fn toph_cast_receipt_includes_additional_mana_costs() {
     let card = move_to_hand(&mut s, "Toph, Greatest Earthbender");
     // A controlled cost fixture exercises the same receipt with a required
     // additional cost. Toph's printed definition is unchanged.
-    s.game_mut().state.cards[card]
+    s.game_mut().state.objects[card]
         .additional_costs
         .push(AdditionalCost::RequiredWaterbend(ManaCost::parse("2")));
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
-        |a| matches!(a, Action::CastSpell { card: c, .. } if *c == card),
+        |a| matches!(a, Action::CastSpell { object: c, .. } if *c == card),
     );
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert_eq!(spell_spent(&s, card).total(), 6);
@@ -916,8 +916,8 @@ fn animal_attendant_and_toph_countered_then_reanimated_keep_no_cast_receipt() {
             s.game().state.zones.zone_of(card),
             Some(ZoneType::Graveyard)
         );
-        s.game_mut().move_card(card, ZoneType::Battlefield);
-        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        s.game_mut().move_object(card, ZoneType::Battlefield);
+        let permanent = s.game().state.object_to_permanent[card].unwrap();
         assert_eq!(counters(&s, permanent), 0);
         assert!(s.game().state.permanents[permanent]
             .as_ref()

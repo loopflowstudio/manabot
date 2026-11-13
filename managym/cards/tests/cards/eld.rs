@@ -24,7 +24,7 @@ fn fetch_lands_have_distinct_entry_and_life_rules() {
         let found = library_card(&s, 0, "Forest");
         select_card(&mut s, found);
         settle(&mut s);
-        let id = s.game().state.card_to_permanent[found].unwrap();
+        let id = s.game().state.object_to_permanent[found].unwrap();
         assert_eq!(
             s.game().state.permanents[id].as_ref().unwrap().tapped,
             tapped

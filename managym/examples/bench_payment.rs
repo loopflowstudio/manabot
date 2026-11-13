@@ -53,6 +53,10 @@ fn replay(path: &str) {
         digest = digest
             .wrapping_mul(31)
             .wrapping_add(count as u64 * 7 + *action as u64);
+        total.witness_digest = total
+            .witness_digest
+            .wrapping_mul(31)
+            .wrapping_add(m.witness_digest);
         total.plans += m.plans;
         total.calls += m.calls;
         total.states += m.states;
