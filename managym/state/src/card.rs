@@ -123,12 +123,56 @@ pub struct ManaAbility {
     pub mana: Mana,
 }
 
-/// A triggered mana ability (CR 605.1b): "Whenever you tap a [predicate]
-/// for mana, add [mana]." Resolves immediately — no stack, no priority.
+/// A triggered mana ability (CR 605.1b): "Whenever [who] taps a
+/// [predicate] for mana, [that player] adds [output]." It triggers when a
+/// mana ability with the permanent's own {T} in its cost resolves and
+/// produces mana (CR 106.12, 106.12a) and resolves immediately after that
+/// ability, off the stack (CR 605.4a). The tapping player receives the mana,
+/// whoever controls this ability.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredManaAbility {
+    /// Who taps, relative to this ability's controller: `You` for
+    /// "whenever you tap", `AnyPlayer` for "whenever a player taps".
+    pub who: crate::ability::Actor,
     pub predicate: CardPredicate,
-    pub mana: Mana,
+    pub output: TriggeredManaOutput,
+}
+
+/// What a triggered mana ability adds.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum TriggeredManaOutput {
+    /// "add an additional {G}" (Badgermole Cub).
+    Fixed(Mana),
+    /// "adds one mana of any type that [permanent] produced" (Heartbeat of
+    /// Spring): one mana of a type, colorless included, among the mana the
+    /// triggering ability actually produced (CR 106.12a). The tapping player
+    /// chooses when it produced more than one type.
+    OneProducedType,
+}
+
+impl TriggeredManaOutput {
+    /// Each mana this output can add after `produced`; empty after a
+    /// production of no mana, which triggers nothing (CR 106.12a).
+    pub fn alternatives(&self, produced: &Mana) -> Vec<Mana> {
+        if produced.total() == 0 {
+            return Vec::new();
+        }
+        match self {
+            Self::Fixed(mana) => vec![mana.clone()],
+            Self::OneProducedType => {
+                let restricted = produced.restricted_colors();
+                let unrestricted = produced.unrestricted_colors();
+                (0..6)
+                    .filter(|&slot| unrestricted[slot] != 0 || restricted[slot] != 0)
+                    .map(|slot| {
+                        let mut mana = Mana::default();
+                        mana.mana[slot] = 1;
+                        mana
+                    })
+                    .collect()
+            }
+        }
+    }
 }
 
 // One declaration owns the enum, iteration order and storage capacity. Append

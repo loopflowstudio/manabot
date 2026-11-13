@@ -3,7 +3,7 @@
 use crate::support::{
     game::{five_color_setup, plant_in_graveyard, until_end_of_turn},
     inspect::zone_of,
-    play::{activate, cast, cast_owned, offers_ability, settle, target_opponent},
+    play::{activate, cast, cast_owned, offers_ability, settle, spend_colorless, target_opponent},
 };
 use managym::{
     flow::turn::StepKind,
@@ -31,6 +31,7 @@ fn sundial_of_the_infinite_ends_the_turn_exiling_the_stack() {
     target_opponent(&mut s);
     assert!(offers_ability(&mut s, sundial, 0));
     activate(&mut s, sundial, 0);
+    spend_colorless(&mut s);
     s.pass_priority();
     s.pass_priority();
     assert_eq!(zone_of(&s, bolt), Some(ZoneType::Exile));
@@ -66,6 +67,7 @@ fn warstorm_surge_has_the_entering_creature_deal_its_power() {
     let mut s = five_color_setup(&["Warstorm Surge", "Aardvark Sloth"]);
     s.force_permanent_on_battlefield(0, "Warstorm Surge");
     cast(&mut s, "Aardvark Sloth");
+    spend_colorless(&mut s);
     settle_targeting_opponent(&mut s);
     s.assert_life(1, 17);
     s.assert_life(0, 23);

@@ -700,7 +700,7 @@ to an authored setup refuse imported decks even when shapes agree
 
 TLA play boosters include a bonus sheet of 61 Avatar: The Last Airbender
 Eternal (TLE) cards, collector numbers 1–61. TLA Limited decks use the same
-importer, with no extra pack or flag. The engine defines 58 of the 61:
+importer, with no extra pack or flag. The engine defines all 61:
 
 ```python
 import managym
@@ -718,19 +718,19 @@ Every defined non-token card belongs to the world pool. This small example
 checks `development-v1` admission, not Limited construction or booster
 contents; use a complete deck for play.
 
-Three bonus-sheet cards are not yet defined, so a deck listing one of them
-raises `managym.DeckImportError` naming it as unknown:
+All bonus-sheet cards now have definitions, including Heartbeat of Spring,
+Release to Memory and Lita, Mechanical Engineer. Re-admitting the first 1,000
+TLA PremierDraft trophy decks in the retained MTG-213 corpus admits all 1,000.
+This check reparses each retained deck's original source against the current
+world, preserving the corpus and its historical diagnostics.
 
-| Card | Waits for |
-| --- | --- |
-| Release to Memory | Tokens with their own definition type, resolved by key |
-| Lita, Mechanical Engineer | The same token change (its Zeppelin token has no printing) |
-| Heartbeat of Spring | A redesign of how mana production triggers see what a land produced |
-
-Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, 995
-admit; the five that fail list Heartbeat of Spring (three) or Lita (two). Do
-not drop or substitute the card to admit such a deck; it admits once its
-definition exists.
+Two bonus-sheet cards create tokens that need care when reading a board.
+Release to Memory makes plain 1/1 colorless Spirits, which block and are
+blocked normally; TLA's own Spirit token shares the name and can't block or be
+blocked by non-Spirit creatures. The two are separate token definitions, and
+observations and learning tokens tell them apart. Lita, Mechanical Engineer
+makes a 5/5 colorless Zeppelin Vehicle with flying and crew 3, a token with no
+printing and so no Scryfall id.
 
 Bloodchief Ascension, Brought Back and Cityscape Leveler depend on state that
 policy input v9 cannot hold: life lost this turn, cards put into a graveyard

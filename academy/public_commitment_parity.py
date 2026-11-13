@@ -37,11 +37,11 @@ from .replay_index import CanonicalReplayV1
 
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
-    ROOT / "conformance/public-commitment-parity-w17-v1/"
+    ROOT / "conformance/public-commitment-parity-w17-v2/"
     "release-live-replay-hypothesis-seed-0.json"
 )
 AUTHORITY_RECEIPT_SHA256 = (
-    "28ed11cc5241466791bdd3b0240585dbc0dd4aa0e0c2005e6c519abd2bb96c4f"
+    "39ec3796e6b09bc4775aa29894274e82e88b96aaed3f440b252ca54d7b34b1dc"
 )
 COMMAND_COUNT = 135
 COMMITMENT_COUNT = 66
@@ -491,7 +491,7 @@ def _materialized_discard_proof(root: managym.Env) -> dict[str, Any]:
 
 def _source_manifest() -> dict[str, Any]:
     paths = (
-        "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w17-v2/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
         "managym/experience_projection.py",

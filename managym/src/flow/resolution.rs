@@ -56,11 +56,21 @@ impl Game {
     /// announced X and recorded excess damage.
     fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         match value {
-            EffectValue::Objects(of) => self.select(of, frame).len() as i32,
+            EffectValue::Objects { of, predicate } => self
+                .select(of, frame)
+                .into_iter()
+                .filter(|object| {
+                    predicate.as_ref().is_none_or(|predicate| {
+                        self.card_matches_predicate(CardId::from(object.entity), predicate)
+                    })
+                })
+                .count() as i32,
             EffectValue::X => i32::from(frame.x),
             EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
             EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::ExcessDamage => frame.excess_damage,
+            EffectValue::ManaSpentToCast => i32::from(frame.spent.total()),
+            EffectValue::ColorsSpentToCast => i32::from(frame.spent.colors()),
             EffectValue::SourcePower => self
                 .source_permanent_id(frame)
                 .map(|id| self.characteristics(id).power)
@@ -91,9 +101,11 @@ impl Game {
     pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         match value {
             EffectValue::Fixed(value) => *value,
-            EffectValue::Objects(_)
+            EffectValue::Objects { .. }
             | EffectValue::X
             | EffectValue::ExcessDamage
+            | EffectValue::ManaSpentToCast
+            | EffectValue::ColorsSpentToCast
             | EffectValue::SourcePower
             | EffectValue::TriggeringPower
             | EffectValue::TargetToughness
@@ -198,6 +210,7 @@ impl Game {
             source_ref: self.current_object_ref(card),
             kicked: spell.kicked,
             x: spell.x,
+            spent: spell.spent,
             targets,
             completion: FrameCompletion::Spell {
                 card,
@@ -391,6 +404,7 @@ impl Game {
             source_transforms: triggered.source_transforms,
             resolutions_this_turn,
             x: triggered.x,
+            spent: triggered.spent,
             targets,
             context_target: triggered.context,
             triggering_player: triggered.player,
@@ -1539,6 +1553,7 @@ impl Game {
                 );
                 trigger.remembered = frame.remembered.clone();
                 trigger.x = frame.x;
+                trigger.spent = frame.spent;
                 trigger.player = frame.triggering_player;
                 None
             }

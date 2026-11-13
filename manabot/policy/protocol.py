@@ -12,12 +12,14 @@ and `Settings` are one captured minibatch's constants and coefficients.
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import numpy as np
 
 from manabot.policy.checkpoint import PolicyCheckpoint
 from manabot.policy.prepare import Prepared
+
+Precision = Literal["float32", "bfloat16", "float16"]
 
 
 @dataclass(frozen=True)

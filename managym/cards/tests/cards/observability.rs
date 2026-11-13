@@ -18,7 +18,7 @@ use crate::support::{
         put_onto_battlefield, until_end_of_turn, ur_lessons_setup, Scenario,
     },
     inspect::{card_of, library_card},
-    play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle},
+    play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle, spend_colorless},
 };
 use managym::agent::observation_layout::{
     action, card, fact, permanent, player, relation, turn_state,
@@ -33,8 +33,8 @@ use managym::{
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
             ContinuousEffectData, CopyData, EventData, Observation, PermanentData, PlayerData,
-            RestrictedManaData, SideboardCardData, StackObjectData, StackTargetData, TurnData,
-            KEYWORD_COUNT,
+            PooledManaClassData, RestrictedManaData, SideboardCardData, StackObjectData,
+            StackTargetData, TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
             encode, EncodedObservation, FactKind, ObservationEncoderConfig, CARD_DIM, FACT_DIM,
@@ -69,7 +69,8 @@ use managym::{
             Keywords, ObjectDefinition, PowerCda, PrintedCharacteristics, Restriction,
             SacrificeCost, SetCharacteristics, SpellCostReduction, StaticAbility,
             StaticKeywordGrant, StaticLandType, StaticPtBuff, StaticRestriction, StaticScope,
-            StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
+            StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
+            TriggeredManaOutput,
         },
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -128,7 +129,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
     let Permanent {
         transforms: _,
         id: _,
@@ -144,6 +145,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
         attacking: _,
         was_cast: _,
         cast_x: _,
+        cast_spent: _,
         attached_to: _,
         exhausted: _,
         activated_this_turn: _,
@@ -179,6 +181,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
         (
             "cast_x",
             Seen::Transient("copied into its own entering trigger's X as it fires"),
+        ),
+        (
+            "cast_spent",
+            Seen::Transient("copied into its own entering trigger's mana spent as it fires"),
         ),
         ("attached_to", Seen::Permanent(permanent::ATTACHED_TO)),
         ("exhausted", Seen::Fact(FactKind::UsedAbility)),
@@ -1768,14 +1774,18 @@ fn card_row<'a>(
     encoded: &'a EncodedObservation,
     permanent: PermanentId,
 ) -> &'a [f32] {
+    let row = card_index(game, observation, permanent);
+    &encoded.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM]
+}
+
+fn card_index(game: &Game, observation: &Observation, permanent: PermanentId) -> usize {
     let card = game.state.permanents[permanent].as_ref().unwrap().card;
     let id = game.state.cards[card].id.0 as i32;
-    let row = observation
+    observation
         .agent_cards
         .iter()
         .position(|card| card.id == id)
-        .unwrap();
-    &encoded.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM]
+        .unwrap()
 }
 
 fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
@@ -1835,6 +1845,44 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
                 tokens.contains(&(TokenKind::Variant, name_value(name))),
                 "{name}"
             );
+        }
+    }
+}
+
+/// A triggered mana ability's tapping actor and each output reach the
+/// learning tokens.
+#[test]
+fn every_triggered_mana_output_and_actor_reaches_the_learning_tokens() {
+    fn output_token(output: &TriggeredManaOutput) -> &'static str {
+        match output {
+            TriggeredManaOutput::Fixed(_) => "TriggeredManaOutput::Fixed",
+            TriggeredManaOutput::OneProducedType => "TriggeredManaOutput::OneProducedType",
+        }
+    }
+    for (who, actor) in [
+        (Actor::You, "Actor::You"),
+        (Actor::AnyPlayer, "Actor::AnyPlayer"),
+    ] {
+        for output in [
+            TriggeredManaOutput::Fixed(Mana::parse("G")),
+            TriggeredManaOutput::OneProducedType,
+        ] {
+            let definition = ObjectDefinition::face(PrintedCharacteristics {
+                name: "Witness".into(),
+                triggered_mana_abilities: vec![TriggeredManaAbility {
+                    who,
+                    predicate: CardPredicate::default(),
+                    output: output.clone(),
+                }],
+                ..Default::default()
+            });
+            let tokens = tokens_of(&definition);
+            for name in [actor, output_token(&output)] {
+                assert!(
+                    tokens.contains(&(TokenKind::Variant, name_value(name))),
+                    "{name} in {output:?}"
+                );
+            }
         }
     }
 }
@@ -2824,6 +2872,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         mana => [Columns(Player, player::MANA_WHITE, 6)],
         lesson_mana => [Columns(Player, player::LESSON_MANA_WHITE, 6)],
         restricted_mana => [Rows("restricted mana below")],
+        pooled_mana_classes => [Rows("pooled mana classes below")],
         hand_only_until => [column(Player, player::HAND_ONLY)],
         known_hand => [Rows("known_hand")],
         main_counts => [Rows("decklists")],
@@ -2882,6 +2931,16 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         waterbend => [column(Card, card::PERMISSION_WATERBEND)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
+    }));
+    fields.extend(encoding!(PooledManaClassData {
+        combat => [FactOccurrence(FactKind::EffectProgram)],
+        restriction => [FactOccurrence(FactKind::EffectProgram)],
+        effect => [FactOccurrence(FactKind::EffectProgram)],
+        mana => [
+            FactOccurrence(FactKind::EffectProgram),
+            Columns(Player, player::MANA_WHITE, 6),
+        ],
+        program => [FactOccurrence(FactKind::EffectProgram)],
     }));
     fields.extend(encoding!(RestrictedManaData {
         spells => [Columns(Player, player::RESTRICTED_LESSON_WHITE, 18)],
@@ -3922,6 +3981,7 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
     let (mut s, ogre) = setup();
     cast(&mut s, "Lightning Strike");
     assert!(s.choose_target(Target::Permanent(ogre)));
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert_eq!(waiting(&s, 0), None, "fired");
 }
@@ -4278,6 +4338,126 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
     let mut expected = [0.0; 18];
     expected[12 + 4] = 0.1; // Ally, green
     assert_eq!(by_subtype, expected);
+}
+
+/// Animal Attendant's mana counts as ordinary green and states its spend
+/// effect as a program on its player, in catalog tokens, for both viewers.
+#[test]
+fn pooled_mana_classes_are_programs_on_their_player() {
+    let mut s = five_color_setup(&["Animal Attendant"]);
+    let attendant = s.force_permanent_on_battlefield(0, "Animal Attendant");
+    clear_summoning_sickness(&mut s, attendant);
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, attendant, 0);
+    choose_mode(&mut s, 4);
+
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let owner = if viewer == 0 {
+            &observation.agent
+        } else {
+            &observation.opponent
+        };
+        assert_eq!(owner.mana, [0, 0, 0, 0, 1, 0]);
+        assert_eq!(owner.lesson_mana, [0; 6]);
+        let classes = &owner.pooled_mana_classes;
+        assert_eq!(classes.len(), 1);
+        assert_eq!(classes[0].mana, [0, 0, 0, 0, 1, 0]);
+        assert!(classes[0]
+            .effect
+            .as_ref()
+            .is_some_and(|effect| effect.contains("non-Human creature spell")));
+        assert_eq!(
+            managym::agent::observation_encoder::unrepresentable_state(&observation),
+            None
+        );
+
+        let encoded = encoded_default(&observation);
+        let pooled = id_columns(name_value(managym::agent::observation_encoder::POOLED_MANA));
+        let rows: Vec<&[f32]> = encoded
+            .facts
+            .chunks(FACT_DIM)
+            .filter(|row| {
+                row[fact::KIND] == FactKind::EffectProgram as u8 as f32
+                    && row[fact::ID_HIGH..fact::ID_HIGH + 2] == pooled
+            })
+            .collect();
+        assert_eq!(rows.len(), classes[0].program.len());
+        let owner_row = if viewer == 0 { 1.0 } else { 2.0 };
+        for (ordinal, (row, &(kind, value))) in rows.iter().zip(&classes[0].program).enumerate() {
+            assert_eq!(row[fact::OBJECT], owner_row);
+            assert_eq!(row[fact::VALUE], f32::from(kind));
+            assert_eq!(row[fact::VALUE + 1], ordinal as f32);
+            assert_eq!(
+                row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2],
+                id_columns(value)
+            );
+        }
+        // Every program token is one the Attendant's own definition spells.
+        let definition = managym_cards::catalog()
+            .iter()
+            .find(|definition| definition.name == "Animal Attendant")
+            .unwrap();
+        let tokens = tokens_of(&ObjectDefinition::card(definition));
+        let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
+        for &(kind, value) in &classes[0].program {
+            assert!(
+                literal.contains(&kind)
+                    || tokens.iter().any(|&(k, v)| k as u16 == kind && v == value),
+                "program token ({kind}, {value}) is outside the definition's vocabulary"
+            );
+        }
+    }
+}
+
+/// The mana spent to cast a spell that counts it (converge) is an execution
+/// occurrence of its stack frame for both viewers, in registered tokens; a
+/// spell no rule reads the receipt of has none.
+#[test]
+fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
+    let mut s = five_color_setup(&["Uncle's Musings", "Kyoshi Warrior Guard"]);
+    s.set_player_mana_pool(0, "WUGG");
+    cast(&mut s, "Uncle's Musings");
+    // The policy's token vocabulary: every definition's tokens and the
+    // registered runtime names.
+    let vocabulary: std::collections::HashSet<(u16, i32)> =
+        managym::agent::record_vocabulary::record_names()
+            .into_iter()
+            .filter_map(|name| name.token)
+            .chain(
+                managym_cards::catalog()
+                    .iter()
+                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
+                    .map(|(kind, value)| (kind as u16, value)),
+            )
+            .collect();
+    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
+    let marker = (TokenKind::Text as u16, name_value("mana spent"));
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 1);
+        assert!(frame.effect_execution.contains(&marker));
+        for token in &frame.effect_execution {
+            assert!(
+                literal.contains(&token.0) || vocabulary.contains(token),
+                "unregistered execution token {token:?}"
+            );
+        }
+        let rows = encoded_default(&observation).facts;
+        let programs = rows
+            .chunks(FACT_DIM)
+            .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
+            .count();
+        assert_eq!(programs, frame.effect_execution.len());
+    }
+
+    let mut s = five_color_setup(&["Kyoshi Warrior Guard"]);
+    s.set_player_mana_pool(0, "1W");
+    cast(&mut s, "Kyoshi Warrior Guard");
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(observation.continuation[0].kind, 1);
+    assert!(observation.continuation[0].effect_execution.is_empty());
 }
 
 /// A spell on the stack shows its announced X.
@@ -4754,4 +4934,89 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     );
     let row = encoded(&s).player_turn_state;
     assert_eq!(row[turn_state::NONARTIFACT_MANA_COLORLESS], 0.1);
+}
+
+#[test]
+fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
+    let pack = default_content_pack();
+    let plain = pack
+        .definition(pack.token_id("token.plain_spirit").unwrap())
+        .unwrap();
+    let tla = pack
+        .definition(pack.token_id("token.spirit").unwrap())
+        .unwrap();
+    assert_ne!(tokens_of(plain), tokens_of(tla));
+    let zeppelin = pack
+        .definition(pack.token_id("token.zeppelin").unwrap())
+        .unwrap();
+    assert!(tokens_of(zeppelin).contains(&(TokenKind::Variant, name_value("Keyword::flying"))));
+    assert!(tokens_of(zeppelin).contains(&(TokenKind::Field, name_value("crew"))));
+
+    let release = pack
+        .definition(pack.definition_id("Release to Memory").unwrap())
+        .unwrap();
+    let rules = tokens_of(release);
+    for variant in [
+        "EffectValue::Objects",
+        "ObjectSelector::Moved",
+        "CardType::Creature",
+    ] {
+        assert!(
+            rules.contains(&(TokenKind::Variant, name_value(variant))),
+            "{variant}"
+        );
+    }
+    assert!(rules.contains(&(TokenKind::Field, name_value("predicate"))));
+
+    let (mut game, _) = ogre_game();
+    let plain_id = game.create_token(plain.key, PlayerId(0), false).unwrap();
+    let tla_id = game.create_token(tla.key, PlayerId(0), false).unwrap();
+    let vehicle = game.create_token(zeppelin.key, PlayerId(0), false).unwrap();
+    let (observation, encoded) = observe(&game, 0);
+    let plain_row = card_row(&game, &observation, &encoded, plain_id);
+    let tla_row = card_row(&game, &observation, &encoded, tla_id);
+    // Shared printed names still bind distinct catalog rows and programs.
+    assert_ne!(
+        encoded.semantic_cards[card_index(&game, &observation, plain_id)],
+        encoded.semantic_cards[card_index(&game, &observation, tla_id)]
+    );
+    assert_eq!(plain_row[card::FLYING], 0.0);
+    assert_eq!(tla_row[card::FLYING], 0.0);
+    let vehicle_row = card_row(&game, &observation, &encoded, vehicle);
+    assert_eq!(vehicle_row[card::FLYING], 1.0);
+    assert_eq!(vehicle_row[card::IS_CREATURE], 0.0);
+    assert_eq!(vehicle_row[card::IS_ARTIFACT], 1.0);
+    assert_eq!(vehicle_row[card::POWER], 0.5);
+    assert_eq!(vehicle_row[card::TOUGHNESS], 0.5);
+}
+
+#[test]
+fn pooled_mana_expiry_preserves_totals_beyond_one_class_capacity() {
+    let mut s = five_color_setup(&["Animal Attendant"]);
+    s.set_player_mana_pool(0, "255");
+    s.game_mut().state.players[0].combat_mana_pool = managym::state::mana::Mana::parse("1");
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let player = if viewer == 0 {
+            &observation.agent
+        } else {
+            &observation.opponent
+        };
+        assert_eq!(player.mana[5], 256);
+        assert_eq!(player.pooled_mana_classes.len(), 1);
+        assert!(player.pooled_mana_classes[0].combat);
+        assert_eq!(player.pooled_mana_classes[0].mana[5], 1);
+        let class = &player.pooled_mana_classes[0];
+        assert_eq!(class.effect, None);
+        assert_eq!(class.restriction, None);
+        let serialized = serde_json::to_value(class).unwrap();
+        assert!(serialized.get("effect").is_none());
+        assert!(serialized.get("restriction").is_none());
+        assert_eq!(
+            serde_json::from_value::<managym::agent::observation::PooledManaClassData>(serialized)
+                .unwrap(),
+            *class
+        );
+        encoded_default(&observation);
+    }
 }

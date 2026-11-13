@@ -22,6 +22,8 @@ mod bro;
 mod c17;
 #[path = "cards/c19.rs"]
 mod c19;
+#[path = "cards/chk.rs"]
+mod chk;
 #[path = "cards/cmr.rs"]
 mod cmr;
 #[path = "cards/csp.rs"]
@@ -56,6 +58,8 @@ mod iko;
 mod inv;
 #[path = "cards/isd.rs"]
 mod isd;
+#[path = "cards/j22.rs"]
+mod j22;
 #[path = "cards/khm.rs"]
 mod khm;
 #[path = "cards/kld.rs"]
@@ -80,6 +84,8 @@ mod mid;
 mod mkm;
 #[path = "cards/mmq.rs"]
 mod mmq;
+#[path = "cards/nec.rs"]
+mod nec;
 #[path = "cards/observability.rs"]
 mod observability;
 #[path = "cards/ody.rs"]

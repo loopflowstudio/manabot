@@ -282,6 +282,7 @@ class Prepared:
     opponent_cards: Array
     permanents: Array  # [B,2,P,numeric]
     validity: Array  # [B,N]
+    ownership: Array  # [N] +1 acting viewer, -1 opponent, at this batch's shape
     card_rows: Array  # [B,2,C]
     known_rows: Array  # [B,2,K]
     known_counts: Array  # [B,2,K] already / 60
@@ -340,7 +341,26 @@ def prepare(
             columns = used
     layout = tables.layout
     batch = obs["actions_valid"].shape[0]
-    objects = layout.objects
+    # Callers may have bucket-trimmed and remapped admitted observations.
+    # Object joins use the batch's coordinates, while checkpoint capacities
+    # still locate each segment in the retained ownership buffer.
+    objects = validity.shape[1]
+    ownership: list[Array] = []
+    start = 0
+    capacities = (
+        1,
+        1,
+        layout.cards_per_player,
+        layout.cards_per_player,
+        layout.perms_per_player,
+        layout.perms_per_player,
+    )
+    for key, capacity in zip(_VALID_KEYS, capacities, strict=True):
+        rows = obs[key].shape[1]
+        if rows > capacity:
+            raise ValueError(f"{key} exceeds checkpoint capacity")
+        ownership.append(tables.is_agent[start : start + rows])
+        start += capacity
     f32 = np.float32
     permanents = np.stack([obs[key] for key in _PERMANENT_KEYS], axis=1)
     numeric = permanents[..., list(layout.numeric_permanent_columns)].astype(f32)
@@ -403,6 +423,7 @@ def prepare(
         opponent_cards=obs["opponent_cards"].astype(f32),
         permanents=numeric,
         validity=validity.astype(f32),
+        ownership=np.where(np.concatenate(ownership), 1, -1).astype(f32),
         card_rows=tables.rows(obs["semantic_cards"]),
         known_rows=tables.rows(knowledge[..., 0]),
         known_counts=(knowledge[..., 1] / f32(60)).astype(f32),
