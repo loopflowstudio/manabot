@@ -585,4 +585,20 @@ recorded needs serve a learner with or without object trimming. Tests:
 `test_collection_records_each_rows_measured_needs`,
 `test_row_needs_regroup_to_the_measured_buckets`; forward 0 differ; updates
 byte-identical (#503 and #501). Pass 4 (cohort `mtg325-speed-4`, revision
-7820d1e8d, three arms x3) validates it. Spend so far: $0.58 + $0.27 + $0.56.
+7820d1e8d, three arms x3) validates it. 
+
+## Speed check pass 4 (Etude 8a376219e430, revision 7820d1e8d): no regression
+
+Three arms x3 (`scratch/speed/run4/compare.txt`); same 53,341 rows and 208
+damped steps everywhere. Medians [min, max], base main a343904ee / #503 /
+#501: damped 9.63 [9.55, 9.64] / 9.90 [9.88, 9.93] / 9.94 [9.70, 10.01]
+steps/s; PPO 0.2558 [0.2547, 0.2560] / 0.2575 [0.2566, 0.2589] / 0.2534
+[0.2110, 0.2564]; `PolicyInference` 1,282 / 2,350 / 2,296 obs/s; save 0.022 /
+0.022 / 0.023 s; load 0.079 / 0.080 / 0.082 s (all within spread); collection
+73.6 / 62.9 / 61.9 s. #501's PPO median is 0.9% under base's: one of its nine
+updates stalled (0.070 steps/s in process 3; the others 0.253-0.257), and its
+learner sections are no slower (PPO minibatches 61.45 vs 61.67 s, forward and
+loss 11.77 vs 12.03 s). Machine terminated by hand.
+
+Speed-check cost (launcher, final): $0.58 + $0.46 + $0.34 + $0.66 = $2.04 of
+the USD10 cap.
