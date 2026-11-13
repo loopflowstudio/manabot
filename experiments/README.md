@@ -39,9 +39,9 @@ the name itself yet.
 
 | file | `runs()` | `eval(state)` | `report()` |
 | --- | --- | --- | --- |
-| [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, pairs |
+| [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, crosstable of pairs |
 | [seat_comparison](seat_comparison.py) (MTG-165) | one- and two-seat arms × four seeds | — | score on learner transitions, one-seat dotted |
-| [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups, head to head |
+| [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups |
 
 Perf and ML details draw self-play's own keys ([`manabot.training.panels`](../manabot/training/panels.py)),
 including a flame graph of each update's `time/` seconds. The two-deck

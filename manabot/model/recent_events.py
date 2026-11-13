@@ -13,6 +13,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from manabot.model.semantic_cards import SemanticCardEncoder
+
 # Each event carries two references: definition, owner, zone, focus, status.
 _REFERENCE_STARTS = (2, 7)
 
@@ -104,7 +106,7 @@ class RecentEventEncoder(nn.Module):
             context = context.masked_fill(((focus < 0) | ~admitted).unsqueeze(-1), 0)
             features.extend(
                 (
-                    definitions[catalog_rows],
+                    SemanticCardEncoder.lookup(definitions, catalog_rows),
                     context,
                     categorical(owner, 3),
                     categorical(zone, 8),

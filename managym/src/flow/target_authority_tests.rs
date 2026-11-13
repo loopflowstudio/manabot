@@ -10,7 +10,7 @@ use crate::{
         },
         card::{Keyword, Keywords},
         effect::{EffectDuration, Modification},
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, PermanentId, PlayerId, Target},
         player::PlayerConfig,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -29,7 +29,7 @@ fn grant_hexproof(game: &mut Game, id: PermanentId) {
     );
 }
 
-fn fixture() -> (Game, CardId, CardId, Target, Target) {
+fn fixture() -> (Game, ObjectId, ObjectId, Target, Target) {
     let deck = BTreeMap::from([
         ("Gray Ogre".to_string(), 8),
         ("Lightning Bolt".to_string(), 8),
@@ -50,11 +50,11 @@ fn fixture() -> (Game, CardId, CardId, Target, Target) {
         .scenario_force_battlefield(PlayerId(0), "Mountain", true)
         .unwrap();
     let card_named = |name: &str| {
-        CardId(
+        ObjectId(
             game.state
-                .cards
+                .objects
                 .iter()
-                .position(|card| card.owner == PlayerId(1) && card.name == name)
+                .position(|object| object.owner == PlayerId(1) && object.name == name)
                 .unwrap(),
         )
     };
@@ -71,11 +71,11 @@ fn fixture() -> (Game, CardId, CardId, Target, Target) {
     )
 }
 
-fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
+fn trigger(source: ObjectId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
     PendingTrigger {
         program: false,
         remembered: Vec::new(),
-        source_card: source,
+        source_object: source,
         source_ref: None,
         source_lki: None,
         ability_index: 0,
@@ -169,8 +169,8 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
             ]
         );
     }
-    game.move_card(bolt, ZoneType::Graveyard);
-    game.move_card(ogre, ZoneType::Graveyard);
+    game.move_object(bolt, ZoneType::Graveyard);
+    game.move_object(ogre, ZoneType::Graveyard);
     let spec = TargetSpec::GraveyardCardYouOwn {
         predicate: CardPredicate::default(),
     };
@@ -236,7 +236,7 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
     game.choose_trigger_target(PlayerId(0), Target::StackSpell(ogre))
         .unwrap();
     assert!(game.flush_triggers().is_none());
-    game.move_card(ogre, ZoneType::Hand);
+    game.move_object(ogre, ZoneType::Hand);
     // CR 608.2b: with every target illegal the whole ability fails to resolve,
     // including its untargeted instruction. This is more than skipping countering.
     game.resolve_top_of_stack();
@@ -263,12 +263,12 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
     game.choose_trigger_target(PlayerId(0), Target::StackSpell(ogre))
         .unwrap();
     assert!(game.flush_triggers().is_none());
-    game.move_card(ogre, ZoneType::Hand);
+    game.move_object(ogre, ZoneType::Hand);
     game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], Default::default());
     assert_ne!(game.current_object_ref(ogre).unwrap(), original);
 
     // CR 405.2 / 608.2b: the recast object is above the older ability, so
-    // resolves first. CardId-only targets remain an identity limitation;
+    // resolves first. ObjectId-only targets remain an identity limitation;
     // this ordinary LIFO sequence does not expose a stale-target effect.
     game.resolve_top_of_stack();
     assert_eq!(game.state.zones.zone_of(ogre), Some(ZoneType::Battlefield));
@@ -495,7 +495,7 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
             game.choose_trigger_target(controller, Target::Permanent(second))
                 .unwrap();
             assert!(game.flush_triggers().is_none());
-            let second_card = game.state.permanents[second].as_ref().unwrap().card;
+            let second_card = game.state.permanents[second].as_ref().unwrap().object;
             // CR 608.2b: gaining hexproof after selection invalidates an opposing
             // target; remaining legal targets and untargeted instructions survive.
             grant_hexproof(&mut game, first);
@@ -528,8 +528,8 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         let id = game
             .scenario_force_battlefield(owner, "Gray Ogre", true)
             .unwrap();
-        let card = game.state.permanents[id].as_ref().unwrap().card;
-        let before = game.current_object_ref(card).unwrap();
+        let object = game.state.permanents[id].as_ref().unwrap().object;
+        let before = game.current_object_ref(object).unwrap();
         let spec = TargetSpec::SpellOrPermanent { min_mana_value: 3 };
         let mut pending = trigger(
             source,
@@ -545,15 +545,18 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         game.choose_trigger_target(controller, Target::Permanent(id))
             .unwrap();
         assert!(game.flush_triggers().is_none());
-        game.move_card(card, ZoneType::Hand);
-        game.move_card(card, ZoneType::Battlefield);
-        let replacement = game.state.card_to_permanent[card].unwrap();
-        assert_ne!(game.current_object_ref(card).unwrap(), before);
+        game.move_object(object, ZoneType::Hand);
+        game.move_object(object, ZoneType::Battlefield);
+        let replacement = game.state.object_to_permanent[object].unwrap();
+        assert_ne!(game.current_object_ref(object).unwrap(), before);
         assert_ne!(replacement, id);
         assert!(!game.target_is_legal(Target::Permanent(id), &spec, controller));
         assert!(game.target_is_legal(Target::Permanent(replacement), &spec, controller));
         game.resolve_top_of_stack();
-        assert_eq!(game.state.zones.zone_of(card), Some(ZoneType::Battlefield));
+        assert_eq!(
+            game.state.zones.zone_of(object),
+            Some(ZoneType::Battlefield)
+        );
         assert_eq!(game.state.players[controller.0].life, 20);
     }
 }
@@ -794,7 +797,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     use crate::agent::observation::Observation;
     use crate::state::ability::{Ability, TriggerCondition, TriggerSubject};
     let (mut game, source, ..) = fixture();
-    game.state.cards[source].abilities = vec![
+    game.state.objects[source].abilities = vec![
         Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::Dies {
@@ -848,7 +851,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     ]);
     assert!(labels
         .iter()
-        .all(|label| !label.contains(&game.state.cards[source].text_box)));
+        .all(|label| !label.contains(&game.state.objects[source].text_box)));
     for id in 0..2 {
         game.choose_trigger(PlayerId(0), crate::flow::trigger::TriggerId(id))
             .unwrap();

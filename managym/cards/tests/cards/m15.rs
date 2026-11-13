@@ -12,13 +12,13 @@ use managym::{
 #[test]
 fn meteorite_deals_two_on_entry_and_taps_for_any_color() {
     let mut s = five_color_setup(&["Meteorite"]);
-    let card = cast_owned(&mut s, "Meteorite");
+    let object = cast_owned(&mut s, "Meteorite");
     spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Player(PlayerId(1))));
     settle(&mut s);
     s.assert_life(1, 18);
-    let meteorite = s.game().state.card_to_permanent[card].unwrap();
+    let meteorite = s.game().state.object_to_permanent[object].unwrap();
     s.set_player_mana_pool(0, "");
     s.game_mut().scenario_refresh_priority().unwrap();
     activate(&mut s, meteorite, 0);

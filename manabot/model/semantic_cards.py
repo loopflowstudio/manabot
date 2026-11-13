@@ -13,6 +13,7 @@ from enum import IntEnum
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from manabot.backends.torch.arrays import to_numpy
 from manabot.model.numerics import buffer_on, embedding_rows
@@ -407,11 +408,31 @@ class SemanticCardEncoder(nn.Module):
         ).unique()
         return rows[rows > 0]
 
+    @staticmethod
+    def lookup(definitions: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
+        """Read card-program rows; every read of the program table goes here.
+
+        Rows repeat heavily within a batch. Under CUDA autograd, embedding
+        backward groups repeated rows before accumulating into the
+        differentiable table, where advanced indexing accumulates each one
+        separately (`experiments/ppo_cuda.md`). Row 0 still receives gradients;
+        no padding suppression or frequency normalization applies. Other
+        devices and inference keep advanced indexing, so CPU results are
+        unchanged.
+        """
+        if (
+            definitions.is_cuda
+            and torch.is_grad_enabled()
+            and definitions.requires_grad
+        ):
+            return F.embedding(rows, definitions)
+        return definitions[rows]
+
     def embed_definitions(
         self, ids: torch.Tensor, definitions: torch.Tensor
     ) -> torch.Tensor:
         """Join admitted card or permanent IDs to their card programs."""
-        return definitions[self._rows(ids)]
+        return self.lookup(definitions, self._rows(ids))
 
     def forward(
         self,
@@ -421,17 +442,18 @@ class SemanticCardEncoder(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if definitions is None:
             definitions = self.definitions()
-        cards = definitions[
+        cards = self.lookup(
+            definitions,
             self._rows(obs["semantic_cards"])
             if references is None
-            else references.cards
-        ]
+            else references.cards,
+        )
         knowledge = obs["known_hand"]
         known_rows = (
             self._rows(knowledge[..., 0]) if references is None else references.known
         )
         assert known_rows is not None
-        known = definitions[known_rows]
+        known = self.lookup(definitions, known_rows)
         known = (known * knowledge[..., 1, None] / 60.0).sum(dim=2)
         if self.decklist_projection is not None:
             decklists = obs["decklists"]
@@ -443,7 +465,9 @@ class SemanticCardEncoder(nn.Module):
             # [batch, seat, row, hidden] x [batch, seat, row, 4 counts]
             # -> [batch, seat, 4 * hidden]; a closed decklist pools to zero.
             pooled = torch.einsum(
-                "bsrh,bsrc->bsch", definitions[deck_rows], decklists[..., 1:] / 60.0
+                "bsrh,bsrc->bsch",
+                self.lookup(definitions, deck_rows),
+                decklists[..., 1:] / 60.0,
             ).flatten(start_dim=2)
             known = known + self.decklist_projection(pooled)
         return cards, known

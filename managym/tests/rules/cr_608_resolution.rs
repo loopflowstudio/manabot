@@ -11,7 +11,7 @@ use managym::{
         ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
         card::{Keyword, Keywords},
         effect::Modification,
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -19,12 +19,12 @@ use managym::{
 
 use crate::support::{game::*, play::select_card};
 
-fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
+fn queue_effects(s: &mut Scenario, source: ObjectId, effects: Vec<Effect>) {
     let source_ref = s.game().current_object_ref(source);
     s.game_mut().state.pending_triggers.push(PendingTrigger {
         program: false,
         remembered: Vec::new(),
-        source_card: source,
+        source_object: source,
         source_ref,
         source_lki: None,
         ability_index: 0,
@@ -55,11 +55,11 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
     );
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let card = s.game().state.permanents[source].as_ref().unwrap().card;
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
     s.game_mut().state.players[0].life = 1;
     queue_effects(
         &mut s,
-        card,
+        object,
         vec![
             Effect::DealDamageToPlayer {
                 player: PlayerSelector::You,
@@ -100,8 +100,8 @@ fn cr_603_5_optional_draw_is_chosen_at_resolution() {
     );
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let card = s.game().state.permanents[source].as_ref().unwrap().card;
-    queue_effects(&mut s, card, vec![Effect::discard_draw(1, 1)]);
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
+    queue_effects(&mut s, object, vec![Effect::discard_draw(1, 1)]);
     let hand = s.zone_size(0, ZoneType::Hand);
     s.pass_priority();
     assert_eq!(s.game().state.stack_objects.len(), 1);
@@ -134,8 +134,8 @@ fn chosen_selector_offers_the_choice_for_any_verb() {
     let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
     assert_ne!(first, second);
     let permanents = &s.game().state.permanents;
-    let source = permanents[first].as_ref().unwrap().card;
-    let chosen = permanents[second].as_ref().unwrap().card;
+    let source = permanents[first].as_ref().unwrap().object;
+    let chosen = permanents[second].as_ref().unwrap().object;
     queue_effects(
         &mut s,
         source,
@@ -172,8 +172,8 @@ fn chosen_selector_is_released_after_stopping_counter_removal() {
     s.advance_to_active_step(0, StepKind::Main);
     let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let source = s.game().state.permanents[first].as_ref().unwrap().card;
-    let other = s.game().state.permanents[second].as_ref().unwrap().card;
+    let source = s.game().state.permanents[first].as_ref().unwrap().object;
+    let other = s.game().state.permanents[second].as_ref().unwrap().object;
     queue_effects(
         &mut s,
         source,
@@ -220,11 +220,11 @@ fn chosen_selector_without_candidates_does_not_reuse_a_previous_move() {
     );
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let card = s.game().state.permanents[source].as_ref().unwrap().card;
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
     let life = s.game().state.players[0].life;
     queue_effects(
         &mut s,
-        card,
+        object,
         vec![
             Effect::exile(ObjectSelector::This),
             Effect::exile(ObjectSelector::chosen(CardPredicate::creature())),
@@ -234,7 +234,7 @@ fn chosen_selector_without_candidates_does_not_reuse_a_previous_move() {
     s.pass_priority();
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
     assert_eq!(s.game().state.players[0].life, life);
     assert!(s.game().state.stack_objects.is_empty());
 }
@@ -249,11 +249,11 @@ fn moved_selector_sacrifices_the_returned_permanent() {
     );
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let card = s.game().state.permanents[source].as_ref().unwrap().card;
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
     let life = s.game().state.players[0].life;
     queue_effects(
         &mut s,
-        card,
+        object,
         vec![
             Effect::exile(ObjectSelector::This),
             Effect::return_to_battlefield(ObjectSelector::Moved, false),
@@ -268,7 +268,7 @@ fn moved_selector_sacrifices_the_returned_permanent() {
     s.pass_priority();
     s.pass_priority();
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Graveyard)
     );
     assert_eq!(s.game().state.players[0].life, life + 5);
@@ -288,7 +288,7 @@ fn each_selector_earthbends_every_selected_land() {
     let first = s.force_permanent_on_battlefield(0, "Mountain");
     let second = s.force_permanent_on_battlefield(0, "Mountain");
     assert_ne!(first, second);
-    let source = s.game().state.permanents[first].as_ref().unwrap().card;
+    let source = s.game().state.permanents[first].as_ref().unwrap().object;
     queue_effects(
         &mut s,
         source,
@@ -326,10 +326,10 @@ fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
     );
     s.advance_to_active_step(0, StepKind::Main);
     let land = s.force_permanent_on_battlefield(0, "Mountain");
-    let card = s.game().state.permanents[land].as_ref().unwrap().card;
+    let object = s.game().state.permanents[land].as_ref().unwrap().object;
     queue_effects(
         &mut s,
-        card,
+        object,
         vec![Effect::Earthbend {
             count: EffectValue::Fixed(1),
             what: ObjectSelector::Target(TargetSpec::LandYouControl),
@@ -339,13 +339,13 @@ fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
     assert!(s.choose_target(managym::state::game_object::Target::Permanent(land)));
     s.pass_priority();
     s.pass_priority();
-    s.game_mut().move_card(card, ZoneType::Graveyard);
+    s.game_mut().move_object(object, ZoneType::Graveyard);
     s.pass_priority(); // the return is now on the stack
     assert_eq!(s.game().state.stack_objects.len(), 1);
-    s.game_mut().move_card(card, ZoneType::Exile);
+    s.game_mut().move_object(object, ZoneType::Exile);
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
 }
 
 /// CR 704.5h: surviving a deathtouch SBA check does not keep a destruction
@@ -361,14 +361,14 @@ fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
     s.advance_to_active_step(0, StepKind::Main);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let permanent = s.game_mut().state.permanents[ogre].as_mut().unwrap();
-    let card = permanent.card;
+    let object = permanent.object;
     permanent.damage = 1;
     permanent.deathtouch_damage = true;
     let indestructible = Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible]));
     until_end_of_turn(&mut s, ogre, indestructible.clone());
     s.pass_priority();
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Battlefield)
     );
     s.game_mut()
@@ -377,7 +377,7 @@ fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
         .retain(|effect| effect.modification != indestructible);
     s.pass_priority();
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Battlefield)
     );
 }
@@ -394,10 +394,10 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let victim = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let card = s.game().state.permanents[source].as_ref().unwrap().card;
+    let object = s.game().state.permanents[source].as_ref().unwrap().object;
     queue_effects(
         &mut s,
-        card,
+        object,
         vec![
             Effect::until_end_of_turn(
                 ObjectSelector::Target(TargetSpec::Creature),

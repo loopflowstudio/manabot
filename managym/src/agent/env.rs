@@ -1101,13 +1101,14 @@ impl Env {
             return Err(AgentError("hand snapshot player must be 0 or 1".into()));
         }
         let mut counts = BTreeMap::new();
-        for card in game
+        for object in game
             .state
             .zones
-            .zone_cards(ZoneType::Hand, PlayerId(player))
+            .zone_objects(ZoneType::Hand, PlayerId(player))
+            .iter()
         {
             *counts
-                .entry(game.state.cards[*card].name.clone())
+                .entry(game.state.objects[*object].name.clone())
                 .or_insert(0) += 1;
         }
         Ok(counts)
@@ -1715,9 +1716,9 @@ mod content_pack_contract_tests {
         assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);
         for (first_card, second_card) in first_game
             .state
-            .cards
+            .objects
             .iter()
-            .zip(second_game.state.cards.iter())
+            .zip(second_game.state.objects.iter())
         {
             assert!(first_card.shares_definition_with(second_card));
         }
@@ -1755,7 +1756,9 @@ mod content_pack_contract_tests {
         assert_eq!(changed_game.state.players[0].life, root_life - 3);
 
         for branch in [changed_game, untouched_game] {
-            for (root_card, branch_card) in root.state.cards.iter().zip(branch.state.cards.iter()) {
+            for (root_card, branch_card) in
+                root.state.objects.iter().zip(branch.state.objects.iter())
+            {
                 assert_eq!(root_card.definition_id, branch_card.definition_id);
                 assert!(root_card.shares_definition_with(branch_card));
             }

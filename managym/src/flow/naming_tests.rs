@@ -91,8 +91,8 @@ fn assert_no_naming_effect(before: &Game, after: &Game) {
             ZoneType::Exile,
         ] {
             assert_eq!(
-                before.state.zones.zone_cards(zone, player),
-                after.state.zones.zone_cards(zone, player)
+                before.state.zones.zone_objects(zone, player),
+                after.state.zones.zone_objects(zone, player)
             );
         }
     }

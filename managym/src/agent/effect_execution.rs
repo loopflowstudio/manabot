@@ -28,7 +28,7 @@ use crate::{
     state::{
         ability::Effect,
         card::CardDefId,
-        game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+        game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, Target},
         mana::{Mana, ManaSpent},
     },
 };
@@ -292,8 +292,8 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn card(&mut self, name: &str, card: CardId) {
-        self.reference(name, self.game.card_reference(card, self.viewer));
+    fn object_id(&mut self, name: &str, object_id: impl Into<ObjectId>) {
+        self.reference(name, self.game.object_reference(object_id, self.viewer));
     }
 
     fn target(&mut self, name: &str, target: Target) {
@@ -321,24 +321,24 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn cards(&mut self, name: &str, cards: &[CardId]) {
-        if cards.is_empty() {
+    fn object_ids(&mut self, name: &str, object_ids: &[ObjectId]) {
+        if object_ids.is_empty() {
             return;
         }
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
                 "{name}: {}.",
-                cards
+                object_ids
                     .iter()
-                    .map(|card| Self::label(game.card_reference(*card, viewer)))
+                    .map(|object_id| Self::label(game.object_reference(*object_id, viewer)))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
         });
-        self.field(name, &cards.len());
-        for card in cards {
-            self.card(name, *card);
+        self.field(name, &object_ids.len());
+        for object_id in object_ids {
+            self.object_id(name, *object_id);
         }
     }
 
@@ -417,9 +417,12 @@ impl<'a> Projection<'a> {
                     _ => unreachable!("only operation completion events are retained"),
                 }
             }
-            FrameCompletion::Spell { card, attach_to } => {
+            FrameCompletion::Spell {
+                object: object_id,
+                attach_to,
+            } => {
                 self.field("return", &"finish spell");
-                self.card("spell", *card);
+                self.object_id("spell", *object_id);
                 if let Some(object) = attach_to {
                     self.object("attach to", *object);
                 }
@@ -460,8 +463,8 @@ impl<'a> Projection<'a> {
                     self.object("grantor", grant.grantor);
                     self.field("grant index", &grant.index);
                 }
-                if let Some(card) = source_after_cost {
-                    self.card("source after cost", *card);
+                if let Some(object_id) = source_after_cost {
+                    self.object_id("source after cost", *object_id);
                 }
             }
         }
@@ -470,13 +473,13 @@ impl<'a> Projection<'a> {
     fn payment(&mut self, payment: &Payment) {
         match payment {
             Payment::Spell {
-                card,
+                object,
                 cast,
                 mode,
                 targets,
                 target_req_indices,
             } => {
-                self.card("paid spell", *card);
+                self.object_id("paid spell", *object);
                 self.field("cast choices", cast);
                 self.field("mode", mode);
                 self.field("target clauses", target_req_indices);
@@ -494,7 +497,7 @@ impl<'a> Projection<'a> {
                     ActivationSource::Permanent(id) => {
                         self.target("paid source", Target::Permanent(*id))
                     }
-                    ActivationSource::Card(card) => self.card("paid source", *card),
+                    ActivationSource::Card(card) => self.object_id("paid source", *card),
                 }
                 self.field("ability", ability_index);
                 self.field("X", x);
@@ -541,7 +544,7 @@ impl<'a> Projection<'a> {
         // While the exact object still has this view, its ordinary object row
         // and catalog already carry the snapshot. After departure or a changed
         // view, retain the non-identity facts explicitly.
-        if self.game.snapshot_current_permanent(lki.card).as_ref() == Some(lki) {
+        if self.game.snapshot_current_permanent(lki.object).as_ref() == Some(lki) {
             self.field("snapshot", &"current characteristics");
             return;
         }
@@ -569,7 +572,7 @@ impl<'a> Projection<'a> {
             toughness,
             counters,
             object_ref: _,
-            card: _,
+            object: _,
             from_zone,
             owner,
             controller,
@@ -688,7 +691,7 @@ impl<'a> Projection<'a> {
                     });
                 }
                 ProposedEvent::ZoneMove {
-                    card,
+                    object_id,
                     object,
                     from,
                     to,
@@ -700,7 +703,9 @@ impl<'a> Projection<'a> {
                         self.reference(
                             "entering definition",
                             VisibleReference {
-                                definition: Some(self.game.state.cards[*card].definition_id.0),
+                                definition: Some(
+                                    self.game.state.objects[*object_id].definition_id.0,
+                                ),
                                 ..Default::default()
                             },
                         );
@@ -775,8 +780,8 @@ impl<'a> Projection<'a> {
                     unreachable!("normalized batch")
                 }
             }
-            if let Some((card, controller)) = pending.sacrifice {
-                self.card("sacrificed object", card);
+            if let Some((object_id, controller)) = pending.sacrifice {
+                self.object_id("sacrificed object", object_id);
                 self.field("sacrificing player", &controller);
             }
             // One ordered rules record per identity, reusing visible source
@@ -901,7 +906,7 @@ pub(crate) fn project_frame(
     }
     let source_definition = effect
         .source
-        .map(|card| game.state.cards[card].definition_id);
+        .map(|object| game.state.objects[object].definition_id);
     if receipt_matters(&effect.spent, source_definition) {
         out.receipt(&effect.spent);
     }
@@ -983,7 +988,7 @@ pub(crate) fn project_decision(
                         out.field("once each turn ability", &key.1);
                     }
                 }
-                SpendCompletion::Foretell(card) => out.card("cast from hand", *card),
+                SpendCompletion::Foretell(card) => out.object_id("cast from hand", *card),
                 SpendCompletion::Upfront(_) => {}
             }
         }
@@ -1021,21 +1026,24 @@ pub(crate) fn project_decision(
             bottom,
             ..
         } => {
-            out.cards("inspected", looked);
-            out.cards("remaining", remaining);
-            out.cards("kept on top", top);
-            out.cards("placed on bottom", bottom);
+            out.object_ids("inspected", looked);
+            out.object_ids("remaining", remaining);
+            out.object_ids("kept on top", top);
+            out.object_ids("placed on bottom", bottom);
         }
         Decision::Surveil {
             looked, graveyard, ..
         } => {
-            out.cards("inspected", looked);
-            out.cards("selected for graveyard", graveyard);
+            out.object_ids("inspected", looked);
+            out.object_ids("selected for graveyard", graveyard);
         }
         Decision::OrderLibrary {
-            cards, next, end, ..
+            object_ids,
+            next,
+            end,
+            ..
         } => {
-            out.cards("library order", cards);
+            out.object_ids("library order", object_ids);
             out.field("ordered prefix", next);
             out.field("library end", end);
         }
@@ -1050,7 +1058,7 @@ pub(crate) fn project_decision(
             max_select,
             ..
         } => {
-            out.cards("inspected", looked);
+            out.object_ids("inspected", looked);
             out.field("selection", &(predicate, selected, min_select, max_select));
             out.field("placement", &(random_order, reveal, to_battlefield));
         }
@@ -1097,7 +1105,7 @@ pub(crate) fn project_decision(
             end,
             ..
         } => {
-            out.cards("selected distinct names", selected);
+            out.object_ids("selected distinct names", selected);
             out.field("distinct name search", &(predicate, remaining, end));
         }
         Decision::OpponentSplitsRevealed {
@@ -1106,7 +1114,7 @@ pub(crate) fn project_decision(
             remaining,
             ..
         } => {
-            out.cards("revealed lands", revealed);
+            out.object_ids("revealed lands", revealed);
             out.field("graveyard choices remaining", &(owner, remaining));
         }
         Decision::DiscardFromRevealedHand {
@@ -1142,14 +1150,16 @@ pub(crate) fn project_decision(
         }
         Decision::LegendRule { groups, keep, .. } => {
             for group in groups {
-                out.cards("legend group", group);
+                out.object_ids("legend group", group);
             }
-            out.cards("legends kept", keep);
+            out.object_ids("legends kept", keep);
         }
         Decision::EnterAsCopy {
-            card, candidates, ..
+            object_id,
+            candidates,
+            ..
         } => {
-            out.card("entering card", *card);
+            out.object_id("entering card", *object_id);
             for id in candidates {
                 out.target("may copy", Target::Permanent(*id));
             }
@@ -1191,14 +1201,21 @@ pub(crate) fn project_decision(
             out.field("pay casting costs", paid);
             match offer {
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
-                ResolutionCastOffer::Exiled { card } => out.card("cast from exile", *card),
-                ResolutionCastOffer::Cascade { card, exiled } => {
-                    out.card("cast from exile", *card);
+                ResolutionCastOffer::Exiled { object: object_id } => {
+                    out.object_id("cast from exile", *object_id)
+                }
+                ResolutionCastOffer::Cascade {
+                    object: object_id,
+                    exiled,
+                } => {
+                    out.object_id("cast from exile", *object_id);
                     for exiled in exiled {
-                        out.card("cascade exiled", *exiled);
+                        out.object_id("cascade exiled", *exiled);
                     }
                 }
-                ResolutionCastOffer::LibraryTop { card } => out.card("cast from library", *card),
+                ResolutionCastOffer::LibraryTop { object: object_id } => {
+                    out.object_id("cast from library", *object_id)
+                }
                 ResolutionCastOffer::ExiledWith { source, predicate } => {
                     out.object("exiled with", *source);
                     out.field("cast predicate", predicate);

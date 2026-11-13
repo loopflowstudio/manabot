@@ -17,6 +17,8 @@
 mod outcomes;
 pub(crate) use outcomes::PaymentShapeCapture;
 
+use std::num::NonZeroUsize;
+
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
@@ -33,7 +35,7 @@ use crate::{
             ActivatedAbilityDefinition, ReplacementEffect, TriggeredManaAbility,
             TriggeredManaOutput,
         },
-        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost, ManaSpendChoice, ManaSpent},
     },
 };
@@ -84,7 +86,7 @@ enum Obligation {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ManaSource {
     permanent: PermanentId,
-    card: CardId,
+    object: ObjectId,
     untapped: bool,
     fixed: Option<Mana>,
     abilities: Vec<ManaActivation>,
@@ -114,13 +116,14 @@ struct SourceReservation {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "benchmark", derive(serde::Serialize))]
 enum PaymentStep {
     Fixed(PermanentId),
     Activate(PermanentId, usize),
     Spend,
     Output(usize),
     Waterbend(PermanentId),
-    Tap(CardId),
+    Tap(ObjectId),
 }
 
 impl PaymentStep {
@@ -131,9 +134,9 @@ impl PaymentStep {
                 permanent: *permanent,
                 ability_index: *ability_index,
             }),
-            Self::Tap(card) => Some(Action::SelectCard {
+            Self::Tap(object) => Some(Action::SelectCard {
                 player,
-                card: *card,
+                object: *object,
             }),
             Self::Output(mode) => Some(Action::ChooseMode {
                 player,
@@ -456,16 +459,23 @@ impl PaymentModel {
         {
             return 0;
         }
-        // No counted tap cost leaves this bound open (usize::MAX) for the
-        // finite-resource limits below.
-        let mut uses = self
-            .tap_candidates(resources, &ability.tap_candidates)
-            .count()
-            .checked_div(ability.tap_count)
-            .unwrap_or(usize::MAX);
-        if ability.tap_source || ability.sacrifice_source || ability.limited {
-            uses = uses.min(1);
-        }
+        // A tapped, sacrificed or limited source activates at most once.
+        let cap = if ability.tap_source || ability.sacrifice_source || ability.limited {
+            1
+        } else {
+            usize::MAX
+        };
+        // Only a counted tap cost reads the board, and only as far as `cap`
+        // activations need: a repeatable cost counts every candidate for its
+        // optimistic production bound.
+        let uses = if let Some(tap_count) = NonZeroUsize::new(ability.tap_count) {
+            self.tap_candidates(resources, &ability.tap_candidates)
+                .take(cap.saturating_mul(tap_count.get()))
+                .count()
+                / tap_count.get()
+        } else {
+            cap
+        };
         assert_ne!(
             uses,
             usize::MAX,
@@ -604,7 +614,7 @@ impl PaymentModel {
                         remaining: remaining - 1,
                     };
                     if let Some(mut path) = self.witness(next, policy, visited) {
-                        path.insert(0, PaymentStep::Tap(self.sources[index].card));
+                        path.insert(0, PaymentStep::Tap(self.sources[index].object));
                         return Some(path);
                     }
                 }
@@ -941,7 +951,7 @@ impl PaymentModel {
         crate::benchmark_payments::begin_plan(self.sources.len());
         let path = self.search_after_tap(pool, obligations, permanent);
         #[cfg(feature = "benchmark")]
-        crate::benchmark_payments::end_plan();
+        crate::benchmark_payments::end_plan(&path);
         path
     }
 
@@ -1000,7 +1010,7 @@ impl PaymentModel {
             None => self.search(pool, obligations, policy),
         };
         #[cfg(feature = "benchmark")]
-        crate::benchmark_payments::end_plan();
+        crate::benchmark_payments::end_plan(&path);
         path
     }
 
@@ -1457,7 +1467,7 @@ impl Game {
                     .collect();
                 ManaSource {
                     permanent,
-                    card: source.card,
+                    object: source.object,
                     untapped: !source.tapped,
                     fixed,
                     abilities,
@@ -1892,7 +1902,7 @@ impl Game {
             {
                 actions.push(Action::SelectCard {
                     player,
-                    card: self.state.permanents[*permanent].as_ref().unwrap().card,
+                    object: self.state.permanents[*permanent].as_ref().unwrap().object,
                 });
             }
         }
@@ -1902,15 +1912,15 @@ impl Game {
     pub(crate) fn pay_mana_tap_cost(
         &mut self,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
     ) -> Result<(), AgentError> {
         if !self
             .mana_tap_cost_actions(player)
-            .contains(&Action::SelectCard { player, card })
+            .contains(&Action::SelectCard { player, object })
         {
             return Err(AgentError("illegal mana tap cost selection".into()));
         }
-        let permanent = self.state.card_to_permanent[card].unwrap();
+        let permanent = self.state.object_to_permanent[object].unwrap();
         self.tap_permanent(permanent, false);
         if let Some(SuspendedResolution {
             decision: Decision::ManaUpfront { tap_remaining, .. },
@@ -2035,7 +2045,7 @@ impl Game {
         effects.extend_from_slice(ability.mana_suffix());
         if !effects.is_empty() {
             let mut child = EffectFrame::new(player, effects);
-            child.source = self.state.permanents[permanent].as_ref().map(|p| p.card);
+            child.source = self.state.permanents[permanent].as_ref().map(|p| p.object);
             child.source_ref = source_ref;
             self.run_before_decision(child, caller);
         } else {
@@ -2551,7 +2561,7 @@ impl Game {
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
         self.iter_battlefield_permanents(player).any(|id| {
             self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                self.state.cards[permanent.card]
+                self.state.objects[permanent.object]
                     .replacement_effects
                     .contains(&ReplacementEffect::UnspentManaBecomesRed)
             }) && !self.characteristics(id).abilities_lost
@@ -2645,7 +2655,7 @@ mod tests {
     };
     use crate::cards::content_pack::ContentPack;
     use crate::state::{
-        game_object::{CardId, PermanentId},
+        game_object::{ObjectId, PermanentId},
         mana::{Mana, ManaCost, ManaRestriction, SpendEffect, SpendingContext},
     };
 
@@ -2751,7 +2761,7 @@ mod tests {
     fn source(index: usize, fixed: Option<&str>, abilities: Vec<ManaActivation>) -> ManaSource {
         ManaSource {
             permanent: PermanentId(index),
-            card: CardId(index),
+            object: ObjectId(index),
             untapped: true,
             fixed: fixed.map(Mana::parse),
             abilities,
@@ -2871,7 +2881,7 @@ mod tests {
                         let untapped = rng.gen_bool(0.85);
                         ManaSource {
                             permanent: PermanentId(index),
-                            card: CardId(index),
+                            object: ObjectId(index),
                             untapped,
                             fixed: outputs.choose(&mut rng).unwrap().clone(),
                             abilities: Vec::new(),
@@ -3105,7 +3115,7 @@ mod tests {
             // One Herbalist-shaped source: any color, or two restricted mana.
             model.sources.push(ManaSource {
                 permanent: PermanentId(count),
-                card: CardId(count),
+                object: ObjectId(count),
                 untapped: true,
                 fixed: None,
                 waterbend: true,
@@ -3296,7 +3306,7 @@ mod tests {
         let sources = (0..4)
             .map(|index| ManaSource {
                 permanent: PermanentId(index),
-                card: CardId(index),
+                object: ObjectId(index),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![
@@ -3359,7 +3369,7 @@ mod tests {
         let model = PaymentModel {
             sources: vec![ManaSource {
                 permanent: PermanentId(0),
-                card: CardId(0),
+                object: ObjectId(0),
                 untapped: true,
                 fixed: Some(Mana::parse("G")),
                 abilities: vec![sacrifice],

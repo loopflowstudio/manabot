@@ -261,7 +261,7 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
     }
     command(
         &mut s,
-        |a| matches!(a, Action::CastSpell { card, .. } if *card == ogre),
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == ogre),
     );
     // The restricted pool pays the whole cost, so payment is automatic.
     assert_eq!(s.game().state.players[0].mana_pool, Mana::default());

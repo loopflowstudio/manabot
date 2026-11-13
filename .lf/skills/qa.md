@@ -116,6 +116,9 @@ publish, land or choose the next Graph step from here.
   other buttons open the deck picker or start a New Game. Triggered abilities
   appear under "Stack · top first" as `Card — <trigger>: <effects> ·
   triggered ability · Seat N`; read that text while the stack is non-empty.
+  Detect the end by a visible "Play Again" button (the page holds hidden
+  "game over" text); after clicking it, wait for the button to hide before
+  reading offers again.
   To play specific cards, open **Import decklist files**, check "Use imported
   decks for the next game" (the `#hero-deck-source`/`#villain-deck-source`
   textareas appear only then), fill both, press Check decklists, then New
@@ -130,6 +133,15 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Engine cost on large boards (`docs/development.md#stress-states`): build
+  once with `cargo build --release --features benchmark --example bench_states
+  --manifest-path managym/Cargo.toml`, then call
+  `managym/target/release/examples/bench_states` directly (all 17 states ran
+  in about 11 s on an M-series laptop). Compare two commits by building the
+  other one in a `/private/tmp` worktree with its own `CARGO_TARGET_DIR` and
+  diffing each row's `work` field; the closing digest also moves whenever
+  cards are added, so it is not a behavior check across a merge from main.
+  `scripts/bench_states.py` uses the installed extension.
 - Local-update search changes: `uv run --extra dev python
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
   seconds that receipts still equal main's, field for field; the
@@ -155,15 +167,24 @@ publish, land or choose the next Graph step from here.
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
 - MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
-  run it on the Mac that owns the measurement, not on a shared laptop. Convert a w160l8
-  checkpoint (the published `experiments/data/mlx_pilot/capture/initial.pt`;
-  `local` recipe checkpoints use FiLM and are refused), load it with
+  run it on the Mac that owns the measurement, not on a shared laptop. The
+  published `experiments/data/mlx_pilot/capture/initial.pt` is now refused by
+  the parity CLI's world binding (written at `b62ac3127`). Make a current
+  capture instead with `manabot.backends.torch.capture.capture(out, regime,
+  seed, experiment=...)`, using the regime of
+  `tests/model/test_backend_capture.py` with `hidden_dim=384`,
+  `attention_layers=8`, `num_attention_heads=8`, 8 streams and 32 transitions
+  (about 2 minutes on CPU; `hidden_dim=64` takes 20 s). Convert its
+  `initial.pt` with `uv run python -m manabot.backends.convert` (`local` recipe
+  checkpoints use FiLM and are refused), load it with
   `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
   admitting each batch with `admit_observation` and comparing against torch
   `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
   `policy.evaluate`; untrained-policy argmax
-  differences are exact ties). `python -m manabot.backends.parity <initial.pt>
-  --capture <capture dir>` on the published subset takes about 50 s on an M2.
+  differences are exact ties). `uv run python -m manabot.backends.parity <initial.pt>
+  --capture <capture dir> --backend mlx --precision <dtype> --minibatches 4`
+  takes seconds; `--json` keeps per-minibatch `loss_torch`/`loss_backend`, which
+  show when a relative-loss failure comes from a near-zero loss.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
@@ -177,6 +198,32 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Engine rules changes (zones, tokens, copies, SBAs): play many games through
+  `managym.Env` with `PlayerConfig(name, {card: count}, world=managym.WORLD_SETUP)`
+  decks built around the cards involved, and a scripted policy over
+  `obs.action_space.actions`. Actions carry no `description`; match
+  `action.focus` ids against `env.observation_for_player(env.current_agent_index())`
+  card ids to pick a card. Read `observation_for_player(p).agent_cards`
+  (`zone`, `is_token`) at every decision. A token in the graveyard during a
+  mana ability's color choice is correct: SBAs wait for priority. Academy's
+  game end is a "Game Over" dialog with "Play Again".
+- "No behavior change" engine claims: `git worktree add --detach /tmp/<x>
+  <before>`, build it with `uv run --extra play maturin build --release -i .venv/bin/python -m
+  /tmp/<x>/managym/Cargo.toml` (about 4-5 min), drop its `.so` into
+  `/tmp/<x>/managym/`, and run one seeded script against each tree
+  (`sys.path.insert(0, root)` before `import managym`). Per decision, write a
+  hash of both seats' `toJSON()` plus `env.state_digest()`; `cmp` the files.
+  Use `random.Random(seed).randrange(env.action_count())` for actions.
+  `managym.authored_deck_keys(pack)` / `authored_deck_setup(pack, key)` give
+  the authored decks. Remove the worktree afterwards. Include the TLA pool
+  human builds too: in MTG-320, 138 authored and Azula games matched while 33
+  of 120 pool games exposed a regression (Kyoshi Battle Fan's token attach).
+  When games diverge, replay one to the first differing decision on both
+  engines and diff the parsed `toJSON()`; permanents' `attached_to`, `power`
+  and the cast action's `focus` names locate the card.
+- Record `uptime` when the Academy table stalls or Vite fails startup. MTG-320
+  QA observed both at load averages around 300, but did not establish a cause.
+  Repeat on an idle host before attributing a stall to the change or to load.
 - Python-only library changes (no engine change): `uv build --wheel --package
   manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
   venv with `uv pip install <wheel> --index-url https://pypi.org/simple

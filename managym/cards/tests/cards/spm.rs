@@ -33,7 +33,7 @@ fn supportive_parents_repeats_only_with_distinct_shared_creatures() {
     s.game_mut().scenario_refresh_priority().unwrap();
     command(
         &mut s,
-        |action| matches!(action, Action::CastSpell { card, .. } if *card == spell),
+        |action| matches!(action, Action::CastSpell { object, .. } if *object == spell),
     );
     for (source, taps, color) in [(first, [first, third], 1), (first, [second, fourth], 3)] {
         command(
@@ -47,10 +47,13 @@ fn supportive_parents_repeats_only_with_distinct_shared_creatures() {
                 Some(2 - index)
             );
             encode(&observation, &ObservationEncoderConfig::default()).unwrap();
-            let card = s.game().state.permanents[permanent].as_ref().unwrap().card;
+            let object = s.game().state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .object;
             command(
                 &mut s,
-                |action| matches!(action, Action::SelectCard { card: selected, .. } if *selected == card),
+                |action| matches!(action, Action::SelectCard { object: selected, .. } if *selected == object),
             );
         }
         assert_eq!(
@@ -90,5 +93,5 @@ fn supportive_parents_cannot_double_count_creatures_across_sources() {
         .action_space()
         .actions
         .iter()
-        .any(|action| matches!(action, Action::CastSpell { card, .. } if *card == spell)));
+        .any(|action| matches!(action, Action::CastSpell { object, .. } if *object == spell)));
 }

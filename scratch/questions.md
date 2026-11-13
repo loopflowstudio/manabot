@@ -23,6 +23,10 @@
 
 ## Sync resolution (2026-11-13)
 
+Later sync onto main: retain this branch's notes despite main deleting the
+file. Combine the payment-outcome module with main's `NonZeroUsize` import,
+and retain both `mana_spending` and `mps_retest` in experiment discovery.
+
 Retain main's MTG-313 `scratch/qa.html`: it records new card QA, rather
 than the inherited MTG-324 page removed at kickoff. Preserve main's source
 facts below as historical context, separate from MTG-347 assumptions.
