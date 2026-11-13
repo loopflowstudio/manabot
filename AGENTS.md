@@ -317,8 +317,8 @@ admission. Admission-rejection fixtures must mark the config as submitted
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
   pass green in release and still fail CI. `create_token` is the live example —
-  it `debug_assert!`s that the name resolves to a token definition, so passing
-  an ordinary card name is release-silent and debug-fatal. Clippy does not
+  it `debug_assert!`s that the key resolves in the token catalog, so passing
+  a card key or a printed name is release-silent and debug-fatal. Clippy does not
   catch this either.
 - Finish frontend generation/check/build commands before starting Playwright's
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
@@ -333,20 +333,42 @@ are `lea.*`), returning the engine's own `CardDefinition` written in its rules
 types (`Effect`, `Ability`, `StaticAbility`, `AdditionalCost`, `TargetSpec`,
 `TriggerCondition`, …), which live in the `managym-state` crate
 (`managym/state/`) and are re-exported as `managym::state`. The engine reaches
-the sets only through `managym_cards::catalog()`. Keywords are `Keyword`
+the sets only through `managym_cards::catalog()` and `token_catalog()`. Keywords are `Keyword`
 variants held in a `Keywords` set (`Keywords::of(&[Keyword::Flying])`);
 counters are `CounterKind` entries stored sparsely on the permanent.
 That value is the only card representation: there is no authoring language,
-compiler, IR or card JSON. `CardDefinition` holds identity, characteristics and
-ability/cost lists; a static ability or additional cost is a variant of
-`StaticAbility` or `AdditionalCost`, never a new field. Every token is a
-`CardDefinition` with `is_token: true` in `managym/cards/src/tokens.rs` (keys `token.*`,
-Scryfall id of its first token printing). Add the function to its set file's `cards()`. New behavior is a new
-rules-type variant (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
-card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
-id of the printing in its set file (`tests/cards/scryfall.rs` in the cards crate
-checks shape and uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
-online, never in CI). Rebuild the extension after card changes.
+compiler, IR or card JSON. What cards and tokens share (name, cost, types,
+colors, keywords, abilities, costs, text, power/toughness) is one
+`PrintedCharacteristics`, the object as printed before any continuous effect;
+`Game::characteristics(id)` is the layered view computed from it. A
+`CardDefinition` is `key`, a required `scryfall_id` (the Scryfall card id of
+the printing in its set file) and `printed`; a transforming card's back face is
+another `PrintedCharacteristics` on it. A static ability or additional cost is
+a variant of `StaticAbility` or `AdditionalCost`, never a new field. Add the
+function to its set file's `cards()`. New behavior is a new rules-type variant
+(with a directed test in `managym/cards/tests/cards/<set>.rs`), never
+card-specific logic. Rebuild the extension after card changes.
+
+Tokens are not cards (CR 108.2, 111.1). Each is a `TokenDefinition` (`key`,
+an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
+listed in its `tokens()` and reached through `managym_cards::token_catalog()`,
+keyed `token.<name>`. Effects create tokens by key (`Effect::create_tokens("token.spirit", 1)`),
+never by printed name, so two tokens may share a name (a plain 1/1 Spirit
+beside TLA's `token.spirit`); give each its own descriptive key. A definition's
+identity is its key, never its printed name: a deck entry names the one
+eligible card of that name whatever tokens share it, and the learning catalog
+binds manifest rows by key (`catalog_tokens()["keys"]`), by name only for the
+keyless back faces and fixtures. A token's
+`scryfall_id` is the id of its first token printing, or `None` only for a token
+with no printing (Lita's Zeppelin). Deck admission, the world pool and card
+support never accept a token. The engine registers every card face and token
+as an `ObjectDefinition` (one `CardDefId` row: identity, `printed` and token
+status); token status is never a printed characteristic, so it lives only on
+that row and on game objects, and copy effects copy `printed`, never status.
+The cards crate's `tests/cards/scryfall.rs`
+checks id shape, uniqueness and token keys offline; `tests/cards/check_scryfall.py`
+checks names, sets and token printings online, never in CI, and skips tokens
+without an id.
 
 Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
 table of their categories. Add a new subtype there (the cards crate's

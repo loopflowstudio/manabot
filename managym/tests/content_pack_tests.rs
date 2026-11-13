@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use managym::{
     cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
-        game_object::{CardId, PlayerId},
+        card::{PrintedCharacteristics, TokenDefinition},
+        game_object::{CardId, ObjectId, PlayerId},
         player::PlayerConfig,
         zone::{ZoneManager, ZoneType},
     },
@@ -111,7 +112,6 @@ fn stable_card_def_ids_are_deterministic() {
         "Lightning Bolt",
         "Counterspell",
         "Kyoshi Warriors",
-        "Clue",
     ] {
         let first_id = first.definition_id(name).expect("definition in first pack");
         let second_id = second
@@ -120,6 +120,19 @@ fn stable_card_def_ids_are_deterministic() {
         assert_eq!(first_id, second_id, "unstable CardDefId for {name}");
         assert_eq!(first.definition(first_id).unwrap().name, name);
     }
+
+    let clue = first.token_id("token.clue").expect("token in first pack");
+    assert_eq!(
+        second.token_id("token.clue"),
+        Some(clue),
+        "unstable token CardDefId"
+    );
+    assert_eq!(first.definition(clue).unwrap().name, "Clue");
+    assert_eq!(
+        first.definition_id("Clue"),
+        None,
+        "tokens are not found by name"
+    );
 
     let game = make_game(7);
     for card in game.state.cards.iter() {
@@ -132,6 +145,37 @@ fn stable_card_def_ids_are_deterministic() {
             card.name
         );
     }
+}
+
+/// Tokens resolve by key, never by printed name, so a plain Spirit can sit
+/// beside TLA's `token.spirit`.
+#[test]
+fn tokens_sharing_a_printed_name_stay_distinct_by_key() {
+    let mut pack = ContentPack::default();
+    let printed = pack.token_id("token.spirit").unwrap();
+    pack.register_token(&TokenDefinition {
+        key: "token.plain_spirit",
+        scryfall_id: None,
+        printed: PrintedCharacteristics {
+            name: "Spirit".into(),
+            power: Some(1),
+            toughness: Some(1),
+            ..Default::default()
+        },
+    });
+    let plain = pack.token_id("token.plain_spirit").unwrap();
+    assert_ne!(plain, printed);
+    assert_eq!(pack.definition_id("Spirit"), None);
+    for (key, row) in [("token.spirit", printed), ("token.plain_spirit", plain)] {
+        let token = pack
+            .instantiate_token(key, PlayerId(0), ObjectId(1))
+            .unwrap();
+        assert_eq!(token.definition_id, row);
+        assert!(token.is_token && token.name == "Spirit", "{key}");
+    }
+    assert_eq!(pack.definition(printed).unwrap().statics.len(), 2);
+    assert!(pack.definition(plain).unwrap().statics.is_empty());
+    assert_eq!(pack.definition(plain).unwrap().scryfall_id, None);
 }
 
 #[test]

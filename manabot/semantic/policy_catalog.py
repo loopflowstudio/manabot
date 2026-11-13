@@ -26,6 +26,7 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
         "definitions": [
             {
                 "card_def_id": row["card_def_id"],
+                "key": row["key"],
                 "registry_name": row["registry_name"],
             }
             for row in pool["definitions"]

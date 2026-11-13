@@ -19,7 +19,7 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::game::Game,
     state::{
-        card::{CardDefId, CardDefinition, Keyword, Keywords},
+        card::{CardDefId, Keyword, Keywords, PrintedCharacteristics},
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
@@ -132,8 +132,10 @@ impl Game {
     pub(crate) fn inherited_definition(
         &self,
         permanent_id: PermanentId,
-    ) -> Option<&'static CardDefinition> {
-        default_content_pack().definition(self.inherited_definition_id(permanent_id)?)
+    ) -> Option<&'static PrintedCharacteristics> {
+        default_content_pack()
+            .definition(self.inherited_definition_id(permanent_id)?)
+            .map(|row| &*row.printed)
     }
 
     pub(crate) fn inherited_definition_id(&self, permanent_id: PermanentId) -> Option<CardDefId> {

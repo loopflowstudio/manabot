@@ -2,7 +2,7 @@
 use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -16,17 +16,20 @@ fn savor() -> CardDefinition {
     CardDefinition {
         key: "blb.savor",
         scryfall_id: "1397f689-dca1-4d35-864b-92c5606afb9a",
-        name: "Savor".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![
-            Effect::until_end_of_turn(
-                ObjectSelector::Target(TargetSpec::Creature),
-                Modification::pump(-2, -2),
-            ),
-            Effect::create_tokens("Food", 1),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Savor".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![
+                Effect::until_end_of_turn(
+                    ObjectSelector::Target(TargetSpec::Creature),
+                    Modification::pump(-2, -2),
+                ),
+                Effect::create_tokens("token.food", 1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -36,20 +39,23 @@ fn diresight() -> CardDefinition {
     CardDefinition {
         key: "blb.diresight",
         scryfall_id: "fada29c0-5293-40a4-b36d-d073ee99e650",
-        name: "Diresight".into(),
-        mana_cost: Some(ManaCost::parse("{2}{B}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![
-            Effect::Surveil { count: 2 },
-            Effect::DrawCards {
-                count: EffectValue::Fixed(2),
-            },
-            Effect::LoseLife {
-                player: PlayerSelector::You,
-                amount: EffectValue::Fixed(2),
-            },
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Diresight".into(),
+            mana_cost: Some(ManaCost::parse("{2}{B}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![
+                Effect::Surveil { count: 2 },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                },
+                Effect::LoseLife {
+                    player: PlayerSelector::You,
+                    amount: EffectValue::Fixed(2),
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
