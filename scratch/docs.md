@@ -1,7 +1,8 @@
 # MTG-313 docs
 
 `docs/engine.md` describes the two new cards and their distinct token behavior,
-60/61 bonus-sheet coverage and the expected 997/1,000 MTG-213 admission result.
+60/61 bonus-sheet coverage and the expected 997/1,000 MTG-213 admission result,
+explicitly marked unverified after the 2026-11-12 reconciliation.
 The 2026-11-12 bonus-sheet audit confirmed coverage, with only Heartbeat of
 Spring missing. Direct MTG-213 readmission remains pending at gate; the pool
 measurement below is a separate result.
