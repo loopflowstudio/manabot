@@ -162,6 +162,10 @@ class MLXBackend:
 
     name = "mlx"
 
+    def __init__(self, precision: Precision = "float32") -> None:
+        precision_dtype(precision)
+        self.precision = precision
+
     def load_policy(
         self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
     ) -> tuple[MLXActorCritic, ObservationSpace]:
@@ -176,10 +180,6 @@ class MLXBackend:
     @staticmethod
     def seed(seed: int) -> None:
         mx.random.seed(seed)
-
-    def __init__(self, precision: Precision = "float32") -> None:
-        precision_dtype(precision)
-        self.precision = precision
 
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
         policy = assemble(checkpoint, precision=self.precision)

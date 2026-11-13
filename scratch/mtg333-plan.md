@@ -1,14 +1,20 @@
 # MTG-333 plan: torch forward over `Prepared`, container saves, backend rule
 
-Policy baseline: `ef28f3a58` (PR #501 merged). Comparison baseline for every
-receipt below: `105e7e2aa` (MTG-297 mana spending), merged as `9db3f1373`.
-`f4e1822fa` (#510, training precision: `manabot/training/{execution,regime}.py`,
-no policy or engine file) is merged at `070da04ed`; `origin/main` had nothing
-further at 2026-11-13 realign. That merge changes no `manabot/` policy code, so
-no capture is repeated for it. `a289fe066` (#513, MLX half precision and shared Torch captures) is merged
-as `6e20654c34`; its recorder and experiment consumers now use Prepared.
-One PR. Earlier full plan with every receipt: `1f634d89b:scratch/mtg333-plan.md`;
-MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
+Policy baseline: `ef28f3a58` (PR #501). Comparison baseline for every receipt:
+`105e7e2aa` (MTG-297 mana spending). Main is merged through `a289fe066` (#513)
+as `6e20654c34`. One PR. Full history of this plan, with every attempt and
+intermediate receipt: `696e7e667c:scratch/mtg333-plan.md`; slice 1–6 receipts:
+`1f634d89b:scratch/mtg333-plan.md`; MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
+
+**Not merged (seen 2026-11-13 20:30 UTC):** `origin/main` has `2b0cae2ab7`
+(#514, "Speed up PPO updates 2.17x on CUDA with grouped card-program
+gradients") and `493127545a`. #514 edits `manabot/model/semantic_cards.py` and
+`manabot/model/recent_events.py`, which this branch moved to
+`manabot/backends/torch/_semantic_cards.py` and `_recent_events.py`, and
+`backends/torch/policy.py`; it adds `tests/model/test_semantic_cards.py` cases
+and `experiments/ppo_cuda.{py,md}`. Every PPO number below predates it: the
+merge must port its change into the moved encoders, repeat the CPU oracle and
+update comparison, and makes the recorded PPO ratio stale.
 
 ## Problem
 
@@ -71,9 +77,9 @@ logits, values = policy.evaluate(batch)  # NumPy out
 and the PR body's CUDA table: base vs head medians with spread, then the
 optimize pass's before/after.
 
-## State (slices 1–6 at `1f634d89b`; upstream merge `9db3f1373`)
+## State
 
-Slices 1–6 are implemented and pass their focused checks:
+Slices 1–8 are implemented; nothing is pending a launch.
 
 1. `prepare` covers every torch configuration on the host (`Prepared[A]`,
    catalog-free and hashed-record `Tables`, NumPy trimming, belief/event
@@ -88,27 +94,39 @@ Slices 1–6 are implemented and pass their focused checks:
 5. `manabot.backends.resolve`; exact-allowlist boundary test; sim/eval take a
    `BackendPolicy`. Deferred imports are local Task `c2ef4a`
    (`task_c2ef4a5da9cb437b921cca1ef40e94a1`, not started; Linear sync pending).
-6. `ObservationBuffers`, `ParameterArrays`; docs describe the full PR.
-   Shipped docs (reviewed against the code 2026-11-13; re-check after the
-   optimize pass): `manabot/backends/README.md` (example, backend rule, torch
-   backend, policy checkpoints, convert, parity), `manabot/policy/README.md`,
-   `manabot/backends/mlx.md`, `docs/training-loop.md`, `docs/training.md`,
-   `docs/evaluation.md`, `docs/observation-and-model.md`, `manabot/README.md`,
-   `manabot/model/agent.md`, `docs/academy.md`, `academy/README.md`,
-   `AGENTS.md`. 2026-11-13 13:00 UTC: the `backends/README.md` examples were
-   run as written on CPU (save, load, prepare, evaluate, `on_device` forward,
-   `resolve`, `read_metadata`, both `TypeError`s, `NotAContainer`); one fix,
-   `load_policy` returns `(policy, space)`. No unreleased release-notes section exists; the release note
+6. `ObservationBuffers`, `ParameterArrays`; docs describe the full PR
+   (`manabot/backends/README.md` examples were run as written on CPU,
+   2026-11-13). No unreleased release-notes section exists; the release note
    must replace v0.2.3's `admit_observation` advice with `policy.prepare`.
+7. #513 port: the shared capture recorder takes host `ObservationBuffers`,
+   forwards `Prepared` and keeps raw `ActionRows.observation` for replay;
+   initial policy captures are `.safetensors`; MLX reads `Prepared.is_agent`
+   for trimmed ownership; `MLXBackend(precision=)` reaches file loads.
+8. CUDA equivalence, speed, profile and the optimize pass are measured
+   (Receipts). The optimize pass kept one change: `arrays.array_fields` and
+   `_replace_arrays` skip scalar-only tuples.
 
-Receipts at the `105e7e2aa` engine are under "Receipts" below; the earlier
-3,248-tensor captures belong to the previous engine. Gate's broader suites,
-Python 3.12 and installed-wheel checks have not been run.
+**Open for review, not waived:**
+
+- PPO is slower: 7.7% on A40 (three processes per arm, outside spread), 5.2%
+  in the final same-5090 check. The plan's no-slower-median condition is not
+  met. In the final check PPO "Forward and loss" is 9.612 s vs 5.725 s while
+  backward is 34.672 s vs 36.041 s; the limiter is large-minibatch host
+  preparation in the forward, not a correctness difference or a reason to
+  restore raw forwards. #514 (above) changes PPO backward on main.
+- CUDA gradients meet the Task bar (≤1e-8) but exceed the head-vs-head repeat
+  floor the plan also asked for.
+- With `tests/eval/test_batched_eval.py` earlier in the same pytest process,
+  `tests/model/test_inference.py::test_prepared_collection_and_restored_continuation_match_reference`
+  hit the 300 s limit twice (16 s alone). Serving backlog followed by restored
+  collection alone passed (2 passed, 58.64 s); the full-file order is
+  undiagnosed.
+- Gate's broader suites, Python 3.12 and installed-wheel checks have not run.
 
 Captures in `/tmp/mtg333/` are temporary. If gone, or after any change to
 `manabot/` or the engine: rebuild the extension per `AGENTS.md`, extract the
-base `manabot/` (`git archive 105e7e2aa manabot`), and capture base,
-base-repeat and head together.
+base `manabot/` (`git archive 105e7e2aa manabot`), and capture base and head
+with one retained belief corpus (`EQUIV_BELIEF_INPUT`; see Receipts).
 
 ## Constraints the remaining work must keep
 
@@ -157,97 +175,61 @@ admission's private `_key`/`_word` and fact-kind tuples (one owner:
 `_numeric_permanent_columns` (read `policy.checkpoint.layout`), `pack(order=)`
 (takes `order_lengths`).
 
-## Remaining slices
-
-6b. Complete: current native rebuilt; controlled-input CPU oracle exact.
-7. Complete measurements: three-process A40 comparison and profile, plus the
-   final same-card 5090 check. CUDA <=1e-8 holds; stricter repeat-floor
-   condition remains open. Full tables: `scratch/speed/mtg333-results.txt`.
-8. Complete optimization pass: traversal of scalar-only metadata tuples skipped; measured
-   +5.6% damped throughput on 5090, CPU oracle and updates exact. PPO did not
-   improve. Final original-baseline comparison still shows a 5.2% PPO loss.
-
-**Performance acceptance remains open:** the plan's no-slower-median condition
-is not met for PPO. Keep that contrary result for review; do not describe the
-branch as passing that criterion. The requested speed/profile/optimization
-work is measured, not pending another launch. Further PPO work would need a
-revised preparation strategy; the observed limiter is large-minibatch host
-preparation, not a correctness difference or a reason to restore raw forwards.
-
-### Slice 6b facts that still bind
+## Facts that still bind
 
 - `105e7e2aa` changes seeded games (102,209 steps over the budget's 512
   games, was 101,650) and adds pooled-mana `FACT_EFFECT_PROGRAM` rows on the
-  player's object row, id `token("PooledMana")`. `prepare` needed no change;
-  the oracle carries a synthetic pooled-mana case built as
-  `tests/semantic/test_pooled_mana_classes_input.py::_observation`.
+  player's object row, id `token("PooledMana")`. The oracle carries a
+  synthetic pooled-mana case built as
+  `tests/semantic/test_pooled_mana_classes_input.py::_observation`; a
+  difference there is a `prepare` defect to fix on the host, never a
+  torch-side special case.
+- `2c47f59aea` excludes tokens from `belief_schema_from_engine`; the baseline
+  predates it and generates 932 belief rows where head generates 900 (136
+  belief tensors then differ, max gradient 8.502e-4, with identical weights).
+  Keep the schema correction: the oracle loads one head-generated corpus in
+  both arms. Baseline's pre-TLE schema builder also rejects the current
+  native definitions' duplicate card/token names.
 - `docs/development.md` requires
   `uv run --extra dev pytest tests/model/test_record_coverage.py -q` after a
   rebuild for record-vocabulary changes.
-- A difference in the pooled-mana case is a `prepare` defect to fix on the
-  host, never a torch-side special case.
 
-### Card
-
-Equivalence ran on RTX A6000 (`mtg333-a6000`) after L4 refusals and an A40
-HTTP 400. Speed and the optimize pass take the first card in the steer's order
-that rents, on a new Task template (for example `mtg333-cuda`) with a ceiling
-covering that card, since `mtg333-a6000` may still be held by 4b091160edbf.
-Vast (RTX 5090 at ≤$1.00/hour on-demand) is an equal option; on an HTTP 400,
-read the provider body before calling it stock. The earlier 400s'
-bodies were not recorded.
-The optimize pass's before/after uses that same card type. One Task rental at
-a time.
-
-### Mechanics
+## Launching again
 
 Launch files: `scratch/equivalence/mtg333_cuda_equivalence.py`,
-`scratch/speed/mtg333_speed.py` with `--rent <template>`. Each launch commit
-tracks its own patches (equivalence applies `git diff BASE HEAD -- manabot`
-reversed; speed applies `git diff HEAD BASE -- manabot` forward) with BASE =
-`105e7e2aa`: `296c90f33` (equivalence) and `c150d5f25` (combined
-equivalence/speed/profile). The compress pass after `c150d5f25` changed
-`manabot/` (no numeric change; CPU oracle exact): regenerate the patches at
-the next launch commit. `run.py` and `bench.py` run under both arms.
+`scratch/speed/mtg333_speed.py` with `--rent <template>`; `run.py` and
+`bench.py` run under both arms. A launch commit tracks its own generated
+patches (equivalence applies `git diff BASE HEAD -- manabot` reversed; speed
+applies `git diff HEAD BASE -- manabot` forward). They are not in the tree:
+regenerate and commit them. Frozen launch commits: `cd7afaec86` (A40
+comparison), `e6cd7f59cc` (optimization), `46e3db32d7` (final check).
 
 Control: `ETUDE_HOME=/tmp/mtg333/launcher`, overlay
 `uv run --with 'etude-sdk[s3,eval]==0.2.15' etude …`, nested
 `doppler run -p etude -c prd -- doppler run -p manabot -c prd
---preserve-env=RUNPOD_API_KEY --`. `availability` can say rentable and the
-launch still be refused at creation: retry, or `etude queue` plus
-`caffeinate -is etude wait COHORT`. After reading results:
-`etude terminate MACHINE`, then `runpodctl pod list` → `[]`.
-MTG-325 spent $0.04 (equivalence) and $2.04 over four speed passes.
+--preserve-env=RUNPOD_API_KEY --`. Base and head run on one card in one
+rental; one Task rental at a time; USD 10 per speed cohort, USD 25 for the
+Task. A cohort name cannot be reused. `availability` can say rentable and the
+create still fail: read the provider body. After results: `etude terminate
+MACHINE`, then check the provider inventory.
 
-### Acceptance for slice 7
+Rental facts from this Task: L4 quotes were refused ("provider reports no
+available machines"). RunPod A40/A6000 creates returned HTTP 400 whose body
+was "There are no longer any instances available with the requested
+specifications. Please refresh and try again." (stock, 19:33–19:38 UTC). Vast
+RTX 5090 rented both times it was asked. A cancelled, never-created request
+(`4b091160edbf`) showed provisional accrual and blocked its template until its
+rental deadline, then settled **lost (create_unconfirmed), $0.00**: SDK 0.2.15
+`Scheduler._observe` finishes an absent machine only after the deadline and
+ignores `cancel_requested_at`; `terminate` refuses unfinished allocations.
+That is an Etude fix outside this Task; never edit the launcher database.
 
-- Equivalence (cohort `mtg333-equivalence`, cap USD 3): logits, values, losses
-  and trained weights bitwise base vs head; gradients ≤ 1e-8 abs and no worse
-  than the head-vs-head repeat. A difference is reported with tensor names
-  and max absolute differences, not waived.
-- Speed (cohort `mtg333-speed`, cap USD 10; ABAB, 3 processes per arm): no
-  head median slower than the run-to-run spread, for learner steps/s (damped
-  and PPO), `PolicyInference` obs/s, save, load and collection. The bench
-  reports host preparation as its own section and implicit device reads
-  (`torch.cuda.set_sync_debug_mode("warn")`) per arm as diagnostics.
-  L4 reference at #501 (Etude 8a376219e430): damped 9.94 steps/s
-  [9.70, 10.01], PPO 0.2534, inference 2,296 obs/s, save 0.023 s, load
-  0.082 s, collection 61.9 s.
-- A slower median is not a stop: it is the optimize pass's first target, and
-  the PR body shows both tables.
-
-### Optimize pass (whatever the speed check shows)
-
-Behaviour-preserving within the stated tolerances, judged on the rented card.
-Candidates, unmeasured: vectorize `prepare._effects`' per-record Python loop;
-int32 index arrays; `Packed.gather` for fact programs instead of
-`pack_sequence`; host compaction on CUDA inference (changes summation order:
-tolerance, not bitwise); skip moving lookup buffers the forward no longer
-reads; avoid full-capacity temporaries before trimming. Start from the bench's
-host-preparation section and the device-read count. Each kept change reruns
-the CPU oracle, the update comparison and one speed pass; a change that
-measures no gain is dropped. Total rental spend for the Task stays under
-USD 25 without asking.
+Optimize candidates not tried (unmeasured): vectorize `prepare._effects`'
+per-record loop; int32 index arrays; `Packed.gather` for fact programs; host
+compaction on CUDA inference (summation order: tolerance, not bitwise); skip
+unused definition-reference collection (0.928 s of the PPO profile); avoid
+full-capacity temporaries before trimming. Each kept change reruns the CPU
+oracle, the update comparison and one same-card speed pass.
 
 ## Acceptance at gate
 
@@ -271,22 +253,6 @@ USD 25 without asking.
   → nothing.
 - Slice 7's CUDA results and the optimize before/after are in the PR body.
 
-## Risks
-
-- Main keeps moving under an engine-bound baseline: each engine merge voids
-  the captures. Merge once before the CUDA launch, launch from that commit,
-  and merge again only at gate; a later engine change repeats slice 6b's CPU
-  capture, not the rented runs, unless it touches `manabot/` policy code.
-- Rental stock can vanish at creation (L4, A40 and A6000 each did): queue
-  and wait under the cohort cap.
-- Host preparation on a 6–9 vCPU pod may bound collection: it is measured as
-  its own section and is the optimize pass's first target.
-- CUDA gradient order through `index_put`/`embedding` backward may exceed
-  1e-8 on non-belief paths; the head-vs-head repeat separates that from a
-  real difference.
-- The optimize pass reopens the forward: every kept change is held to the
-  oracle and update comparison, and seeded sim digests stay unchanged.
-
 ## Exclusions
 
 MLX support for the newly carried configurations; PPO or a categorical critic
@@ -303,261 +269,57 @@ table and the optimize pass's before/after are in the PR body.
 
 ## Receipts, 2026-11-13
 
-Jack Heart: “retry after implement agent fix”. `105e7e2aa` merged as
-`9db3f1373` (one conflict, `manabot/env/observation.py`; `ObservationBuffers`
-kept). Native release rebuild 3m54s; cp313 extension replaced atomically.
-Slice 6b focused checks: 142 passed, then two generic-helper boundary
-failures from a runtime `ParameterArrays` import, fixed by moving it under
-`TYPE_CHECKING`. Fresh CPU captures against `/tmp/mtg333-mana-base`: base vs
-base-repeat and base vs head each **3,410 tensors, differing 0**;
-`updates-mana-{base,head}.json` `cmp`-identical (five PPO/damped cases).
+Launcher cost as recorded once per run; no cross-card ratios. Full speed
+tables with ranges and section timings: `scratch/speed/mtg333-results.txt`.
 
-Rentals: L4 quote refused (“provider reports no available machines”); A40
-admission `eb5ed2c1dabd` failed “ProviderUnavailable: POST pods: status 400”
-before any command, $0.00.
+| Run | Card | Source | Result | Cost |
+|---|---|---|---|---|
+| `047fa57e0e5e` equivalence | A6000 | `296c90f33` | outputs, losses, CPU-trained weights exact; 95 gradients ≤3.725290298461914e-9; repeat: 7 belief gradients ≤5.529727786779404e-10 | $0.04 |
+| `8a4dd0751651` | A40 | `27daef1ae5` | failed before timing (baseline schema builder, see Facts) | $0.02 |
+| `2f98203dd0a7` equivalence + speed + profile | A40 | `cd7afaec86` | identical-input oracle 3,410 tensors: outputs exact, 95 gradients ≤3.259629011154175e-9, repeat 7 belief gradients ≤3.026798367500305e-9; speed below | ~$0.31 |
+| `267f945d54a0` optimization before/after | Vast 5090 | `e6cd7f59cc` | damped 18.2057→19.2337 steps/s (+5.6%), inference 9667→10170 obs/s, collection 31.46→21.86 s, PPO 0.33794→0.3379 (unchanged) | ~$0.18 |
+| `ce884945fab8` original baseline vs optimized head | Vast 5090 | `46e3db32d7` | damped 17.3248→18.1048 (+4.5%), PPO 0.360453→0.341814 (−5.2%), inference 9742.44→10725.6 obs/s, save 0.02085→0.01762 s; 55 gradients ≤2.561137080192566e-9, repeat 6 ≤2.0954757928848267e-9 | ~$0.15 |
 
-Compress pass (after `c150d5f25`, dead names and duplicate tables only):
-`compare.py mana-base.pt compress2-head.pt` → **3,410 tensors, differing 0**;
-`cmp updates-mana-base.json updates-compress2.json` identical.
+A40 comparison (`2f98203dd0a7`, three processes per arm, head vs base
+medians): damped 7.615 vs 7.356 steps/s; PPO 0.1992 vs 0.2157 (**7.7%
+regression**, outside spread); inference 4136 vs 1318 obs/s; host preparation
+0.03386 vs 0.09876 s; save 0.02816 vs 0.03710 s; load 0.1757 vs 0.1662 s
+(within spread); collection 56.56 vs 79.60 s; forward sync warnings 1 vs 24.
+All arms: 55,391 learner rows, 217 damped and 16 PPO steps. The 5090 passes
+have one process per arm with three timed inner repeats.
 
-Second compress pass (`array_fields` public, `admit_rows` needs branch
-flattened, plan curated): `compare.py mana-base.pt compress3-head.pt` →
-**3,410 tensors, differing 0**; `updates-compress3.json` `cmp`-identical.
-`tests/eval/test_batched_eval.py` → 22 passed, 1 skipped after repairing
-`test_queue_boundary_excludes_cold_load_and_overlapping_requests`, which
-patched the removed `serving.load_checkpoint` (now `TORCH_BACKEND.load_policy`).
-The protocol, bucketed-shape, inference, update-protocol and boundary files →
-55 passed.
+Profile (same run): PPO made 1,519,556 visits each to `array_fields` and
+`_replace_arrays` (4.804 s and 4.117 s cumulative) over host-only
+`Packed.sizes`/`lengths` and bucket needs, against 0.113 s in GRU packing.
+The prediction that skipping them would cut PPO wall time 5–10% was not met;
+damped and collection improved instead.
 
-**Open for gate:** with `test_batched_eval.py` earlier in the same pytest
-process, `tests/model/test_inference.py::test_prepared_collection_and_restored_continuation_match_reference`
-(line 253, the restored collection) hit the 300 s limit twice; alone it takes
-16 s. Seen before and after the test repair; cause not diagnosed.
+CPU, current engine (native release rebuild 3m18s, cp313 extension replaced
+atomically): `compare.py current-shared-base.pt current-shared-head.pt` →
+**3,410 tensors, differing 0**; `updates-current-{base,head}.json`
+`cmp`-identical (five PPO/damped cases); `parity: pass (torch, mlx)` on a
+fresh 172-decision capture, MLX clipped-step parameter max difference 1.2e-7.
+Boundaries, capture replay and experiment discovery: 20 passed (66.98 s);
+`tests/model/test_backend_capture.py tests/model/test_mlx_backend.py` → 15
+passed.
 
-### CUDA equivalence: `047fa57e0e5e` (A6000)
+Compress pass, 20:40 UTC (`array_fields` skips scalar-only tuples for every
+leaf type; `MLXBackend.__init__` first): `compare.py current-shared-base.pt
+compress4-head.pt` → **3,410 tensors, differing 0**; `updates-compress4.json`
+`cmp`-identical; transfer-layout and two half-loader tests → 3 passed.
 
-Succeeded; launcher cost **$0.04**. All 3,410 tensors captured in each arm.
-Logits, values, losses, inference and CPU-trained weights are bitwise exact.
-95 gradients differ, max `3.725290298461914e-9` (masked-mean bucketed
-`semantic_cards.encoder.bias_hh_l0` and `name_candidates.embedding.weight`).
-Head-repeat: seven belief gradients differ, max `5.529727786779404e-10`.
-Text receipts: `/tmp/mtg333/cuda-retry/{base_vs_head,head_vs_repeat}.txt`;
-full tensors retained by Etude as `base.pt`, `head.pt`, `head_repeat.pt`.
+Rentals at 20:32 UTC: the RunPod inventory holds two pods, both other Tasks'
+in `~/.etude` (`etude-e0f0acfca5a5` = `mtg324-l4-ab`, `etude-b0805de6f0f4` =
+`mtg347-l4`), left alone. The Task launcher lists three never-created
+requests at $0.00 (`mtg333-speed-a40-130fbf7df7b8`, `-855b55b84a3f`,
+`mtg333-opt-a6000-5e566212bb22`) whose windows end by 20:51 UTC; no Vast
+entry remains. No Vast CLI is installed locally, so Vast was read only
+through the launcher.
 
-The Task numeric CUDA bar (≤1e-8) holds; the stronger plan condition
-“no worse than the head-vs-head repeat” does **not**. Keep this contrary
-finding for gate review; speed measurement proceeds under the Task numeric
-tolerance without claiming the stricter condition passed. No gradient
-threshold or receipt was changed.
+## Next actions
 
-### Earlier speed attempts (before 18:20 UTC): no result
-
-Every speed admission failed before a job command ran; nothing was measured:
-
-| Request | Outcome |
-|---|---|
-| `cb8fa16ee59e`, `b3a50357784a` | refused at the one-machine limit (the finished equivalence session is not reusable); terminated `mtg333-a6000-3a2a673ba16f`, pod list `[]` |
-| `e91a37b6f51b` / run `3b240dc55ea4` | RunPod HTTP 400 at create |
-| `ff725204b789` / run `a1f656c6c77a` (combined) | HTTP 400 at create; cleanup requested for `mtg333-a6000-d90f6b127513` |
-| queued `4b091160edbf` (combined, source `c150d5f25`, cap $10) | never reached setup; cancelled, still `renting` |
-
-The combined launcher runs equivalence, the frozen speed benchmark (three
-alternating processes per arm) and one unreported cProfile pass on a single
-rental (2.5-hour job allowance), so no session reuse is needed. Its generated patch files are tracked
-only in `c150d5f25`.
-
-`4b091160edbf`: cancellation requested `2026-11-13T16:35:59.645540Z`
-(`etude cancel` preserves it). `etude status` still reports `renting, ~$0.32,
-machine mtg333-a6000-b2d4123a77e0`, `last loop: never`. Fresh
-credential-injected waiters did not settle it (stopped with SIGINT; none
-remain). `etude terminate mtg333-a6000-b2d4123a77e0` → “still has a run on
-it”. RunPod SDK inventory for `etude-b2d4123a77e0` and the provider pod list
-show no pod for any Task session; no other workload was changed.
-
-Why retrying cannot help (SDK 0.2.15): `Scheduler._observe`'s missing-receipt
-branch calls `service.find` and finishes an absent machine only after the
-rental deadline; it ignores `cancel_requested_at` there. `terminate` refuses
-unfinished allocations before its missing-receipt cleanup. SDK `rentals()`
-gives the deadline **2026-11-13T19:15:51.924571Z**. An earlier settlement
-needs an Etude cancellation fix, outside this Task. Never edit the launcher
-database or clock, and never launch over the stale request.
-
-18:05 UTC check: `etude status 4b091160edbf` → still `renting, ~$1.08`
-(launcher accrual; no pod exists for it), `last loop: never`. The only
-RunPod pod is `etude-e0f0acfca5a5`, i.e. MTG-324's `mtg324-l4-ab-e0f0acfca5a5`
-in `~/.etude` ($0.69/hour, another Session waiting on it): not this Task's,
-left alone.
-
-### Upstream #513 (`a289fe066`, merged as `6e20654c34`)
-
-The shared recorder and its callers use Prepared; initial policy capture
-files carry container bytes. MLX uses Prepared.is_agent for bucket-trimmed
-ownership. Both half precisions preserve float32 masters and public outputs.
-The prior conflict inventory is at `9fe9eb1e7:scratch/mtg333-plan.md`.
-
-### Next actions
-
-1. Review the residual PPO tradeoff (5.2% slower in the final same-card check)
-   and the stronger CUDA repeat-floor criterion. Neither is waived here.
-2. Gate runs the remaining broader suites, installed-wheel/Python 3.12 checks
-   and the previously failing full-file test order. The narrow backlog/order
-   probe passed; it does not close the earlier 300-second failure.
-3. Publication and landing remain the caller's steps. No Task rental or waiter
-   remains active; failed allocation windows were closed after reconciliation.
-
-### Current pass, 2026-11-13 18:20 UTC
-
-Fresh launch source `27daef1ae5`, request `8a4dd0751651`, machine
-`mtg333-speed-a40-7ccc26a44f00`: A40, $0.59/hour, cohort cap $10. Provider
-inventory before launch had no Task pod. A blob-filtered history fetch
-retained origin verification after the ordinary full fetch was interrupted
-before admission. The original cancelled allocation still has no provider pod.
-
-#513 integration: shared capture hooks accept host ObservationBuffers, forward
-Prepared, and retain raw ActionRows.observation for replay. New containers are
-discovered at their safetensors suffix. MLX uses existing Prepared.is_agent
-for trimmed ownership instead of a duplicate signed array. Experiment consumers
-use the surviving prepare/on_device/assemble APIs.
-
-`pytest tests/model/test_backend_capture.py tests/model/test_mlx_backend.py -q`
-→ 15 passed (62.09s); half-head public-logit check passed separately. Fresh
-172-decision capture, 86 minibatches: `parity: pass (torch, mlx)`, MLX clipped
-step max parameter difference 5.96e-8. Five update JSON cases cmp-identical.
-
-Contrary oracle result: fresh baseline versus merged head differs in 136
-belief tensors (max gradient 8.502e-4). Isolated probes show identical model
-weights but different generated inputs: 932 baseline belief rows versus 900
-at head. `2c47f59aea` excludes tokens from belief_schema_from_engine; baseline
-105e7e2aa predates it. This is upstream schema behavior, not #513's no-op
-float32 score cast. Keep the schema correction. The oracle now retains one
-real head-generated corpus via EQUIV_BELIEF_INPUT and loads its exact bytes
-in both arms. The current rental uses the earlier harness, so its generated
-belief comparison is not an identical-input policy-equivalence result; speed
-and profile remain usable. Identical-input CPU captures are in progress.
-
-The first fresh A40 attempt `8a4dd0751651` failed before timing, cost $0.02:
-current native definitions cause baseline's pre-TLE schema builder to reject
-duplicate card/token names. The retained-input harness avoids that obsolete
-generator. The rental was terminated. Local probes additionally reveal the
-loaded native extension predates TLE (it allows baseline schema generation);
-rebuild current native source before final CPU captures.
-
-Retry `2f98203dd0a7`, source `cd7afaec86`, machine
-`mtg333-speed-a40-029a57d11bfc`, cohort `mtg333-speed-shared`, $10 cap:
-identical-input CUDA oracle captures 3,410 tensors. All outputs, losses and
-CPU-trained weights are exact; 95 gradients differ ≤3.259629011154175e-9.
-Head-repeat has seven differing belief gradients ≤3.026798367500305e-9.
-The Task's ≤1e-8 bar holds; the stricter repeat-floor condition remains open.
-Speed samples are running. Previous cohort name could not be reused; refused
-request `d6e61bbf0407` created no pod or job. Current native release rebuild
-completed in 3m18s and the cp313 extension was installed atomically.
-
-Current-engine CPU oracle with the retained head corpus:
-`compare.py current-shared-base.pt current-shared-head.pt` → **3,410 tensors,
-differing 0**. The pre-TLE local captures remain in /tmp as earlier evidence;
-new comparisons use current-shared files and current-belief-input.pt.
-
-Current native validation: five update cases (`updates-current-{base,head}.json`)
-are cmp-identical. Package boundaries, real capture replay and experiment
-discovery: **20 passed, 66.98s**. Fresh current-engine capture parity passes
-Torch and MLX; MLX clipped-step parameter max difference 1.2e-7. Generic MLX
-learner annotations now stay under TYPE_CHECKING so importing the helper does
-not eagerly load observation/checkpoint contracts.
-
-A narrow probe of the prior test-order hang passed: serving backlog followed
-by restored collection → 2 passed, 58.64s. This rules out that pairing alone,
-not the previously failing full-file order; leave the broader gate check open.
-
-First-pair speed (preliminary, one process each; final medians pending):
-55391 learner rows, 217 damped steps and 16 PPO steps in both arms. Head/base:
-damped 8.174/7.551 steps/s; PPO 0.1993/0.2157; inference 4136/1318 obs/s;
-host preparation 0.03310/0.09876s; collection 56.56/79.60s; save
-0.02930/0.03710s; load 0.1692/0.1650s. Forward sync diagnostics fall from
-23 actual warnings to zero (both include one prototype-mode warning).
-PPO forward/loss is 29.21s versus 17.86s; await cProfile before optimizing.
-
-19:16 UTC: `etude wait 4b091160edbf` settled the cancelled request as
-**lost (create_unconfirmed), final launcher cost $0.00**. Its earlier displayed
-accrual was provisional, not a charge. No provider pod existed for it.
-
-Optimization hypothesis (exploratory, before candidate measurement): the damped
-cProfile has 493,537 recursive calls each to array_fields and _replace_arrays
-for 218 transfers (1.669s and 1.755s cumulative). Both recursively visit every
-integer in host-only Packed.sizes/lengths and bucket needs, constructing keys
-and copied tuples that no device reads. Stop traversal of scalar-only tuples,
-preserving mixed/nested tuples and every array leaf. Expect 5–10% lower PPO
-wall time by eliminating metadata traversal; keep only if CUDA measurement
-shows a gain and the CPU oracle/updates remain exact. Preparation's packing
-and unused definition-reference collection are smaller damped costs (0.185s
-and 0.077s), so they are not the first candidate.
-
-Full A40 speed comparison `2f98203dd0a7` succeeded; final launcher cost ~$0.31.
-Three process medians (head vs base, ranges in retained compare.txt): damped
-7.615 vs 7.356 steps/s; PPO 0.1992 vs 0.2157 (**7.7% regression**, outside
-spread); inference 4136 vs 1318 obs/s; preparation 0.03386 vs 0.09876s; save
-0.02816 vs 0.03710s; load 0.1757 vs 0.1662s (within observed spread);
-collection 56.56 vs 79.60s. All arms have 55391 learner rows, 217 damped and
-16 PPO steps. Complete table is /tmp/mtg333/speed-live/compare.txt and Etude's
-compare.txt. The candidate is scalar metadata traversal, not GRU packing or
-float arithmetic. The follow-up uses one process per arm, each with the same
-three timed inner repeats, on a fresh A40; repeat profiling is omitted.
-
-PPO cProfile confirms the candidate: 1,519,556 visits each to array_fields
-and _replace_arrays, 4.804s and 4.117s cumulative, versus 0.113s in GRU
-packing and 0.928s in unused definition references. Scalar-only tuples now
-remain untouched by traversal; mixed tuples and arbitrary leaf types retain
-their behavior. Candidate sanity: packed transfer layout/value test passes;
-final CPU oracle **3,410 tensors exact**, all five update JSON cases exact.
-Optimization baseline is `5940609a28` (same numeric code as the speed head);
-the launch patch restores it from the candidate.
-
-Optimization run `267f945d54a0`, source `e6cd7f59cc`, on Vast instance
-60539549 (`mtg333-opt-vast5090-295daf64df5d`): RTX 5090, 12 vCPUs, 64 GB,
-$0.7881481481481482/hour; job cap $2, cohort cap $10. A40 was unavailable at
-create (after its quote said available), as was A6000; the 400 bodies were read,
-all unconfirmed requests reconciled absent, and no second Task rental was left
-running. Before/after both use this one 5090; the first A40 table stays separate.
-
-Optimization `267f945d54a0` succeeded, final launcher cost ~$0.18; its window
-was terminated and provider inventory confirms the Vast instance and every
-Task RunPod request absent. Same-5090 before/after: damped 18.2057→19.2337
-steps/s (+5.6%, beyond the three inner-repeat ranges), inference 9667→10170
-obs/s (+5.2%), collection 31.46→21.86s (-30.5%). PPO 0.33794→0.3379 is
-unchanged; the prediction of a 5–10% PPO wall reduction was not met. Keep the
-measured damped/collection improvement, without claiming PPO improved.
-The initial A40 PPO regression therefore needs a direct optimized-head versus
-original-baseline check; regenerate the speed patch to 105e7e2aa for that pass.
-
-Final direct check `ce884945fab8` completed from `46e3db32d7`: original
-105e7e2aa versus optimized Torch, one process/arm with three inner repeats,
-on one Vast 5090 rental (`mtg333-opt-vast5090-1ea3bc7d1921`, instance
-60541658). $2 job/$10 cohort caps; $0.7481481481481482/hour. A40 admission
-4c4ca07ee2a0 was refused before any machine acquisition.
-
-#513 loader consistency: explicit MLXBackend precision now reaches file-based
-load_policy as well as in-memory load. The two existing half-policy loading
-cases pass (18.03s), including assertions through the backend file-loader API.
-Torch numerics and the frozen final comparison are unaffected.
-
-### Final receipt, 2026-11-13 20:17 UTC
-
-`ce884945fab8` succeeded; final launcher cost ~$0.15. Original baseline versus
-optimized head, on one 5090: damped 17.3248→18.1048 (+4.5%), PPO
-0.360453→0.341814 (-5.2%), inference 9742.44→10725.6 obs/s, save
-0.02085→0.01762s. This last pass has one process/arm with three timed inner
-repeats; the initial A40 comparison has three processes/arm. Full ranges and
-other sections are in `scratch/speed/mtg333-results.txt`, with frozen source
-commits and Etude run IDs. No cross-card ratios are used.
-
-All final CUDA outputs/losses and CPU-trained weights are exact; 55 gradients
-differ ≤2.561137080192566e-9, versus six repeat gradients ≤2.0954757928848267e-9.
-Task numeric tolerance passes; stronger repeat-floor condition stays open.
-Final CPU oracle: 3,410 tensors exact; five update cases exact. Fresh parity
-passes Torch and MLX. Focused checks: 20 current-engine boundary/capture/discovery
-tests, transfer-layout case, mixed/nested/scalar-leaf checks, and two half-loader
-cases pass. Ruff checks and formatting pass on the changed production pieces.
-
-Generated launch patches are removed from the final tree, retained in frozen
-launch commits `cd7afaec86`, `e6cd7f59cc` and `46e3db32d7`. Regenerate and commit
-patches for a new launch. All Task rentals were terminated; provider inventory
-was checked independently. The old cancelled request settled at $0.00.
+1. Review the PPO tradeoff and the CUDA repeat-floor finding (State).
+2. Merge main (#514) with the port described at the top, then repeat the CPU
+   oracle and update comparison.
+3. Gate: broader suites, installed wheel, Python 3.12, the full-file test
+   order. Publication and landing are the caller's steps.

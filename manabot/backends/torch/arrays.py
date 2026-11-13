@@ -23,7 +23,9 @@ _SCALAR_TYPES = (int, float, complex, bool, str, bytes, type(None))
 
 
 def _host_scalars(value: tuple[object, ...]) -> bool:
-    """Immutable schedule metadata contains no array leaves to transfer."""
+    """Schedule metadata (packed sizes and lengths, bucket needs): a tuple of
+    plain scalars holds no array leaf, and visiting each integer dominated
+    the transfer of large minibatches."""
     return all(type(item) in _SCALAR_TYPES for item in value)
 
 
@@ -52,7 +54,7 @@ def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str,
     if is_dataclass(value) and not isinstance(value, type):
         children = ((f.name, getattr(value, f.name)) for f in fields(value))
     elif isinstance(value, tuple):
-        if leaf in (np.ndarray, Tensor) and _host_scalars(value):
+        if _host_scalars(value):
             return {}
         children = ((str(i), child) for i, child in enumerate(value))
     else:
