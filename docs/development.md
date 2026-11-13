@@ -562,7 +562,7 @@ states isolate one player. Every state is constructed; none replays a recorded
 game ([the reported game](#the-reported-game) says why).
 
 **Layers.** Every checkpoint runs through the same list. Action steps with no
-applicable action and characteristics reads without permanents print no row.
+applicable action print no row.
 Preparation reaches combat, cast choices, trigger ordering, a deep stack and
 naming through rules actions; it is outside the measured region.
 
@@ -603,8 +603,6 @@ checkpoint, including separately serialized continuation frames via
 requires a live Academy session and is not measured here.
 `--recipes-file <path>` reuses an export; `--layers encode-py` selects one
 consumer. The script uses the installed extension, so rebuild after Rust changes.
-A renderer stage it cannot represent prints `unavailable`, an audit finding
-without a timing. Invalid captures still fail the run.
 Both encoders use input v10 with capacities expanded to hold the complete state;
 neither truncates actions or facts.
 

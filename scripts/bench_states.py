@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from manabot.env.observation import ObservationEncoder
 from manabot.infra.config import ObservationConfig
-from manabot.semantic.text_observation import TextEncodingError, render_decision
+from manabot.semantic.text_observation import render_decision
 import managym
 
 
@@ -106,20 +106,13 @@ def main() -> None:
             "text": lambda: render_decision(point.capture, max_bytes=4 * 1024 * 1024),
         }
         for layer in layers:
-            row: dict[str, str | int | float] = {
+            row = {
                 "state": point.recipe.state,
                 "size": point.recipe.size,
                 "checkpoint": point.checkpoint,
                 "layer": layer,
+                "ms": _measure(consumers[layer]),
             }
-            try:
-                row["ms"] = _measure(consumers[layer])
-            except TextEncodingError as error:
-                # An existing renderer gap is an audit finding. Malformed
-                # captures, capacity failures and other faults still fail the run.
-                if str(error) != "unsupported continuation stage":
-                    raise
-                row["unavailable"] = str(error)
             print(json.dumps(row), flush=True)
 
 

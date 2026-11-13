@@ -22,50 +22,52 @@ from the Task comments (2026-11-12/13):
 - Latest steer (comment `353491cd`): "Rebuild toward the latest direction ...
   Drop the single-replay CI test as the deliverable."
 
-Auto-Ship was withdrawn in comment `d55bd16b` ("lf task hold"); nothing since
-restores it.
+Auto-Ship was withdrawn in comment `d55bd16b` ("lf task hold"); comment
+`9f42783b` later approved shipping with the recorded-state removal below.
 
 ## Implemented
 
-- `bench_states` has 18 catalog-backed recipes and 13 layers. Default sizes
-  are 4/8/16, restricted-filter 2/3/4, recorded 13. Ordinary rules actions
-  prepare combat declarations and damage, modal/target choices, chosen-object
-  sacrifice, trigger ordering, a deep stack and Saga naming. Every checkpoint
-  uses the same layer list; missing action families print no step row.
-- JSON lines report median-of-three ms and deterministic payment/layer/trigger
-  work. JSON output formatting is outside timing. The digest includes legal
-  actions, ordered first payment witnesses, step outcomes and search scores.
-- Rust exports exact observations, continuation frames and atomic captures
-  beside recipes. `scripts/bench_states.py` measures the Python encoder and
-  text renderer over them. `Observation.from_json` accepts explicit separate
-  continuation JSON through the existing canonical parser; no frozen schema
-  changes. The regression test preserves every policy buffer across this join.
-- Developer docs, TESTING and the card-batch, engine-measure and performance
-  review skills point at this audit. Optional Academy frame measurement needs
-  a live session and is omitted. The recorded closed-decklist root reports
-  search unavailable; its existing text `announcement` stage is also unavailable.
+- `managym/examples/bench_states.rs`: 17 catalog-backed recipes, 13 layers.
+  Default sizes 4/8/16; restricted-filter and distinct-restrictions 2/3/4.
+  Checkpoints are reached by ordinary rules actions (combat declarations and
+  damage, modal/target choices, chosen sacrifice, trigger ordering, a deep
+  stack, Saga naming). JSON lines carry median-of-three ms and deterministic
+  payment/layer/trigger work; the digest folds legal actions, ordered first
+  payment witnesses, step outcomes and search scores.
+- `--recipes` exports exact observations, continuation frames and decision
+  captures; `scripts/bench_states.py` times the Python encoder and the text
+  renderer over them. `Observation.from_json(..., continuation_json=...)`
+  joins the frames through the existing canonical parser (no schema change);
+  `tests/verify/test_continuation_input.py` checks every policy buffer.
+- `PaymentModel::uses` (`managym/src/flow/mana.rs`) reads the board only for a
+  counted tap cost and only as far as its use cap needs. Transition order,
+  resource model, bounds and memo are unchanged.
+- `docs/development.md#stress-states`, TESTING and the card-batch,
+  engine-measure and engine-performance-review skills point at the audit.
 
 ## Delete — do not maintain
 
-Removed `managym/tests/payment_search_tests.rs`, `with_call_limit`, its limit
-state and debug-only payment instrumentation. Counters are benchmark-only.
-The reporter fixture remains byte-identical (SHA-256
-`42c6bec5f6a94fbb189ef40a92c7f197489e75756d3e813eaff063bd996596fa`),
-with its Ruff exclusion and detailed `bench_payment replay` reader retained.
+Done: `managym/tests/payment_search_tests.rs`, `with_call_limit` and its
+debug-only instrumentation (counters are benchmark-only); the `recorded`
+recipe with its embedded recording, size override and build/checkpoint
+branches. Compress pass 2 (2026-11-13) removed what only `recorded` used:
+library `benchmark_payments::reporter_game` (the reader is back inside
+`bench_payment replay`, as on main), the harness's closed-decklist
+`unavailable` search row and empty-board characteristics skip, and the Python
+script's `unavailable` text row. A text-renderer error now fails the script.
+Nothing further is queued for deletion. The reporter fixture stays
+byte-identical (SHA-256
+`42c6bec5f6a94fbb189ef40a92c7f197489e75756d3e813eaff063bd996596fa`) with its
+Ruff exclusion.
 
-## Current constructed-state audit (2026-11-13, release, one machine)
+## Constructed-state audit (2026-11-13, release, one machine)
 
-Final table: `.runs/mtg337/constructed-final.jsonl`: 1,425 rows, 186 checkpoints,
-17 constructed states, digest
-`f0539bcff108e87cef7ea5bc8654078a118616ed3f13858a624d9543ef57fe5d`.
-The final executable preserves all 320 comparison work rows below. The new
-family's exact exports are `distinct-recipes.jsonl` and Python results are
-`distinct-python.jsonl` beside it: 14 rows over 7 checkpoints; both consumers
-complete, maximum 1.182 ms. The `recorded` failure is below, not in this digest.
-These are local review artifacts, not committed experiment evidence. Put the
-table and findings in the eventual PR body. The earlier executable's audit,
-replay and Python findings remain in `7e450d47f:scratch/payment-search.md`;
-do not present their numbers as a source-built audit of the merged HEAD.
+Full default run: 1,425 rows, 186 checkpoints, 17 states, digest
+`f0539bcff108e87cef7ea5bc8654078a118616ed3f13858a624d9543ef57fe5d`
+(`.runs/mtg337/constructed-final.jsonl`; reproduced after compress pass 2 in
+`compress2-all.jsonl`). Local review artifacts, not committed evidence; the
+table and findings go in the PR body. Timings are one-machine medians of
+three, not assertions.
 
 | State | Sizes | Priority payment calls | Largest row (checkpoint/layer, size) | Median ms |
 |---|---|---|---|---:|
@@ -87,48 +89,33 @@ do not present their numbers as a source-built audit of the merged HEAD.
 | choices | 4/8/16 | 0/0/0 | object/search, 16 | 3.666 |
 | names | 4/8/16 | — | name/search, 16 | 0.709 |
 
-- Payment and rollout work has two shapes. Counted-tap's slowest row makes
-  8,296 plans / 515,556 calls, at most 67 calls per plan; mixed makes 10,213
-  plans / 51,479 calls, at most 13 per plan. Restricted-filter's slowest row
-  makes 1,966 plans / 51,897 calls with up to 2,375 in one plan. The finite
-  distinct family reaches 1,893 calls in one plan at size 4.
-- The earlier size-8 restricted-filter search stopped producing rows and was
-  interrupted without a completed count. Do not raise its defaults to retry it.
-- Combat declarations/damage, targets/modes, chosen sacrifices, naming groups,
-  trigger ordering and zones remain measured at real decision boundaries.
-  No strategic action is truncated. A whole combat or ordering round still
-  requires multiple choices; the harness does not materialize all sequences.
-- Static diversity saturates at four cards; mana diversity saturates at seven.
-  Cold characteristics costs at these sizes do not warrant a separate layer
-  optimization. Clone/observation work grows with objects and capacities.
-- Academy frames need a live session; the optional frame measurement is
-  omitted. The earlier Python audit found a text announcement-stage gap;
-  fixing renderer coverage remains outside this Task.
 
-## Optimization pass (2026-11-13)
+- Two payment shapes. Many small plans: counted-tap's slowest row makes 8,296
+  plans / 515,556 calls (at most 67 per plan); mixed 10,213 / 51,479 (at most
+  13). Few large plans: restricted-filter 1,966 / 51,897 with up to 2,375 in
+  one plan; distinct-restrictions reaches 1,893 in one plan at size 4.
+- A restricted-filter search at size 8 stopped producing rows and was
+  interrupted without a count. Do not raise its defaults to retry it.
+- Static diversity saturates at four cards, mana diversity at seven. Cold
+  characteristics cost at these sizes warrants no separate optimization.
+- Python consumers: every constructed checkpoint completed in the earlier
+  16-state run (`python.jsonl`) and in distinct-restrictions (14 rows over 7
+  checkpoints, maximum 1.182 ms). Academy frames need a live session and are
+  not measured.
+- Catalog audit: `ManaRestriction` appears on Tea Shop, Hideout, Herbalist and
+  Powerstone only, so `distinct-restrictions` is bounded at 2..4 and cannot
+  establish a growth rate in the number of restrictions.
 
-`PaymentModel::uses` reads the board only for a counted tap cost, and only as
-far as its use cap needs: a tapped, sacrificed or limited source stops after
-one activation's candidates; repeatable costs still count every candidate.
-The transition order, resource model, bounds and memo are unchanged. There is
-no new runtime cache or schema.
+## Optimization evidence (2026-11-13)
 
-Compress pass (2026-11-13): the bound is one cap and one bounded count instead
-of two nested branches; stress-state docs merged the two restricted-size
-paragraphs. `bench_states counted-tap diverse-mana restricted-filter mixed`
-(release, rebuilt) reproduces all 320 rows' digest `dcd55c3f…46df`; debug
-`cargo test --lib flow::mana::tests` passes 21. The installed CPython
-extension predates this behavior-preserving edit; gate rebuilds it.
-
-Controlled release comparison: `.runs/mtg337/optimization-before.jsonl` and
-`optimization-after.jsonl`, rebuilt from HEAD and the optimized source with
-identical features. All 320 rows have identical deterministic work, legal
-surfaces, step results, ordered first witnesses and corpus digest
+Source-built before/after with identical features
+(`.runs/mtg337/optimization-{before,after}.jsonl`, checked field by field by
+`compare_optimization.py`): all 320 rows of `counted-tap diverse-mana
+restricted-filter mixed` keep their work, legal surfaces, step results and
+first witnesses; digest
 `dcd55c3f472dc6563cfa53b7e088fe50587addd26fcae62833b0d12de6b646df`.
-`compare_optimization.py` beside those artifacts checks every non-time field.
-The initial comparison used a stale executable and is discarded; rebuilding the
-unchanged source resolved its different digest. Do not reuse the stale timing
-comparison as evidence for this optimization.
+An earlier comparison used a stale executable and is discarded: rebuild
+benchmark binaries before comparing.
 
 | State / checkpoint / size | Before ms | After ms |
 |---|---:|---:|
@@ -137,66 +124,24 @@ comparison as evidence for this optimization.
 | counted-tap / cast-choice / 16 | 1057.352 | 1022.781 |
 | restricted-filter / priority / 4 | 106.482 | 103.133 |
 
-These are one-machine medians of three, not timing assertions or broad speed
-claims. Search-call counts are unchanged: the improvement removes work inside
-a call. Counted-tap and restricted-filter have only small timing differences.
-Residual work is explicitly named in `--list` for each slow state:
+Search-call counts are unchanged; the gain is work inside a call. Engine
+Budget, source-built: 102,209 steps / digest `17459788495858550277` and the
+three search seed digests (`16220228006789220642`, `5713229298486337703`,
+`18315821755026080079`) unchanged. Debug `cargo test --lib flow::mana::tests`
+passes 21.
 
-- Diverse-mana and restricted-filter need a stronger exact nested-payment
-  bound. Subtracting activation fees from output is unsafe: restricted pool
-  mana may pay a filter while being unusable for its parent (the existing
-  `payment_bound_allows_restricted_mana_to_fund_a_filter` test covers this).
-  A tighter bound must account for spending-purpose conversions and saved
-  outputs, beyond this local cost reduction; no partial pruning is added.
-- Counted-tap and mixed repeatedly plan over different tapped sets, pools,
-  life and saved obligations during rollouts. Reusing only the root cost or
-  source identity would give stale answers. Cross-step reuse needs a separate
-  ownership/key/invalidation design; a per-plan limit would not help.
+Residual costs, named in `--list`, not addressed here:
 
-Catalog audit: `ManaRestriction::` appears at Tea Shop (Ally spells/abilities),
-Hideout (Lesson/Shrine spells), Herbalist (Lesson spells), and Powerstone
-(except nonartifact spells). Added `distinct-restrictions` with 2/3/4 distinct
-restrictions and a paid Prism. Token recipes now name their catalog keys rather
-than assuming Ally. No catalog state can realize arbitrary N distinct
-restrictions, and this bounded family does not establish 2^(N+1) growth.
-`--list` and developer docs state the limit; sizes outside 2..4 are rejected.
+- Nested-payment bound (diverse-mana, restricted-filter, distinct-
+  restrictions). Subtracting activation fees from output is unsafe: restricted
+  mana may pay a filter while being unusable for its parent
+  (`payment_bound_allows_restricted_mana_to_fund_a_filter`). A tighter exact
+  bound must account for spending-purpose conversions and saved outputs.
+- Cross-step payment reuse (counted-tap, mixed). Rollouts replan over
+  different tapped sets, pools, life and saved obligations; reuse needs its own
+  ownership/key/invalidation design. A per-plan limit would not help.
 
-Validation: debug `cargo test --lib flow::mana::tests -- --test-threads 2`
-passes all 21 tests, including counted taps, limited uses, saved callers,
-restricted filter funding and full first-witness comparisons.
-
-Source-built Engine Budget comparison: 102,209 steps / digest
-`17459788495858550277` unchanged; all three search seed digests unchanged
-(`16220228006789220642`, `5713229298486337703`, `18315821755026080079`).
-
-Counterexample after rebuilding (do not hide): the existing debug example
-construction test fails on the final `recorded` recipe. The source-built
-**unchanged baseline** also fails `bench_states recorded --layers actions`
-with `Action index 2 out of bounds: 2`. With the improved diagnostic the
-optimized debug build identifies zero-based step 145, action 2. This is
-pre-existing relative to the scan reduction, consistent with the stale
-executable found above; the earlier 426-step success cannot describe HEAD.
-Realign check (2026-11-13): main's own `bench_payment replay` at the checkout
-base `2f00cbbf6d` (release, `benchmark`, source-built) fails identically
-(`AgentError("Action index 2 out of bounds: 2")`). Upstream engine changes
-since PR #504 broke the index-only recording; this branch did not. CI never
-runs the `bench_states` example test (no `benchmark` feature), so the failing
-construction test is local-only.
-The full construction test is left failing, the fixture remains byte-identical,
-and no index is remapped or historical world rebound. Default all-state audits
-therefore fail as well. A current-world replay needs semantic decision mapping
-or an explicitly chosen compatible historical runtime; neither can be inferred
-from the index-only recording. Stop dependent recorded-corpus claims and leave
-this design/compatibility decision to review.
-
-CPython 3.13 release wheel rebuilt and matching extension atomically installed.
-Rust format and diff whitespace checks pass.
-
-Focused new-state debug check: `cargo run --features benchmark --example
-bench_states --manifest-path managym/Cargo.toml -- distinct-restrictions
---layers actions` succeeds at all 2/3/4 sizes with debug invariants enabled.
-
-## Recorded-state decision (2026-11-13)
+## Recorded game
 
 Task comment `9f42783b`, for Jack Heart: "Decision on the recorded state: (b).
 Remove `recorded` from bench_states and its example test; document that the
@@ -207,24 +152,28 @@ the audit table, the optimisation, the named residual costs (nested-payment
 bound; cross-step payment reuse) and the replay finding, and land it. Shipping
 is approved."
 
-Docs written for it: `docs/development.md` (#stress-states no longer names
-`recorded`; new "The reported game" subsection). No other shipped doc or skill
-names the state. Run evidence: the fixture replays on the `v0.2.3` tag built
-from `git archive` (release, `benchmark`): 426 steps, 2,100 plans, 9,382
-calls, 7,167 states, max 180 calls in a plan, digest `16547847303527648701`.
-The Task brief's 9,371 / 7,161 / 169 are PR #504-era numbers, not this tag's.
-The tag's engine needs the repository's `content/` beside `managym/`.
+Run evidence: on this branch and on main at `2f00cbbf6d` (release,
+source-built) the replay stops with `AgentError("Action index 2 out of
+bounds: 2")`, zero-based step 145; the break is upstream of this branch. On
+the `v0.2.3` tag (built from `git archive`, needs the repository's `content/`
+beside `managym/`) it completes: 426 steps, 2,100 plans, 9,382 calls, 7,167
+states, max 180 calls in a plan, digest `16547847303527648701`. The Task
+brief's 9,371 / 7,161 / 169 are PR #504-era numbers, not this tag's.
+`docs/development.md` "The reported game" documents this.
 
 ## Remaining
 
-1. Code for (b): remove the `recorded` recipe, `RECORDING` include, its size
-   row and its branches from `managym/examples/bench_states.rs` (lines ~22,
-   41, 220, 230, 474, 825) and the Python script's handling if any; the
-   example construction test then passes. `bench_payment replay`,
-   `benchmark_payments::reporter_game`, the fixture and its Ruff exclusion stay.
-2. Gate, PR body with the state x layer table, the optimization, residual
-   reasons (in `--list`: nested-payment bound; cross-step payment reuse) and
-   the replay finding, then land. The text `announcement` gap is outside this
-   Task.
+Compress pass 2 checks: debug `cargo test --features benchmark --example
+bench_states --example bench_payment` passes 1; the release default run keeps
+the digest above; `scripts/bench_states.py --recipes-file
+.runs/mtg337/distinct-recipes.jsonl` completes; Ruff and `cargo fmt` clean.
+The library edit touches only `benchmark`-feature code, so the installed
+extension is unaffected.
 
-Earlier replay CI implementation history is retained at `6691ed956:scratch/payment-search.md`.
+1. Gate, PR body with the state x layer table, the optimization, the two
+   residual costs and the replay finding, then land. The text renderer's
+   `announcement` stage gap (seen only on the recorded checkpoint) is outside
+   this Task.
+
+Earlier narrative (stale-executable discovery, replay CI design):
+`e8eb0ab296:scratch/payment-search.md`, `6691ed956:scratch/payment-search.md`.

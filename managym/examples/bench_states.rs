@@ -19,7 +19,6 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, hint::black_box, time::Instant};
 
-const RECORDING: &str = include_str!("../tests/fixtures/payment_search/manabot_slow_step.py");
 const STATES: &[(&str, &str)] = &[
     ("duplicate-lands", "Forest + Airship Engine Room; interchangeable sources, unpayable Sokka"),
     ("herbalist", "Forest + Hermitic Herbalist; modal and Lesson-only output"),
@@ -38,7 +37,6 @@ const STATES: &[(&str, &str)] = &[
     ("mixed", "Gray Ogre + cycle of statics and mana sources on both sides; avoids ordinary-activation tap scans. Residual many-small-plan rollout cost needs cross-step payment caching keyed by resources, pools, life and saved obligations; not a per-plan explosion"),
     ("choices", "Azula Always Lies modes and targets; Joo Dee chosen sacrifice among many creatures"),
     ("names", "The Rise of Sozin chapter II; catalog-wide bounded naming groups beside a large graveyard"),
-    ("recorded", "unchanged 426-action reporter game; one size (13 mana sources at reported step)"),
 ];
 const LAYERS: &[&str] = &[
     "actions",
@@ -217,7 +215,6 @@ fn recipe(name: &str, size: usize) -> Recipe {
                 seats[0].hand.push("Azula Always Lies".into());
             }
         }
-        "recorded" => (),
         _ => panic!("unknown state {name}; use --list"),
     }
     Recipe {
@@ -227,15 +224,6 @@ fn recipe(name: &str, size: usize) -> Recipe {
     }
 }
 fn build(recipe: &Recipe) -> Env {
-    if recipe.state == "recorded" {
-        let (mut env, actions) = benchmark_payments::reporter_game(RECORDING);
-        for (step, action) in actions.into_iter().enumerate() {
-            env.step(action).unwrap_or_else(|error| {
-                panic!("recorded replay failed at step {step} (action {action}): {error}")
-            });
-        }
-        return env;
-    }
     let players = recipe
         .seats
         .iter()
@@ -471,9 +459,6 @@ fn reach(root: &Env, label: &str) -> Env {
 
 fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
     let mut result = vec![("priority".into(), root.fork().unwrap())];
-    if recipe.state == "recorded" {
-        return result;
-    }
     if recipe.state == "names" {
         return vec![("name".into(), reach(root, "name"))];
     }
@@ -566,9 +551,6 @@ enum Output {
         cap_hits: u64,
         scores: Vec<f64>,
     },
-    Unavailable {
-        unavailable: String,
-    },
 }
 
 fn run(
@@ -600,12 +582,6 @@ fn run(
             .strip_prefix("step:")
             .and_then(|kind| first_action(&mut probe, kind));
         if layer.starts_with("step:") && index.is_none() {
-            continue;
-        }
-        if layer == "characteristics"
-            && obs.agent_permanents.is_empty()
-            && obs.opponent_permanents.is_empty()
-        {
             continue;
         }
         let mut times = Vec::new();
@@ -689,17 +665,14 @@ fn run(
                     }
                     Output::Steps { steps: 1 }
                 }
-                "search" => match env.flat_mc_scores(4, 1, 23, 4) {
-                    Ok(scores) => Output::Search {
+                "search" => {
+                    let scores = env.flat_mc_scores(4, 1, 23, 4).unwrap();
+                    Output::Search {
                         simulations: scores.simulations,
                         cap_hits: scores.cap_hits,
                         scores: scores.scores,
-                    },
-                    Err(error) if error.0.starts_with("decklist closed:") => Output::Unavailable {
-                        unavailable: error.0,
-                    },
-                    Err(error) => panic!("search failed: {error}"),
-                },
+                    }
+                }
                 _ => {
                     env.step(index.unwrap() as i64).unwrap();
                     Output::Steps { steps: 1 }
@@ -822,7 +795,6 @@ fn main() {
             continue;
         }
         let sizes = match (name, &sizes) {
-            ("recorded", _) => vec![13],
             (_, Some(given)) => given.clone(),
             ("restricted-filter" | "distinct-restrictions", None) => vec![2, 3, 4],
             (_, None) => vec![4, 8, 16],

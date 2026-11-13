@@ -6,11 +6,7 @@
 //! that passed the bounds and was new to its plan's memo, so it expanded
 //! successors. Counts are per-thread and deterministic for a fixed workload.
 
-use crate::{
-    agent::env::Env,
-    state::player::{DecklistDisclosure, PlayerConfig},
-};
-use std::{cell::RefCell, collections::BTreeMap};
+use std::cell::RefCell;
 
 #[derive(Clone, Default, serde::Serialize)]
 pub struct Metrics {
@@ -66,31 +62,4 @@ pub(crate) fn call() {
 
 pub(crate) fn state() {
     METRICS.with(|m| m.borrow_mut().0.states += 1);
-}
-
-fn literal<'a>(source: &'a str, name: &str, close: &str) -> &'a str {
-    let (_, value) = source.split_once(&format!("\n{name} = ")).unwrap();
-    value[..value.find(close).unwrap() + close.len()].trim()
-}
-
-/// The game of a reporter script, reset and unplayed, with its actions: the
-/// script's `SEED`, `DECKS` and `ACTIONS` literals, closed decklists and
-/// submitted-deck admission, as the reporter's own run had them.
-pub fn reporter_game(script: &str) -> (Env, Vec<i64>) {
-    let seed: u64 = literal(script, "SEED", "\n").parse().unwrap();
-    let decks: Vec<BTreeMap<String, usize>> =
-        serde_json::from_str(literal(script, "DECKS", "\n]\n")).unwrap();
-    let actions = serde_json::from_str(literal(script, "ACTIONS", "]\n")).unwrap();
-    let players = decks
-        .into_iter()
-        .enumerate()
-        .map(|(seat, deck)| {
-            let mut player = PlayerConfig::new(format!("seat {seat}"), deck).submit_to_world();
-            player.disclosure = DecklistDisclosure::Closed;
-            player
-        })
-        .collect();
-    let mut env = Env::new(seed, true, false, false);
-    env.reset(players).unwrap();
-    (env, actions)
 }

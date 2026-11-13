@@ -8,13 +8,34 @@
 //! so a behavior change shows beside the counts. Run in release:
 //! `cargo run --release --features benchmark --example bench_payment --manifest-path managym/Cargo.toml -- boards`.
 use managym::agent::env::Env;
-use managym::benchmark_payments::{reporter_game, reset, snapshot, Metrics};
-use managym::state::player::PlayerConfig;
+use managym::benchmark_payments::{reset, snapshot, Metrics};
+use managym::state::player::{DecklistDisclosure, PlayerConfig};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
+fn literal<'a>(source: &'a str, name: &str, close: &str) -> &'a str {
+    let start = source.find(&format!("\n{name} = ")).unwrap() + name.len() + 4;
+    let end = start + source[start..].find(close).unwrap() + close.len() - 1;
+    source[start..end].trim()
+}
+
 fn replay(path: &str) {
-    let (mut env, actions) = reporter_game(&std::fs::read_to_string(path).unwrap());
+    let source = std::fs::read_to_string(path).unwrap();
+    let seed: u64 = literal(&source, "SEED", "\n").parse().unwrap();
+    let decks: Vec<BTreeMap<String, usize>> =
+        serde_json::from_str(literal(&source, "DECKS", "\n]\n")).unwrap();
+    let actions: Vec<i64> = serde_json::from_str(literal(&source, "ACTIONS", "]\n")).unwrap();
+    let players = decks
+        .into_iter()
+        .enumerate()
+        .map(|(seat, deck)| {
+            let mut player = PlayerConfig::new(format!("seat {seat}"), deck).submit_to_world();
+            player.disclosure = DecklistDisclosure::Closed;
+            player
+        })
+        .collect();
+    let mut env = Env::new(seed, true, false, false);
+    env.reset(players).unwrap();
     let mut digest = env.action_count().unwrap() as u64;
     let mut total = Metrics::default();
     let mut steps: Vec<(u64, usize, Metrics, f64)> = Vec::new();
