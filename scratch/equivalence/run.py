@@ -3,9 +3,10 @@
 Usage: uv run python run.py OUT.pt  (with PYTHONPATH pointing at the checkout)
 EQUIV_DEVICE=cuda runs the forward/backward configs on CUDA with TF32 matmul
 and cuDNN allowed (`precision="tf32"`'s switches); `minimal.train` stays CPU.
-Imports only names that resolve at both 05c1203e9 and MTG-325 HEAD.
+Imports names shared by the integrated baseline 105e7e2aa and MTG-333.
 """
 
+import json
 import os
 import sys
 import warnings
@@ -88,6 +89,25 @@ def observations(space: ObservationSpace, count: int) -> dict[str, torch.Tensor]
         if terminated or truncated:
             env.reset(Match().to_rust())
     return {k: torch.from_numpy(np.stack([r[k] for r in rows])) for k in rows[0]}
+
+
+def pooled_mana_batch(space: ObservationSpace) -> dict[str, torch.Tensor]:
+    """Exercise player-owned fact programs even when sampled games omit them."""
+    env = managym.Env(seed=163)
+    env.reset(Match().to_rust())
+    actor = env.current_agent_index()
+    payload = json.loads(env.observation_for_player(actor).toJSON())
+    for seat in ("agent", "opponent"):
+        payload[seat]["pooled_mana_classes"] = [
+            {
+                "combat": False,
+                "effect": "a +1/+1 counter on a non-Human creature spell it casts",
+                "mana": [0, 0, 0, 0, 1, 0],
+                "program": [[4, 0], [4, 1], [4, 2]],
+            }
+        ]
+    encoded = space.encode(managym.Observation.from_json(json.dumps(payload)))
+    return {key: torch.from_numpy(value[None]) for key, value in encoded.items()}
 
 
 def belief_batch(
@@ -176,6 +196,13 @@ def inference(out, key, model, batch) -> None:
 
 def capture() -> dict[str, torch.Tensor]:
     out: dict[str, torch.Tensor] = {}
+    space = ObservationSpace()
+    for bucketed in (False, True):
+        torch.manual_seed(0)
+        model = ActorCritic(space, CONFIGS["default"][0], bucketed_shapes=bucketed)
+        key = f"pooled_mana/{'bucketed' if bucketed else 'padded'}"
+        forward_backward(out, key, model, pooled_mana_batch(space))
+        inference(out, key, model, pooled_mana_batch(space))
     space, config, batch = belief_batch(24)
     for bucketed in (False, True):
         torch.manual_seed(0)

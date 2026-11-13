@@ -2,7 +2,7 @@
 
 Policy baseline: `ef28f3a58` (PR #501 merged). Upstream `6ce618b8a` is merged
 in (`0c43cc16e`). `origin/main` moved to `105e7e2aa` (MTG-297 mana spending) at
-2026-11-13 12:21 UTC and is **not merged yet**: slice 6b.
+2026-11-13 12:21 UTC and is merged locally as `9db3f1373`: slice 6b validation is in progress.
 One PR. Earlier full plan with every receipt: `1f634d89b:scratch/mtg333-plan.md`;
 MTG-325's plan: `65fa8c7aa:scratch/plan.md`.
 
@@ -51,7 +51,7 @@ logits, values = policy.evaluate(batch)  # NumPy out
 and the PR body's CUDA table: base vs head medians with spread, then the
 optimize pass's before/after.
 
-## State (HEAD `1f634d89b`)
+## State (slices 1–6 at `1f634d89b`; upstream merge `9db3f1373`)
 
 Slices 1–6 are implemented and pass their focused checks:
 
@@ -139,7 +139,7 @@ Deleted predecessors are not restored; the list is in
 
 ## Remaining slices
 
-6b. **This slice — merge `105e7e2aa` and re-establish the CPU baseline.**
+6b. **This slice — `105e7e2aa` merged; rebuild and re-establish the CPU baseline.**
 7. **CUDA equivalence and speed**, launched from the merged commit. Blocked
    since 12:12 UTC on L4 stock; the card route below unblocks it.
 8. **Optimize pass**, on the card the speed check used.
@@ -306,3 +306,16 @@ A developer prepares NumPy observations once and runs them through either
 backend; training writes `.safetensors` policies that sim, eval and Academy
 load beside old `.pt` files; the CPU oracle and CUDA checks hold; the speed
 table and the optimize pass's before/after are in the PR body.
+
+## Retry receipt, 2026-11-13
+
+Jack Heart: “retry after implement agent fix”. `lf sync 105e7e2aa --manual`
+and `lf sync --continue` completed as `9db3f1373`, preserving
+`ObservationBuffers` at the only conflict. Pooled-mana oracle case added.
+Native release rebuild succeeded (3m54s); cp313 extension replaced atomically.
+Slice 6b focused checks: 142 passed, two generic-helper boundary failures
+from the runtime `ParameterArrays` import. Moved that annotation-only import
+under `TYPE_CHECKING`; `pytest tests/test_package_boundaries.py -k generic_learning`
+then passed both tests (3.72s). Ruff passed for the two changed modules.
+Fresh CPU captures are in progress against `/tmp/mtg333-mana-base`. L4 availability at
+16:00 UTC: rentable at $0.69/hour under the $0.75 template ceiling.

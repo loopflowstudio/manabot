@@ -75,3 +75,7 @@ targets. Original uncommitted notes were copied to
   than `ef28f3a58`, so both arms share one engine and one observation
   encoder; the oracle gains a synthetic pooled-mana case. The rented runs are
   not repeated for later engine-only merges.
+
+- **Retry, 2026-11-13.** L4 became rentable at 16:00 UTC under the existing
+  Task ceiling, so retain the original L4 comparison rather than the A40
+  fallback. No change to cohort or total spend caps.

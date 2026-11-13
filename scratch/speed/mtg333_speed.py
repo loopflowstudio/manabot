@@ -1,17 +1,17 @@
-"""MTG-333 speed check on one rented L4.
+"""MTG-333 speed check on one rented CUDA machine.
 
 One machine, one venv and one native build. Each arm directory holds its own
 `manabot/` beside symlinks to every other checkout entry: `head` is the job
 revision's, and every `<arm>.patch` here gives one more arm (`base.patch`:
-baseline ef28f3a58's `manabot/`, the merge-base).
+baseline 105e7e2aa's `manabot/`, the merge-base).
 `bench.py` runs the arms interleaved, `REPEATS` processes each, then
 `compare.py` writes `summary.txt`.
 
 Patches are generated, not tracked: commit them only on the launch commit
-(`git diff HEAD ef28f3a58 -- manabot > scratch/speed/base.patch`).
+(`git diff HEAD 105e7e2aa -- manabot > scratch/speed/base.patch`).
 
     uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
-        scratch/speed/mtg333_speed.py --rent l4 --revision COMMIT \\
+        scratch/speed/mtg333_speed.py --rent mtg333-l4 --revision COMMIT \\
         --cohort mtg333-speed --max-usd 10
 """
 
@@ -52,7 +52,7 @@ uv run --locked python {_HERE}/compare.py "$out" | tee "$out/compare.txt"
 
 
 def runs(revision: str, hours: float = 2.5, usd: float = 4.0) -> list[Run]:
-    """The one L4 job at `revision`."""
+    """The one CUDA job at `revision`."""
     return Job(
         name="mtg333-speed",
         setup=machine_setup(""),
