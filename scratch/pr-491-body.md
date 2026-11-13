@@ -81,11 +81,16 @@ Exact command and run ID are in `scratch/mtg-320-plan.md`.
 
 ## Remaining before review
 
-Main 2c47f59ae is merged (c653e5dc0f), with main's explicit mana-spending
-fixtures adapted to runtime object ids (91ba66c3a4); two focused debug tests
-passed after it. Current-head suites/conformance, seeded QA against main
-2c47f59ae, Engine Budget, a clean Academy game to completion and authored
-reviews remain. Focused validation is recorded in `scratch/mtg-320-plan.md`.
+Main is merged through 1d7b5fde9 (its engine tree equals 22ed4a733 and
+2c47f59ae), with main's explicit mana-spending fixtures adapted to runtime
+object ids (91ba66c3a4). At 9c9124627, 568 seeded games (108 authored, 30
+Azula, 30 Heartbeat/Lita/Release to Memory mirrors, 400 TLA pools; 137,518
+decisions) matched main 22ed4a733 byte for byte in observations and state
+hashes; the one `PyAgentError: source cannot pay tap cost` occurs identically
+on main. Two Academy games reached Game Over. CI passed on c52d81b16. The
+widened-local cleanup (4ef4a0829: `flow/action.rs`, `flow/play.rs`,
+`state/src/zone.rs`) came after that QA; its CI run, Engine Budget numbers
+and authored reviews remain.
 
 ## Left for later
 
@@ -132,10 +137,7 @@ on 8e5e8e62b passed Semantic Kernel Conformance, Python Unit Tests, Academy
 Integration and Clean-machine Play; Rust Tests failed to compile the four
 fixtures since repaired. Engine Budget and all Integration groups passed;
 [package run 43369147921](https://github.com/loopflowstudio/manabot/actions/runs/43369147921)
-completed successfully. These results cover 8e5e8e62b only. Final paired QA
-must compare with current main 2c47f59ae so both engines include its payment
-optimizations and mana-spending redesign; include TLA pool builds as well as
-authored setups.
+completed successfully. These results cover 8e5e8e62b only.
 
 Earlier evidence, **not validation of typed ids or compression**:
 

@@ -98,19 +98,19 @@ keep card names rather than acquiring runtime-object terminology.
 
 ## Remaining work
 
-No implementation or deletion target remains in the accepted slice. Gate owns,
-on the final head: affected suites and Semantic Kernel Conformance, paired
-seeded observation/state-byte comparison against current main 2c47f59ae (tree
-equal to sync target 22ed4a733; it adds main's mana-spending redesign 105e7e2aa
-and the TLE bonus sheet, so the 6ce618b8a comparison no longer covers the
-merged code), Engine Budget search/step numbers with unchanged digests recorded
-in the PR body, a clean Academy game to Game Over, and the selected reviews.
-The last seeded QA predates the conversion cleanup, zone-store compression and
-the 22ed4a733 merge, so it does not validate them. CI run 43476080828 on head
-97269988b was pending at the 2026-11-13 realign readback. Delivery refreshes
-the PR body from `scratch/pr-491-body.md`, keeping its Task context block, and
-stops at review with auto-merge disabled. No Wave is bound. No evidence was
-regenerated for the rename.
+No implementation or deletion target remains in the accepted slice. Main is
+merged through 1d7b5fde9 (#513 only; its `managym/` tree equals 22ed4a733 and
+2c47f59ae), so the post-merge QA at 9c9124627 compared against the current
+engine. CI run 43482226694 on merge c52d81b16 passed. The widened-local
+cleanup in 4ef4a0829 (`flow/action.rs`, `flow/play.rs`, `state/src/zone.rs`)
+followed that QA; CI run 43489082846 on it was in progress at the 2026-11-13
+realign, and covers Clippy, which was not rerun locally after the `zone.rs`
+edit. Gate owns, on the final head: that CI result, Engine Budget numbers with
+unchanged digests in the PR body, and the selected reviews; a fresh seeded
+comparison is needed only if the final head changes behavior beyond 4ef4a0829's
+local-binding edits. Delivery refreshes the PR body from
+`scratch/pr-491-body.md`, keeping its Task context block, and stops at review
+with auto-merge disabled. No Wave is bound. No evidence was regenerated.
 
 Open: the historical Academy table stall's cause is unknown; the payment-search
 merge is not proof of a fix. The earlier Python failure attribution and
