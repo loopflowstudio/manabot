@@ -76,6 +76,16 @@ no `card`-named binding, field or `fn` return typed `ObjectId`, no
 `state/src/game_object.rs`; the merged mana-spending code follows the naming
 rule. No implement direction and no new open choice.
 
+Re-read 2026-11-13 at 9efe8eac5 (after the 1d7b5fde9 merge and the
+widened-local cleanup 4ef4a0829), headless: same result. The only engine and
+doc changes since 9c9124627 are that cleanup (`flow/action.rs`, `flow/play.rs`,
+`state/src/zone.rs`) and its `#### Names` sentence in `docs/engine.md`, which
+agree. The same greps over `managym/` found no `card`-named `ObjectId` binding
+or return, no `object`-named `CardId`, no `CardId(` outside
+`state/src/game_object.rs`, and no `let x = ObjectId::from(card)` /
+`card.into()` widened local. Graveyard/exile storage stays the one item
+flagged for the reviewer above.
+
 ## Delete — do not maintain
 
 Completed: runtime `Card`/`CardVec`, definition-owned runtime token flags,
