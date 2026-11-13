@@ -24,7 +24,7 @@ import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 import numpy as np
 
-from manabot.backends.mlx.arrays import to_mlx
+from manabot.backends.mlx.arrays import precision_dtype, to_mlx
 from manabot.backends.mlx.learner import Learner
 from manabot.backends.mlx.policy import MLXActorCritic
 from manabot.env.observation import ObservationSpace
@@ -37,6 +37,7 @@ from manabot.policy.checkpoint import (
     read_container,
     read_metadata,
 )
+from manabot.policy.protocol import Precision
 
 
 def require_supported(model: ModelConfig, observation: ObservationConfig) -> None:
@@ -111,13 +112,19 @@ def mlx_gradients(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     return mlx_parameters(canonical)
 
 
-def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
+def assemble(
+    checkpoint: PolicyCheckpoint, *, precision: Precision = "float32"
+) -> MLXActorCritic:
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly."""
     require_supported(checkpoint.model, checkpoint.space.encoder.config)
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
-        checkpoint.dimensions(), checkpoint.tables(), checkpoint.model, checkpoint.space
+        checkpoint.dimensions(),
+        checkpoint.tables(),
+        checkpoint.model,
+        checkpoint.space,
+        precision=precision,
     )
     expected = dict(tree_flatten(policy.parameters()))
     unmapped = sorted(set(parameters) ^ set(expected))
@@ -133,10 +140,12 @@ def assemble(checkpoint: PolicyCheckpoint) -> MLXActorCritic:
     return policy
 
 
-def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]:
+def load_mlx_policy(
+    path: str | Path, *, precision: Precision = "float32"
+) -> tuple[MLXActorCritic, ObservationSpace]:
     """Load a checkpoint container, validating its world binding."""
     checkpoint = read_container(path)
-    policy = assemble(checkpoint)
+    policy = assemble(checkpoint, precision=precision)
     # read_container has already validated the world. Keep it on the loaded
     # policy so simulation's common deck admission cannot silently bypass it.
     policy.world_binding = json.loads(checkpoint.metadata["world_binding"])
@@ -148,7 +157,7 @@ def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]
     return policy, checkpoint.space
 
 
-class _MLX:
+class MLXBackend:
     """`manabot.policy.protocol.Backend` for MLX."""
 
     name = "mlx"
@@ -169,8 +178,12 @@ class _MLX:
     def seed(seed: int) -> None:
         mx.random.seed(seed)
 
+    def __init__(self, precision: Precision = "float32") -> None:
+        precision_dtype(precision)
+        self.precision = precision
+
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
-        policy = assemble(checkpoint)
+        policy = assemble(checkpoint, precision=self.precision)
         return policy, Learner(policy, minibatch_rows=1)
 
     def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
@@ -180,4 +193,4 @@ class _MLX:
         return mlx_gradients(canonical)
 
 
-BACKEND = _MLX()
+BACKEND = MLXBackend()

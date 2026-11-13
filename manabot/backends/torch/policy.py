@@ -620,7 +620,10 @@ class ActorCritic(nn.Module):
             informed_actions = informed_actions * (
                 1 + self.policy_film(pooled)[batches]
             )
-        scores = self.policy_head(informed_actions).squeeze(-1)
+        # Autocast may compute the head in float16, which cannot represent
+        # the public illegal-action sentinel. Keep that output boundary in
+        # float32; the cast preserves gradients into the reduced-precision head.
+        scores = self.policy_head(informed_actions).squeeze(-1).float()
         # Public logits retain original coordinates, including interior padding.
         # Only the legal rows entered the action networks; objects/programs were
         # encoded once for the batch, independent of each row's support size.

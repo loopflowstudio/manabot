@@ -27,7 +27,13 @@ checked against.
 | Backend | Status | Guide |
 | --- | --- | --- |
 | `torch` | the reference: training, evaluation, the CLI and Academy | [below](#the-torch-backend) |
-| `mlx` | policy and the damped update, parity-checked; measurement only | [mlx.md](mlx.md) |
+| `mlx` | experimental policy and damped update; explicit f32/bf16/f16 | [mlx.md](mlx.md) |
+
+## Which backend on Apple Silicon
+
+Keep PyTorch in production and retain MLX as an experimental Apple backend:
+MLX half's measured speed advantage still needs learning-quality validation.
+See the [MPS retest](../../experiments/mps_retest.md) for results and limits.
 
 ## Layout
 
@@ -201,6 +207,7 @@ documents them. A backend never carries its own copy of an update's loss:
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic`, `PolicyInference` |
+| `manabot.backends.torch.capture` | bounded real-call and learner-input capture for backend comparisons |
 | `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout` |
@@ -376,7 +383,7 @@ backend loads the reference's weights through the canonical names and is
 compared in its own parameter layout. The check compares logits on legal
 actions and values (absolute difference), the update's loss (relative difference),
 each parameter's gradient (cosine similarity), and every weight after one
-Adam step with gradient clipping. Tolerances are fixed:
+Adam step with gradient clipping. Float32 tolerances remain fixed:
 logits and values within 1e-4, loss within 0.1%, every gradient cosine at
 least 0.999, post-step weights within 1e-6 absolute. The weight bar includes
 every parameter; only the gradient-cosine check treats negligible tensors as
@@ -386,4 +393,9 @@ bias have analytically zero gradients (softmax ignores a shift shared by all
 its inputs), so both sides hold rounding noise. The check exits 1 naming each
 failing backend's worst components, and 2 when the checkpoint or capture
 cannot be read, the checkpoint is refused or no backend is installed; a
-timing taken from a backend that fails it is not reported.
+timing in the ordinary MLX pilot requires passing parity. The MPS retest
+explicitly retains approximate arms and reports their numerical differences.
+
+For explicit MLX half precision, select `--backend mlx --precision bfloat16`
+(or `float16`). See the [compute precision guide](mlx.md#compute-precision) for
+the API and dtype-specific numerical gates.

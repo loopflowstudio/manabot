@@ -39,10 +39,12 @@ from manabot.env.observation import ObservationSpace  # noqa: E402
 from manabot.infra.config import MatchConfig, ModelConfig  # noqa: E402
 from manabot.policy.checkpoint import (  # noqa: E402
     canonical_parameters,
+    from_torch_state,
     read_safetensors,
     write_safetensors,
 )
 from manabot.policy.prepare import Tables, pack  # noqa: E402
+from manabot.policy.protocol import Precision  # noqa: E402
 import managym  # noqa: E402
 
 
@@ -238,3 +240,204 @@ def test_mlx_policy_serves_and_samples_through_the_shared_interface(
         )
         with pytest.raises(RuntimeError, match="changed"):
             changed.infer(inputs)
+
+
+def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
+    """Remapped opponent joins and ownership survive changes in object capacity."""
+    import manabot.backends.mlx as backend
+    from manabot.backends.mlx.checkpoint import assemble
+    from manabot.backends.mlx.learner import Learner
+    from manabot.backends.parity import minibatch_loss
+    from manabot.policy.buckets import bucket_sizes, trim_observation
+    from manabot.policy.protocol import Settings, Targets
+
+    torch.set_num_threads(1)
+    _, _, agent = _converted(tmp_path)
+    encoder = agent.observation_space.encoder
+    obs = {k: torch.zeros((2, *shape)) for k, shape in encoder.shapes.items()}
+    obs["agent_player_valid"][:] = 1
+    obs["opponent_player_valid"][:] = 1
+    obs["agent_cards_valid"][:, 1] = 1
+    obs["opponent_permanents_valid"][:, 0] = 1
+    obs["actions_valid"][:, :2] = 1
+    obs["action_focus"].fill_(-1)
+    obs["action_focus"][:, 0, 0] = 0
+    obs["action_focus"][:, 1, 0] = (
+        2 + 2 * encoder.cards_per_player + encoder.perms_per_player
+    )
+    sizes = bucket_sizes({k: v.numpy() for k, v in obs.items()}, encoder, objects=True)
+    assert sizes is not None and sizes.trims_objects
+    trimmed = trim_observation({k: v.numpy() for k, v in obs.items()}, sizes)
+    policy = assemble(
+        from_torch_state(
+            agent.config,
+            encoder.config,
+            {k: v.numpy() for k, v in agent.state_dict().items()},
+            parameter_names=dict(agent.named_parameters()),
+        )
+    )
+    learner = Learner(policy, minibatch_rows=2)
+    settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
+    policy.check_observation({k: v.numpy() for k, v in obs.items()})
+    results = []
+    for tensors in ({k: v.numpy() for k, v in obs.items()}, trimmed):
+        prepared = policy.prepare_admitted(tensors)
+        assert prepared.is_agent.shape == prepared.validity.shape
+        logits, values = policy.evaluate(prepared)
+        legal = prepared.legal
+        logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
+        reference = np.where(legal, 0.5, 0).astype(np.float32)
+        targets = Targets(
+            np.zeros(2, np.int64),
+            np.array([1, -1], np.float32),
+            np.ones(2, np.float32),
+            np.ones(2, bool),
+            logs,
+            reference,
+        )
+        loss = minibatch_loss(backend, policy, learner, prepared, targets, settings)
+        gradients = learner.gradients(loss)
+        results.append((logits[:, :2], values, float(loss), gradients))
+    expected, actual = results
+    for a, b in zip(actual[:3], expected[:3], strict=True):
+        np.testing.assert_allclose(a, b, atol=2e-6)
+    assert actual[3].keys() == expected[3].keys()
+    for key in expected[3]:
+        np.testing.assert_allclose(
+            actual[3][key], expected[3][key], atol=2e-6, err_msg=key
+        )
+
+
+@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
+def test_mixed_precision_preserves_master_updates(
+    tmp_path: Path, precision: Precision
+) -> None:
+    """Half forwards preserve small updates in float32 masters and Adam state."""
+    import manabot.backends.mlx as backend
+    from manabot.backends.mlx.arrays import precision_dtype
+    from manabot.backends.mlx.checkpoint import assemble
+    from manabot.backends.mlx.learner import Learner
+    from manabot.backends.parity import minibatch_loss
+    from manabot.policy.protocol import Settings, Targets
+
+    _, _, agent = _converted(tmp_path)
+    encoder = agent.observation_space.encoder
+    obs = {k: np.zeros((2, *shape), np.float32) for k, shape in encoder.shapes.items()}
+    obs["agent_player_valid"][:] = obs["opponent_player_valid"][:] = 1
+    obs["actions_valid"][:, :2] = 1
+    obs["action_focus"][:] = -1
+    policy = assemble(
+        from_torch_state(
+            agent.config,
+            encoder.config,
+            {k: v.numpy() for k, v in agent.state_dict().items()},
+            parameter_names=dict(agent.named_parameters()),
+        )
+    )
+    assert policy.precision == "float32"
+    learner = Learner(policy, precision=precision, minibatch_rows=2)
+    dtype = precision_dtype(precision)
+    assert learner.precision == policy.precision == precision
+    assert learner.loss_scale == (128 if precision == "float16" else 1)
+    batch = policy.prepare(obs)
+    settings = Settings(1e-5, 0.2, 0.1, 0.05, 0.01)
+    targets = Targets(
+        np.zeros(2, np.int64),
+        np.array([1, -1], np.float32),
+        np.ones(2, np.float32),
+        np.ones(2, bool),
+        np.where(batch.legal, np.log(0.5), -np.inf).astype(np.float32),
+        np.where(batch.legal, 0.5, 0).astype(np.float32),
+    )
+    with learner.forward_precision():
+        assert policy.programs().dtype == dtype
+        assert all(p.dtype == dtype for _, p in tree_flatten(policy.parameters()))
+    policy.cache_programs()
+    inference_logits, inference_values = policy.evaluate(batch)
+    logits, values = policy.forward_distribution(batch)
+    assert logits.dtype == values.dtype == mx.float32
+    np.testing.assert_array_equal(inference_logits, np.array(logits))
+    np.testing.assert_array_equal(inference_values, np.array(values).reshape(-1))
+    before = learner.parameters()
+    loss = minibatch_loss(backend, policy, learner, batch, targets, settings)
+    assert loss.dtype == mx.float32 and bool(mx.isfinite(loss))
+    gradients = learner.gradients(loss)
+    norm = np.sqrt(
+        sum(np.square(g.astype(np.float64)).sum() for g in gradients.values())
+    )
+    assert norm > settings.max_grad_norm
+    learner.set_learning_rate(settings.learning_rate)
+    with policy.forward_precision(), pytest.raises(ValueError, match="before stepping"):
+        learner.step(loss, settings.max_grad_norm)
+    learner.step(loss, settings.max_grad_norm)
+    after = learner.parameters()
+    changed = False
+    for name, value in after.items():
+        assert value.dtype == np.float32
+        grad = gradients[name] * min(1, settings.max_grad_norm / norm)
+        expected = before[name] - settings.learning_rate * grad / (np.abs(grad) + 1e-5)
+        np.testing.assert_allclose(value, expected, atol=1e-7, rtol=1e-6)
+        changed |= bool(np.any(value != before[name]))
+    assert changed
+    assert all(
+        p.dtype == mx.float32
+        for _, p in tree_flatten(learner.optimizer.state)
+        if isinstance(p, mx.array) and mx.issubdtype(p.dtype, mx.floating)
+    )
+
+
+@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
+def test_half_policy_loading_and_float32_action_logs(
+    tmp_path: Path, precision: Precision
+) -> None:
+    from manabot.backends.mlx.arrays import precision_dtype
+    from manabot.backends.mlx.rl import action_logs, policy_logs
+
+    _, path, _ = _converted(tmp_path)
+    policy, _ = load_mlx_policy(str(path), precision=precision)
+    assert policy.precision == precision
+    assert policy.programs().dtype == precision_dtype(precision)
+    policy.cache_programs()
+    policy.set_precision("float32")
+    assert policy.programs().dtype == mx.float32
+    assert all(p.dtype == mx.float32 for _, p in tree_flatten(policy.parameters()))
+    # Torch regimes spell "bf16"; the refusal names MLX's dtype spellings.
+    with pytest.raises(ValueError, match="expected one of float32, bfloat16, float16"):
+        policy.set_precision("bf16")  # type: ignore[arg-type]
+
+    logits = mx.array(
+        [[0.123, 0.124, 20], [-3, 2, 0]], dtype=precision_dtype(precision)
+    )
+    valid = mx.array([[True, True, False], [True, True, True]])
+    logs = policy_logs(logits, valid)
+    expected = policy_logs(logits.astype(mx.float32), valid)
+    assert logs.dtype == mx.float32
+    np.testing.assert_array_equal(np.array(logs), np.array(expected))
+    actions = mx.array([1, 2])
+    selected = action_logs(logs, actions)
+    assert selected.dtype == mx.float32
+    np.testing.assert_array_equal(np.array(selected), np.array(logs)[[0, 1], [1, 2]])
+    np.testing.assert_allclose(np.array(mx.exp(logs).sum(-1)), 1, atol=1e-7)
+
+
+def test_half_overflow_refuses_update(tmp_path: Path) -> None:
+    from manabot.backends.mlx.learner import Learner
+    from manabot.backends.mlx.rl import NumericalError
+
+    _, path, _ = _converted(tmp_path)
+    policy, _ = load_mlx_policy(str(path), precision="float16")
+    learner = Learner(policy, minibatch_rows=1)
+    before = learner.parameters()
+
+    def overflow() -> tuple[mx.array, ...]:
+        with learner.forward_precision():
+            return (
+                policy.semantic_cards.token_embedding.weight.sum() * mx.array(mx.inf),
+            )
+
+    loss = learner.loss(overflow)[0]
+    with pytest.raises(NumericalError, match="nonfinite_objective"):
+        learner.step(loss, 0.1)
+    for key, value in learner.parameters().items():
+        np.testing.assert_array_equal(value, before[key])
+    assert int(learner.optimizer.step) == 0

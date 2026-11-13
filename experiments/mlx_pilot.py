@@ -26,12 +26,10 @@ import argparse
 from collections.abc import Iterator
 from dataclasses import dataclass
 import gc
-import inspect
 import json
 from pathlib import Path
 import platform
 import resource
-import shutil
 import subprocess
 import sys
 import time
@@ -72,155 +70,23 @@ def _host() -> dict[str, Any]:
 
 
 def capture(out: Path) -> None:
-    """Run one CPU8 update of the w160l8 regime, keeping its inputs as npz."""
-    import torch
-
+    """Run the pilot's one-update capture using the shared recorder."""
     from experiments.tla_frontier import frozen
-    from manabot.backends.torch.policy import ActorCritic
-    from manabot.training.execution import execute_regime
+    from manabot.backends.torch.capture import capture as record
     from manabot.training.regime import TrainingRegime
-    from manabot.training.rollout.collection import SeatRoutedCollector
-    from manabot.training.updates.health import OptimizerHealth
-    from manabot.verify.store import VerifyStore
 
-    out.mkdir(parents=True, exist_ok=False)
-    (out / "collection").mkdir()
-    (out / "learner").mkdir()
     regimes, protocol = frozen()
     data = regimes["w160l8"].model_dump()
     stage = data["stages"][0]
     stage["updates"] = 1
-    # Regimes allow at most four threads; the capture keeps only inputs and the
-    # engine's share of collection time, which policy threads do not change.
     stage["execution"].update(device="cpu", workers=1, threads=4, wall_seconds=7200.0)
     data["wall_seconds"] = 7200.0
-    regime = TrainingRegime.model_validate(data)
-    (out / "regime.json").write_text(regime.model_dump_json(indent=2))
-
-    calls: list[dict[str, Any]] = []
-    minibatches: list[dict[str, Any]] = []
-    clock: dict[str, float] = {}
-    in_collection = False
-    original_prepare = PolicyInference.prepare
-    original_forward = ActorCritic.forward
-    original_collect = SeatRoutedCollector.collect
-    original_check = OptimizerHealth.check
-
-    def prepare(self: PolicyInference, obs: dict[str, torch.Tensor]) -> Any:
-        if not in_collection:
-            return original_prepare(self, obs)
-        tick = time.perf_counter()
-        prepared = original_prepare(self, obs)
-        calls.append(
-            {
-                "index": len(calls),
-                "B": int(obs["actions_valid"].shape[0]),
-                "prepare": time.perf_counter() - tick,
-                "forward": 0.0,
-            }
-        )
-        np.savez(
-            out / "collection" / f"{len(calls) - 1:05d}.npz",
-            **{key: value.numpy() for key, value in obs.items()},
-        )
-        return prepared
-
-    def forward(self: ActorCritic, obs: Any) -> Any:
-        tick = time.perf_counter()
-        result = original_forward(self, obs)
-        if in_collection and calls:
-            calls[-1]["forward"] += time.perf_counter() - tick
-        return result
-
-    def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> Any:
-        nonlocal in_collection
-        in_collection = True
-        tick = time.perf_counter()
-        try:
-            batch = original_collect(self, *args, **kwargs)
-        finally:
-            in_collection = False
-            clock["collection"] = time.perf_counter() - tick
-        clock["learning_start"] = time.perf_counter()
-        return batch
-
-    def check(self: OptimizerHealth, loss: torch.Tensor) -> None:
-        original_check(self, loss)
-        frame = inspect.currentframe()
-        assert frame is not None and frame.f_back is not None
-        local = frame.f_back.f_locals
-        assert frame.f_back.f_code.co_name == "update_damped_iteration"
-        indexes = local["indexes"]
-        learning = local["learning"]
-        arrays = {f"obs/{k}": v.detach().numpy() for k, v in local["obs"].items()}
-        arrays.update(
-            actions=local["actions"][indexes].numpy(),
-            advantages=local["advantages"][indexes].numpy(),
-            value_targets=local["value_targets"][indexes].numpy(),
-            actor_mask=local["actor_mask"].numpy(),
-            behavior_logs=local["behavior_logs"].numpy(),
-        )
-        np.savez(out / "learner" / f"{len(minibatches):03d}.npz", **arrays)
-        minibatches.append(
-            {
-                "index": len(minibatches),
-                "B": int(len(indexes)),
-                "loss": float(loss.detach()),
-                "iteration": int(local["iteration"]),
-                "learning_rate": float(local["rate"]),
-                "tau": float(local["tau"]),
-                "clip": learning.clip,
-                "collection_kl": learning.collection_kl,
-                "reference": learning.reference,
-                "max_grad_norm": learning.max_grad_norm,
-                "time": time.perf_counter(),
-            }
-        )
-        del local, frame
-
-    PolicyInference.prepare = prepare  # type: ignore[method-assign]
-    ActorCritic.forward = forward  # type: ignore[method-assign]
-    SeatRoutedCollector.collect = collect  # type: ignore[method-assign]
-    OptimizerHealth.check = check  # type: ignore[method-assign]
-    started = time.perf_counter()
-    meta: dict[str, Any] = {"host_before": _host(), "torch": torch.__version__}
-    try:
-        with VerifyStore(out / "capture.sqlite") as store:
-            result = execute_regime(
-                regime,
-                protocol.training_seed,
-                out / "execution",
-                store,
-                experiment="mlx-pilot-capture",
-                training_exposure=False,
-            )
-    finally:
-        PolicyInference.prepare = original_prepare  # type: ignore[method-assign]
-        ActorCritic.forward = original_forward  # type: ignore[method-assign]
-        SeatRoutedCollector.collect = original_collect  # type: ignore[method-assign]
-        OptimizerHealth.check = original_check  # type: ignore[method-assign]
-    initial = sorted((out / "execution").rglob("*-initial-raw.safetensors"))
-    if len(initial) != 1:
-        raise RuntimeError(f"expected one initial checkpoint, found {initial}")
-    shutil.copyfile(initial[0], out / "initial.pt")
-    policy = sum(c["prepare"] + c["forward"] for c in calls)
-    meta.update(
-        status=str(result.status),
-        wall=time.perf_counter() - started,
-        collection_wall=clock.get("collection"),
-        collection_policy=policy,
-        engine=clock["collection"] - policy,
-        calls=len(calls),
-        minibatches=len(minibatches),
-        host_after=_host(),
+    record(
+        out,
+        TrainingRegime.model_validate(data),
+        protocol.training_seed,
+        experiment="mlx-pilot-capture",
     )
-    (out / "calls.json").write_text(json.dumps(calls, indent=1))
-    (out / "minibatches.json").write_text(json.dumps(minibatches, indent=1))
-    (out / "capture.json").write_text(json.dumps(meta, indent=2, default=str))
-    print(json.dumps(meta, indent=2, default=str))
-
-
-# -- shared bench helpers ------------------------------------------------------
 
 
 # -- arms ------------------------------------------------------------------------------
@@ -238,14 +104,12 @@ class TorchLearner:
     def __init__(self, agent: Any, device: str) -> None:
         import torch
 
-        from manabot.training.updates.health import OptimizerHealth
+        from manabot.backends.torch.learner import Learner
 
         self.torch = torch
         self.device = torch.device(device)
-        self.agent = agent.to(self.device).train()
-        self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=2.5e-4, eps=1e-5)
-        self.health = {"sampled_steps": 0, "rejected_steps": 0, "optimizer_steps": 0}
-        self.observer = OptimizerHealth(self.agent, self.optimizer, self.health, 2)
+        self.learner = Learner(agent, self.device, minibatch_rows=1)
+        self.agent = self.learner.agent
 
     def sync(self) -> None:
         if self.device.type == "mps":
@@ -255,43 +119,36 @@ class TorchLearner:
         self, obs: dict[str, np.ndarray], targets: Any, settings: Any
     ) -> tuple[float, float]:
         torch = self.torch
-        from manabot.backends.torch.rl import (
-            damped_policy_loss,
-            float64_operand,
-            selected_mean,
-        )
-        from manabot.policy.prepare import reference_distribution
+        from manabot.backends.torch import rl
+        from manabot.training.updates.damped_policy import minibatch_objective
 
-        device = self.device
-        admitted = on_device(self.agent.prepare_admitted(obs), device)
-        for group in self.optimizer.param_groups:
-            group["lr"] = settings.learning_rate
-        valid = admitted.legal
-        logits, values = self.agent.forward_distribution(admitted)
-        logits, values = logits.float(), values.float()
-        reference = torch.from_numpy(
-            reference_distribution(obs, settings.reference)
-        ).to(device)
-        policy = damped_policy_loss(
-            logits,
-            torch.from_numpy(targets.actions).to(device),
-            torch.from_numpy(targets.advantages).to(device),
-            torch.from_numpy(targets.behavior_logs).to(device),
-            reference,
-            valid,
-            clip=settings.clip,
-            collection_kl=settings.collection_kl,
-            tau=settings.tau,
-        )
-        policy = selected_mean(policy, torch.from_numpy(targets.actor_mask).to(device))
-        value = (
-            (values.squeeze(-1) - torch.from_numpy(targets.value_targets).to(device))
-            .square()
-            .mean()
-        )
-        loss = policy + float64_operand(value)
-        self.observer.check(loss)
-        norm = self.observer.step(loss, settings.max_grad_norm, checked=True)
+        admitted = on_device(self.agent.prepare_admitted(obs), self.device)
+
+        def tensor(value: np.ndarray) -> torch.Tensor:
+            return torch.from_numpy(value).to(self.device)
+
+        def objective() -> tuple[torch.Tensor, ...]:
+            logits, values = self.agent.forward_distribution(admitted)
+            return minibatch_objective(
+                rl,
+                logits.float(),
+                values.float(),
+                admitted.legal,
+                actions=tensor(targets.actions),
+                advantages=tensor(targets.advantages),
+                value_targets=tensor(targets.value_targets),
+                behavior_logs=tensor(targets.behavior_logs),
+                reference=tensor(targets.reference),
+                actor_mask=tensor(targets.actor_mask),
+                categorical=self.agent.config.value_kind == "categorical_wdl",
+                clip=settings.clip,
+                collection_kl=settings.collection_kl,
+                tau=settings.tau,
+            )
+
+        loss = self.learner.loss(objective)[0]
+        self.learner.set_learning_rate(settings.learning_rate)
+        norm = self.learner.step(loss, settings.max_grad_norm)
         self.sync()
         return float(loss.detach()), float(norm)
 
@@ -331,9 +188,10 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
     the same architecture at another width; and its MLX twin."""
     import torch
 
-    from manabot.backends.mlx.checkpoint import build
+    from manabot.backends.mlx.checkpoint import assemble
     from manabot.backends.torch.checkpoint import load_checkpoint
     from manabot.backends.torch.policy import ActorCritic
+    from manabot.policy.checkpoint import from_torch_state
 
     agent, space = load_checkpoint(str(capture_dir / "initial.pt"))
     if width != agent.config.hidden_dim:
@@ -342,7 +200,14 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
             torch.manual_seed(21501)
             agent = ActorCritic(space, config)
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    policy, _ = build(agent.config, space.encoder.config, state)
+    policy = assemble(
+        from_torch_state(
+            agent.config,
+            space.encoder.config,
+            state,
+            parameter_names=dict(agent.named_parameters()),
+        )
+    )
     return agent, policy
 
 
