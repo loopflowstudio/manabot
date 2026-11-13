@@ -1,9 +1,11 @@
 # PPO CUDA baseline (MTG-338)
 
 Exploratory throughput measurement, not playing-strength evidence. Intended
-claim: “Current PPO completes X optimizer steps/s on an NVIDIA L4 at the
-Elemental w64l2 recipe, 256 streams × 64 transitions, both seats, TF32,
-bucketed shapes and live tokens.” No implementation candidate exists yet.
+claim to test: “Current PPO sustains roughly 0.26 optimizer steps/s on an
+NVIDIA L4 at the Elemental w64l2 recipe, 256 streams × 64 transitions, both
+seats, TF32, bucketed shapes and live tokens; backward and clipping account
+for roughly three quarters of update time.” This expectation comes from the
+historical MTG-325 run. No implementation candidate exists yet.
 
 The restored MTG-325 harness is the starting point. This baseline adds five
 unprofiled repeats after warmup, a separate cProfile run and one-minibatch
@@ -17,3 +19,10 @@ Timing includes the actual update and a final CUDA synchronization. Warmup,
 copies, digesting and the profiled update are excluded. A future implementation
 comparison must alternate both arms at least five times using a frozen harness
 and verify behavior; this baseline alone cannot establish a speedup.
+
+- 2026-11-13: the shared `l4-etude` ceiling ($0.60/hour) was below the
+  available L4 offer ($0.69/hour). Created `mtg338-l4` from that template,
+  with one machine and a $0.75/hour ceiling, retaining the $4 launch cap.
+- The local launcher database refuses SDK 0.2.16 as a different writer
+  version. Launcher commands use its existing 0.2.15; workers retain the
+  repository's locked SDK. The database is unchanged.
