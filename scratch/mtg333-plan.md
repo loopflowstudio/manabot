@@ -518,8 +518,55 @@ to reduce and reran the same three commands on the unchanged tree
 differing 0, updates identical, 63 passed (88.20 s). No CUDA rerun is required by
 this cleanup's direction; existing CUDA review findings stay open.
 
+## Concept review 2, 2026-11-13 (after the concept cleanup; direction for implement)
+
+The earlier two directions are in the code: the collector slices host rows and
+`prepare_admitted` reads no grad mode. No product choice is open. One leftover
+keeps the second from being true at the call sites.
+
+**Purpose is still computed from ambient grad mode by the callers.**
+`backends/README.md` now says the argument "chooses preparation purpose
+independently of autograd mode", yet 13 `manabot/` sites pass
+`inference=not torch.is_grad_enabled()`. Three are in the torch
+`AdmittedRollout` (`next_observation`, `rows`, `minibatches`), so a shared
+protocol method prepares different rows by the caller's grad mode on torch and
+fixed rows on MLX (`mlx/rollout.py` passes nothing), and `minibatches` still
+captures the caller's mode to hand to its worker. Each method's role already
+fixes the purpose, and production agrees: `next_observation` is read only under
+`backend.learner.no_grad()` (`ppo.py:57`, `damped_policy.py:126`); `rows` and
+`minibatches` only with gradients (`damped_policy.py:286`, `ppo.py:156`,
+`loops/minimal.py:63`).
+
+Direction:
+
+1. Torch `AdmittedRollout` states purpose by role: `next_observation` prepares
+   inference rows (`inference=True`), `rows`/`minibatches`/`_prepare_rows`
+   prepare learner rows (`inference=False`; `_prepare_rows` loses the
+   parameter and `minibatches` its captured mode). `rollout.py` then reads no
+   grad mode; docstrings and `docs/training-loop.md`'s `AdmittedRollout` row
+   say which rows each returns.
+2. A site already inside an explicit `torch.no_grad()` block writes
+   `inference=True` (`backends/parity.py:551`, `scripts/bench_breakdown.py:72`;
+   check each of the others the same way). A helper genuinely called in both
+   modes (`verify/util.py`, `tests/model/prepared_routes.py`) may keep the
+   expression, or take the purpose from its caller if that is one line.
+   Frozen experiments and `scratch/equivalence/run.py` are not edited.
+3. Production values are unchanged, so the 3,410-tensor CPU oracle, the
+   five-case update comparison and the focused suite must stay exact, and no
+   CUDA rerun follows. `test_update_backend_protocols.py` compares `rows`
+   with `minibatches`; a test that reads `rows` under `no_grad` now gets
+   learner rows by design. If any exactness check moves, revert and instead
+   state the grad-mode rule in the rollout docstrings and the README.
+
+Left alone: MLX's bootstrap rows stay learner-prepared (MLX changes are
+excluded, and its parity tolerance covers compaction order); forward-time
+grad-mode reads (program cache, `F.embedding` on CUDA, the inference guard)
+describe the forward, not preparation.
+
 ## Next actions
 
+0. Implement "Concept review 2": purpose by role in the torch rollout, literal
+   purpose inside explicit `no_grad` blocks; rerun the three exactness checks.
 1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
    exceed the head-vs-head floor), host preparation/load costs, and the threaded
    profile limitation. PPO's no-slower-median condition now clears; main/head
