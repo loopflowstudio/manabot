@@ -481,6 +481,20 @@ excluded). Forward-time grad reads for caching, CUDA embedding gradients and
 inference guards remain. The two verification preparations outside their
 no-grad forward blocks also retain their current values.
 
+## Concept review 3, 2026-11-13 (nothing to change)
+
+Reviewed `6514220586`: since review 2 only the callback accept loop and the
+shared verification preparation changed; neither adds a concept. One input
+(`Prepared`), one statement of purpose (`inference`), one container and one
+backend rule hold across docs, protocol and callers. No open product choice.
+
+The one remaining grad-mode purpose read is `verify.util._tensor_observation`
+(used by verify and `academy/villain.py`, as on main). It stays: it reproduces
+the old `admit_on_device` rule per caller, and literal inference purpose would
+compact CPU columns for `llm_game`/`decision_profile`, a summation reorder
+under seeded action sampling (forbidden: changed seeded games). Its name and
+purpose belong to the verify/ follow-up, Task `c2ef4a`.
+
 ## Next actions
 
 0. Role-based preparation cleanup and the callback listener fix are implemented
