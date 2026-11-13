@@ -19,6 +19,7 @@ mod bng;
 mod bro;
 mod c17;
 mod c19;
+mod chk;
 mod cmr;
 mod csp;
 mod dft;
@@ -104,13 +105,14 @@ pub fn token_catalog() -> &'static [TokenDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 62] = [
+const SETS: [fn() -> Vec<CardDefinition>; 63] = [
     aer::cards,
     afr::cards,
     blb::cards,
     bng::cards,
     bro::cards,
     c17::cards,
+    chk::cards,
     c19::cards,
     cmr::cards,
     csp::cards,

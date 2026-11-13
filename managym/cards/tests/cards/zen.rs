@@ -3,7 +3,7 @@
 use crate::support::{
     game::five_color_setup,
     inspect::{counters, library_card, permanent_named},
-    play::{activate_first, choose, play_and_settle, settle},
+    play::{activate_first, choose, play_and_settle, settle, spend_colorless},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
@@ -229,6 +229,7 @@ fn bloodchief_ascension_counts_life_lost_this_turn_at_each_end_step() {
         if strike {
             cast(&mut s, "Lightning Strike");
             assert!(s.choose_target(Target::Player(PlayerId(1))));
+            spend_colorless(&mut s);
             settle_choosing(&mut s, true);
             assert_eq!(s.game().state.turn.history[1].life_lost, 3);
         }
