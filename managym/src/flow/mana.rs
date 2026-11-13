@@ -393,7 +393,7 @@ impl PaymentModel {
         policy: SourcePolicy,
         visited: &mut PaymentSearch,
     ) -> Option<Vec<PaymentStep>> {
-        #[cfg(feature = "benchmark")]
+        #[cfg(any(debug_assertions, feature = "benchmark"))]
         crate::benchmark_payments::call();
         if state.obligations.is_empty() {
             return Some(Vec::new());
@@ -456,7 +456,7 @@ impl PaymentModel {
         {
             return None;
         }
-        #[cfg(feature = "benchmark")]
+        #[cfg(any(debug_assertions, feature = "benchmark"))]
         crate::benchmark_payments::state();
         let first = state.obligations[0].clone();
         let rest = state.obligations[1..].to_vec();
@@ -801,10 +801,10 @@ impl PaymentModel {
         obligations: Vec<Obligation>,
         permanent: PermanentId,
     ) -> Option<Vec<PaymentStep>> {
-        #[cfg(feature = "benchmark")]
+        #[cfg(any(debug_assertions, feature = "benchmark"))]
         crate::benchmark_payments::begin_plan(self.sources.len());
         let path = self.search_after_tap(pool, obligations, permanent);
-        #[cfg(feature = "benchmark")]
+        #[cfg(any(debug_assertions, feature = "benchmark"))]
         crate::benchmark_payments::end_plan();
         path
     }
@@ -849,10 +849,10 @@ impl PaymentModel {
         obligations: Vec<Obligation>,
         policy: SourcePolicy,
     ) -> Option<Vec<PaymentStep>> {
-        #[cfg(feature = "benchmark")]
+        #[cfg(any(debug_assertions, feature = "benchmark"))]
         crate::benchmark_payments::begin_plan(self.sources.len());
         let path = self.search(pool, obligations, policy);
-        #[cfg(feature = "benchmark")]
+        #[cfg(any(debug_assertions, feature = "benchmark"))]
         crate::benchmark_payments::end_plan();
         path
     }

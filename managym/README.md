@@ -292,7 +292,10 @@ does it classify the sources and apply both to every state, so ordinary small
 payments pay nothing for them. Distinct
 source behaviors, overlapping tap sets, nested obligations and concrete pool
 remainders can still make exact search combinatorial; there is no general
-large-board work limit or truncation of legal payments.
+large-board work limit or truncation of legal payments. `tests/payment_search_tests.rs`
+replays a recorded game with 13 mana sources and fails when one plan passes
+1,000 search calls; that limit exists only in the test
+([payment search work](../docs/development.md#payment-search-work)).
 
 Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's

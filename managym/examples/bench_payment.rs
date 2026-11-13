@@ -14,9 +14,8 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 fn literal<'a>(source: &'a str, name: &str, close: &str) -> &'a str {
-    let start = source.find(&format!("\n{name} = ")).unwrap() + name.len() + 4;
-    let end = start + source[start..].find(close).unwrap() + close.len() - 1;
-    source[start..end].trim()
+    let (_, value) = source.split_once(&format!("\n{name} = ")).unwrap();
+    value[..value.find(close).unwrap() + close.len()].trim()
 }
 
 fn replay(path: &str) {

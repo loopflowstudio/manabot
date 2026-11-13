@@ -91,6 +91,11 @@ is newer than PyO3 supports, set `PYO3_PYTHON=../.venv/bin/python`. A failure of
 `cargo test --all-features` for missing Python dev/link symbols is environment
 setup, not engine correctness. Record unavailable tooling in the gate summary.
 
+**Mana payment search** (`managym/src/flow/mana.rs`, mana abilities and
+sources): run `cargo nextest run -E 'binary(payment_search_tests)'` in debug.
+It counts search work on a recorded large-board game missed by the benchmarks
+and rarely reached by random play; see [payment search work](#payment-search-work).
+
 **Authored rules, worlds and setups.** Run the complete debug Rust suite,
 including semantic-kernel conformance, and focused browser interactions. Also:
 
@@ -234,7 +239,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 
 | Job | Runs |
 |---|---|
-| Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
+| Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests` and the [payment search work](#payment-search-work) limit; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
 | Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
@@ -480,6 +485,51 @@ locally only as a smoke check:
 `cargo run --release --example bench_search --manifest-path managym/Cargo.toml`
 (and `bench_steps`). Never add load to make a measurement move
 ([TESTING.md](../TESTING.md)).
+
+### Payment search work
+
+Engine Budget's benchmarks never exceed 12 search calls per payment plan;
+random play rarely builds boards with many mana sources.
+`managym/tests/payment_search_tests.rs` covers this gap in ordinary debug CI:
+
+```bash
+cargo nextest run --manifest-path managym/Cargo.toml -E 'binary(payment_search_tests)'
+```
+
+The test reads the unchanged reporter script at
+`managym/tests/fixtures/payment_search/manabot_slow_step.py`: a fixed seed,
+two closed 40-card TLA decks and 426 actions ending at the reported slow step.
+It requires scalar `Env` and one-slot `VectorEnv::step_isolated_into` to agree
+on every observation and complete decision, without early termination.
+A second test builds unpayable `{U}{R}` positions with Hermitic Herbalist,
+Airship Engine Room or Prophetic Prism and requires equal expanded state
+counts at 6 and 12 Forests.
+
+Both tests stop a payment plan on its first call above 1,000, with the action
+or board and source count in the failure message. A *plan* is one payment
+request, a *call* is one search entry, and a *state* is a call that passes the
+bounds and memo and expands successors. These counts are deterministic;
+there is no wall-time assertion. The scoped limit applies only on the test's
+thread; isolated-vector gameplay failures must also fail the test. Counters
+exist in debug and `benchmark` builds, and are absent from release wheels.
+
+Fix regressions in the whole-payment bound, color-set bound or
+interchangeable-source memo in `flow/mana.rs`
+([search behavior](../managym/README.md#style)). Do not raise the limit or edit
+the recording to make a failure pass: the limit allows over five times the
+heaviest plan measured when this test was added. If a rules change invalidates
+the recorded actions, retain the evidence and review a replacement fixture.
+
+For per-step counts, run the benchmark from the repository root:
+
+```bash
+cargo run --release --features benchmark --example bench_payment \
+  --manifest-path managym/Cargo.toml -- \
+  replay managym/tests/fixtures/payment_search/manabot_slow_step.py
+```
+
+The benchmark has no search limit; use the bounded test first on a suspected
+regression. Its `boards [max_lands]` mode measures the constructed source mixes.
 
 ## Releases
 
