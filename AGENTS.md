@@ -207,6 +207,11 @@ checkpoints or experiment evidence.
 
 ## Commands
 
+- **Use uv everywhere for Python installation and execution guidance.** Never
+  suggest bare `pip install`, including in docs, quickstarts, CLI errors or
+  troubleshooting. Use `uv venv`, `uv pip install` and `uv run`; installed
+  Academy examples use `uv run --no-project managym academy`. Preserve exact
+  historical quotes and frozen evidence.
 - **All Python commands run through uv.** This repo's environment is
   uv-managed; bare `python`, `uvicorn`, `pytest`, `maturin` etc. will miss the
   venv or pick the wrong interpreter. Always `uv run <cmd>` (or

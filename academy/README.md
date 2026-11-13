@@ -3,8 +3,9 @@
 The experience server ships in managym. Install and launch it with:
 
 ```bash
-pip install 'managym[academy]'
-managym academy
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
+uv run --no-project managym academy
 ```
 
 See [Running Academy](../docs/academy.md#running-academy) for installation,

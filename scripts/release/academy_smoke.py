@@ -19,8 +19,8 @@ from urllib.request import urlopen
 
 from websockets.sync.client import connect
 
-INSTALL_COMMAND = "pip install 'managym[academy]'"
-LAUNCH_COMMAND = "managym academy"
+INSTALL_COMMAND = "uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'"
+LAUNCH_COMMAND = "uv run --no-project managym academy"
 DEFAULT_URL = "http://127.0.0.1:8000"
 
 

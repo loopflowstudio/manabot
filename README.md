@@ -372,12 +372,13 @@ runs, and [manabot/README.md](manabot/README.md) covers the package.
 
 There is also a local browser table, Academy, for playing one game against a
 bot or stepping through a replay. It is for inspecting what a bot does, not a
-way to play Magic. Outside a checkout it is two commands and needs no manabot,
+way to play Magic. Outside a checkout, install and launch it with uv; it needs no manabot,
 Torch, Node or Rust:
 
 ```bash
-pip install 'managym[academy]'
-managym academy                            # opens http://127.0.0.1:8000; Ctrl-C stops it
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
+uv run --no-project managym academy                            # opens http://127.0.0.1:8000; Ctrl-C stops it
 ```
 
 From this checkout, `./scripts/play` runs it with hot reload and your trained
@@ -469,7 +470,7 @@ guides are in each package README.
 - **manabot**: the bot and the Python library. You train *a* manabot.
 - **managym**: the rules environment the bot lives in.
 - **Academy**: the local bot-testing UI (`managym.academy`, started with
-  `managym academy`; client source in `academy/ui/`).
+  `uv run --no-project managym academy`; client source in `academy/ui/`).
 - **Etude**: the separate system that launches and records experiments
   ([`loopflowstudio/etude`](https://github.com/loopflowstudio/etude)). Older
   documents also use *Etude* and *Fantasia* for this project.

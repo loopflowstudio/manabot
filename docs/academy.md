@@ -24,11 +24,12 @@ The PyPI commands below apply once a release that includes Academy is
 published. To try an unpublished candidate, build it with
 [Build and verify](development.md#build-and-verify) and install its engine
 wheel with the extra, in a fresh environment:
-`pip install '<path>/managym-<version>-<python>-<platform>.whl[academy]'`.
+`uv pip install '<path>/managym-<version>-<python>-<platform>.whl[academy]'`.
 
 ```bash
-pip install 'managym[academy]'
-managym academy
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
+uv run --no-project managym academy
 ```
 
 ```text
@@ -47,12 +48,7 @@ network requests while you play.
 
 Academy needs ordinary CPython 3.12 or 3.13 on a platform with a `managym`
 wheel ([supported platforms](engine-python.md)). Install into a virtual
-environment, with pip or uv:
-
-```bash
-uv venv --python 3.13 --seed && source .venv/bin/activate   # --seed adds pip
-pip install 'managym[academy]'
-```
+environment with uv:
 
 ```bash
 uv venv --python 3.13
@@ -61,14 +57,14 @@ uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
 
 The `academy` extra adds the server's two dependencies, FastAPI and Uvicorn.
 Keep the quotes: zsh treats unquoted square brackets as a pattern. Without the
-extra, `import managym` works as before and `managym academy` tells you what
+extra, `import managym` works as before and `uv run --no-project managym academy` tells you what
 to install.
 
 ### Launch
 
 ```bash
-managym academy                  # or: uv run --no-project python -m managym.academy
-managym academy --port 8001 --no-open --traces-dir ~/academy-games
+uv run --no-project managym academy                  # or: uv run --no-project python -m managym.academy
+uv run --no-project managym academy --port 8001 --no-open --traces-dir ~/academy-games
 ```
 
 | Option | Default | Meaning |
@@ -106,6 +102,16 @@ The table opens with UR Lessons (you) against GW Allies. Before starting:
 - **New Game** starts the selected matchup. During a game it ends the current
   attempt and starts another.
 
+To use your own decks, open **Choose decks**, expand **Import decklist files**
+and check **Use imported decks for the next game**. Upload a UTF-8 `.txt` or
+`.dek` file for both **Your deck** and **Opponent deck**, or paste each list
+into its source box. Write one `count card name` per line, with optional
+`Main` and `Sideboard` headings. Select **Check decklists**, correct any
+reported lines, choose a built-in opponent such as **Search 64**, then select
+**New Game**. Imported decks use the development format and supported cards;
+this is not tournament legality validation. Checkpoint opponents are unavailable
+for imported decks. Uncheck the import option to return to bundled decks.
+
 The table reads **Who decides / What is happening / Your choices**. Clicking a
 card inspects it and sends nothing; choosing one of the listed legal actions
 commits it. Decisions with a single legal action are taken for you and never
@@ -135,6 +141,40 @@ to `academy/traces` in the directory you launched from. Launch from the same
 directory, or pass the same `--traces-dir`, to see earlier games. The file
 holds private deal seeds; keep it private.
 
+### Watch a game from an evaluation
+
+Evaluation trace import currently needs the optional manabot integration.
+Install it into the same environment as Academy, then restart the server:
+
+```bash
+uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
+uv run --no-project managym academy
+```
+
+Use matching `managym` and `manabot` release versions. For an unpublished
+candidate, install both wheels from the same release build instead.
+
+1. Find the evaluation's retained command trace, typically
+   `traces/<cell-id>.commands.jsonl.gz` under its output directory. Copy or
+   download that artifact locally if the evaluation ran remotely. Use the
+   command trace rather than the evaluation's metrics or summary file; see
+   [automatic capture and replay](training.md#automatic-capture-and-replay)
+   for the evaluation workflow.
+2. Open **Watch** at `http://127.0.0.1:8000/replay?watch=1` and use
+   **Open arena / Tournament game** to select the trace. Individual game JSON
+   and uncompressed JSONL are also accepted.
+3. If it contains several games, select a **Recorded game** and click
+   **Open selected game**. A single game opens automatically.
+4. Use **Step decision**, **Previous decision**, or **Play** to inspect the
+   recorded game. The importer verifies the retained Commands and state
+   digests without running the original players again. Historical policy
+   outputs that were not recorded are marked unavailable.
+
+If the file picker is absent, check that manabot is installed in the server's
+environment and restart Academy. A trace bound to an incompatible world must
+be opened with the revision that produced it; import does not upgrade frozen
+evaluation evidence. Replaying does not require the original checkpoint.
+
 ### Trained opponents and other bots
 
 Passive, Random and Search need only the engine. Everything that runs a
@@ -142,7 +182,7 @@ trained policy comes from manabot. Install it into the same environment and
 restart Academy:
 
 ```bash
-pip install manabot
+uv pip install manabot
 ```
 
 manabot brings Torch with it; see
@@ -172,9 +212,9 @@ and a message, and exits with status 2.
 
 | What you see | Cause and fix |
 |---|---|
-| `managym: command not found`, or `No module named managym.academy` | The environment holds a `managym` from before Academy was included (pip also warned that it `does not provide the extra 'academy'`), or the virtual environment is not active. Upgrade with `pip install --upgrade 'managym[academy]'`. |
-| `ACADEMY_PLAY_ERROR` with code `extra.missing` | `managym` is installed without the server dependencies. Run `pip install 'managym[academy]'`. |
-| `ACADEMY_PLAY_ERROR` with code `port.in_use` | Another program, often an earlier Academy, holds the port. Stop it, or run `managym academy --port 8001`. |
+| `managym: command not found`, or `No module named managym.academy` | The environment holds a `managym` from before Academy was included or the command is running outside the virtual environment. Upgrade with `uv pip install --upgrade 'managym[academy]'`. |
+| `ACADEMY_PLAY_ERROR` with code `extra.missing` | `managym` is installed without the server dependencies. Run `uv pip install 'managym[academy]'`. |
+| `ACADEMY_PLAY_ERROR` with code `port.in_use` | Another program, often an earlier Academy, holds the port. Stop it, or run `uv run --no-project managym academy --port 8001`. |
 | `ACADEMY_PLAY_ERROR` with code `site.missing` | This `managym` was built from source without the browser client, as in a checkout. Use `./scripts/play` from the checkout, or install a released wheel. |
 | No browser window opens | Open the printed `url` yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
 | Trained opponents are not listed | manabot is not installed in the environment that runs Academy; the Opponent menu says so. Install it there and restart. If the menu reports a catalog error instead, manabot is present but Torch failed to import. |
@@ -195,7 +235,7 @@ uv run --extra dev pytest tests/academy/test_server.py -q
 ```
 
 In a checkout the trained-bot features above are on, because manabot is
-installed in the development environment. `managym academy` there reports
+installed in the development environment. `uv run --no-project managym academy` there reports
 `site.missing` unless `ACADEMY_FRONTEND_BUILD` names a static build of
 `academy/ui` (`ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build`); the
 released wheel is the one place that build is packaged.

@@ -66,8 +66,9 @@ recorded offer and Command.
 To use Academy, install it and run one command; no checkout is needed:
 
 ```bash
-pip install 'managym[academy]'
-managym academy
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
+uv run --no-project managym academy
 ```
 
 [Running Academy](../../docs/academy.md#running-academy) is the guide: options,

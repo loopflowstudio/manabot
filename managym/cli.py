@@ -62,7 +62,7 @@ def academy(argv: list[str] | None = None) -> int:
         if exc.name and exc.name.split(".")[0] in {"fastapi", "uvicorn", "starlette"}:
             return _error(
                 "extra.missing",
-                "Install the server dependencies: pip install 'managym[academy]'",
+                "Install the server dependencies: uv pip install 'managym[academy]'",
             )
         raise
     directory = frontend_directory()
