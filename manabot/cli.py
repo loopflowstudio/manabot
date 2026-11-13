@@ -68,7 +68,11 @@ def experiment_recipe(name: str) -> tuple[Callable[[Any], None], type[BaseModel]
     """Validate an experiment's typed function at the dynamic CLI boundary."""
     module_name, _, function = name.partition(":")
     if not module_name.isidentifier() or (function and not function.isidentifier()):
-        raise typer.BadParameter("recipe must name a module and optional function")
+        raise typer.BadParameter(
+            f"recipe {name!r} must be an experiment module name with an optional "
+            "function (<experiment> or <experiment>:<function>, not a path); "
+            "use --list"
+        )
     module = importlib.import_module(f"experiments.{module_name}")
     train = getattr(module, function or "train", None)
     if not callable(train):
