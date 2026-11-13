@@ -407,7 +407,23 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference.** Commit `7ef6ce588` is adopted from
+**Current reference: MTG-297 mana spending.** Commit `d53220d36` is adopted
+from [dedicated run 43417765062](https://github.com/loopflowstudio/manabot/actions/runs/43417765062)
+(2026-11-13 UTC, AMD EPYC 7763). Native unit/class spending adds decisions to
+these decks: all three search digests and the step digest change, with 102,209
+steps instead of 101,650 across 512 games. The previous reference reproduces
+all committed digests. Every timing threshold passes; both samples agree
+closely and user CPU tracks wall time. Changed gameplay means these are
+budget measurements of different workloads, not an isolated algorithmic
+speedup. The 10% tolerance is unchanged.
+
+| Metric | Previous reference `7ef6ce588` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.928 s | 3.611 s |
+| Total search | 169.080 s | 125.545 s |
+| Step throughput | 11,760.9/s | 13,728.0/s |
+
+**Previous reference: MTG-286 TLE rules.** Commit `7ef6ce588` was adopted from
 [PR #469 CI run 43221435403](https://github.com/loopflowstudio/manabot/actions/runs/43221435403)
 (2026-11-12 UTC, AMD EPYC 7763) as an accepted cost. MTG-286's TLE rules
 additions (mana payment, casting, proposed events and triggers) leave every

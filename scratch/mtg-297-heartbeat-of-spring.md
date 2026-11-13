@@ -218,43 +218,97 @@ The surrounding callers, fixtures, projections and docs need no further cut.
 - `uv run --extra dev pytest tests/semantic/test_pooled_mana_classes_input.py -q` — **4 passed**, 16.22s; `/tmp/mtg297-compress-caller-parity.log` (2026-11-13). Covers native/reference/vector/text and Academy spending/receipt projections in v9/v10.
 - Workspace `cargo fmt --all --check` and `git diff --check` — **passed**. `lf context` — scratch below both configured limits. Full debug/conformance and dedicated-runner Engine Budget remain gate obligations.
 
-## Remaining
+## Delivery status
 
-No known card behavior or fixture repair remains open. Reconciliation on
-2026-11-13 matched the current `8888428c4` mana blob to the saved-caller
-receipt and checked the retained logs: 121 focused debug tests, both original
-autoreset fixtures, Clippy, extension build and four shared-input parity tests
-passed. The preceding merged-runtime run also passed 106 focused debug tests
-and 33 parity tests. The earlier direction to build and validate the merge is
-fulfilled; no repeated implementation check is needed solely for that feedback.
-These focused results do not establish full-suite or performance acceptance.
-Academy browser QA re-ran on `8888428c4` (2026-11-13, top section of
-`scratch/qa.html`). The cards, reload, cross-seat Heartbeat and all three demo
-fixtures work. It found nothing to fix in this change.
+Current gate evidence follows. No product decision is needed for correctness
+validation. Performance acceptance and the full CI matrix remain distinct from
+focused local passes. No human demo, landing or Task completion is implied.
 
-Gate still needs evidence for the current runtime:
+## Gate plan (2026-11-13, `d53220d36`)
 
-- Complete the required debug coverage, including semantic conformance, under
-  the unchanged five-minute watchdog. The focused combined-payment and original
-  autoreset checks above pass after the saved-caller simplification. Preserve
-  their original 1,000-step contracts and the watchdog; no split is needed.
-- Check affected current-world/model admission paths against the merged tree.
-  The matching extension rebuild and shared-input parity above pass; earlier
-  admission results remain evidence for their recorded revisions. The current
-  arena/monitoring selection is `tests/semantic/test_elemental_world.py`,
-  `tests/eval/test_evaluation_models.py`, `tests/eval/test_mirror_admission.py`,
-  `tests/training/test_monitor_evaluation.py` and
-  `tests/model/test_choice_separability.py`, with the dev, notebook, artifacts
-  and reports extras. Include the affected checkpoint/world rejection and
-  Academy setup paths required by `docs/development.md#validation-by-change-area`;
-  the upstream backend reorganization does not waive these checks.
-- Obtain a dedicated-runner Engine Budget comparison. Investigate any remaining
-  search slowdown; reconcile deliberate decision-digest changes through the
-  documented PR-run reference process (`docs/development.md`). Neither the
-  compression nor upstream's fast paths have a current performance receipt here.
+Review covers the branch diff against origin/main, with no initial uncommitted
+work. The CI selector (`git diff --name-only -z origin/main...HEAD | bash
+.github/ci/select-tests.sh`) selects every CI job for native changes; it has no
+per-test plan or content reuse. This gate uses a focused local selection rather
+than running every package, as the gate instruction requires:
 
-No product decision is needed to do those checks. A measured cost requiring
-acceptance remains open until reviewed; no such acceptance is recorded.
-Review and delivery belong to the caller. No human demo, publication, landing
-or Task completion is implied. The noisy failed comparison remains a failure,
-not performance acceptance.
+- Debug: changed flow/agent modules, mana arithmetic, changed card-set modules,
+  observability, CR 106/603/608, state hashing and semantic conformance. Existing
+  current-runtime receipts remain valid for unchanged code; CI owns the rest of
+  the full native matrix.
+- Python: the five required current-world arena/monitoring files, model world,
+  policy-input rejection and catalog admission, Academy Learn/navigation and
+  changed protocol/text/belief/parity fixtures.
+- Frontend: PlayerArea rendered tests, Svelte checks and build. Reuse the current
+  runtime headless browser proof in `scratch/qa.html`; no UI inputs changed.
+- Static: workspace Rust format and Clippy, Ruff on changed Python/stub files,
+  schema generation consistency and diff whitespace.
+- Performance: dedicated Engine Budget workflow 43417765062, dispatched against
+  the already-published current HEAD. Wait for its result; do not reinterpret
+  the earlier local failure or adopt a measured cost without acceptance.
+
+The matching extension build for runtime blob `3c3ed8afa` is reused; this gate
+has not changed native source. No new rules or product decision is assumed.
+
+### Gate results
+
+Runtime and fixture sources stayed unchanged throughout this gate. The diff
+review found no further implementation repair: the accepted production timing,
+source joins, explicit spending, receipt ownership and projection contract are
+present. Docs already describe the behavior. Existing current-runtime browser
+QA is reused; no manual demo is claimed.
+
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 -E 'test(flow::) or test(agent::) or test(mana::) or binary(semantic_conformance_tests) or binary(match_state_hash_tests) or test(cr_106_mana::) or test(cr_603_triggers::) or test(cr_608_resolution::) or test(chk::) or test(tle::) or test(tla::) or test(observability::) or test(afr::) or test(blb::) or test(bro::) or test(cmr::) or test(fdn::) or test(ice::) or test(iko::) or test(kld::) or test(ktk::) or test(lea::) or test(m12::) or test(m15::) or test(m20::) or test(mmq::) or test(por::) or test(psal::) or test(roe::) or test(stx::) or test(war::) or test(zen::)'` — **870 passed**, 208.412s; run `9b05743d-ac37-4d66-b30d-cff720b02444`, `/tmp/mtg297-gate-debug.log`; remaining full native matrix deferred to CI.
+- `cargo nextest run --manifest-path managym/Cargo.toml --profile ci --build-jobs 2 --test-threads 2 -E 'binary(experience_protocol_tests) or binary(canonical_replay_tests) or binary(study_protocol_tests) or test(checked_in)'` — **16 passed**, including all five Rust-generated schemas; `/tmp/mtg297-gate-protocol.log`.
+- `uv run --extra dev --extra notebook --extra artifacts --extra reports pytest tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/model/test_choice_separability.py tests/model/test_world.py tests/model/test_policy_input_rejection.py tests/model/test_policy_catalog.py tests/academy/test_learn_setup.py tests/academy/test_choice_navigation.py tests/academy/test_experience_protocol.py tests/semantic/test_text_observation.py tests/semantic/test_pooled_mana_classes_input.py tests/belief/test_state.py -q` — **224 passed**, 104.21s; `/tmp/mtg297-gate-python.log`; unrelated integration/model suites deferred to CI.
+- `cargo fmt --manifest-path managym/Cargo.toml --all` — passed, no changes.
+- `cargo clippy --manifest-path managym/Cargo.toml --jobs 2 --all-targets --all-features -- -D warnings` — passed; `/tmp/mtg297-gate-clippy.log`.
+- `git diff --name-only -z origin/main...HEAD -- '*.py' '*.pyi' | xargs -0 uv run --extra dev ruff check --fix` and the same selection with `ruff format` — passed, 11 files unchanged.
+- `npm --prefix academy/ui test -- --run src/lib/components/PlayerArea.svelte.test.ts src/lib/protocol-conformance.test.ts` — **10 passed**; `/tmp/mtg297-gate-frontend-test.log`.
+- `npm --prefix academy/ui run check` — passed, zero errors/warnings; `/tmp/mtg297-gate-frontend-check.log`.
+- `npm --prefix academy/ui run build` — passed; `/tmp/mtg297-gate-frontend-build.log`.
+- `uv run --extra play python` comparison of `advice_schema()` against `protocol/advice-v1.schema.json` — exact match; `git diff --check` — passed.
+
+No test timed out. Semantic conformance reproduced in 62.843s; the unchanged
+masked and restored autoreset fixtures passed in 4.253s and 4.232s. Three owned
+test processes were observed in OS state `T` and resumed with SIGCONT, without
+changing the watchdog. The repeatedly stopped uniform-roots fixture had used
+12.33s CPU at 165s elapsed and ultimately passed at 170.623s. These are
+correctness receipts, not performance measurements; the source of the external
+stops remains unknown. No induced load or extra test workers were used.
+
+### Dedicated Engine Budget and adoption
+
+`gh workflow run engine-budget.yml --ref jack/mtg-297-define-heartbeat-of-spring-with-the-tle-mana`
+completed as [run 43417765062](https://github.com/loopflowstudio/manabot/actions/runs/43417765062),
+measuring exact HEAD `d53220d36` against `7ef6ce588` on one AMD EPYC 7763 runner.
+Both builds and all samples completed. The comparison failed **only five
+intentional digest/count checks**; every timing threshold passed. All old
+reference digests reproduced. Native spending choices change all three search
+digests, the step digest and the step count (101,650 → 102,209).
+
+| Metric | Reference | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Worst reply | 4.928s | 3.611s | −26.7% |
+| Total search | 169.080s | 125.545s | −25.7% |
+| Steps per second | 11,760.9 | 13,728.0 | +16.7% |
+
+Candidate search samples were 125.475/125.672s wall and 125.452/125.636s user
+CPU; reference samples were 169.914/168.356s wall and 169.852/168.292s user CPU.
+Candidate step samples were 7.429/7.529s versus reference 8.732/8.631s. The
+samples are consistent; the earlier local noisy failure does not describe this
+current-runtime dedicated measurement. Because gameplay changed, these deltas
+are not an isolated algorithmic speedup or evidence of playing strength.
+
+- `gh run download 43417765062 --name engine-budget --dir .cache/engine-budget-mtg297-gate` — complete artifact retained with raw samples, telemetry and provenance.
+- `uv run --no-project python scripts/engine_budget.py record --artifact .cache/engine-budget-mtg297-gate --reason '<native spending changes decision digests; all paired timing checks pass; preserve 10% tolerance>'` — adopted the exact recording in `managym/perf/baseline.json`; the full reason is in that file. `docs/development.md` records the same-run comparison.
+
+This is the documented deliberate-digest adoption, with no cost requiring
+acceptance and no adaptive retry. The original workflow remains failed against
+its old baseline; delivery CI must compare the recording commit against the
+new reference and run the deferred full matrix. Local gate found no remaining
+implementation blocker. No runtime source changed, so its passing checks are
+reused after the baseline/docs-only update. No servers, tests or workflow
+watchers remain running from this gate.
+
+- After adopting the baseline, `uv run --extra dev pytest tests/infra/test_engine_budget.py -q` — **19 passed**, 12.94s; `/tmp/mtg297-gate-budget-tests.log`. `git diff --check` passed; `lf context` remains below both scratch limits.
