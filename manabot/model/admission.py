@@ -28,6 +28,7 @@ it performs no checks and is for that owner only.
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+import numpy as np
 import torch
 
 from manabot.backends.torch.arrays import to_numpy
@@ -47,7 +48,7 @@ from manabot.model.semantic_cards import (
     definition_rows,
 )
 from manabot.model.shared_effects import admit_shared_effects
-from manabot.policy.buckets import BucketSizes, bucket_sizes
+from manabot.policy.buckets import BucketSizes, bucket_sizes, row_needs, sizes_of
 
 if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
@@ -179,16 +180,45 @@ def _check(
 
 
 def bind_admitted(
-    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+    agent: "ActorCritic",
+    obs: Mapping[str, torch.Tensor],
+    *,
+    needs: np.ndarray | None = None,
 ) -> AdmittedObservation:
-    """Wrap rows of a source already admitted for `agent`, without checks."""
+    """Wrap rows of a source already admitted for `agent`, without checks.
+
+    `needs` are these rows' bucket needs measured when they were admitted
+    (`measure_row_needs`); without them the batch is measured here.
+    """
     lookup = _semantic_lookup(agent, _device(obs))
+    buckets = (
+        measure_buckets(agent, obs)
+        if needs is None
+        else sizes_of(
+            needs, agent.observation_space.encoder, objects=agent.object_trimming()
+        )
+    )
     return AdmittedObservation(
         obs,
         admission_binding(agent),
         _references(agent, obs, lookup, check=False),
         bool(obs["actions_valid"].any(-1).all()),
-        measure_buckets(agent, obs),
+        buckets,
+    )
+
+
+def measure_row_needs(
+    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+) -> np.ndarray | None:
+    """Each row's bucket needs [B, len(AXES)] (`manabot.policy.buckets.row_needs`),
+    for a policy with bucketed shapes; None otherwise or for a layout bucketing
+    leaves untouched."""
+    if not agent.bucketed_shapes:
+        return None
+    return row_needs(
+        {key: to_numpy(value) for key, value in obs.items()},
+        agent.observation_space.encoder,
+        objects=agent.object_trimming(),
     )
 
 
