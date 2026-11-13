@@ -117,6 +117,7 @@ class AdmittedRollout:
         if size < 1:
             raise ValueError("minibatch size must be positive")
         inference = not torch.is_grad_enabled()
+        chunks = [order[start : start + size] for start in range(0, len(order), size)]
         with ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="ppo-prepare"
         ) as worker:
@@ -124,25 +125,20 @@ class AdmittedRollout:
             def batches() -> Iterator[
                 tuple[NDArray[np.int64], Prepared[torch.Tensor], ActionRows]
             ]:
-                indexes = order[:size]
-                if not len(indexes):
-                    return
-                pending = worker.submit(self._prepare_rows, indexes, inference)
-                for start in range(0, len(order), size):
-                    prepared, rows = pending.result()
-                    indexes = order[start : start + size]
-                    following = order[start + size : start + 2 * size]
-                    if len(following):
-                        pending = worker.submit(
-                            self._prepare_rows, following, inference
-                        )
-                    yield indexes, on_device(prepared, device), rows
+                # Lazy submission: the worker holds the batch being awaited
+                # and at most the one after it.
+                submitted = (
+                    worker.submit(self._prepare_rows, chunk, inference)
+                    for chunk in chunks
+                )
+                pending = next(submitted, None)
+                for chunk in chunks:
+                    ready, pending = pending, next(submitted, None)
+                    assert ready is not None
+                    prepared, rows = ready.result()
+                    yield chunk, on_device(prepared, device), rows
 
-            iterator = batches()
-            try:
-                yield iterator
-            finally:
-                iterator.close()
+            yield batches()
 
     def legal(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         """The 0/1 legal-action input [B,A] of rows this rollout returned."""

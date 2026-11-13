@@ -428,6 +428,15 @@ digest-verified output files are in `/tmp/mtg333/prefetch-results` and retained
 in Etude. Full tables and launcher cost are in `scratch/speed/mtg333-results.txt`.
 The rental was terminated; provider inventory confirms `etude-f482ab7677e1`
 is absent. Generated patches were removed from the final tree.
+
+Compress pass after the CUDA run (`minibatches` submits lazily from one chunk
+list; the executor's exit is the only join, so the manual generator close is
+gone; same preparation order and at most one batch ahead):
+`cmp updates-post514-base.json updates-compress6.json` → identical;
+`pytest tests/training/test_update_backend_protocols.py` → 8 passed (55.98 s).
+The forward oracle and CUDA speed were not rerun: `_prepare_rows`, transfers
+and the PPO loop are unchanged, so the numbers above predate this edit.
+
 ## Next actions
 
 1. Review: the CUDA repeat-floor finding (gradients ≤1e-8 meet the bar, but
