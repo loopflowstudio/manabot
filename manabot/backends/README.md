@@ -73,7 +73,8 @@ backend = manabot.backends.resolve("torch")  # the module manabot.backends.torch
 learner = backend.learner.Learner(policy, "cpu", minibatch_rows=64)
 ```
 
-A loader uses `backend.checkpoint.BACKEND.load_policy(path)`. The resulting
+A loader calls `backend.checkpoint.BACKEND.load_policy(path)`, which returns
+the policy and its observation space. The
 policy supplies host `prepare`/`evaluate`, action sampling and guarded
 `inference_scope()` calls. Sampling stays in the backend so moving a caller
 preserves its seeded action stream. The serving child chooses Torch when it

@@ -75,7 +75,10 @@ Slices 1–6 are implemented and pass their focused checks:
    `manabot/backends/mlx.md`, `docs/training-loop.md`, `docs/training.md`,
    `docs/evaluation.md`, `docs/observation-and-model.md`, `manabot/README.md`,
    `manabot/model/agent.md`, `docs/academy.md`, `academy/README.md`,
-   `AGENTS.md`. No unreleased release-notes section exists; the release note
+   `AGENTS.md`. 2026-11-13 13:00 UTC: the `backends/README.md` examples were
+   run as written on CPU (save, load, prepare, evaluate, `on_device` forward,
+   `resolve`, `read_metadata`, both `TypeError`s, `NotAContainer`); one fix,
+   `load_policy` returns `(policy, space)`. No unreleased release-notes section exists; the release note
    must replace v0.2.3's `admit_observation` advice with `policy.prepare`.
 
 Last receipts (laptop, one native build from the integrated source in both
