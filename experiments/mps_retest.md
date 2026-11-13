@@ -21,16 +21,15 @@ rates, memory, gradient/logit/value/loss differences and sampled choices.
 Each host gets separate charts and tables; replay receipts preserve the
 capture host and its thread count. These outputs have been checked with
 synthetic receipts, not performance evidence. Receipt completeness requires
-the same-hour window on either host and is not a correctness verdict; the
+three back-to-back replays on one host and is not a correctness verdict; the
 numerical differences must be interpreted separately.
 
 The operator owns AWS allocation, access notes, release after the 24-hour
 minimum and the cost receipt. No rental lifecycle tooling is part of this
 Task. The operator reported no mac2-m2 capacity in the checked US zones at
 2026-11-13 01:20 UTC and is retrying. The M4 Max may run captures and
-all arms that fit while M2 capacity is pending. If no host arrives within
-12 hours of that direction (2026-11-13 13:12:38.971 UTC), report the laptop
-evidence and mark M2 unmeasured.
+all arms that fit while M2 capacity is pending. The later 02:16 UTC steer removes host availability as a delivery gate:
+if M2 access does not arrive, report laptop evidence and mark M2 unmeasured.
 The laptop has no load threshold. Use four CPU threads and call-by-call
 interleaving across arms, retaining the start and end one-minute loads. The
 2026-11-13 02:16 UTC operator direction supersedes all earlier load thresholds.
@@ -46,7 +45,7 @@ There is one panel per model shape and a group per 256, 512 and 1,024 streams.
 Every group includes CPU float32 (four threads on the laptop, eight on M2), MPS float32, each supported MPS half dtype,
 and MLX float32. Bars show the median-total replay of three repetitions and
 its component times, so their stacks sum to the median total. Each group must
-be measured on the same host within one hour. Does-not-fit, unsupported and
+run back to back on the same host, with no elapsed-time cap. Does-not-fit, unsupported and
 not-measured cells stay visible. Captions identify hardware, framework
 versions, half dtype and parity evidence. The chart uses an opaque light
 background for sharing in either light or dark interfaces.
@@ -155,12 +154,13 @@ call or learner step per arm in order. The start and end loads belong to the
 entire comparison; there is no mid-block load refusal that would selectively
 truncate slower arms.
 
-If start and end load differ by more than 2×, repeat the entire block once,
+On either host, if end load exceeds twice start load, repeat the entire replay
+once,
 without a load threshold. Keep the attempt with the lower arithmetic mean
 of endpoint loads; a tie keeps the first. Retain both attempts and select all
-arms together. An unavailable repeat leaves coverage incomplete. Captures use
-the same repeat rule, keeping the unused capture beside the selected one.
-Every laptop table row and chart point/bar carries the block's endpoint loads;
+arms together. An unavailable repeat leaves coverage incomplete. Laptop captures and per-call blocks also retain and repeat load increases
+over 2×, keeping unused captures beside the selected one.
+Every table row and chart point/bar carries the block's endpoint loads;
 whole-update captions also give the reused engine capture's loads. Repeated
 blocks are identified. This reduces shared-host drift; it does not make a busy
 laptop equivalent to a dedicated host. No artificial load is generated.
@@ -177,11 +177,12 @@ run identity. The operator supplies M2 access when available. These are
 measurement commands, not rental commands. Start with a selected width to
 establish replay durations before scheduling the full matrix; the default
 worker timeout is 900 seconds and a timeout is a failed attempt, not OOM.
-The three-replay, same-hour requirement remains unchanged. Each repetition
+Three interleaved replays run back to back on the same host, without a
+one-hour admission or reporting limit. Each repetition
 interleaves all executable arms call by call and step by step. Their total
 elapsed span, including the gaps spent running the other arms, determines the
-window; phase sums exclude those gaps. The timeout applies to an individual worker
-call, not a complete update. Increasing it never relaxes the one-hour window.
+recorded window; phase sums exclude those gaps. The timeout applies to an
+individual worker call, not a complete update.
 
 ```sh
 uv run --extra mlx python experiments/mps_retest.py capture capture-256 --streams 256
@@ -267,6 +268,38 @@ failures. Upstream v0.2.3 release preparation changes metadata, not this method.
 retain endpoint load labels, four threads, interleaving and the drift retry.
 M2 access is optional for delivery; laptop evidence is the deliverable if it
 does not arrive.
+
+**2026-11-13 02:21 UTC first execution:** source `99210bf8d`, local Etude
+run `c91b93dcc210`, M4 Max, load 69.68→69.68. Capture failed before any games
+with `SemanticProjectionError: catalog_tokens.keys: expected array`; the
+local native extension predates the checked-out catalog API. Retain its receipt
+under `laptop/capture-256-failed-c91b93dcc210`. Rebuild the extension from this
+source before retrying. Launcher cost: USD 0.00.
+
+**2026-11-13 02:37 UTC capture:** the CPython 3.13 extension was rebuilt
+from `99210bf8d` and installed atomically. Etude `f800789ff669` completed
+the 256-stream w384l8 capture: 48,064 learner decisions, 792 collection calls,
+188 learner minibatches, 624.57 s capture wall time. Shared engine/host work
+is 55.98 s after subtracting policy and recording I/O; capture load
+77.81→85.09, four threads, no drift retry. Launcher cost USD 0.00.
+This capture is input evidence, not a backend comparison.
+
+**2026-11-13 laptop replay feasibility:** Etude `86e16cc560fc` completed
+one five-arm w384/256 block in 2,425.13 s. Load 54.52→21.48 required a
+drift retry. The continuation was cancelled during that retry when M2 became
+the primary host: three blocks at this observed rate take about two hours,
+not one. Retain the completed block as provisional evidence; no selected
+three-replay median exists and the retry is incomplete.
+
+**2026-11-13 03:38 UTC direction:** remove the one-hour window. Run three
+interleaved replays back to back on each host, recording wall-clock endpoints
+and load. Retry only when end load exceeds twice start load, once at most;
+retain both attempts and select the lower mean endpoint load. Load falling
+by more than half does not trigger a retry. The laptop window ends 06:17 UTC;
+priorities are w384 at 256/512/1024 streams, w768 and w1024 at 256, then
+smaller widths. Report cells not reached. Restart both current replay series
+from one new freeze; retain earlier receipts separately instead of combining
+repetitions separated by cancellations or source changes.
 
 **Cost:** no rental was launched by this Task. The operator's cost receipt is
 pending; this report will cite it once supplied.

@@ -187,3 +187,36 @@ Operator: drop the load threshold for laptop blocks entirely. This machine hosts
 <!-- loopflow-requester:"Jack Heart" -->
 
 <!-- loopflow-steer:902d2d02-c77a-40e6-bab0-9c73aaa046b0 -->
+
+
+## M2 access supplied
+
+Comment dc46aaf7-05b3-42f0-a34c-74a9c7fce64e by Jack Heart:
+
+Operator: the rented M2 is up. Host h-067a779e551e75812 (us-east-1b), instance i-01bad7ce91e5de2d7, public IP 34.229.142.55; SSH command, key path and machine facts are in ~/.manabot-mps-bench/access.md (rewritten 02:56 UTC). It is a fresh macOS 26.7 image with nothing installed; allow 5-10 minutes from 02:56 UTC for first boot, then install Homebrew, uv, Python 3.12, torch 2.15 and mlx, and clone the repo at your frozen revision. Run the M2 arms there (all widths that fit in 24 GiB, 256/512/1024 streams, four arms interleaved, three replays within one hour); keep the laptop for the widths the M2 cannot hold. The operator releases the host when you post that the M2 blocks are complete, or 24 h after allocation at the latest; do not release it yourself. Cost receipt: allocated 2026-11-13T02:56:06Z, 24 h minimum about USD 21.
+
+<!-- loopflow-requester:"Jack Heart" -->
+
+<!-- loopflow-steer:dc46aaf7-05b3-42f0-a34c-74a9c7fce64e -->
+
+Reversible interpretation: “four arms” names backend/precision families; keep
+both working half dtypes as explicitly required earlier (five executed arms).
+Finish the already-running laptop w384 comparison; subsequent fitting widths
+belong on M2, with laptop supplemental widths only if M2 cannot hold them.
+
+
+## Back-to-back replays replace the one-hour window
+
+Comment 3b899965-3f27-426c-8c7a-8afe14a666be by Jack Heart:
+
+Operator: drop the one-hour window; it was my constraint and it does not fit a 40-minute replay. Rule now: the three interleaved replays of a capture run back to back on the same host, each with its start and end wall-clock and 1-minute load in the receipt; no time cap. Repeat a replay only if the load more than doubles within that single replay, at most once, and keep both in the receipt with the quieter one in the chart. Do not stop the laptop replays; continue the w384l8 256-stream replays now and then the rest of the matrix. On the M2 the same rule applies, and nothing else runs there so the load note will be trivial. If the whole laptop matrix would exceed the four-hour quiet window the operator holds (ends 06:17 UTC), prioritise in this order: w384l8 at 256/512/1024 streams, then w768l8 and w1024l8 at 256 streams, then the smaller widths, and report what was not reached.
+
+<!-- loopflow-requester:"Jack Heart" -->
+
+<!-- loopflow-steer:3b899965-3f27-426c-8c7a-8afe14a666be -->
+
+Implementation choice: preserve prior capture and parity/replay evidence at its
+source. Restart three repetitions under one new freeze after the retry-policy
+change; do not combine runs separated by cancellations. Per-call comparison
+blocks use the same directional load-increase retry on both hosts; laptop
+captures retain their retry with this directional predicate.

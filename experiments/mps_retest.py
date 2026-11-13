@@ -951,7 +951,7 @@ def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:
 
 
 def _unstable(before: float, after: float) -> bool:
-    return max(before, after) > 2 * min(before, after)
+    return after > 2 * before
 
 
 def _failure(error: Exception, arm: Arm) -> dict[str, str]:
@@ -1155,11 +1155,11 @@ def _interleaved(
                 started=started,
                 ended=ended,
                 load_retry=attempt > 0,
-                load_retry_required=args.laptop and _unstable(before, after),
+                load_retry_required=_unstable(before, after),
             )
             _emit(ledger, row)
         attempts.append(list(rows.values()))
-        if not args.laptop or not _unstable(before, after) or attempt:
+        if not _unstable(before, after) or attempt:
             break
     if len(attempts) == 2:
         chosen = min(
@@ -1244,8 +1244,6 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
 
 
 def _load_label(row: dict[str, Any]) -> str:
-    if not row.get("laptop"):
-        return "not laptop"
     before, after = row.get("load_before"), row.get("load_after")
     label = (
         f"{before:.2f}→{after:.2f}"
@@ -1284,7 +1282,7 @@ def _details(
         "and MLX allocator peak. They measure different scopes and must not be summed. "
         "All arm models are resident during timing: allocation failures describe this "
         "shared-memory setup, not standalone arm capacity. Endpoint loads label every "
-        "laptop measurement; quieter of 2 selects the lower mean endpoint load.",
+        "measurement; quieter of 2 selects the lower mean endpoint load.",
         "## Shared engine component",
         _table(
             [
@@ -1293,7 +1291,7 @@ def _details(
                 "Capture machine",
                 "Capture threads",
                 "Capture source",
-                "Laptop load start→end",
+                "Load start→end",
             ],
             [
                 [
@@ -1351,7 +1349,7 @@ def _details(
                         "Rows",
                         "Arm",
                         "Status",
-                        "Laptop load start→end",
+                        "Load start→end",
                         "First s",
                         "Catalog s",
                         "Warm median s",
@@ -1428,7 +1426,7 @@ def _details(
                     "Rows",
                     "Arm",
                     "Status",
-                    "Laptop load start→end",
+                    "Load start→end",
                     "Learner logit Δ",
                     "Collection logit Δ",
                     "Value Δ",
@@ -1458,6 +1456,12 @@ def _details(
                     str(streams),
                     _arm_label(arm, host),
                     str(rep + 1),
+                    *[
+                        time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(r[k]))
+                        if k in r
+                        else "—"
+                        for k in ("started", "ended")
+                    ],
                     _status(row),
                     _load_label(r),
                     *[
@@ -1478,8 +1482,10 @@ def _details(
                 "Streams",
                 "Arm",
                 "Repeat",
+                "Started UTC",
+                "Ended UTC",
                 "Status",
-                "Laptop load start→end",
+                "Load start→end",
                 "Shared engine s",
                 "Collection s",
                 "Learning s",
@@ -1606,15 +1612,13 @@ def _host_report(
                     r["started"] for r in valid_replays
                 )
                 spans.append({"width": width, "streams": streams, "seconds": span})
-    same_hour = bool(spans) and all(r["seconds"] <= 3600 for r in spans)
     summary = {
         "host": host,
         "missing": missing,
-        "complete": not missing and same_hour,
+        "complete": not missing,
         "captures": captures,
         "whole_updates": medians,
         "replay_windows": spans,
-        "same_hour": same_hour,
     }
     if host["chip"] != "Apple M2":
         summary["supplemental_host"] = True
@@ -1648,7 +1652,7 @@ def _call_charts(out: Path, suffix: str, data: HostReport) -> None:
                         _status(r)
                         + (
                             "\nL " + _load_label(r).replace(" (quieter of 2)", "*")
-                            if r and r.get("laptop")
+                            if r
                             else ""
                         )
                         for r in points
@@ -1680,7 +1684,7 @@ def _call_charts(out: Path, suffix: str, data: HostReport) -> None:
             0,
             0.15,
             "Warmed medians; gaps are not zero.\n"
-            "L = laptop block start→end 1-minute load, shown per point.\n"
+            "L = block start→end 1-minute load, shown per point.\n"
             "* = quieter of two blocks (lower mean endpoint load).\n"
             "Measured means execution completed, not correctness passed.\n"
             f"First calls, setup, memory and correctness: comparisons{suffix}.md",
@@ -1789,11 +1793,10 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
                     text += "\nchoices differ"
                 else:
                     text += "\nchoices match"
-                if middle.get("laptop"):
-                    text += "\n" + "\n".join(
-                        f"L{i + 1} " + _load_label(r).replace(" (quieter of 2)", "*")
-                        for i, r in enumerate(complete)
-                    )
+                text += "\n" + "\n".join(
+                    f"L{i + 1} " + _load_label(r).replace(" (quieter of 2)", "*")
+                    for i, r in enumerate(complete)
+                )
                 axis.annotate(
                     text,
                     (x, bottom),
@@ -1838,7 +1841,6 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
     origin_caption += "".join(
         f"\n{c['streams']} streams capture load: {_load_label(c['host'] or {})}"
         for c in captures
-        if (c["host"] or {}).get("laptop")
     )
     mixed_host = any(
         c["host"] is None or c["host"]["hostname"] != hostname for c in captures
@@ -1864,8 +1866,7 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
         )
         + "Both-seat self-play; one real capture per stream count.\nMedian of three replays; same inputs and recorded decisions.\nHalf arms: bfloat16; float16 with gradient scaler.\nBars identify executed dtype and median-total phase times.\nRate counts learner decisions before filtering.\nCosines vs CPU; choices use common-uniform samples.\nNeither proves identical trained policies.\nFirst calls, memory and correctness: comparisons"
         + suffix
-        + ".md\nL = each replay block start→end 1-minute load.\nLoads label all phase stacks and associated rates.\n* = lower mean endpoint load after >2× drift.\nAll arm models resident; memory capacity is shared.\nMissing and failed arms remain visible.\nSame-hour condition for measured groups: "
-        + ("met" if summary["same_hour"] else "NOT MET")
+        + ".md\nL = each replay block start→end 1-minute load.\nLoads label all phase stacks and associated rates.\n* = lower mean endpoint load after load more than doubles.\nAll arm models resident; memory capacity is shared.\nMissing and failed arms remain visible.\nThree back-to-back replays on the same host; no time cap."
         + (
             "\nReceipt coverage: complete"
             if summary["complete"]
