@@ -328,7 +328,8 @@ The second command trains the same learner one update further and runs the
 later steps again for the new policy; nothing made from the earlier policy is
 overwritten or mistaken for the later one's. This recipe's policy learns with
 PPO, whose rates follow a horizon the recipe states (`horizon=config.updates`),
-so the first update is the same whether the run stops there or is extended
+so the first update is the same whether the run stops there or is extended.
+The second update lies past that one-update horizon and uses the final rates
 ([schedules and clocks](#schedules-and-clocks)).
 
 `collect_belief` (`manabot.belief.collect`) plays `games` complete games with a

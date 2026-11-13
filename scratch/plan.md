@@ -176,6 +176,10 @@ already do by clamping) rather than refusing; a changed horizon is refused on
 resume as a learner setting. `SelfPlay.learning` defaults to `Learning()`, so
 "refuses PPO without a horizon" makes that default unusable: implement must
 either drop the default or accept that a bare `SelfPlay(...)` refuses.
+Second docs pass (same day): reread both files against the recipe code; the
+only edit is one sentence in `docs/training.md` saying the belief example's
+second update lies past its one-update horizon and uses the final rates. The
+changed doc paths are still `docs/training.md` and `docs/learning.md`.
 The loop docstring (`learn`: "for PPO the target matters") and questions.md's
 "PPO rates still depend on the requested update count" line still need the
 implement step's edit (questions.md line done).
