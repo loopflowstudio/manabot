@@ -2950,6 +2950,18 @@
    "sha256": "39a7f62153baeea05fe534ed8c551969994548eee770c18e4572e4d790111d4f",
    "bytes": 1493544
   },
+  "experiments/data/cuda_precision/w256l8/regime.json": {
+   "sha256": "dd4f468166dc1f5a7dd93e5e4f48c43c26b0fd8b3c8109ce1b875b8dd863d9e2",
+   "bytes": 156119
+  },
+  "experiments/data/cuda_precision/w256l8/summary.json": {
+   "sha256": "e2867e30e30147ccd9b1b6d9a4b6668a51726a5171947de127a679f1524fecb0",
+   "bytes": 11381
+  },
+  "experiments/data/cuda_precision/w256l8/trajectories.json": {
+   "sha256": "34cb6aaac089fea5252628632c9afe86cabd14baacea6a126a032fbb6ce0d5f3",
+   "bytes": 746776
+  },
   "experiments/data/current-baseline-calibration-3.json": {
    "sha256": "67a3b4cb2a3ee1c010dd2b78518f12efa6e047da87c387c268fb94b307011121",
    "bytes": 5690
@@ -40525,6 +40537,34 @@
   "experiments/data/pooling-filter/evidence.json": {
    "sha256": "5fd1af3f1c6897e87fd1014b30f79102b4fee4102a43a9f40773954c13a4219d",
    "bytes": 403261
+  },
+  "experiments/data/precision_ladder/07f84834e617/run.json": {
+   "sha256": "2e249face778508c83499e46763a562c43d92ca9f067e4286c07183698278fe2",
+   "bytes": 53802
+  },
+  "experiments/data/precision_ladder/2be568a65518/failure.txt": {
+   "sha256": "3b4923229c5f2ef5678503c82ee362c6ce2daea19fc744292b179fd09c388d73",
+   "bytes": 2843
+  },
+  "experiments/data/precision_ladder/2be568a65518/run.json": {
+   "sha256": "6c70bc8028dc6fc49260ebec48be8ffeaf35780573eed4f25f96889c37eabdbf",
+   "bytes": 52993
+  },
+  "experiments/data/precision_ladder/6aa5ba4d5fac/run.json": {
+   "sha256": "7c2f2edc60e9ceeecfbc9367444d6b22118600f4014000d3d88e855a32d5bd29",
+   "bytes": 53861
+  },
+  "experiments/data/precision_ladder/aa9518f6fc4b/run.json": {
+   "sha256": "4358ed3dd212549c9a07d2ce95e5fef260e83a059a43d13544457b79b44ff771",
+   "bytes": 53796
+  },
+  "experiments/data/precision_ladder/launcher-status.json": {
+   "sha256": "e47784ae13912e85c2532aa2402de69801e7a26d21b672cf589c743e0b6bcf42",
+   "bytes": 2156
+  },
+  "experiments/data/precision_ladder/updates.png": {
+   "sha256": "c3d8498cefccab35b60b66f3fc74e1b33d4eff840526c0661e5a9ad94871baf6",
+   "bytes": 41675
   },
   "experiments/data/rul-10-tla-jeong-increment-v1.json": {
    "sha256": "57d92b259e0e1a8b7d1b1485c862168bba8aaa8bca946ba272178a8fc9aa28d5",
