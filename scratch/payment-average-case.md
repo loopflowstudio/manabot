@@ -76,3 +76,15 @@ Nothing upstream since e82a20033 touched `managym/src`, `managym/perf` or
   covers the sharing mechanism and the debug equality assertion its soundness.
 - Not built, by choice: a revision-keyed cache across computations (see
   `scratch/questions.md`).
+
+## QA (2026-11-12, scratch/qa.html)
+
+- 2,400 seeded random games (authored + TLA pool corpus) give identical
+  observation digests on main's and this engine; 179 of them replayed with
+  debug assertions live, no panic.
+- Final code, interleaved with baseline binaries: bench_steps 49.11-49.16 G
+  vs 62.43-62.51 G (3 runs each); bench_search 944.75 G / 53.11 user s vs
+  1314.50 G / 74.17 (1 run each). Digests unchanged. Raw files are in ignored
+  `.runs/qa339/bench/`.
+- On main too: pool games seed 340067 (`not enough automatic mana`) and
+  340431 (`no legal targets`) end in PyAgentError; no bug Task filed yet.

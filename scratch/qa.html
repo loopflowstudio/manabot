@@ -1,62 +1,76 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>QA: CI under 8 minutes (38ef25)</title>
-<style>body{font:15px/1.5 system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;color:#222}
-table{border-collapse:collapse}td,th{padding:.3rem .7rem;border-bottom:1px solid #ddd;text-align:left}td.n{text-align:right}</style></head>
+<html lang="en"><head><meta charset="utf-8"><title>QA: MTG-339 payment average case</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:54rem;margin:2rem auto;padding:0 1rem;color:#222}
+table{border-collapse:collapse}td,th{padding:.3rem .7rem;border-bottom:1px solid #ddd;text-align:left}td.n{text-align:right}
+img{max-width:100%;border:1px solid #ccc}pre{background:#f5f2ea;padding:.6rem;overflow:auto;font-size:13px}</style></head>
 <body>
-<h1>QA: CI under 8 minutes</h1>
-<p>Observed 2026-11-12, headless. Contributors need every ordinary Ubuntu job to pass below 480 s,
-job start to end including install and build. Engine Budget is exempt.</p>
+<h1>QA: answer ordinary mana payment checks by arithmetic (MTG-339)</h1>
+<p>Observed 2026-11-12, headless, at <code>482635a8f</code> against main <code>c942af600</code>. The laptop's load
+average was 110–170 from other checkouts' builds throughout, so wall and user seconds are weak; instructions
+retired and digests are not affected. The people this is for play games through the engine (training, evaluation,
+Academy) and run its debug test suite. They should see the same game, faster, and no assertion failures.</p>
+<p><b>Nothing broke and nothing was fixed in the engine.</b> One addition: the working route is written into
+<code>.lf/skills/qa.md</code>.</p>
 
-<h2>Scenario 1: the final revision on hosted CI</h2>
-<p>Did: <code>gh workflow run ci.yml --ref jack-heart/38ef25-get-ci-under</code> at <code>38e3e5557</code>
-(the CPU-Torch Integration repair plus main's v0.2.3 release merge, never run before), then read job and step
-timestamps (<code>gh run view --json jobs</code>) and logs.</p>
-<p>Saw: <a href="https://github.com/loopflowstudio/manabot/actions/runs/43350950910">43350950910</a> green.
-Slowest ordinary job Integration evaluation 399 s; every Integration install 5–6 s with <code>torch==2.15.0+cpu</code>;
-experiment 130 passed, the repaired comparison 140 s.</p>
-<p>Noticed: Python unit spent 195 s of its 210 s installing. The engine build finished about 105 s in;
-the rest was 3 GB of CUDA Torch, NVIDIA and Triton downloads for 4 s of tests. It was 308 s on the merged #506 push.</p>
+<h2>1. Same seeded games on main's engine and this one</h2>
+<p>Did: built both release extensions (<code>maturin build --release</code>; main from a detached worktree), then
+played 2,400 seeded random games on each by switching <code>PYTHONPATH</code>: the 14 authored TLA baseline and
+Elemental matchups plus 2,340 games between human builds of the TLA pool corpus (509 distinct matchups, 922 playable
+pools). Every decision hashed the full observation JSON (legal actions, tapped permanents, pools, events).</p>
+<p>Saw: <b>0 of 2,400 games differ</b> over 471,383 decisions. The games included 17,121 waterbend decisions
+(53,206 tap-for-cost offers), 20,201 pay-cost offers, 215,657 cast offers and 528,557 activation offers; pool decks
+bring Treasure, any-color and restricted-mana sources that the benchmark decks lack.</p>
+<p>Noticed (also on main, identical there, so not from this change): two pool games end in an engine error.</p>
+<pre>pool:127b2c70/7a5d3c62 seed 340067 step 133: PyAgentError: not enough automatic mana
+pool:7ba44bb8/6367d16e seed 340431 step 123: PyAgentError: no legal targets</pre>
+<p>Reproduce with <code>.runs/qa339/diff_play.py</code> logic (in the qa skill): <code>managym.Env(seed)</code>,
+the two human builds, <code>random.Random(seed).randrange(len(actions))</code> each step.</p>
 
-<h2>Fix: CPU Torch for Python unit</h2>
-<p><code>ef0839c9c</code> adds <code>--no-default-groups --group play-runtime</code> to that job's
-<code>uv sync</code> <em>and</em> its <code>uv run</code>; without the latter, <code>uv run</code> re-syncs the
-default CUDA group. <code>docs/development.md</code> now names both jobs. The website step is a separate project, unchanged.</p>
-<p>Re-ran: <a href="https://github.com/loopflowstudio/manabot/actions/runs/43353030839">43353030839</a> green.</p>
-<table><tr><th>Job</th><th>38e3e5557</th><th>ef0839c9c</th></tr>
-<tr><td>Rust Tests</td><td class="n">396</td><td class="n">406</td></tr>
-<tr><td>Integration evaluation</td><td class="n">399</td><td class="n">267</td></tr>
-<tr><td>Integration recovery</td><td class="n">359</td><td class="n">261</td></tr>
-<tr><td>Integration evaluation-long</td><td class="n">345</td><td class="n">248</td></tr>
-<tr><td>Integration experiment</td><td class="n">343</td><td class="n">335</td></tr>
-<tr><td>Integration training</td><td class="n">296</td><td class="n">275</td></tr>
-<tr><td>Protocol v1</td><td class="n">282</td><td class="n">244</td></tr>
-<tr><td>Academy UI</td><td class="n">273</td><td class="n">218</td></tr>
-<tr><td>Integration model</td><td class="n">233</td><td class="n">194</td></tr>
-<tr><td>Python unit</td><td class="n">210</td><td class="n">104</td></tr>
-<tr><td>Academy Integration</td><td class="n">174</td><td class="n">168</td></tr>
-<tr><td>Clean-machine Play</td><td class="n">151</td><td class="n">162</td></tr>
-<tr><td>Semantic conformance</td><td class="n">98</td><td class="n">118</td></tr>
-<tr><td>Engine Budget (exempt)</td><td class="n">906</td><td class="n">901</td></tr></table>
-<p>Python unit kept 157 passed / 1 skipped and website 21 passed, now on <code>torch==2.15.0+cpu</code>.
-Integration differences other than Python unit are runner variance; their workflow is unchanged.</p>
+<h2>2. The same games with the debug assertions live</h2>
+<p>Did: built the extension in the dev profile (<code>debug_assert!</code> on), which runs the search beside every
+direct answer, the fork oracle beside every waterbend candidate and a source rebuild on every shared reuse, and
+replayed the first games of scenario 1.</p>
+<p>Saw: 179 games (34,557 decisions, 1,152 waterbend decisions, 167 pool games) with no panic, each digest equal to
+the release run. The run was planned for 300 games and was stopped at its 50-minute limit on the loaded host.</p>
 
-<h2>Scenario 2: a developer running the repaired test locally</h2>
-<p><code>uv run --extra dev --extra notebook --extra artifacts --extra reports pytest
-tests/training/test_experiment_runner.py::test_tiny_comparison_evaluates_live_and_notebook_refresh_preserves_edits</code>:
-1 passed in 45.02 s. <code>actionlint</code> passed on both changed workflows; <code>uv export --frozen</code> with the
-CI flags selects <code>torch==2.15.0+cpu</code> on Linux and <code>2.15.0</code> on macOS, no NVIDIA/Triton.
-Earlier evidence (receipt assertion fails when the old workload is restored, watchdog proof, selection audit) is in
-<a href="ci-under-8-minutes.md">the active plan</a>.</p>
+<h2>3. Training</h2>
+<p>Did: <code>uv run manabot train --recipe local --device cpu --seed 339</code> on this engine and on main's.</p>
+<p>Saw: both completed; all 110 tensors of <code>self-play-raw.pt</code> are bit-identical. <code>run.json</code>
+differs only in identities, paths and seconds. The seconds favoured main in every phase, including learning that
+never calls the engine, so they say nothing here.</p>
 
-<h2>Result</h2>
-<p>Works: every ordinary job passes below 480 s on the final revision; max 406 s (Rust), 74 s margin.</p>
-<p>Not reached: PR-event timing and post-merge verification, which need publication.</p>
-<p>Still wrong or risky, worst first:</p>
-<ol>
-<li>Engine Budget (exempt) took 901–906 s in both runs today, against 571–685 s before; its paired benchmark step is 715 s.
-Not investigated.</li>
-<li>Rust Tests is now the slowest ordinary job (396–406 s); it was untouched by this Task.</li>
-<li>Academy Integration still installs the default runtime; its install was 18–20 s here, so it has not been changed.</li>
-</ol>
-<p>No local process remains.</p>
+<h2>4. Academy table in a browser</h2>
+<p>Did: <code>./scripts/play --port 8339 --frontend-port 5339</code>, headless Chromium, New Game against the random
+opponent, played lands and cast every offered spell for three games' worth of runs.</p>
+<p>Saw: no console or page errors. Cast offers followed the lands: with three lands Pop Quiz and Igneous Inspiration
+were offered and Firebending Lesson was not; after two casts with seven lands only It'll Quench Ya! remained. Below,
+two spells on the stack with the first four lands tapped in order and three left, then the pay-or-decline offer.</p>
+<img src="qa/academy-two-casts.png" alt="Academy: seven lands, four tapped, two spells on the stack">
+<p>Noticed: one of four launches did not show a board within 30 s of New Game (load average about 170); it did not
+recur in the next two launches with a 60 s wait. No waterbend prompt came up in the browser games; scenario 1
+covers those.</p>
+
+<h2>5. Benchmarks on the final code</h2>
+<p>Did: rebuilt <code>bench_steps</code> and <code>bench_search</code> at HEAD and ran them interleaved with the saved
+baseline binaries (<code>scratch/payment-baseline/bin/*.e82a20033</code>), <code>/usr/bin/time -l</code>.</p>
+<table><tr><th></th><th>baseline</th><th>HEAD</th><th>change</th></tr>
+<tr><td>bench_steps instructions (3 runs each)</td><td class="n">62.43–62.51 G</td><td class="n">49.11–49.16 G</td><td class="n">−21%</td></tr>
+<tr><td>bench_steps user s</td><td class="n">3.48–3.50</td><td class="n">2.78–2.82</td><td class="n">−20%</td></tr>
+<tr><td>bench_search instructions (1 run each)</td><td class="n">1314.50 G</td><td class="n">944.75 G</td><td class="n">−28%</td></tr>
+<tr><td>bench_search user s</td><td class="n">74.17</td><td class="n">53.11</td><td class="n">−28%</td></tr></table>
+<p>All digests equal <code>managym/perf/baseline.json</code>: steps 15843333459759757527; search 13733780288109658817,
+5337676601429031145, 10035331835025021780. This is the first <code>bench_search</code> run of the final
+<code>mana.rs</code>.</p>
+
+<h2>Where this leaves it</h2>
+<p><b>Works now:</b> identical play to main across authored and pool decks, identical training, clean Academy play,
+live debug assertions silent, both benchmarks faster with unchanged digests.</p>
+<p><b>Not reached:</b> CI's Engine Budget run (needs the published PR; the reference is then adopted with
+<code>scripts/engine_budget.py record --reason</code>); the full debug Rust suites (the gate's job); a waterbend
+decision in the browser; trained-policy play, since random play was the driver; debug games beyond the first 179.</p>
+<p><b>Still wrong, worst first:</b></p>
+<ol><li>Two engine errors in random pool games, present on main too (seeds above). Worth bug Tasks; outside this
+change.</li>
+<li>One Academy launch showed no board within 30 s under heavy load; not reproduced.</li></ol>
+<p>This file replaces the previous Task's <code>scratch/qa.html</code> that arrived with the main merge.</p>
 </body></html>
