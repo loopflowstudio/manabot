@@ -750,7 +750,19 @@ fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
-        EffectValue::Objects(of) => format!("the number of {}", selector_description(of)),
+        EffectValue::Objects { of, predicate } => {
+            let objects = match of.as_ref() {
+                ObjectSelector::Moved => "objects moved this way".into(),
+                other => selector_description(other),
+            };
+            match predicate {
+                None => format!("the number of {objects}"),
+                Some(predicate) => format!(
+                    "the number of {} among {objects}",
+                    predicate_description(predicate, "cards"),
+                ),
+            }
+        }
         EffectValue::Half(value) => format!("half of {}, rounded down", value_description(value)),
         EffectValue::OwnedPermanentsOpponentsControl => {
             "the number of permanents you own that your opponents control".into()
@@ -1362,5 +1374,23 @@ mod tests {
             },
         ]);
         assert_eq!(description, "Choose 0–2 target creature you control for this clause: For each chosen target: Untap target creature you control. You may pay {1}{W}. If paid: Draw 2 cards. Otherwise: Deal 1 damage to you");
+    }
+    #[test]
+    fn object_counts_describe_the_filter_and_resolution_result() {
+        let count = EffectValue::Objects {
+            of: Box::new(ObjectSelector::Moved),
+            predicate: Some(CardPredicate::creature()),
+        };
+        assert_eq!(
+            value_description(&count),
+            "the number of creature cards among objects moved this way"
+        );
+        assert_eq!(
+            value_description(&EffectValue::Objects {
+                of: Box::new(ObjectSelector::Moved),
+                predicate: None,
+            }),
+            "the number of objects moved this way"
+        );
     }
 }

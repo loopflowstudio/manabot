@@ -165,7 +165,7 @@ print(len(training), len(held_out))
 ```
 
 ```text
-827 95
+897 100
 ```
 
 The corpus holds the first 1,000 trophy drafts in the retained 17Lands corpus
@@ -188,10 +188,10 @@ the player's builds that was. A 41-card human build stays 41 cards. Pool cards
 not in the human build remain available outside its main deck. Two drafts
 with identical lists remain two pools.
 
-Whether a pool is playable belongs to whoever plays it. Today 78 pools use one
-or more of 41 TLE bonus-sheet cards the engine does not define, so 922 pools
-are playable: 827 training and 95 held out. Defining more cards makes more
-pools playable and moves no pool between splits. **State the playable pool
+Whether a pool is playable belongs to whoever plays it. Three pools include
+Heartbeat of Spring, which the engine does not yet define, so 997 pools are
+playable: 897 training and 100 held out. Defining more cards makes more pools
+playable and moves no pool between splits. **State the playable pool
 count with any result measured on the corpus**; held-out results before and
 after a card-support change cover different pools. A run's own population is
 frozen in its regime, which embeds the deck lists it used.

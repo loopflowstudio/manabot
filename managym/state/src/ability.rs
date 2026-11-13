@@ -573,7 +573,13 @@ pub enum EffectValue {
     /// Cards in `controller`'s hand.
     CardsInHand,
     /// Number of objects still named by a resolution result or selector.
-    Objects(Box<ObjectSelector>),
+    Objects {
+        of: Box<ObjectSelector>,
+        /// Count only matching card objects when present, using their current
+        /// characteristics. `Moved` therefore counts what actually moved.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        predicate: Option<CardPredicate>,
+    },
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -1836,7 +1842,10 @@ impl Effect {
             up_to,
             vec![
                 Effect::DrawCards {
-                    count: EffectValue::Objects(Box::new(ObjectSelector::Moved)),
+                    count: EffectValue::Objects {
+                        of: Box::new(ObjectSelector::Moved),
+                        predicate: None
+                    },
                 };
                 per_card
             ],

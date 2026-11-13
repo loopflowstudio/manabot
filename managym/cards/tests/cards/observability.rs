@@ -1768,14 +1768,18 @@ fn card_row<'a>(
     encoded: &'a EncodedObservation,
     permanent: PermanentId,
 ) -> &'a [f32] {
+    let row = card_index(game, observation, permanent);
+    &encoded.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM]
+}
+
+fn card_index(game: &Game, observation: &Observation, permanent: PermanentId) -> usize {
     let card = game.state.permanents[permanent].as_ref().unwrap().card;
     let id = game.state.cards[card].id.0 as i32;
-    let row = observation
+    observation
         .agent_cards
         .iter()
         .position(|card| card.id == id)
-        .unwrap();
-    &encoded.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM]
+        .unwrap()
 }
 
 fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
@@ -4754,4 +4758,58 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     );
     let row = encoded(&s).player_turn_state;
     assert_eq!(row[turn_state::NONARTIFACT_MANA_COLORLESS], 0.1);
+}
+
+#[test]
+fn release_and_lita_tokens_preserve_identity_and_expose_their_rules() {
+    let pack = default_content_pack();
+    let plain = pack
+        .definition(pack.token_id("token.colorless_spirit").unwrap())
+        .unwrap();
+    let tla = pack
+        .definition(pack.token_id("token.spirit").unwrap())
+        .unwrap();
+    assert_ne!(tokens_of(plain), tokens_of(tla));
+    let zeppelin = pack
+        .definition(pack.token_id("token.zeppelin").unwrap())
+        .unwrap();
+    assert!(tokens_of(zeppelin).contains(&(TokenKind::Variant, name_value("Keyword::flying"))));
+    assert!(tokens_of(zeppelin).contains(&(TokenKind::Field, name_value("crew"))));
+
+    let release = pack
+        .definition(pack.definition_id("Release to Memory").unwrap())
+        .unwrap();
+    let rules = tokens_of(release);
+    for variant in [
+        "EffectValue::Objects",
+        "ObjectSelector::Moved",
+        "CardType::Creature",
+    ] {
+        assert!(
+            rules.contains(&(TokenKind::Variant, name_value(variant))),
+            "{variant}"
+        );
+    }
+    assert!(rules.contains(&(TokenKind::Field, name_value("predicate"))));
+
+    let (mut game, _) = ogre_game();
+    let plain_id = game.create_token(plain.key, PlayerId(0), false).unwrap();
+    let tla_id = game.create_token(tla.key, PlayerId(0), false).unwrap();
+    let vehicle = game.create_token(zeppelin.key, PlayerId(0), false).unwrap();
+    let (observation, encoded) = observe(&game, 0);
+    let plain_row = card_row(&game, &observation, &encoded, plain_id);
+    let tla_row = card_row(&game, &observation, &encoded, tla_id);
+    // Shared printed names still bind distinct catalog rows and programs.
+    assert_ne!(
+        encoded.semantic_cards[card_index(&game, &observation, plain_id)],
+        encoded.semantic_cards[card_index(&game, &observation, tla_id)]
+    );
+    assert_eq!(plain_row[card::FLYING], 0.0);
+    assert_eq!(tla_row[card::FLYING], 0.0);
+    let vehicle_row = card_row(&game, &observation, &encoded, vehicle);
+    assert_eq!(vehicle_row[card::FLYING], 1.0);
+    assert_eq!(vehicle_row[card::IS_CREATURE], 0.0);
+    assert_eq!(vehicle_row[card::IS_ARTIFACT], 1.0);
+    assert_eq!(vehicle_row[card::POWER], 0.5);
+    assert_eq!(vehicle_row[card::TOUGHNESS], 0.5);
 }
