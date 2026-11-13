@@ -21,7 +21,8 @@ The corpus admits 998/1,000 events, including all three Heartbeat events. Only
 the two Lita events fail; `docs/engine.md` matches. Frozen evidence is unchanged.
 Main's MTG-242 pool types, #504 search bounds, #506 sharding, CPU CI selection,
 v0.2.3 preparation and `6ce618b8a` payment fast paths are incorporated.
-The latest merge is `b274d4c5f`; focused post-merge validation is recorded below.
+The latest merge is `b274d4c5f`; `8888428c4` checkpoints the subsequent
+saved-caller simplification. Focused validation covers both revisions below.
 The unrelated CI receipts at
 `3cb9cc70a:scratch/ci-under-8-minutes.md` do not certify this mana change.
 The superseded intermediate payment diagnostic is retained at
@@ -200,7 +201,8 @@ notes differed during these checks. No runtime or fixture repair was needed.
 
 ## Compression of saved-caller ownership (2026-11-12)
 
-On `b274d4c5f`, `managym/src/flow/mana.rs` blob
+Built on `b274d4c5f` and now committed in `8888428c4`,
+`managym/src/flow/mana.rs` blob
 `3c3ed8afab464a9e2327fbcab743eb02b7ba6cba`:
 `complete_mana_upfront` consumes the saved caller directly, removing the
 temporary game-state restoration, second decision extraction and infallible
@@ -218,15 +220,34 @@ The surrounding callers, fixtures, projections and docs need no further cut.
 
 ## Remaining
 
-No known card behavior or fixture repair remains open. Gate still needs evidence
-for the merged runtime:
+No known card behavior or fixture repair remains open. Reconciliation on
+2026-11-13 matched the current `8888428c4` mana blob to the saved-caller
+receipt and checked the retained logs: 121 focused debug tests, both original
+autoreset fixtures, Clippy, extension build and four shared-input parity tests
+passed. The preceding merged-runtime run also passed 106 focused debug tests
+and 33 parity tests. The earlier direction to build and validate the merge is
+fulfilled; no repeated implementation check is needed solely for that feedback.
+These focused results do not establish full-suite or performance acceptance.
+Academy browser QA re-ran on `8888428c4` (2026-11-13, top section of
+`scratch/qa.html`). The cards, reload, cross-seat Heartbeat and all three demo
+fixtures work. It found nothing to fix in this change.
+
+Gate still needs evidence for the current runtime:
 
 - Complete the required debug coverage, including semantic conformance, under
   the unchanged five-minute watchdog. The focused combined-payment and original
-  autoreset checks above pass on the merged runtime.
+  autoreset checks above pass after the saved-caller simplification. Preserve
+  their original 1,000-step contracts and the watchdog; no split is needed.
 - Check affected current-world/model admission paths against the merged tree.
   The matching extension rebuild and shared-input parity above pass; earlier
-  admission results remain evidence for their recorded revisions.
+  admission results remain evidence for their recorded revisions. The current
+  arena/monitoring selection is `tests/semantic/test_elemental_world.py`,
+  `tests/eval/test_evaluation_models.py`, `tests/eval/test_mirror_admission.py`,
+  `tests/training/test_monitor_evaluation.py` and
+  `tests/model/test_choice_separability.py`, with the dev, notebook, artifacts
+  and reports extras. Include the affected checkpoint/world rejection and
+  Academy setup paths required by `docs/development.md#validation-by-change-area`;
+  the upstream backend reorganization does not waive these checks.
 - Obtain a dedicated-runner Engine Budget comparison. Investigate any remaining
   search slowdown; reconcile deliberate decision-digest changes through the
   documented PR-run reference process (`docs/development.md`). Neither the

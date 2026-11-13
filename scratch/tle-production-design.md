@@ -74,8 +74,9 @@ same-purpose generic waterbend split; automatic prefixes and more complex
 obligations keep the search. Debug checks compare direct affordability and
 witnesses with the search and rebuild shared sources to check equality. The
 merged witness still yields at `PaymentStep::Spend`; these optimizations must
-not choose units or weaken the saved-caller contract. Post-merge validation and
-performance evidence remain in the implementation plan's remaining work.
+not choose units or weaken the saved-caller contract. Focused post-merge and
+saved-caller validation passed; full debug/conformance, affected admission and
+dedicated-runner performance evidence remain in the implementation plan.
 
 ## Shared observation
 
@@ -204,3 +205,23 @@ contract. Nothing to change; no open product choice.
   by the exact label "Spend {X} (expires at step end)", so the wording noted
   in the previous review is now pinned by tests. Changing it is a label edit
   plus those strings, not a design change.
+
+## Concept review after the payment fast paths (2026-11-13)
+
+Reviewed `8888428c4` (upstream `6ce618b8a` direct payment and `PaymentScan`,
+the funded final-cost shortcut, owned `complete_mana_upfront`) against this
+contract. Nothing to change; no open product choice.
+
+- All three answer "can this be paid" or build a tapping prefix; none selects
+  a unit. `PaymentModel::witness`, `direct_witness` and `advance_mana_upfront`
+  each end at `PaymentStep::Spend`, and `advance_mana_spend` is still the only
+  place a unit leaves the pool. A player meets the same spend offers, labels,
+  pool rows and receipts as at the previous review.
+- The funded final-cost shortcut is safe while the last obligation's remainder
+  has no reader. A new saved caller after a final payment would need the unit
+  search there again.
+- No removed name returned with the merge; README and
+  `docs/observation-and-model.md` still describe the built behavior.
+- Not a concept question: the local Engine Budget failure (changed digests,
+  slower search) stays with the plan's dedicated-runner check. A real cost is
+  a person's acceptance, per `docs/development.md`, when that run exists.

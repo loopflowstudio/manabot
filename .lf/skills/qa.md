@@ -100,6 +100,16 @@ publish, land or choose the next Graph step from here.
   (`setInputFiles` with counted lines such as `4 Heartbeat of Spring`), press
   "Check decklists", wait for `Ready —`, pick the `passive` opponent and press
   New Game; imported decks take any number of copies.
+  Under heavy host load the first frontend probe in `scripts/play.py` keeps a
+  fixed 30-second deadline whatever `--ready-timeout` says, so the launch
+  fails with `ready.timeout`. Then start the two servers as it does: from the
+  root, `uv run --python 3.13 --locked --only-group play-runtime uvicorn
+  academy.server:app --host 127.0.0.1 --port <api>`; from `academy/ui`,
+  `ACADEMY_API_PORT=<api> npm run dev -- --host 127.0.0.1 --port <ui>
+  --strictPort`; poll `/` and `/api/traces` until both return 200. Demos:
+  open `/?demo=learn|precision|precision-mana`, wait a second after the
+  `connected` badge, then press New Game (an immediate click can leave "No
+  game in progress").
   Without a connected browser, run a Node Playwright script from `academy/ui`
   (its `playwright` package and cached Chromium resolve there; delete the
   script afterwards). Click only `[data-testid=action-panel] button` offers:
