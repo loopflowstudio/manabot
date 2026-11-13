@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "manabot"
-version = "0.2.2"
+version = "0.2.3"
 description = "The trainable Magic: The Gathering agent for Manabot"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.14"
 dependencies = [
-    "managym==0.2.2",
+    "managym==0.2.3",
     # Split markers keep uv group-specific CPU/CUDA indexes disjoint.
     "torch>=2.15.0 ; sys_platform == 'linux'",
     "torch>=2.15.0 ; sys_platform != 'linux'",

@@ -1,6 +1,6 @@
 [package]
 name = "managym-cards"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "MIT"
 description = "Card set definitions for the managym engine, one module per printed set"
