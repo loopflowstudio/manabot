@@ -1,6 +1,6 @@
 [package]
 name = "managym"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 license = "MIT"
 
@@ -42,6 +42,10 @@ required-features = ["benchmark"]
 
 [[example]]
 name = "bench_execution"
+required-features = ["benchmark"]
+
+[[example]]
+name = "bench_payment"
 required-features = ["benchmark"]
 
 [[example]]

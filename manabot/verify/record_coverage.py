@@ -23,9 +23,9 @@ from typing import Literal
 import numpy as np
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 import managym
 

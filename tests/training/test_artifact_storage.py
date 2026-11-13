@@ -10,8 +10,12 @@ import boto3
 from botocore.exceptions import ClientError
 import pytest
 
-from manabot.infra.artifacts import StoredArtifact, fetch_artifact, publish_artifact
-from manabot.model.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.infra.artifacts import (
+    StoredArtifact,
+    fetch_artifact,
+    publish_artifact,
+)
 
 
 @pytest.fixture
@@ -131,7 +135,7 @@ def test_loader_checks_cached_digest_before_deserializing(
     (tmp_path / reference.sha256).write_bytes(b"tampered")
     monkeypatch.setenv("MANABOT_ARTIFACT_CACHE", str(tmp_path))
     loader = MagicMock()
-    monkeypatch.setattr("manabot.model.checkpoint.torch.load", loader)
+    monkeypatch.setattr("manabot.backends.torch.checkpoint.torch.load", loader)
     with pytest.raises(ValueError, match="differ"):
         load_checkpoint(reference)
     loader.assert_not_called()

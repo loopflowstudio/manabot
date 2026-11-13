@@ -1,5 +1,63 @@
 # Infrastructure Wave memory
 
+## CI job budgets (38ef25, reconciled 2026-11-12)
+
+Measure job start to job end on the target runner, including installation and
+build. `docs/development.md` owns the ordinary Ubuntu PR budget of eight
+minutes; Engine Budget retains its same-runner reference comparison and is
+exempt. The macOS nightly has no such budget. In Task 38ef25, main's slowest
+Integration job was 1443 s. PR #506 run 43337105047 at `1fc4e1b24` passed
+with every ordinary job at or below 349 s. Its exact merged push,
+43341403551 at `60664d149`, kept every ordinary job below 480 s but failed
+the live experiment/notebook fixture's training resource deadline (129 passed,
+one failed). Engine Budget passed in 685 s. The bounded fixture then passed
+Ubuntu debug/xdist in run 43345024882 at `4db5cd64b`, but its experiment job
+took 549 s, exceeding the target. CPU Torch dispatch 43348710097 at
+`a1efea11b`, including main's mana-payment optimization (#504), then passed:
+ordinary max 406 s, Integration max 350 s. Green tests and a met job budget
+are separate obligations; this dispatch supplies both, but PR-event and
+successful post-merge verification of the repair remain outstanding.
+
+- Inspect setup before adding shards: `uv sync` built the engine in release,
+  then `maturin develop` built it again in dev. Syncing all needed extras with
+  `--no-install-package managym`, building once and retaining `UV_NO_SYNC=1`
+  removed the duplicate while keeping native debug assertions. Cache paths
+  must follow the action's actual directory; `~/.cache/uv` never hit here.
+- Bound complete-game smoke work by streams/games, not just the transition
+  floor. Two streams retained the real-worker one-update size check. For an
+  orchestration fixture that does not require complete-game training, the
+  existing one-seat `exact-quota` collector bounds learner rows while live
+  monitoring still completes games. The experiment fixture repair pins one
+  update and asserts all four receipts contain 16 learner transitions, with
+  120-second resource guards. The comparison passed Ubuntu debug/xdist in
+  151.70 s; temporarily restoring the old workload failed the new assertion
+  locally (`610 == 16`). Four real attempts and live monitoring remain.
+  The failed run does not identify the expired clock or separate collection
+  time from scheduling; a larger allowance alone is no timing evidence.
+- Match dependencies to the runner before retaining large caches. Run
+  43345024882 restored a pruned uv cache but downloaded about 2.8 GiB of
+  CUDA Torch/NVIDIA/Triton wheels per Integration job; one install took 181 s
+  against peers' 17–18 s. Integration now selects the existing locked CPU
+  Torch with `--no-default-groups --group play-runtime` and setup-uv defaults;
+  wheel-retention overrides were removed. All six installs in 43348710097
+  took 5–6 s with Torch `2.15.0+cpu`, no NVIDIA/Triton log entries and
+  unchanged model/evaluation pass and skip counts. This establishes CPU CI
+  coverage, not GPU admission. Python unit then took the same selection on
+  both `uv sync` and `uv run` (plain `uv run` re-syncs the CUDA default):
+  dispatch 43353030839 cut it from 210 to 104 s with equal counts. Academy
+  Integration still uses the default runtime (install 18–20 s).
+- Parallel tests need isolated files/ports and injected time at scheduling
+  boundaries. A 30-second future wait failed beside other workers; the final
+  admission fixture releases the gate in its injected sleep instead. The
+  five-minute test watchdog belongs in each xdist worker, not its controller.
+- Keep timing margin: unchanged evaluation-long tests varied from 153 to
+  249 s across two CI runs. The successful six-group layout used four logical
+  workers; earlier two-worker groups remained over budget.
+
+Coverage: read Infrastructure's complete objective and memory and listed its
+directory on 2026-11-12; there were no immediate child directories or child
+memories. No other Wave memory was read in this reconciliation.
+
 ## Training throughput and experiment delivery (b015d5, reconciled 2026-11-11)
 
 Jack Heart said "keep going" after "I recommend repairing BF16, lengthening the

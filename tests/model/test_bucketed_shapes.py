@@ -2,19 +2,22 @@
 
 from collections.abc import Callable
 
+import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import FACT_OBJECT_INDEX
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.buckets import (
+from manabot.model.inference import PolicyInference
+from manabot.policy.buckets import (
     ONE_BASED_REFERENCES,
     ZERO_BASED_REFERENCES,
     bucket,
     bucket_sizes,
+    row_needs,
+    sizes_of,
 )
-from manabot.model.inference import PolicyInference
 from manabot.training.rollout.collection import collect
 import managym
 from tests.model.test_inference import PolicyFixture, _policy
@@ -35,6 +38,10 @@ def _bucketed(case: PolicyFixture) -> ActorCritic:
             reference.add_(noise)
             copy.add_(noise)
     return agent
+
+
+def _host(obs: dict[str, torch.Tensor]) -> dict[str, np.ndarray]:
+    return {key: value.numpy() for key, value in obs.items()}
 
 
 def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
@@ -88,7 +95,7 @@ def test_outputs_and_gradients_match_default(
     case = _policy(history=history)
     obs = _later_decisions(case)
     agent = _bucketed(case)
-    buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
     assert buckets is not None and buckets.trims_objects
     outputs = []
     for model in (case.agent, agent):
@@ -171,7 +178,7 @@ def test_reference_to_padding_object_is_kept() -> None:
     agent = _bucketed(case)
     objects = case.agent._is_agent_template.shape[1]
     _set_focus(objects - 1)(obs)
-    buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
     assert buckets is not None
     assert buckets.sizes["permanents"] == buckets.capacities["permanents"]
     with torch.no_grad():
@@ -180,3 +187,42 @@ def test_reference_to_padding_object_is_kept() -> None:
         )
         actual, _ = agent.forward_distribution(admit_observation(agent, obs))
     torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-5)
+
+
+@pytest.mark.parametrize("objects", [True, False])
+def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
+    """Needs measured once per row give any grouping of those rows the buckets
+    measuring the group directly gives, so later epochs need not measure."""
+    case = _policy(history=True)
+    encoder = case.agent.observation_space.encoder
+    batch = collect(case.collector, case.agent, 24)
+    obs = {
+        key: torch.from_numpy(value[:, 0]).float()
+        for key, value in batch.observations().observation.items()
+    }
+    # A fractional object reference in one row, which only that row needs.
+    _set_fact_object(3.7)(obs)
+    host = _host(obs)
+    needs = row_needs(host, encoder)
+    assert needs is not None and len(needs) == len(host["actions_valid"])
+    rng = np.random.default_rng(0)
+    for _ in range(20):
+        rows = rng.choice(len(needs), size=rng.integers(1, len(needs)), replace=False)
+        group = {key: value[rows] for key, value in host.items()}
+        assert sizes_of(needs[rows], encoder, objects=objects) == bucket_sizes(
+            group, encoder, objects=objects
+        )
+
+
+def test_collection_records_each_rows_measured_needs() -> None:
+    """A bucketed collector records the needs it measured for every learner row,
+    equal to measuring the recorded rows again, so learning reuses them."""
+    case = _policy(history=True)
+    agent = _bucketed(case)
+    batch = collect(case.collector, agent, 12)
+    rows = np.arange(batch.actions.size)
+    recorded = batch.recorded.gather_needs(rows)
+    assert recorded is not None
+    host = batch.observations(rows).observation
+    encoder = agent.observation_space.encoder
+    assert np.array_equal(recorded, row_needs(host, encoder))

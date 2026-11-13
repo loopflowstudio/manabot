@@ -16,10 +16,13 @@ import argparse
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline_test
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import (
@@ -29,7 +32,6 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates.damped_policy import _targets, update_damped_iteration
-from manabot.training.updates.learner import AdmittedRollout, Learner, new_learner
 
 STREAMS = 2
 
@@ -57,7 +59,9 @@ def _trajectories(ends: np.ndarray) -> list[range]:
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = _targets(learner, AdmittedRollout(learner.agent, batch), learning)
+    targets = _targets(
+        torch_backend, learner, AdmittedRollout(learner.agent, batch), learning
+    )
     advantages = targets.advantages.flatten().numpy()
     value_targets = targets.values.flatten().numpy()
     kept = targets.selected.flatten().numpy()
@@ -104,11 +108,11 @@ def main() -> None:
         seed=args.seed,
         opponent_mode="self",
     )
-    learner = new_learner(agent, "cpu", minibatch_rows=STREAMS)
+    learner = Learner(agent, "cpu", minibatch_rows=STREAMS)
     try:
         for iteration in range(1, args.updates + 1):
             batch = collect(collector, agent, 64)
-            update_damped_iteration(learner, batch, learning, iteration)
+            update_damped_iteration(torch_backend, learner, batch, learning, iteration)
         _report(collect(collector, agent, 64), learner, learning, args.rows)
     finally:
         close_collector(collector)

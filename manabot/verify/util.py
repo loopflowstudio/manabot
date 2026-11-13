@@ -23,7 +23,7 @@ from manabot.model.admission import AdmittedObservation
 from manabot.model.inference import admit_on_device
 
 if TYPE_CHECKING:
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
 
 
 class VerificationConfig(BaseConfig):

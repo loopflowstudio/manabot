@@ -6,7 +6,6 @@ bit-identical with timing on or off.
 """
 
 from copy import deepcopy
-from dataclasses import replace
 import os
 from pathlib import Path
 
@@ -15,6 +14,8 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
@@ -27,9 +28,8 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.rollout.collection import collect
-from manabot.training.updates.learner import Learner, new_learner
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.store import VerifyStore
 import managym
@@ -72,10 +72,18 @@ def _update(
 ) -> dict[str, object]:
     with learner.profiler.track("Learning"):
         if isinstance(learning, DampedPolicyLearning):
-            return dict(update_damped_iteration(learner, batch, learning, 1))
+            return dict(
+                update_damped_iteration(torch_backend, learner, batch, learning, 1)
+            )
         return dict(
             update_iteration(
-                learner, batch, learning, 0.5, np.random.default_rng(3), iteration=1
+                torch_backend,
+                learner,
+                batch,
+                learning,
+                0.5,
+                np.random.default_rng(3),
+                iteration=1,
             )
         )
 
@@ -85,11 +93,9 @@ def test_learning_timers_leave_state_and_diagnostics_identical(rule: int) -> Non
     learning, phases = _rules()[rule]
     agent = _agent()
     batch = collect(_collector(agent), agent, 1)
-    timed = new_learner(deepcopy(agent), "cpu", minibatch_rows=2)
-    untimed = replace(
-        new_learner(deepcopy(agent), "cpu", minibatch_rows=2),
-        profiler=Profiler(enabled=False),
-    )
+    timed = Learner(deepcopy(agent), "cpu", minibatch_rows=2)
+    untimed = Learner(deepcopy(agent), "cpu", minibatch_rows=2)
+    untimed.profiler = Profiler(enabled=False)
 
     assert _update(timed, learning, batch) == _update(untimed, learning, batch)
     for (name, a), (_, b) in zip(
@@ -110,7 +116,7 @@ def test_nested_phases_never_exceed_their_parent() -> None:
     learning, _ = _rules()[0]
     agent = _agent()
     batch = collect(_collector(agent), agent, 1)
-    learner = new_learner(agent, "cpu", minibatch_rows=2)
+    learner = Learner(agent, "cpu", minibatch_rows=2)
     _update(learner, learning, batch)
     stats = learner.profiler.get_stats()
     total = stats["Learning"]["total_time"]

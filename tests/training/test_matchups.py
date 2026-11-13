@@ -4,10 +4,10 @@ from collections import Counter
 
 import pytest
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.matchup import selected_match
 from manabot.training.rollout.matchups import stream_matches

@@ -163,7 +163,7 @@ class _Captured(TypedDict):
 @contextmanager
 def _capturing(folder: Path, probe: Probe) -> Iterator[None]:
     """Keep initial weights, collection observations and learner loss inputs."""
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.model.inference import PreparedObservation
     from manabot.training.updates.health import OptimizerHealth
 
@@ -356,8 +356,8 @@ def _agent(
     folder: Path, size: str, bucketed: bool, seed: int, device: torch.device
 ) -> Any:
     """w160l8 from the captured initial weights; larger sizes from `seed`."""
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.model.actor_critic import ActorCritic
     from manabot.training.regime import TrainingRegime
 
     regime = TrainingRegime.model_validate_json((folder / "regime.json").read_text())
@@ -402,9 +402,8 @@ def _infer(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Collection's preparation, forward and action selection
     (`SeatRoutedCollector._sample_learning_rows` up to rollout recording)."""
-    from manabot.model.policy_distribution import legal_mask, policy_logs
-    from manabot.rl.numerics import require
-    from manabot.training.precision import forward_precision
+    from manabot.backends.torch.learner import forward_precision
+    from manabot.backends.torch.rl import legal_mask, policy_logs, require
 
     prepared = scope.prepare(obs)
     with torch.no_grad():
@@ -446,13 +445,14 @@ class _Loss:
 
 def _loss(learner: Any, batch: Minibatch) -> _Loss:
     """`update_damped_iteration`'s forward and loss on one kept minibatch."""
+    from manabot.backends.torch.rl import (
+        damped_policy_loss,
+        float64_operand,
+        legal_mask,
+        selected_mean,
+    )
     from manabot.model.inference import transfer_admitted
-    from manabot.model.policy_distribution import legal_mask
-    from manabot.rl.numerics import float64_operand
-    from manabot.rl.selection import selected_mean
-    from manabot.training.updates.damped_policy import damped_policy_loss
-    from manabot.training.updates.learner import learner_precision
-    from manabot.training.updates.references import reference_distribution
+    from manabot.policy.prepare import reference_distribution
 
     device = learner.device
     obs = transfer_admitted(batch.obs, device)[0]
@@ -462,7 +462,7 @@ def _loss(learner: Any, batch: Minibatch) -> _Loss:
     advantages = batch.advantages.to(device)
     value_targets = batch.value_targets.to(device)
     actor_mask = batch.actor_mask.to(device)
-    with learner_precision(learner):
+    with learner.forward_precision():
         logits, value_logits = learner.agent.forward_distribution(obs)
     logits, value_logits = logits.float(), value_logits.float()
     reference = reference_distribution(obs, batch.learning.reference)
@@ -499,9 +499,7 @@ def _loss(learner: Any, batch: Minibatch) -> _Loss:
 
 def _learn(learner: Any, observer: Any, batch: Minibatch) -> dict[str, float]:
     """One optimizer step with the learner's checks and diagnostics."""
-    from manabot.model.policy_distribution import policy_logs
-    from manabot.rl.losses import reverse_kl
-    from manabot.rl.numerics import float64_operand
+    from manabot.backends.torch.rl import float64_operand, policy_logs, reverse_kl
 
     for group in learner.optimizer.param_groups:
         group["lr"] = batch.lr
@@ -624,12 +622,10 @@ def run_arm(
     reference: Outputs | None,
 ) -> tuple[dict[str, Any], Outputs]:
     """One arm of one group; returns its receipt and fixed-weight outputs."""
+    from manabot.backends.torch.learner import Learner, apply_matmul_precision
+    from manabot.backends.torch.rl import NumericalError, policy_logs
     from manabot.model.inference import PolicyInference
-    from manabot.model.policy_distribution import policy_logs
-    from manabot.rl.numerics import NumericalError
-    from manabot.training.precision import apply_matmul_precision
     from manabot.training.updates.health import NumericalHealth, OptimizerHealth
-    from manabot.training.updates.learner import new_learner
 
     device = torch.device(probe.device)
     precision: Precision = "float32" if arm.startswith("float32") else arm  # type: ignore[assignment]
@@ -676,7 +672,7 @@ def run_arm(
             ]
         receipt["collection_peak_bytes"] = _peak(device)
         # Fixed weights: loss parts, logits and gradient without a step.
-        learner = new_learner(agent, device, minibatch_rows=256, precision=precision)
+        learner = Learner(agent, device, minibatch_rows=256, precision=precision)
         for batch in minibatches[: probe.numeric_minibatches]:
             learner.optimizer.zero_grad(set_to_none=True)
             parts = _loss(learner, batch)

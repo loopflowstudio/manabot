@@ -92,7 +92,7 @@ class GameProfile:
 
 
 def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
 
     torch.manual_seed(seed)
     agent = ActorCritic(observation_space, config.agent)

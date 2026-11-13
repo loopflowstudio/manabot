@@ -125,9 +125,9 @@ deals. A rule-based `heuristic` bot and frozen checkpoints anchor the scale,
 ratings are fit across the whole population, and tactical scenarios and
 bounded attacks probe what a win rate hides ([evaluation](docs/evaluation.md)).
 
-Most runs are exploratory and need no prediction. A result cited as a finding
-commits its question, numeric prediction, refuting result and cost cap to git
-before the run, and claims about a method need independent training seeds.
+Most runs are exploratory. A result cited as a finding commits its question,
+method and cost cap to git before the run and decides what it means after
+reading the data, and claims about a method need independent training seeds.
 Refutations stay on the record
 ([experiments](docs/experiments.md)).
 
@@ -195,8 +195,9 @@ deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
 `heuristic` and frozen checkpoints as working anchors. No win rate, rating or
 report promotes a checkpoint; scores never enter the loss.
 
-**Findings are preregistered.** A result cited as a finding commits its
-question, prediction, refuting result and cost cap before the run; everything
+**Findings decide after the data.** A result cited as a finding commits its
+question, method and cost cap before the run and gives its recommendation, with
+the reasoning, in the report; nothing fixes the verdict in advance. Everything
 else is exploratory and says so. The training seed is the unit of evidence for
 a method; refutations stay on the record.
 

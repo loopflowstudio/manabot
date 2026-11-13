@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import (
     CaptureScope,
@@ -22,7 +23,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim import rollout
 from manabot.training import execution
 from manabot.training.regime import (

@@ -15,10 +15,16 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
-from typing import Any, Literal
-from urllib.parse import urlsplit
+from typing import TYPE_CHECKING, Any, Literal
+from urllib.parse import unquote, urlsplit
 
+from etude.run.records import ArtifactRef
+from etude.run.storage import storage_from_uri
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+if TYPE_CHECKING:
+    # Artifact verification must not import managed evaluation machinery.
+    from etude.eval.records import Player
 
 Scheme = Literal["s3", "r2"]
 
@@ -199,6 +205,59 @@ def materialize_artifact(reference: StoredArtifact) -> Path:
         verify_file(target, reference.sha256, reference.bytes)
         return target
     return fetch_artifact(reference, cache)
+
+
+def local_checkpoint_file(seated: "Player") -> Path:
+    """The verified file a model plays; raises for code or a remote checkpoint."""
+    if seated.kind != "model":
+        raise ValueError("expected a model with a digest and byte count")
+    artifact = seated.checkpoint.artifact
+    if artifact.sha256 is None or artifact.size_bytes is None:
+        raise ValueError("expected a model with a digest and byte count")
+    uri = urlsplit(artifact.uri)
+    if uri.scheme != "file" or uri.netloc:
+        raise ValueError("checkpoint must be a verified local file")
+    path = Path(unquote(uri.path))
+    verify_file(path, artifact.sha256, artifact.size_bytes)
+    return path
+
+
+def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
+    """The verified local bytes of an Etude checkpoint artifact; loads no weights.
+
+    A local file is verified in place and returned. An S3 or R2 object is
+    downloaded to `target` through the SDK's storage adapter and verified before
+    it is renamed there, so a partial download never becomes a cached policy.
+    Each call writes its own partial file, so concurrent fetches of one target
+    are safe.
+    """
+    if reference.sha256 is None or reference.size_bytes is None:
+        raise ValueError("Etude checkpoint requires a digest and byte count")
+    uri = urlsplit(reference.uri)
+    if uri.scheme == "file" and uri.netloc in {"", "localhost"}:
+        path = Path(unquote(uri.path))
+        verify_file(path, reference.sha256, reference.size_bytes)
+        return path
+    if uri.scheme not in {"s3", "r2"} or uri.query or uri.fragment or not uri.netloc:
+        raise ValueError("Etude checkpoint must name a local file or S3/R2 object")
+    storage = storage_from_uri(f"{uri.scheme}://{uri.netloc}")
+    key = uri.path.lstrip("/")
+    descriptor, name = tempfile.mkstemp(
+        prefix=f"{target.name}.", suffix=".partial", dir=target.parent
+    )
+    partial = Path(name)
+    with os.fdopen(descriptor, "wb") as file:
+        offset = 0
+        while offset < reference.size_bytes:
+            length = min(8 * 1024 * 1024, reference.size_bytes - offset)
+            block = storage.get_range(key, offset, length)
+            if len(block) != length:
+                raise ValueError("incomplete Etude checkpoint download")
+            file.write(block)
+            offset += length
+    verify_file(partial, reference.sha256, reference.size_bytes)
+    partial.replace(target)
+    return target
 
 
 def _environment(name: str) -> str:

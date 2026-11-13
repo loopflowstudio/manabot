@@ -27,14 +27,14 @@ import numpy as np
 import psutil
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.inference import PolicyInference, transfer_admitted
 from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution

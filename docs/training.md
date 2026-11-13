@@ -83,8 +83,8 @@ with an older Torch, `--device mps` stops before training with a message
 naming both versions. An unavailable device fails explicitly. Reduced precision
 remains CUDA-only. Belief inputs and frozen opponents are unsupported on MPS.
 Evaluation and search stay on CPU. A separate [MLX backend](../manabot/backends/mlx.md)
-reads the same checkpoints through the shared policy container for measurements
-on Apple Silicon; it does not train. This support makes no speed or strength claim.
+of the policy and the damped update reads the same checkpoints, converted to
+the shared container, for measurement on Apple Silicon; no recipe runs on it. This support makes no speed or strength claim.
 
 ### Saved regimes
 

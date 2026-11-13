@@ -35,6 +35,13 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.checkpoint import (
+    load_checkpoint,
+    save_checkpoint as save_policy,
+)
+from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -47,21 +54,14 @@ from manabot.infra.config import (
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.runtime import seed_random
 from manabot.infra.source import source_commit
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint as save_policy
 from manabot.model.world import validate_agent_setup
 from manabot.training.decks import UniformDecks
-from manabot.training.updates.learner import Learner, new_learner
-from manabot.rl.step import update_ema
-from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.ppo import update_iteration
-from manabot.training.updates.selection import UpdateDiagnostics
-from manabot.training.precision import Precision, apply_matmul_precision
 from manabot.training.regime import (
     BatchClosure,
     DampedPolicyLearning,
     Execution,
     Learning,
+    Precision,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -84,6 +84,9 @@ from manabot.training.state.game_errors import (
     open_ledger,
 )
 from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.ppo import update_iteration
+from manabot.training.updates.selection import UpdateDiagnostics
 import managym
 
 # Offsets that separate a run seed's random streams (see the module docstring).
@@ -318,7 +321,7 @@ def _model(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
 
 
 def _learner(settings: SelfPlay, agent: ActorCritic) -> Learner:
-    return new_learner(
+    return Learner(
         agent,
         settings.device,
         minibatch_rows=settings.streams,
@@ -487,6 +490,7 @@ def learn(
     settings = state.settings
     if isinstance(settings.learning, DampedPolicyLearning):
         metrics = update_damped_iteration(
+            torch_backend,
             state.learner,
             batch,
             settings.learning,
@@ -495,6 +499,7 @@ def learn(
         )
     else:
         metrics = update_iteration(
+            torch_backend,
             state.learner,
             batch,
             settings.learning,

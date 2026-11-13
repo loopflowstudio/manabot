@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -17,10 +19,7 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.architecture import architecture_receipt
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import collect, open_collector
@@ -105,8 +104,8 @@ def test_real_history_reaches_both_heads_and_reloads(
     )
     loaded, space = load_checkpoint(str(path))
     assert space.encoder.config.policy_history_version == 1
-    assert architecture_receipt(loaded) == architecture_receipt(agent)
-    assert architecture_receipt(agent).components["recent_events"].total > 0
+    assert loaded.architecture_receipt() == agent.architecture_receipt()
+    assert agent.architecture_receipt().components["recent_events"].total > 0
     for expected, actual in zip(
         (policy, value), loaded(admit_observation(loaded, obs)), strict=True
     ):
@@ -252,7 +251,7 @@ def test_history_off_and_declarative_identity() -> None:
         "policy_history_version"
         not in explicit.observation_space.encoder.config.model_dump()
     )
-    assert architecture_receipt(baseline) == architecture_receipt(explicit)
+    assert baseline.architecture_receipt() == explicit.architecture_receipt()
     for name, weights in baseline.state_dict().items():
         assert "recent_events" not in name
         assert torch.equal(weights, explicit.state_dict()[name])

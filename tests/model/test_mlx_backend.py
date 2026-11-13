@@ -26,11 +26,11 @@ from manabot.backends.mlx.policy import (  # noqa: E402
     attend,
     packed_steps,
 )
+from manabot.backends.torch.checkpoint import save_checkpoint  # noqa: E402
+from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.env.match import Match  # noqa: E402
 from manabot.env.observation import ObservationSpace  # noqa: E402
 from manabot.infra.config import MatchConfig, ModelConfig  # noqa: E402
-from manabot.model.actor_critic import ActorCritic  # noqa: E402
-from manabot.model.checkpoint import save_checkpoint  # noqa: E402
 from manabot.policy.checkpoint import (  # noqa: E402
     canonical_parameters,
     read_safetensors,

@@ -1,4 +1,4 @@
-"""Inference players for scalar simulation; model admission lives in model.checkpoint.
+"""Inference players for scalar simulation; model admission lives in backends.torch.checkpoint.
 
 `Player` is the interface `manabot.sim.sim` plays: a name and one action per
 encoded observation. `load_player` in that module picks the implementation.
@@ -9,7 +9,7 @@ from typing import Protocol
 import numpy as np
 import torch
 
-from manabot.model.actor_critic import ActorCritic
+from manabot.backends.torch.policy import ActorCritic
 from manabot.model.inference import admit_on_device
 
 

@@ -8,17 +8,22 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch import rollout as learner_module
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.training.regime import DampedPolicyLearning, Learning
-from manabot.training.rollout.collection import RolloutBatch, collect, open_collector
-from manabot.training.updates import learner as learner_module
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    collect,
+    open_collector,
+)
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import new_learner
 from manabot.training.updates.ppo import update_iteration
 from tests.training.test_recovery import recipe
 
@@ -123,6 +128,7 @@ def test_learning_admits_each_trained_row_once(
     monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
     admit = learner_module.admit_observation
+    check = learner_module.check_observation
 
     def admitted_rows(epochs: int) -> list[int]:
         agent, batch = _policy(history=False)
@@ -134,10 +140,16 @@ def test_learning_admits_each_trained_row_once(
             rows.append(len(obs["actions_valid"]))
             return admit(model, obs)
 
+        def counting_checks(model: ActorCritic, obs: dict[str, torch.Tensor]) -> None:
+            rows.append(len(obs["actions_valid"]))
+            check(model, obs)
+
         monkeypatch.setattr(learner_module, "admit_observation", counting)
-        learner = new_learner(agent, "cpu", minibatch_rows=2)
+        monkeypatch.setattr(learner_module, "check_observation", counting_checks)
+        learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(
+                torch_backend,
                 learner,
                 batch,
                 Learning(epochs=epochs, minibatches=2),
@@ -146,11 +158,15 @@ def test_learning_admits_each_trained_row_once(
             )
         else:
             update_damped_iteration(
-                learner, batch, DampedPolicyLearning(gradient="damped_policy"), 1
+                torch_backend,
+                learner,
+                batch,
+                DampedPolicyLearning(gradient="damped_policy"),
+                1,
             )
         # Bootstrap rows first, then trained rows in minibatch-sized chunks.
         assert rows[0] == len(batch.next_done)
-        assert sum(rows[1:]) <= batch.actions.size
+        assert 0 < sum(rows[1:]) <= batch.actions.size
         return rows
 
     once = admitted_rows(1)

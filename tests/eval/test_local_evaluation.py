@@ -240,8 +240,9 @@ def forbidden(*args, **kwargs):
     raise AssertionError("forbidden cloud/credential/callback entry point")
 
 socket.create_connection = forbidden
-from manabot.model import checkpoint
-checkpoint.storage_from_uri = forbidden
+from manabot.backends.torch import checkpoint
+from manabot.infra import artifacts
+artifacts.storage_from_uri = forbidden
 checkpoint.materialize_artifact = forbidden
 from manabot.eval.local import main
 if __name__ == "__main__":

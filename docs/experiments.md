@@ -2,14 +2,17 @@
 
 An experiment here is a module, the runs it launched and one report that stays
 on the record whichever way it goes. Most are exploratory. One that will be
-cited as a finding also commits a numeric prediction to git before it runs.
-This guide covers how a question becomes a report, what makes a result
-count, and the tools that declare and execute a comparison. The
+cited as a finding also commits its question, method and cost cap to git
+before it runs, and decides what the result means after reading it. This
+guide covers how a question becomes a report, what makes a result count, how
+a result becomes a decision, and the tools that declare and execute a
+comparison. The
 [research program](../manabot/RESEARCH.md) says which questions are open; the
 [experiments index](../experiments/README.md) lists every report.
 
 - [What an experiment is](#what-an-experiment-is)
 - [How a claim gets made](#how-a-claim-gets-made)
+- [From a result to a decision](#from-a-result-to-a-decision)
 - [A worked example](#a-worked-example)
 - [Failures worth reading](#failures-worth-reading)
 - [Declaring a comparison](#declaring-a-comparison)
@@ -51,11 +54,17 @@ matter most on day one:
   runs, and anything run to make later work possible, need no prediction. Their
   reports say what was learned, under the word "Exploratory", and their numbers
   are not cited as findings.
-- **A finding predicts first.** A result that will be cited as a claim about a
+- **A finding asks first.** A result that will be cited as a claim about a
   method or about playing strength (in the README's "What we know", the
   research program or the paper) opens its report with one paragraph committed
-  before any scored run: the question, a numeric prediction, the result that
-  would refute it and a cost cap. That paragraph is the whole preregistration.
+  before any scored run: the question, what will be measured and against
+  what, the strongest confound and a cost cap. An expectation of the outcome
+  may be written there too, as an expectation. What that paragraph never
+  holds is a verdict: no number chosen before the data decides whether the
+  result is a win. A threshold set in advance is a guess dressed as a rule,
+  and it has turned clear results into "rejected" and "unresolved". The
+  decision is made after reading the result
+  ([from a result to a decision](#from-a-result-to-a-decision)).
 - **The freeze is the commit and the run ID.** A change that keeps the question
   is a dated line in the report, not a new protocol. Cost is the launcher's
   number for the run.
@@ -69,6 +78,28 @@ matter most on day one:
   [world versions](../WORLDS.md).
 - **Refutations stay on the record,** dated and never silently edited.
 
+## From a result to a decision
+
+A report does not trigger a decision; a person makes one with the report in
+hand. The report's job is to make that easy:
+
+- **Lead with the plain answer:** the effect, its uncertainty and what it
+  means for the question.
+- **Compare against the incumbent, not against a bar.** What we run today is
+  the default. A new backend, layout or technique has to justify its cost
+  (code to keep, complexity, dollars) with an advantage where the work spends
+  its time. Say how large the advantage is and where it appears and
+  disappears: batch size, width, device, phase.
+- **Separate what the numbers support from what they do not:** one host, a
+  replayed update, a noise floor measured from a repeat run, how many seeds.
+- **Recommend, with the reasoning, as a recommendation,** and name what would
+  change it. Adopt, keep as a switch, drop and measure more are all
+  legitimate outcomes, and inconclusive is a result.
+
+What stays fixed after the run is the evidence, not the reading of it. Source,
+decks, seeds, bounds and retained data are never changed to fit a conclusion,
+and refutations stay on the record, dated.
+
 ## A worked example
 
 [exp-04](../experiments/exp-04-potential-shaping.md) is from an earlier world,
@@ -76,7 +107,7 @@ so read it for its shape rather than its numbers. The project believed that
 shaped rewards (pay per land, creature and damage) sped up learning, and an
 earlier run had shown those rewards training agents into cast-everything play.
 The question was whether a policy-invariant form of shaping would learn without
-that fingerprint. The prediction was committed first:
+that fingerprint. The expectation going in was written down:
 
 > E2c reaches ≥90% of E2b's win-vs-random while holding instants
 > significantly longer. […]
@@ -86,7 +117,7 @@ terminal-only control matched the potential-shaped arm and beat pay-per-event
 shaping by about 14 points, so the shaping the project had been paying for was
 buying nothing. Reward in every recipe since has been win, loss or draw and
 nothing else. The report records the question, the prediction, the method, the
-results, a verdict on the prediction and the caveats, in that order, which is
+results, what they supported and the caveats, in that order, which is
 the shape reports here aim for.
 
 ## Failures worth reading

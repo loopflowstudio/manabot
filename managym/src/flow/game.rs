@@ -555,6 +555,9 @@ pub struct Game {
     /// `state` at its current revisions; cloned with it (its `Arc`s are
     /// immutable), never hashed.
     pub(crate) derived: RefCell<DerivedCache>,
+    /// One player's mana sources for the questions of a live `PaymentScan`;
+    /// empty outside one and in every clone.
+    pub(crate) payment_sources: RefCell<crate::flow::mana::SharedSources>,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
@@ -581,6 +584,7 @@ impl Clone for Game {
         Self {
             state: self.state.clone(),
             derived: RefCell::new(self.derived.borrow().clone()),
+            payment_sources: Default::default(),
             policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),

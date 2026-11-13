@@ -8,10 +8,10 @@ from torch import nn
 
 from experiments import training_throughput_sizes as sizes
 from experiments.elemental_variants import elemental_recipe
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob
 from manabot.infra.identity import canonical_sha256
-from manabot.model.actor_critic import ActorCritic
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
 from tests.training.test_training_throughput import _worker
@@ -156,12 +156,16 @@ def test_unknown_legs_and_seeds_are_refused() -> None:
 def test_a_size_cell_trains_through_the_real_worker_on_cpu(
     tmp_path: Path, leg: str
 ) -> None:
-    """The leg's regime at 8 streams and 1 update, moved to CPU."""
+    """The leg's regime at 2 streams and 1 update, moved to CPU.
+
+    Collection plays every stream's game to its end, so the stream count, not
+    the transition floor, sets how long the largest model takes here.
+    """
     chosen = sizes.LEGS[leg]
     regime = sizes.recipe(chosen.size, chosen.precision, 1)
     regime.wall_seconds = 600
     stage = regime.stages[0]
-    stage.streams = 8
+    stage.streams = 2
     stage.execution.device = "cpu"
     stage.execution.wall_seconds = 600
     spec = TrainingJob(regime=regime, experiment=sizes.EXPERIMENT)

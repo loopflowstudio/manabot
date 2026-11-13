@@ -131,7 +131,7 @@ public encoder boundary, before the retained action list reaches row encoding.
 
 **Local-update search.** Run `tests/sim/test_local_update.py`,
 `tests/sim/test_local_update_sampling.py` and
-`tests/sim/test_search_command_evidence.py` together. The core integration job
+`tests/sim/test_search_command_evidence.py` together. The model integration group
 includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
@@ -183,6 +183,16 @@ Check changed Python modules and type stubs with
 `uv run --extra dev ruff check --fix <paths>` and
 `uv run --extra dev ruff format <paths>`. Include moved `.pyi` files: the
 compatibility stub is part of the public package surface.
+
+**Policy backends.** Shared damped-update or backend changes need
+`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
+The installed-backend tests run the real update, force gradient clipping,
+compare every post-Adam weight and reject malformed raw rollout rows. MLX
+cases skip where it is unavailable; run them on Apple Silicon with the `mlx`
+extra before claiming MLX parity. For a changed forward or parameter mapping,
+also run the [captured parity check](../manabot/backends/README.md#parity-check)
+against a capture whose world binding still matches; it gates the optimizer
+step as well as forward, loss and gradients.
 
 **Loopflow workflows.** With `lf` installed, run
 `uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
@@ -236,7 +246,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 |---|---|
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
-| Integration | `manabot-integration.yml` (`core`, `evaluation` and `long` groups on separate runners; Perf report proof and training smoke in `evaluation`) |
+| Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v2` |
@@ -250,6 +260,46 @@ drifted case is written to `target/semantic-conformance/<corpus>/`, which Rust
 Tests uploads on failure; fuzz failures keep exact seeds under
 `target/semantic-conformance/failures/`. Rust Tests runs whenever the fuzzing
 job does.
+
+**Job time.** Pull-request jobs have an 8-minute budget on the ordinary
+Ubuntu runner, measured from job start to job end, so installation and
+the extension build count against it. Read a job's time from the run:
+
+```console
+$ gh run view <run-id> --json jobs \
+    --jq '.jobs[] | select(.conclusion == "success") | "\(((.completedAt | fromdate) - (.startedAt | fromdate)) / 60 | floor) min  \(.name)"' | sort -rn | head -4
+15 min  Engine Budget / Engine Budget
+6 min  Rust Tests
+6 min  Integration / Integration (ubuntu-latest, training)
+6 min  Integration / Integration (ubuntu-latest, experiment)
+```
+
+Integration and Academy Integration install every extra they use in one
+`uv sync` that leaves `managym` out, build the extension once with
+`maturin develop`, and run with `UV_NO_SYNC=1` so no later `uv run` compiles the
+engine a second time. Each Integration group runs one pytest worker per logical core
+(`pytest -n logical`; [TESTING.md](../TESTING.md) says what that asks of a test)
+and prints its 20 slowest tests (`--durations=20`) at the end of its test step.
+
+Integration and Python unit install the locked CPU Torch with
+`--no-default-groups --group play-runtime` because hosted Ubuntu runners have no GPU.
+
+When a job passes 8 minutes, in order of preference:
+
+1. Make its slowest tests cheaper (a smaller fixture, fewer updates or games,
+   a shared setup) while keeping what they assert.
+2. Cut the shared installation and build time.
+3. Move test files to a faster group, or add a group to the matrix, balanced by
+   the measured times; `tests/infra/test_ci_selection.py` checks that every
+   path a group names exists.
+
+Never skip, deselect or delete a test to fit, and never raise the five-minute
+single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
+files and individual tests. If a new file is not covered by a directory
+selection, add it to the group with the most room.
+Engine Budget is the exception: it builds and measures the change and its
+reference on one runner and keeps that shape, whatever it takes. The macOS
+nightly reuses the same groups without this limit.
 
 **Selection.** Detect Changes pipes the NUL-delimited diff (`--no-renames`, so
 both sides of a rename) into `.github/ci/select-tests.sh`. Manual dispatch, an
@@ -541,6 +591,13 @@ source checkout. Never change a running experiment's pinned source to install a
 release.
 
 ### Build and verify
+
+Before publishing a release PR, update both Python project versions, all three
+Rust crate versions and the exact `managym` dependency together. Refresh
+`uv.lock` with `uv lock` and `managym/Cargo.lock` with
+`cargo metadata --manifest-path managym/Cargo.toml --format-version 1`, then run
+the release metadata check and `tests/infra/test_release.py` command below.
+These checks apply even when the release changes only versions and notes.
 
 From a clean checkout, with a fresh staging path and empty output directory:
 

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
@@ -18,9 +19,12 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim.heuristic import HeuristicPlayer
-from manabot.training.rollout.collection import close_collector, collect, open_collector
+from manabot.training.rollout.collection import (
+    close_collector,
+    collect,
+    open_collector,
+)
 from managym.decision import Command, DecisionFrame
 
 

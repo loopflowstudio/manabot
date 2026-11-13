@@ -17,30 +17,31 @@ import torch
 from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner, gradient_step
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import (
+    NumericalError,
+    check_behavior,
+    check_probabilities,
+    damped_policy_loss,
+    legal_mask,
+    policy_logs,
+    selected_moves,
+)
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import admit_on_device
-from manabot.model.policy_distribution import (
-    check_behavior,
-    check_probabilities,
-    legal_mask,
-    policy_logs,
-)
-from manabot.rl.numerics import NumericalError
-from manabot.rl.selection import selected_moves
-from manabot.rl.step import gradient_step
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
-from manabot.training.rollout.collection import collect, open_collector
-from manabot.training.updates.damped_policy import (
-    damped_policy_loss,
-    update_damped_iteration,
+from manabot.training.rollout.collection import (
+    collect,
+    open_collector,
 )
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
-from manabot.training.updates.learner import new_learner
 from manabot.training.updates.selection import value_scale
 from manabot.verify.store import VerifyStore
 import managym
@@ -380,12 +381,12 @@ def test_extreme_real_collector_to_learner() -> None:
     )
     batch = collect(collector, agent, 4)
     assert np.isfinite(batch.action_data.log_probabilities).all()
-    trainer = new_learner(agent, DEVICE, minibatch_rows=collector.num_envs)
+    trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
 
     learning = DampedPolicyLearning(
         gradient="damped_policy", advantage_quantile=0, min_advantage=0
     )
-    result = update_damped_iteration(trainer, batch, learning, 1)
+    result = update_damped_iteration(torch_backend, trainer, batch, learning, 1)
     assert result["numerical"]["legal_underflow_count"] > 0
     assert (
         result["numerical"]["optimizer_steps"]
@@ -474,7 +475,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
             clock.elapsed += 10.0
             return result
         clock.elapsed += 0.25
-        batch = args[1]
+        batch = args[2]
         rows = batch.observations()
         probabilities = torch.as_tensor(rows.probabilities).clone()
         probabilities[-1, -1, 0] = float("nan")

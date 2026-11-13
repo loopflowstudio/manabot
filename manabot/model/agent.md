@@ -148,6 +148,20 @@ This updated design document reflects both the current implementation and our st
 
 
 
+## Where the code lives
+
+The policy is split by what depends on an array framework:
+
+- [`manabot/policy/`](../policy/README.md): host preparation (definition rows,
+  record vocabulary, legal actions, packed GRU schedules, shared-effect
+  routes, column compaction, bucket selection) and the checkpoint container.
+  NumPy only.
+- [`manabot/backends/torch/policy.py`](../backends/torch/policy.py):
+  `ActorCritic`, the forward over a prepared batch. Other frameworks sit
+  beside it under [`manabot/backends/`](../backends/README.md).
+- This directory: the torch model's components, admission, inference
+  preparation, architecture receipts and world binding.
+
 ## Observation admission
 
 A policy forward reads only admitted observations. Admission
@@ -181,16 +195,16 @@ it, and a model with another configuration raises `ValueError`. Admitted
 tensors are read-only; assembling an `AdmittedObservation` by hand is outside
 the contract.
 
-The forward still compacts data-dependent structure per batch: legal action
-rows, the object and fact columns in use, packed card programs and
-shared-effect CSR routes. Those reads choose the CPU work; they are not
-validation.
+Host preparation (`manabot.policy.prepare`) then compacts data-dependent
+structure per batch: legal action rows, the object and fact columns in use,
+packed card programs and shared-effect CSR routes. Those reads choose the
+work; they are not validation.
 
 Each observation path admits once per batch:
 
 - Collection and search serving admit inside `PolicyInference.prepare` (below).
 - Learning wraps each rollout batch in `AdmittedRollout`
-  ([`learner.py`](../training/updates/learner.py)): it admits the bootstrap
+  ([`rollout.py`](../backends/torch/rollout.py)): it admits the bootstrap
   rows and then the rows an update trains, in minibatch-sized chunks; rows the
   advantage filter drops are never admitted, and epochs re-read admitted rows
   without checks.
@@ -222,7 +236,8 @@ Explicit `include_ataraxos=True` adds 384/8 with feedforward width 1,536;
 [the scale probe](../../docs/experiments.md#freeze-step-targets)
 measures that model without changing the scientific cohort.
 
-`manabot.model.architecture.architecture_receipt(agent)` derives a versioned
+`ActorCritic.architecture_receipt()` passes its named parameter sizes to
+`manabot.model.architecture.architecture_receipt`, which derives a versioned
 identity and total/trainable counts by the actual top-level parameter owner.
 It counts shared parameters once and excludes buffers. The receipt consumes no
 RNG and does not change initialization, weights or forward equations. Counts
