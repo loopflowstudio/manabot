@@ -6,8 +6,9 @@ Review with the person what the result establishes and whether the experiment
 is done.
 
 Check that each claim matches its evidence, that exploratory numbers are not
-presented as findings, and that a finding is judged against the prediction
-committed before its runs. A merged PR, a complete schedule or a tiny
+presented as findings, that a finding answers the question committed before
+its runs, and that its recommendation follows from the result read against
+the incumbent rather than from a bar set in advance. A merged PR, a complete schedule or a tiny
 successful update does not by itself show learning. An inconclusive result can
 finish an honest experiment. Read the report from the top as its reader would:
 it must answer its questions in plain words before tables, with provenance in
