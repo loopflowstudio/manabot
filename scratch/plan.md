@@ -87,12 +87,15 @@ gate must resolve or explicitly report the failure, not regenerate it away.
 
 ## Realign observations — 2026-11-13
 
-Rechecked at this pass (second realign): Etude PR #103 is still OPEN at
-`105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (`mergedAt: null`); `origin/main`
-is still `6ce618b8a`, already an ancestor of HEAD; `pyproject.toml` stays at
-0.2.16. The concept-review items (records.py, learning.py, resume refusal
-naming differing settings, `--updates` with warning `--steps`) are in commit
-`1fcb8983d`; the code backs each claim below. No tests were rerun for realign.
+Third realign recheck: Etude PR #103 is still OPEN at
+`105abdd323016b7f7baaaf57aaaa7f5d896c71bf` (`mergedAt: null`); `pyproject.toml`
+still requires 0.2.16. Main advanced to `105e7e2aa` (player-chosen mana
+spending, Heartbeat of Spring), merged here as `117f2d22b`/`85fd4607e`. Among
+training-adjacent paths it changed only `manabot/env/observation.py` and
+`manabot/semantic/text_observation.py`; no loop, learner, recipe, fixture or
+dependency file. The parity proof compared against main `6ce618b8a`, before
+that observation change; it is not rerun here. Gate's focused checks cover the
+merged observation code. No tests were rerun for realign.
 
 ## Concept review follow-through — 2026-11-13
 
