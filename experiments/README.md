@@ -96,13 +96,15 @@ at the source each run pinned; ac601834d is the last revision carrying them.
    teacher, or training loop in the real engine. Use katas and ablations to
    resolve an observed ambiguity or choose between concrete next builds, not
    as admission tests before integration.
-2. **Exploratory by default; a finding predicts first.** Calibration,
-   throughput, capacity and pilot runs need no prediction and are labelled
-   exploratory. A result that will be cited as a finding commits one paragraph
-   *before* its runs: question, numeric prediction, the result that would
-   refute it and a cost cap. The freeze is the commit and the run ID; a change
-   that keeps the question is a dated line in the report
-   ([how a claim gets made](../docs/experiments.md#how-a-claim-gets-made)).
+2. **Exploratory by default; a finding asks first and decides after.**
+   Calibration, throughput, capacity and pilot runs are labelled exploratory.
+   A result that will be cited as a finding commits one paragraph *before*
+   its runs: question, what is measured against what, the strongest confound
+   and a cost cap. No threshold set before the data decides the outcome; the
+   report reads the result against the incumbent and recommends, with its
+   reasoning. The freeze is the commit and the run ID; a change that keeps
+   the question is a dated line in the report
+   ([from a result to a decision](../docs/experiments.md#from-a-result-to-a-decision)).
 3. **Name the strongest confound.** Every report says how its result could
    be wrong and what would discriminate.
 4. **Mechanism over aggregates.** "Can/cannot" claims need a behavioral
