@@ -20,8 +20,19 @@ maintaining the extra implementation. The [MLX pilot](../../experiments/mlx_pilo
 measured an advantage over CPU8 on its M2 workload, but used padded shapes and
 float32 MPS. The [MPS retest](../../experiments/mps_retest.md) compares the current
 bucketed recipe, both MPS half dtypes, wider/smaller models and larger stream
-counts. Its measurements are pending; it has no automatic adoption threshold.
-Defaults and off-CUDA precision refusals remain unchanged.
+counts. Its completed M4 Max w384l8/256-stream comparison measured median
+whole-update times of 703 s on CPU4, 521 s on MPS float32, 478 s on MPS
+bfloat16, 442 s on MPS float16 and 402 s on MLX float32. Float16 MPS narrowed
+the gap to about 10%, but individual gradient tensors differed more than the
+global cosine suggests. At w64l2/256 streams, every MPS precision was slower
+than CPU on both the M2 and M4 Max; MLX was fastest. The broader matrix is incomplete, and the M2's
+five-resident-arm setup was stopped for sustained paging.
+
+Recommendation: keep PyTorch in production and retain MLX as an experimental
+Apple backend while the half-precision numerical differences and wider batch
+comparison remain unresolved. This is one busy host's replay evidence, not
+equivalent learning trajectories or an automatic adoption rule. Defaults and
+off-CUDA precision refusals remain unchanged.
 
 ## Layout
 

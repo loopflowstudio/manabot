@@ -1,162 +1,106 @@
-# MPS retest implementation
+# MPS retest: partial results and remaining design work
 
-## Outcome and constraints
+## Outcome
 
-Measure the bucketed recipe across CPU float32 (CPU4 laptop / CPU8 M2), MPS
-float32, both working MPS half dtypes and MLX float32.
-`experiments/mps_retest.md` owns the full matrix and deliverables;
-`questions.md` preserves the exact steers. Torch is the incumbent. Recommend
-from measurements, without an adoption rule or defaults change. No performance
-or real-MPS correctness conclusion exists yet.
+`experiments/mps_retest.md` contains the measured answer, recommendation,
+charts, limits and run history. Both MPS half dtypes executed. Production
+backend defaults and off-CUDA refusals are unchanged. This is not a completed
+matrix: missing cells remain visible in charts and tables.
 
-The operator owns the USD25 rental cap, allocation, release and cost receipt.
-Captures and all fitting arms may run on the laptop while M2 capacity is pending.
-Start laptop blocks regardless of load; record endpoint loads. Repeat load increases over 2×
-once, retaining both attempts and selecting all arms from the lower mean
-endpoint-load attempt (ties keep the first). Each width/stream group needs three back-to-back replays per arm with
-wall-clock and load endpoints; the latest steer removes the one-hour cap. Keep hosts separate. The latest steer removes host availability as a delivery gate: if M2 access
-does not arrive, report laptop measurements and M2 explicitly unmeasured.
+Measurements used source `fa23fc364`; original 256-stream captures used
+`99210bf8d`. The only subsequent executable edit labels the plotted cosine
+as global and points readers to tensor minima. It changes no measured math
+or scheduling.
 
-## Implementation owners
+Completed three-replay groups, in CPU / MPS f32 / bf16 / f16 / MLX order:
 
-- `manabot/backends/capture.py::capture` records the real update for both this
-  experiment and the pilot. `experiments/mps_retest.py::capture` selects the
-  recipe; endpoint loads describe the shared host without gating execution.
-- `_interleaved` admits timed arms before starting workers. `_latest_parity`
-  reads all arms once per block, scoped to host/software/source, capture and
-  width; per-call admission also requires the row count. Retries share that
-  evidence. Admission means parity executed, not that gradients agreed;
-  numerical agreement remains a report judgment. A refused arm retains its
-  parity failure status (including OOM) and names that prerequisite in its error.
-  `bench` and `update` execute admitted calls/steps in isolated
-  persistent workers; `replays` schedules three repetitions. Workers retain
-  their own provenance. All models remain resident, so OOM describes this
-  shared-memory setup, not standalone arm capacity.
-- `_host_report` selects latest receipts and checks coverage and records the replay
-  span. Failed attempts supersede successes; coverage is separate from
-  correctness. `report` writes host-separated tables/charts, using the named
-  `full_context.png` for a sole host, including the laptop fallback.
-- Receipts distinguish capture host/threads from replay host/threads. The shared
-  engine component uses four CPU threads; replay uses four on the laptop,
-  eight on M2. Cross-host phase sums identify the capture origin. Unknown
-  provenance leaves coverage incomplete; conflicting origins are refused.
+- M4 Max w384l8/256, `5bd37fb3abaa`: median totals 703.20 / 521.22 /
+  478.42 / 442.03 / 402.22 s. No retry; all sampled choices match CPU.
+- M4 Max w64l2/256, `7fb121dc08a6`: 110.18 / 136.38 / 135.82 /
+  136.08 / 95.94 s. Repetitions 0 and 2 each retried once, selecting the
+  original lower-mean-load attempt; both retries remain in the ledger.
+- M2 w64l2/256, `133dacc3287a`: 107.75 / 141.98 / 144.15 /
+  142.93 / 84.00 s. No retry; all sampled choices match CPU.
 
-## Remaining execution and acceptance
+The last laptop retry ended 2026-11-13T06:19:45Z, continuing the already
+running series across the 06:17 window per the explicit no-stop direction.
+M2 timing ended at 06:16:29Z. Measurement workers exited on both hosts.
+No further measurements were queued. Rental release remains operator-owned;
+allocation was 2026-11-13T02:56:06Z, 24-hour minimum about USD21, cap USD25.
+Release timestamp is still pending.
 
-1. Laptop 256-stream capture completed at `99210bf8d`; see execution evidence
-   below. M2 capture is running as `bfb4d0e22dd7` from the same source in
-   `/Users/ec2-user/manabot-mps`, with CPython 3.12.16, Torch 2.15.0, MLX 0.32.4.
-   Use its independent `experiments/data/mps_retest/m2` evidence.
-2. Run three back-to-back blocks at w384/256 on both hosts under the new
-   directional retry rule. No one-hour cap remains. Keep old cancelled series
-   separate; completed captures remain valid inputs. A 900-second worker-call timeout
-   is failure, not OOM. Preserve errors and fix implementation failures.
-3. Capture 512/1024 streams and attempt the full matrix, including both MPS
-   half dtypes. Actual dtype support and gradient agreement remain unverified.
-4. Run M2 comparisons when access arrives, if access arrives;
-   cite the operator's cost receipt and keep per-host captures/charts separate.
-5. Publish captures (including unused retry attempts), receipts, tables and
-   charts with `manabot.data`; embed the named full-context chart, interpret
-   measured results/limits and recommend in the report and backend README.
+## Counterexamples and remaining work
 
-Laptop execution priorities through 06:17 UTC: w384 at 256/512/1024 streams,
-then w768/w1024 at 256, then smaller widths. Report what was not reached.
+1. **Review resident memory before further M2 scaling.** w384 M2
+   `877fa3cf766d` was cancelled after about 105 minutes without a complete
+   replay, with used swap 10,518.25 MiB and sustained paging. No OOM was
+   inferred. Even the completed w64 setup had 7.90 GiB of swap-outs across
+   setup, replay and cleanup while used swap ended near 257 MiB. Raw counters
+   are in `m2/host-observations.jsonl`. Pairwise interleaving changes the
+   steered all-arm comparison and single CPU baseline; it was not silently
+   substituted. Further timing needs a memory-bounded design, not more runs
+   of the same pressure-prone setup.
+2. **Review the larger-stream capture budget and execution window.** Laptop
+   512 `dcf93e86b142` and 1024 `88dd067a2d9b` failed the configured 20 GiB
+   process-tree memory guard before learning. Exact partial captures and
+   launcher errors are retained. This is not proof of a replay-arm OOM or
+   the laptop's physical capacity. Only 256-stream inputs are replayable.
+3. **The remaining matrix is unmeasured.** No warmed per-call matrix ran;
+   w96l4, w160l8, w512l8, w768l8 and w1024l8, and every 512/1024-stream
+   replay group, remain open. The M2 has no complete w384 replay. The laptop
+   window is over. Do not substitute one repetition for a median of three or
+   treat this implementation step as the completed experiment.
+4. **Interpret the half-precision differences before adoption.** Global
+   cosine is not a tensor-wise correctness verdict. M2 w384 bf16 global
+   cosine was 0.996963478; M4 w384 bf16/f16 had poorer individual tensors.
+   The score-bias case is analytically zero and needs norm-aware interpretation.
+   The report recommends retaining Torch in production and MLX as experimental.
+5. Gate owns the remaining affected suites and acceptance checks. Publication,
+   landing and Task movement belong to later Graph steps. Link the named
+   `full_context.png` first in the PR body; it is explicitly a partial M2
+   matrix, with a separate M4 chart. No Wave is bound.
 
-Gate owns affected suites and final acceptance. Publication and Task movement
-belong to later Graph steps. No Wave is bound. Implementation checks do not
-complete this experiment.
+## Evidence and delivery
 
-Upstream reviewed at `e82a20033`: the only new main commit prepares v0.2.3
-release metadata and upgrade docs; it changes no retest model or measurement
-behavior. Keep the measurement revision explicit if that metadata is synced.
-The initial Task description still carries the superseded adoption rule and
-laptop prohibition; the dated exact steers in `questions.md` and the experiment
-report describe the current scope.
+The per-host `bench-back-to-back` ledgers retain every attempt and selection.
+Root `bench.jsonl` / `updates.jsonl` are byte-concatenated report inputs, not
+new measurements. `summary.json`, six PNGs and two comparison tables derive
+from them. The charts were visually inspected with real receipts; global
+cosine labels and host provenance are explicit, and gaps are not zero-filled.
+
+Published via `manabot.data`: current ledgers, laptop references, both charts
+and missing per-call charts, tables, summary, host observations, launcher
+receipts, and `laptop/capture-failures-fa23fc364.tar.gz`. The original laptop
+captures/failed native preflight are in the already-published
+`laptop/captures-99210bf8d.tar.gz`; old cancelled `laptop/bench` evidence stays
+separate. The final M2 capture/ledger/reference/receipt archive was transferred as
+`m2-evidence-fa23fc364.tar.gz`; its local SHA-256 matched the remote
+`264ef59f82285682e3bb656b3f670d6a23f01eea12c25a0bd2a4c6436ec831b9`.
+Publication completed; all 38 retest manifest entries are retained. No artifact
+transfer or measurement process remains running.
 
 ## Delete — do not maintain
 
-Removed the duplicate pilot capture, serial timed-arm comparison path,
-reference writer's disk reread and repeated host/capture probes during replay
-admission. Removed worker-side parity admission: the coordinator already owns
-that guard before allocation, so it now also attaches the per-call parity
-metrics. No second ledger scan or competing admission path inside a worker.
-Keep isolated parity execution and retained CPU arrays. No alternate capture
-or rental implementation; preserve frozen evidence and production off-CUDA
-refusals. No remaining deletion target is identified.
+Removed the duplicate pilot capture, serial timed-arm path, reference writer's
+disk reread, repeated host/capture probes and worker-side parity admission.
+The coordinator owns admission before allocation and attaches parity metrics.
+Keep isolated parity execution, CPU arrays, original captures and failures;
+no alternate capture or rental implementation. No remaining deletion target.
 
-## Validation and execution evidence
+## Validation
 
-All checks below use controlled fixtures, not performance evidence. Historical
-commands and full results through the interleaving change are retained at
-`348c8f26b:scratch/mps-retest.md`; earlier implementation checks are in
-`9a83ac5:scratch/mps-retest.md`. The removed, already-landed CI Task notes are
-in `0ed4f2cb1:scratch/ci-under-8-minutes.md` and do not establish MPS acceptance.
+Earlier controlled checks and their commands are retained in
+`fa23fc364:scratch/mps-retest.md` (older history at `348c8f26b` and `9a83ac5`).
+At the measurement freeze, fixtures passed unconditional high-load admission,
+directional >2× retry on both hosts, whole-attempt selection, and acceptance
+of a 10,000-second three-replay span without an hourly gate. Ruff and diff
+checks passed; no production model math changed in that method update.
 
-- 2026-11-12: `.runs/mps-report-check/check.py` passed actual PNG rendering with
-  synthetic M2/M4 receipts, missing/status cells, timing/memory/correctness
-  tables, latest failures, capture provenance and conflicting-origin refusal.
-  Visual inspection found and fixed overlapping labels/legends. The first
-  compression preserved six PNGs and both tables byte-for-byte; summary JSON
-  was equivalent after sorting missing labels. Sole-M2, sole-M4 and combined
-  report filename checks passed. No real MPS execution was checked.
-- 2026-11-13, before this compression: `.runs/mps-steer-check.py` and
-  `.runs/mps-steer-extra-check.py` passed load boundaries, call order, whole-block
-  retry selection, pending-repeat coverage, per-call resets, independent
-  evolving replay state, actual pipe exchange and timeout cleanup. Rendering
-  passed and the corrected full-context PNG was visually inspected.
-- Measurement preflight, 2026-11-13T02:01:15+00:00: load 64.67 prohibited
-  capture under <16. M2 access notes still had the 2026-11-12 08:47:58 PST
-  modification time. No capture or timed arm started; no worker remained.
-  Earlier load readings and source freezes are retained in `questions.md`.
-- Current compression: `uv run --no-sync python .runs/mps-admission-check.py`
-  passed provenance-scoped latest parity, failure supersession, refusal before
-  worker creation, retained per-call metrics, one ledger read across retries
-  and two-width replay admission. `uv run --no-sync python
-  .runs/mps-steer-extra-check.py` passed the interleaving/capture/worker checks
-  above after updating its admission fixtures. Ruff check/format, compilation
-  and `git diff --check` passed. No model, game or measurement ran.
-- Realignment preflight, 2026-11-13T02:09:13.955809+00:00: load 63.00 still
-  prohibited capture under <16; M2 access notes were unchanged. Task comments
-  supplied no newer direction. No capture or timed arm started.
-- Realignment repair: `uv run --no-sync python .runs/mps-admission-check.py`
-  passed with assertions for preserved parity failure statuses, no worker
-  allocation, and OOM displayed as “does not fit.” Ruff check/format and
-  `git diff --check` passed. These are controlled fixtures, not MPS evidence.
-
-- 2026-11-13 02:21 UTC: `c91b93dcc210` at `99210bf8d` attempted the
-  capture at load 69.68; failed before games because the local native extension
-  omitted `catalog_tokens.keys`. Failure retained in
-  `experiments/data/mps_retest/laptop/capture-256-failed-c91b93dcc210`.
-  Rebuilding the extension from this checkout before retry; launcher USD 0.00.
-- Controlled high-load fixture passed: load 100 admitted, five arms interleaved,
-  both endpoint loads retained, >2× boundary unchanged. Ruff and diff checks passed.
-
-- `f800789ff669` completed the 256-stream capture at `99210bf8d`: 48,064
-  decisions, 792 calls, 188 minibatches, 624.57 s capture wall, load
-  77.81→85.09, no repeat; launcher USD 0.00. Native wheel rebuilt and
-  atomically installed before this run. Replays/parity are next.
-
-- Laptop `86e16cc560fc`, first w384/256 replay: all five arms completed
-  in one interleaved block spanning 2,425.13 s. Whole-update seconds:
-  CPU4 737.14, MPS f32 536.55, bf16 511.31, f16 472.41, MLX 427.30.
-  All sampled-choice disagreement counts zero. Load 54.52→21.48 triggers
-  a required whole-block repeat; these are not selected medians or final results.
-  Three such blocks cannot fit an hour at the observed duration; acceptance
-  must retain the actual span rather than relax the window.
-
-- Laptop continuation `86e16cc560fc` cancelled after the first complete block
-  and during its drift retry: observed 40.4-minute block conflicts with the
-  three-block hour at that rate; M2 is now the primary host per the latest steer.
-  The first laptop block remains provisional, with retry pending and no median.
-  Do not describe laptop replay acceptance as met.
-
-- M2 source transferred as a shallow Git checkout of `99210bf8d`, native
-  CPython 3.12 extension rebuilt there and installed atomically. Capture
-  `bfb4d0e22dd7` uses the isolated `.runs/mps-etude` launcher. Allocation and
-  release remain operator-owned; allocation receipt is quoted in questions.
-
-- M2 `bfb4d0e22dd7` completed its 256-stream capture: 1,223.33 s wall,
-  48,064 learner decisions, 792 calls, 188 minibatches, 9.79 s shared
-  engine/host work. Replay/parity run `5884f474a199` now measures w384.
-  Laptop archive and bench receipts/references were published with manabot.data;
-  captures are packaged byte-for-byte in `laptop/captures-99210bf8d.tar.gz`.
+Current checks: `uv run --no-sync python experiments/mps_retest.py report
+experiments/data/mps_retest --bench experiments/data/mps_retest` passed;
+independent assertions verified 15 selected medians, both half dtypes, no
+pending retry, exact phase sums, explicit gaps, six PNGs and two UTC-labelled
+tables. Ruff format/check and visual inspection passed.
+`uv run --no-sync pytest tests/infra/test_experiment_data_untracked.py -q`
+passed (1 test). The final archive hash/size matched its manifest entry;
+`git diff --check` passed. Scratch is within both context limits.

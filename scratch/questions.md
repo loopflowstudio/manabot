@@ -220,3 +220,42 @@ source. Restart three repetitions under one new freeze after the retry-policy
 change; do not combine runs separated by cancellations. Per-call comparison
 blocks use the same directional load-increase retry on both hosts; laptop
 captures retain their retry with this directional predicate.
+
+## M2 comparison design counterexample, 2026-11-13 05:29 UTC
+
+Five resident arms on the 24 GiB M2 sustained paging, reaching 10,518.25 MiB
+used swap with no complete replay after about 105 minutes. Raw counter samples
+and the cancellation receipt are retained in `m2/host-observations.jsonl`.
+Etude `877fa3cf766d` was cancelled at 05:29 UTC; no OOM was observed or inferred.
+The implement instruction says to stop dependent work when evidence breaks
+the design. Further M2 timing is stopped pending review of a comparison that
+does not keep five allocator working sets resident on a 24 GiB machine.
+Pairwise interleaving would change the steered all-arm comparison and its
+single CPU baseline, so it is not silently substituted. Captures and parity
+remain evidence; no M2 performance conclusion or full-matrix completion is
+claimed. The explicit instruction to continue laptop replays still applies.
+
+Reporting choice: if only the laptop completes timing, its chart uses the
+canonical `full_context.png` with M4 provenance. Keep the M2 parity and aborted
+series in a separate evidence directory/table and describe the missing timing
+in the report, rather than giving the shareable path an empty M2 chart.
+
+Laptop scheduling choice: the completed three-replay w384/256 series took
+6,870.95 seconds. Do not start another full series that cannot fit the
+remaining window ending 06:17 UTC. Capture 512 and then 1024 streams while
+time remains, preserving failures or unused captures; report their replays
+and lower-priority widths as not reached rather than substituting a single
+replay for the required median of three.
+
+Scope refinement after the w384 M2 stop: the counterexample blocks that
+resident working set and larger ones, not every smaller model. Attempt w64l2
+on M2 independently under the unchanged all-arm method; watch for active
+paging and retain any failure. Do not extrapolate the w384 failure to a
+smaller working set without measuring it. No pairwise substitution is made.
+
+Final scope observation: w64l2 completed on M2, but the full setup/replay/cleanup
+interval still recorded 7.90 GiB of swap-outs with about 257 MiB used swap at
+the end. Those timings are retained with this qualification. No additional
+M2 widths or per-call matrix were launched; further scaling awaits a revised
+memory-bounded comparison. The laptop w64 series finished its required retry
+at 06:19:45 UTC, then all measurement workers exited.

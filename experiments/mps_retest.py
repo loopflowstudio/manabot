@@ -1788,7 +1788,9 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
                 ]
                 worst = min((r["gradient_cosine"] for r in parity), default=None)
                 same = all(r["sample_disagreements"] == 0 for r in complete)
-                text = f"cos {worst:.4f}" if worst is not None else "parity missing"
+                text = (
+                    f"global cos {worst:.4f}" if worst is not None else "parity missing"
+                )
                 if not same:
                     text += "\nchoices differ"
                 else:
@@ -1864,7 +1866,7 @@ def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
             if mixed_host
             else ""
         )
-        + "Both-seat self-play; one real capture per stream count.\nMedian of three replays; same inputs and recorded decisions.\nHalf arms: bfloat16; float16 with gradient scaler.\nBars identify executed dtype and median-total phase times.\nRate counts learner decisions before filtering.\nCosines vs CPU; choices use common-uniform samples.\nNeither proves identical trained policies.\nFirst calls, memory and correctness: comparisons"
+        + "Both-seat self-play; one real capture per stream count.\nMedian of three replays; same inputs and recorded decisions.\nHalf arms: bfloat16; float16 with gradient scaler.\nBars identify executed dtype and median-total phase times.\nRate counts learner decisions before filtering.\nGlobal gradient cosine vs CPU; tensor minima are in the table.\nChoices use common-uniform samples.\nNeither proves identical trained policies.\nFirst calls, memory and correctness: comparisons"
         + suffix
         + ".md\nL = each replay block start→end 1-minute load.\nLoads label all phase stacks and associated rates.\n* = lower mean endpoint load after load more than doubles.\nAll arm models resident; memory capacity is shared.\nMissing and failed arms remain visible.\nThree back-to-back replays on the same host; no time cap."
         + (
