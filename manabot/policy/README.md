@@ -30,7 +30,8 @@ forward reads the result; no forward reads an observation dictionary.
 - `prepare.py` turns one admitted observation batch into a `Prepared` batch:
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes, belief and recent-event rows, live-token
-  offsets and inference column compaction. A backend's graph then holds only
+  offsets and inference column compaction. Object joins and ownership follow
+  the batch's trimmed object axes. A backend's graph then holds only
   gathers, scatters and arithmetic. `Prepared` is generic over its array type:
   `prepare` returns NumPy arrays and a backend moves them to its device
   (torch's `on_device`). Optional groups are `None` when unused: a fact

@@ -161,7 +161,7 @@ admission's private `_key`/`_word` and fact-kind tuples (one owner:
 
 6b. **Complete** — `105e7e2aa` merged, rebuilt; fresh CPU oracle and updates exact.
 7. **CUDA equivalence captured** at `296c90f33` on A6000: numeric bar holds,
-   stricter repeat-floor condition unresolved. **Speed has no result**: see
+   stricter repeat-floor condition unresolved. **Full speed receipt pending**: see
    "Speed and profile" and "Next actions".
 8. **Optimize pass pending** speed/profile output; no optimization claim yet.
 
@@ -341,7 +341,7 @@ finding for gate review; speed measurement proceeds under the Task numeric
 tolerance without claiming the stricter condition passed. No gradient
 threshold or receipt was changed.
 
-### Speed and profile: no result; launcher request stuck
+### Earlier speed attempts (before 18:20 UTC): no result
 
 Every speed admission failed before a job command ran; nothing was measured:
 
@@ -388,20 +388,15 @@ The prior conflict inventory is at `9fe9eb1e7:scratch/mtg333-plan.md`.
 
 ### Next actions
 
-1. Launch speed/profile now, without waiting for 19:15:52 UTC: commit a launch
-   source with patches regenerated against `105e7e2aa` (the `manabot/` code
-   changed after `c150d5f25`), on a new Task template per the steer, cohort
-   `mtg333-speed`, `--max-usd 10`. Before launching, confirm the provider pod
-   list has no Task pod. Later, `etude terminate` the
-   `4b091160edbf` machine once Etude settles it, then confirm `runpodctl pod list`
-   shows no Task pod. The speed question predates #513, so the launch does
-   not wait for that merge.
-2. #513 is merged and its capture replay/MLX checks pass. Complete the
-   identical-input CPU oracle described below; five update cases are exact
-   and parity passes on a fresh real capture.
-3. Slice 8 runs from the speed/profile output on the merged code, with the
-   same card. Then gate: review the repeat-floor finding and run the broader
-   suites, Python 3.12 and the wheel smoke.
+1. Finish the live A40 run `2f98203dd0a7` (three alternating processes per
+   arm, then cProfile). Retain its summary and profile; terminate that rental
+   before another. Settle the old cancelled `4b091160edbf` allocation after
+   its 19:15:51 UTC deadline; its provider pod is absent.
+2. #513's Prepared capture port is complete. Current-engine CPU oracle is
+   exact, all five update cases are exact, and fresh Torch/MLX parity passes.
+3. Use the final speed/profile to select and measure the optimization on A40.
+   Then gate reviews the repeat-floor finding, the full-file ordering hang,
+   broader suites, Python 3.12 and installed-wheel smoke.
 
 ### Current pass, 2026-11-13 18:20 UTC
 
@@ -443,7 +438,7 @@ rebuild current native source before final CPU captures.
 Retry `2f98203dd0a7`, source `cd7afaec86`, machine
 `mtg333-speed-a40-029a57d11bfc`, cohort `mtg333-speed-shared`, $10 cap:
 identical-input CUDA oracle captures 3,410 tensors. All outputs, losses and
-trained weights are exact; 95 gradients differ ≤3.259629011154175e-9.
+CPU-trained weights are exact; 95 gradients differ ≤3.259629011154175e-9.
 Head-repeat has seven differing belief gradients ≤3.026798367500305e-9.
 The Task's ≤1e-8 bar holds; the stricter repeat-floor condition remains open.
 Speed samples are running. Previous cohort name could not be reused; refused
@@ -461,3 +456,50 @@ discovery: **20 passed, 66.98s**. Fresh current-engine capture parity passes
 Torch and MLX; MLX clipped-step parameter max difference 1.2e-7. Generic MLX
 learner annotations now stay under TYPE_CHECKING so importing the helper does
 not eagerly load observation/checkpoint contracts.
+
+A narrow probe of the prior test-order hang passed: serving backlog followed
+by restored collection → 2 passed, 58.64s. This rules out that pairing alone,
+not the previously failing full-file order; leave the broader gate check open.
+
+First-pair speed (preliminary, one process each; final medians pending):
+55391 learner rows, 217 damped steps and 16 PPO steps in both arms. Head/base:
+damped 8.174/7.551 steps/s; PPO 0.1993/0.2157; inference 4136/1318 obs/s;
+host preparation 0.03310/0.09876s; collection 56.56/79.60s; save
+0.02930/0.03710s; load 0.1692/0.1650s. Forward sync diagnostics fall from
+23 actual warnings to zero (both include one prototype-mode warning).
+PPO forward/loss is 29.21s versus 17.86s; await cProfile before optimizing.
+
+19:16 UTC: `etude wait 4b091160edbf` settled the cancelled request as
+**lost (create_unconfirmed), final launcher cost $0.00**. Its earlier displayed
+accrual was provisional, not a charge. No provider pod existed for it.
+
+Optimization hypothesis (exploratory, before candidate measurement): the damped
+cProfile has 493,537 recursive calls each to array_fields and _replace_arrays
+for 218 transfers (1.669s and 1.755s cumulative). Both recursively visit every
+integer in host-only Packed.sizes/lengths and bucket needs, constructing keys
+and copied tuples that no device reads. Stop traversal of scalar-only tuples,
+preserving mixed/nested tuples and every array leaf. Expect 5–10% lower PPO
+wall time by eliminating metadata traversal; keep only if CUDA measurement
+shows a gain and the CPU oracle/updates remain exact. Preparation's packing
+and unused definition-reference collection are smaller damped costs (0.185s
+and 0.077s), so they are not the first candidate.
+
+Full A40 speed comparison `2f98203dd0a7` succeeded; final launcher cost ~$0.31.
+Three process medians (head vs base, ranges in retained compare.txt): damped
+7.615 vs 7.356 steps/s; PPO 0.1992 vs 0.2157 (**7.7% regression**, outside
+spread); inference 4136 vs 1318 obs/s; preparation 0.03386 vs 0.09876s; save
+0.02816 vs 0.03710s; load 0.1757 vs 0.1662s (within observed spread);
+collection 56.56 vs 79.60s. All arms have 55391 learner rows, 217 damped and
+16 PPO steps. Complete table is /tmp/mtg333/speed-live/compare.txt and Etude's
+compare.txt. The candidate is scalar metadata traversal, not GRU packing or
+float arithmetic. The follow-up uses one process per arm, each with the same
+three timed inner repeats, on a fresh A40; repeat profiling is omitted.
+
+PPO cProfile confirms the candidate: 1,519,556 visits each to array_fields
+and _replace_arrays, 4.804s and 4.117s cumulative, versus 0.113s in GRU
+packing and 0.928s in unused definition references. Scalar-only tuples now
+remain untouched by traversal; mixed tuples and arbitrary leaf types retain
+their behavior. Candidate sanity: packed transfer layout/value test passes;
+final CPU oracle **3,410 tensors exact**, all five update JSON cases exact.
+Optimization baseline is `5940609a28` (same numeric code as the speed head);
+the launch patch restores it from the candidate.

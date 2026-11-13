@@ -88,7 +88,7 @@ focus indexes and selected the legal action rows. `forward_distribution`
 restores their scores to the published action capacity:
 
 ```python
-scores = self.policy_head(informed_actions).squeeze(-1)
+scores = self.policy_head(informed_actions).squeeze(-1).float()
 logits = scores.new_full(capacity, -1e8)
 logits = logits.index_put((batches, slots), scores.to(logits.dtype))
 ```

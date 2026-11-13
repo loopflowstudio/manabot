@@ -3,7 +3,7 @@
 One machine, one venv and one native build. Each arm directory holds its own
 `manabot/` beside symlinks to every other checkout entry: `head` is the job
 revision's, and every `<arm>.patch` here gives one more arm (`base.patch`:
-baseline 105e7e2aa's `manabot/`, the merge-base).
+the baseline selected at the launch commit's `manabot/`).
 `bench.py` runs the arms interleaved, `REPEATS` processes each, then
 `compare.py` writes `summary.txt`.
 The same rental first captures equivalence and ends with an untimed profiling
@@ -64,12 +64,21 @@ uv run --locked python -c "import pstats; pstats.Stats('$out/profile.damped').so
 """
 
 
-def runs(revision: str, hours: float = 2.5, usd: float = 4.0) -> list[Run]:
+def runs(
+    revision: str,
+    hours: float = 2.5,
+    usd: float = 4.0,
+    processes: int = 3,
+    profile: bool = True,
+) -> list[Run]:
     """The one CUDA job at `revision`."""
+    if processes < 1:
+        raise ValueError("processes must be positive")
+    command = _COMMAND if profile else _COMMAND.partition("# Profile separately")[0]
     return Job(
         name="mtg333-speed",
         setup=machine_setup(""),
-        command=_COMMAND,
+        command=f"export REPEATS={processes}\n" + command,
         repo=str(ROOT),
         revision=revision,
         max_hours=hours,

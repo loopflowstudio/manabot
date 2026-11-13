@@ -1,6 +1,9 @@
 """Capture policy outputs, gradients and trained weights for one checkout.
 
 Usage: uv run python run.py OUT.pt  (with PYTHONPATH pointing at the checkout)
+Generate one real head corpus with `--belief-input PATH`, then set
+EQUIV_BELIEF_INPUT=PATH for every arm; schema generation is not the forward
+being compared. The same corpus bytes must enter both revisions.
 EQUIV_DEVICE=cuda runs the forward/backward configs on CUDA with TF32 matmul
 and cuDNN allowed (`precision="tf32"`'s switches); `minimal.train` stays CPU.
 Imports names shared by the integrated baseline 105e7e2aa and MTG-333.

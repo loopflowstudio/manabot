@@ -19,6 +19,14 @@ if TYPE_CHECKING:
     from manabot.policy.prepare import CatalogPrograms, Prepared
 
 
+_SCALAR_TYPES = (int, float, complex, bool, str, bytes, type(None))
+
+
+def _host_scalars(value: tuple[object, ...]) -> bool:
+    """Immutable schedule metadata contains no array leaves to transfer."""
+    return all(type(item) in _SCALAR_TYPES for item in value)
+
+
 def from_numpy(array: np.ndarray, device: torch.device | str = "cpu") -> Tensor:
     return torch.as_tensor(array, device=device)
 
@@ -44,6 +52,8 @@ def array_fields[A](value: object, leaf: type[A], prefix: str = "") -> dict[str,
     if is_dataclass(value) and not isinstance(value, type):
         children = ((f.name, getattr(value, f.name)) for f in fields(value))
     elif isinstance(value, tuple):
+        if leaf in (np.ndarray, Tensor) and _host_scalars(value):
+            return {}
         children = ((str(i), child) for i, child in enumerate(value))
     else:
         return {}
@@ -68,6 +78,8 @@ def _replace_arrays(value: Any, moved: dict[str, Tensor], prefix: str = "") -> A
             },
         )
     if isinstance(value, tuple):
+        if _host_scalars(value):
+            return value
         return tuple(
             _replace_arrays(child, moved, f"{prefix}/{i}")
             for i, child in enumerate(value)
