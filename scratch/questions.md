@@ -22,3 +22,11 @@ not to reword existing cards; do not change the move verb.
 2026-11-12: Use the descriptive `w17-token-cards` fixture suffix for the new
 Academy catalog binding. Preserve the existing `w17` files unchanged; replay
 only existing Commands and require their offer ids/labels to match.
+
+2026-11-13: Main now includes MTG-297 (Heartbeat of Spring). Use the complete
+61/61 bonus sheet and 1,000-deck admission as the combined acceptance outcome;
+do not keep a known obsolete "only Heartbeat missing" expectation. Seed new
+`w17-token-cards` fixtures from main's current w17 Commands before refreshing
+the combined catalog, because main's mana spending redesign changed Commands.
+The managed `lf sync` plan selected merge_target for this branch; preserve
+history through that supported integration rather than raw git rebase.
