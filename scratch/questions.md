@@ -54,3 +54,13 @@ source override; no package version was invented and no local path was pinned.
 Release/pin/lock and installed-consumer proof remain before publication.
 Actual provider courier restore/retry and service continuation remain unproved
 from Manabot. No paid launch was performed for this cutover.
+
+## Concept review — 2026-11-13
+
+Reversible, simpler option kept: the CLI passes only seed, device and (for
+local/baseline) learning seats and padded shapes to a recipe config. Other
+fields are unreachable, so `manabot train --recipe elemental` on a laptop runs
+256 CPU streams; the two-stream smoke config exists only in `runs()`. Whether
+the CLI should accept any field of the recipe's Pydantic config is not settled
+by the recorded direction and was not built. It matters because the README
+advertises that command as the way to run the current recipe locally.

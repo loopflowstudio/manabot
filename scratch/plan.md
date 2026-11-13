@@ -91,3 +91,51 @@ dependency has not cleared. `origin/main` is still
 `6ce618b8adacee3a4894d05572399853680bb9fe`, already incorporated. Requirements
 and the runtime pin in `pyproject.toml` remain 0.2.16. No training test was
 rerun for this reconciliation; earlier results in implementation.md stand.
+
+## Concept review — 2026-11-13: next implement direction
+
+Reviewed the recipe/loop/CLI experience against the code at `4bf7ac1e5`. The
+model holds: a recipe is `train(config)`, the loop is `self_play`, Etude owns
+the run. No recipe or loop restructuring follows. What remains are names and
+one recovery message that still teach the retired model. These are proposals
+implied by the Task vocabulary ("Recipe" replaces "regime"; an update learns
+from one batch), not statements anyone made about these files.
+
+1. `manabot/experiment/execution.py` executes nothing: it holds retained
+   schedule, hardware and run records for offline reports. Rename it for what
+   it holds (`manabot/experiment/records.py`), with its seven importers; no
+   alias. A reader of this Task otherwise finds an `execution.py` surviving.
+2. Live learning records sit in the retired concept's module. A recipe author
+   imports `DampedPolicyLearning`, `IterationSchedule`, `Learning` from
+   `manabot.training.regime`, and training-loop.md tells them to add a new
+   learning record there. Move `Schedule`, `Learning`, `IterationSchedule`,
+   `DampedPolicyLearning`, `Precision` and `BatchClosure` to
+   `manabot/training/learning.py` (about 30 importers; class names, fields and
+   serialized keys unchanged). `regime.py` then holds only retained
+   regime/stage records and imports those types for its fields. Check the
+   Torch-free child boundary still passes. `manabot/training/learning/` is an
+   empty untracked leftover directory; remove it first.
+3. A refused resume says only `state.pt was written for another settings:
+   '<digest>', not '<digest>'`; docs claim it names what differs. Save the
+   learner settings (machine fields excluded) in `state.pt` beside the digest
+   and name the differing fields with both values. The state format is
+   unreleased, so no compatibility path is needed.
+4. CLI vocabulary: the target flag is `--steps` while the config field, clock,
+   checkpoint names and messages all say update, and README has to explain
+   that steps are not optimizer calls. Make `--updates` the flag; keep
+   `--steps` as a hidden alias that warns with its removal release
+   (`experiments/baseline-nightly.md` and both READMEs name it). The CLI
+   requires an experiment config to have an `updates` field it never sets;
+   require only what it passes.
+5. With the SDK release (remaining work 1): the CLI hand-writes Etude's
+   `ETUDE_UNTIL_*` and `ETUDE_DEADLINE` variables with its own save/restore
+   around `local_launch`, which already does the same for its four. Target
+   and deadline are launch facts; ask EXP-56 for
+   `local_launch(out=, experiment=, until=, deadline=)` and drop the block.
+   If the release lands without it, keep the current code. Also remove the
+   "This cutover requires Etude PR #103" paragraph from docs/training.md when
+   the pin lands.
+
+Left alone on purpose: the repeated three-line `track(...)` /
+`run.until("updates", default=config.updates)` opening in each recipe is the
+explicit shape asked for; `runs()`/`eval()`/`report()` keep Etude's names.
