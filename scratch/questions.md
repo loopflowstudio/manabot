@@ -77,3 +77,12 @@ ownership instead of adding a second ownership array. It already follows
 bucket-trimmed coordinates and preserves explicit belief ownership. Port
 shared capture hooks to NumPy inputs and retain raw `ActionRows.observation`
 for cross-backend replay; Prepared evidence is intentionally not raw input.
+
+2026-11-13 19:33–19:38 UTC: A40 optimization admission f6f8c567e281
+was refused by the capacity quote. A6000 bcc8fca2fcb9 and A40 retry
+49a888481def returned HTTP 400; both bodies said “There are no longer any
+instances available with the requested specifications. Please refresh and try
+again.” Provider inventory confirmed no pods; their windows were terminated.
+Use the authorized Vast 5090 fallback: run 267f945d54a0, one card/rental for
+both optimization arms. Absolute times are not compared across cards with
+the initial A40 result.

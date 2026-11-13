@@ -503,3 +503,20 @@ their behavior. Candidate sanity: packed transfer layout/value test passes;
 final CPU oracle **3,410 tensors exact**, all five update JSON cases exact.
 Optimization baseline is `5940609a28` (same numeric code as the speed head);
 the launch patch restores it from the candidate.
+
+Optimization run `267f945d54a0`, source `e6cd7f59cc`, on Vast instance
+60539549 (`mtg333-opt-vast5090-295daf64df5d`): RTX 5090, 12 vCPUs, 64 GB,
+$0.7881481481481482/hour; job cap $2, cohort cap $10. A40 was unavailable at
+create (after its quote said available), as was A6000; the 400 bodies were read,
+all unconfirmed requests reconciled absent, and no second Task rental was left
+running. Before/after both use this one 5090; the first A40 table stays separate.
+
+Optimization `267f945d54a0` succeeded, final launcher cost ~$0.18; its window
+was terminated and provider inventory confirms the Vast instance and every
+Task RunPod request absent. Same-5090 before/after: damped 18.2057→19.225
+steps/s (+5.6%, beyond the three inner-repeat ranges), inference 9667→10170
+obs/s (+5.2%), collection 31.46→21.86s (-30.5%). PPO 0.33794→0.3379 is
+unchanged; the prediction of a 5–10% PPO wall reduction was not met. Keep the
+measured damped/collection improvement, without claiming PPO improved.
+The initial A40 PPO regression therefore needs a direct optimized-head versus
+original-baseline check; regenerate the speed patch to 105e7e2aa for that pass.
