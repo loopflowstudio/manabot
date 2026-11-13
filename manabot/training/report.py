@@ -5,18 +5,18 @@ An experiment's `report()` composes these into an Etude `Report`, beside
 returns an ordinary Etude record, so a report mixes them with its own panels:
 
 - `job_labels`: `Report.labels`, a display name per job from its regime's model;
-- `against_earlier_self`, `against_fixed`, `head_to_head`: eval `Curve`s, one
-  chart per question with a line per job;
-- `learning_schedule`: ML `Schedule` panels of the configured damped learning
+- `against_earlier_self`, `against_fixed`: eval `Curve`s with a line per job;
+- `head_to_head`: an eval `Curve` of named pairs, one line for the first seat;
+- `learning_schedule`: ML `Planned` panels of the configured damped learning
   rate and policy damping on the update clock.
 
 Jobs are keyed by their Etude name, which for a `TrainingJob` is its regime id.
-Matches are named by the tags an experiment's `eval(state)` gives its matchups.
+Matches are selected by the tags or names `eval(state)` gives its seatings.
 """
 
 from collections.abc import Mapping, Sequence
 
-from etude.report import Curve, Matches, Schedule, SchedulePoint
+from etude.report import Curve, Matches, Planned, PlannedPoint
 
 from manabot.training.learning import DampedPolicyLearning
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -64,23 +64,20 @@ def against_earlier_self(title: str, tags: Sequence[str]) -> Curve:
     return Curve(title=title, matches=tuple(Matches(tag=tag) for tag in tags))
 
 
-def against_fixed(title: str, opponent: str, tags: Sequence[str]) -> Curve:
-    """Each checkpoint against one fixed player, by its Etude name, a line per job."""
-    return Curve(
-        title=title,
-        matches=tuple(Matches(tag=tag) for tag in tags),
-        opponent=opponent,
-    )
+def against_fixed(title: str, tags: Sequence[str]) -> Curve:
+    """Each checkpoint against the fixed player selected by the tags, a line per job."""
+    return Curve(title=title, matches=tuple(Matches(tag=tag) for tag in tags))
 
 
-def head_to_head(title: str, subject: str, tag: str) -> Curve:
-    """Two jobs against each other, drawn once from `subject`'s side.
+def head_to_head(title: str, seatings: Sequence[str]) -> Curve:
+    """One line: the first seat's score where its checkpoint stood.
 
-    A head-to-head score and its complement carry the same information, so
-    only `subject`'s line is drawn: above the reference means `subject` is
-    stronger.
+    `seatings` are the names `eval(state)` gave the pairs. An empty sequence
+    raises `ValueError`.
     """
-    return Curve(title=title, matches=Matches(tag=tag), subject=subject)
+    if not seatings:
+        raise ValueError("head-to-head needs at least one seating")
+    return Curve(title=title, matches=tuple(Matches(seating=name) for name in seatings))
 
 
 # -- Learning schedule ---------------------------------------------------------
@@ -112,7 +109,7 @@ def _sampled(last: int) -> tuple[int, ...]:
 
 def learning_schedule(
     regimes: Mapping[str, TrainingRegime],
-) -> tuple[Schedule, Schedule]:
+) -> tuple[Planned, Planned]:
     """The configured learning rate and policy damping of each job, by update.
 
     Values come from `DampedPolicyLearning.rates`, the method the learner calls,
@@ -124,13 +121,13 @@ def learning_schedule(
         learning, last = _damped(name, regime)
         rates[name] = [(u, learning.rates(u)) for u in _sampled(last)]
 
-    def panel(title: str, unit: str, index: int) -> Schedule:
-        return Schedule(
+    def panel(title: str, unit: str, index: int) -> Planned:
+        return Planned(
             title=title,
             clock="updates",
             unit=unit,
             jobs={
-                name: tuple(SchedulePoint(at=u, value=r[index]) for u, r in found)
+                name: tuple(PlannedPoint(at=u, value=r[index]) for u, r in found)
                 for name, found in rates.items()
             },
         )

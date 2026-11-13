@@ -30,14 +30,14 @@ Etude tracking and its segments track under `self-play`, so its follower
 from decimal import Decimal
 from pathlib import Path
 
-from etude.eval.records import Benchmark, Inference, Matchup, Player
+from etude.eval.records import Benchmark, Inference, Player, Seating
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation, training
 from etude.launch.records import Job
 from etude.report import (
     Anchors,
+    Crosstable,
     Curve,
-    HeadToHead,
     Matches,
     Matrix,
     Ranking,
@@ -112,7 +112,7 @@ def runs(
 
 
 def _updates(checkpoint: Checkpoint) -> int:
-    return int(checkpoint.clocks["updates"])
+    return int(checkpoint.at["updates"])
 
 
 def _rated(run: TrainingRun) -> tuple[dict[int, Checkpoint], int | None]:
@@ -128,10 +128,10 @@ def _matchup(
     tags: tuple[str, ...],
     players: tuple[Player | Inference, Player | Inference],
     grid: list[Conditions],
-) -> Matchup:
+) -> Seating:
     """One match per grid row; every row of a grid plays the same number of games."""
     (games,) = {sum(len(group.deals) for group in row.groups) for row in grid}
-    return Matchup(
+    return Seating(
         name=name,
         tags=tags,
         players=players,
@@ -144,7 +144,7 @@ def _grid(name: str, kind: Kind, games: list[Game]) -> Benchmark:
     return Benchmark(
         name=name,
         environment=eval_environment(),
-        matchups=(
+        seatings=(
             _matchup(
                 f"vs heuristic, {kind} grid",
                 ("heuristic",),
@@ -157,7 +157,7 @@ def _grid(name: str, kind: Kind, games: list[Game]) -> Benchmark:
 
 def _pairs(
     run: TrainingRun, rated: dict[int, Checkpoint], endpoint: int | None
-) -> list[Matchup]:
+) -> list[Seating]:
     """The run's pairing graph: each pair plays the 10×10 cross-checkpoint schedule."""
     grid = rows("pair", h2h_groups(h2h_schedule()))
     return [
@@ -179,7 +179,7 @@ def eval(state: ExperimentState) -> list[Job]:
     """
     full: list[Checkpoint] = []
     subset: list[Checkpoint] = []
-    pairs: list[Matchup] = []
+    pairs: list[Seating] = []
     for run in state.runs:
         rated, endpoint = _rated(run)
         for updates, checkpoint in rated.items():
@@ -205,7 +205,7 @@ def eval(state: ExperimentState) -> list[Job]:
     ]
     if pairs:
         ladder = Benchmark(
-            name=PAIRS, environment=eval_environment(), matchups=tuple(pairs)
+            name=PAIRS, environment=eval_environment(), seatings=tuple(pairs)
         )
         jobs.append(
             evaluation(ladder, play=play, workers=WORKERS, max_hours=EVAL_HOURS)
@@ -249,7 +249,7 @@ def report() -> Report:
             Ranking(title="By heuristic deck", by="opponent_deck", matches=heuristic),
             Ranking(title="On the play or the draw", by="game_seat", matches=heuristic),
             Curve(title="By model deck", split="deck", matches=heuristic),
-            HeadToHead(matches=Matches(tournament=PAIRS)),
+            Crosstable(matches=Matches(tournament=PAIRS)),
             Anchors(),
         ),
         perf=PERF,

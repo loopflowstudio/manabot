@@ -16,7 +16,7 @@ from __future__ import annotations
 from itertools import product
 from pathlib import Path
 
-from etude.eval.records import Inference, Matchup
+from etude.eval.records import Inference, Seating
 from etude.experiment import ExperimentState, TrainingRun
 from etude.launch.records import Job
 from etude.report import Curve, Matches, Ranking, Report, Score
@@ -72,7 +72,7 @@ def eval(state: ExperimentState) -> list[Job]:
     )
 
 
-def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
+def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
     """Scheduled checkpoints against the heuristic, then BF16 against float32.
 
     A checkpoint not yet stored is left out, so a later pass plays it. A
@@ -98,8 +98,8 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
     for left, right in product(reference, candidate):
         if not (left.ended and right.ended):
             continue
-        shared = {int(c.clocks["updates"]) for c in left.checkpoints} & {
-            int(c.clocks["updates"]) for c in right.checkpoints
+        shared = {int(c.at["updates"]) for c in left.checkpoints} & {
+            int(c.at["updates"]) for c in right.checkpoints
         }
         if not shared:
             continue
@@ -108,7 +108,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
         second = right.checkpoints.at("updates", update).last
         assert first is not None and second is not None
         found.append(
-            Matchup(
+            Seating(
                 name=f"{ARMS[0]} {left.name} v {ARMS[1]} {right.name} u{update}",
                 players=(first.model(inference), second.model(inference)),
                 conditions=conditions,

@@ -209,6 +209,9 @@ def _stored(run: str, *updates: int) -> TrainingRun:
     return TrainingRun(
         name=run,
         experiment=value_readout_252.EXPERIMENT,
+        job=run,
+        launch=run,
+        line=run,
         state="finished",
         checkpoints=Checkpoints(
             Checkpoint(
@@ -220,7 +223,7 @@ def _stored(run: str, *updates: int) -> TrainingRun:
                     sha256="a" * 64,
                     size_bytes=1,
                 ),
-                clocks={"updates": float(update)},
+                at={"updates": float(update)},
                 line=run,
             )
             for ordinal, update in enumerate(updates, start=1)

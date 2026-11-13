@@ -49,7 +49,7 @@ draws them. Etude tells each run it launches from the file that stem, and the
 
 | file | `runs()` | `eval(state)` | `report()` |
 | --- | --- | --- | --- |
-| [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, pairs |
+| [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, crosstable of pairs |
 | [seat_comparison](seat_comparison.py) (MTG-165) | retired; requires pre-cutover source `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` | — | score on learner transitions, one-seat dotted |
 | [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups, head to head |
 

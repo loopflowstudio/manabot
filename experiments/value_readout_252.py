@@ -50,7 +50,7 @@ from itertools import combinations, product
 import json
 from pathlib import Path
 
-from etude.eval.records import Code, Inference, Matchup
+from etude.eval.records import Code, Inference, Seating
 from etude.experiment import Checkpoint, ExperimentState
 from etude.launch.records import Job
 from etude.run.storage import storage_from_uri
@@ -278,7 +278,7 @@ def eval(state: ExperimentState) -> list[Job]:
     )
 
 
-def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
+def evaluation_matchups(state: ExperimentState) -> tuple[Seating, ...]:
     """Each arm and seed against the heuristic, then each seed's finals pairwise.
 
     A checkpoint not yet stored is left out, so a later pass plays it. In a
@@ -293,7 +293,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
         for pairing in ELEMENTAL_PAIRS.pairings
     )
     legs = ELEMENTAL_PAIRS.legs
-    found: list[Matchup] = []
+    found: list[Seating] = []
     for (aggregation, seed), parent in PARENTS.items():
         scheduled = [
             (update, _checkpoint(state, parent, update))
@@ -305,7 +305,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
                 for update in THIRD_SEGMENT_UPDATES
             ]
         found += [
-            Matchup(
+            Seating(
                 name=f"{aggregation} s{seed} u{update} vs heuristic",
                 players=(checkpoint.model(inference), heuristic),
                 conditions=conditions,
@@ -318,7 +318,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
     deep = f"depth{DEPTH_LAYERS}"
     for aggregation, seed in DEEPER:
         found += [
-            Matchup(
+            Seating(
                 name=f"{aggregation} {deep} s{seed} u{update} vs heuristic",
                 players=(checkpoint.model(inference), heuristic),
                 conditions=conditions,
@@ -336,7 +336,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
         deeper_one = _deep(state, aggregation, seed, update)
         if shallow is not None and deeper_one is not None:
             found.append(
-                Matchup(
+                Seating(
                     name=(
                         f"{ARMS[0]} v {deep} s{seed} u{update}"
                         if aggregation == ARMS[0]
@@ -354,7 +354,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
             right = _deep(state, second, seed, update)
             if left is not None and right is not None:
                 found.append(
-                    Matchup(
+                    Seating(
                         name=f"{first} {deep} v {second} {deep} s{seed} u{update}",
                         players=(left.model(inference), right.model(inference)),
                         conditions=conditions,
@@ -374,7 +374,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
             if left is None or right is None:
                 continue
             found.append(
-                Matchup(
+                Seating(
                     name=f"{first} v {second} s{seed} u{update}",
                     players=(left.model(inference), right.model(inference)),
                     conditions=conditions,

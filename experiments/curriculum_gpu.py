@@ -44,7 +44,7 @@ class GPUConditions(Conditions):
 def benchmark(original: Benchmark) -> Benchmark:
     """Preserve the authored population and anchor; separate GPU match identity."""
     matchups = []
-    for matchup in original.matchups:
+    for matchup in original.seatings:
         candidate, anchor = matchup.players
         if not isinstance(candidate, Inference):
             raise ValueError("GPU curriculum benchmark requires one model placeholder")

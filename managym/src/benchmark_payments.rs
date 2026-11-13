@@ -10,6 +10,8 @@ use std::cell::RefCell;
 
 #[derive(Clone, Default, serde::Serialize)]
 pub struct Metrics {
+    /// Ordered first witnesses, including failed plans (FNV-1a over JSON).
+    pub witness_digest: u64,
     pub plans: u64,
     pub calls: u64,
     pub states: u64,
@@ -41,10 +43,14 @@ pub(crate) fn begin_plan(sources: usize) {
     });
 }
 
-pub(crate) fn end_plan() {
+pub(crate) fn end_plan(witness: &impl serde::Serialize) {
     METRICS.with(|m| {
         let (metrics, start) = &mut *m.borrow_mut();
         let spent = metrics.calls - *start;
+        for byte in serde_json::to_vec(witness).unwrap() {
+            metrics.witness_digest =
+                (metrics.witness_digest ^ u64::from(byte)).wrapping_mul(1099511628211);
+        }
         metrics.max_plan_calls = metrics.max_plan_calls.max(spent);
         metrics.plans_over_1k += u64::from(spent >= 1000);
     });

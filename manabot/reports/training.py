@@ -184,12 +184,10 @@ def training_dashboard(
 def _recorded_rows(directory: Path, experiment: str, run_id: str) -> dict[int, str]:
     """Read acknowledged row identities from Etude, including sealed crash tails."""
     recorded: dict[int, str] = {}
-    for table in read(directory, experiment, run_id).tables:
+    for table in read(directory, experiment, run_id).columns:
         for index in range(table.rows):
             row = table.row(index)
-            values, clocks = row["values"], row["clocks"]
-            if not isinstance(values, dict) or not isinstance(clocks, dict):
-                raise ValueError("invalid Etude projection row")
+            values, clocks = row.values, row.clocks
             digest = values.get("projection/row_sha256")
             if digest is None:
                 continue  # Summary observations are not settled history rows.
