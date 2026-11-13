@@ -26,6 +26,8 @@ pub(crate) struct PaymentShapeCounts {
     pub receipt_outcomes: usize,
     pub outcomes: usize,
     pub identity_outcomes: usize,
+    pub non_redundant_outcomes: usize,
+    pub non_redundant_identity_outcomes: usize,
     pub work: usize,
     pub cap_hit: bool,
 }
@@ -38,6 +40,8 @@ struct Outcomes {
     receipts: HashSet<ManaSpent>,
     combined: HashSet<(Vec<String>, Mana, ManaSpent)>,
     identities: HashSet<(Vec<usize>, Mana, ManaSpent)>,
+    non_redundant: HashSet<(Vec<String>, Mana, ManaSpent)>,
+    non_redundant_identities: HashSet<(Vec<usize>, Mana, ManaSpent)>,
     work: usize,
     cap_hit: bool,
 }
@@ -99,6 +103,8 @@ impl PaymentModel {
             receipt_outcomes: result.receipts.len(),
             outcomes: result.combined.len(),
             identity_outcomes: result.identities.len(),
+            non_redundant_outcomes: result.non_redundant.len(),
+            non_redundant_identity_outcomes: result.non_redundant_identities.len(),
             work: result.work,
             cap_hit: result.cap_hit,
         }
@@ -187,6 +193,28 @@ impl PaymentModel {
                 sacrifice: false,
             });
         }
+        // Match record_mana_payment's attribution: remove one whole fixed
+        // output, keeping the actual post-tap board reserved. The current cost
+        // must be payable from the pool; saved callers may use other sources.
+        // Classify the subset once, before enumerating its receipts. Sharing
+        // the traversal and cap preserves surplus-inclusive lower bounds.
+        let redundant = pool.usable_total(cost) > u16::from(cost.mana_value)
+            && selected.iter().any(|index| {
+                let mut remaining = pool.clone();
+                remaining.spend(self.sources[*index].fixed.as_ref().unwrap(), &cost.purpose);
+                if !remaining.can_pay(cost) {
+                    return false;
+                }
+                if tail.is_empty() {
+                    return true;
+                }
+                let mut obligations = vec![Obligation::Pay {
+                    cost: cost.clone(),
+                    waterbend: false,
+                }];
+                obligations.extend_from_slice(tail);
+                after.payable(remaining, obligations, SourcePolicy::All)
+            });
         let mut pending = vec![(pool, cost.clone(), ManaSpent::default())];
         let mut visited = HashSet::new();
         while let Some((pool, remaining, spent)) = pending.pop() {
@@ -209,6 +237,16 @@ impl PaymentModel {
                 result
                     .combined
                     .insert((capabilities.clone(), pool.clone(), spent));
+                if !redundant {
+                    result
+                        .non_redundant
+                        .insert((capabilities.clone(), pool.clone(), spent));
+                    result.non_redundant_identities.insert((
+                        available.clone(),
+                        pool.clone(),
+                        spent,
+                    ));
+                }
                 result.identities.insert((available.clone(), pool, spent));
                 continue;
             }
@@ -243,6 +281,8 @@ mod tests {
         assert_eq!(outcomes.source_outcomes, 3);
         assert_eq!(outcomes.receipt_outcomes, 1);
         assert_eq!(outcomes.identity_outcomes, 7);
+        assert_eq!(outcomes.non_redundant_outcomes, 1);
+        assert_eq!(outcomes.non_redundant_identity_outcomes, 3);
         assert!(!outcomes.cap_hit);
         assert!(
             model
@@ -260,6 +300,7 @@ mod tests {
         }];
         let outcomes = model.fixed_outcomes(Mana::default(), &ManaCost::parse("G"), 1000, &tail);
         assert_eq!(outcomes.outcomes, 0);
+        assert_eq!(outcomes.non_redundant_outcomes, 0);
         assert!(!outcomes.cap_hit);
     }
 
@@ -273,6 +314,41 @@ mod tests {
         assert_eq!(outcomes.outcomes, 2);
         assert_eq!(outcomes.source_outcomes, 2);
         assert_eq!(outcomes.receipt_outcomes, 2);
+        assert_eq!(outcomes.non_redundant_outcomes, 2);
+        assert!(!outcomes.cap_hit);
+    }
+
+    #[test]
+    fn non_redundant_outcomes_retain_indivisible_surplus_and_zero_cost_pool() {
+        let mut model = forests(2);
+        for source in &mut model.sources {
+            source.fixed = Some(Mana::parse("GG"));
+        }
+        let outcomes = model.fixed_outcomes(Mana::default(), &ManaCost::parse("G"), 1000, &[]);
+        assert_eq!(outcomes.outcomes, 2);
+        assert_eq!(outcomes.non_redundant_outcomes, 1);
+        assert_eq!(outcomes.non_redundant_identity_outcomes, 2);
+        let free = model.fixed_outcomes(Mana::parse("RG"), &ManaCost::parse("0"), 1000, &[]);
+        assert_eq!(free.non_redundant_outcomes, 1);
+        assert_eq!(free.non_redundant_identity_outcomes, 1);
+        let floating = model.fixed_outcomes(Mana::parse("G"), &ManaCost::parse("G"), 1000, &[]);
+        assert_eq!(floating.non_redundant_outcomes, 1);
+        assert_eq!(floating.non_redundant_identity_outcomes, 1);
+    }
+
+    #[test]
+    fn non_redundant_outcomes_preserve_saved_obligations_on_post_tap_board() {
+        let model = forests(3);
+        let tail = [Obligation::Pay {
+            cost: ManaCost::parse("GG"),
+            waterbend: false,
+        }];
+        let outcomes = model.fixed_outcomes(Mana::default(), &ManaCost::parse("G"), 1000, &tail);
+        // All three units are needed across the current and saved costs.
+        // Removing any tapped output while retaining the post-tap board makes
+        // the saved cost infeasible, even when the current cost still fits.
+        assert_eq!(outcomes.non_redundant_outcomes, 3);
+        assert_eq!(outcomes.non_redundant_identity_outcomes, 7);
         assert!(!outcomes.cap_hit);
     }
 }

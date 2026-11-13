@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from decimal import Decimal
 import json
@@ -303,6 +304,8 @@ class ShapeCounts:
     receipt_outcomes: int
     outcomes: int
     identity_outcomes: int
+    non_redundant_outcomes: int
+    non_redundant_identity_outcomes: int
     work: int
     cap_hit: bool
 
@@ -311,6 +314,9 @@ class ShapeCounts:
 class FoldedCounts:
     original: int
     expanded: int
+    non_redundant_expanded: int
+    identity_expanded: int
+    non_redundant_identity_expanded: int
     cast_offers: int
     unresolved: int
     capped: int
@@ -361,6 +367,9 @@ def shapes(source: Path, out: Path, cap: int) -> None:
                 ]
                 if cast_actions:
                     expanded = len(raw.action_space.actions) - len(cast_actions)
+                    non_redundant_expanded = identity_expanded = (
+                        non_redundant_identity_expanded
+                    ) = expanded
                     unresolved = capped = 0
                     for i in cast_actions:
                         fork = env.clone_env()
@@ -374,13 +383,28 @@ def shapes(source: Path, out: Path, cap: int) -> None:
                         if len(alternatives) != 1:
                             unresolved += 1
                             expanded += 1
+                            non_redundant_expanded += 1
+                            identity_expanded += 1
+                            non_redundant_identity_expanded += 1
                         else:
                             expanded += max(1, alternatives[0].outcomes)
+                            non_redundant_expanded += max(
+                                1, alternatives[0].non_redundant_outcomes
+                            )
+                            identity_expanded += max(
+                                1, alternatives[0].identity_outcomes
+                            )
+                            non_redundant_identity_expanded += max(
+                                1, alternatives[0].non_redundant_identity_outcomes
+                            )
                             capped += alternatives[0].cap_hit
                     folded.append(
                         FoldedCounts(
                             original=len(raw.action_space.actions),
                             expanded=expanded,
+                            non_redundant_expanded=non_redundant_expanded,
+                            identity_expanded=identity_expanded,
+                            non_redundant_identity_expanded=non_redundant_identity_expanded,
                             cast_offers=len(cast_actions),
                             unresolved=unresolved,
                             capped=capped,
@@ -496,6 +520,53 @@ def summarize_shapes(source: Path) -> None:
             "E_exact_offers": _quantiles([f.expanded for f in folded_exact]),
             "E_original_offers": _quantiles([f.original for f in folded_exact]),
         }
+        measurements: tuple[
+            tuple[str, Callable[[ShapeCounts], int], Callable[[FoldedCounts], int]], ...
+        ] = (
+            ("capability", lambda p: p.outcomes, lambda f: f.expanded),
+            ("identity", lambda p: p.identity_outcomes, lambda f: f.identity_expanded),
+            (
+                "non_redundant_capability",
+                lambda p: p.non_redundant_outcomes,
+                lambda f: f.non_redundant_expanded,
+            ),
+            (
+                "non_redundant_identity",
+                lambda p: p.non_redundant_identity_outcomes,
+                lambda f: f.non_redundant_identity_expanded,
+            ),
+        )
+        for label, count_outcomes, count_folded in measurements:
+            counts = [count_outcomes(p) for p in casts]
+            exact_counts = [count_outcomes(p) for p in exact]
+            real_counts = [n for n in exact_counts if n > 1]
+            certain = sum(n > 1 for n in counts)
+            possible = sum(n > 1 or p.cap_hit for n, p in zip(counts, casts))
+            row[label] = {
+                "D_exact_offers": _quantiles(real_counts),
+                "D_certified_over64": sum(n > 64 for n in counts),
+                "D_exact_over64": sum(n > 64 for n in exact_counts),
+                "cast_cap_hits": sum(p.cap_hit for p in casts),
+                "certified_real_casts": certain,
+                "D_decisions_per_game": [
+                    (without_cast_spend + n) / len(games) for n in (certain, possible)
+                ],
+                "C_decisions_per_game": [
+                    (without_cast_spend + certain) / len(games),
+                    (
+                        without_cast_spend
+                        + possible
+                        + sum(n > 2 or p.cap_hit for n, p in zip(counts, casts))
+                    )
+                    / len(games),
+                ],
+                "C_worst_path_exact_offers": _quantiles(
+                    [2 for _ in real_counts] + [n - 1 for n in real_counts if n > 2]
+                ),
+                "E_exact_offers": _quantiles([count_folded(f) for f in folded_exact]),
+                "E_exact_over64": sum(count_folded(f) > 64 for f in folded_exact),
+                "E_certified_over64": sum(count_folded(f) > 64 for f in folded),
+            }
         summaries.append(row)
         print(json.dumps(row), flush=True)
     (source / "summary.json").write_text(json.dumps(summaries, indent=2) + "\n")
