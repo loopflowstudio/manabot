@@ -608,16 +608,28 @@ def _effects(
 
 
 def reference_distribution(obs: Mapping[str, Array], kind: str) -> Array:
-    """`manabot.training.updates.references.reference_distribution` in numpy."""
+    """The full-support magnet [B,A] float32 a reverse KL pulls toward.
+
+    `"uniform"` spreads mass evenly over the legal offers; `"action_type_uniform"`
+    spreads it evenly over the legal action types, then over offers within a
+    type. Reads `actions_valid` [B,A] and `actions` [B,A,F]; every row needs a
+    legal offer.
+    """
+    if kind not in {"uniform", "action_type_uniform"}:
+        raise ValueError(f"unknown reference: {kind}")
     valid = np.asarray(obs["actions_valid"]) > 0
+    if not valid.any(-1).all():
+        raise ValueError("reference requires at least one legal offer per row")
     if kind == "uniform":
         return (valid / valid.sum(-1, keepdims=True)).astype(np.float32)
-    if kind != "action_type_uniform":
-        raise ValueError(f"unknown reference: {kind}")
     action_types = np.asarray(obs["actions"])[..., :ACTION_TYPE_DIM]
     types = action_types.argmax(-1)
-    counts = np.zeros((valid.shape[0], action_types.shape[-1]), dtype=np.float32)
-    for row in range(valid.shape[0]):
-        np.add.at(counts[row], types[row], valid[row].astype(np.float32))
+    # Legal offers of each type per row, [B,types]: exact small integers.
+    width = action_types.shape[-1]
+    slots = types + width * np.arange(valid.shape[0])[:, None]
+    counts = np.bincount(
+        slots.ravel(), weights=valid.ravel(), minlength=valid.shape[0] * width
+    )
+    counts = counts.reshape(valid.shape[0], width).astype(np.float32)
     weights = valid / np.take_along_axis(counts, types, -1).clip(min=1)
     return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)

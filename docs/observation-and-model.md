@@ -74,7 +74,7 @@ and paying costs. The action's own features are concatenated with the
 post-attention embeddings of the objects it names.
 
 From `_add_focus` in
-[`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py):
+[`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py):
 
 ```python
 focus_embeds = torch.gather(post_attention_focus_objects, 2, focus_indices)
@@ -144,9 +144,9 @@ batch uses includes every row a reference can name, so trimming removes only
 empty rows nothing refers to. Trimming cards and permanents renumbers object
 references; it is skipped under `historical_mean` value aggregation, whose
 average includes padding, and with belief rows. Logits keep their full action
-capacity. Inference measures the buckets on the host while preparing a batch,
-so the device forward reads nothing back to find them; learning measures them
-with one read per forward.
+capacity. Admission measures the buckets on the host
+(`manabot.policy.buckets`), before any device transfer, for inference and
+learning alike, so the device forward reads nothing back to find them.
 
 Inside the network, fact ids are looked up at the fact axis's shape instead of
 for selected rows, and learning encodes the complete card catalog instead of
@@ -363,14 +363,41 @@ value encodings for every buffer come from `managym.observation_layout()`
 
 Relation validity is column 31. Only the acting viewer receives private
 continuation. Transport IDs are joins to the card catalog and object table,
-never numeric features. At `Decision::ManaChoice` the activation source is
-unavailable because rules state has discarded it.
+never numeric features. At `Decision::ManaChoice` the frame's source is the
+mana ability's source; a triggered mana ability's type choice (Heartbeat of
+Spring) names that ability's source, with the permanent tapped for mana as
+its context.
 
 Waiting delayed abilities (frame kind 10) carry event codes independently of
 frequency and expiry. Relation row kind 9 carries frequency in column 28 (1
 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
 objects are kind-8 reference rows, separate from event context. Ordered control
 schedules and delegated decisions use kinds 13 and 14.
+
+Pooled mana whose spending has an effect (Animal Attendant's "that creature
+enters with an additional +1/+1 counter") counts in its player's ordinary
+or restricted mana aggregate, according to its restriction, and is stated as
+an effect program on that player: fact kind 11
+under the id `PooledMana`, one program per class, in the tokens the producing
+card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is
+an execution occurrence of its stack or resolution frame (`mana spent`, a
+kind-14 continuation program) when a rule still reads it: the definition
+counts that mana (Toph, converge) or a spend effect applied. These programs
+use the same representation in v9 and v10. Combat mana also has a pool
+program, including ordinary combat mana; its class records combat expiry.
+Regular and combat units never merge during payment search. Academy shows each
+rider, restriction and expiry alongside the public amounts in
+`pooled_mana_classes`. A class without a restriction or spend effect omits that
+qualifier. Class rows state amounts first; Academy uses the aggregate combat
+expiry only when no class rows are recorded.
+
+Spending offers select one color and class at a time. The native obligation
+frame (decision code 31) carries the remaining cost; its execution program
+joins each offer's mode to the exact unit and retains the partial receipt.
+Every offer preserves all saved payments, including nested mana-ability fees.
+Equivalent units and permutations of a single forced payment need no choice.
+Submitting a spending Command commits that unit; replay, forks and stale
+rejection use the same authority as other decisions.
 
 Fact rows carry source, duration and timestamp rank. The model divides
 timestamp ranks by 128, independent of fact capacity.
@@ -606,7 +633,7 @@ is not evidence for any of them:
 
 | Part | Code |
 | --- | --- |
-| Network | `ActorCritic` in [`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py) |
+| Network | `ActorCritic` in [`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py) |
 | Observation admission | [`manabot/model/admission.py`](../manabot/model/admission.py) |
 | Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |

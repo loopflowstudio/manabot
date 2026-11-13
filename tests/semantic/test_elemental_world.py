@@ -7,14 +7,14 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from managym.experience import LegacyPermanentView
-from managym.experience_projection import describe_actions, serialize_observation
 import numpy as np
 import pytest
 import torch
 
 from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from academy.server import GameSession, _parse_game_config
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationEncoder, ObservationSpace
@@ -24,10 +24,8 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.catalog import inspect_checkpoint
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import (
     checkpoint_world,
     validate_agent_setup,
@@ -38,6 +36,8 @@ from manabot.training.execution import execute_regime
 from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 import managym
+from managym.experience import LegacyPermanentView
+from managym.experience_projection import describe_actions, serialize_observation
 
 PACK = "elemental-world-v2"
 

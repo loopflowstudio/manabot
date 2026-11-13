@@ -5,7 +5,7 @@ use crate::support::{
     inspect::{can_cast, library_card, permanent_named},
     play::{
         activate_first, activate_named, cast, choose, enter_and_settle, play_and_settle,
-        select_card, settle,
+        select_card, settle, spend_colorless,
     },
 };
 use managym::{
@@ -25,6 +25,7 @@ fn dispute_sacrifices_before_responses_draws_two_and_makes_live_treasure() {
     cast(&mut s, "Deadly Dispute");
     let hand = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
     select_card(&mut s, food_card);
+    spend_colorless(&mut s);
     assert_ne!(
         s.game().state.zones.zone_of(food_card),
         Some(ZoneType::Battlefield)

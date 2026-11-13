@@ -8,7 +8,7 @@ use managym::{
 use crate::support::{
     game::five_color_setup,
     inspect::{card_of, library_card},
-    play::{cast, resolve_top, select_card, settle, target_opponent},
+    play::{cast, resolve_top, select_card, settle, spend_colorless, target_opponent},
 };
 
 /// Bribery shows the searcher the opponent's library, not their hand, and
@@ -21,6 +21,7 @@ fn bribery_puts_a_creature_from_the_opponents_library_under_your_control() {
     let ogre = library_card(&s, 1, "Gray Ogre");
     cast(&mut s, "Bribery");
     target_opponent(&mut s);
+    spend_colorless(&mut s);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
 

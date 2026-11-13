@@ -95,6 +95,16 @@ impl Game {
                         NameOption::Name(row) => Some(format!("Name {}", names.get(row)?.name)),
                     },
                     Decision::ChoosePaymentX { .. } => Some(format!("X = {mode}")),
+                    Decision::ManaSpend { player, cost, .. } => {
+                        let choices = self.mana_spend_choices(*player, cost);
+                        let unit = &choices.get(*mode)?.unit;
+                        let expiry = if unit.classes().iter().any(|(class, _)| class.combat) {
+                            ""
+                        } else {
+                            " (expires at step end)"
+                        };
+                        Some(format!("Spend {}{expiry}", mana_description(unit)))
+                    }
                     Decision::ManaChoice { choices, .. } => {
                         Some(format!("Add {}", mana_description(choices.get(*mode)?)))
                     }
@@ -244,6 +254,7 @@ impl Game {
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
         let _scan = self.board_scan();
+        let _payments = self.payment_scan();
         let mut actions: Vec<Action> = self
             .priority_candidate_cards(player)
             .filter_map(|card| self.priority_action_for_card(player, card))
@@ -486,6 +497,7 @@ impl Game {
     }
 
     pub(crate) fn pending_choice_action_space(&self) -> Option<ActionSpace> {
+        let _payments = self.payment_scan();
         let choice = self.pending_choice.as_ref()?;
         match choice {
             PendingChoice::ManaPayment {
@@ -748,20 +760,18 @@ impl Game {
                 let tapped_source = self.payment_tapped_source(payment);
                 let mut actions = self.mana_ability_actions(*player, None);
                 if waterbend > 0 {
-                    for candidate in self.waterbend_payment_candidates(*player, payment) {
-                        // Only offer taps that keep the rest of the cost payable.
-                        let rest = owed.reduced_generic(1);
-                        if self.waterbend_payment_after_taps(
-                            *player,
-                            &rest,
-                            waterbend - 1,
-                            std::iter::once(candidate).chain(tapped_source),
-                        ) {
-                            actions.push(Action::WaterbendTap {
-                                player: *player,
-                                permanent: candidate,
-                            });
-                        }
+                    // Only offer taps that keep the rest of the cost payable.
+                    for candidate in self.waterbend_taps_keeping_payable(
+                        *player,
+                        &owed.reduced_generic(1),
+                        waterbend - 1,
+                        self.waterbend_payment_candidates(*player, payment),
+                        tapped_source,
+                    ) {
+                        actions.push(Action::WaterbendTap {
+                            player: *player,
+                            permanent: candidate,
+                        });
                     }
                 }
                 if self.can_pay_mana_cost(*player, &owed) {

@@ -700,7 +700,7 @@ to an authored setup refuse imported decks even when shapes agree
 
 TLA play boosters include a bonus sheet of 61 Avatar: The Last Airbender
 Eternal (TLE) cards, collector numbers 1–61. TLA Limited decks use the same
-importer, with no extra pack or flag. The engine defines 60 of the 61:
+importer, with no extra pack or flag. The engine defines all 61:
 
 ```python
 import managym
@@ -718,16 +718,8 @@ Every defined non-token card belongs to the world pool. This small example
 checks `development-v1` admission, not Limited construction or booster
 contents; use a complete deck for play.
 
-One bonus-sheet card, Heartbeat of Spring, is not yet defined: it waits for a
-redesign of how mana production triggers see what a land produced. A deck
-listing it raises `managym.DeckImportError` naming it as unknown.
-
-Re-admitting the first 1,000 TLA PremierDraft trophy decks in the retained
-MTG-213 corpus admits 997; only the three decks listing Heartbeat of Spring
-fail. This check reparses each retained deck's original source against the
-current world, preserving the corpus and its historical diagnostics. Do not
-drop or substitute the card to admit such a deck; it admits once its definition
-exists.
+All bonus-sheet cards now have definitions, including Heartbeat of Spring,
+Release to Memory and Lita, Mechanical Engineer.
 
 Two bonus-sheet cards create tokens that need care when reading a board.
 Release to Memory makes plain 1/1 colorless Spirits, which block and are

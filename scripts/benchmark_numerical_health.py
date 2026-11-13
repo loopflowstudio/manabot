@@ -11,7 +11,7 @@ import time
 
 import torch
 
-from manabot.rl.step import gradient_step
+from manabot.backends.torch.learner import gradient_step
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 
 

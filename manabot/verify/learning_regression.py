@@ -16,6 +16,7 @@ import numpy as np
 from pydantic import Field
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.observation import ActionEnum
 from manabot.eval.monitor import MonitorResult
 from manabot.experiment.evaluation_queue import Attempt, checkpoints
@@ -23,7 +24,6 @@ from manabot.experiment.execution import ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.sim.matchup import selected_decks
 from manabot.sim.search.flat_mc import ACTION_SPACE_KIND_NAMES

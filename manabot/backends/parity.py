@@ -5,15 +5,16 @@ real inputs.
 
 `DIR` is a capture written by `experiments/mlx_pilot.py capture`: learner
 minibatches (`learner/NNN.npz` with `minibatches.json`) and collection calls
-(`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU,
-running the training code's own loss (`damped_policy_loss`, `selected_mean`).
+(`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU.
 Each backend whose framework is installed (`BACKENDS`) loads the same weights
 through the shared container's canonical names and is compared in its own
-parameter layout (`manabot.policy.protocol.Backend`). For each minibatch, at
-the checkpoint's weights:
+parameter layout (`manabot.policy.protocol.Backend`). Both sides run the one
+loss the damped update trains (`minibatch_objective`), each over its own
+backend's `rl` functions and learner (`minibatch_loss`). For each minibatch,
+at the checkpoint's weights:
 
 - forward logits on legal actions and values: max absolute difference <= 1e-4;
-- PPO loss: relative difference <= 0.1%;
+- damped policy loss: relative difference <= 0.1%;
 - every parameter's gradient: cosine similarity >= 0.999. A tensor whose
   gradient norm is below 1e-6 of the global gradient norm in both frameworks
   counts as zero: the policy-score bias and every attention key bias have
@@ -22,9 +23,11 @@ the checkpoint's weights:
   meaningless.
 
 Collection calls compare inference logits and values with the same 1e-4 bar.
-The first minibatch also takes one clipped Adam step in both frameworks and
-reports how far the parameters then differ; that comparison is informative and
-not part of the bar. The command prints one line per check and backend, writes
+The first minibatch also takes one clipped Adam step in both frameworks:
+every parameter must agree within 1e-6 absolute, including near-zero-gradient
+tensors. This is 0.4% of the default learning rate (2.5e-4), tight enough to
+reject a missing or doubled update. The command prints one line per check and
+backend, writes
 `--json` (one report per backend) when given, and exits 1 naming each failing
 backend's worst components if any check fails; it exits 2 when the checkpoint
 or capture is missing, the checkpoint is refused or no backend is installed.
@@ -38,16 +41,16 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+from types import ModuleType
 from typing import Any, cast
 
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint
-from manabot.model.policy_distribution import legal_mask
 from manabot.policy.checkpoint import (
-    UnsupportedPolicy,
     canonical_parameters,
     from_torch_state,
 )
@@ -59,20 +62,18 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
-from manabot.rl.selection import selected_mean
-from manabot.training.updates.damped_policy import damped_policy_loss
-from manabot.training.updates.references import (
-    reference_distribution as torch_reference,
-)
+from manabot.training.updates.backend import Backend as UpdateBackend
+from manabot.training.updates.damped_policy import minibatch_objective
 
 LOGIT_TOLERANCE = 1e-4
 LOSS_TOLERANCE = 1e-3
 COSINE_TOLERANCE = 0.999
+STEP_PARAMETER_TOLERANCE = 1e-6
 ZERO_GRADIENT = 1e-6  # of the global gradient norm
 
 # Backend name -> the framework it needs; each provides
 # `manabot.backends.<name>.checkpoint.BACKEND`.
-BACKENDS = {"mlx": "mlx"}
+BACKENDS = {"torch": "torch", "mlx": "mlx"}
 
 
 def installed_backends() -> list[str]:
@@ -83,9 +84,56 @@ def installed_backends() -> list[str]:
     ]
 
 
+def backend_module(name: str) -> ModuleType:
+    """`manabot.backends.<name>`, the module an update takes as its backend."""
+    return importlib.import_module(f"manabot.backends.{name}")
+
+
 def backend(name: str) -> Backend:
-    module = importlib.import_module(f"manabot.backends.{name}.checkpoint")
-    return cast(Backend, module.BACKEND)
+    return cast(Backend, backend_module(name).checkpoint.BACKEND)
+
+
+def minibatch_loss(
+    module: UpdateBackend,
+    policy: BackendPolicy,
+    learner: BackendLearner,
+    batch: Prepared,
+    targets: Targets,
+    settings: Settings,
+) -> Any:
+    """The damped update's loss on one captured minibatch, as `module`'s
+    array, ready for `learner.step` or `learner.gradients`.
+
+    The same `minibatch_objective` the update trains, over the backend's own
+    `rl` functions, with the scalar critic every backend supports.
+    """
+    rl, to_device = module.rl, module.arrays.from_numpy
+    device = getattr(learner, "device", "cpu")
+    valid = rl.legal_mask(to_device(batch.legal, device))
+    constants = {
+        "actions": to_device(targets.actions.astype(np.int64), device),
+        "advantages": to_device(targets.advantages, device),
+        "value_targets": to_device(targets.value_targets, device),
+        "behavior_logs": to_device(targets.behavior_logs, device),
+        "reference": to_device(targets.reference, device),
+        "actor_mask": to_device(targets.actor_mask.astype(bool), device),
+    }
+
+    def objective() -> tuple[Any, ...]:
+        logits, values = policy.forward_distribution(batch)
+        return minibatch_objective(
+            rl,
+            logits,
+            values,
+            valid,
+            **constants,
+            categorical=False,
+            clip=settings.clip,
+            collection_kl=settings.collection_kl,
+            tau=settings.tau,
+        )
+
+    return learner.loss(objective)[0]
 
 
 @dataclass
@@ -102,11 +150,21 @@ class Report:
     collection_values: float = 0.0
     step_parameter_max_abs: float = 0.0
     step_update_min_cosine: float = 1.0
+    step_checked: bool = False
+    step_reference_norm: float = 0.0
+    step_backend_norm: float = 0.0
+    step_max_grad_norm: float = 0.0
     minibatches: list[dict[str, Any]] = field(default_factory=list)
 
     def checks(self) -> list[tuple[str, str, bool]]:
         """(component, measured against its bar, passed) for every gated check."""
         return [
+            (
+                "clipped Adam weights",
+                f"max |Δ| {self.step_parameter_max_abs:.1e} (tol 1e-6)",
+                self.step_checked
+                and self.step_parameter_max_abs <= STEP_PARAMETER_TOLERANCE,
+            ),
             (
                 "forward logits",
                 f"max |Δ| {self.forward_logits:.1e} (tol 1e-4)",
@@ -175,20 +233,6 @@ def minibatches(
         yield obs, targets, settings, row
 
 
-def torch_gradients(agent: torch.nn.Module) -> dict[str, np.ndarray]:
-    """PyTorch gradients under canonical names (zero where none flowed)."""
-    return canonical_parameters(
-        {
-            name: (
-                np.zeros(tuple(parameter.shape), np.float32)
-                if parameter.grad is None
-                else parameter.grad.detach().numpy()
-            )
-            for name, parameter in agent.named_parameters()
-        }
-    )
-
-
 def _cosine(a: np.ndarray, b: np.ndarray, floor: float = 0.0) -> float | None:
     a, b = a.astype(np.float64).ravel(), b.astype(np.float64).ravel()
     na, nb = np.linalg.norm(a), np.linalg.norm(b)
@@ -220,57 +264,44 @@ def check(
     agent, space = load_checkpoint(str(checkpoint))
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
     weights = from_torch_state(agent.config, space.encoder.config, state)
+    module = backend_module(backend_name)
     port = backend(backend_name)
     policy, learner = port.load(weights)
+    # The reference: the same loss over the torch backend, on the loaded agent.
+    reference_policy = torch_backend.checkpoint.TorchPolicy(agent, weights)
+    reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
     report = Report()
-    agent.train()
     for index, (obs, targets, settings, meta) in enumerate(
         minibatches(capture, minibatch_count)
     ):
-        tensors = {k: torch.from_numpy(v) for k, v in obs.items()}
-        admitted = admit_observation(agent, tensors)
-        valid = legal_mask(admitted["actions_valid"])
-        agent.zero_grad(set_to_none=True)
-        logits, values = agent.forward_distribution(admitted)
-        reference = torch_reference(admitted, meta["reference"])
-        if not np.allclose(reference.numpy(), targets.reference, atol=1e-7):
-            raise AssertionError("numpy and torch reference distributions differ")
-        policy_loss = damped_policy_loss(
-            logits,
-            torch.from_numpy(targets.actions),
-            torch.from_numpy(targets.advantages),
-            torch.from_numpy(targets.behavior_logs),
-            reference,
-            valid,
-            clip=settings.clip,
-            collection_kl=settings.collection_kl,
-            tau=settings.tau,
+        reference_batch = reference_policy.prepare(obs)
+        valid = reference_batch.legal
+        with torch.no_grad():
+            logits, values = reference_policy.forward_distribution(reference_batch)
+        loss = minibatch_loss(
+            torch_backend,
+            reference_policy,
+            reference_learner,
+            reference_batch,
+            targets,
+            settings,
         )
-        policy_loss = selected_mean(policy_loss, torch.from_numpy(targets.actor_mask))
-        value_loss = (
-            (values.squeeze(-1) - torch.from_numpy(targets.value_targets))
-            .square()
-            .mean()
+        reference_loss = float(loss.detach())
+        expected = port.gradient_layout(
+            canonical_parameters(reference_learner.gradients(loss))
         )
-        loss = policy_loss + value_loss
-        loss.backward()
-        expected = port.gradient_layout(torch_gradients(agent))
 
         batch = policy.prepare(obs)
         port_logits, port_values = policy.evaluate(batch)
-        loss_value, grads = learner.gradients(batch, targets, settings)
-        absolute, relative = _legal_difference(
-            port_logits, logits.detach().numpy(), valid.numpy()
-        )
-        value_difference = float(
-            np.abs(port_values - values.detach().numpy().reshape(-1)).max()
-        )
-        reference_loss = float(loss.detach())
+        port_loss = minibatch_loss(module, policy, learner, batch, targets, settings)
+        loss_value = float(module.arrays.to_numpy(port_loss))
+        grads = learner.gradients(port_loss)
+        absolute, relative = _legal_difference(port_logits, logits.numpy(), valid)
+        value_difference = float(np.abs(port_values - values.numpy().reshape(-1)).max())
         loss_relative = abs(loss_value - reference_loss) / max(
             abs(reference_loss), 1e-12
         )
         cosines: dict[str, float] = {}
-        zero: set[str] = set()
         both_zero = 0
         floor = ZERO_GRADIENT * float(
             np.sqrt(
@@ -281,7 +312,6 @@ def check(
             cosine = _cosine(grad, expected[name], floor)
             if cosine is None:
                 both_zero += 1
-                zero.add(name)
             else:
                 cosines[name] = cosine
         worst = min(cosines, key=cosines.__getitem__)
@@ -308,9 +338,28 @@ def check(
             report.gradient_min_cosine = cosines[worst]
             report.gradient_worst = worst
         if index == 0:
-            _compare_step(agent, port, learner, batch, targets, settings, zero, report)
+            reference_loss_again = minibatch_loss(
+                torch_backend,
+                reference_policy,
+                reference_learner,
+                reference_batch,
+                targets,
+                settings,
+            )
+            _compare_step(
+                reference_learner,
+                reference_loss_again,
+                port,
+                learner,
+                minibatch_loss(module, policy, learner, batch, targets, settings),
+                settings,
+                report,
+            )
             policy, learner = port.load(weights)
             agent.load_state_dict({k: torch.from_numpy(v) for k, v in state.items()})
+            reference_learner = torch_backend.learner.Learner(
+                agent, "cpu", minibatch_rows=1
+            )
         print(
             f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
@@ -322,45 +371,44 @@ def check(
 
 
 def _compare_step(
-    agent: torch.nn.Module,
+    reference: BackendLearner,
+    reference_loss: Any,
     port: Backend,
     learner: BackendLearner,
-    batch: Prepared,
-    targets: Targets,
+    loss: Any,
     settings: Settings,
-    zero: set[str],
     report: Report,
 ) -> None:
     """One clipped Adam step in both frameworks from the same weights.
 
-    Tensors with structurally zero gradients (`zero`) are skipped: Adam's
-    first step moves their rounding noise by +-lr in either direction.
+    All parameters count, including tensors with near-zero gradients. Cosine
+    is diagnostic only: the absolute weight difference is the acceptance bar.
     """
-    before = {k: v.detach().clone() for k, v in agent.named_parameters()}
-    optimizer = torch.optim.Adam(
-        agent.parameters(), lr=settings.learning_rate, eps=1e-5
+    before = reference.parameters()
+    reference.set_learning_rate(settings.learning_rate)
+    report.step_reference_norm = float(
+        reference.step(reference_loss, settings.max_grad_norm)
     )
-    torch.nn.utils.clip_grad_norm_(list(agent.parameters()), settings.max_grad_norm)
-    optimizer.step()
+    now = reference.parameters()
     initial = learner.parameters()
-    learner.step(batch, targets, settings)
+    learner.set_learning_rate(settings.learning_rate)
+    report.step_backend_norm = float(learner.step(loss, settings.max_grad_norm))
+    report.step_max_grad_norm = settings.max_grad_norm
     after = learner.parameters()
-    now = {k: v.detach().numpy() for k, v in agent.named_parameters()}
     expected_after = port.parameter_layout(canonical_parameters(now))
     expected_delta = port.parameter_layout(
-        canonical_parameters({k: v - before[k].numpy() for k, v in now.items()})
+        canonical_parameters({k: v - before[k] for k, v in now.items()})
     )
     worst = 1.0
     largest = 0.0
     for name, value in after.items():
-        if name in zero:
-            continue
         largest = max(largest, float(np.abs(value - expected_after[name]).max()))
         cosine = _cosine(value - initial[name], expected_delta[name])
         if cosine is not None:
             worst = min(worst, cosine)
     report.step_parameter_max_abs = largest
     report.step_update_min_cosine = worst
+    report.step_checked = True
 
 
 def _collection(
@@ -402,7 +450,7 @@ def _print(name: str, report: Report) -> None:
     print(
         f"{name:<6} {'one step':<40} params max |Δ| "
         f"{report.step_parameter_max_abs:.1e}, update min cosine "
-        f"{report.step_update_min_cosine:.6f} (informative)"
+        f"{report.step_update_min_cosine:.6f} (cosine diagnostic only)"
     )
 
 
@@ -429,7 +477,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.collection,
                 backend_name=name,
             )
-    except (FileNotFoundError, UnsupportedPolicy) as error:
+    except (FileNotFoundError, ValueError) as error:
         parser.error(str(error))  # exits 2; 1 means the models disagree
     failures = {name: report.failures() for name, report in reports.items()}
     for name, report in reports.items():

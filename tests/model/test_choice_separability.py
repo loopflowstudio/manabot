@@ -14,6 +14,7 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
     ACTION_TYPE_DIM,
@@ -22,7 +23,6 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import encode, initial, reach, reorder_objects
 from manabot.verify.trigger_order import ordering_root

@@ -128,6 +128,10 @@ closure treats the transition quota as a minimum.
 Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
+Changes to retained execution or its record vocabulary also require
+`uv run --extra dev pytest tests/model/test_record_coverage.py -q` after rebuilding
+the native extension. This bounded sweep checks that emitted execution tokens
+have catalog rows, including decisions reached through changed game paths.
 
 **Local-update search.** Run `tests/sim/test_local_update.py`,
 `tests/sim/test_local_update_sampling.py` and
@@ -183,6 +187,16 @@ Check changed Python modules and type stubs with
 `uv run --extra dev ruff check --fix <paths>` and
 `uv run --extra dev ruff format <paths>`. Include moved `.pyi` files: the
 compatibility stub is part of the public package surface.
+
+**Policy backends.** Shared damped-update or backend changes need
+`uv run --extra dev pytest tests/training/test_update_backend_protocols.py tests/training/test_update_backends.py tests/model/test_torch_backend_protocol.py tests/model/test_torch_container_load.py tests/model/test_mlx_backend.py tests/test_package_boundaries.py -q`.
+The installed-backend tests run the real update, force gradient clipping,
+compare every post-Adam weight and reject malformed raw rollout rows. MLX
+cases skip where it is unavailable; run them on Apple Silicon with the `mlx`
+extra before claiming MLX parity. For a changed forward or parameter mapping,
+also run the [captured parity check](../manabot/backends/README.md#parity-check)
+against a capture whose world binding still matches; it gates the optimizer
+step as well as forward, loss and gradients.
 
 **Loopflow workflows.** With `lf` installed, run
 `uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
@@ -270,6 +284,10 @@ Integration and Academy Integration install every extra they use in one
 engine a second time. Each Integration group runs one pytest worker per logical core
 (`pytest -n logical`; [TESTING.md](../TESTING.md) says what that asks of a test)
 and prints its 20 slowest tests (`--durations=20`) at the end of its test step.
+
+Integration and Python unit install the locked CPU Torch with
+`--no-default-groups --group play-runtime` because hosted Ubuntu runners have no GPU.
+
 When a job passes 8 minutes, in order of preference:
 
 1. Make its slowest tests cheaper (a smaller fixture, fewer updates or games,
@@ -393,7 +411,23 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference.** Commit `7ef6ce588` is adopted from
+**Current reference: MTG-297 mana spending.** Commit `d53220d36` is adopted
+from [dedicated run 43417765062](https://github.com/loopflowstudio/manabot/actions/runs/43417765062)
+(2026-11-13 UTC, AMD EPYC 7763). Native unit/class spending adds decisions to
+these decks: all three search digests and the step digest change, with 102,209
+steps instead of 101,650 across 512 games. The previous reference reproduces
+all committed digests. Every timing threshold passes; both samples agree
+closely and user CPU tracks wall time. Changed gameplay means these are
+budget measurements of different workloads, not an isolated algorithmic
+speedup. The 10% tolerance is unchanged.
+
+| Metric | Previous reference `7ef6ce588` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.928 s | 3.611 s |
+| Total search | 169.080 s | 125.545 s |
+| Step throughput | 11,760.9/s | 13,728.0/s |
+
+**Previous reference: MTG-286 TLE rules.** Commit `7ef6ce588` was adopted from
 [PR #469 CI run 43221435403](https://github.com/loopflowstudio/manabot/actions/runs/43221435403)
 (2026-11-12 UTC, AMD EPYC 7763) as an accepted cost. MTG-286's TLE rules
 additions (mana payment, casting, proposed events and triggers) leave every

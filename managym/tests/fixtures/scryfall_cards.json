@@ -5864,5 +5864,58 @@
     "colors": [
       "W"
     ]
+  },
+  "Animal Attendant": {
+    "name": "Animal Attendant",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Human Citizen",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{T}: Add one mana of any color. If that mana is spent to cast a non-Human creature spell, that creature enters with an additional +1/+1 counter on it.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Heartbeat of Spring": {
+    "name": "Heartbeat of Spring",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a player taps a land for mana, that player adds one mana of any type that land produced.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Toph, Greatest Earthbender": {
+    "name": "Toph, Greatest Earthbender",
+    "mana_cost": "{2}{R}{G}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When Toph enters, earthbend X, where X is the amount of mana spent to cast her.\nLand creatures you control have double strike.",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
+  "Uncle's Musings": {
+    "name": "Uncle's Musings",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Converge"
+    ],
+    "oracle_text": "Converge — Return up to X permanent cards from your graveyard to your hand, where X is the number of colors of mana spent to cast this spell.\nExile Uncle's Musings.",
+    "colors": [
+      "G"
+    ]
   }
 }

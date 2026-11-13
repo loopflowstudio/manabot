@@ -6,6 +6,34 @@ use managym::{
 
 use crate::support::game::*;
 
+/// CR 106.12a: a produced type is present regardless of its amounts or
+/// spending restrictions. Adding class totals here would overflow at 256.
+#[test]
+fn cr_106_12a_produced_types_ignore_amounts_and_restrictions() {
+    use managym::state::{
+        card::TriggeredManaOutput,
+        mana::{Mana, ManaRestriction},
+    };
+
+    let bonus = TriggeredManaOutput::OneProducedType;
+    assert!(bonus.alternatives(&Mana::default()).is_empty());
+    for slot in 0..6 {
+        let mut unit = Mana::default();
+        unit.mana[slot] = 1;
+        for (ordinary, restricted) in [(0, 1), (1, 0), (255, 1)] {
+            let mut produced = Mana::default();
+            produced.mana[slot] = ordinary;
+            let mut amounts = [0; 6];
+            amounts[slot] = restricted;
+            produced.add(&Mana::restricted_to(
+                ManaRestriction::spell(["Lesson"]),
+                amounts,
+            ));
+            assert_eq!(bonus.alternatives(&produced), vec![unit.clone()]);
+        }
+    }
+}
+
 /// CR 106.3 — Mana abilities can be activated to produce mana used for casting.
 #[test]
 fn cr_106_3_casting_uses_mana_abilities() {
@@ -103,7 +131,14 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
                 );
                 if expected {
                     let mut remaining = pool.clone();
-                    remaining.pay(&cost);
+                    let mut owed = cost.clone();
+                    while owed.mana_value > 0 {
+                        // This fixture chooses one valid path; the engine offers
+                        // every distinct unit instead of preferring a color.
+                        let choice = remaining.spending_choices(&owed).remove(0);
+                        remaining.spend(&choice.unit, &owed.purpose);
+                        owed = choice.remaining;
+                    }
                     assert_eq!(remaining.total(), pool.total() - generic as u16 - 1);
                     assert_eq!(remaining.mana[slot], 0);
                     assert!(remaining
@@ -134,8 +169,10 @@ fn audit_restricted_mana_never_pays_unrelated_costs() {
                 cost.purpose = SpendingContext::cast(["Lesson"], []);
             }
             assert_eq!(pool.can_pay(&cost), eligible);
+            let choices = pool.spending_choices(&cost);
+            assert_eq!(choices.len(), usize::from(eligible));
             if eligible {
-                pool.pay(&cost);
+                pool.spend(&choices[0].unit, &cost.purpose);
                 assert_eq!(pool.total(), 0);
             }
             pool.clear();

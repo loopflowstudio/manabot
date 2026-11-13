@@ -209,7 +209,7 @@ class DampedPolicyLearning(Strict):
 
 
 # float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
-# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.training.precision).
+# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.backends.torch.learner).
 Precision = Literal["float32", "tf32", "bf16"]
 
 
@@ -232,14 +232,14 @@ class Execution(Strict):
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
     # Collection and learner forwards trim variable axes to power-of-two
-    # buckets (`manabot.model.buckets`). Off is omitted, so regimes saved
+    # buckets (`manabot.policy.buckets`). Off is omitted, so regimes saved
     # before the `auto` default keep their hashes and read back as off; never
     # part of the model or its checkpoints.
     bucketed_shapes: Layout = Field(
         default="auto", exclude_if=lambda value: value is False
     )
     # The same forwards attend over valid objects only, packed into one
-    # sequence (`manabot.model.live_tokens`). Serialized like bucketed shapes,
+    # sequence (`manabot.backends.torch.live_tokens`). Serialized like bucketed shapes,
     # and likewise never model state.
     live_tokens: Layout = Field(default="auto", exclude_if=lambda value: value is False)
 

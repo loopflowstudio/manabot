@@ -223,10 +223,16 @@ import](../docs/engine.md#decks)) or reset fails. Fixed setups and tests leave
 it unset and run as given without submitted-deck construction checks.
 Any other `world` value is rejected: authored content packs are retired.
 
-Mana feasibility and production share typed costs and pools. `Mana.lesson`
-retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
-casting context, while resolving costs and activations remain unrestricted
-contexts. Chosen-color mana abilities pay their activation costs before their
+Mana feasibility and production share typed costs and pools. `ManaClass`
+retains each class's spending restriction and spend effect; `SpendingContext`
+distinguishes casting, activation and resolving costs. A spell's payment records
+`ManaSpent`, carried to resolution and the entering permanent's own triggers.
+Spending is a native unit/class decision whenever receipts or remaining pools
+differ, including generic colors, restrictions, riders and combat expiry. Each
+offer can complete every saved payment. Partial spending, nested activation
+fees and their saved caller survive exact forks and Command replay; the spell's
+receipt excludes those fees. Academy and policy inputs expose the same choices.
+Chosen-color mana abilities pay their activation costs before their
 immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a
@@ -269,6 +275,35 @@ commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
 
+Most payment questions never reach the search. With four untapped Islands and
+an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
+plus every source's output either covers the cost or does not, and the first
+witness taps sources in source order until the pool pays, useful or not. That
+direct answer applies when the question is one mana cost and no available
+source has a mana ability beyond tapping itself for one fixed output: no color
+choice, upfront cost, life payment, counted tap, sacrifice or limited use.
+Restricted fixed outputs (CR 106.6) stay in the class, counted only toward the
+purposes they may pay. A waterbend cost stays in it too: every source worth
+mana is tapped for mana, artifacts and creatures worth none cover the generic
+that taps may pay, and each candidate tap of one waterbend decision is judged
+against one model instead of a new search. Automatic production never
+activates abilities, so its single cost is direct on any board.
+
+Legal actions computed for one decision build each player's sources once
+(`PaymentScan`). Those sources are a function of the game alone, which cannot
+change while the computation borrows it; the pending payment's reservations, a
+sacrifice under consideration and payable life are applied per question. Debug
+builds rebuild the sources on every reuse and assert they match.
+
+The direct answer is exact or it is not used. Modal lands, filters, mana
+abilities with other costs, counted taps, nested activations and the automatic
+prefix of a nested activation go to the search described below, which stays
+the one definition of a legal payment: debug builds run it beside every direct
+answer and assert the same affordability and the same first witness, so
+automatic tapping order cannot differ between the two. Adding a kind of mana
+source needs no change here unless it should join the direct class, which
+requires a test comparing both paths on that source.
+
 Payment search tracks an object's untapped resource, presence and limited
 ability uses separately. Counted tap costs select distinct untapped matching
 permanents through ordinary SelectCard decisions; The Cabbage Merchant can
@@ -279,7 +314,9 @@ counts use the continuation mode field; source and ability retain their usual
 joins. Single-object costs keep their serialized definition shape.
 Every registered mana ability must consume a finite resource. Search bounds
 count repeatable outputs optimistically; every accepted payment still requires
-an identity-preserving witness with explicit tap choices. The whole-payment
+an identity-preserving witness with explicit tap choices. Every saved counted-tap
+cost must retain enough present, untapped candidates throughout the search;
+production and spending cannot restore a consumed resource. The whole-payment
 bound counts only outputs a pending cost could spend and takes the maximum of
 competing uses of one tap; the color-set bound applies the same supply to every
 set of owed colors, so one "U or R" source cannot cover `{U}{R}`. Search

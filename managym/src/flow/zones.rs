@@ -1,8 +1,6 @@
 // zones.rs
 // Zone management, card movement, and utility methods on Game.
 
-use std::sync::Arc;
-
 use crate::{
     cards::content_pack::default_content_pack,
     flow::{
@@ -10,7 +8,6 @@ use crate::{
         event::GameEvent,
         game::{CastChoices, Game},
         proposed_event::{ProposedEvent, ZoneEntry},
-        statics::Characteristics,
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
@@ -248,7 +245,9 @@ impl Game {
 
     /// Tap a permanent, emitting a `PermanentTapped` event on the
     /// untapped-to-tapped transition (CR 603.10-style "becomes tapped").
-    /// Returns whether the permanent transitioned.
+    /// Returns whether the permanent transitioned. Tapping for mana triggers
+    /// nothing here: triggered mana abilities wait for the mana ability to
+    /// produce mana (CR 106.12a; `flow/mana.rs`).
     pub(crate) fn tap_permanent(&mut self, permanent_id: PermanentId, for_mana: bool) -> bool {
         let Some(controller) = self.permanent_controller(permanent_id) else {
             return false;
@@ -261,46 +260,7 @@ impl Game {
             permanent: permanent_id,
             for_mana,
         });
-        if for_mana {
-            self.fire_triggered_mana_abilities(permanent_id, controller);
-        }
         true
-    }
-
-    /// Immediate bonus from tapping this source for mana (CR 605.1b).
-    /// Waterbend taps are cost payment and never enter this authority.
-    pub(crate) fn tap_mana_bonus(
-        &self,
-        tapped: PermanentId,
-        controller: PlayerId,
-    ) -> crate::state::mana::Mana {
-        self.tap_mana_bonus_from(&self.tap_bonus_sources(controller), tapped)
-    }
-
-    /// `controller`'s permanents with triggered mana abilities, read from one
-    /// board. A scan pricing several sources at one immutable state reads this
-    /// once, so debug validates the board per scan rather than per source.
-    pub(crate) fn tap_bonus_sources(&self, controller: PlayerId) -> Vec<Arc<Characteristics>> {
-        self.layer_views(self.iter_battlefield_permanents(controller))
-            .map(|(_, view)| view)
-            .filter(|view| !view.triggered_mana_abilities.is_empty())
-            .collect()
-    }
-
-    pub(crate) fn tap_mana_bonus_from(
-        &self,
-        sources: &[Arc<Characteristics>],
-        tapped: PermanentId,
-    ) -> crate::state::mana::Mana {
-        let mut produced = crate::state::mana::Mana::default();
-        for view in sources {
-            for ability in &view.triggered_mana_abilities {
-                if self.permanent_matches_predicate(tapped, &ability.predicate) {
-                    produced.add(&ability.mana);
-                }
-            }
-        }
-        produced
     }
 
     /// Untap a permanent; its controller's producible mana changes.
@@ -315,11 +275,6 @@ impl Game {
         self.state.permanents[permanent_id]
             .as_ref()
             .map(|permanent| permanent.controller)
-    }
-
-    fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {
-        let produced = self.tap_mana_bonus(tapped, controller);
-        self.state.mana_pool_mut(controller).add(&produced);
     }
 
     /// Create a token from the token definition keyed `key` (`token.<name>`)
@@ -495,6 +450,7 @@ impl Game {
                 kicked: cast.kicked,
                 x: cast.x,
                 mode: None,
+                spent: Default::default(),
             }));
     }
 
@@ -627,9 +583,9 @@ impl Game {
             .flatten()
             .map(|index| self.state.stack_objects_mut().remove(index));
         let was_cast = cast_spell.is_some();
-        let cast_x = match cast_spell {
-            Some(StackObject::Spell(spell)) => spell.x,
-            _ => 0,
+        let (cast_x, cast_spent) = match cast_spell {
+            Some(StackObject::Spell(spell)) => (spell.x, spell.spent),
+            _ => Default::default(),
         };
 
         let holder = match (to_zone, entry.controller) {
@@ -656,6 +612,7 @@ impl Game {
             permanent.controller = holder;
             permanent.was_cast = was_cast;
             permanent.cast_x = cast_x;
+            permanent.cast_spent = cast_spent;
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
             event_controller = permanent.controller;

@@ -795,6 +795,8 @@ fn value_description(value: &EffectValue) -> String {
         }
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
+        EffectValue::ManaSpentToCast => "the amount of mana spent to cast it".into(),
+        EffectValue::ColorsSpentToCast => "the number of colors of mana spent to cast it".into(),
         EffectValue::TriggeringPower => "that creature's power".into(),
         EffectValue::TargetToughness => "its toughness".into(),
         EffectValue::AttackingMatching { predicate } => format!(
@@ -810,18 +812,27 @@ fn value_description(value: &EffectValue) -> String {
 
 pub(crate) fn mana_description(mana: &Mana) -> String {
     let restricted = mana.restricted_colors();
+    let unrestricted = mana.unrestricted_colors();
     let mut text: String = ["W", "U", "B", "R", "G", "C"]
         .into_iter()
         .enumerate()
         .flat_map(|(i, s)| {
             std::iter::repeat_n(
                 format!("{{{s}}}"),
-                mana.mana[i] as usize + restricted[i] as usize,
+                unrestricted[i] as usize + restricted[i] as usize,
             )
         })
         .collect();
-    for (restriction, _) in mana.restricted() {
-        text.push_str(&format!(" ({} only)", restriction.describe()));
+    for (class, _) in mana.classes() {
+        if class.combat {
+            text.push_str(" (expires at end of combat)");
+        }
+        if let Some(restriction) = &class.restriction {
+            text.push_str(&format!(" ({} only)", restriction.describe()));
+        }
+        if let Some(effect) = &class.effect {
+            text.push_str(&format!(" (puts {})", effect.describe()));
+        }
     }
     text
 }

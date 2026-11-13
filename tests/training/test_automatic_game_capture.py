@@ -6,11 +6,11 @@ import subprocess
 import sys
 from typing import Any
 
-from managym.decision import Command
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import (
     CaptureScope,
@@ -23,7 +23,6 @@ from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
 from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim import rollout
 from manabot.training import execution
 from manabot.training.regime import (
@@ -36,6 +35,7 @@ from manabot.training.rollout import selection_data
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
+from managym.decision import Command
 
 
 def _model() -> ActorCritic:

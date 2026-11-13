@@ -22,6 +22,8 @@ mod bro;
 mod c17;
 #[path = "cards/c19.rs"]
 mod c19;
+#[path = "cards/chk.rs"]
+mod chk;
 #[path = "cards/cmr.rs"]
 mod cmr;
 #[path = "cards/csp.rs"]

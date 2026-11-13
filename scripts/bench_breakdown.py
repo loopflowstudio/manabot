@@ -10,6 +10,7 @@ import json
 from bench_observation_support import identity, matched_breakdown
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv
@@ -20,7 +21,6 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.profiler import Profiler
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 
 

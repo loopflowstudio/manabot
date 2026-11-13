@@ -7,22 +7,20 @@ import pytest
 import torch
 from torch import Tensor
 
-from manabot.model.policy_distribution import policy_logs
-from manabot.rl.losses import (
+from manabot.backends.torch.learner import StepRecorder, gradient_step, update_ema
+from manabot.backends.torch.rl import (
+    NumericalError,
     categorical_value_loss,
     clip_fraction,
     entropy,
+    expected_outcome,
+    policy_logs,
+    reference_logs,
     reverse_kl,
     squared_value_loss,
-    support_logs,
-)
-from manabot.rl.numerics import NumericalError
-from manabot.rl.returns import (
-    expected_outcome,
     standardized_advantages,
     transition_gae,
 )
-from manabot.rl.step import StepRecorder, gradient_step, update_ema
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 
 
@@ -54,10 +52,10 @@ def test_entropy_reads_only_legal_offers() -> None:
     )
 
 
-def test_support_logs_give_a_finite_reverse_kl_target_on_padding() -> None:
+def test_reference_logs_give_a_finite_reverse_kl_target_on_padding() -> None:
     valid = torch.tensor([[True, True, False]])
     reference = torch.tensor([[0.25, 0.75, 0.0]])
-    target = support_logs(reference, valid)
+    target = reference_logs(reference, valid)
     torch.testing.assert_close(target, torch.tensor([[0.25, 0.75, 1.0]]).log())
     logs = policy_logs(torch.zeros(1, 3), valid)
     expected = 0.5 * (torch.tensor(0.5 / 0.25).log() + torch.tensor(0.5 / 0.75).log())

@@ -268,9 +268,27 @@ def _serialize_player(
                 {
                     **({"spells": list(r.spells)} if r.spells else {}),
                     **({"abilities": list(r.abilities)} if r.abilities else {}),
+                    **(
+                        {"except_nonartifact_spells": True}
+                        if r.except_nonartifact_spells
+                        else {}
+                    ),
                     "mana": list(r.mana),
                 }
                 for r in player.restricted_mana
+            ],
+            "pooled_mana_classes": [
+                {
+                    "mana": list(p.mana),
+                    **({"effect": p.effect} if p.effect is not None else {}),
+                    **(
+                        {"restriction": p.restriction}
+                        if p.restriction is not None
+                        else {}
+                    ),
+                    "combat": p.combat,
+                }
+                for p in player.pooled_mana_classes
             ],
             "combat_mana": int(player.combat_mana),
             "inspected": grouped_cards["LIBRARY"],
