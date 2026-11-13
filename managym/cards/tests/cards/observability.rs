@@ -4388,7 +4388,7 @@ fn spend_effect_mana_is_a_program_on_its_player() {
             .iter()
             .find(|definition| definition.name == "Animal Attendant")
             .unwrap();
-        let tokens = tokens_of(definition);
+        let tokens = tokens_of(&ObjectDefinition::card(definition));
         let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
         for &(kind, value) in &classes[0].program {
             assert!(
@@ -4417,7 +4417,7 @@ fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
             .chain(
                 managym_cards::catalog()
                     .iter()
-                    .flat_map(tokens_of)
+                    .flat_map(|definition| tokens_of(&ObjectDefinition::card(definition)))
                     .map(|(kind, value)| (kind as u16, value)),
             )
             .collect();
