@@ -1,15 +1,110 @@
 """Ordinary policies consume complete outside programs and public knowledge."""
 
+import os
+from typing import Literal
+
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from tests.model.prepared_routes import device_input
 from tests.semantic.test_learn_contract import learn_root  # noqa: F401
+
+
+@pytest.fixture(scope="module", params=["cpu", "cuda"])
+def lookup_encoder(request: pytest.FixtureRequest) -> SemanticCardEncoder:
+    if request.param == "cuda" and not torch.cuda.is_available():
+        if os.environ.get("MANABOT_REQUIRE_CUDA") == "1":
+            pytest.fail("Definition lookup admission requires a real CUDA device")
+        pytest.skip("CUDA lookup admission runs on the bounded rental")
+    return SemanticCardEncoder("ur-lessons-vs-gw-allies", 4).to(request.param)
+
+
+@pytest.mark.parametrize("pattern", ["repeated", "strided", "empty", "scalar"])
+def test_definition_lookup_preserves_values_and_producer_gradients(
+    lookup_encoder: SemanticCardEncoder,
+    pattern: Literal["repeated", "strided", "empty", "scalar"],
+) -> None:
+    encoder = lookup_encoder
+    device = encoder.definition_rows.device
+    # Resolve transport IDs through the real catalog, including its zero row.
+    admitted = (encoder.definition_rows > 0).nonzero().flatten()[:2]
+    choices = torch.cat((admitted.new_zeros(1), admitted))
+    if pattern == "repeated":
+        # More than 3072 IDs also exercises CUDA's large-index reduction.
+        ids = choices[torch.arange(4098, device=device) % 3]
+    elif pattern == "strided":
+        ids = choices[torch.arange(24, device=device).reshape(2, 3, 4) % 3]
+        ids = ids.transpose(0, 2)
+        assert not ids.is_contiguous()
+    elif pattern == "empty":
+        ids = choices.new_empty((2, 0, 3))
+    else:
+        ids = choices[0]
+    rows = encoder.definition_rows[ids]
+    count = encoder.catalog_shape.definitions + 1
+    producer = (
+        torch.arange(count * 4, device=device, dtype=torch.float32)
+        .reshape(count, 4)
+        .div(16)
+        .requires_grad_()
+    )
+    bias = torch.ones(4, device=device, requires_grad=True)
+    definitions = producer * 2 + bias
+    definitions.retain_grad()
+    actual = encoder.lookup(definitions, rows)
+    torch.testing.assert_close(actual, definitions[rows], atol=0, rtol=0)
+    assert actual.dtype == definitions.dtype and actual.device == definitions.device
+
+    # Dyadic weights have exact float32 sums at this bounded size. A float64
+    # reference checks counts and gradients without accepting rounding drift
+    # as a tolerance for a missing producer, padding suppression or averaging.
+    weights = (
+        (torch.arange(actual.numel(), device=device) % 7 - 2).float() / 8
+    ).reshape(actual.shape)
+    actual.backward(weights)
+    expected = torch.zeros(count, 4, dtype=torch.float64)
+    expected.index_add_(
+        0, rows.cpu().reshape(-1), weights.cpu().double().reshape(-1, 4)
+    )
+    assert definitions.grad is not None and producer.grad is not None
+    assert bias.grad is not None
+    torch.testing.assert_close(
+        definitions.grad.cpu().double(), expected, atol=0, rtol=0
+    )
+    torch.testing.assert_close(
+        producer.grad.cpu().double(), expected * 2, atol=0, rtol=0
+    )
+    torch.testing.assert_close(
+        bias.grad.cpu().double(), expected.sum(0), atol=0, rtol=0
+    )
+    if ids.numel():
+        assert expected[0].abs().sum() > 0
+
+
+@pytest.mark.parametrize("requires_grad", [False, True])
+@pytest.mark.parametrize("grad_enabled", [False, True])
+def test_definition_lookup_preserves_autograd_contract(
+    lookup_encoder: SemanticCardEncoder, requires_grad: bool, grad_enabled: bool
+) -> None:
+    encoder = lookup_encoder
+    definitions = torch.ones(
+        encoder.catalog_shape.definitions + 1,
+        4,
+        device=encoder.definition_rows.device,
+        requires_grad=requires_grad,
+    )
+    ids = (encoder.definition_rows >= 0).nonzero().flatten()[:3]
+    with torch.set_grad_enabled(grad_enabled):
+        actual = encoder.lookup(definitions, encoder.definition_rows[ids])
+        expected = definitions[encoder.definition_rows[ids]]
+    torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+    assert actual.requires_grad == (requires_grad and grad_enabled)
 
 
 def tensors(space, observation):

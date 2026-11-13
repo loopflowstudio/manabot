@@ -133,7 +133,7 @@ pub struct TurnState {
     pub active_player: PlayerId,
     pub turn_number: u32,
     pub lands_played: u32,
-    pub spells_cast: [Vec<crate::state::game_object::CardId>; 2],
+    pub spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
     /// Each player's history this turn, by player index. Resets every turn.
     pub history: [PlayerTurnHistory; 2],
     /// Graveyard objects that were put there from the battlefield this turn

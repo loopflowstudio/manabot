@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from manabot.policy.prepare import (
     NUMBER_TOKEN_KINDS,
@@ -242,16 +243,40 @@ class SemanticCardEncoder(nn.Module):
         encoded = torch.cat(finished[::-1], dim=1)[0]
         return encoded[programs.schedule.restore]
 
+    @staticmethod
+    def lookup(definitions: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
+        """Read card-program rows; every read of the program table goes here.
+
+        Rows repeat heavily within a batch. Under CUDA autograd, embedding
+        backward groups repeated rows before accumulating into the
+        differentiable table, where advanced indexing accumulates each one
+        separately (`experiments/ppo_cuda.md`). Row 0 still receives gradients;
+        no padding suppression or frequency normalization applies. Other
+        devices and inference keep advanced indexing, so CPU results are
+        unchanged.
+        """
+        if (
+            definitions.is_cuda
+            and torch.is_grad_enabled()
+            and definitions.requires_grad
+        ):
+            return F.embedding(rows, definitions)
+        return definitions[rows]
+
     def forward(
         self, batch: Prepared[torch.Tensor], definitions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        cards = definitions[batch.card_rows]
+        cards = self.lookup(definitions, batch.card_rows)
         known = (
-            definitions[batch.known_rows] * batch.known_counts[..., None] / 60.0
+            self.lookup(definitions, batch.known_rows)
+            * batch.known_counts[..., None]
+            / 60.0
         ).sum(dim=2)
         if self.decklist_projection is not None:
             pooled = torch.einsum(
-                "bsrh,bsrc->bsch", definitions[batch.deck_rows], batch.deck_counts
+                "bsrh,bsrc->bsch",
+                self.lookup(definitions, batch.deck_rows),
+                batch.deck_counts
             ).flatten(start_dim=2)
             known = known + self.decklist_projection(pooled)
         return cards, known

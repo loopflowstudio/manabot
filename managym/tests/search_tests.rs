@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use managym::{
     agent::env::Env,
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         player::PlayerConfig,
         zone::ZoneType,
     },
@@ -62,17 +62,22 @@ fn advance_random(game: &mut Game, steps: usize, seed: u64) {
     }
 }
 
-fn zone_snapshot(game: &Game, zone: ZoneType, player: PlayerId) -> Vec<CardId> {
-    game.state.zones.zone_cards(zone, player).clone()
+fn zone_snapshot(game: &Game, zone: ZoneType, player: PlayerId) -> Vec<ObjectId> {
+    game.state.zones.zone_objects(zone, player).to_vec()
 }
 
 fn hidden_pool(game: &Game, player: PlayerId) -> BTreeSet<usize> {
     let mut pool = BTreeSet::new();
-    for card in game.state.zones.zone_cards(ZoneType::Hand, player) {
-        pool.insert(card.0);
+    for object in game.state.zones.zone_objects(ZoneType::Hand, player).iter() {
+        pool.insert(object.0);
     }
-    for card in game.state.zones.zone_cards(ZoneType::Library, player) {
-        pool.insert(card.0);
+    for object in game
+        .state
+        .zones
+        .zone_objects(ZoneType::Library, player)
+        .iter()
+    {
+        pool.insert(object.0);
     }
     pool
 }
@@ -147,7 +152,7 @@ fn determinize_preserves_public_state_and_hand_sizes() {
         ZoneType::Exile,
         ZoneType::Stack,
     ];
-    let public_before: Vec<Vec<CardId>> = public_zones
+    let public_before: Vec<Vec<ObjectId>> = public_zones
         .iter()
         .flat_map(|zone| {
             [
@@ -188,7 +193,7 @@ fn determinize_preserves_public_state_and_hand_sizes() {
         game.action_space().map(|s| s.actions.len()),
         action_count_before
     );
-    let public_after: Vec<Vec<CardId>> = public_zones
+    let public_after: Vec<Vec<ObjectId>> = public_zones
         .iter()
         .flat_map(|zone| {
             [
@@ -207,8 +212,8 @@ fn determinize_preserves_public_state_and_hand_sizes() {
         (ZoneType::Hand, hero),
         (ZoneType::Library, hero),
     ] {
-        for card in game.state.zones.zone_cards(zone, player) {
-            assert_eq!(game.state.zones.zone_of(*card), Some(zone));
+        for object in game.state.zones.zone_objects(zone, player).iter() {
+            assert_eq!(game.state.zones.zone_of(*object), Some(zone));
         }
     }
 }

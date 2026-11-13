@@ -17,6 +17,7 @@ encoder reads `EffectRoutes`; host preparation owns all CSR and recurrent routes
 import torch
 from torch import nn
 
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch._facts import RecordVocabulary
 from manabot.backends.torch._numerics import embedding_rows
 from manabot.backends.torch._records import RecordReducer, program_number
@@ -68,7 +69,7 @@ class SharedEffectEncoder(nn.Module):
             raise ValueError("catalog effect ids require the card encoder")
         else:
             mod = embedding_rows(token_embedding, rows.modification_rows)
-            sources = definitions[rows.source_rows]
+            sources = SemanticCardEncoder.lookup(definitions, rows.source_rows)
             detail = embedding_rows(token_embedding, rows.detail_rows)
         detail_tokens = detail + embedding_rows(self.detail_kind, rows.detail_kinds)
         detail_tokens = detail_tokens + self.detail_number(

@@ -2,6 +2,8 @@
 // State-based actions.
 
 use crate::state::card::Keyword;
+
+use crate::state::game_object::ObjectKind;
 use crate::{
     flow::{
         decision::{EffectFrame, FrameCompletion},
@@ -10,7 +12,7 @@ use crate::{
     },
     state::{
         ability::{Ability, TriggerCondition},
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         permanent::CounterKind,
         stack_object::StackObject,
         zone::ZoneType,
@@ -27,10 +29,10 @@ pub(crate) enum SbaProgress {
 impl Game {
     /// Duplicate legendary names (layered `is_legendary` and `name`),
     /// grouped by controller in APNAP order.
-    fn legend_groups(&self) -> Vec<Vec<CardId>> {
+    fn legend_groups(&self) -> Vec<Vec<ObjectId>> {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
-            let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
+            let mut names = std::collections::BTreeMap::<String, Vec<ObjectId>>::new();
             let views: Vec<_> = self
                 .layer_views(self.iter_battlefield_permanents(player))
                 .collect();
@@ -47,10 +49,10 @@ impl Game {
                     names
                         .entry(characteristics.name.clone())
                         .or_default()
-                        .push(permanent.card);
+                        .push(permanent.object);
                 }
             }
-            groups.extend(names.into_values().filter(|cards| cards.len() > 1));
+            groups.extend(names.into_values().filter(|objects| objects.len() > 1));
         }
         groups
     }
@@ -68,7 +70,7 @@ impl Game {
         {
             let groups = self.legend_groups();
             if let Some(first) = groups.first() {
-                let id = self.state.card_to_permanent[first[0]].expect("legend");
+                let id = self.state.object_to_permanent[first[0]].expect("legend");
                 let player = self.state.permanents[id]
                     .as_ref()
                     .expect("legend")
@@ -89,18 +91,18 @@ impl Game {
 
     pub(crate) fn perform_state_based_actions_with_legends(
         &mut self,
-        keep: &[CardId],
+        keep: &[ObjectId],
     ) -> SbaProgress {
-        let legend_losers: Vec<CardId> = self
+        let legend_losers: Vec<ObjectId> = self
             .legend_groups()
             .into_iter()
             .flatten()
-            .filter(|card| !keep.contains(card))
+            .filter(|object| !keep.contains(object))
             .collect();
         self.perform_state_based_batch(&legend_losers)
     }
 
-    fn perform_state_based_batch(&mut self, legend_losers: &[CardId]) -> SbaProgress {
+    fn perform_state_based_batch(&mut self, legend_losers: &[ObjectId]) -> SbaProgress {
         let mut performed = false;
         for player in [PlayerId(0), PlayerId(1)] {
             // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
@@ -142,7 +144,7 @@ impl Game {
                 && permanent.counter_count(CounterKind::Loyalty) == 0)
                 || (characteristics.types.is_battle()
                     && permanent.counter_count(CounterKind::Defense) == 0);
-            let legend_loser = legend_losers.contains(&permanent.card);
+            let legend_loser = legend_losers.contains(&permanent.object);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.
             let illegal_aura = self.aura_attachment_illegal(permanent_id);
@@ -169,7 +171,7 @@ impl Game {
                     ProposedEvent::Destroy { target }
                 } else {
                     self.zone_move_proposal(
-                        CardId::from(target.entity),
+                        ObjectId::from(target.entity),
                         ZoneType::Graveyard,
                         Default::default(),
                     )
@@ -238,7 +240,7 @@ impl Game {
             .filter(|&id| {
                 self.state.permanents[id].as_ref().is_some_and(|equipment| {
                     equipment.attached_to.is_some()
-                        && self.state.cards[equipment.card].enchant().is_none()
+                        && self.state.objects[equipment.object].enchant().is_none()
                 }) && self.attached_creature(id).is_none()
             })
             .collect();
@@ -249,25 +251,27 @@ impl Game {
             performed = true;
         }
 
-        // CR 704.5d — A token in a zone other than the battlefield ceases to
-        // exist. This runs after the move to the graveyard, so death triggers
-        // from tokens have already been enqueued.
+        // CR 704.5d-e — A token in a zone other than the battlefield, or a
+        // copy of a spell in a zone other than the stack, ceases to exist.
+        // This runs after the move to the graveyard, so death triggers from
+        // tokens have already been enqueued.
         let mut tokens_to_remove = Vec::new();
-        for (index, card) in self.state.cards.iter().enumerate() {
-            if !card.is_token {
-                continue;
-            }
-            let card_id = CardId(index);
-            match self.state.zones.zone_of(card_id) {
-                // A spell copy is a token card while on the stack (CR 704.5e).
-                Some(ZoneType::Battlefield | ZoneType::Stack) | None => {}
-                Some(_) => tokens_to_remove.push((card_id, card.owner)),
+        for (index, object) in self.state.objects.iter().enumerate() {
+            let object_id = ObjectId(index);
+            let zone = self.state.zones.zone_of(object_id);
+            let ceases = match object.kind() {
+                ObjectKind::Card => false,
+                ObjectKind::Token => !matches!(zone, Some(ZoneType::Battlefield) | None),
+                ObjectKind::SpellCopy => !matches!(zone, Some(ZoneType::Stack) | None),
+            };
+            if ceases {
+                tokens_to_remove.push((object_id, object.owner));
             }
         }
-        for (card_id, owner) in tokens_to_remove {
-            let from = self.state.zones.zone_of(card_id);
-            self.state.zones.remove_card(card_id);
-            self.capture_card_move(card_id, from, None, owner);
+        for (object_id, owner) in tokens_to_remove {
+            let from = self.state.zones.zone_of(object_id);
+            self.state.zones.remove_object(object_id);
+            self.capture_object_move(object_id, from, None, owner);
             performed = true;
         }
 
@@ -282,7 +286,7 @@ impl Game {
                     return false;
                 };
                 permanent.counter_count(CounterKind::Lore) >= i32::from(last)
-                    && !self.chapter_ability_pending(permanent.card)
+                    && !self.chapter_ability_pending(permanent.object)
             })
             .map(|(id, _)| id)
             .collect()
@@ -290,14 +294,14 @@ impl Game {
 
     /// Whether a chapter ability of this Saga has triggered and not yet left
     /// the stack: waiting to be put on it, or on it.
-    fn chapter_ability_pending(&self, saga: CardId) -> bool {
+    fn chapter_ability_pending(&self, saga: ObjectId) -> bool {
         let object = self.current_object_ref(saga);
-        let is_chapter = |card, source_ref, inline: &Option<_>, index: usize| {
-            card == saga
+        let is_chapter = |object_id, source_ref, inline: &Option<_>, index: usize| {
+            object_id == saga
                 && source_ref == object
                 && inline.is_none()
                 && matches!(
-                    self.state.cards[saga].abilities.get(index),
+                    self.state.objects[saga].abilities.get(index),
                     Some(Ability::Triggered {
                         condition: TriggerCondition::Chapter { .. },
                         ..
@@ -306,14 +310,14 @@ impl Game {
         };
         self.state.pending_triggers.iter().any(|trigger| {
             is_chapter(
-                trigger.source_card,
+                trigger.source_object,
                 trigger.source_ref,
                 &trigger.inline_effects,
                 trigger.ability_index,
             )
         }) || self.state.stack_objects.iter().any(|item| {
             matches!(item, StackObject::TriggeredAbility(ability) if is_chapter(
-                ability.source_card,
+                ability.source_object,
                 ability.source_ref,
                 &ability.inline_effects,
                 ability.ability_index,
@@ -327,7 +331,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[aura].as_ref() else {
             return false;
         };
-        let Some(enchant) = self.state.cards[permanent.card].enchant() else {
+        let Some(enchant) = self.state.objects[permanent.object].enchant() else {
             return false;
         };
         !self.attached_permanent(aura).is_some_and(|object| {

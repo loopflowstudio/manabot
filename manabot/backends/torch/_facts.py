@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import PackedSequence
 
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch._numerics import embedding_rows
 from manabot.backends.torch._records import program_number
 from manabot.env.observation import FACT_KINDS
@@ -91,7 +92,7 @@ class FactEncoder(nn.Module):
                 masked(rows.id_rows, rows.id_mask)
                 + masked(rows.detail_rows, rows.detail_mask)
                 + masked(rows.token_rows, rows.token_mask)
-                + definitions[rows.source_rows]
+                + SemanticCardEncoder.lookup(definitions, rows.source_rows)
             )
         hidden = self.kind(rows.kinds) + ids + self.numeric(rows.columns)
         program = rows.programs

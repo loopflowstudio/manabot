@@ -363,3 +363,27 @@ def test_retained_capture_schema_cannot_admit_current_name_references() -> None:
     fresh["capture_version"] = 5
     with pytest.raises(ValueError, match="noncanonical semantic observation"):
         DecisionInput.model_validate_json(json.dumps(fresh))
+
+
+def test_exported_observation_keeps_complete_policy_input_with_continuation() -> None:
+    space = ObservationSpace(ObservationConfig(policy_input_version=10))
+    for env in collision_branches():
+        actor = env.current_agent_index()
+        assert actor is not None
+        observation = env.observation_for_player(actor)
+        assert observation.continuation
+        exported = managym.Observation.from_json(
+            observation.toJSON(), continuation_json=observation.continuation_json()
+        )
+        assert exported.toJSON() == observation.toJSON()
+        assert exported.continuation_json() == observation.continuation_json()
+        expected = space.encode(observation)
+        actual = space.encode(exported)
+        for key in expected:
+            np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+        frames = json.loads(observation.continuation_json())
+        frames[0]["kind"] = 99
+        with pytest.raises(ValueError, match="continuation"):
+            managym.Observation.from_json(
+                observation.toJSON(), continuation_json=json.dumps(frames)
+            )

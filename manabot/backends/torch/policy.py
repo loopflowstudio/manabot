@@ -794,7 +794,9 @@ class ActorCritic(nn.Module):
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
-            permanent_definitions = definitions[obs.permanent_rows]
+            permanent_definitions = self.semantic_cards.lookup(
+                definitions, obs.permanent_rows
+            )
         else:
             assert self.card_definitions is not None
             cards = self.card_definitions(obs.card_rows)
@@ -832,7 +834,7 @@ class ActorCritic(nn.Module):
             obs.effects, objects, token_embedding, definitions
         )
         relation_definitions = (
-            definitions[obs.relation_rows]
+            SemanticCardEncoder.lookup(definitions, obs.relation_rows)
             if definitions is not None
             else self.card_definitions(obs.relation_rows)
         )

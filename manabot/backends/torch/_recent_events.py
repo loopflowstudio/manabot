@@ -11,6 +11,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.policy.prepare import EventRows
 
 
@@ -48,7 +49,9 @@ class RecentEventEncoder(nn.Module):
             context = context.masked_fill(~rows.focus_mask[..., index, None], 0)
             features.extend(
                 (
-                    definitions[rows.definitions[..., index]],
+                    SemanticCardEncoder.lookup(
+                        definitions, rows.definitions[..., index]
+                    ),
                     context,
                     categorical(rows.owners[..., index], 3),
                     categorical(rows.zones[..., index], 8),
