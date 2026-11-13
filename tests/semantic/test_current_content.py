@@ -25,7 +25,11 @@ def _manifest() -> dict:
         "schema_version": 1,
         "content_digest": pool["content_digest"],
         "definitions": [
-            {"card_def_id": row["card_def_id"], "registry_name": row["registry_name"]}
+            {
+                "card_def_id": row["card_def_id"],
+                "key": row["key"],
+                "registry_name": row["registry_name"],
+            }
             for row in pool["definitions"]
         ],
     }

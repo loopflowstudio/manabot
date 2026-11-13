@@ -122,7 +122,7 @@ fn the_great_henge_costs_less_by_greatest_power_and_rewards_nontoken_creatures()
     let hand = s.zone_size(0, ZoneType::Hand);
     let spirit = s
         .game_mut()
-        .create_token("Spirit", PlayerId(0), false)
+        .create_token("token.spirit", PlayerId(0), false)
         .unwrap();
     settle(&mut s);
     assert_eq!(counters_of(&s, spirit, CounterKind::PlusOnePlusOne), 0);

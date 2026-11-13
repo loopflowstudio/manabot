@@ -1,9 +1,10 @@
 //! The world's one immutable card catalog.
 //!
-//! A [`ContentPack`] maps registry names to stable [`CardDefId`]s and shared
-//! [`CardDefinition`]s. A process holds one ([`default_content_pack`]): every
-//! definition in `managym-cards` plus the rules fixtures, in name order, with each
-//! double-faced card's back face registered right after its front. Every
+//! A [`ContentPack`] maps card names and token keys to stable [`CardDefId`]s
+//! and their [`ObjectDefinition`] rows. A process holds one ([`default_content_pack`]):
+//! every card and token definition in `managym-cards` plus the rules fixtures, in
+//! name order, with each double-faced card's back face registered right after its
+//! front. Cards resolve by name; tokens, which may share a name, by `token.*` key. Every
 //! match, authored setup and search fork runs on it. Its digest and manifest
 //! name the world's cards for derived consumers (the world identity, learning
 //! catalogs, checkpoints).
@@ -18,7 +19,9 @@ use super::names::{NameCandidate, NameVocabulary};
 use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
-    card::{Card, CardDefId, CardDefinition},
+    card::{
+        Card, CardDefId, CardDefinition, ObjectDefinition, PrintedCharacteristics, TokenDefinition,
+    },
     game_object::{ObjectId, PlayerId},
 };
 
@@ -27,6 +30,9 @@ pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackDefinitionManifest {
     pub card_def_id: CardDefId,
+    /// The card's or token's key; `None` for a back face or rules fixture.
+    /// With the name it identifies the row: two tokens may share a name.
+    pub key: Option<String>,
     pub registry_name: String,
 }
 
@@ -42,7 +48,8 @@ pub struct ContentPackManifest {
 pub struct ContentPack {
     pub schema_version: u32,
     cards_by_name: BTreeMap<String, CardDefId>,
-    definitions: Vec<Arc<CardDefinition>>,
+    tokens_by_key: BTreeMap<&'static str, CardDefId>,
+    definitions: Vec<ObjectDefinition>,
     names: OnceLock<Arc<NameVocabulary>>,
     digest: OnceLock<String>,
     public_definitions: OnceLock<Vec<serde_json::Value>>,
@@ -93,8 +100,9 @@ impl ContentPack {
 
     /// Read-only descriptor for binding derived consumers to the catalog.
     ///
-    /// Registry names are used only at the adapter boundary. Runtime match
-    /// facts and learning projections continue to carry typed definition IDs.
+    /// Keys and registry names are used only at the adapter boundary. Runtime
+    /// match facts and learning projections continue to carry typed
+    /// definition IDs.
     pub fn manifest(&self) -> ContentPackManifest {
         ContentPackManifest {
             world_version: crate::WORLD_VERSION.into(),
@@ -104,6 +112,7 @@ impl ContentPack {
                 .definition_entries()
                 .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
                     card_def_id,
+                    key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
                     registry_name: definition.name.clone(),
                 })
                 .collect(),
@@ -111,29 +120,58 @@ impl ContentPack {
     }
 }
 
-/// A freshly allocated catalog: every current card from `managym-cards` and the
-/// rules fixtures, in name order. Matches share [`default_content_pack`]; a
+/// A freshly allocated catalog: every current card and token from
+/// `managym-cards` and the rules fixtures, in name order (tokens sharing a
+/// name follow key order). Matches share [`default_content_pack`]; a
 /// separate allocation exists to show that match state identity ignores it.
 impl Default for ContentPack {
     fn default() -> Self {
-        let by_name = managym_cards::catalog()
+        let fixture = fixtures::crossroads_of_destiny();
+        let mut rows = managym_cards::catalog()
             .iter()
-            .cloned()
-            .chain([fixtures::crossroads_of_destiny()])
-            .map(|definition| (definition.name.clone(), definition))
-            .collect::<BTreeMap<_, _>>();
+            .chain([&fixture])
+            .map(Row::Card)
+            .chain(managym_cards::token_catalog().iter().map(Row::Token))
+            .collect::<Vec<_>>();
+        rows.sort_by(|left, right| (left.name(), left.key()).cmp(&(right.name(), right.key())));
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             cards_by_name: BTreeMap::new(),
+            tokens_by_key: BTreeMap::new(),
             names: OnceLock::new(),
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
-            definitions: Vec::with_capacity(by_name.len()),
+            definitions: Vec::with_capacity(rows.len()),
         };
-        for definition in by_name.into_values() {
-            out.register_card(definition);
+        for row in rows {
+            match row {
+                Row::Card(card) => out.register_card(card.clone()),
+                Row::Token(token) => out.register_token(token),
+            }
         }
         out
+    }
+}
+
+/// A definition the default catalog registers, before it is a row.
+enum Row<'a> {
+    Card(&'a CardDefinition),
+    Token(&'a TokenDefinition),
+}
+
+impl Row<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Self::Card(card) => &card.name,
+            Self::Token(token) => &token.name,
+        }
+    }
+
+    fn key(&self) -> &'static str {
+        match self {
+            Self::Card(card) => card.key,
+            Self::Token(token) => token.key,
+        }
     }
 }
 
@@ -146,12 +184,29 @@ impl ContentPack {
     /// unless that player pays [cost]", so a set file states ward once as a
     /// keyword and the catalog adds the trigger. Besides the catalog's own
     /// construction, only content-sensitivity tests extend a copy.
-    pub fn register_card(&mut self, mut definition: CardDefinition) {
+    pub fn register_card(&mut self, card: CardDefinition) {
+        self.register(ObjectDefinition::card(&card));
+        // A double-faced card's back face is its own row, right after its
+        // front, so a transformed permanent observes and tokenizes as it.
+        if let Some(back_face) = card.back_face {
+            self.register(ObjectDefinition::face(*back_face));
+        }
+    }
+
+    /// Append `token`'s object definition as the next row, found by its key.
+    pub fn register_token(&mut self, token: &TokenDefinition) {
+        self.register(ObjectDefinition::token(token));
+    }
+
+    /// Register a card face by name, or a token row (`is_token`) by key.
+    fn register(&mut self, mut definition: ObjectDefinition) {
         self.names.take();
         self.digest.take();
         self.public_definitions.take();
         if let Some(ward_cost) = definition.ward().cloned() {
-            definition.abilities.push(Ability::ward(ward_cost));
+            Arc::make_mut(&mut definition.printed)
+                .abilities
+                .push(Ability::ward(ward_cost));
         }
         let definition_id = CardDefId(
             self.definitions
@@ -159,25 +214,31 @@ impl ContentPack {
                 .try_into()
                 .expect("content pack exceeds CardDefId capacity"),
         );
-        let name = definition.name.clone();
-        assert!(
-            self.cards_by_name.insert(name, definition_id).is_none(),
-            "duplicate card definition"
-        );
-        let back_face = definition.back_face.clone();
-        self.definitions.push(Arc::new(definition));
-        // A double-faced card's back face is its own row, right after its
-        // front, so a transformed permanent observes and tokenizes as it.
-        if let Some(back_face) = back_face {
-            self.register_card(*back_face);
+        if definition.is_token {
+            assert!(
+                self.tokens_by_key
+                    .insert(definition.key, definition_id)
+                    .is_none(),
+                "duplicate token definition {}",
+                definition.key
+            );
+        } else {
+            assert!(
+                self.cards_by_name
+                    .insert(definition.name.clone(), definition_id)
+                    .is_none(),
+                "duplicate card definition {}",
+                definition.name
+            );
         }
+        self.definitions.push(definition);
     }
 
     /// The back face's row of the double-faced card whose front is `front`.
-    pub fn back_face(&self, front: CardDefId) -> Option<(CardDefId, Arc<CardDefinition>)> {
+    pub fn back_face(&self, front: CardDefId) -> Option<(CardDefId, Arc<PrintedCharacteristics>)> {
         self.definition(front)?.back_face.as_ref()?;
         let back = CardDefId(front.0 + 1);
-        Some((back, Arc::clone(&self.definitions[back.0 as usize])))
+        Some((back, Arc::clone(&self.definitions[back.0 as usize].printed)))
     }
 
     /// The front face whose back face is `back`; `None` for any other row.
@@ -189,17 +250,17 @@ impl ContentPack {
 
     /// Iterate every registered card definition (conformance tests audit
     /// these against the Scryfall fixture).
-    pub fn definitions(&self) -> impl Iterator<Item = &CardDefinition> {
-        self.definitions.iter().map(Arc::as_ref)
+    pub fn definitions(&self) -> impl Iterator<Item = &ObjectDefinition> {
+        self.definitions.iter()
     }
 
     /// Stable `(CardDefId, definition)` pairs for replay, measurement, and
     /// content fingerprinting without inspecting the pack's storage layout.
-    pub fn definition_entries(&self) -> impl Iterator<Item = (CardDefId, &CardDefinition)> {
+    pub fn definition_entries(&self) -> impl Iterator<Item = (CardDefId, &ObjectDefinition)> {
         self.definitions
             .iter()
             .enumerate()
-            .map(|(index, definition)| (CardDefId(index as u32), definition.as_ref()))
+            .map(|(index, definition)| (CardDefId(index as u32), definition))
     }
 
     pub fn len(&self) -> usize {
@@ -210,12 +271,19 @@ impl ContentPack {
         self.definitions.is_empty()
     }
 
+    /// The row of the card (or back face, or rules fixture) named `name`.
+    /// Tokens are not found by name; see [`Self::token_id`].
     pub fn definition_id(&self, name: &str) -> Option<CardDefId> {
         self.cards_by_name.get(name).copied()
     }
 
-    pub fn definition(&self, id: CardDefId) -> Option<&CardDefinition> {
-        self.definitions.get(id.0 as usize).map(Arc::as_ref)
+    /// The row of the token definition keyed `key` (`token.<name>`).
+    pub fn token_id(&self, key: &str) -> Option<CardDefId> {
+        self.tokens_by_key.get(key).copied()
+    }
+
+    pub fn definition(&self, id: CardDefId) -> Option<&ObjectDefinition> {
+        self.definitions.get(id.0 as usize)
     }
 
     /// Immutable public characteristics reused by every capture of this content
@@ -244,14 +312,58 @@ impl ContentPack {
             .get(id.0 as usize)
     }
 
+    /// The printed name of the token keyed `key`, for descriptions; the key
+    /// itself when it names no token.
+    pub fn token_name<'a>(&'a self, key: &'a str) -> &'a str {
+        self.token_id(key)
+            .and_then(|id| self.definition(id))
+            .map_or(key, |token| token.name.as_str())
+    }
+
+    /// `card`'s current copiable values in the row shape, with its token
+    /// status and its shown face's back face. Records of a copy (pending
+    /// creations, canonical state) serialize this; the token a copy creates
+    /// takes only `printed`.
+    pub fn object_row(&self, card: &Card) -> ObjectDefinition {
+        ObjectDefinition {
+            key: "",
+            scryfall_id: None,
+            printed: card.copiable_definition(),
+            is_token: card.is_token,
+            back_face: self
+                .definition(card.definition_id)
+                .and_then(|row| row.back_face.clone()),
+        }
+    }
+
+    /// A new card object of the card named `name`.
     pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: ObjectId) -> Option<Card> {
-        let definition_id = self.definition_id(name)?;
-        let definition = Arc::clone(self.definitions.get(definition_id.0 as usize)?);
+        self.instantiate_row(self.definition_id(name)?, owner, object_id)
+    }
+
+    /// A new token object of the token definition keyed `key`.
+    pub fn instantiate_token(
+        &self,
+        key: &str,
+        owner: PlayerId,
+        object_id: ObjectId,
+    ) -> Option<Card> {
+        self.instantiate_row(self.token_id(key)?, owner, object_id)
+    }
+
+    fn instantiate_row(
+        &self,
+        definition_id: CardDefId,
+        owner: PlayerId,
+        object_id: ObjectId,
+    ) -> Option<Card> {
+        let row = self.definitions.get(definition_id.0 as usize)?;
         Some(Card::from_definition(
             object_id,
             owner,
             definition_id,
-            definition,
+            Arc::clone(&row.printed),
+            row.is_token,
         ))
     }
 }

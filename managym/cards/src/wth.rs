@@ -1,8 +1,8 @@
 //! Weatherlight.
 use managym_state::{
     card::{
-        CardDefinition, CardType, CardTypes, Keyword, Keywords, StaticAbility, StaticKeywordGrant,
-        StaticScope,
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility, StaticKeywordGrant, StaticScope,
     },
     mana::ManaCost,
     predicate::CardPredicate,
@@ -17,15 +17,18 @@ fn fervor() -> CardDefinition {
     CardDefinition {
         key: "wth.fervor",
         scryfall_id: "b4df70ea-2b6b-4e25-a564-655989ef16fa",
-        name: "Fervor".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
-            scope: StaticScope::YouControl(CardPredicate::creature()),
-            condition: None,
-            keywords: Keywords::of(&[Keyword::Haste]),
-        })],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Fervor".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::YouControl(CardPredicate::creature()),
+                condition: None,
+                keywords: Keywords::of(&[Keyword::Haste]),
+            })],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

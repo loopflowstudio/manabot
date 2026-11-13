@@ -4,7 +4,7 @@ use managym_state::{
         Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, TargetSpec,
         TriggerCondition, TriggerSubject, TurnStep,
     },
-    card::{CardDefinition, CardType, CardTypes, StaticAbility},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics, StaticAbility},
     mana::ManaCost,
     permanent::CounterKind,
 };
@@ -19,32 +19,35 @@ fn proft_s_eidetic_memory() -> CardDefinition {
     CardDefinition {
         key: "mkm.proft_s_eidetic_memory",
         scryfall_id: "af5b29b3-974c-4200-8df8-b072c11e1600",
-        name: "Proft's Eidetic Memory".into(),
-        mana_cost: Some(ManaCost::parse("{1}{U}")),
-        types: CardTypes::new([CardType::Enchantment]),
-        supertypes: vec!["Legendary".into()],
-        statics: vec![StaticAbility::NoMaximumHandSize],
-        abilities: vec![
-            Ability::Triggered {
-                intervening_if: None,
-                condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
+        printed: PrintedCharacteristics {
+            name: "Proft's Eidetic Memory".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            supertypes: vec!["Legendary".into()],
+            statics: vec![StaticAbility::NoMaximumHandSize],
+            abilities: vec![
+                Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
+                    },
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
                 },
-                effects: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-            },
-            Ability::Triggered {
-                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
-                intervening_if: Some(Condition::CardsDrawnAtLeast { count: 2 }),
-                effects: vec![Effect::put_counters(
-                    ObjectSelector::Target(TargetSpec::CreatureYouControl),
-                    CounterKind::PlusOnePlusOne,
-                    EffectValue::CardsDrawnMinus { subtract: 1 },
-                )],
-            },
-        ],
-        text_box: text_box.into(),
+                Ability::Triggered {
+                    condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
+                    intervening_if: Some(Condition::CardsDrawnAtLeast { count: 2 }),
+                    effects: vec![Effect::put_counters(
+                        ObjectSelector::Target(TargetSpec::CreatureYouControl),
+                        CounterKind::PlusOnePlusOne,
+                        EffectValue::CardsDrawnMinus { subtract: 1 },
+                    )],
+                },
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

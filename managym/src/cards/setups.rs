@@ -119,13 +119,13 @@ fn build(
         if !keys.insert(deck.key.clone()) {
             return Err(context(format!("duplicate deck {}", deck.key)));
         }
-        let resolve = |entries: &[EntrySource], sideboard: bool| {
+        let resolve = |entries: &[EntrySource]| {
             let mut out = BTreeMap::new();
             for entry in entries {
                 let definition = by_key
                     .get(entry.definition.as_str())
                     .ok_or_else(|| context(format!("unknown card {:?}", entry.definition)))?;
-                if entry.count == 0 || (sideboard && definition.is_token) {
+                if entry.count == 0 {
                     return Err(context(format!("invalid entry {:?}", entry.definition)));
                 }
                 if out.insert(definition.name.clone(), entry.count).is_some() {
@@ -134,8 +134,8 @@ fn build(
             }
             Ok(out)
         };
-        let cards = resolve(&deck.cards, false)?;
-        let sideboard = resolve(&deck.sideboard, true)?;
+        let cards = resolve(&deck.cards)?;
+        let sideboard = resolve(&deck.sideboard)?;
         if cards.values().sum::<usize>() != deck.card_count {
             return Err(context(format!(
                 "{} entries do not sum to {}",

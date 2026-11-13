@@ -1682,13 +1682,11 @@ mod content_pack_contract_tests {
         assert_eq!(manifest.content_digest, expected_digest);
         assert_eq!(manifest.definitions.len(), admitted.len());
         for entry in &manifest.definitions {
-            assert_eq!(
-                admitted
-                    .definition(entry.card_def_id)
-                    .expect("manifest definition")
-                    .name,
-                entry.registry_name
-            );
+            let definition = admitted
+                .definition(entry.card_def_id)
+                .expect("manifest definition");
+            assert_eq!(definition.name, entry.registry_name);
+            assert_eq!(definition.key, entry.key.as_deref().unwrap_or(""));
         }
 
         let root_hash = first_game.state.deterministic_hash();
