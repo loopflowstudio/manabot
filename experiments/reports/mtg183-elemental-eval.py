@@ -7,13 +7,17 @@ experiment its eval runs record. It only reports; the follower
 update and its line, so the evaluation-only page draws curves over updates
 (`experiments.elemental_long_db.normalize` declares them on older records).
 
+The Opponent control selects the heuristic. The former 400-updates-earlier
+and half-updates curves cannot be selected under Etude 0.3.1: these historical
+matches carry neither seating names nor tags identifying those comparisons.
+
     uv run --extra evaluation python -m experiments.elemental_long_db build
     ETUDE_HOME=~/.manabot/mtg183-eval-db/etude uv run --extra evaluation \\
         etude report experiments/reports/mtg183-elemental-eval.py \\
         --source ~/.manabot/mtg183-eval-db/store --out ~/.manabot/mtg183-eval-db/reports --open
 """
 
-from etude.report import Anchors, Crosstable, Curve, Earlier, Fraction, Report, Score
+from etude.report import Anchors, Crosstable, Curve, Report, Score
 
 
 def report() -> Report:
@@ -23,16 +27,7 @@ def report() -> Report:
         score=Score(table="games", value="score", reference=0.5),
         clock="updates",
         evals=(
-            Curve(title="Against heuristic v2", opponent="heuristic"),
-            Curve(
-                title="Against the checkpoint 400 updates earlier",
-                opponent=Earlier(clock="updates", by=400),
-            ),
-            # Doubling's gain: each checkpoint against itself at half its updates.
-            Curve(
-                title="Against the checkpoint at half its updates",
-                opponent=Fraction(clock="updates", value=0.5),
-            ),
+            Curve(title="Against heuristic v2"),
             Crosstable(),
             Anchors(),
         ),

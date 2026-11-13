@@ -56,13 +56,12 @@ def test_labels_name_width_and_only_a_differing_depth() -> None:
 
 def test_comparisons_draw_one_chart_per_question_across_jobs() -> None:
     earlier = against_earlier_self("Vs itself", tags=("half-w64", "half-w160"))
-    fixed = against_fixed("Vs heuristic", "heuristic", tags=("heur-w64", "heur-w160"))
-    pair = head_to_head("Large vs Small", subject="w160", tag="head-to-head")
+    fixed = against_fixed("Vs heuristic", tags=("heur-w64", "heur-w160"))
+    pair = head_to_head("Large vs Small", tag="head-to-head")
 
     assert earlier.matches == (Matches(tag="half-w64"), Matches(tag="half-w160"))
-    assert fixed.opponent == "heuristic"
-    # One side of a head-to-head: the subject's line alone.
-    assert (pair.subject, pair.matches) == ("w160", Matches(tag="head-to-head"))
+    assert fixed.matches == (Matches(tag="heur-w64"), Matches(tag="heur-w160"))
+    assert pair.matches == Matches(tag="head-to-head")
     # They compose into an ordinary Etude report.
     Report(score=Score(table="games", value="score"), evals=(earlier, fixed, pair))
 

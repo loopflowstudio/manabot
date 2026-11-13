@@ -41,7 +41,7 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.2.16` (also for
+The `manabot` public dependency requirements are `etude-sdk>=0.3.1` (also for
 its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
 requirements. A downstream project resolves those with its own dependencies. The repository's
 `uv.lock` records exact versions, and its dedicated training and play runtime
@@ -57,7 +57,10 @@ uv sync --locked --python 3.13 --extra dev --extra artifacts
 
 Commit the lock change before preparing a new experiment. When raising a public
 minimum, update every requirement for that dependency and commit the metadata
-with the lock.
+with the lock. An Etude release that changes the launcher schema refuses the
+existing `~/.etude/launcher.db`; see
+[experiments](experiments.md#what-an-experiment-is) before running launch commands
+against a shared home.
 Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
 Retained experiments keep their original source and lock, including the v7
 representation study's historical Git source pin. Never downgrade the current
@@ -577,7 +580,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.2.16`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.3.1`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact

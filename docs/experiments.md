@@ -35,8 +35,29 @@ uv run etude eval experiments/elemental.py --source r2://manabot/jobs     # play
 uv run etude report experiments/elemental.py --source r2://manabot/jobs --serve  # draw what it played
 ```
 
-`runs()` names the training runs, `eval(state)` returns the matchups still
+`runs()` names the training runs, `eval(state)` returns the seatings still
 wanted so repeated passes play only new ones, and `report()` draws the figures.
+A seating is Etude's rule for who meets whom (`etude.eval.records.Seating`):
+its players in seat order, the conditions they play under and the tags a
+report selects them by. A `Benchmark` holds `seatings`, and a checkpoint says
+where it stood on each clock in `Checkpoint.at`, as in
+`checkpoint.at["updates"]`.
+
+These commands need etude-sdk 0.3.1 or later, which the lock pins. Launch,
+status and eval commands keep their state in `~/.etude/launcher.db`, and each
+database has a schema version. Etude 0.3.1 requires schema 17; commands
+against an incompatible database stop with
+
+```text
+~/.etude/launcher.db was written by another version of etude; move or delete it to start again
+```
+
+There is no migration. Rename the file once no older client is using it, and
+keep the copy while its runs are still referenced, since it is the only record
+of how they ended; the next command starts an empty database. To leave a
+shared `~/.etude` alone, give the command its own home:
+`ETUDE_HOME=$(mktemp -d) uv run etude ...`. `etude report` reads the job store
+and needs no launcher database.
 Raw results live in the artifact store, not in git; `experiments/data.manifest.json`
 records each file's digest ([data](../experiments/README.md#data)).
 
@@ -269,11 +290,10 @@ def report() -> Report:
             ),
             against_fixed(
                 "Model vs heuristic",
-                "heuristic",
                 tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
-            head_to_head("Large vs Small at fixed training time", subject=large, tag="equal-hours"),
-            head_to_head("Large vs Small at fixed # updates", subject=large, tag="head-to-head"),
+            head_to_head("Large vs Small at fixed training time", tag="equal-hours"),
+            head_to_head("Large vs Small at fixed # updates", tag="head-to-head"),
         ),
         perf=PERF,
         ml=(*learning_schedule(jobs), *ML),
@@ -284,15 +304,28 @@ For an experiment whose evaluations were played from the same revision,
 `uv run etude report <experiment file> --source r2://manabot/jobs --serve`
 draws it. A finished experiment's page is rebuilt from the revision that ran
 it, or from a file with its `report()` and no `eval` over its own run prefixes:
-`etude report` still calls `eval(state)`, and a matchup derived from today's
-source digest no longer agrees with the held runs (`tournament_conflict`).
+`etude report` still calls `eval(state)`, and a seating derived from today's
+source digest no longer agrees with the held runs. The page then draws the
+tournament as its eval runs recorded it and says so in a note at the top
+(`tournament_conflict`).
+
+```sh
+doppler run -p manabot -c prd -- \
+  uv run etude report experiments/tla_frontier.py --source r2://manabot/jobs --out /tmp/tla-frontier
+```
+
+writes the frontier page from its 1,120 stored matches on any machine with
+access to the bucket. Allow about half an hour: `r2://manabot/jobs` holds
+several thousand runs, and a build reads each one's record. A report over a
+local store takes seconds.
 
 Over the frontier's retained evaluations, the page shows four charts under
 Evals, scored from 0 to 1 with 0.5 drawn as even. The charts against the
 model's earlier self and against the heuristic have a line for Small (width
 64) and one for Large (width 160, 8 layers). The two Large vs Small charts, at
-a fixed number of updates and at fixed training time, show Large's line only,
-so above 0.5 means Large is stronger. Hovering a point reads
+a fixed number of updates and at fixed training time, also show both lines.
+Each is the other mirrored about 0.5, since they score the same games from
+opposite seats: where Large's line is above 0.5, Large is stronger. Hovering a point reads
 like `0.62 · 95% interval 0.53–0.72 · 64 games · 16 matches`.
 The learning schedule opens ML details.
 
@@ -300,15 +333,29 @@ The learning schedule opens ML details.
 | --- | --- |
 | `job_labels(jobs)` | A display name per job: the size word you give, then the model's width, and its attention layers when they differ from the first job's. Small (width 64), Large (width 160, 8 layers). Etude appends each job's seed count. |
 | `against_earlier_self(title, tags)` | Each checkpoint against an earlier checkpoint of its own job, a line per job. A point counts every such match its checkpoint sat in; a checkpoint that was also the earlier partner of a later one counts that role too, until Etude can score only the later side. |
-| `against_fixed(title, opponent, tags)` | Each checkpoint against one fixed player, such as `heuristic`, a line per job. |
-| `head_to_head(title, subject, tag)` | Two jobs against each other, drawn once from `subject`'s side, so above 0.5 means `subject` is stronger. There is no mirrored line for the other job. |
+| `against_fixed(title, tags)` | Each checkpoint against one fixed player, such as the heuristic, a line per job. The tags select the seatings that hold that player. |
+| `head_to_head(title, tag)` | Two jobs against each other, a line per job. Both jobs sat in every match, so the lines mirror each other about 0.5. |
 | `learning_schedule(regimes)` | Two charts, the configured learning rate and policy damping of each job on the update clock through its damping horizon, with each run's latest update marked. These are plans, not measurements. |
 
 Every helper returns an ordinary Etude panel, so a report mixes them with its
 own `Curve`, `Matrix` or `Series` panels, and an experiment that needs a
-different title, opponent or tag passes it rather than writing a new helper.
+different title or tag passes it rather than writing a new helper.
 Equal training time is not yet an Etude clock: a fixed-time head-to-head is
-drawn at the subject's update, and the report's text gives each pair's hours.
+drawn at each job's own update, and the report's text gives each pair's hours.
+
+A head-to-head with one line is a curve over a named seating,
+`Curve(matches=Matches(seating=NAME))`, which draws the first seat's score
+where the held checkpoint stood. The seating needs an `Inference` first seat
+for each held checkpoint to fill and a relative second seat, such as
+`Aligned(job=OTHER, clock="updates", inference=...)` for the other job at the
+same update. `Earlier` and `Fraction` seat a checkpoint's own earlier self the
+same way, and every relative seat names the `Inference` it plays as. A
+seating of two fixed checkpoints is played once and has no such curve, so its
+tag draws both jobs.
+
+`Crosstable(matches=Matches(tournament=NAME))` shows each checkpoint of one
+line against each other checkpoint of it, a tab per line. Etude has no panel
+for direct games between two jobs other than these.
 
 How a game was run is provenance, like its seed: an evaluation pass may play a
 requested game on any available setup, and each result records its device,
@@ -319,7 +366,7 @@ one comparison played in several environments shows the environment whose
 latest match is newest, with a note at the top of the page. Because each
 chart names its own matches, the page shows no Matches control.
 
-A tag no matchup carries is noted at the top of the page, and a chart drawing
+A tag no seating carries is noted at the top of the page, and a chart drawing
 nothing says so; check those notes before reading the charts.
 
 ## Reading a report

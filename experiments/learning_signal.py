@@ -31,8 +31,8 @@ from etude.eval.records import (
     Environment,
     Inference,
     Match,
-    Matchup,
     Model,
+    Seating,
 )
 from etude.experiment import ExperimentState, TrainingRun
 from etude.jobs import evaluation
@@ -225,7 +225,7 @@ def training_runs(
     return found
 
 
-def scheduled_matchups(run: TrainingRun, design: Design) -> list[Matchup]:
+def scheduled_matchups(run: TrainingRun, design: Design) -> list[Seating]:
     """Each checkpoint at a scheduled update, or the run's end, against the heuristic."""
     source = _source()
     inference = Inference(source=source)
@@ -236,17 +236,17 @@ def scheduled_matchups(run: TrainingRun, design: Design) -> list[Matchup]:
     )
     wanted = set(SCORED_UPDATES)
     if run.final is not None:
-        wanted.add(int(run.final.clocks["updates"]))
+        wanted.add(int(run.final.at["updates"]))
     return [
-        Matchup(
-            name=f"{run.name} u{int(checkpoint.clocks['updates'])} vs heuristic",
+        Seating(
+            name=f"{run.name} u{int(checkpoint.at['updates'])} vs heuristic",
             players=(checkpoint.model(inference), heuristic),
             conditions=conditions,
             games=design.legs,
             tags=("heuristic",),
         )
         for checkpoint in run.checkpoints
-        if int(checkpoint.clocks["updates"]) in wanted
+        if int(checkpoint.at["updates"]) in wanted
     ]
 
 
@@ -265,7 +265,7 @@ def evaluation_jobs(
 
 
 def benchmark_jobs(
-    matchups: tuple[Matchup, ...],
+    matchups: tuple[Seating, ...],
     name: str,
     design: Design,
     *,
@@ -276,7 +276,7 @@ def benchmark_jobs(
     if not matchups:
         return []
     benchmark = Benchmark(
-        name=name, environment=_environment(design), matchups=matchups
+        name=name, environment=_environment(design), seatings=matchups
     )
     job = evaluation(
         benchmark,

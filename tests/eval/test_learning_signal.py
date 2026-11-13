@@ -3,7 +3,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from etude.eval.records import Code, Matchup
+from etude.eval.records import Code, Seating
 from etude.experiment import read_experiment
 from etude.jobs import evaluation_spec
 import pytest
@@ -111,7 +111,7 @@ def test_discovered_studies_keep_the_evaluation_callback_importable(
 ) -> None:
     source = [Path(learning_signal.__file__)]
     heuristic = Code(name="heuristic", source=source)
-    matchup = Matchup(
+    matchup = Seating(
         name="fixture", players=(heuristic, heuristic), conditions=({},), games=8
     )
     monkeypatch.setattr(
