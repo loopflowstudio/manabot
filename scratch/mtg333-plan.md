@@ -80,7 +80,7 @@ compaction and live-token routes are consumed. `arrays.on_device` batches
 transfers by dtype. The final arithmetic CPU oracle passed at `prepared-forward.pt` (below).
 
 Commit `775e5d823` contains the verified arithmetic, learner-rollout and container
-cut (receipts below). The following caller cut is in progress: `ActorCritic`
+cut (receipts below). The caller cut is complete: `ActorCritic`
 now accepts only device `Prepared`; `model/admission.py` and
 `model/inference.py` are deleted. `PolicyInference` lives in the Torch policy
 module, uses its catalog cache and installs a lifetime guard on the batch.
@@ -94,16 +94,16 @@ precomputed routes. No catalog lengths are read back from the device in forward.
 
 General container saves and metadata readers, policy fixture mutation and new
 export suffixes are implemented. The docs describe the full PR; backend
-injection and alias changes are under focused verification; L4 and optimize remain.
+injection, import enforcement and alias changes pass focused verification; L4 and optimize remain.
 
 The backend-selection rule is written in `AGENTS.md` (`CLAUDE.md` links to
-it) and `backends/README.md`, and its lazy resolver is implemented. The import guard and sim/eval injection are implemented and under focused
+it) and `backends/README.md`, and its lazy resolver is implemented. The import guard and sim/eval injection are implemented and pass focused
 verification. It names CLI/child roots and exactly lists the deferred imports.
 `ParameterArrays`, header-only metadata reads and general container support are
 implemented. Parameters come from `named_parameters` with float32 required;
 all other state entries remain buffers. MLX checks support at its own load.
 Metadata readers, policy fixture mutations and new export suffixes are migrated;
-targeted consumer checks are in progress.
+targeted consumer checks pass (receipts below).
 
 ### Upstream reconciliation (2026-11-13 UTC)
 
@@ -595,3 +595,31 @@ and manabot/prd. The isolated home contains only this Task's supply.
 Speed harness CPU smoke (2 streams, 2-transition floor, one repeat) completed:
 407 learner rows, preparation/save/load results present; this is harness
 validation, not a speed comparison or a substitute for the L4 measurements.
+
+
+## Current blocker and resumption (2026-11-13 12:12 UTC)
+
+Implementation slices 1–6 are complete. Required L4 equivalence, ABAB speed,
+and the subsequent optimization pass are **not complete**; old MTG-325 receipts
+are not substitutes. Gate's broader affected suites and installed-consumer
+checks also remain for gate, rather than being claimed from focused checks.
+
+RunPod refused isolated Etude run `4d6117d0b975` at machine creation:
+"provider refused; no machine acquired; Refused: no NVIDIA L4 available in any data center".
+It ended `lost (capacity_refused)`, launcher cost **$0.00**. Subsequent availability
+at 12:11 UTC: RunPod no L4 at $0.69/hour under the $0.75 ceiling; configured
+Vast also reports no L4 under $0.75/hour. The earlier shared-home queue
+`439342c34491` was cancelled at **$0.00**; the failed strict admission
+`e1b75519b9de` never recorded a run. Total Task rental spend: **$0.00**.
+`etude terminate mtg333-l4-4b3f1e50f0a1` returned; `runpodctl pod list` returned
+`[]`. All launcher/wait and local test processes started here have ended.
+
+The frozen comparison source is `a222dc9df`; both generated patches are kept
+in that launch commit and removed from HEAD tracking while local copies remain.
+Use isolated `ETUDE_HOME=/tmp/mtg333/launcher`, the 0.2.15 launcher overlay and
+nested Doppler environments described above. Check L4 availability before a
+new capped queue/wait. Once available: equivalence first, then speed with three
+interleaved processes per arm, then the required measured optimization pass.
+Do not optimize against the CPU smoke timing or claim a speed result before
+the CUDA workload runs. Production code has not changed since the successful
+CPU/update/parity captures except type annotations.
