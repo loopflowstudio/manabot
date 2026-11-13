@@ -375,7 +375,7 @@ lists in one loop. No emitted value changes; Python only.
 Published surface, aliases, stub, docs and frozen spellings match the rename
 table. Nothing in the model changes and no product choice is open.
 
-Next implement direction:
+Direction (implemented in `2265c71c97`; see "Concept review 3 implementation"):
 
 - `scripts/bench_states.py:97` reads `obs.agent_cards` / `obs.opponent_cards`
   on a `managym.Observation` (arrived with main's `de39d601fb`; the realign
@@ -440,3 +440,9 @@ binds `object`, matching `agent/env.rs`. Test-only Rust, no extension rebuild.
 `experiments/` Python files hold no deprecated observation attribute.
 
 Remaining gate suites and the alias-removal Task remain later delivery steps.
+
+Realign at `2265c71c97`: origin/main has not moved past `e363e4058e`. A grep of
+`scripts`, `experiments`, `manabot`, `academy` and `managym` Python for
+`.agent_cards`/`.opponent_cards` (excluding buffer fields), `source_card_registry_key`
+and `managym.Card` -> no matches. The code agrees with the plan; what remains is
+the gate suites under "Acceptance at gate" and filing the alias-removal Task at landing.
