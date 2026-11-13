@@ -186,6 +186,13 @@ maps canonical names back). Until `ActorCritic` reads `Prepared` indices, its
 observation on it (`Retained`), so parity can run torch against its own torch
 reference.
 
+Read card-program rows through `SemanticCardEncoder.lookup`
+(`manabot/model/semantic_cards.py`), never `table[rows]`. Card and fact IDs
+repeat heavily in a batch; under CUDA autograd `lookup` uses embedding
+backward, which groups repeated rows, where advanced indexing accumulates each
+row separately and made PPO updates 2.17× slower on an L4
+(`experiments/ppo_cuda.md`). CPU results are identical either way.
+
 The reusable pieces in `rl.py`, `learner.py` and `arrays.py` depend only on
 their own backend, the shared host returns and the profiler at runtime;
 they load neither the policy network nor the training configuration.
