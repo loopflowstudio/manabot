@@ -19,7 +19,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.model.actor_critic import ActorCritic
+from manabot.backends.torch.policy import ActorCritic
 from manabot.model.admission import AdmittedObservation
 from manabot.model.inference import PolicyInference, PreparedObservation
 from manabot.training.execution import execute_regime
@@ -101,13 +101,15 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
         local = frame.f_back.f_locals
         assert frame.f_back.f_code.co_name == "update_damped_iteration"
         indexes = local["indexes"]
-        targets = local["targets"]
         learning = local["learning"]
-        arrays = {f"obs/{k}": v.detach().numpy() for k, v in local["obs"].items()}
+        arrays = {
+            f"obs/{k}": v.detach().cpu().numpy()
+            for k, v in local["admitted"].evidence(local["obs"]).items()
+        }
         arrays.update(
-            actions=local["actions"][indexes].numpy(),
-            advantages=targets.advantages[indexes].numpy(),
-            value_targets=targets.values[indexes].numpy(),
+            actions=local["minibatch_actions"].detach().cpu().numpy(),
+            advantages=local["advantages"][indexes].detach().cpu().numpy(),
+            value_targets=local["value_targets"][indexes].detach().cpu().numpy(),
             actor_mask=local["actor_mask"].numpy(),
             behavior_logs=local["behavior_logs"].numpy(),
         )
@@ -118,9 +120,7 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
                 "B": int(len(indexes)),
                 "loss": float(loss.detach()),
                 "iteration": int(local["iteration"]),
-                "learning_rate": float(
-                    local["learner"].optimizer.param_groups[0]["lr"]
-                ),
+                "learning_rate": float(local["rate"]),
                 "tau": float(local["tau"]),
                 "clip": learning.clip,
                 "collection_kl": learning.collection_kl,

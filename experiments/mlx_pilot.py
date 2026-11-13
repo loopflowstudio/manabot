@@ -101,14 +101,12 @@ class TorchLearner:
     def __init__(self, agent: Any, device: str) -> None:
         import torch
 
-        from manabot.training.updates.health import OptimizerHealth
+        from manabot.backends.torch.learner import Learner
 
         self.torch = torch
         self.device = torch.device(device)
-        self.agent = agent.to(self.device).train()
-        self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=2.5e-4, eps=1e-5)
-        self.health = {"sampled_steps": 0, "rejected_steps": 0, "optimizer_steps": 0}
-        self.observer = OptimizerHealth(self.agent, self.optimizer, self.health, 2)
+        self.learner = Learner(agent, self.device, minibatch_rows=1)
+        self.agent = self.learner.agent
 
     def sync(self) -> None:
         if self.device.type == "mps":
@@ -118,49 +116,41 @@ class TorchLearner:
         self, obs: dict[str, np.ndarray], targets: Any, settings: Any
     ) -> tuple[float, float]:
         torch = self.torch
-        from manabot.backends.torch.rl import (
-            damped_policy_loss,
-            float64_operand,
-            legal_mask,
-            selected_mean,
-        )
+        from manabot.backends.torch import rl
         from manabot.model.admission import bind_admitted
         from manabot.model.inference import transfer_admitted
-        from manabot.policy.prepare import reference_distribution
+        from manabot.training.updates.damped_policy import minibatch_objective
 
-        device = self.device
         admitted, _ = transfer_admitted(
             bind_admitted(self.agent, {k: torch.from_numpy(v) for k, v in obs.items()}),
-            device,
+            self.device,
         )
-        for group in self.optimizer.param_groups:
-            group["lr"] = settings.learning_rate
-        valid = legal_mask(admitted["actions_valid"])
-        logits, values = self.agent.forward_distribution(admitted)
-        logits, values = logits.float(), values.float()
-        reference = torch.from_numpy(
-            reference_distribution(obs, settings.reference)
-        ).to(device)
-        policy = damped_policy_loss(
-            logits,
-            torch.from_numpy(targets.actions).to(device),
-            torch.from_numpy(targets.advantages).to(device),
-            torch.from_numpy(targets.behavior_logs).to(device),
-            reference,
-            valid,
-            clip=settings.clip,
-            collection_kl=settings.collection_kl,
-            tau=settings.tau,
-        )
-        policy = selected_mean(policy, torch.from_numpy(targets.actor_mask).to(device))
-        value = (
-            (values.squeeze(-1) - torch.from_numpy(targets.value_targets).to(device))
-            .square()
-            .mean()
-        )
-        loss = policy + float64_operand(value)
-        self.observer.check(loss)
-        norm = self.observer.step(loss, settings.max_grad_norm, checked=True)
+
+        def tensor(value: np.ndarray) -> torch.Tensor:
+            return torch.from_numpy(value).to(self.device)
+
+        def objective() -> tuple[torch.Tensor, ...]:
+            logits, values = self.agent.forward_distribution(admitted)
+            return minibatch_objective(
+                rl,
+                logits.float(),
+                values.float(),
+                rl.legal_mask(admitted["actions_valid"]),
+                actions=tensor(targets.actions),
+                advantages=tensor(targets.advantages),
+                value_targets=tensor(targets.value_targets),
+                behavior_logs=tensor(targets.behavior_logs),
+                reference=tensor(targets.reference),
+                actor_mask=tensor(targets.actor_mask),
+                categorical=self.agent.config.value_kind == "categorical_wdl",
+                clip=settings.clip,
+                collection_kl=settings.collection_kl,
+                tau=settings.tau,
+            )
+
+        loss = self.learner.loss(objective)[0]
+        self.learner.set_learning_rate(settings.learning_rate)
+        norm = self.learner.step(loss, settings.max_grad_norm)
         self.sync()
         return float(loss.detach()), float(norm)
 

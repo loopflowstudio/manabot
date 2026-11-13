@@ -179,9 +179,12 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
 
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
     """Remapped opponent joins and ownership survive changes in object capacity."""
+    import manabot.backends.mlx as backend
     from manabot.backends.mlx.checkpoint import build
-    from manabot.backends.mlx.learner import MLXLearner
-    from manabot.model.buckets import bucket_sizes, trim_observation
+    from manabot.backends.mlx.learner import Learner
+    from manabot.backends.parity import minibatch_loss
+    from manabot.model.inference import trim_observation
+    from manabot.policy.buckets import bucket_sizes
     from manabot.policy.protocol import Settings, Targets
 
     torch.set_num_threads(1)
@@ -198,7 +201,7 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
     obs["action_focus"][:, 1, 0] = (
         2 + 2 * encoder.cards_per_player + encoder.perms_per_player
     )
-    sizes = bucket_sizes(obs, encoder, objects=True)
+    sizes = bucket_sizes({k: v.numpy() for k, v in obs.items()}, encoder, objects=True)
     assert sizes is not None and sizes.trims_objects
     trimmed = trim_observation(obs, sizes)
     policy, _ = build(
@@ -206,11 +209,12 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
         encoder.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
     )
-    learner = MLXLearner(policy)
+    learner = Learner(policy, minibatch_rows=2)
     settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
+    policy.check_observation({k: v.numpy() for k, v in obs.items()})
     results = []
     for tensors in (obs, trimmed):
-        prepared = policy.prepare({k: v.numpy() for k, v in tensors.items()})
+        prepared = policy.prepare_admitted({k: v.numpy() for k, v in tensors.items()})
         assert prepared.ownership.shape == (prepared.validity.shape[1],)
         logits, values = policy.evaluate(prepared)
         legal = prepared.legal
@@ -224,8 +228,9 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
             logs,
             reference,
         )
-        loss, gradients = learner.gradients(prepared, targets, settings)
-        results.append((logits[:, :2], values, loss, gradients))
+        loss = minibatch_loss(backend, policy, learner, prepared, targets, settings)
+        gradients = learner.gradients(loss)
+        results.append((logits[:, :2], values, float(loss), gradients))
     expected, actual = results
     for a, b in zip(actual[:3], expected[:3], strict=True):
         np.testing.assert_allclose(a, b, atol=2e-6)

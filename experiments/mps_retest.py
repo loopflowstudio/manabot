@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import resource
 import select
 import statistics
@@ -38,7 +39,7 @@ if str(ROOT) not in sys.path:
 if TYPE_CHECKING:
     import torch
 
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.policy.protocol import Settings, Targets
 
 Arm = Literal["cpu", "mps-f32", "mps-bf16", "mps-f16", "mlx-f32"]
@@ -136,8 +137,8 @@ def _host() -> dict[str, Any]:
 def _agent(capture: Path, width: int) -> ActorCritic:
     import torch
 
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.model.checkpoint import load_checkpoint
+    from manabot.backends.torch.checkpoint import load_checkpoint
+    from manabot.backends.torch.policy import ActorCritic
 
     agent, space = load_checkpoint(str(capture / "initial.pt"), bucketed_shapes=True)
     if agent.config.hidden_dim != width:
@@ -266,11 +267,10 @@ class TorchRunner:
     def _loss(self, batch: Batch) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         import torch
 
+        from manabot.backends.torch import rl
         from manabot.model.admission import bind_admitted
         from manabot.model.inference import transfer_admitted
-        from manabot.rl.numerics import float64_operand
-        from manabot.rl.selection import selected_mean
-        from manabot.training.updates.damped_policy import damped_policy_loss
+        from manabot.training.updates.damped_policy import minibatch_objective
 
         targets, settings = batch.targets, batch.settings
         assert targets is not None and settings is not None
@@ -287,24 +287,27 @@ class TorchRunner:
         def tensor(value: np.ndarray) -> torch.Tensor:
             return torch.from_numpy(value).to(self.device)
 
-        policy = damped_policy_loss(
+        loss, _, _ = minibatch_objective(
+            rl,
             logits,
-            tensor(targets.actions),
-            tensor(targets.advantages),
-            tensor(targets.behavior_logs),
-            tensor(targets.reference),
+            values,
             obs["actions_valid"].bool(),
+            actions=tensor(targets.actions),
+            advantages=tensor(targets.advantages),
+            value_targets=tensor(targets.value_targets),
+            behavior_logs=tensor(targets.behavior_logs),
+            reference=tensor(targets.reference),
+            actor_mask=tensor(targets.actor_mask),
+            categorical=self.agent.config.value_kind == "categorical_wdl",
             clip=settings.clip,
             collection_kl=settings.collection_kl,
             tau=settings.tau,
         )
-        policy = selected_mean(policy, tensor(targets.actor_mask))
-        value = (values.squeeze(-1) - tensor(targets.value_targets)).square().mean()
-        return policy + float64_operand(value), logits, values
+        return loss, logits, values
 
     def _backward(self, loss: torch.Tensor) -> None:
 
-        from manabot.rl.step import check_objective
+        from manabot.backends.torch.learner import check_objective
 
         check_objective(loss)
         self.optimizer.zero_grad(set_to_none=True)
@@ -422,10 +425,10 @@ class MLXRunner:
         self.policy.clear_cache()
 
     def reset(self) -> None:
-        from manabot.backends.mlx.learner import MLXLearner
+        from manabot.backends.mlx.learner import Learner
 
         self.policy.update(self.initial)
-        self.learner = MLXLearner(self.policy)
+        self.learner = Learner(self.policy, minibatch_rows=1)
 
     def sync(self) -> None:
         import mlx.core as mx
@@ -435,10 +438,12 @@ class MLXRunner:
     def _trim(self, batch: Batch) -> Batch:
         import torch
 
-        from manabot.model.buckets import bucket_sizes, trim_observation
+        from manabot.model.inference import trim_observation
+        from manabot.policy.buckets import bucket_sizes
 
+        self.policy.check_observation(batch.observations)
         obs = {k: torch.from_numpy(v) for k, v in batch.observations.items()}
-        sizes = bucket_sizes(obs, self.encoder, objects=True)
+        sizes = bucket_sizes(batch.observations, self.encoder, objects=True)
         if sizes is None:
             raise ValueError("capture does not match the checkpoint observation layout")
         trimmed = {k: v.numpy() for k, v in trim_observation(obs, sizes).items()}
@@ -455,12 +460,23 @@ class MLXRunner:
     def evaluate(self, batch: Batch) -> Evaluation:
         trimmed = self._trim(batch)
         assert trimmed.targets is not None and trimmed.settings is not None
-        prepared = self.policy.prepare(trimmed.observations)
+        prepared = self.policy.prepare_admitted(trimmed.observations)
         logits, values = self.policy.evaluate(prepared)
-        loss, gradients = self.learner.gradients(
-            prepared, trimmed.targets, trimmed.settings
+        import manabot.backends.mlx as backend
+        from manabot.backends.parity import minibatch_loss
+
+        loss = minibatch_loss(
+            backend,
+            self.policy,
+            self.learner,
+            prepared,
+            trimmed.targets,
+            trimmed.settings,
         )
-        return Evaluation(_pad(logits, batch), values.reshape(-1, 1), loss, gradients)
+        gradients = self.learner.gradients(loss)
+        return Evaluation(
+            _pad(logits, batch), values.reshape(-1, 1), float(loss), gradients
+        )
 
     def step(self, batch: Batch) -> float:
         import mlx.core as mx
@@ -468,16 +484,26 @@ class MLXRunner:
 
         trimmed = self._trim(batch)
         assert trimmed.targets is not None and trimmed.settings is not None
-        loss, norm = self.learner.step(
-            self.policy.prepare(trimmed.observations), trimmed.targets, trimmed.settings
+        import manabot.backends.mlx as backend
+        from manabot.backends.parity import minibatch_loss
+
+        loss = minibatch_loss(
+            backend,
+            self.policy,
+            self.learner,
+            self.policy.prepare_admitted(trimmed.observations),
+            trimmed.targets,
+            trimmed.settings,
         )
+        self.learner.set_learning_rate(trimmed.settings.learning_rate)
+        norm = self.learner.step(loss, trimmed.settings.max_grad_norm)
         self.sync()
         parameters = [p.reshape(-1) for _, p in tree_flatten(self.policy.parameters())]
         if not np.isfinite([loss, norm]).all() or not bool(
             mx.all(mx.isfinite(mx.concatenate(parameters)))
         ):
             raise ValueError("nonfinite MLX loss, gradient norm or parameters")
-        return loss
+        return float(loss)
 
     @contextmanager
     def collection(self) -> Iterator[Collect]:
@@ -490,7 +516,7 @@ class MLXRunner:
                 # GPU arms attend the same bucket shape. CPU additionally
                 # compacts inference columns, as production PolicyInference does.
                 logits, _ = self.policy.evaluate(
-                    self.policy.prepare(trimmed.observations)
+                    self.policy.prepare_admitted(trimmed.observations)
                 )
                 return _pad(logits, batch)
 
@@ -913,7 +939,11 @@ def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:
         # Use the same replies and cleanup as timing, but finish this arm
         # before allocating the next. The timeout covers the whole parity run.
         deadline = time.monotonic() + args.timeout
+        paging = (
+            None if args.laptop else PagingGuard(args.out / "host-observations.jsonl")
+        )
         with closing(CallWorker(args, "parity", width, arm, size, 0)) as worker:
+            worker.paging = paging
             worker.timeout = max(0, deadline - time.monotonic())
             row = worker.receive()
             while row is None:
@@ -929,6 +959,8 @@ def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:
             **_provenance(args.capture, args.laptop),
         }
     _emit(args.out / "bench.jsonl", row)
+    if row["status"] == "paging":
+        raise PagingDetected(row["error"])
 
 
 def _unstable(before: float, after: float) -> bool:
@@ -939,7 +971,9 @@ def _failure(error: Exception, arm: Arm) -> dict[str, str]:
     message = str(error)
     lower = message.lower()
     status = "failed"
-    if isinstance(error, MemoryError) or "out of memory" in lower:
+    if isinstance(error, PagingDetected):
+        status = "paging"
+    elif isinstance(error, MemoryError) or "out of memory" in lower:
         status = "oom"
     elif arm in HALF and (
         ("autocast" in lower and isinstance(error, UserWarning))
@@ -952,6 +986,49 @@ def _failure(error: Exception, arm: Arm) -> dict[str, str]:
     ):
         status = "unsupported"
     return {"status": status, "error": f"{type(error).__name__}: {message}"}
+
+
+class PagingDetected(RuntimeError):
+    """The dedicated host swapped during this cell; no timing is selected."""
+
+
+class PagingGuard:
+    """Sample real macOS swap counters; used only on the dedicated M2.
+
+    Poll while a worker is computing as well as between calls, so a paging
+    cell stops without waiting for a long kernel or the worker timeout.
+    Existing occupied swap alone does not count as new paging.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.next_sample = 0.0
+        self.initial: tuple[int, int] | None = None
+        self()
+
+    def __call__(self) -> None:
+        now = time.monotonic()
+        if now < self.next_sample:
+            return
+        self.next_sample = now + 1.0
+        output = subprocess.check_output(["vm_stat"], text=True)
+        counts = tuple(
+            int(re.search(rf"{name}:\s+(\d+)", output)[1])
+            for name in ("Swapins", "Swapouts")
+        )
+        _emit(
+            self.path,
+            {
+                "time": time.time(),
+                "swapins_pages": counts[0],
+                "swapouts_pages": counts[1],
+                "raw": output,
+            },
+        )
+        if self.initial is None:
+            self.initial = (counts[0], counts[1])
+        elif any(n > old for n, old in zip(counts, self.initial, strict=True)):
+            raise PagingDetected(f"swap pages {self.initial} → {counts}; cell stopped")
 
 
 class CallWorker:
@@ -997,17 +1074,20 @@ class CallWorker:
             cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1
         )
         self.timeout = args.timeout
+        self.paging: PagingGuard | None = None
 
     def receive(self) -> dict[str, Any] | None:
         assert self.process.stdout is not None
         deadline = time.monotonic() + self.timeout
         while True:
             remaining = deadline - time.monotonic()
-            if (
-                remaining <= 0
-                or not select.select([self.process.stdout], [], [], remaining)[0]
-            ):
+            if self.paging is not None:
+                self.paging()
+            if remaining <= 0:
                 raise TimeoutError(f"worker call timeout after {self.timeout}s")
+            wait = min(remaining, 1.0) if self.paging is not None else remaining
+            if not select.select([self.process.stdout], [], [], wait)[0]:
+                continue
             line = self.process.stdout.readline()
             if not line:
                 raise RuntimeError(f"worker exited {self.process.poll()}")
@@ -1053,6 +1133,11 @@ def _interleaved(
         block = str(uuid.uuid4())
         workers: dict[Arm, CallWorker] = {}
         rows: dict[Arm, dict[str, Any]] = {}
+        before, started = os.getloadavg()[0], time.time()
+        paging = (
+            None if args.laptop else PagingGuard(args.out / "host-observations.jsonl")
+        )
+        paging_error: PagingDetected | None = None
         try:
             for arm in ARMS:
                 rows[arm] = {
@@ -1098,11 +1183,14 @@ def _interleaved(
                 try:
                     worker = CallWorker(args, phase, width, arm, size, rep)
                     workers[arm] = worker
+                    worker.paging = paging
                     ready = worker.receive()
                     if ready is not None:
                         rows[arm].update(ready)
                         worker.close()
                         del workers[arm]
+                except PagingDetected:
+                    raise
                 except Exception as error:
                     rows[arm].update(_failure(error, arm))
                     if arm in workers:
@@ -1116,12 +1204,19 @@ def _interleaved(
                         if result is None:
                             continue
                         rows[arm].update(result)
+                    except PagingDetected:
+                        raise
                     except Exception as error:
                         rows[arm].update(_failure(error, arm))
                     worker.close()
                     del workers[arm]
             after = os.getloadavg()[0]
             ended = time.time()
+        except PagingDetected as error:
+            paging_error = error
+            after, ended = os.getloadavg()[0], time.time()
+            for row in rows.values():
+                row.update(status="paging", error=str(error))
         finally:
             for worker in workers.values():
                 worker.close()
@@ -1135,6 +1230,8 @@ def _interleaved(
                 load_retry_required=_unstable(before, after),
             )
             _emit(ledger, row)
+        if paging_error is not None:
+            raise paging_error
         attempts.append(list(rows.values()))
         if not _unstable(before, after) or attempt:
             break
@@ -1682,191 +1779,143 @@ def _call_charts(out: Path, suffix: str, data: HostReport) -> None:
         plt.close(fig)
 
 
-def _update_chart(out: Path, suffix: str, data: HostReport) -> None:
+def _update_chart(out: Path, suffix: str, hosts: list[HostReport]) -> None:
+    """Measured host/shape panels only; missing cells belong in the matrix."""
     from matplotlib.patches import Patch
     import matplotlib.pyplot as plt
 
-    summary = data.summary
-    host, captures = summary["host"], summary["captures"]
-    hostname = host["hostname"]
-    medians = {
-        (r["width"], r["streams"], r["arm"]): r for r in summary["whole_updates"]
-    }
-    # One panel per model shape; three stream groups each contain all arms.
-    fig = plt.figure(figsize=(19, 22))
-    grid = fig.add_gridspec(4, 2, hspace=0.5, wspace=0.22)
+    panels = [
+        (data, width, streams)
+        for data in hosts
+        for width, streams in sorted(
+            {(row["width"], row["streams"]) for row in data.summary["whole_updates"]}
+        )
+    ]
+    if not panels:
+        return
     phases = (
-        ("engine", "Shared capture engine + host work", "#808080"),
-        ("collection_policy", "Collection policy calls", "#539caf"),
+        ("engine", "Shared engine + host work", "#808080"),
+        ("collection_policy", "Collection policy", "#539caf"),
         ("learning", "Learning", "#db9250"),
     )
-    labels = (
-        f"CPU{host['cpu_threads']}\nf32",
-        "MPS\nf32",
-        "MPS\nbf16",
-        "MPS\nf16",
-        "MLX\nf32",
+    fig = plt.figure(figsize=(5.5 * len(panels), 7.5), facecolor="white")
+    grid = fig.add_gridspec(
+        2,
+        len(panels),
+        height_ratios=(3, 1),
+        hspace=0.15,
+        wspace=0.35,
+        bottom=0.28,
+        top=0.84,
     )
-    for index, width in enumerate(WIDTHS):
-        sub = grid[index // 2, index % 2].subgridspec(
-            2, 1, height_ratios=(3, 1), hspace=0.12
-        )
-        axis = fig.add_subplot(sub[0])
-        rate = fig.add_subplot(sub[1], sharex=axis)
-        for si, streams in enumerate(STREAMS):
-            for ai, arm in enumerate(ARMS):
-                x = si * 6 + ai
-                attempts = data.updates[(width, streams, arm)]
-                complete = [r for r in attempts if r and r["status"] == "ok"]
-                middle = medians.get((width, streams, arm))
-                if middle is None:
-                    note = "/".join(sorted({_status(r) for r in attempts}))
-                    axis.text(
-                        x,
-                        0.03,
-                        note,
-                        rotation=90,
-                        ha="center",
-                        va="bottom",
-                        fontsize=8,
-                        transform=axis.get_xaxis_transform(),
-                    )
-                    continue
-                bottom = 0.0
-                for key, _, color in phases:
-                    axis.bar(
-                        x,
-                        middle[key],
-                        0.83,
-                        bottom=bottom,
-                        color=color,
-                        edgecolor="#333333",
-                        linewidth=0.4,
-                    )
-                    bottom += middle[key]
-                rate.bar(
+    for index, (data, width, streams) in enumerate(panels):
+        host = data.summary["host"]
+        medians = {
+            r["arm"]: r
+            for r in data.summary["whole_updates"]
+            if r["width"] == width and r["streams"] == streams
+        }
+        axis = fig.add_subplot(grid[0, index])
+        rate = fig.add_subplot(grid[1, index], sharex=axis)
+        arms = [arm for arm in ARMS if arm in medians]
+        for x, arm in enumerate(arms):
+            middle = medians[arm]
+            bottom = 0.0
+            for key, _, color in phases:
+                axis.bar(
                     x,
-                    statistics.median(
-                        r["learner_decisions"] / r["seconds"] for r in complete
-                    ),
-                    0.83,
-                    color="#539caf",
+                    middle[key],
+                    0.75,
+                    bottom=bottom,
+                    color=color,
                     edgecolor="#333333",
                     linewidth=0.4,
                 )
-                parity = [
-                    r
-                    for r in data.calls.values()
-                    if r["event"] == "parity"
-                    and r["width"] == width
-                    and r["streams"] == streams
-                    and r["arm"] == arm
-                    and r["status"] == "ok"
-                ]
-                worst = min((r["gradient_cosine"] for r in parity), default=None)
-                same = all(r["sample_disagreements"] == 0 for r in complete)
-                text = (
-                    f"global cos {worst:.4f}" if worst is not None else "parity missing"
-                )
-                if not same:
-                    text += "\nchoices differ"
-                else:
-                    text += "\nchoices match"
-                text += "\n" + "\n".join(
-                    f"L{i + 1} " + _load_label(r).replace(" (quieter of 2)", "*")
-                    for i, r in enumerate(complete)
-                )
-                axis.annotate(
-                    text,
-                    (x, bottom),
-                    xytext=(0, 4),
-                    textcoords="offset points",
-                    ha="center",
-                    rotation=90,
-                    fontsize=6,
-                )
+                bottom += middle[key]
+            axis.annotate(
+                f"{bottom:.0f}",
+                (x, bottom),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                fontsize=10,
+            )
+            complete = data.updates[(width, streams, arm)]
+            rate.bar(
+                x,
+                statistics.median(
+                    r["learner_decisions"] / r["seconds"] for r in complete if r
+                ),
+                0.75,
+                color="#539caf",
+                edgecolor="#333333",
+                linewidth=0.4,
+            )
         axis.set(
-            title=f"Width {width} · {LAYERS[width]} attention layers",
+            title=f"{host['chip']} · {host['memory_bytes'] / 2**30:g} GiB\n"
+            f"w{width}l{LAYERS[width]} · {streams} streams",
             ylabel="Seconds per update",
         )
-        axis.margins(y=0.65)
+        axis.margins(y=0.15)
         axis.set_ylim(bottom=0)
-        axis.set_xlim(-0.7, 16.7)
         axis.tick_params(axis="x", labelbottom=False)
-        rate.set_ylabel("Learner decisions /\nwhole-update second", fontsize=8)
-        rate.set_xticks(
-            [si * 6 + ai for si in range(3) for ai in range(5)],
-            list(labels) * 3,
-            fontsize=7,
-        )
-        for si, streams in enumerate(STREAMS):
-            rate.text(
-                si * 6 + 2,
-                -0.6,
-                f"{streams} streams",
-                ha="center",
-                fontsize=9,
-                transform=rate.get_xaxis_transform(),
-            )
-    origins = sorted(
-        {
-            f"{c['host']['chip']} / {c['host']['hostname']} / {c['threads']} CPU threads"
-            if c["host"]
-            else "unknown capture host/threads"
-            for c in captures
+        labels = {
+            "cpu": f"CPU{host['cpu_threads']}\nf32",
+            "mps-f32": "MPS\nf32",
+            "mps-bf16": "MPS\nbf16",
+            "mps-f16": "MPS\nf16",
+            "mlx-f32": "MLX\nf32",
         }
-    )
-    origin_caption = "\n".join(origins) or "No capture provenance"
-    origin_caption += "".join(
-        f"\n{c['streams']} streams capture load: {_load_label(c['host'] or {})}"
-        for c in captures
-    )
-    mixed_host = any(
-        c["host"] is None or c["host"]["hostname"] != hostname for c in captures
-    )
-    legend = fig.add_subplot(grid[3, 1])
-    legend.axis("off")
-    legend.text(
-        0,
-        0.95,
-        "Full context: the current training recipe",
-        fontsize=16,
-        weight="bold",
-        va="top",
-    )
-    legend.text(
-        0,
-        0.84,
-        f"Replay: {host['chip']} · {host['memory_bytes'] / 2**30:g} GiB\n{hostname} · {host['cpu_threads']} CPU threads\ntorch {host['torch']} · MLX {host['mlx']}\nShared engine/host component from capture:\n{origin_caption}\n"
-        + (
-            "Cross-host phase sum, not a measured replay-host update.\n"
-            if mixed_host
-            else ""
+        rate.set_xticks(range(len(arms)), [labels[arm] for arm in arms], fontsize=9)
+        rate.set_ylabel("Learner decisions/s", fontsize=9)
+        for ax in (axis, rate):
+            ax.spines[["top", "right"]].set_visible(False)
+            ax.set_axisbelow(True)
+            ax.grid(axis="y", alpha=0.15)
+    provenance = []
+    for data in hosts:
+        if not data.summary["whole_updates"]:
+            continue
+        host = data.summary["host"]
+        provenance.append(
+            f"{host['chip']}: PyTorch {host['torch']}, MLX {host['mlx']}, "
+            f"source {host['revision'][:9]}"
         )
-        + "Both-seat self-play; one real capture per stream count.\nMedian of three replays; same inputs and recorded decisions.\nHalf arms: bfloat16; float16 with gradient scaler.\nBars identify executed dtype and median-total phase times.\nRate counts learner decisions before filtering.\nGlobal gradient cosine vs CPU; tensor minima are in the table.\nChoices use common-uniform samples.\nNeither proves identical trained policies.\nFirst calls, memory and correctness: comparisons"
-        + suffix
-        + ".md\nL = each replay block start→end 1-minute load.\nLoads label all phase stacks and associated rates.\n* = lower mean endpoint load after load more than doubles.\nAll arm models resident; memory capacity is shared.\nMissing and failed arms remain visible.\nThree back-to-back replays on the same host; no time cap."
-        + (
-            "\nReceipt coverage: complete"
-            if summary["complete"]
-            else "\nReceipt coverage: incomplete"
-        ),
-        fontsize=9,
-        va="top",
-        linespacing=1.2,
+    same = all(
+        r["sample_disagreements"] == 0
+        for data, width, streams in panels
+        for arm in ARMS
+        for r in data.updates[(width, streams, arm)]
+        if r and r["status"] == "ok"
     )
-    legend.legend(
+    cross_host = any(
+        c["host"] is None or c["host"]["hostname"] != data.summary["host"]["hostname"]
+        for data in hosts
+        for c in data.summary["captures"]
+    )
+    caption = "\n".join(provenance)
+    caption += "\nMedian of three interleaved replays; phase stack from the median-total replay. "
+    caption += (
+        "Same sampled decisions as CPU."
+        if same
+        else "Sampled decisions differ; see report."
+    )
+    caption += "\nHalf arms: bfloat16 autocast; float16 autocast + scaler. "
+    caption += (
+        "Cross-host engine component; see report."
+        if cross_host
+        else "Engine component from same-host capture."
+    )
+    caption += "\nOnly measured cells shown. Full coverage, paging, loads, gradients and memory: experiments/mps_retest.md."
+    fig.suptitle("Whole training update · measured cells", fontsize=18, y=0.97)
+    fig.legend(
         handles=[Patch(facecolor=color, label=label) for _, label, color in phases],
-        loc="upper left",
-        bbox_to_anchor=(0, -0.42),
-        fontsize=9,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.93),
+        ncol=3,
+        frameon=False,
     )
-    fig.suptitle(
-        ("Cross-host phase sum · " if mixed_host else "Whole-update replay · ")
-        + host["chip"],
-        fontsize=20,
-        y=0.995,
-    )
+    fig.text(0.04, 0.02, caption, fontsize=9, va="bottom", linespacing=1.4)
     fig.savefig(
         out / f"full_context{suffix}.png",
         dpi=180,
@@ -1900,20 +1949,23 @@ def report(bench_dir: Path, out: Path) -> None:
     ):
         raise ValueError("multiple main M2 hosts; use separate report directories")
     summaries: list[dict[str, Any]] = []
+    reports: list[HostReport] = []
     for hostname in hosts:
         data = _host_report(
             [r for r in rows if r["host"]["hostname"] == hostname],
             [r for r in updates if r["host"]["hostname"] == hostname],
         )
         summaries.append(data.summary)
+        reports.append(data)
         suffix = (
             ""
             if len(hosts) == 1 or data.summary["host"]["chip"] == "Apple M2"
             else "-" + hostname.replace("/", "_")
         )
         _call_charts(out, suffix, data)
-        _update_chart(out, suffix, data)
+        _update_chart(out, suffix, [data])
         _details(out, suffix, data)
+    _update_chart(out, "", reports)
     (out / "summary.json").write_text(
         json.dumps(
             {"hosts": summaries, "measurements": rows, "updates": updates},
