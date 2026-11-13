@@ -9,12 +9,14 @@
 
 use managym::state::{
     ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
-    card::{CardDefinition, CardType, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant},
+    card::{
+        CardType, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant,
+    },
     permanent::CounterKind,
     predicate::CardPredicate,
     subtype::subtype_category,
 };
-use managym_cards::catalog;
+use managym_cards::{catalog, token_catalog};
 use serde_json::Value;
 
 /// Where a condition sits: an `Effect::If` condition may ask anything; an
@@ -32,7 +34,7 @@ enum Place {
 /// `Effect::If` condition, and of source questions outside an `Effect::If`
 /// condition, an intervening-if clause or a type grant's / land-type
 /// overwrite's / P/T buff's own condition (layers ask those of the source).
-fn misplaced_resolution_conditions(definition: &CardDefinition) -> Vec<String> {
+fn misplaced_resolution_conditions(definition: &PrintedCharacteristics) -> Vec<String> {
     let value = serde_json::to_value(definition).expect("definitions serialize");
     let mut found = Vec::new();
     walk(&value, String::new(), Place::Elsewhere, &mut found);
@@ -94,17 +96,25 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
     }
 }
 
+/// The printed characteristics of every card face and token.
+fn authored_definitions() -> impl Iterator<Item = &'static PrintedCharacteristics> {
+    catalog()
+        .iter()
+        .flat_map(|card| std::iter::once(&card.printed).chain(card.back_face.as_deref()))
+        .chain(token_catalog().iter().map(|token| &token.printed))
+}
+
 #[test]
 fn resolution_only_conditions_appear_only_in_effect_if() {
-    for definition in catalog() {
+    for definition in authored_definitions() {
         let misplaced = misplaced_resolution_conditions(definition);
-        assert!(misplaced.is_empty(), "{}: {misplaced:?}", definition.key);
+        assert!(misplaced.is_empty(), "{}: {misplaced:?}", definition.name);
     }
 }
 
 #[test]
 fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
-    let allowed = CardDefinition {
+    let allowed = PrintedCharacteristics {
         name: "Witness".into(),
         spell_effects: vec![Effect::If {
             condition: Condition::AnyOf(vec![
@@ -118,7 +128,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     };
     assert!(misplaced_resolution_conditions(&allowed).is_empty());
 
-    let intervening = CardDefinition {
+    let intervening = PrintedCharacteristics {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
@@ -129,7 +139,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     };
     assert_eq!(misplaced_resolution_conditions(&intervening).len(), 1);
 
-    let active = CardDefinition {
+    let active = PrintedCharacteristics {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::ActiveIf {
@@ -143,7 +153,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     };
     assert_eq!(misplaced_resolution_conditions(&active).len(), 1);
 
-    let source_intervening = CardDefinition {
+    let source_intervening = PrintedCharacteristics {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
@@ -154,7 +164,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     };
     assert!(misplaced_resolution_conditions(&source_intervening).is_empty());
 
-    let source_active = CardDefinition {
+    let source_active = PrintedCharacteristics {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::ActiveIf {
@@ -172,7 +182,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         kind: CounterKind::Fire,
         count: 3,
     };
-    let source_type_grant = CardDefinition {
+    let source_type_grant = PrintedCharacteristics {
         name: "Witness".into(),
         statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
@@ -185,7 +195,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     assert!(misplaced_resolution_conditions(&source_type_grant).is_empty());
 
     // Beastmaster Ascension: layers ask a buff's condition of its source.
-    let source_buff = CardDefinition {
+    let source_buff = PrintedCharacteristics {
         name: "Witness".into(),
         statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
@@ -200,7 +210,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     };
     assert!(misplaced_resolution_conditions(&source_buff).is_empty());
 
-    let source_unblockable = CardDefinition {
+    let source_unblockable = PrintedCharacteristics {
         name: "Witness".into(),
         statics: vec![StaticAbility::CantBeBlockedIf(fire)],
         ..Default::default()
@@ -244,9 +254,11 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
             }
             "token_template" if row["in_tla_closure"] == true => {
                 tokens += 1;
-                let id = catalog
-                    .definition_id(name)
+                let token = token_catalog()
+                    .iter()
+                    .find(|token| token.name == name)
                     .unwrap_or_else(|| panic!("undefined allocated token {name}"));
+                let id = catalog.token_id(token.key).unwrap();
                 assert!(catalog.definition(id).unwrap().is_token, "{name}");
             }
             "copy_marker" => {
@@ -303,7 +315,7 @@ fn named_subtypes(value: &Value, key: Option<&str>, found: &mut Vec<String>) {
 #[test]
 fn every_authored_subtype_has_a_category() {
     let mut found = Vec::new();
-    for definition in catalog() {
+    for definition in authored_definitions() {
         let value = serde_json::to_value(definition).expect("definitions serialize");
         named_subtypes(&value, None, &mut found);
     }
