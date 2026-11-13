@@ -101,3 +101,15 @@ Also still open for demo, nothing built: a local checkpoint follower.
 Implemented the reversible choice: drop the loop's `final` checkpoint tag
 in favor of Etude's `TrainingRun.final`. The alternative, untagging the old
 checkpoint on extension, keeps a second owner of one fact.
+
+## Concept review 4 — 2026-11-13
+
+Reversible, taken without asking: per-update monitoring rows the executor
+logged (phase split, CUDA/MPS peaks, RSS, host load) go back into the loop's
+row, and the update benchmark runs the loop, rather than deleting the panels,
+the guide's claims and the script. The other option, dropping them, was not
+taken because the branch's own docs and two skills still send people to them.
+Not asked of anyone: nobody was told these rows were lost; the loss reviewed
+under "do em all in this diff" was recovery. Raise it at demo with the
+recovery loss. Open, small: whether loop runs need the `transitions` clock
+back; nothing reads it today that was checked here.

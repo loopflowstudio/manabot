@@ -139,3 +139,70 @@ Last focused check (after review 3):
 `uv run --no-sync --with /Users/jack/src/etude.exp-56-give-a-training pytest tests/training/test_recipe_etude.py::test_local_cli_stop_resume_and_target_only_continuation tests/training/test_self_play_loop.py::test_a_rerun_resumes_and_a_finished_loop_returns_at_once -q`: 2 passed; Ruff clean.
 PPO fresh-run parity with horizon equal to the target is recorded in
 implementation.md.
+
+## Concept review 4: next implement direction — 2026-11-13
+
+Proposals drawn from the design and the code, not statements anyone made.
+The walk-through was "where does an update's time go on this machine", the
+question docs/training.md (Monitoring), docs/workflows.md and the
+`experiment-measure` / `qa` skills answer with `scripts/bench_training_update.py`
+and the Perf panel. The cutover lost that path without listing it: the loss
+reviewed so far is recovery only.
+
+Observed at `569653ccd`, against main's executor:
+
+- The loop's row has `time/collection` and `time/learning` only. The executor
+  enabled the collector profiler and logged every subphase per update
+  (`time_since(phase_seconds(...))`), plus `cuda_peak_metrics`,
+  `mps_memory_metrics`, `coordinates/rss_bytes`, `coordinates/host_load_1m`,
+  `training_seconds`, and a `transitions` clock. `open_collector` now builds
+  `Profiler(enabled=False)` and nothing enables it; `phase_seconds` and
+  `time_since` have no caller; `cuda_peak_metrics` is gone.
+- `training/panels.py` still draws "Update time" from seven
+  `time/collection/...` keys, "Process memory" and "Host load"; for a run of
+  the new loop all are blank except `time/learning`. docs/training.md "Update
+  metrics" still lists `time/learning/minibatches/forward_and_loss` and the
+  CUDA high-water marks as logged rows.
+- `scripts/bench_training_update.py` parses its arguments, then `_execute`
+  raises the frozen-execution refusal; its docstring still says it runs
+  through `execute_regime`. `experiments/training_throughput.py` still spawns
+  it as its child and does not refuse.
+- Recipes declare only `Step("updates")`, so `manabot training-report`
+  (default `--training-clock training_seconds`) reports active time
+  unavailable for every new run.
+
+Direction (settled by the design: these are rows a loop logs through the
+tracker, and the docs written on this branch already promise them):
+
+1. The loop logs the per-update phase split again. Enable the collector's
+   profiler where the loop opens it; each `step` adds the seconds the collector
+   and learner profilers gained since the previous step, under the existing
+   `time/...` key spelling so new runs overlay retained ones. Make
+   `phase_seconds`/`time_since` read profiler timings rather than a
+   `StageRecord`, keeping one implementation; the retained-record reader keeps
+   what it needs. Timers only: the bitwise parity proof must still pass.
+2. The row carries the resource observations the panels and guide name: CUDA
+   (and MPS) high-water marks, process RSS and host load. One small function
+   beside the loop; no sampling thread.
+3. `bench_training_update.py` measures the loop: `--recipe` names a function
+   returning `SelfPlay` (default `elemental_self_play`), it runs a few updates
+   untracked or under `local_launch`, and prints the split from the rows of
+   item 1. Drop the regime-file form and the `TrainingRun` receipt, and say so
+   in docs/workflows.md and the two skills. Then `training_throughput.py`
+   either reads the new output or refuses like the other frozen drivers; it
+   must not spawn a child that can only fail.
+4. Check Etude `105abdd` for a time clock a run can declare. If there is one,
+   recipes declare `training_seconds` and the loop logs cumulative active
+   seconds from `state.pt` (a new `Counts` field, so it survives resume);
+   otherwise docs/training.md says the time report has no active time for loop
+   runs. Do not rebuild the `transitions` clock unless a reader needs it.
+5. One owner for the retired revision: a constant and one raising function in
+   `manabot/training/regime.py` (the module that owns saved regimes), used by
+   the CLI and the ~18 refusing entry points that each spell the SHA out.
+   Fix `manabot/training/__init__.py`, whose docstring names `execute_regime`
+   and which re-exports against the package rule; nothing imports from it.
+6. After 1–4, make panels.py's header, docs/training.md "Update metrics" and
+   "Monitoring" match exactly what the loop logs.
+
+Not changed by this review: the open CLI-config and local-follower questions
+(questions.md), the left-alone list above, and every delivery item.
