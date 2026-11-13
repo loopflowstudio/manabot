@@ -87,3 +87,15 @@ history through that supported integration rather than raw git rebase.
   mana creature may also attack, block or carry an effect). The diagnostic
   reports exact-source identity counts separately; the recommendation must not
   authorize a source-capability collapse without a rules equivalence argument.
+
+## Measurement baseline after merge (2026-11-13)
+
+The rebuilt current engine replays elemental_bg deal 0 to digest
+`25e7d895b1660c391141b9e627c53deb89d7dfe61c1a9b79545c21035e9d6c54`
+with capture both off and on, with identical payment counters. The retained
+58e5923c53 trace ends at `4814ad1b380e005edc2f31a816d802db2284d61b53070bd18b55144c8e2abb50`.
+Main's engine/card changes merged after counting. Preserve the original evidence;
+regenerate the frequency baseline under the instrumented current engine in
+`experiments/data/mana_spending/current/`, on the same 21 exact deck lists,
+8 games and seeds. Use that baseline for strict shape replay digest checks.
+This is a second measured baseline, not a rebind of the old trace or checkpoint.

@@ -286,3 +286,8 @@ Launch `518a4948ea80` failed admission: the second L4 was unavailable. Run IDs
 started. Launcher reported machine `mtg347-l4-71b326e7fb82` confirmed deleted,
 `mtg347-l4-620f4314c806` not acquired. Finish shapes before retrying with one
 rental at a time; retain this failed admission and its launcher cost if exposed.
+
+Baseline revision: strict replay of 58e5923c53's original digest fails after the
+main merge. Current capture on/off agrees. Recount the same exact decks/deals
+on the current engine, preserve original evidence, then run shapes against that
+new baseline. No learning launch until the shape results are recorded.
