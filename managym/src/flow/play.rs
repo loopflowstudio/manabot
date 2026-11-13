@@ -153,7 +153,7 @@ impl Game {
         let definition = &self.state.objects[card];
         (!definition.types.is_land()
             && self.active_permanent_has(player, |source| {
-                matches!(source, StaticAbility::CastFromLibraryTop(predicate) if self.object_matches_predicate(card.into(), predicate))
+                matches!(source, StaticAbility::CastFromLibraryTop(predicate) if self.object_matches_predicate(card, predicate))
             }))
         .then_some(card)
     }
@@ -204,10 +204,11 @@ impl Game {
     pub(crate) fn effective_spell_cost(
         &self,
         player: PlayerId,
-        object: ObjectId,
+        object: impl Into<ObjectId>,
         cast: CastChoices,
         targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
+        let object: ObjectId = object.into();
         let card_ref = &self.state.objects[object];
         let mut cost = self.casting_mana_cost(player, object, cast)?.with_x(cast.x);
         cost.purpose = SpendingContext::Cast(SpellSnapshot(card_ref.copiable_definition()));
@@ -296,7 +297,6 @@ impl Game {
     }
 
     pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
-        let object = ObjectId::from(card);
         let card_ref = &self.state.objects[card];
         if !card_ref.types.is_land() {
             return Err(AgentError("only land cards can be played".to_string()));
@@ -304,7 +304,7 @@ impl Game {
         if card_ref.owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
-        if !self.may_play_from_zone(player, object) {
+        if !self.may_play_from_zone(player, card) {
             return Err(AgentError("land is not in a permitted zone".into()));
         }
         if !self.can_play_land(player) {
@@ -315,7 +315,7 @@ impl Game {
         self.state.turn.lands_played += 1;
         let mut frame = EffectFrame::new(player, Vec::new());
         frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
-            object,
+            card,
             ZoneType::Battlefield,
             Default::default(),
         )]));
@@ -329,7 +329,6 @@ impl Game {
         player: PlayerId,
         card: CardId,
     ) -> Result<(), AgentError> {
-        let object = ObjectId::from(card);
         if self.pending_choice.is_some() {
             return Err(AgentError("a choice is already pending".to_string()));
         }
@@ -339,17 +338,17 @@ impl Game {
             (
                 card_ref.types.is_land(),
                 card_ref.owner,
-                self.has_instant_timing(player, object),
+                self.has_instant_timing(player, card),
             )
         };
 
-        if !self.may_play_from_zone(player, object) {
+        if !self.may_play_from_zone(player, card) {
             return Err(AgentError("card is not in a permitted casting zone".into()));
         }
         if is_land {
             return Err(AgentError("land cards cannot be cast".to_string()));
         }
-        if owner != player && self.exile_grant(player, object).is_none() {
+        if owner != player && self.exile_grant(player, card).is_none() {
             return Err(AgentError("card does not belong to player".to_string()));
         }
         if self.state.priority.holder != player {
@@ -365,7 +364,7 @@ impl Game {
             ));
         }
 
-        self.begin_cast(player, object, CastChoices::default())
+        self.begin_cast(player, card, CastChoices::default())
     }
 
     /// Cast `card` while an effect resolves (CR 608.2g), paying its costs
@@ -390,9 +389,10 @@ impl Game {
     fn begin_cast(
         &mut self,
         player: PlayerId,
-        object: ObjectId,
+        object: impl Into<ObjectId>,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
+        let object: ObjectId = object.into();
         let card_ref = &self.state.objects[object];
         let printed_x = card_ref.mana_cost.as_ref().is_some_and(|cost| cost.x > 0);
         let selected_x = self
@@ -419,10 +419,10 @@ impl Game {
     pub(crate) fn can_pay_cast(
         &self,
         player: PlayerId,
-        object: ObjectId,
+        object: impl Into<ObjectId>,
         cast: CastChoices,
     ) -> bool {
-        self.can_pay_cast_with_targets(player, object, cast, None)
+        self.can_pay_cast_with_targets(player, object.into(), cast, None)
     }
 
     /// [`Game::can_pay_cast`] once `targets` are chosen (`None` before).
@@ -605,7 +605,12 @@ impl Game {
         }
     }
 
-    pub(crate) fn legal_spell_modes(&self, player: PlayerId, object: ObjectId) -> Vec<usize> {
+    pub(crate) fn legal_spell_modes(
+        &self,
+        player: PlayerId,
+        object: impl Into<ObjectId>,
+    ) -> Vec<usize> {
+        let object: ObjectId = object.into();
         self.state.objects[object]
             .spell_modes()
             .map_or_else(Vec::new, |modes| {
@@ -991,8 +996,7 @@ impl Game {
         self.state
             .zone_cards(ZoneType::Hand, player)
             .filter(|card| {
-                ObjectId::from(*card) != object
-                    && self.object_matches_predicate((*card).into(), predicate)
+                ObjectId::from(*card) != object && self.object_matches_predicate(*card, predicate)
             })
             .collect()
     }
@@ -1004,7 +1008,6 @@ impl Game {
         player: PlayerId,
         card: CardId,
     ) -> Result<(), AgentError> {
-        let exiled = ObjectId::from(card);
         let Some(PendingChoice::ExileFromHandPayment {
             player: payer,
             payment,
@@ -1024,7 +1027,7 @@ impl Game {
                 "not a card this alternative cost can exile".into(),
             ));
         }
-        self.move_object(exiled, ZoneType::Exile);
+        self.move_object(card, ZoneType::Exile);
         let cost = self.state.objects[*object].sacrifice_cost().cloned();
         self.begin_payment(player, *payment, cost)
     }
@@ -1283,14 +1286,10 @@ impl Game {
         card: CardId,
         ability_index: usize,
     ) -> Option<ActivatedAbilityDefinition> {
-        let object = ObjectId::from(card);
         let definition = &self.state.objects[card];
         let ability = definition.activated_abilities.get(ability_index)?;
         if ability.zone == ActivationZone::Battlefield
-            || !self
-                .state
-                .zones
-                .contains(object, ability.zone.zone(), player)
+            || !self.state.zones.contains(card, ability.zone.zone(), player)
         {
             return None;
         }
@@ -1796,7 +1795,6 @@ impl Game {
         player: PlayerId,
         card: CardId,
     ) -> Result<(), AgentError> {
-        let object = ObjectId::from(card);
         let Some(PendingChoice::DiscardPayment {
             player: payer,
             source,
@@ -1806,14 +1804,14 @@ impl Game {
         else {
             return Err(AgentError("no discard payment pending".into()));
         };
-        if payer != player || !self.state.zones.contains(object, ZoneType::Hand, player) {
+        if payer != player || !self.state.zones.contains(card, ZoneType::Hand, player) {
             return Err(AgentError("discard cost must be a card in hand".into()));
         }
         let sacrifice = self
             .activation_ability(source, ability_index)
             .ok_or_else(|| AgentError("missing source".into()))?
             .sacrifice;
-        self.move_object(object, ZoneType::Graveyard);
+        self.move_object(card, ZoneType::Graveyard);
         let payment = Payment::Activation {
             source,
             ability_index,
@@ -2400,9 +2398,10 @@ impl Game {
     pub(crate) fn legal_targets_for_requirement(
         &self,
         player: PlayerId,
-        object: ObjectId,
+        object: impl Into<ObjectId>,
         requirement: &TargetRequirement,
     ) -> Vec<Target> {
+        let object: ObjectId = object.into();
         self.legal_targets_for_spec(&requirement.spec, player)
             .into_iter()
             .filter(|target| *target != Target::StackSpell(object))

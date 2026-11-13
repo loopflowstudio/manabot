@@ -406,7 +406,8 @@ impl Game {
     /// Power in the object's current zone (CR 604.3). On the stack "you"
     /// means the spell's controller; elsewhere off the battlefield it means
     /// the owner (CR 109.5), including owned outside-game copies.
-    pub fn object_power(&self, object_id: ObjectId) -> i32 {
+    pub fn object_power(&self, object_id: impl Into<ObjectId>) -> i32 {
+        let object_id: ObjectId = object_id.into();
         if let Some(permanent) = self.state.object_to_permanent[object_id] {
             return self.characteristics(permanent).power;
         }
@@ -424,9 +425,10 @@ impl Game {
     /// placeholder. Layer computation itself uses its explicit board context.
     pub(crate) fn object_matches_predicate(
         &self,
-        object_id: ObjectId,
+        object_id: impl Into<ObjectId>,
         predicate: &CardPredicate,
     ) -> bool {
+        let object_id: ObjectId = object_id.into();
         if predicate.from_battlefield_this_turn {
             let Some(object) = self.current_object_ref(object_id) else {
                 return false;
@@ -583,7 +585,8 @@ impl Game {
     }
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
-    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: ObjectId) -> bool {
+    pub(crate) fn has_instant_timing(&self, player: PlayerId, object: impl Into<ObjectId>) -> bool {
+        let object: ObjectId = object.into();
         let granted_flash = self
             .exile_grant(player, object)
             .is_some_and(|grant| grant.flash);

@@ -507,7 +507,7 @@ fn counters_on_lands_are_inert_and_persistent() {
         .state
         .zones
         .zone_objects(ZoneType::Battlefield, PlayerId(0))
-        .contains(&forest_perm.object));
+        .contains(forest_perm.object));
 }
 
 /// Observation encoding: counter counts, token flag, Ally/Lesson type tags,

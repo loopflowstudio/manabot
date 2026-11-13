@@ -630,13 +630,16 @@ let Some(card) = game.state.card_id(object_id) else {
 };
 let name = &game.state.objects[card].name; // a CardId indexes the same store
 
-let object_id: ObjectId = card.into(); // free: every card is an object
+// Every card is an object, so what takes any object takes the card as it is.
+let zone = game.state.zones.zone_of(card);
+let reference = game.current_object_ref(card);
 ```
 
 `GameState::card_id` is the one checked conversion from an object to a card;
-it returns `None` for a token or a copy. Going back is `ObjectId::from(card)`
-and costs nothing. A `CardId` stays valid for the whole game, because an
-object never becomes a card or stops being one.
+it returns `None` for a token or a copy. Object APIs accept a `CardId` or an
+`ObjectId` directly.
+A `CardId` stays valid for the whole game, because an object never becomes a
+card or stops being one.
 
 ### Objects
 
@@ -669,8 +672,31 @@ A runtime id binding's name says which id it holds:
 | `card`, `card_id`, `cards` | `CardId` | card-only zone readers, decklists, sideboards, and effects whose text says "card" |
 | `object`, `object_id`, `objects` | `ObjectId` | mixed zone lists, spells, permanents, targets, events and last known information |
 
-A function taking `CardId` needs no `is_card()` check. One taking `ObjectId`
-converts once with `card_id` when it needs a card, then passes that `CardId` on.
+The parameter type says which of the two a function works on:
+
+```rust
+// Works on any object: callers pass a CardId or an ObjectId.
+pub fn zone_of(&self, object: impl Into<ObjectId>) -> Option<ZoneType>
+
+// Works on cards alone: a token or a spell copy cannot be passed.
+pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError>
+```
+
+- **Any object** takes `impl Into<ObjectId>` and converts once, or hands the
+  id on to the object function it wraps. Zone lookups and membership, object
+  references, public ids, predicates and moves are written this way, so a
+  caller holding a `CardId` passes it without `.into()` or `ObjectId::from`.
+- **Cards alone** takes `CardId` and needs no `is_card()` check. No function
+  accepts an `ObjectId` where a card is required. A caller holding an
+  `ObjectId` narrows once with `card_id`, then passes that `CardId` on.
+- **A plain `ObjectId` parameter** remains where a generic does not fit: a
+  trait-object or function-pointer signature, a serialized field, a PyO3
+  binding, or a hot path where the generic measurably costs. A caller holding
+  a `CardId` writes `card.into()` there. Explicit widening also remains when
+  storing a card in an `ObjectId` field or collection, comparing mixed ids,
+  or implementing the checked indexing traits. Private test command builders
+  can retain their concrete transport signature.
+
 `Object::is_card()` remains for code that only asks the question.
 
 Names that do not bind runtime ids keep `card`: definitions

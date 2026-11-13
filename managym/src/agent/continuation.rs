@@ -296,7 +296,7 @@ impl Game {
 
     pub(crate) fn object_reference(
         &self,
-        object_id: ObjectId,
+        object_id: impl Into<ObjectId>,
         viewer: PlayerId,
     ) -> VisibleReference {
         self.current_object_ref(object_id)
@@ -309,7 +309,7 @@ impl Game {
             ActivationSource::Permanent(permanent) => {
                 self.target_reference(Target::Permanent(permanent), viewer)
             }
-            ActivationSource::Card(card) => self.object_reference(card.into(), viewer),
+            ActivationSource::Card(card) => self.object_reference(card, viewer),
         }
     }
 

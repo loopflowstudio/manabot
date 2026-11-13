@@ -79,7 +79,7 @@ pub struct GameState {
 impl GameState {
     /// Update raw membership, certifying card-zone occupants. Callers own
     /// rules events; ordinary play uses `Game::move_object`.
-    pub fn place_object(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
+    pub fn place_object(&mut self, object: impl Into<ObjectId>, holder: PlayerId, zone: ZoneType) {
         self.zones.move_object(&self.objects, object, holder, zone);
     }
 
@@ -524,7 +524,13 @@ impl TrackedState {
 
     /// Move `object` to `to_zone` under `holder`. Characteristics read the
     /// battlefield and graveyards; the trigger index reads the battlefield.
-    pub(crate) fn move_object(&mut self, object: ObjectId, holder: PlayerId, to_zone: ZoneType) {
+    pub(crate) fn move_object(
+        &mut self,
+        object: impl Into<ObjectId>,
+        holder: PlayerId,
+        to_zone: ZoneType,
+    ) {
+        let object: ObjectId = object.into();
         let from_zone = self.state.zones.zone_of(object);
         let touches = |zone: ZoneType| matches!(zone, ZoneType::Battlefield | ZoneType::Graveyard);
         if touches(to_zone) || from_zone.is_some_and(touches) {

@@ -53,7 +53,7 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
                 .zone_objects(ZoneType::Library, PlayerId(0));
             let retained: Vec<_> = before
                 .into_iter()
-                .filter(|object| after.contains(object))
+                .filter(|object| after.contains(*object))
                 .collect();
             assert_eq!(retained, after.to_vec());
         }

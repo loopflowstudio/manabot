@@ -234,7 +234,7 @@ fn card_ids_narrow_kind_and_keep_numeric_wire_identity() {
         ZoneType::Exile,
         ZoneType::Library,
     ] {
-        s.game_mut().move_object(object, zone);
+        s.game_mut().move_object(card, zone);
         assert_eq!(s.game().state.card_id(object), Some(card));
         assert!(s
             .game()

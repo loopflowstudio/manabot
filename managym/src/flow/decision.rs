@@ -2780,11 +2780,10 @@ impl Game {
     }
 
     fn eligible_lesson(&self, player: PlayerId, card: CardId) -> bool {
-        let object = ObjectId::from(card);
         self.decision_controller(player) == player
             && self.state.players[player.0].sideboard.contains(&card)
             && self.state.objects[card].owner == player
-            && self.state.zones.zone_of(object).is_none()
+            && self.state.zones.zone_of(card).is_none()
             && self.state.objects[card]
                 .subtypes
                 .iter()
@@ -2834,7 +2833,7 @@ impl Game {
             _ => self
                 .state
                 .zone_cards(ZoneType::Graveyard, *owner)
-                .filter(|card| self.object_matches_predicate((*card).into(), predicate))
+                .filter(|card| self.object_matches_predicate(*card, predicate))
                 .collect(),
         }
     }
@@ -2869,7 +2868,7 @@ impl Game {
                 .zone_cards(ZoneType::Hand, *player)
                 .filter(|card| {
                     self.state.objects[*card].types.is_castable()
-                        && self.object_matches_predicate((*card).into(), predicate)
+                        && self.object_matches_predicate(*card, predicate)
                 })
                 .collect(),
             ResolutionCastOffer::Exiled { object }
@@ -2887,11 +2886,9 @@ impl Game {
                 .filter_map(|link| self.state.card_id(link.exiled_object))
                 .filter(|card| {
                     let definition = &self.state.objects[*card];
-                    self.state
-                        .zones
-                        .contains((*card).into(), ZoneType::Exile, *player)
+                    self.state.zones.contains(*card, ZoneType::Exile, *player)
                         && definition.types.is_castable()
-                        && self.object_matches_predicate((*card).into(), predicate)
+                        && self.object_matches_predicate(*card, predicate)
                 })
                 .collect(),
             ResolutionCastOffer::LibraryTop { object } => self
@@ -3173,7 +3170,7 @@ mod learn_tests {
         assert!(game.state.suspended_decision.is_some());
         game.move_object(token, ZoneType::Graveyard);
         let card = game.state.players[player.0].deck[0];
-        game.move_object(card.into(), ZoneType::Graveyard);
+        game.move_object(card, ZoneType::Graveyard);
         let spec = crate::state::ability::TargetSpec::GraveyardCard {
             predicate: CardPredicate::default(),
         };
@@ -3182,7 +3179,7 @@ mod learn_tests {
         assert_eq!(
             game.legal_targets_for_spec(&spec, player),
             vec![Target::GraveyardCard(
-                game.current_object_ref(card.into()).unwrap()
+                game.current_object_ref(card).unwrap()
             ),]
         );
     }
@@ -3211,7 +3208,7 @@ mod learn_tests {
         ] {
             let mut game = game(&[(name, 1)]);
             let card = game.state.players[0].sideboard[0];
-            assert!(game.current_object_ref(card.into()).is_none());
+            assert!(game.current_object_ref(card).is_none());
             let deck = game.state.players[0].deck.clone();
             assert!(!deck.contains(&card));
             learn(&mut game);
@@ -3230,12 +3227,9 @@ mod learn_tests {
                 game.state.zones.size(ZoneType::Hand, PlayerId(0)),
                 hand_count + 1
             );
-            assert!(game
-                .state
-                .zones
-                .contains(card.into(), ZoneType::Hand, PlayerId(0)));
+            assert!(game.state.zones.contains(card, ZoneType::Hand, PlayerId(0)));
             assert_eq!(game.state.objects[card].name, name);
-            assert!(game.current_object_ref(card.into()).is_some());
+            assert!(game.current_object_ref(card).is_some());
             assert_eq!(game.state.players[0].deck, deck);
             assert_eq!(
                 game.state
@@ -3265,7 +3259,7 @@ mod learn_tests {
             learn(&mut game);
             take(&mut game, roster[0].into());
             if destination != ZoneType::Hand {
-                game.move_object(roster[0].into(), destination);
+                game.move_object(roster[0], destination);
             }
             learn(&mut game);
             let before = witness(&game);
@@ -3622,7 +3616,7 @@ mod learn_tests {
         // One unknown hand slot, a residual pool of two Lessons and two Islands.
         let deck = game.state.players[0].deck.clone();
         for card in deck {
-            game.move_object(card.into(), ZoneType::Library);
+            game.move_object(card, ZoneType::Library);
         }
         let island = game.state.players[0]
             .deck
@@ -3630,7 +3624,7 @@ mod learn_tests {
             .copied()
             .find(|card| game.state.objects[*card].name == "Island")
             .unwrap();
-        game.move_object(island.into(), ZoneType::Hand);
+        game.move_object(island, ZoneType::Hand);
         learn(&mut game);
         let card = game.state.players[0].sideboard[0];
         take(&mut game, card.into());
@@ -3710,7 +3704,7 @@ mod learn_tests {
             let hand = branch.state.zones.zone_objects(ZoneType::Hand, PlayerId(0));
             for action in &branch.action_space().unwrap().actions {
                 if let Action::LearnDiscard { object, .. } = action {
-                    assert!(hand.contains(object));
+                    assert!(hand.contains(*object));
                 }
             }
             let action_index = branch
@@ -3744,7 +3738,7 @@ mod learn_tests {
             );
             for action in actions {
                 if let Action::LearnDiscard { object, .. } = action {
-                    assert!(hand.contains(object));
+                    assert!(hand.contains(*object));
                 }
             }
             assert_eq!(
@@ -3782,10 +3776,10 @@ mod learn_tests {
         // An identical main-deck physical copy can witness the known card.
         swapped
             .state
-            .place_object(retrieved.into(), PlayerId(0), ZoneType::Library);
+            .place_object(retrieved, PlayerId(0), ZoneType::Library);
         swapped
             .state
-            .place_object(duplicate.into(), PlayerId(0), ZoneType::Hand);
+            .place_object(duplicate, PlayerId(0), ZoneType::Hand);
         assert_eq!(
             crate::possible_worlds::viewer_observation(&swapped, PlayerId(1)),
             crate::possible_worlds::viewer_observation(&source, PlayerId(1))
@@ -3813,13 +3807,13 @@ mod learn_tests {
             .copied()
             .find(|object| game.state.objects[*object].definition_id == definition)
             .unwrap();
-        game.move_object(duplicate.into(), ZoneType::Hand);
+        game.move_object(duplicate, ZoneType::Hand);
         assert_eq!(game.state.players[0].known_hand.get(&definition), Some(&1));
-        game.move_object(duplicate.into(), ZoneType::Graveyard);
+        game.move_object(duplicate, ZoneType::Graveyard);
         assert!(game
             .state
             .zones
-            .contains(retrieved.into(), ZoneType::Hand, PlayerId(0)));
+            .contains(retrieved, ZoneType::Hand, PlayerId(0)));
         assert!(game.state.players[0].known_hand.is_empty());
     }
 
@@ -4019,8 +4013,8 @@ mod payment_tests {
                 .copied()
                 .find(|card| game.state.objects[*card].name == name)
                 .unwrap();
-            game.move_object(card.into(), ZoneType::Battlefield);
-            sources.push(game.current_object_ref(card.into()).unwrap());
+            game.move_object(card, ZoneType::Battlefield);
+            sources.push(game.current_object_ref(card).unwrap());
         }
         let waterbend = game.lookup_current_permanent(sources[0]).unwrap();
         let prism = game.lookup_current_permanent(sources[1]).unwrap();

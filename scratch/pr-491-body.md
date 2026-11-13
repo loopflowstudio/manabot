@@ -21,6 +21,52 @@ This builds on [MTG-298 · Give tokens their own `TokenDefinition` type](https:/
 - **Card-only choices.** Transient tokens stay visible in their zones but are excluded from card-only play, activation, discard and search choices. `SelectCards` narrows to cards only when it reads a zone or milled cards; `CreatedThisWay` still selects the new token (Kyoshi Battle Fan). Direct card-only commands reject them too. Generic movement, inspection and draw ordering still include them. Predicate `token` filters match only `ObjectKind::Token`; spell copies used to match, though no defined card filters spells by token status.
 - **No emblem or copy-of-a-card kind.** No defined card creates either; the docs say "none yet".
 
+## Conversion cleanup
+
+Object lookups, references, predicates, moves, casting helpers and projection
+helpers and zone membership accept `impl Into<ObjectId>`, the one convention;
+a wrapper hands the id to the object function it calls without converting
+first. Observation definition counting accepts either id kind.
+Card-only functions retain `CardId` and checked construction is unchanged.
+
+Audited explicit CardId widening expressions: **88 before → 41 after** against
+66e8b7ae5, including inline/integration tests, iterator maps and widened locals.
+This is broader than the steer's approximate call-site count: it also counts
+stored values, comparisons and conversion assertions. EntityId conversions and
+card-name string conversions are excluded. No performance exception is claimed.
+
+Every retained site is below (paths under `managym/`; line numbers are the local
+conversion-cleanup source). These conversions cross a storage, standard-library,
+trait or assertion boundary; they are not skipped object API migrations.
+
+| Sites | Reason |
+| --- | --- |
+| `cards/tests/cards/stx.rs:568` | Compare a checked Lesson with the support helper's `Vec<ObjectId>` using standard slice membership. |
+| `src/agent/observation.rs:2055` | Combine card and permanent activation sources into one `Option<ObjectId>` projection. |
+| `src/flow/action.rs:369,381,414,448,599,612` | Construct Action/Payment transport fields; the three widened locals supply concrete mixed-object fields. |
+| `src/flow/cast_permission.rs:215` | Collect foretold cards into a `Vec<ObjectId>` alongside hidden slots. |
+| `src/flow/decision.rs:1798,1808` | Construct discard Action fields. |
+| `src/flow/decision.rs:2413,2468,2516,2897` | Compare typed candidates with object-based command/offer identities. |
+| `src/flow/decision.rs:3224,3260,3273,3553,3630` | Private Learn test helper constructs a concrete object-based Action. |
+| `src/flow/decision.rs:3247,3838` | Compare checked cards with event/Action object fields in assertions. |
+| `src/flow/decision.rs:3269,3303,3307,3315,3319` | Construct object-based Action fixtures, including rejection cases. |
+| `src/flow/play.rs:173` | Compare a checked library-top result with a mixed object's identity. |
+| `src/flow/play.rs:999` | Exclude the casting object from checked alternative-cost candidates. |
+| `src/flow/play.rs:2020,2131` | Combine card and permanent payment sources as `Option<ObjectId>`. |
+| `src/flow/play.rs:2361` | Capture a concrete `ActivatedAbilityOnStack.source_object`. |
+| `src/flow/search.rs:100`, `src/flow/selection_sampling.rs:138` | Extend mixed hidden-object collections with foretold cards. |
+| `state/src/game_object.rs:271,284` | Implement `Index<CardId>`/`IndexMut<CardId>` through the ObjectId index while checking kind in debug. |
+| `tests/rules/cr_400_identity.rs:209` | Assert the free widening preserves the original id. |
+| `tests/rules/cr_400_identity.rs:277,308` | Assert typed scans exclude a transient token's object id. |
+| `tests/rules/cr_400_identity.rs:353,392` | Compare typed scan results with independently specified object rows. |
+
+Conversion cleanup and its compression passed 44 focused debug tests (1.242 s)
+and workspace all-target/all-feature Clippy with warnings denied. Formatting and whitespace
+checks passed. The cp313/arm64 wheel rebuilt, its matching extension was
+installed atomically, and a fresh import passed. Final-head conformance, replay
+bytes and Engine Budget (unchanged
+digests) still belong to gate. Existing seeded QA below predates this pass.
+
 ## Final-head QA
 
 538 seeded random games (authored setups, Fire Lord Azula copies, 400 TLA pool human builds; 118,781 decisions) produce byte-identical observations for both seats and identical state digests on this branch and main 6ce618b8a, including four matching `PyAgentError` endings. That comparison first caught a regression in Kyoshi Battle Fan's token attach, fixed here. Two Academy games played to Game Over. Details: `scratch/qa.html` (not published).

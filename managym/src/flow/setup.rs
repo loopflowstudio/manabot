@@ -111,7 +111,7 @@ impl Game {
         for player in [PlayerId(0), PlayerId(1)] {
             let deck = players[player.0].deck.clone();
             for card in deck {
-                zones.move_object(&objects, card.into(), player, ZoneType::Library);
+                zones.move_object(&objects, card, player, ZoneType::Library);
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
             // CR 103.3, 103.5 — Shuffle, then draw the ordinary seven-card hand.

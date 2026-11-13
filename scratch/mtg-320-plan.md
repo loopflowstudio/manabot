@@ -227,3 +227,92 @@ Two Academy games reached Game Over. Debug suite: 1195/1199 passed; the four
 `vector_env` timeouts were load contention and pass alone. Clippy, fmt pass.
 Receipts: `scratch/qa.html`. The fix and release extension are local, not
 committed or published.
+
+## Conversion cleanup (steer ced7607f, 2026-11-13)
+
+Jack Heart, 2026-11-13: "yeah lets do that fairly exhaustively in 320. if there
+are any super expensive cases we can skip them". Full steer:
+`.lf/prompts/20261113-081526-LxK62h-steer.md`. Implemented locally.
+
+Docs written first, describing intended behavior: `docs/engine.md`, the opening
+example of [Objects and zones] and `#### Names` (parameter rule: any object
+takes `impl Into<ObjectId>`; cards alone take
+`CardId`; plain `ObjectId` stays for trait-object/fn-pointer signatures,
+serialized fields, PyO3 bindings and measured hot paths). The example names
+`zones.zone_of`, `Game::current_object_ref` and `play_land`; the first two
+now accept either runtime id directly.
+
+Implementation owes the PR body: explicit-conversion count before/after
+(steer says about 81 sites on #491's head) and each skipped site with its
+reason. Engine Budget digests unchanged; observations and evidence
+byte-identical. Stop at review; no auto-merge.
+
+
+### Conversion implementation (2026-11-13)
+
+Object APIs, zone membership included, accept `impl Into<ObjectId>` and
+convert where they first use the id. Definition counting accepts an
+iterator of either id. Removed redundant caller conversions and widened locals
+in land play, casting, foretell, card abilities, discard/exile costs and Lesson
+eligibility. Card-only entry points and checked construction stay unchanged.
+Delete — do not maintain: the concrete-only object parameter signatures and
+redundant call-site widening are replaced; no alternate API or compatibility
+path is added. Wire fields and mixed collections retain concrete ids.
+
+An audited inventory, including inline and integration tests, counts 88 explicit
+CardId-to-ObjectId expressions before this pass (66e8b7ae5) and 41 after.
+It includes iterator maps, aliases, mixed comparisons and identity assertions;
+it excludes EntityId conversions and `possible_worlds.rs` card-name strings.
+The PR draft lists all retained sites and why they remain. No skip is claimed
+on unmeasured performance grounds. Gate owns final Engine Budget/digests,
+conformance and replay-byte comparison; earlier QA does not validate this pass.
+
+
+### Focused validation of conversion cleanup
+
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml
+  --lib --test rules_tests --test cards --test learn_setup_tests --profile ci
+  --test-threads 2 -E 'test(cr_400_identity) | test(learn_retrieves_each) |
+  test(learn_consumes_each) | test(foretell) | test(pop_quiz_learn_retrieves) |
+  test(battle_fan)'`: 13 passed, 1088 skipped (0.637 s; build 10m 03s),
+  run `ef20f456-65e7-4164-b089-69ffa963a143`.
+- Compile iteration removed ambiguous `.into()` at a roster call and fixed
+  the destination type of an EntityId local after object lookups became generic.
+  Clippy found four redundant borrows in zone membership (two internal, two
+  test callers); all are removed.
+
+- `CARGO_BUILD_JOBS=2 PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy
+  --manifest-path managym/Cargo.toml --workspace --all-targets --all-features
+  -- -D warnings`: passed after those borrow fixes (17.88 s final invocation).
+- `cargo fmt --manifest-path managym/Cargo.toml --all -- --check` and
+  `git diff --check`: passed. Scratch stays under both configured limits.
+
+- `CARGO_BUILD_JOBS=2 uv run --extra play maturin build --release
+  -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`:
+  cp313/arm64 0.2.3 wheel built successfully (6m 27s). The wheel's exact
+  interpreter `EXT_SUFFIX` member was installed with `os.replace`.
+  `uv run --no-sync python -c 'import managym._managym'`: passed in a fresh
+  process, loading this checkout's `_managym.cpython-313-darwin.so`.
+
+Implementation and documentation are local. No publication, Graph change,
+auto-merge or frozen-evidence update was performed. Gate still owes final-head
+conformance, paired observation/state-byte QA and Engine Budget with unchanged
+digests, followed by the selected review steps.
+
+### Compression of the conversion cleanup (2026-11-13)
+
+One parameter convention: `ZoneObjects::contains` takes `impl Into<ObjectId>`
+like every other object API, so the reflexive `AsRef<ObjectId> for ObjectId`
+is deleted and the docs rule loses its borrow case (three test callers
+dereference). `grants_naming` converts for `is_foretold`, `exile_grant` and
+`exile_grant_on`; wrappers that only delegate (`Game::move_object`,
+`move_object_with_entry`, `GameState::place_object`, `Game::object_reference`,
+`Projection::object_id`, `can_pay_cast`, `latest_object_lki`) no longer convert
+first. The retained-site count stays 41; the PR table's line numbers are current.
+
+- Focused nextest command above plus `test(learn_tests) | test(engine_events)
+  | test(azula_has_the_opponent) | test(dft::)`: 44 passed, 1057 skipped
+  (1.242 s). Workspace all-target/all-feature Clippy with warnings denied,
+  rustfmt and `git diff --check` passed.
+- Release wheel rebuilt (cp313/arm64 0.2.3, 2m 33s), its `EXT_SUFFIX` member
+  installed with `os.replace`; fresh `import managym._managym` loaded it.

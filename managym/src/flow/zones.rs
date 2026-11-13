@@ -453,7 +453,7 @@ impl Game {
     ) -> usize {
         self.state
             .zone_cards(ZoneType::Graveyard, player)
-            .filter(|card| self.object_matches_predicate((*card).into(), predicate))
+            .filter(|card| self.object_matches_predicate(*card, predicate))
             .count()
     }
 
@@ -521,13 +521,13 @@ impl Game {
         self.state.stack_objects.is_empty()
     }
 
-    pub fn move_object(&mut self, object: ObjectId, to_zone: ZoneType) {
+    pub fn move_object(&mut self, object: impl Into<ObjectId>, to_zone: ZoneType) {
         self.move_object_with_entry(object, to_zone, ZoneEntry::default());
     }
 
     pub(crate) fn move_object_with_entry(
         &mut self,
-        object: ObjectId,
+        object: impl Into<ObjectId>,
         to_zone: ZoneType,
         entry: ZoneEntry,
     ) {
@@ -537,10 +537,11 @@ impl Game {
 
     pub(crate) fn zone_move_proposal(
         &self,
-        object_id: ObjectId,
+        object_id: impl Into<ObjectId>,
         to_zone: ZoneType,
         mut entry: ZoneEntry,
     ) -> ProposedEvent {
+        let object_id: ObjectId = object_id.into();
         let from = self.state.zones.zone_of(object_id);
         let to_zone = if from == Some(ZoneType::Stack) && to_zone != ZoneType::Exile
             && self.find_spell_on_stack_index(object_id).is_some_and(|index| {

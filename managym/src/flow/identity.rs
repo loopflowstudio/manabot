@@ -17,7 +17,8 @@ use crate::{
 impl Game {
     /// Exact identity of `object` in its current zone. An object removed
     /// from every zone has no current rules identity.
-    pub fn current_object_ref(&self, object: ObjectId) -> Option<ObjectRef> {
+    pub fn current_object_ref(&self, object: impl Into<ObjectId>) -> Option<ObjectRef> {
+        let object: ObjectId = object.into();
         self.state.zones.zone_of(object)?;
         let incarnation = *self.state.object_incarnations.get(object.0)?;
         Some(ObjectRef {
@@ -70,7 +71,11 @@ impl Game {
     }
 
     /// Snapshot the current battlefield object for triggers and LKI.
-    pub(crate) fn snapshot_current_permanent(&self, object: ObjectId) -> Option<ObjectLki> {
+    pub(crate) fn snapshot_current_permanent(
+        &self,
+        object: impl Into<ObjectId>,
+    ) -> Option<ObjectLki> {
+        let object: ObjectId = object.into();
         let object_ref = self.current_object_ref(object)?;
         let permanent_id = self.lookup_current_permanent(object_ref).ok()?;
         let permanent = self.state.permanents[permanent_id].as_ref()?;
@@ -119,8 +124,8 @@ impl Game {
     }
 
     /// Last known information of `object`'s most recent battlefield appearance.
-    pub(crate) fn latest_object_lki(&self, object: ObjectId) -> Option<&ObjectLki> {
-        self.state.object_lki.latest_for_object(object)
+    pub(crate) fn latest_object_lki(&self, object: impl Into<ObjectId>) -> Option<&ObjectLki> {
+        self.state.object_lki.latest_for_object(object.into())
     }
 
     /// Capture the stable viewer identity for a current or departed object.

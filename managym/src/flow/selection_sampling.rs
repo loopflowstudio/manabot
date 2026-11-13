@@ -274,8 +274,7 @@ impl Game {
             self.captured_bindings()
                 .filter(|binding| {
                     binding.known_to[viewer.0]
-                        && self.current_object_ref(binding.object.entity.into())
-                            == Some(binding.object)
+                        && self.current_object_ref(binding.object.entity) == Some(binding.object)
                 })
                 .map(|binding| binding.object),
         );
@@ -319,7 +318,7 @@ impl Game {
                 }
             }
         }
-        entries.retain(|object| self.current_object_ref(object.entity.into()) == Some(*object));
+        entries.retain(|object| self.current_object_ref(object.entity) == Some(*object));
         entries.sort_unstable();
         entries.dedup();
         entries
@@ -341,7 +340,7 @@ impl Game {
                 return;
             };
             for object in selected {
-                let object_id = object.entity.into();
+                let object_id = ObjectId::from(object.entity);
                 // Moved selections keep their old incarnation and no longer
                 // bind a hidden source slot. Public results must never be sampled.
                 if self.current_object_ref(object_id) == Some(*object)
@@ -405,7 +404,7 @@ impl Game {
                 } = decision
                 {
                     let matches = |object: &&ObjectRef| {
-                        self.object_matches_predicate(object.entity.into(), predicate)
+                        self.object_matches_predicate(object.entity, predicate)
                     };
                     let known_matching = objects
                         .iter()
@@ -723,10 +722,8 @@ impl Game {
                     *candidates = self
                         .selection_zone_cards(source.owner, source.zone)
                         .into_iter()
-                        .filter(|card| {
-                            self.object_matches_predicate((*card).into(), &source.predicate)
-                        })
-                        .filter_map(|card| self.current_object_ref(card.into()))
+                        .filter(|card| self.object_matches_predicate(*card, &source.predicate))
+                        .filter_map(|card| self.current_object_ref(card))
                         .collect();
                 } else {
                     rebind(candidates.iter_mut(), &rebinding.objects);

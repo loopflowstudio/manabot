@@ -822,7 +822,7 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .state
         .zones
         .zone_objects(ZoneType::Battlefield, PlayerId(0))
-        .contains(&ogre_card));
+        .contains(ogre_card));
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let id = s.game().state.objects[ogre_card].id.0 as i32;
     assert!(observation
@@ -15053,7 +15053,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         239,
     );
     let card = outside.game().state.players[0].sideboard[0];
-    assert_eq!(outside.game().object_power(card.into()), 0);
+    assert_eq!(outside.game().object_power(card), 0);
 }
 
 #[test]

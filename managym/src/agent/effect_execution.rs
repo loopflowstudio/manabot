@@ -285,7 +285,7 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn object_id(&mut self, name: &str, object_id: ObjectId) {
+    fn object_id(&mut self, name: &str, object_id: impl Into<ObjectId>) {
         self.reference(name, self.game.object_reference(object_id, self.viewer));
     }
 
@@ -450,9 +450,7 @@ impl<'a> Projection<'a> {
                             ActivationSource::Permanent(id) => {
                                 self.target("paid source", Target::Permanent(*id))
                             }
-                            ActivationSource::Card(card) => {
-                                self.object_id("paid source", (*card).into())
-                            }
+                            ActivationSource::Card(card) => self.object_id("paid source", *card),
                         }
                         self.field("ability", ability_index);
                         self.field("X", x);

@@ -81,8 +81,9 @@ impl<'a> ZoneObjects<'a> {
         self.len() == 0
     }
 
-    pub fn contains(self, object: &ObjectId) -> bool {
-        self.iter().any(|candidate| candidate == object)
+    pub fn contains(self, object: impl Into<ObjectId>) -> bool {
+        let object: ObjectId = object.into();
+        self.iter().any(|candidate| *candidate == object)
     }
 
     pub fn last(self) -> Option<&'a ObjectId> {
@@ -129,7 +130,7 @@ impl ZoneManager {
     fn holder_in(&self, object: ObjectId, zone: ZoneType) -> Option<PlayerId> {
         [PlayerId(0), PlayerId(1)]
             .into_iter()
-            .find(|player| self.zone_objects(zone, *player).contains(&object))
+            .find(|player| self.zone_objects(zone, *player).contains(object))
     }
 
     fn ensure_slot(&mut self, object: ObjectId) {
@@ -138,7 +139,8 @@ impl ZoneManager {
         }
     }
 
-    pub fn zone_of(&self, object: ObjectId) -> Option<ZoneType> {
+    pub fn zone_of(&self, object: impl Into<ObjectId>) -> Option<ZoneType> {
+        let object: ObjectId = object.into();
         self.object_zones.get(object.0).copied().flatten()
     }
 
@@ -158,7 +160,8 @@ impl ZoneManager {
     /// Remove an object from all zones entirely (CR 704.5d — tokens cease to
     /// exist). The object remains in `GameState::objects` but is no
     /// longer in any zone.
-    pub fn remove_object(&mut self, object: ObjectId) {
+    pub fn remove_object(&mut self, object: impl Into<ObjectId>) {
+        let object: ObjectId = object.into();
         if let Some(zone) = self.zone_of(object) {
             self.remove_from_zone(object, zone);
             self.object_zones[object.0] = None;
@@ -172,10 +175,11 @@ impl ZoneManager {
     pub fn move_object(
         &mut self,
         objects: &ObjectVec<Object>,
-        object: ObjectId,
+        object: impl Into<ObjectId>,
         holder: PlayerId,
         to_zone: ZoneType,
     ) {
+        let object: ObjectId = object.into();
         self.ensure_slot(object);
         if let Some(old_zone) = self.zone_of(object) {
             self.remove_from_zone(object, old_zone);
@@ -193,8 +197,9 @@ impl ZoneManager {
         objects.last().copied()
     }
 
-    pub fn contains(&self, object: ObjectId, zone: ZoneType, player: PlayerId) -> bool {
-        self.zone_objects(zone, player).contains(&object)
+    pub fn contains(&self, object: impl Into<ObjectId>, zone: ZoneType, player: PlayerId) -> bool {
+        let object: ObjectId = object.into();
+        self.zone_objects(zone, player).contains(object)
     }
 
     pub fn size(&self, zone: ZoneType, player: PlayerId) -> usize {
@@ -233,7 +238,14 @@ impl ZoneManager {
 
     /// Reorder an existing occupant; `index` is its position after removal,
     /// clamped to the end. This preserves its kind and zone membership.
-    pub fn reposition(&mut self, zone: ZoneType, player: PlayerId, object: ObjectId, index: usize) {
+    pub fn reposition(
+        &mut self,
+        zone: ZoneType,
+        player: PlayerId,
+        object: impl Into<ObjectId>,
+        index: usize,
+    ) {
+        let object: ObjectId = object.into();
         let Some(old) = self
             .zone_objects(zone, player)
             .iter()

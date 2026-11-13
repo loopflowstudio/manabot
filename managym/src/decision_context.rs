@@ -21,7 +21,8 @@ use crate::{
 };
 
 impl Game {
-    fn decision_object(&self, object: ObjectId) -> Option<DecisionObjectView> {
+    fn decision_object(&self, object: impl Into<ObjectId>) -> Option<DecisionObjectView> {
+        let object: ObjectId = object.into();
         let reference = self.current_object_ref(object)?;
         let display_id = self
             .state

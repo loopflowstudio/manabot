@@ -63,7 +63,8 @@ fn public(zone: ZoneType) -> bool {
     )
 }
 
-fn object_reference(game: &Game, object: ObjectId) -> HistoryReference {
+fn object_reference(game: &Game, object: impl Into<ObjectId>) -> HistoryReference {
+    let object: ObjectId = object.into();
     let Some(zone) = game
         .state
         .zones

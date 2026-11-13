@@ -62,7 +62,7 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
             assert_eq!(roster.len(), config.deck.sideboard.values().sum::<usize>());
             for &card in roster {
                 assert_eq!(game.state.objects[card].owner, PlayerId(player));
-                assert_eq!(game.state.zones.zone_of(card.into()), None);
+                assert_eq!(game.state.zones.zone_of(card), None);
                 assert!(!game.state.players[player].deck.contains(&card));
             }
         }

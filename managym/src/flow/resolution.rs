@@ -1668,12 +1668,11 @@ impl Game {
                 let card = self
                     .state
                     .card_id(self.departed_permanent_lki(id)?.object)?;
-                let object_id = ObjectId::from(card);
-                if self.state.zones.zone_of(object_id) != Some(ZoneType::Graveyard) {
+                if self.state.zones.zone_of(card) != Some(ZoneType::Graveyard) {
                     return None;
                 }
                 frame.targets = vec![crate::flow::decision::ResolutionTarget {
-                    target: Target::GraveyardCard(self.current_object_ref(object_id)?),
+                    target: Target::GraveyardCard(self.current_object_ref(card)?),
                     requirement: 0,
                     legal: true,
                 }];
@@ -2117,7 +2116,7 @@ impl Game {
                 .remembered
                 .iter()
                 .map(|binding| binding.object)
-                .filter(|object| self.current_object_ref(object.entity.into()) == Some(*object))
+                .filter(|object| self.current_object_ref(object.entity) == Some(*object))
                 .collect(),
             ObjectSelector::Moved | ObjectSelector::CardsThisWay | ObjectSelector::Selected => {
                 (match what {
@@ -2139,7 +2138,7 @@ impl Game {
                 };
                 self.selection_zone_cards(owner, zone)
                     .into_iter()
-                    .filter_map(|card| self.current_object_ref(card.into()))
+                    .filter_map(|card| self.current_object_ref(card))
                     .collect()
             }
             ObjectSelector::You => Vec::new(),
@@ -2464,7 +2463,8 @@ impl Game {
 
     /// The object's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
-    pub(crate) fn object_mana_value(&self, object: ObjectId) -> u8 {
+    pub(crate) fn object_mana_value(&self, object: impl Into<ObjectId>) -> u8 {
+        let object: ObjectId = object.into();
         let Some(cost) = self.state.objects[object].mana_value_cost() else {
             return 0;
         };

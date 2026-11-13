@@ -1095,10 +1095,11 @@ impl Observation {
     /// Copies of each definition id among `objects`.
     fn definition_counts(
         game: &Game,
-        objects: impl IntoIterator<Item = ObjectId>,
+        objects: impl IntoIterator<Item = impl Into<ObjectId>>,
     ) -> BTreeMap<u32, u32> {
         let mut counts = BTreeMap::new();
         for object in objects {
+            let object: ObjectId = object.into();
             *counts
                 .entry(game.state.objects[object].definition_id.0)
                 .or_default() += 1;
@@ -1141,18 +1142,12 @@ impl Observation {
                     .sideboard
                     .iter()
                     .copied()
-                    .filter(|object| game.state.zones.zone_of((*object).into()).is_none());
+                    .filter(|object| game.state.zones.zone_of(*object).is_none());
                 (
-                    Some(Self::definition_counts(
-                        game,
-                        p.deck.iter().copied().map(ObjectId::from),
-                    )),
+                    Some(Self::definition_counts(game, p.deck.iter().copied())),
                     Some(Self::unseen_counts(game, player, viewer)),
-                    Some(Self::definition_counts(
-                        game,
-                        p.sideboard.iter().copied().map(ObjectId::from),
-                    )),
-                    Some(Self::definition_counts(game, outside.map(ObjectId::from))),
+                    Some(Self::definition_counts(game, p.sideboard.iter().copied())),
+                    Some(Self::definition_counts(game, outside)),
                 )
             } else {
                 (None, None, None, None)
@@ -1214,7 +1209,7 @@ impl Observation {
 
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
-            if game.state.zones.zone_of((*card).into()).is_none() {
+            if game.state.zones.zone_of(*card).is_none() {
                 let record = &game.state.objects[*card];
                 self.agent_sideboard.push(SideboardCardData {
                     candidate_id: record.id.0 as i32,

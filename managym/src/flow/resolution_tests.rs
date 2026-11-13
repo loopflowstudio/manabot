@@ -1062,12 +1062,9 @@ fn hidden_selection_completed_capture_stays_in_sampled_hand() {
                     assert_eq!(objects.len(), 2, "stage {stage}");
                     assert_eq!(objects[0], objects[1], "aliases, stage {stage}");
                     let object = objects[0];
+                    assert_eq!(branch.current_object_ref(object.entity), Some(object));
                     assert_eq!(
-                        branch.current_object_ref(object.entity.into()),
-                        Some(object)
-                    );
-                    assert_eq!(
-                        branch.state.zones.zone_of(object.entity.into()),
+                        branch.state.zones.zone_of(object.entity),
                         Some(ZoneType::Hand)
                     );
                     if viewer == player {
@@ -1181,7 +1178,7 @@ fn hidden_selection_moved_capture_uses_its_new_zone() {
     ] {
         let object = branch.state.delayed_triggers[0].remembered[0].object;
         assert_eq!(
-            branch.state.zones.zone_of(object.entity.into()),
+            branch.state.zones.zone_of(object.entity),
             Some(ZoneType::Library)
         );
     }
@@ -1230,7 +1227,7 @@ fn hidden_selection_known_capture_pins_the_exact_copy_after_control_expires() {
             original
         );
         assert_eq!(
-            branch.state.zones.zone_of(original.entity.into()),
+            branch.state.zones.zone_of(original.entity),
             Some(ZoneType::Hand)
         );
     }
@@ -1332,7 +1329,7 @@ fn hidden_selection_from_remembered_keeps_decision_and_child_aliases() {
                 },
             );
             assert_eq!(
-                branch.state.zones.zone_of(captured.entity.into()),
+                branch.state.zones.zone_of(captured.entity),
                 Some(ZoneType::Exile)
             );
         }
