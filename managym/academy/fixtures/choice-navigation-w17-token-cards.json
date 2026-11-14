@@ -63,6 +63,10 @@
           "label": "Play Island"
         },
         {
+          "offer_id": 2,
+          "label": "Pass priority"
+        },
+        {
           "offer_id": 0,
           "label": "Cast Dragonfly Swarm"
         },
@@ -111,17 +115,17 @@
           "label": "Decline"
         }
       ],
-      "digest": "12cd9cd709eaa350f6cc9a59e20ae445ed780fec26d8ebaf535d31e1a513b406",
+      "digest": "90d3f9307faada02a45d0017c8ad26610346275498fd0502e4d2a1591b2a0343",
       "frame": {
         "protocol": 1,
-        "match_id": "IVts5g2_M5SVmRBAemb5CQ",
-        "revision": 75,
-        "frame_hash": "784d2277dd42454866645d96a6fb90b8f7d616ea228d2897417fb24562af1ec8",
+        "match_id": "vMkJhl4PoII-cZl3OshrQA",
+        "revision": 76,
+        "frame_hash": "36116913326a2622bbe1534cf709005cd2321ddf722cf36c71649afee8c57936",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 76,
+          "id": 77,
           "actor": 0,
           "kind": "choose_target",
           "title": "Targets",
@@ -136,6 +140,7 @@
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
+              "Earth Kingdom Jailer finished resolving.",
               "First-Time Flyer was cast; its announced costs are committed.",
               "First-Time Flyer finished resolving.",
               "Kyoshi Warriors was cast; its announced costs are committed.",
@@ -2208,7 +2213,15 @@
         },
         {
           "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
           "label": "Do not attack with Fire Nation Cadets"
+        },
+        {
+          "offer_id": 1,
+          "label": "Pass priority"
         },
         {
           "offer_id": 1,
@@ -2219,17 +2232,17 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "e1a6fe5dbadcc0d7730ad3daec96e02c50c0bbf31725172c6a130f82662bc7e9",
+      "digest": "da223ebe0cc72f88185b881dd6efce8ea56e65c73b034463041691397b02ddde",
       "frame": {
         "protocol": 1,
-        "match_id": "7a9cmnkwHGvBfrevAPu9Bw",
-        "revision": 65,
-        "frame_hash": "1bab86036d098b26b577cb7ad5d4ea6bd668e0bc44f31272aac3231cdb28fe3f",
+        "match_id": "DSPfJGN5KtzkOrdthRijiA",
+        "revision": 67,
+        "frame_hash": "8ce6de1c68f8df51255e6513eee13a68498de79f047cd05c6c11ac309598b673",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 66,
+          "id": 68,
           "actor": 0,
           "kind": "learn",
           "title": "Learn",
@@ -3945,17 +3958,17 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "f6b8ea29d3438c439fdcca9b2fb148cf69bc6bb408d033655145ee1eb0027af6",
+      "digest": "1252d372cd7948f3de96c13e34ef91949fd981512ed39d7d836bdf97fb6fba61",
       "frame": {
         "protocol": 1,
-        "match_id": "aGozylxiGEKkEZ4dkNEy7Q",
-        "revision": 90,
-        "frame_hash": "51a88ffa7fd3eb851d9a3dcb6272b5276fd4db3a7d38337cc4d30601505c384f",
+        "match_id": "sRpLX7QjxSpQgHlzcUmKWw",
+        "revision": 81,
+        "frame_hash": "864764336fed34ce53e60a0cd1f33c1afbdce9fde9e77f3af7787f70910e9fdc",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 91,
+          "id": 82,
           "actor": 0,
           "kind": "discard",
           "title": "Discard",
@@ -3970,8 +3983,8 @@
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
-              "Badgermole Cub was cast; its announced costs are committed.",
-              "Badgermole Cub finished resolving."
+              "Invasion Reinforcements was cast; its announced costs are committed.",
+              "Invasion Reinforcements finished resolving."
             ],
             "actor": 0,
             "stage": "discard",
@@ -4952,11 +4965,11 @@
             "id": 1,
             "is_active": false,
             "is_agent": false,
-            "life": 23,
+            "life": 22,
             "zone_counts": {
               "LIBRARY": 22,
               "HAND": 4,
-              "BATTLEFIELD": 13,
+              "BATTLEFIELD": 14,
               "GRAVEYARD": 1,
               "STACK": 0,
               "EXILE": 0,
@@ -4964,8 +4977,8 @@
             },
             "library_count": 22,
             "known_hand": {
-              "108": 1,
-              "354": 1
+              "75": 1,
+              "108": 1
             },
             "main_counts": {
               "20": 2,
@@ -4986,14 +4999,15 @@
             },
             "unseen_counts": {
               "20": 2,
-              "75": 1,
+              "36": 1,
               "108": 1,
               "110": 2,
               "134": 2,
-              "170": 4,
-              "208": 2,
+              "170": 3,
+              "208": 1,
               "241": 2,
-              "288": 5,
+              "288": 6,
+              "354": 1,
               "364": 1,
               "444": 1,
               "452": 1
@@ -5075,11 +5089,11 @@
                 "tapped": true,
                 "damage": 0,
                 "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
-                "plus1_counters": 2,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 1,
                 "effects": [
                   {
                     "modification": "BecomeCreature",
@@ -5103,29 +5117,6 @@
                     "duration": "Indefinite",
                     "source": "Badgermole Cub",
                     "timestamp": 98
-                  },
-                  {
-                    "modification": "BecomeCreature",
-                    "duration": "Indefinite",
-                    "source": "Badgermole Cub",
-                    "timestamp": 141
-                  },
-                  {
-                    "modification": "SetBasePt",
-                    "power": 0,
-                    "toughness": 0,
-                    "duration": "Indefinite",
-                    "source": "Badgermole Cub",
-                    "timestamp": 141
-                  },
-                  {
-                    "modification": "AddKeywords",
-                    "keywords": [
-                      "haste"
-                    ],
-                    "duration": "Indefinite",
-                    "source": "Badgermole Cub",
-                    "timestamp": 141
                   }
                 ]
               },
@@ -5168,7 +5159,7 @@
                 "id": 112,
                 "name": "White Lotus Reinforcements",
                 "controller_id": 1,
-                "tapped": false,
+                "tapped": true,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 2,
@@ -5203,7 +5194,7 @@
               },
               {
                 "types": {
-                  "is_creature": true,
+                  "is_creature": false,
                   "is_land": true,
                   "is_spell": false,
                   "is_artifact": false,
@@ -5219,36 +5210,11 @@
                 "tapped": true,
                 "damage": 0,
                 "summoning_sick": false,
-                "power": 1,
-                "toughness": 1,
-                "base_power": 1,
-                "base_toughness": 1,
-                "plus1_counters": 1,
-                "effects": [
-                  {
-                    "modification": "BecomeCreature",
-                    "duration": "Indefinite",
-                    "source": "Badgermole Cub",
-                    "timestamp": 127
-                  },
-                  {
-                    "modification": "SetBasePt",
-                    "power": 0,
-                    "toughness": 0,
-                    "duration": "Indefinite",
-                    "source": "Badgermole Cub",
-                    "timestamp": 127
-                  },
-                  {
-                    "modification": "AddKeywords",
-                    "keywords": [
-                      "haste"
-                    ],
-                    "duration": "Indefinite",
-                    "source": "Badgermole Cub",
-                    "timestamp": 127
-                  }
-                ]
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
+                "plus1_counters": 0
               },
               {
                 "types": {
@@ -5276,30 +5242,6 @@
               },
               {
                 "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
-                "id": 119,
-                "name": "Water Tribe Rallier",
-                "controller_id": 1,
-                "tapped": true,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 3,
-                "toughness": 3,
-                "base_power": 3,
-                "base_toughness": 3,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
                   "is_creature": false,
                   "is_land": true,
                   "is_spell": false,
@@ -5310,7 +5252,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 123,
+                "id": 119,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -5333,13 +5275,133 @@
                   "is_battle": false
                 },
                 "is_token": false,
-                "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+                "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+                "id": 121,
+                "name": "Water Tribe Rallier",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "({T}: Add {G}.)",
                 "id": 125,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 1,
+                "effects": [
+                  {
+                    "modification": "BecomeCreature",
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 130
+                  },
+                  {
+                    "modification": "SetBasePt",
+                    "power": 0,
+                    "toughness": 0,
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 130
+                  },
+                  {
+                    "modification": "AddKeywords",
+                    "keywords": [
+                      "haste"
+                    ],
+                    "duration": "Indefinite",
+                    "source": "Badgermole Cub",
+                    "timestamp": 130
+                  }
+                ]
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+                "id": 128,
                 "name": "Badgermole Cub",
                 "controller_id": 1,
                 "tapped": true,
                 "damage": 0,
                 "summoning_sick": false,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "Flash\nWhen this creature enters, create a 1/1 white Ally creature token.",
+                "id": 136,
+                "name": "Invasion Reinforcements",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": true,
+                "id": 139,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
                 "power": 2,
                 "toughness": 2,
                 "base_power": 2,
@@ -5358,33 +5420,9 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 131,
+                "id": 140,
                 "name": "Forest",
                 "controller_id": 1,
-                "tapped": true,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 0,
-                "toughness": 0,
-                "base_power": 0,
-                "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": false,
-                  "is_land": true,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "({T}: Add {W}.)",
-                "id": 137,
-                "name": "Plains",
-                "controller_id": 1,
                 "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
@@ -5392,30 +5430,6 @@
                 "toughness": 0,
                 "base_power": 0,
                 "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
-                "id": 139,
-                "name": "Badgermole Cub",
-                "controller_id": 1,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": true,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
                 "plus1_counters": 0
               }
             ]
@@ -5759,19 +5773,27 @@
         {
           "offer_id": 0,
           "label": "Cast Otter-Penguin"
+        },
+        {
+          "offer_id": 2,
+          "label": "Cast Otter-Penguin"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Mountain"
         }
       ],
-      "digest": "9030f31a691347dbdae876ad135915c4b82a210b0e75727dbc718e9f5e3f81be",
+      "digest": "9fe400a2f7befda35b9543c4f384a50edea4f43f61c9d388ce0ee6f2387c3af2",
       "frame": {
         "protocol": 1,
-        "match_id": "RDfNT3Ccqi2fy0lJMWb-4A",
-        "revision": 37,
-        "frame_hash": "c62e1654fe3d43b1d7d65ad003b0adb6c164563a495af0cd8fcf88c5f8cba33a",
+        "match_id": "Rij3NGaX-LfrY-CBpTSLiQ",
+        "revision": 52,
+        "frame_hash": "e7dd15d1ce3a6a8b4a41191f1b9d767e9c5414001d95079232dda2c8bbf7777b",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 38,
+          "id": 53,
           "actor": 0,
           "kind": "declare_blocker",
           "title": "Declare blockers",
@@ -5789,12 +5811,11 @@
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
-              "Firebending Lesson was cast; its announced costs are committed.",
-              "Firebending Lesson finished resolving.",
+              "Allies at Last finished resolving.",
               "Otter-Penguin was cast; its announced costs are committed.",
               "Otter-Penguin finished resolving.",
-              "Earth Kingdom Jailer was cast; its announced costs are committed.",
-              "Earth Kingdom Jailer finished resolving."
+              "Compassionate Healer was cast; its announced costs are committed.",
+              "Compassionate Healer finished resolving."
             ],
             "actor": 0,
             "stage": "declare_blockers",
@@ -6280,7 +6301,7 @@
           "game_over": false,
           "won": false,
           "turn": {
-            "turn_number": 8,
+            "turn_number": 10,
             "phase": "COMBAT",
             "step": "COMBAT_DECLARE_BLOCKERS",
             "active_player_id": 1,
@@ -6308,17 +6329,17 @@
             "id": 0,
             "is_active": false,
             "is_agent": true,
-            "life": 20,
+            "life": 17,
             "zone_counts": {
-              "LIBRARY": 30,
-              "HAND": 3,
-              "BATTLEFIELD": 4,
-              "GRAVEYARD": 4,
+              "LIBRARY": 29,
+              "HAND": 2,
+              "BATTLEFIELD": 5,
+              "GRAVEYARD": 5,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 30,
+            "library_count": 29,
             "main_counts": {
               "11": 2,
               "100": 2,
@@ -6346,7 +6367,7 @@
               "203": 2,
               "215": 8,
               "216": 2,
-              "270": 6,
+              "270": 5,
               "291": 1,
               "402": 2
             },
@@ -6418,26 +6439,6 @@
                   "is_creature": false,
                   "is_land": false,
                   "is_spell": true,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
-              {
-                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
-                "id": 38,
-                "registry_key": 281,
-                "name": "Otter-Penguin",
-                "zone": "HAND",
-                "owner_id": 0,
-                "power": 2,
-                "toughness": 1,
-                "mana_value": 2,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
                   "is_artifact": false,
                   "is_enchantment": false,
                   "is_planeswalker": false,
@@ -6525,6 +6526,26 @@
                   "is_planeswalker": false,
                   "is_battle": false
                 }
+              },
+              {
+                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+                "id": 37,
+                "registry_key": 281,
+                "name": "Otter-Penguin",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 2,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
               }
             ],
             "exile": [],
@@ -6593,7 +6614,7 @@
                 "id": 99,
                 "name": "Mountain",
                 "controller_id": 0,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -6614,7 +6635,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
-                "id": 110,
+                "id": 119,
                 "name": "Otter-Penguin",
                 "controller_id": 0,
                 "tapped": false,
@@ -6624,6 +6645,30 @@
                 "toughness": 1,
                 "base_power": 2,
                 "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "({T}: Add {R}.)",
+                "id": 120,
+                "name": "Mountain",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
                 "plus1_counters": 0
               }
             ]
@@ -6650,17 +6695,17 @@
             "id": 1,
             "is_active": true,
             "is_agent": false,
-            "life": 22,
+            "life": 23,
             "zone_counts": {
-              "LIBRARY": 29,
-              "HAND": 4,
-              "BATTLEFIELD": 7,
-              "GRAVEYARD": 0,
+              "LIBRARY": 28,
+              "HAND": 2,
+              "BATTLEFIELD": 9,
+              "GRAVEYARD": 1,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 29,
+            "library_count": 28,
             "main_counts": {
               "20": 2,
               "36": 2,
@@ -6679,13 +6724,13 @@
               "457": 1
             },
             "unseen_counts": {
-              "20": 2,
+              "20": 1,
               "36": 2,
-              "75": 2,
+              "75": 1,
               "108": 1,
               "110": 1,
               "134": 2,
-              "170": 7,
+              "170": 6,
               "208": 2,
               "241": 2,
               "288": 6,
@@ -6702,7 +6747,7 @@
               "134": 1,
               "457": 1
             },
-            "hand_hidden_count": 4,
+            "hand_hidden_count": 2,
             "turn_history": {
               "attacked": true,
               "land_entered": true,
@@ -6710,7 +6755,28 @@
             },
             "spells_cast": 1,
             "hand": [],
-            "graveyard": [],
+            "graveyard": [
+              {
+                "text_box": "Affinity for Allies (This spell costs {1} less to cast for each Ally you control.)\nUp to two target creatures you control each deal damage equal to their power to target creature an opponent controls.",
+                "id": 44,
+                "registry_key": 20,
+                "name": "Allies at Last",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              }
+            ],
             "exile": [],
             "stack": [],
             "battlefield": [
@@ -6753,7 +6819,7 @@
                 "id": 95,
                 "name": "Forest",
                 "controller_id": 1,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -6826,15 +6892,14 @@
                 "id": 105,
                 "name": "Earth King's Lieutenant",
                 "controller_id": 1,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
-                "plus1_counters": 1,
-                "attacking": true
+                "power": 3,
+                "toughness": 3,
+                "base_power": 3,
+                "base_toughness": 3,
+                "plus1_counters": 2
               },
               {
                 "types": {
@@ -6877,11 +6942,59 @@
                 "controller_id": 1,
                 "tapped": false,
                 "damage": 0,
-                "summoning_sick": true,
+                "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
                 "base_power": 3,
                 "base_toughness": 3,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
+                "id": 122,
+                "name": "Compassionate Healer",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": true,
+                "power": 2,
+                "toughness": 2,
+                "base_power": 2,
+                "base_toughness": 2,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "({T}: Add {G}.)",
+                "id": 125,
+                "name": "Forest",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
                 "plus1_counters": 0
               }
             ]
@@ -6893,62 +7006,15 @@
               {
                 "role": "choice",
                 "object": {
-                  "entity_id": 35,
+                  "entity_id": 36,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 110,
+                      "entity": 119,
                       "incarnation": 2
                     }
                   },
-                  "display_id": 110,
-                  "label": "Otter-Penguin"
-                }
-              },
-              {
-                "role": "target",
-                "object": {
-                  "entity_id": 48,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 105,
-                      "incarnation": 3
-                    }
-                  },
-                  "display_id": 105,
-                  "label": "Earth King's Lieutenant"
-                }
-              }
-            ],
-            "id": 0,
-            "actor": 0,
-            "verb": "declare_blockers",
-            "source": null,
-            "label": "Block Earth King's Lieutenant with Otter-Penguin",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Block Earth King's Lieutenant with Otter-Penguin",
-            "action_type": "DECLARE_BLOCKER",
-            "focus": [
-              110,
-              105
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "choice",
-                "object": {
-                  "entity_id": 35,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 110,
-                      "incarnation": 2
-                    }
-                  },
-                  "display_id": 110,
+                  "display_id": 119,
                   "label": "Otter-Penguin"
                 }
               },
@@ -6968,7 +7034,7 @@
                 }
               }
             ],
-            "id": 1,
+            "id": 0,
             "actor": 0,
             "verb": "declare_blockers",
             "source": null,
@@ -6978,7 +7044,7 @@
             "confirm_label": "Block South Pole Voyager with Otter-Penguin",
             "action_type": "DECLARE_BLOCKER",
             "focus": [
-              110,
+              119,
               97
             ]
           },
@@ -6987,20 +7053,20 @@
               {
                 "role": "choice",
                 "object": {
-                  "entity_id": 35,
+                  "entity_id": 36,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 110,
+                      "entity": 119,
                       "incarnation": 2
                     }
                   },
-                  "display_id": 110,
+                  "display_id": 119,
                   "label": "Otter-Penguin"
                 }
               }
             ],
-            "id": 2,
+            "id": 1,
             "actor": 0,
             "verb": "declare_blockers",
             "source": null,
@@ -7010,7 +7076,7 @@
             "confirm_label": "Otter-Penguin: do not block",
             "action_type": "DECLARE_BLOCKER",
             "focus": [
-              110
+              119
             ]
           }
         ],
@@ -7105,11 +7171,15 @@
         },
         {
           "offer_id": 2,
-          "label": "Otter-Penguin: do not block"
+          "label": "Cast Otter-Penguin"
         },
         {
-          "offer_id": 3,
+          "offer_id": 0,
           "label": "Play Mountain"
+        },
+        {
+          "offer_id": 1,
+          "label": "Otter-Penguin: do not block"
         },
         {
           "offer_id": 1,
@@ -7121,18 +7191,26 @@
         },
         {
           "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 1,
           "label": "Do not attack with Otter-Penguin"
         },
         {
           "offer_id": 1,
+          "label": "Pass priority"
+        },
+        {
+          "offer_id": 3,
           "label": "Otter-Penguin: do not block"
         },
         {
-          "offer_id": 1,
+          "offer_id": 0,
           "label": "Play Island"
         },
         {
-          "offer_id": 1,
+          "offer_id": 0,
           "label": "Cast Tiger-Seal"
         },
         {
@@ -7140,17 +7218,17 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "baacf076b8ba38ecf9b30927c8c0c6d1a2e9807b26f7d9c5b5542b4d3a45e864",
+      "digest": "b8054f8fe62a44aedba39afbf3607369addc73ce1a8cad03931a3bfc8fadd018",
       "frame": {
         "protocol": 1,
-        "match_id": "9n9CjOuc8wSiNtXN6gq4Ag",
-        "revision": 57,
-        "frame_hash": "ec0ba3ba48e51f42952a6b695e61f938db0d452ddcdea99e805c0f12b593cf10",
+        "match_id": "p3OVk_iWgkak9IbRVXCA3A",
+        "revision": 77,
+        "frame_hash": "6c4c289198426e98bfa49abdedde2f531c40e4eb0b7c67bae1cba99102eb3ad9",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 58,
+          "id": 78,
           "actor": 0,
           "kind": "pay_or_not",
           "title": "Resolution payment",
@@ -7164,13 +7242,13 @@
           "player_controls": [],
           "stack_objects": [
             {
-              "id": 130,
+              "id": 142,
               "kind": "spell",
               "controller": 0,
               "label": "It'll Quench Ya!"
             },
             {
-              "id": 129,
+              "id": 141,
               "kind": "spell",
               "controller": 0,
               "label": "Tiger-Seal"
@@ -7178,10 +7256,9 @@
           ],
           "decision_context": {
             "recent_facts": [
-              "Allies at Last was cast; its announced costs are committed.",
-              "Allies at Last finished resolving.",
-              "Compassionate Healer was cast; its announced costs are committed.",
-              "Compassionate Healer finished resolving.",
+              "Pop Quiz finished resolving.",
+              "Yip Yip! was cast; its announced costs are committed.",
+              "Yip Yip! finished resolving.",
               "Tiger-Seal was cast; its announced costs are committed.",
               "It'll Quench Ya! was cast; its announced costs are committed."
             ],
@@ -7696,7 +7773,7 @@
           "game_over": false,
           "won": false,
           "turn": {
-            "turn_number": 11,
+            "turn_number": 13,
             "phase": "PRECOMBAT_MAIN",
             "step": "PRECOMBAT_MAIN_STEP",
             "active_player_id": 0,
@@ -7707,7 +7784,7 @@
               0,
               0,
               0,
-              2,
+              0,
               0,
               0
             ],
@@ -7724,17 +7801,17 @@
             "id": 0,
             "is_active": true,
             "is_agent": true,
-            "life": 12,
+            "life": 5,
             "zone_counts": {
-              "LIBRARY": 26,
+              "LIBRARY": 25,
               "HAND": 1,
               "BATTLEFIELD": 6,
-              "GRAVEYARD": 6,
+              "GRAVEYARD": 7,
               "STACK": 2,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 26,
+            "library_count": 25,
             "main_counts": {
               "11": 2,
               "100": 2,
@@ -7762,7 +7839,7 @@
               "203": 2,
               "215": 7,
               "216": 1,
-              "270": 5,
+              "270": 4,
               "291": 1,
               "402": 1
             },
@@ -7806,18 +7883,18 @@
             "spells_cast": 2,
             "hand": [
               {
-                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
-                "id": 38,
-                "registry_key": 281,
-                "name": "Otter-Penguin",
+                "text_box": "({T}: Add {R}.)",
+                "id": 32,
+                "registry_key": 270,
+                "name": "Mountain",
                 "zone": "HAND",
                 "owner_id": 0,
-                "power": 2,
-                "toughness": 1,
-                "mana_value": 2,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 0,
                 "types": {
-                  "is_creature": true,
-                  "is_land": false,
+                  "is_creature": false,
+                  "is_land": true,
                   "is_spell": false,
                   "is_artifact": false,
                   "is_enchantment": false,
@@ -7901,6 +7978,26 @@
                   "is_creature": false,
                   "is_land": false,
                   "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
+                "id": 37,
+                "registry_key": 281,
+                "name": "Otter-Penguin",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 2,
+                "toughness": 1,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
                   "is_artifact": false,
                   "is_enchantment": false,
                   "is_planeswalker": false,
@@ -8055,7 +8152,7 @@
                 "id": 99,
                 "name": "Mountain",
                 "controller_id": 0,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -8076,7 +8173,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
-                "id": 110,
+                "id": 119,
                 "name": "Otter-Penguin",
                 "controller_id": 0,
                 "tapped": false,
@@ -8100,10 +8197,10 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {R}.)",
-                "id": 117,
+                "id": 120,
                 "name": "Mountain",
                 "controller_id": 0,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -8124,7 +8221,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 128,
+                "id": 140,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": true,
@@ -8160,17 +8257,17 @@
             "id": 1,
             "is_active": false,
             "is_agent": false,
-            "life": 23,
+            "life": 25,
             "zone_counts": {
-              "LIBRARY": 28,
-              "HAND": 2,
-              "BATTLEFIELD": 9,
-              "GRAVEYARD": 1,
+              "LIBRARY": 26,
+              "HAND": 1,
+              "BATTLEFIELD": 11,
+              "GRAVEYARD": 2,
               "STACK": 0,
               "EXILE": 0,
               "COMMAND": 0
             },
-            "library_count": 28,
+            "library_count": 26,
             "main_counts": {
               "20": 2,
               "36": 2,
@@ -8192,17 +8289,15 @@
               "20": 1,
               "36": 2,
               "75": 1,
-              "108": 1,
               "110": 1,
               "134": 2,
-              "170": 6,
+              "170": 5,
               "208": 2,
               "241": 2,
               "288": 6,
               "364": 1,
               "444": 2,
-              "452": 2,
-              "457": 1
+              "452": 2
             },
             "sideboard_counts": {
               "134": 1,
@@ -8212,7 +8307,7 @@
               "134": 1,
               "457": 1
             },
-            "hand_hidden_count": 2,
+            "hand_hidden_count": 1,
             "hand": [],
             "graveyard": [
               {
@@ -8225,6 +8320,26 @@
                 "power": 0,
                 "toughness": 0,
                 "mana_value": 3,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn.",
+                "id": 82,
+                "registry_key": 457,
+                "name": "Yip Yip!",
+                "zone": "GRAVEYARD",
+                "owner_id": 1,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 1,
                 "types": {
                   "is_creature": false,
                   "is_land": false,
@@ -8278,7 +8393,7 @@
                 "id": 95,
                 "name": "Forest",
                 "controller_id": 1,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -8302,14 +8417,14 @@
                 "id": 97,
                 "name": "South Pole Voyager",
                 "controller_id": 1,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
-                "power": 3,
-                "toughness": 3,
-                "base_power": 3,
-                "base_toughness": 3,
-                "plus1_counters": 1
+                "power": 4,
+                "toughness": 4,
+                "base_power": 4,
+                "base_toughness": 4,
+                "plus1_counters": 2
               },
               {
                 "types": {
@@ -8326,7 +8441,7 @@
                 "id": 103,
                 "name": "Plains",
                 "controller_id": 1,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -8350,14 +8465,14 @@
                 "id": 105,
                 "name": "Earth King's Lieutenant",
                 "controller_id": 1,
-                "tapped": false,
+                "tapped": true,
                 "damage": 0,
                 "summoning_sick": false,
-                "power": 3,
-                "toughness": 3,
-                "base_power": 3,
-                "base_toughness": 3,
-                "plus1_counters": 2
+                "power": 5,
+                "toughness": 5,
+                "base_power": 5,
+                "base_toughness": 5,
+                "plus1_counters": 4
               },
               {
                 "types": {
@@ -8374,7 +8489,7 @@
                 "id": 111,
                 "name": "Plains",
                 "controller_id": 1,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -8401,11 +8516,35 @@
                 "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
+                "power": 4,
+                "toughness": 4,
+                "base_power": 4,
+                "base_toughness": 4,
+                "plus1_counters": 1
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
+                "id": 122,
+                "name": "Compassionate Healer",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
                 "base_power": 3,
                 "base_toughness": 3,
-                "plus1_counters": 0
+                "plus1_counters": 1
               },
               {
                 "types": {
@@ -8419,7 +8558,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 123,
+                "id": 125,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": false,
@@ -8442,17 +8581,41 @@
                   "is_battle": false
                 },
                 "is_token": false,
-                "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
-                "id": 125,
-                "name": "Compassionate Healer",
+                "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
+                "id": 127,
+                "name": "Earth King's Lieutenant",
+                "controller_id": 1,
+                "tapped": true,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "({T}: Add {G}.)",
+                "id": 135,
+                "name": "Forest",
                 "controller_id": 1,
                 "tapped": false,
                 "damage": 0,
-                "summoning_sick": true,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 2,
-                "base_toughness": 2,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
                 "plus1_counters": 0
               }
             ]
