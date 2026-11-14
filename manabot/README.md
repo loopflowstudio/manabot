@@ -17,6 +17,7 @@ uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
 uv run manabot train --learning-seats one  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz  # one recorded training game, for Academy
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
@@ -398,6 +399,37 @@ Each current experiment is one module in [experiments/](../experiments/), holdin
 its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
+
+### Watch a game the loop played
+
+```python
+from pathlib import Path
+
+from manabot.sim.recording import record_games
+from manabot.training.loops.minimal import train
+
+with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
+    train(8)
+path = games.sample(seed=0).export(Path("jace.game.jsonl.gz"))
+```
+
+```bash
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+`record_games` keeps a receipt of every game the collectors inside the block
+play (seed, decks, chosen actions) without changing the loop. `sample` picks
+one complete game; `export` replays its actions through the engine, checks
+each decision's option count against the receipt and writes one Command game
+bound to the current world, labelled a training game with the player names you
+gave. Academy steps through it with no policy or checkpoint. `uv run manabot
+export-game <directory> --out <path>` lists a recorded directory's games and exports one,
+including a `training/exposure` directory downloaded from a run. Games cut off
+when the loop stopped are counted and not exported. A fresh game between
+current policies is an evaluation game, not a training game; evaluation writes
+those. The
+[Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
+selection, naming the seats and failures.
 
 The reference league's TrainingJob enables private exposure capture through the
 ordinary native vector collector. Digest-bound game receipts preserve actual

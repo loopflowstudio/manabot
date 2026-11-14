@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-import subprocess
 from urllib.parse import urlencode
 
 from etude.run.storage import storage_from_uri
@@ -102,12 +101,6 @@ def main() -> None:
     )
     if args.prepare_only:
         return
-    if not args.offline:
-        subprocess.run(
-            ["node", str(ROOT / "academy/ui/scripts/fetch-card-art.mjs")],
-            cwd=ROOT,
-            check=True,
-        )
     digest = inspect_checkpoint(checkpoint).sha256
     query = urlencode(
         {"hero": "elemental_ur", "villain": "elemental_gw", "opponent": digest}

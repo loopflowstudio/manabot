@@ -81,8 +81,8 @@ def test_cli_smoke_and_named_recipe(
             stages=[SimpleNamespace(artifacts={"raw": {"path": "policy.pt"}})],
         )
 
-    monkeypatch.setattr(cli, "run_local", run)
-    monkeypatch.setattr(cli, "run_baseline", run)
+    monkeypatch.setattr("manabot.recipes.local.run_local", run)
+    monkeypatch.setattr("manabot.recipes.baseline.run_baseline", run)
     runner = CliRunner()
     result = runner.invoke(cli.app, ["train"])
     assert result.exit_code == 0, result.output

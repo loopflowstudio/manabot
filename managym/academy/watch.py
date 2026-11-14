@@ -15,6 +15,7 @@ from managym.bots import BotPolicy, choose_bot
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
 from .extensions import bot_extension
+from .launch import refuse_training_receipt
 from .replay_index import DecisionAddressV2, load_canonical_replay
 from .trace import load_trace
 from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
@@ -155,6 +156,7 @@ def inspect_watch(
     observation = row.frame.projection.model_dump(mode="json")
     if reveal:
         observation = event["analysis_observation"]
+    opponent = payload["config"].get("opponent") or {}
     return {
         "id": trace_id,
         "decision": {**row.model_dump(mode="json"), "address": address},
@@ -166,6 +168,9 @@ def inspect_watch(
         "revision": row.revision,
         "winner": payload.get("winner"),
         "players": payload["config"]["watch_players"],
+        "source_kind": opponent.get(
+            "source_kind", "evaluation" if opponent.get("kind") == "arena" else None
+        ),
         "identities": AttemptStore(server.trace_store.TRACES_DIR / "play.sqlite")
         .metadata(trace_id)
         .get("players", []),
@@ -173,7 +178,7 @@ def inspect_watch(
 
 
 def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
-    """Verify an arena/Tournament game, then project its Commands without policies.
+    """Verify a training or evaluation game, then project its Commands without policies.
 
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.
@@ -183,7 +188,18 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     extension = bot_extension()
     if extension is None:
         raise HTTPException(400, "arena_import_unavailable")
+    refuse_training_receipt(game_record)
     arena = extension.verify_arena(game_record)
+    # Verify the supplied bytes even when the source identity was imported before.
+    existing = AttemptStore(
+        server.trace_store.TRACES_DIR / "play.sqlite"
+    ).arena_recording(game_record["game_trace_sha256"])
+    if existing is not None:
+        return {
+            "id": existing,
+            "finished": True,
+            "source_sha256": game_record["game_trace_sha256"],
+        }
     request = WatchRequest(
         players=["random", "random"],
         hero_deck="interactive",
@@ -225,6 +241,9 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
             watch_players=list(game_record["seat_players"]),
             opponent={
                 "kind": "arena",
+                "source_kind": (game_record.get("source") or {}).get(
+                    "kind", "evaluation"
+                ),
                 "name": str(game_record["match_id"]),
                 "sha256": game_record["game_trace_sha256"],
             },

@@ -36,7 +36,8 @@ test('opens formatted arena JSON as one game', async ({ page }) => {
   });
   await page.goto('/replay?watch=1');
   await expect(page.getByRole('button', { name: 'Start watching' })).toBeEnabled();
-  await page.getByLabel('Open arena game').setInputFiles({
+  await expect(page.getByLabel('Open a game file')).toHaveAccessibleDescription('An exported training game or an evaluation trace');
+  await page.getByLabel('Open a game file').setInputFiles({
     name: 'game.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(game, null, 2)),

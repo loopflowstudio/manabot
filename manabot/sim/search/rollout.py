@@ -17,7 +17,7 @@ from numpy.typing import NDArray
 
 from manabot.sim.search.branch import BranchSession
 from manabot.sim.search.rollout_receipt import RolloutReceipt
-from manabot.sim.search.sampling import HandSample
+from manabot.sim.search.sampling_receipt import HandSample
 import managym
 
 

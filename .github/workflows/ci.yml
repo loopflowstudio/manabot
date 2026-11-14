@@ -17,6 +17,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  ACADEMY_CARD_ART: "off"
+
 jobs:
   # Job-level filters keep the required aggregate present, even for docs-only
   # PRs. Renames select both old and new paths; manual runs exercise all jobs.
@@ -258,8 +261,10 @@ jobs:
           uv pip install --python .venv/bin/python \
             --default-index https://download.pytorch.org/whl/cpu torch==2.15.0
 
-      - name: Build Python extension
-        run: uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
+      - name: Build Python extension and register optional bot provider
+        run: |
+          uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
+          uv pip install --python .venv/bin/python --no-deps --editable .
 
       - name: Install frontend and Chromium
         working-directory: academy/ui
@@ -273,6 +278,8 @@ jobs:
           npm test
           npm run check
           npm run test:e2e:release
+          ACADEMY_STATIC_BUILD=1 npm run build
+          npm run test:e2e:launch
 
       - name: Upload browser failure evidence
         if: failure()

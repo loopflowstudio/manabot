@@ -121,6 +121,7 @@ def _artifacts(directory: Path) -> None:
             metadata += (
                 "Requires-Dist: numpy>=1.24.0\nRequires-Dist: pydantic>=2.12.0\n"
                 "Requires-Dist: fastapi>=0.116.0; extra == 'academy'\n"
+                "Requires-Dist: typer>=0.12.5; extra == 'academy'\n"
                 "Requires-Dist: uvicorn[standard]>=0.34.0; extra == 'academy'\n"
             )
             tags = [
