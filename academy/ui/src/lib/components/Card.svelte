@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
+  import { PRESENTATION_CONTEXT, presentationSubjects, type PresentationEvent } from '$lib/presentation';
   import CardImage from './CardImage.svelte';
 
   // A printed plate and the things a print shop does to it: turned and
@@ -47,6 +49,12 @@
     onHoverEnd = undefined,
   }: Props = $props();
 
+  const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
+  const narrated = $derived.by(() => {
+    const event = narratedEvent?.();
+    return event && presentationSubjects(event).some(subject => subject.kind === 'object' && subject.id.incarnation === 0 && subject.id.entity === objectId) ? event.seq : undefined;
+  });
+
   // Tapped cards are landscape: the footprint turns with the card, so
   // rows never shingle and names never read sideways.
   const dims = $derived(
@@ -80,6 +88,7 @@
 
 <button
   data-object-id={objectId}
+  data-narrated-seq={narrated}
   type="button"
   aria-label={accessibleName}
   aria-disabled={!clickable}
@@ -173,6 +182,7 @@
 </button>
 
 <style>
+  [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
   .spent {
     outline: 1px dashed var(--border);
   }

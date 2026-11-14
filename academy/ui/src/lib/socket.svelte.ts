@@ -6,10 +6,11 @@ import { checkpointChoice, gameStore } from './game.svelte';
 import {
   mergePresentationLabels,
   presentationLabelsFromFrame,
+  presentationLabelsFromObservation,
   validatePresentationTail,
   validatePresentationUpdate,
 } from './presentation';
-import { presentationPlayer } from './presentation.svelte';
+import { presentationPlayer, studyPresentationPlayer } from './presentation.svelte';
 import type { RestoredReplayDecision } from './replay-index';
 import type {
   BranchRetryPayload,
@@ -135,6 +136,7 @@ export class GameSocketController {
   private outboundQueue: SharedTableRequest[] = [];
   private inFlightCommand: string | null = null;
   private presentationCursor: number | null = null;
+  private loadingHistory = false;
 
   connect(): void {
     if (!browser) {
@@ -172,9 +174,17 @@ export class GameSocketController {
       if (!this.outboundQueue.some((message) => message.type === 'new_game')) {
         const credentials = loadResumeCredentials();
         if (credentials) {
-          this.presentationCursor = credentials.presentation_cursor ?? null;
+          this.loadingHistory = this.presentationCursor === null;
           this.pendingResume = true;
-          this.send({ type: 'resume', ...credentials });
+          // A persisted cursor outlives the in-memory history. Only request a
+          // delta while this controller still owns that history; reloads need
+          // the server's bounded tail as well as the authoritative frame.
+          this.send({
+            type: 'resume',
+            session_id: credentials.session_id,
+            resume_token: credentials.resume_token,
+            ...(this.presentationCursor === null ? {} : { presentation_cursor: this.presentationCursor }),
+          });
           return;
         }
       }
@@ -442,18 +452,26 @@ export class GameSocketController {
 
     if (message.type === 'decision_restored') {
       gameStore.restoreDecision(message.restored);
+      this.restoreStudyHistory(message.restored);
       return;
     }
 
     if (message.type === 'branch_updated') {
       if (message.phase === 'retry') {
-        gameStore.applyBranchRetry(message.payload as BranchRetryPayload);
+        const payload = message.payload as BranchRetryPayload;
+        gameStore.applyBranchRetry(payload);
+        studyPresentationPlayer.loadEvents(payload.retry.presentation, mergePresentationLabels(
+          ...(gameStore.restoredDecision ? [presentationLabelsFromFrame(gameStore.restoredDecision.frame)] : []),
+          presentationLabelsFromObservation(payload.retry.projection),
+        ), `study:${payload.attempt_id}`);
       }
       return;
     }
 
     if (message.type === 'branch_returned') {
-      gameStore.returnBranch(message.restored as RestoredReplayDecision);
+      const restored = message.restored as RestoredReplayDecision;
+      gameStore.returnBranch(restored);
+      this.restoreStudyHistory(restored);
       return;
     }
 
@@ -548,6 +566,15 @@ export class GameSocketController {
     gameStore.setError(message.message);
   }
 
+  private restoreStudyHistory(restored: RestoredReplayDecision): void {
+    presentationPlayer.finishSequence();
+    studyPresentationPlayer.loadPrefix(presentationPlayer.events.flatMap((event, index) =>
+      event.to_revision <= restored.frame.revision
+        ? [{ events: [event], labels: presentationPlayer.labelsAt(index) }]
+        : [],
+    ), `study:${restored.frame.match_id}:${restored.address}`, false);
+  }
+
   private applyUpdate(update: FrameUpdate): void {
     const current = gameStore.protocolFrame;
     if (current && current.match_id === update.frame.match_id) {
@@ -563,9 +590,10 @@ export class GameSocketController {
     }
     // Canonical truth lands first. Presentation is optional theater over the
     // committed frame and cannot delay or roll back authority.
+    if (current?.match_id !== update.frame.match_id) this.presentationCursor = null;
+    presentationPlayer.setScope(`live:${update.frame.match_id}`);
     const labels = mergePresentationLabels(
-      presentationPlayer.labels,
-      ...(current ? [presentationLabelsFromFrame(current)] : []),
+      ...(current?.match_id === update.frame.match_id ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(update.frame),
     );
     gameStore.applyFrame({
@@ -592,7 +620,7 @@ export class GameSocketController {
       );
       this.persistResumeState();
     } catch (error) {
-      presentationPlayer.clear();
+      presentationPlayer.reject();
       this.rejectPresentation('Presentation stream rejected', error);
     }
   }
@@ -620,8 +648,9 @@ export class GameSocketController {
     }
     // Recovery always cancels any in-flight theater before resuming its
     // viewer-safe tail. The complete frame remains authoritative either way.
+    presentationPlayer.setScope(`live:${next.match_id}`);
     const presentationLabels = mergePresentationLabels(
-      ...(current ? [presentationLabelsFromFrame(current)] : []),
+      ...(current?.match_id === next.match_id ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(next),
     );
     gameStore.applyFrame(
@@ -641,10 +670,15 @@ export class GameSocketController {
       presentationPlayer.recover(
         recovery.presentation_tail,
         presentationLabels,
+        recovery.presentation_cursor,
       );
+      // Initial recovery loads recorded history, not live motion from before
+      // this page opened. Same-page reconnects animate only newly seen facts.
+      if (this.loadingHistory) presentationPlayer.finishSequence();
+      this.loadingHistory = false;
       this.persistResumeState(sessionId, resumeToken);
     } catch (error) {
-      presentationPlayer.clear();
+      presentationPlayer.reject();
       this.rejectPresentation('Recovery presentation rejected', error);
     }
   }

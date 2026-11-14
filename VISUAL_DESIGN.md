@@ -264,7 +264,8 @@ One continuous leaf. Regions are ruled, never boxed.
 - The **margin column** holds the apparatus behind a single vertical rule:
   the prompt as a red-ruled italic annotation, action options as field
   buttons, "Your move" in red small caps, stops, and the log as ruled
-  lines with actor rubrics.
+  lines with actor rubrics. Consequence history and narration stay in this
+  secondary apparatus; event emphasis never covers the board or moves choice focus.
 - The log records **game vocabulary only** — actor and action; key hints
   and control labels never enter the record.
 - **Hidden information is counted, not drawn**: hidden cards are the
@@ -362,7 +363,7 @@ tooltip 400.
 
 **Elevation** — depth has one mechanism per layer: the sheet rests on the
 desk with `shadow-sheet`; only what floats above the sheet (dialogs, the
-hover preview, presentation beats) casts `shadow-raised`. The one
+hover preview) casts `shadow-raised`. The one
 exemption is physical: tipped-in plates sit in slight relief (a contact
 shadow, which flattens when tapped), and print objects on them carry
 their own micro-shadows. Nothing else has a shadow, and shadows are umber
@@ -415,8 +416,10 @@ Acknowledged debts, distinct from Reserved features:
   its log.
 - The contrast validator does not yet lint the voice laws (leading
   multiples, no inline font sizes) — they are greppable but unenforced.
-- The experience-proof baseline and release visual references still pin the
-  pre-redesign board and need regeneration on Linux CI.
+- The historical experience timing baseline remains frozen with its original
+  DOM-response definitions. The current release proof records matching-revision
+  rendering opportunities separately; release visual references still need
+  regeneration on Linux CI.
 
 ---
 
