@@ -661,3 +661,111 @@ for (const zone of ['stack', 'private'] as const) {
 }
 
 });
+
+const checkpointName = 'ci-fix-528/consumer/release-smoke/self-play/etude/6b2c855662254a698e5c7a97356b7930/checkpoints/learner_transitions-8';
+const checkpointDigest = '7ac5d442da37abf0838098f8a971a193b9f77d11c094d92688ff35e3d12544dc';
+
+for (const viewport of [{ width: 1280, height: 800 }, { width: 1440, height: 900 }]) {
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`trained identity fits dense laptop table ${viewport.width} ${colorScheme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await page.emulateMedia({ colorScheme });
+      const { control, frame, publish } = await installTable(page);
+      await page.evaluate(() => document.fonts.ready);
+      const opponentBar = page.locator(`[data-player-id="${frame.projection.opponent.id}"]`);
+      const shortHeight = (await opponentBar.boundingBox())!.height;
+      frame.projection.stack_objects = [{ id: 701, label: 'Crashing Wave', kind: 'spell', controller: 1 }];
+      const table: TableSnapshot = { contract: 'testing-house-v1', table_id: 'identity', table_revision: 1, mode: 'live',
+        access: { identity: { viewer_id: 'viewer', table_id: 'identity', rules_viewer: 0 }, role: 'pilot',
+          capabilities: ['view_table', 'submit_live_command', 'configure_match'], grant_revision: 1 },
+        participants: [], beliefs: [], decisions: [], watcher_invite: null,
+        opponent_label: `${checkpointName} · ${checkpointDigest.slice(0, 10)}`,
+        opponent: { name: checkpointName, sha256: checkpointDigest, producer: 'manabot' } };
+      control({ type: 'role_changed', table });
+      publish();
+      await expect(opponentBar).toContainText('ci-fix-528/…/learner_transitions-8');
+      await expect(opponentBar).toContainText('7ac5d442da');
+      expect((await opponentBar.boundingBox())!.height).toBe(shortHeight);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(viewport.width);
+      const stack = page.getByTestId('ordered-stack');
+      await expect(stack).toBeVisible();
+      const heading = (await opponentBar.locator('h2').boundingBox())!;
+      expect(heading.y + heading.height).toBeLessThanOrEqual((await stack.boundingBox())!.y);
+      const battlefield = page.locator('.player-area').first().locator('.staff [data-object-id]').first();
+      await expect(battlefield).toBeVisible();
+      const hand = page.getByRole('region', { name: 'You hand', exact: true });
+      expect((await hand.boundingBox())!.y + (await hand.boundingBox())!.height).toBeLessThanOrEqual(viewport.height);
+      await expect(page.getByTestId('decision-surface')).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('trained-identity.png') });
+      const disclosure = page.locator('.player-area').first().locator('.player-status summary');
+      await disclosure.focus();
+      await disclosure.press('Enter');
+      const provenance = page.locator('.player-area').first().getByTestId('player-identity');
+      await expect(provenance).toContainText(checkpointName);
+      await expect(provenance).toContainText(checkpointDigest);
+      await expect(provenance).toContainText('Producer: manabot');
+      await page.screenshot({ path: testInfo.outputPath('identity-disclosure.png') });
+      await disclosure.press('Enter');
+      const filter = page.getByRole('searchbox', { name: 'Find an action' });
+      for (const offer of frame.offers) {
+        await filter.fill(offer.label);
+        const option = page.getByTestId('action-option').filter({ hasText: offer.label });
+        await option.focus();
+        const bounds = (await option.boundingBox())!;
+        expect(bounds.y).toBeGreaterThanOrEqual(0);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+      }
+      const humanName = 'H'.repeat(60);
+      await page.route('**/api/traces', route => route.fulfill({ json: [{ id: 'identity-human' }] }));
+      await page.route('**/api/traces/identity-human/decisions', route => route.fulfill({ status: 404 }));
+      await page.route('**/api/traces/identity-human', route => route.fulfill({ json: {
+        config: { hero_deck: {}, villain_deck: {}, villain_type: 'checkpoint',
+          opponent: table.opponent, opponent_checkpoint: { source: 'runs', world: 'w6', model: 'Transformer', step: 8 } },
+        players: [{ seat: 0, name: humanName, kind: 'human', player_id: 'human', deck: 'ur_lessons', version: null },
+          { seat: 1, name: checkpointName, kind: 'bot', player_id: 'bot', deck: 'gw_allies', version: checkpointDigest }],
+        events: [], final_observation: frame.projection, winner: null, end_reason: 'active', timestamp: '2026-11-14T00:00:00Z',
+      } }));
+      await page.goto('/replay?trace=identity-human');
+      const heroBar = page.locator(`[data-player-id="${frame.projection.agent.id}"]`);
+      await expect(heroBar.locator('h2')).toContainText(humanName);
+      expect((await heroBar.locator('h2').boundingBox())!.height).toBeLessThanOrEqual(28);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(viewport.width);
+      await page.locator('.player-area').first().locator('.player-status summary').click();
+      const replayIdentity = page.locator('.player-area').first().getByTestId('player-identity');
+      await expect(replayIdentity).toContainText('world: w6');
+      await expect(replayIdentity).toContainText('step: 8');
+      const replayDisclosure = page.locator('.player-area').first().locator('.player-status summary');
+      await replayDisclosure.focus();
+      await replayDisclosure.press('End');
+      await expect.poll(() => page.locator('.player-area').first().locator('.player-status').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+      await page.screenshot({ path: testInfo.outputPath('long-human-replay.png') });
+    });
+  }
+}
+
+test('Watch keeps recorded identities attached to the acting viewer seat', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const frame = denseFrame();
+  // Seat 2 is acting: its identity belongs on the hero region.
+  frame.projection.agent.player_index = 1;
+  frame.projection.opponent.player_index = 0;
+  const identities = [
+    { seat: 0, player_id: 'reference', name: 'Reference', kind: 'bot', deck: 'gw_allies', version: null, inference: null },
+    { seat: 1, player_id: `checkpoint:${checkpointDigest}`, name: checkpointName, kind: 'bot', deck: 'ur_lessons', version: checkpointDigest, inference: null },
+  ];
+  await page.route('**/api/card-art/**', route => route.fulfill({ status: 404 }));
+  await page.route('**/api/watch/identity-watch/decisions/0?**', route => route.fulfill({ json: {
+    id: 'identity-watch', players: ['random', 'checkpoint'], identities,
+    decision: { address: 'recorded', ordinal: 0, viewer: 1, source: 'policy', revision: frame.revision,
+      prompt_id: frame.prompt!.id, offer_id: frame.offers[0].id, command_id: 'recorded', presentation_cursor: 0,
+      frame, offer: frame.offers[0], command: { command_id: 'recorded', match_id: frame.match_id,
+        expected_revision: frame.revision, prompt_id: frame.prompt!.id, offer_id: frame.offers[0].id, answers: [] } },
+    observation: frame.projection, outputs: null, count: 1, finished: true, revealed: false, revision: 1, winner: 1,
+  } }));
+  await page.goto('/replay?watch=1&trace=identity-watch');
+  const regions = page.locator('.player-area');
+  await expect(regions.last().locator('h2')).toContainText('ci-fix-528/…/learner_transitions-8');
+  await expect(regions.last().locator('h2')).toContainText('7ac5d442da');
+  await expect(regions.first().locator('h2')).toContainText('Reference');
+  await expect(regions.last().locator('h2 .player-name')).toHaveAttribute('title', `${checkpointName} · ${checkpointDigest}`);
+});

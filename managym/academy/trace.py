@@ -287,6 +287,9 @@ def prepare_trace_payload(
         event.pop("analysis_observation", None)
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
+    checkpoint = config.get("opponent_checkpoint")
+    if isinstance(checkpoint, dict):
+        checkpoint.pop("checkpoint", None)
     config.pop("seed", None)
     sources = [config.pop(key, None) for key in ("hero_source", "villain_source")]
     if any(source is not None for source in sources):

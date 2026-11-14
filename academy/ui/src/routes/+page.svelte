@@ -14,6 +14,8 @@
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
   import DeckImport from '$lib/components/DeckImport.svelte';
+  import { playerIdentity } from '$lib/player-identity';
+  import PlayerName from '$lib/components/PlayerName.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
@@ -293,11 +295,15 @@
     random: 'Random',
     passive: 'Passive',
   };
-  const opponentLabel = $derived(
+  const fallbackOpponentLabel = $derived(
     gameStore.table?.opponent_label
       ?? OPPONENT_LABELS[gameStore.opponentChoice]
       ?? 'Opponent',
   );
+
+  const opponentIdentity = $derived(playerIdentity(gameStore.table?.opponent
+    ? { ...gameStore.table.opponent, digest: gameStore.table.opponent.sha256, kind: 'bot' }
+    : { name: fallbackOpponentLabel }));
 
   function syncStopsToServer(): void {
     if (gameActive && gameStore.hasCapability('configure_match')) {
@@ -422,7 +428,7 @@
         <!-- The players live at their bars; this line is the summary for
              assistive tech and the proof suite. -->
         <span data-testid="deck-names" class="sr-only">
-          You ({gameStore.deckNames.hero}) vs {opponentLabel} ({gameStore.deckNames.villain})
+          You ({gameStore.deckNames.hero}) vs <PlayerName identity={opponentIdentity} /> ({gameStore.deckNames.villain})
         </span>
       {:else}
         <span class="type-annotation text-ink-2">No game in progress</span>
@@ -532,8 +538,8 @@
         onHoverTarget={handleBoardTargetHover}
         winner={gameStore.winner}
         deckNames={gameStore.deckNames}
-        heroLabel="You"
-        villainLabel={opponentLabel}
+        heroIdentity={playerIdentity({ name: 'You', kind: 'human' })}
+        villainIdentity={opponentIdentity}
         overlayActionLabel="Play Again"
         onOverlayAction={startNewGame}
         presentationPlayer={tablePresentation}

@@ -199,7 +199,11 @@ an incompatible checkpoint stays listed, disabled, with the mismatch (for
 example `trained in w5, engine is w6`), and the server refuses it with the same
 sentence. The browser sends only a digest; the server re-hashes the bytes,
 checks the selected decks against the checkpoint's binding (either seat), and
-records the exact checkpoint identity as the trace's `opponent_checkpoint`.
+records the exact checkpoint identity as the trace's `opponent_checkpoint`;
+viewer traces omit its server path. Recorded names and digests are never
+rewritten: the browser derives the short form it displays
+(`academy/ui/src/lib/player-identity.ts`,
+[how a trained opponent is named](../../docs/academy.md#how-a-trained-opponent-is-named)).
 Listing needs manabot; an install without it lists no trained opponents and
 says so.
 

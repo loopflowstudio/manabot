@@ -648,6 +648,8 @@ export interface OpponentConfig {
 }
 
 export interface TraceConfig {
+  opponent?: { name: string; sha256: string; producer?: string } | null;
+  opponent_checkpoint?: Record<string, unknown> | null;
   watch_players?: string[] | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;

@@ -104,3 +104,26 @@ test('shared history identifies both players and preserves private prefixes and 
     await Promise.all(contexts.map((context) => context.close()));
   }
 });
+
+
+test('long recorded identities fit Games and preserve full filter values', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const name = 'ci-fix-528/consumer/release-smoke/checkpoints/learner_transitions-8';
+  const version = 'a'.repeat(64);
+  await page.route('**/api/traces?**', route => route.fulfill({ json: [{ id: 'long-identity', timestamp: '2026-11-14T00:00:00Z',
+    status: 'completed', winner: 1, end_reason: 'game_over', origin: 'automated_validation', num_events: 5,
+    replay_available: true, feedback: [], players: [
+      { seat: 0, name: 'H'.repeat(60), kind: 'human', player_id: 'human-identity', deck: 'ur_lessons', version: null },
+      { seat: 1, name, kind: 'bot', player_id: `checkpoint:${version}`, deck: 'gw_allies', version },
+    ] }] }));
+  await page.goto('/games');
+  const row = page.getByTestId('game-history-row');
+  await expect(row).toContainText('ci-fix-528/…/learner_transitions-8');
+  await expect(row).toContainText('aaaaaaaaaa');
+  const modelName = row.locator('.player-name .truncate').last();
+  expect(await modelName.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1280);
+  expect(await row.locator('..').evaluate(el => el.scrollWidth)).toBeLessThanOrEqual(1280);
+  await expect(row.getByRole('link', { name: 'aaaaaaaaaa', exact: true })).toHaveAttribute('href', `/games?version=${version}`);
+  await expect(row.locator(`[title="${name} · ${version}"]`)).toHaveCount(1);
+});

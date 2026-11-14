@@ -7,6 +7,7 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import { tick, untrack } from 'svelte';
 
+  import { playerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import { offerFocus } from '$lib/offer-map';
@@ -679,8 +680,16 @@
             <div class="mt-3 border-t border-line">
               {#if boardObservation}
                 <GameBoard
-                  heroLabel={replayStore.trace.players?.find((p) => p.seat === 0)?.name ?? 'Hero'}
-                  villainLabel={replayStore.trace.players?.find((p) => p.seat === 1)?.name ?? 'Opponent'}
+                  heroIdentity={playerIdentity(replayStore.trace.players?.find(p => p.seat === 0) ?? { name: 'Hero' })}
+                  villainIdentity={playerIdentity({
+                    ...(replayStore.trace.players?.find(p => p.seat === 1) ?? {
+                      name: replayStore.trace.config.opponent?.name ?? 'Opponent',
+                      kind: replayStore.trace.config.opponent ? 'bot' : undefined,
+                      version: replayStore.trace.config.opponent?.sha256,
+                    }),
+                    producer: replayStore.trace.config.opponent?.producer,
+                    provenance: replayStore.trace.config.opponent_checkpoint ?? undefined,
+                  })}
                   observation={boardObservation}
                   {focusedIds}
                   winner={boardObservation.game_over ? replayStore.trace.winner : undefined}

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { replaceState } from '$app/navigation';
+  import { playerIdentity, type PlayerIdentity } from '$lib/player-identity';
+  import PlayerName from './PlayerName.svelte';
   import GameBoard from './GameBoard.svelte';
   import PresentationHistory from './PresentationHistory.svelte';
   import { createPresentationPlayer } from '$lib/presentation.svelte';
@@ -213,6 +215,10 @@
     } catch (reason) { fail(reason); }
     finally { busy = false; }
   }
+  function watchIdentity(seat: number): PlayerIdentity {
+    const recorded = current?.identities.find(player => player.seat === seat);
+    return playerIdentity(recorded ?? { name: `Seat ${seat + 1} · ${current?.players[seat] ?? 'Bot'}` });
+  }
 </script>
 
 <main class="mx-auto w-full max-w-[1400px] px-4 py-6">
@@ -265,10 +271,10 @@
       </div>
       <PresentationHistory player={presentationPlayer} observation={branch ?? restored?.frame.projection ?? current.decision.frame.projection} />
       <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_350px]">
-        <GameBoard {presentationPlayer} observation={branch ?? restored?.frame.projection ?? current.observation} heroLabel={`Seat ${current.decision.viewer + 1} · ${current.players[current.decision.viewer]}`} villainLabel={`Seat ${2 - current.decision.viewer} · ${current.players[1 - current.decision.viewer]}`} />
+        <GameBoard {presentationPlayer} observation={branch ?? restored?.frame.projection ?? current.observation} heroIdentity={watchIdentity(current.decision.viewer)} villainIdentity={watchIdentity(1 - current.decision.viewer)} />
         <aside class="border-l border-line pl-5">
           {#each current.identities as identity}
-            <p class="type-caption text-ink-2">Seat {identity.seat + 1}: {identity.name}{identity.version ? ` · ${identity.version.slice(0, 12)}` : ''}</p>
+            <p class="type-caption text-ink-2">Seat {identity.seat + 1}: <PlayerName identity={playerIdentity(identity)} /></p>
           {/each}
           {#if current.revealed && !restored}<p class="type-rubric text-mountain-ink">Both hands · spectator view</p>{/if}
           {#if branch}<DecisionContext observation={branch} actor={branch.decision_context?.actor ?? null} />{/if}
