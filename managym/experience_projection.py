@@ -80,56 +80,56 @@ def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, 
     return terms
 
 
-def _serialize_card(card: managym.Card) -> dict[str, Any]:
-    face_down = {"face_down": True} if card.face_down else {}
+def _serialize_object(row: managym.Object) -> dict[str, Any]:
+    face_down = {"face_down": True} if row.face_down else {}
     permission = (
-        {"cast_permission": _serialize_cast_permission(card.cast_permission)}
-        if card.cast_permission is not None
+        {"cast_permission": _serialize_cast_permission(row.cast_permission)}
+        if row.cast_permission is not None
         else {}
     )
-    x = {"x": int(card.x)} if card.x is not None else {}
+    x = {"x": int(row.x)} if row.x is not None else {}
     return {
         **face_down,
         **permission,
         **x,
-        "id": int(card.id),
-        "registry_key": int(card.registry_key),
-        "name": card.name,
-        "text_box": card.text_box,
-        "zone": enum_name(ZoneEnum, card.zone),
-        "owner_id": int(card.owner_id),
-        "power": int(card.power),
-        "toughness": int(card.toughness),
-        "mana_value": int(card.mana_cost.mana_value),
+        "id": int(row.id),
+        "registry_key": int(row.registry_key),
+        "name": row.name,
+        "text_box": row.text_box,
+        "zone": enum_name(ZoneEnum, row.zone),
+        "owner_id": int(row.owner_id),
+        "power": int(row.power),
+        "toughness": int(row.toughness),
+        "mana_value": int(row.mana_cost.mana_value),
         "types": {
-            "is_creature": bool(card.card_types.is_creature),
-            "is_land": bool(card.card_types.is_land),
-            "is_spell": bool(card.card_types.is_spell),
-            "is_artifact": bool(card.card_types.is_artifact),
-            "is_enchantment": bool(card.card_types.is_enchantment),
-            "is_planeswalker": bool(card.card_types.is_planeswalker),
-            "is_battle": bool(card.card_types.is_battle),
+            "is_creature": bool(row.card_types.is_creature),
+            "is_land": bool(row.card_types.is_land),
+            "is_spell": bool(row.card_types.is_spell),
+            "is_artifact": bool(row.card_types.is_artifact),
+            "is_enchantment": bool(row.card_types.is_enchantment),
+            "is_planeswalker": bool(row.card_types.is_planeswalker),
+            "is_battle": bool(row.card_types.is_battle),
         },
     }
 
 
 def _serialize_permanent(
     permanent: managym.Permanent,
-    card: managym.Card | None,
+    row: managym.Object | None,
     *,
     include_details: bool = False,
 ) -> dict[str, Any]:
     details: dict[str, Any] = {}
-    if include_details and card is not None:
-        types = _serialize_card(card)["types"]
-        # Earthbend makes a land a creature without changing its printed card.
+    if include_details and row is not None:
+        types = _serialize_object(row)["types"]
+        # Earthbend makes a land a creature without changing its printed characteristics.
         types["is_creature"] = bool(types["is_creature"] or permanent.is_animated)
-        details = {"types": types, "is_token": bool(card.is_token)}
+        details = {"types": types, "is_token": bool(row.is_token)}
     return {
         **details,
         "id": int(permanent.id),
-        "name": permanent.name or (card.name if card else None),
-        "text_box": card.text_box if card else "",
+        "name": permanent.name or (row.name if row else None),
+        "text_box": row.text_box if row else "",
         "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
         **{
             field: int(getattr(permanent, field))
@@ -151,14 +151,14 @@ def _serialize_permanent(
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
         # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. `base_power` / `base_toughness` are the card
-        # row's values; on the battlefield the card row reads the layered
+        # SBA actually checks. `base_power` / `base_toughness` are the object
+        # row's values; on the battlefield the object row reads the layered
         # characteristics too, so they equal the effective values there.
         # Printed P/T is not in the projection.
         "power": int(permanent.power),
         "toughness": int(permanent.toughness),
-        "base_power": int(card.power) if card else None,
-        "base_toughness": int(card.toughness) if card else None,
+        "base_power": int(row.power) if row else None,
+        "base_toughness": int(row.toughness) if row else None,
         "plus1_counters": int(permanent.plus1_counters),
         **_characteristics(permanent),
     }
@@ -226,33 +226,33 @@ def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
 
 def _serialize_player(
     player: managym.Player,
-    cards: list[managym.Card],
+    objects: list[managym.Object],
     permanents: list[managym.Permanent],
     *,
     include_details: bool = False,
 ) -> dict[str, Any]:
-    grouped_cards: dict[str, list[dict[str, Any]]] = {
+    grouped_objects: dict[str, list[dict[str, Any]]] = {
         "LIBRARY": [],
         "HAND": [],
         "GRAVEYARD": [],
         "EXILE": [],
         "STACK": [],
     }
-    battlefield_cards: list[managym.Card] = []
-    for card in cards:
-        zone_name = enum_name(ZoneEnum, card.zone)
+    battlefield_objects: list[managym.Object] = []
+    for row in objects:
+        zone_name = enum_name(ZoneEnum, row.zone)
         if zone_name == "BATTLEFIELD":
-            battlefield_cards.append(card)
-        elif zone_name in grouped_cards:
-            grouped_cards[zone_name].append(_serialize_card(card))
+            battlefield_objects.append(row)
+        elif zone_name in grouped_objects:
+            grouped_objects[zone_name].append(_serialize_object(row))
 
-    # Permanents and battlefield cards correspond 1:1 in order.
+    # Permanents and battlefield objects correspond 1:1 in order.
     # Fall back to None if the lists don't align.
     serialized_permanents = []
     for i, permanent in enumerate(permanents):
-        card = battlefield_cards[i] if i < len(battlefield_cards) else None
+        row = battlefield_objects[i] if i < len(battlefield_objects) else None
         serialized_permanents.append(
-            _serialize_permanent(permanent, card, include_details=include_details)
+            _serialize_permanent(permanent, row, include_details=include_details)
         )
 
     zone_counts = {
@@ -291,7 +291,7 @@ def _serialize_player(
                 for p in player.pooled_mana_classes
             ],
             "combat_mana": int(player.combat_mana),
-            "inspected": grouped_cards["LIBRARY"],
+            "inspected": grouped_objects["LIBRARY"],
         }
         if include_details
         else {}
@@ -339,10 +339,10 @@ def _serialize_player(
         ),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         **({"effects": _effects(player.effects)} if player.effects else {}),
-        "hand": grouped_cards["HAND"],
-        "graveyard": grouped_cards["GRAVEYARD"],
-        "exile": grouped_cards["EXILE"],
-        "stack": grouped_cards["STACK"],
+        "hand": grouped_objects["HAND"],
+        "graveyard": grouped_objects["GRAVEYARD"],
+        "exile": grouped_objects["EXILE"],
+        "stack": grouped_objects["STACK"],
         "battlefield": serialized_permanents,
     }
 
@@ -362,13 +362,13 @@ def serialize_observation(
         },
         "agent": _serialize_player(
             obs.agent,
-            obs.agent_cards,
+            obs.agent_objects,
             obs.agent_permanents,
             include_details=include_details,
         ),
         "opponent": _serialize_player(
             obs.opponent,
-            obs.opponent_cards,
+            obs.opponent_objects,
             obs.opponent_permanents,
             include_details=include_details,
         ),
@@ -378,10 +378,10 @@ def serialize_observation(
     # existing chooser-inspection surface; opponent.hand remains redacted in
     # portable replay/Study projections. Ownership and original zone stay intact.
     inspected = [
-        _serialize_card(card)
-        for card in obs.opponent_cards
-        if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
-        or (card.cast_permission is not None and card.cast_permission.foretold)
+        _serialize_object(row)
+        for row in obs.opponent_objects
+        if int(row.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
+        or (row.cast_permission is not None and row.cast_permission.foretold)
     ]
     if inspected:
         data["agent"].setdefault("inspected", []).extend(inspected)
@@ -399,7 +399,7 @@ def serialize_observation(
 
 
 def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
-    """Definitions this viewer's observation names: its own lists, cards it can
+    """Definitions this viewer's observation names: its own lists, objects it can
     see, publicly known hand cards and the stack."""
     return {
         *(observation.agent.main_counts or {}),
@@ -407,15 +407,15 @@ def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
         *observation.agent.known_hand,
         *observation.opponent.known_hand,
         *(
-            card.registry_key
-            for cards in (
-                observation.agent_cards,
+            row.registry_key
+            for rows in (
+                observation.agent_objects,
                 observation.agent_sideboard,
-                observation.opponent_cards,
+                observation.opponent_objects,
             )
-            for card in cards
+            for row in rows
         ),
-        *(entry.source_card_registry_key for entry in observation.stack_objects),
+        *(entry.source_registry_key for entry in observation.stack_objects),
     }
 
 
@@ -445,7 +445,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             ],
             "controller": int(entry.controller_id),
             "label": entry.description
-            or data["definition_names"][str(entry.source_card_registry_key)],
+            or data["definition_names"][str(entry.source_registry_key)],
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
@@ -469,37 +469,36 @@ def _player_label(player: managym.Player) -> str:
 
 
 def _permanent_names(
-    cards: list[managym.Card],
+    objects: list[managym.Object],
     permanents: list[managym.Permanent],
 ) -> dict[int, str]:
-    """Map permanent ids to card names.
+    """Map permanent ids to object names.
 
-    Permanents carry their own object ids (distinct from card ids), but the
-    observation lists permanents and battlefield cards in the same order —
+    Permanents carry their own object ids (distinct from object-row ids), but the
+    observation lists permanents and battlefield objects in the same order —
     the same alignment _serialize_player relies on.
     """
-    battlefield_cards = [
-        card for card in cards if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
+    battlefield_objects = [
+        row for row in objects if enum_name(ZoneEnum, row.zone) == "BATTLEFIELD"
     ]
-    names: dict[int, str] = {}
-    for index, permanent in enumerate(permanents):
-        if index < len(battlefield_cards):
-            names[int(permanent.id)] = battlefield_cards[index].name
-    return names
+    return {
+        int(permanent.id): row.name
+        for permanent, row in zip(permanents, battlefield_objects)
+    }
 
 
 def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
-    """Map object ids (players, cards, permanents) to display names."""
+    """Map visible player and object ids to display names."""
     names: dict[int, str] = {
         int(obs.agent.id): _player_label(obs.agent),
         int(obs.opponent.id): _player_label(obs.opponent),
     }
     names.update(
-        {int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]}
+        {int(row.id): row.name for row in [*obs.agent_objects, *obs.opponent_objects]}
     )
     names.update({int(card.candidate_id): card.name for card in obs.agent_sideboard})
-    names.update(_permanent_names(obs.agent_cards, obs.agent_permanents))
-    names.update(_permanent_names(obs.opponent_cards, obs.opponent_permanents))
+    names.update(_permanent_names(obs.agent_objects, obs.agent_permanents))
+    names.update(_permanent_names(obs.opponent_objects, obs.opponent_permanents))
     return names
 
 

@@ -148,7 +148,7 @@ class CheckpointOpponent:
         encoder = self.space.encoder
         if (
             len(raw.action_space.actions) > encoder.max_actions
-            or max(len(raw.agent_cards), len(raw.opponent_cards))
+            or max(len(raw.agent_objects), len(raw.opponent_objects))
             > encoder.cards_per_player
             or max(len(raw.agent_permanents), len(raw.opponent_permanents))
             > encoder.perms_per_player

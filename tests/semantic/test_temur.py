@@ -73,7 +73,7 @@ def test_temur_restricted_mana_and_legendary_flags_encode_identically() -> None:
     )
     observation = env.step(red_pair)[0]
     assert observation.agent.lesson_mana[3] == 2
-    assert any(card.is_legendary for card in observation.agent_cards)
+    assert any(card.is_legendary for card in observation.agent_objects)
     expected = ObservationEncoder(ObservationConfig()).encode(observation)
     actual = env.encode_observation(observation)
     for key, value in expected.items():

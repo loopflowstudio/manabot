@@ -6,7 +6,7 @@ use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType},
         observation::{
-            ActionOption, ActionSpaceData, CardData, CastPermissionData, EventData, Observation,
+            ActionOption, ActionSpaceData, CastPermissionData, EventData, ObjectData, Observation,
             StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
     },
@@ -42,12 +42,12 @@ impl Serialize for ObservationJson<'_> {
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("action_space", &ActionSpaceJson(&value.action_space))?;
         map.serialize_entry("agent", &sorted_record(&value.agent))?;
-        map.serialize_entry("agent_cards", &CardsJson(&value.agent_cards))?;
+        map.serialize_entry("agent_cards", &ObjectsJson(&value.agent_objects))?;
         map.serialize_entry("agent_permanents", &sorted_record(&value.agent_permanents))?;
         map.serialize_entry("agent_sideboard", &sorted_record(&value.agent_sideboard))?;
         map.serialize_entry("game_over", &value.game_over)?;
         map.serialize_entry("opponent", &sorted_record(&value.opponent))?;
-        map.serialize_entry("opponent_cards", &CardsJson(&value.opponent_cards))?;
+        map.serialize_entry("opponent_cards", &ObjectsJson(&value.opponent_objects))?;
         map.serialize_entry(
             "opponent_permanents",
             &sorted_record(&value.opponent_permanents),
@@ -126,17 +126,17 @@ impl Serialize for ActionJson<'_> {
     }
 }
 
-struct CardsJson<'a>(&'a [CardData]);
+struct ObjectsJson<'a>(&'a [ObjectData]);
 
-impl Serialize for CardsJson<'_> {
+impl Serialize for ObjectsJson<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_seq(self.0.iter().map(CardJson))
+        serializer.collect_seq(self.0.iter().map(ObjectJson))
     }
 }
 
-struct CardJson<'a>(&'a CardData);
+struct ObjectJson<'a>(&'a ObjectData);
 
-impl Serialize for CardJson<'_> {
+impl Serialize for ObjectJson<'_> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let value = self.0;
         let mut map = serializer.serialize_map(None)?;
@@ -260,7 +260,7 @@ impl Serialize for StackObjectJson<'_> {
             map.serialize_entry("granted_keywords", &sorted_record(keywords))?;
         }
         map.serialize_entry("kind", &(value.kind as i32))?;
-        map.serialize_entry("source_card_registry_key", &value.source_card_registry_key)?;
+        map.serialize_entry("source_card_registry_key", &value.source_registry_key)?;
         map.serialize_entry("source_permanent_id", &value.source_permanent_id)?;
         map.serialize_entry("stack_object_id", &value.stack_object_id)?;
         map.serialize_entry("targets", &StackTargetsJson(&value.targets))?;

@@ -230,7 +230,7 @@ def _choice(name: ChoiceName) -> NativeChoice:
                     if name == "look_select"
                     else managym.ActionEnum.LEARN_DISCARD
                 )
-                definitions = {c.id: c.registry_key for c in raw.agent_cards}
+                definitions = {c.id: c.registry_key for c in raw.agent_objects}
                 offers = _indices(raw, kind)
                 first = offers[0]
                 second = next(
@@ -247,7 +247,7 @@ def _choice(name: ChoiceName) -> NativeChoice:
     if name in {"look_select", "learn_discard"}:
         # Physical copies of the same visible card are exchangeable. Fit their
         # combined probability, without teaching arbitrary instance IDs.
-        definitions = {c.id: c.registry_key for c in raw.agent_cards}
+        definitions = {c.id: c.registry_key for c in raw.agent_objects}
         actions = raw.action_space.actions
 
         def copies(index: int) -> tuple[int, ...]:

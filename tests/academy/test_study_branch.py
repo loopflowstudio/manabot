@@ -135,7 +135,7 @@ def test_historical_address_forks_executes_structured_command_and_returns(tmp_pa
     assert legacy_actions == 1
     assert observation.agent.player_index == 0
     assert observation.opponent.player_index == 1
-    assert all(int(card.zone) != 1 for card in observation.opponent_cards)
+    assert all(int(card.zone) != 1 for card in observation.opponent_objects)
     assert sibling.structured_offers() == sibling_offers
 
     returned = branch.return_to_recorded()
@@ -220,7 +220,7 @@ def test_submission_failures_are_typed_one_shot_and_zero_fallback(tmp_path):
     returned = branch.return_to_recorded()
 
     assert engine_actions == 1
-    assert all(int(card.zone) != 1 for card in observation.opponent_cards)
+    assert all(int(card.zone) != 1 for card in observation.opponent_objects)
     assert returned.source_digest == baseline.source_digest
     assert returned.execution.published_offer_sets == 2
     assert returned.execution.accepted_commands == 1
@@ -242,7 +242,7 @@ def test_projected_object_incarnation_cannot_replace_native_binding(tmp_path):
     returned = branch.return_to_recorded()
 
     moved = next(
-        card for card in observation.agent_cards if card.id == expected_ref["entity"]
+        card for card in observation.agent_objects if card.id == expected_ref["entity"]
     )
     assert int(moved.zone) == int(managym.ZoneEnum.STACK)
     assert expected_ref["incarnation"] >= 0

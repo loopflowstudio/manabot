@@ -269,12 +269,12 @@ pub fn encode(
                 context_id,
             } => {
                 let context = context_id.and_then(|id| {
-                    obs.agent_cards
+                    obs.agent_objects
                         .iter()
                         .position(|object| object.id == id)
                         .map(|slot| 2 + slot)
                         .or_else(|| {
-                            obs.opponent_cards
+                            obs.opponent_objects
                                 .iter()
                                 .position(|object| object.id == id)
                                 .map(|slot| 2 + cards_per_player + slot)
@@ -510,7 +510,7 @@ mod tests {
         // Identical public definitions instantiated in different physical slots.
         let first = root(ObjectId(0), ObjectId(40));
         let second = root(ObjectId(1), ObjectId(41));
-        assert_ne!(first.agent_cards[0].id, second.agent_cards[0].id);
+        assert_ne!(first.agent_objects[0].id, second.agent_objects[0].id);
         assert_eq!(encode(&first, 32, 60), encode(&second, 32, 60));
     }
 }

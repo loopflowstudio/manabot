@@ -319,7 +319,7 @@ class BehaviorProbe:
             and not list(raw.stack_objects)
             and any(
                 c.name == "Counterspell" and int(c.zone) == ZONE_HAND
-                for c in raw.agent_cards
+                for c in raw.agent_objects
             )
         ):
             untapped_lands = sum(
@@ -330,7 +330,7 @@ class BehaviorProbe:
             creature_costs = [
                 int(c.mana_cost.mana_value)
                 for index in range(len(raw.action_space.actions))
-                for c in raw.agent_cards
+                for c in raw.agent_objects
                 if (name := action_casts(raw, index)) is not None
                 and c.name == name
                 and int(c.zone) == ZONE_HAND
@@ -340,7 +340,7 @@ class BehaviorProbe:
                 self.hold_windows += 1
                 cast = action_casts(raw, action)
                 if cast is not None:
-                    for c in raw.agent_cards:
+                    for c in raw.agent_objects:
                         if c.name == cast and bool(c.card_types.is_creature):
                             self.hold_breaks += 1
                             break
@@ -348,7 +348,7 @@ class BehaviorProbe:
     def _stack_cards(self, raw: Any) -> list[Any]:
         return [
             c
-            for c in list(raw.agent_cards) + list(raw.opponent_cards)
+            for c in list(raw.agent_objects) + list(raw.opponent_objects)
             if int(c.zone) == ZONE_STACK
         ]
 

@@ -508,7 +508,11 @@ fn checkpoints(root: &Env, recipe: &Recipe) -> Vec<(String, Env)> {
 }
 fn config(obs: &Observation) -> ObservationEncoderConfig {
     ObservationEncoderConfig {
-        max_cards_per_player: obs.agent_cards.len().max(obs.opponent_cards.len()).max(60),
+        max_cards_per_player: obs
+            .agent_objects
+            .len()
+            .max(obs.opponent_objects.len())
+            .max(60),
         max_permanents_per_player: obs
             .agent_permanents
             .len()
@@ -644,7 +648,7 @@ fn run(
                     encode_into(&observation, &config, buffer.borrow_mut().buffers_mut()).unwrap();
                     black_box(&buffer);
                     Output::Observation {
-                        cards: observation.agent_cards.len() + observation.opponent_cards.len(),
+                        cards: observation.agent_objects.len() + observation.opponent_objects.len(),
                         permanents: observation.agent_permanents.len()
                             + observation.opponent_permanents.len(),
                         actions: observation.action_space.actions.len(),

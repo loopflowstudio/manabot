@@ -59,7 +59,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
             for ordinal in range(180):
                 assert game.obs is not None
                 assert frame.offers, "game ended before the payment fixture"
-                if sum(c.name == "Food" for c in game.obs.agent_cards) == 3:
+                if sum(c.name == "Food" for c in game.obs.agent_objects) == 3:
                     activation = next(
                         (
                             o
@@ -194,7 +194,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
                 assert len(game.trace.events) == events
         assert game.obs is not None
         assert sum(game.obs.agent.mana) == 1
-        food_keys = {c.registry_key for c in game.obs.agent_cards if c.name == "Food"}
+        food_keys = {c.registry_key for c in game.obs.agent_objects if c.name == "Food"}
         assert (
             sum(
                 p.registry_key in food_keys and p.tapped

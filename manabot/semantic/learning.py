@@ -557,14 +557,14 @@ class BoundSemanticPack:
         slots: list[int] = []
         identity_ids: list[int] = []
 
-        for role_name, cards in (
-            ("agent_card", observation.agent_cards),
+        for role_name, rows in (
+            ("agent_card", observation.agent_objects),
             ("agent_sideboard", observation.agent_sideboard),
-            ("opponent_card", observation.opponent_cards),
+            ("opponent_card", observation.opponent_objects),
         ):
             role = self.schema.object_roles[role_name]
-            for slot, card in enumerate(cards):
-                card_def_id = int(card.registry_key)
+            for slot, row in enumerate(rows):
+                card_def_id = int(row.registry_key)
                 definition_rows.append(self.definition_row(card_def_id))
                 roles.append(role)
                 slots.append(slot)
@@ -574,7 +574,7 @@ class BoundSemanticPack:
         for slot, stack_object in enumerate(observation.stack_objects):
             if int(stack_object.kind) == 0:  # spell already appears in visible cards
                 continue
-            card_def_id = int(stack_object.source_card_registry_key)
+            card_def_id = int(stack_object.source_registry_key)
             definition_rows.append(self.definition_row(card_def_id))
             roles.append(stack_role)
             slots.append(slot)

@@ -20,8 +20,8 @@ fn board(kind: Space) -> Observation {
     obs.turn.active_player_id = 10;
     obs.turn.turn_number = 3;
     obs.turn.step = StepKind::Main;
-    obs.agent_cards.clear();
-    obs.opponent_cards.clear();
+    obs.agent_objects.clear();
+    obs.opponent_objects.clear();
     obs.recent_events.clear();
     obs.action_space.action_space_type = kind;
     obs.action_space.actions.clear();
@@ -41,8 +41,8 @@ fn offer(kind: Action, focus: &[i32], declared: Option<bool>) -> ActionOption {
         continuation_index: None,
     }
 }
-fn card(id: i32, name: &str, mv: u8) -> CardData {
-    let mut c = initial_observation().agent_cards.remove(0);
+fn card(id: i32, name: &str, mv: u8) -> ObjectData {
+    let mut c = initial_observation().agent_objects.remove(0);
     c.id = id;
     c.registry_key = id;
     c.owner_id = 10;
@@ -69,7 +69,7 @@ fn lands(obs: &mut Observation, count: i32) {
         c.zone = ZoneType::Battlefield;
         let mut p = creature(id, 10, 0, 0);
         p.is_animated = false;
-        obs.agent_cards.push(c);
+        obs.agent_objects.push(c);
         obs.agent_permanents.push(p);
     }
 }
@@ -86,7 +86,7 @@ fn attack(obs: &mut Observation, id: i32) {
 #[test]
 fn heuristic_priority_timing_and_cast_ties() {
     let mut o = board(Space::Priority);
-    o.agent_cards = vec![card(1, "Gray Ogre", 3), card(2, "Gray Ogre", 3)];
+    o.agent_objects = vec![card(1, "Gray Ogre", 3), card(2, "Gray Ogre", 3)];
     o.action_space.actions = vec![
         offer(Action::PriorityCastSpell, &[1], None),
         offer(Action::PriorityCastSpell, &[2], None),
@@ -98,14 +98,14 @@ fn heuristic_priority_timing_and_cast_ties() {
         .push(offer(Action::PriorityPlayLand, &[3], None));
     assert_eq!(choose(&o), 3);
     o.action_space.actions.pop();
-    o.agent_cards[0] = card(1, "Lightning Bolt", 1);
-    o.agent_cards.truncate(1);
+    o.agent_objects[0] = card(1, "Lightning Bolt", 1);
+    o.agent_objects.truncate(1);
     assert_eq!(choose(&o), 2);
     o.opponent.life = 3;
     assert_eq!(choose(&o), 0);
     o.turn.step = StepKind::Upkeep;
     assert_eq!(choose(&o), 2);
-    o.agent_cards[0] = card(1, "Pop Quiz", 3);
+    o.agent_objects[0] = card(1, "Pop Quiz", 3);
     o.turn.step = StepKind::End;
     assert_eq!(choose(&o), 2);
     o.turn.active_player_id = 20;
@@ -114,7 +114,7 @@ fn heuristic_priority_timing_and_cast_ties() {
 #[test]
 fn heuristic_counters_wait_for_opposing_spells() {
     let mut o = board(Space::Priority);
-    o.agent_cards = vec![card(1, "Counterspell", 2)];
+    o.agent_objects = vec![card(1, "Counterspell", 2)];
     o.action_space.actions = vec![
         offer(Action::PriorityCastSpell, &[1], None),
         offer(Action::PriorityPassPriority, &[], None),
@@ -134,7 +134,7 @@ fn heuristic_counters_wait_for_opposing_spells() {
 #[test]
 fn heuristic_target_polarity_lethal_and_decline() {
     let mut o = board(Space::ChooseTarget);
-    o.agent_cards = vec![card(1, "Igneous Inspiration", 3)];
+    o.agent_objects = vec![card(1, "Igneous Inspiration", 3)];
     o.action_space.focus = vec![1];
     o.agent_permanents = vec![creature(30, 10, 5, 3)];
     o.opponent_permanents = vec![creature(31, 20, 3, 3), creature(32, 20, 6, 6)];
@@ -145,7 +145,7 @@ fn heuristic_target_polarity_lethal_and_decline() {
     assert_eq!(choose(&o), 3);
     o.opponent.life = 3;
     assert_eq!(choose(&o), 1);
-    o.agent_cards[0] = card(1, "Fancy Footwork", 3);
+    o.agent_objects[0] = card(1, "Fancy Footwork", 3);
     o.action_space.actions.drain(..2);
     assert_eq!(choose(&o), 0);
     o.action_space
@@ -158,7 +158,7 @@ fn heuristic_kicker_memory_and_optional_costs() {
     let mut o = board(Space::PayOrNot);
     let mut c = card(1, "Firebending Lesson", 1);
     c.kicker_cost = 4;
-    o.agent_cards.push(c);
+    o.agent_objects.push(c);
     o.action_space.focus = vec![1];
     o.action_space.actions = vec![
         offer(Action::PayCost, &[], None),
@@ -208,7 +208,7 @@ fn heuristic_learn_discard_and_selection() {
     o.opponent_permanents.push(creature(30, 20, 2, 2));
     assert_eq!(choose(&o), 0);
     o.action_space.action_space_type = Space::Discard;
-    o.agent_cards = vec![card(1, "Gray Ogre", 3), card(2, "Gray Ogre", 3)];
+    o.agent_objects = vec![card(1, "Gray Ogre", 3), card(2, "Gray Ogre", 3)];
     o.action_space.actions = vec![
         offer(Action::SelectCard, &[1], None),
         offer(Action::SelectCard, &[2], None),
@@ -218,7 +218,7 @@ fn heuristic_learn_discard_and_selection() {
         .actions
         .push(offer(Action::DeclineChoice, &[], None));
     assert_eq!(choose(&o), 2);
-    o.agent_cards[0].card_types.is_land = true;
+    o.agent_objects[0].card_types.is_land = true;
     lands(&mut o, 5);
     assert_eq!(choose(&o), 0);
     o.action_space.action_space_type = Space::LookAndSelect;
@@ -233,7 +233,7 @@ fn heuristic_attacks_reserve_defenders_and_one_trick() {
     o.opponent_permanents = vec![creature(40, 20, 3, 4)];
     attack(&mut o, 30);
     assert_eq!(choose(&o), 1);
-    o.agent_cards.push(card(1, "Fancy Footwork", 3));
+    o.agent_objects.push(card(1, "Fancy Footwork", 3));
     lands(&mut o, 3);
     let mut h = Heuristic::default();
     assert_eq!(h.select_action(&o, None).unwrap(), 0);
@@ -293,7 +293,7 @@ fn heuristic_blocks_spread_and_chump_for_lethal() {
 fn heuristic_pumps_only_when_combat_improves() {
     let mut o = board(Space::Priority);
     o.turn.step = StepKind::DeclareBlockers;
-    o.agent_cards.push(card(1, "Fancy Footwork", 3));
+    o.agent_objects.push(card(1, "Fancy Footwork", 3));
     o.agent_permanents.push(creature(30, 10, 2, 2));
     o.opponent_permanents.push(creature(40, 20, 3, 3));
     o.action_space.actions = vec![
@@ -324,14 +324,14 @@ fn heuristic_abilities_and_lesson_damage() {
     let mut o = board(Space::Priority);
     let mut c = card(30, "Fabled Passage", 0);
     c.zone = ZoneType::Battlefield;
-    o.agent_cards.push(c);
+    o.agent_objects.push(c);
     o.agent_permanents.push(creature(30, 10, 0, 0));
     o.action_space.actions = vec![
         offer(Action::PriorityPassPriority, &[], None),
         offer(Action::PriorityActivateAbility, &[30], None),
     ];
     assert_eq!(choose(&o), 1);
-    o.agent_cards.push(card(1, "Combustion Technique", 2));
+    o.agent_objects.push(card(1, "Combustion Technique", 2));
     o.opponent_permanents.push(creature(40, 20, 4, 4));
     o.action_space.actions[1] = offer(Action::PriorityCastSpell, &[1], None);
     assert_eq!(choose(&o), 0);
@@ -368,7 +368,7 @@ fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
     let mut obs = board(Space::PayOrNot);
     let mut spell = card(1, "Firebending Lesson", 1);
     spell.kicker_cost = 4;
-    obs.agent_cards.push(spell);
+    obs.agent_objects.push(spell);
     obs.action_space.focus = vec![1];
     obs.action_space.actions = vec![
         offer(Action::PayCost, &[], None),
@@ -405,7 +405,7 @@ fn heuristic_per_seat_memory_is_independent_and_forked() {
     let mut obs = board(Space::PayOrNot);
     let mut spell = card(1, "Firebending Lesson", 1);
     spell.kicker_cost = 4;
-    obs.agent_cards.push(spell);
+    obs.agent_objects.push(spell);
     obs.action_space.focus = vec![1];
     obs.action_space.actions = vec![
         offer(Action::PayCost, &[], None),

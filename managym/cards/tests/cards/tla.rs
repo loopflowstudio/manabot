@@ -190,9 +190,9 @@ fn hybrid_discard_is_optional_at_resolution_and_draws_exactly_two() {
         assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
         let owner = Observation::for_player(s.game(), PlayerId(0));
         let other = Observation::for_player(s.game(), PlayerId(1));
-        assert!(owner.agent_cards.iter().any(|c| c.name == "Plains"));
+        assert!(owner.agent_objects.iter().any(|c| c.name == "Plains"));
         assert!(!other
-            .opponent_cards
+            .opponent_objects
             .iter()
             .any(|c| c.name == "Plains" && c.zone == ZoneType::Hand));
         let index = s
@@ -259,7 +259,7 @@ fn accumulate_wisdom_look_three_pick_one_rest_to_bottom() {
     assert_choice_contract(&s);
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert!(other
-        .opponent_cards
+        .opponent_objects
         .iter()
         .all(|c| c.zone != ZoneType::Library));
     let root = s.game().clone();
@@ -836,7 +836,7 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
         .iter()
         .any(|p| p.id == permanent.id.0 as i32));
     assert!(observation
-        .agent_cards
+        .agent_objects
         .iter()
         .any(|c| c.id == id && c.zone == ZoneType::Battlefield));
 
@@ -1056,7 +1056,7 @@ fn dai_li_indoctrination_reveals_a_hand_and_discards_your_pick_or_earthbends_two
     );
     // The chooser observes the offered cards in the opponent's hand.
     let view = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
-    let seen: Vec<i32> = view.opponent_cards.iter().map(|c| c.id).collect();
+    let seen: Vec<i32> = view.opponent_objects.iter().map(|c| c.id).collect();
     for object in [ogre, iceberg] {
         assert!(seen.contains(&(s.game().state.objects[object].id.0 as i32)));
     }
@@ -1537,7 +1537,7 @@ fn hama_casts_an_opponents_artifact_under_your_control() {
         let view = Observation::for_player(s.game(), viewer);
         assert!(view.validate());
         let mine = view
-            .agent_cards
+            .agent_objects
             .iter()
             .any(|object| object.zone == ZoneType::Battlefield && object.name == "Prophetic Prism");
         assert_eq!(mine, viewer == PlayerId(0));
@@ -4005,7 +4005,7 @@ fn gather_creates_per_plains_and_scry_can_reverse_top_cards_privately() {
     assert_eq!(s.action_space().actions.len(), 4);
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert!(other
-        .opponent_cards
+        .opponent_objects
         .iter()
         .all(|c| c.zone != ZoneType::Library));
     for object in objects.iter().rev() {
@@ -4147,7 +4147,7 @@ fn scry_revealed_card_is_observation_encodable() {
     let obs = Observation::new(s.game(), &events);
     assert!(obs.validate());
     let revealed: Vec<_> = obs
-        .agent_cards
+        .agent_objects
         .iter()
         .filter(|object| object.zone == ZoneType::Library)
         .collect();
@@ -4374,9 +4374,12 @@ fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
 
     let id = s.game().state.objects[comet].id.0 as i32;
     let owner = Observation::for_player(s.game(), PlayerId(0));
-    assert!(owner.agent_cards.iter().any(|c| c.id == id && c.face_down));
+    assert!(owner
+        .agent_objects
+        .iter()
+        .any(|c| c.id == id && c.face_down));
     let opponent = Observation::for_player(s.game(), PlayerId(1));
-    assert!(opponent.opponent_cards.iter().all(|c| c.id != id));
+    assert!(opponent.opponent_objects.iter().all(|c| c.id != id));
     assert_eq!(opponent.opponent.zone_counts[ZoneType::Exile as usize], 1);
     let definition = s.game().state.objects[comet].definition_id.0;
     assert!(opponent.policy_history.iter().all(|row| !matches!(
@@ -6318,9 +6321,9 @@ fn sees_library_card(s: &Scenario, player: usize, object: ObjectId) -> bool {
     let id = s.game().state.objects[object].id.0 as i32;
     let observation = Observation::for_player(s.game(), PlayerId(player));
     observation
-        .agent_cards
+        .agent_objects
         .iter()
-        .chain(&observation.opponent_cards)
+        .chain(&observation.opponent_objects)
         .any(|c| c.id == id && c.zone == ZoneType::Library)
 }
 
@@ -7528,9 +7531,9 @@ fn joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature
     let seen = |viewer: usize| {
         let observation = Observation::for_player(s.game(), PlayerId(viewer));
         observation
-            .agent_cards
+            .agent_objects
             .iter()
-            .chain(&observation.opponent_cards)
+            .chain(&observation.opponent_objects)
             .any(|object| object.id == top_id)
     };
     assert!(seen(0), "the surveilling player sees the card");
@@ -7813,7 +7816,7 @@ fn master_piandao_reveals_a_selected_ally_and_bottoms_the_rest() {
     let other = Observation::for_player(s.game(), PlayerId(1));
     assert_eq!(other.opponent.known_hand.get(&definition), Some(&1));
     assert!(other
-        .opponent_cards
+        .opponent_objects
         .iter()
         .all(|c| c.zone != ZoneType::Hand));
 }
@@ -8679,7 +8682,7 @@ fn shared_roots_search_can_find_or_decline_without_leaking_the_library() {
             .iter()
             .any(|a| matches!(a, Action::SelectCard { object, .. } if *object == nonbasic)));
         assert!(Observation::for_player(s.game(), PlayerId(1))
-            .opponent_cards
+            .opponent_objects
             .iter()
             .all(|c| c.zone != ZoneType::Library));
         choose(&mut s, |a| {
@@ -9254,11 +9257,11 @@ fn merchant_search_returns_the_exact_source_even_on_failure_to_find() {
             let owner = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
             let other = managym::agent::observation::Observation::for_player(s.game(), PlayerId(1));
             assert!(owner
-                .agent_cards
+                .agent_objects
                 .iter()
                 .any(|c| c.zone == ZoneType::Library));
             assert!(other
-                .opponent_cards
+                .opponent_objects
                 .iter()
                 .all(|c| c.zone != ZoneType::Library));
             choose(&mut s, |a| matches!(a, Action::Decline { .. }));
@@ -9638,7 +9641,7 @@ fn rallier_reveals_only_the_selected_card_and_can_decline() {
             .any(|a| matches!(a, Action::SelectCard { object, .. } if *object == top[0])));
         let other = Observation::for_player(s.game(), PlayerId(1));
         assert!(other
-            .opponent_cards
+            .opponent_objects
             .iter()
             .all(|c| c.zone != ZoneType::Library));
         choose(&mut s, |a| {
@@ -9803,7 +9806,7 @@ fn optional_lesson_without_resources_only_declines_then_discards_one_drawn_card(
     assert_choice_contract(&s);
     let other = managym::agent::observation::Observation::for_player(s.game(), PlayerId(1));
     assert!(!other
-        .opponent_cards
+        .opponent_objects
         .iter()
         .any(|c| c.zone == ZoneType::Hand));
     choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
@@ -10216,9 +10219,9 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     );
     assert!(!kyoshi_perm.keywords.hexproof);
     let kyoshi_card = obs
-        .agent_cards
+        .agent_objects
         .iter()
-        .chain(obs.opponent_cards.iter())
+        .chain(obs.opponent_objects.iter())
         .find(|object| object.name == "Kyoshi Warriors")
         .expect("Kyoshi Warriors card should be observable");
     assert!(
@@ -14930,14 +14933,14 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
         let nonacting = Observation::for_player(s.game(), PlayerId(1));
         assert!(
             !nonacting
-                .agent_cards
+                .agent_objects
                 .iter()
                 .any(|c| c.zone == ZoneType::Library),
             "search does not reveal the owner's library to its owner"
         );
         let seen = Observation::for_player(s.game(), PlayerId(0));
         assert!(
-            seen.opponent_cards
+            seen.opponent_objects
                 .iter()
                 .any(|c| c.id == s.game().state.objects[other].id.0 as i32),
             "searcher sees searched hand, even nonmatches"
@@ -14985,7 +14988,7 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
         );
         assert!(
             !after
-                .opponent_cards
+                .opponent_objects
                 .iter()
                 .any(|c| c.id == s.game().state.objects[other].id.0 as i32),
             "search visibility ends with resolution"
@@ -15123,7 +15126,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         if zone != ZoneType::Library {
             let obs = Observation::for_player(s.game(), PlayerId(0));
             let row = obs
-                .agent_cards
+                .agent_objects
                 .iter()
                 .find(|c| c.id == s.game().state.objects[suki].id.0 as i32)
                 .unwrap();
@@ -15175,7 +15178,7 @@ fn water_tribe_rallier_filters_library_using_sukis_current_cda_power() {
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         let obs = Observation::for_player(s.game(), PlayerId(0));
         assert_eq!(
-            obs.agent_cards
+            obs.agent_objects
                 .iter()
                 .find(|c| c.id == s.game().state.objects[top[0]].id.0 as i32)
                 .unwrap()
@@ -15298,7 +15301,7 @@ fn secret_of_bloodbending_controls_only_the_next_combat_in_either_seat() {
         );
         let controller = Observation::for_player(s.game(), PlayerId(caster));
         assert!(controller
-            .opponent_cards
+            .opponent_objects
             .iter()
             .any(|object| object.zone == ZoneType::Hand && object.name == "Lightning Strike"));
         assert!(s
@@ -15342,7 +15345,7 @@ fn secret_of_bloodbending_controls_only_the_next_combat_in_either_seat() {
         assert!(s.game().state.turn.player_controls.is_empty());
         let after = Observation::for_player(s.game(), PlayerId(caster));
         assert!(!after
-            .opponent_cards
+            .opponent_objects
             .iter()
             .any(|object| object.zone == ZoneType::Hand));
         assert!(
@@ -15430,7 +15433,7 @@ fn secret_of_bloodbending_delegated_spell_uses_victims_mana_and_replays_atomical
     let controller = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(
         controller
-            .opponent_cards
+            .opponent_objects
             .iter()
             .filter(|c| c.zone == ZoneType::Library)
             .count(),
@@ -15439,7 +15442,7 @@ fn secret_of_bloodbending_delegated_spell_uses_victims_mana_and_replays_atomical
     let victim = Observation::for_player(s.game(), PlayerId(1));
     assert!(victim.action_space.actions.is_empty());
     assert!(!victim
-        .opponent_cards
+        .opponent_objects
         .iter()
         .any(|c| c.zone == ZoneType::Hand));
     let before = s.game().semantic_observation(PlayerId(0)).unwrap().identity;
@@ -15572,7 +15575,7 @@ fn secret_of_bloodbending_foretold_cards_are_visible_only_during_control() {
     let id = s.game().state.objects[object].id.0 as i32;
     let obs = Observation::for_player(s.game(), PlayerId(0));
     assert!(obs
-        .opponent_cards
+        .opponent_objects
         .iter()
         .any(|c| c.id == id && c.zone == ZoneType::Exile));
     let mut sampled = s.game().clone();
@@ -15583,11 +15586,11 @@ fn secret_of_bloodbending_foretold_cards_are_visible_only_during_control() {
     );
     s.advance_to_active_step(0, StepKind::Upkeep);
     assert!(!Observation::for_player(s.game(), PlayerId(0))
-        .opponent_cards
+        .opponent_objects
         .iter()
         .any(|c| c.id == id));
     assert!(Observation::for_player(s.game(), PlayerId(1))
-        .agent_cards
+        .agent_objects
         .iter()
         .any(|c| c.id == id));
 }
@@ -15895,7 +15898,7 @@ fn sozins_comet_foretell_spending_choices_preserve_color_and_private_identity() 
     assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));
     let opponent = Observation::for_player(s.game(), PlayerId(1));
     assert!(!opponent
-        .opponent_cards
+        .opponent_objects
         .iter()
         .any(|card| card.name == "Sozin's Comet"));
 }

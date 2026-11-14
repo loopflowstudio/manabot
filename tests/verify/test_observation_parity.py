@@ -98,7 +98,7 @@ def expected_focus_indices(
     object_to_index[obs.opponent.id] = current_object_index
     current_object_index += 1
 
-    for cards in (obs.agent_cards, obs.opponent_cards):
+    for cards in (obs.agent_objects, obs.opponent_objects):
         ordered = cards[: config.max_cards_per_player]
         for card in ordered:
             object_to_index[card.id] = current_object_index
@@ -128,14 +128,15 @@ def expected_focus_indices(
     return out
 
 
-def test_observation_parity():
-    """Run 200 games, encode every observation both ways, and assert exact parity."""
-    rng = np.random.default_rng(42)
-    env = managym.Env(seed=42, skip_trivial=True)
+@pytest.mark.parametrize("seed", range(42, 62))
+def test_observation_parity(seed: int) -> None:
+    """Compare every buffer across 200 games in bounded ten-game seed batches."""
+    rng = np.random.default_rng(seed)
+    env = managym.Env(seed=seed, skip_trivial=True)
     config = ObservationConfig()
     encoder = ObservationEncoder(config)
 
-    for game_i in range(200):
+    for game_i in range(10):
         obs, _ = env.reset(make_player_configs())
 
         while True:
@@ -147,7 +148,7 @@ def test_observation_parity():
                     encoded_rust[key],
                     encoded_python[key],
                     atol=1e-6,
-                    err_msg=f"Game {game_i}, key {key}",
+                    err_msg=f"Seed {seed}, game {game_i}, key {key}",
                 )
 
             if obs.game_over:
@@ -321,13 +322,13 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     env.reset(make_player_configs())
     env.scenario_force_battlefield(0, "Gray Ogre")
     obs = env.scenario_refresh()
-    cards = obs.agent_cards
+    cards = obs.agent_objects
     card = cards[0]
     keywords = card.keywords
     keywords.indestructible = True
     card.keywords = keywords
     cards[0] = card
-    obs.agent_cards = cards
+    obs.agent_objects = cards
     permanents = obs.agent_permanents
     permanent = permanents[0]
     keywords = permanent.keywords
@@ -728,7 +729,7 @@ def test_merchant_tap_count_native_reference_and_text_parity() -> None:
         for _ in range(16):
             obs = env.observation_for_player(owner)
             if (
-                sum(card.name == "Food" for card in obs.agent_cards) == food_count
+                sum(row.name == "Food" for row in obs.agent_objects) == food_count
                 and not obs.stack_objects
             ):
                 break

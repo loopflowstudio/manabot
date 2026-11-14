@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     agent::observation::{
-        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
+        ContinuousEffectData, EventData, ObjectData, Observation, PermanentData, PlayerData,
         RestrictedManaData, TurnData,
     },
     cards::tokens::name_value,
@@ -555,12 +555,12 @@ pub fn encode_into(
     for (field, actual, capacity) in [
         (
             "agent_cards plus sideboard",
-            obs.agent_cards.len() + obs.agent_sideboard.len(),
+            obs.agent_objects.len() + obs.agent_sideboard.len(),
             config.max_cards_per_player,
         ),
         (
             "opponent_cards",
-            obs.opponent_cards.len(),
+            obs.opponent_objects.len(),
             config.max_cards_per_player,
         ),
         (
@@ -654,9 +654,9 @@ pub fn encode_into(
     out.actions_valid.fill(0.0);
     out.events_valid.fill(0.0);
 
-    for (seat, (cards, player)) in [
-        (&obs.agent_cards, &obs.agent),
-        (&obs.opponent_cards, &obs.opponent),
+    for (seat, (objects, player)) in [
+        (&obs.agent_objects, &obs.agent),
+        (&obs.opponent_objects, &obs.opponent),
     ]
     .into_iter()
     .enumerate()
@@ -668,9 +668,9 @@ pub fn encode_into(
                 actual: player.known_hand.len(),
             });
         }
-        for (slot, card) in cards.iter().enumerate() {
+        for (slot, object) in objects.iter().enumerate() {
             out.semantic_cards[seat * config.max_cards_per_player + slot] =
-                (card.registry_key + 1) as f32;
+                (object.registry_key + 1) as f32;
         }
         for (slot, (definition, count)) in player.known_hand.iter().enumerate() {
             let offset = (seat * config.max_cards_per_player + slot) * known_hand::WIDTH;
@@ -679,7 +679,7 @@ pub fn encode_into(
         }
     }
     for (slot, card) in obs.agent_sideboard.iter().enumerate() {
-        out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
+        out.semantic_cards[obs.agent_objects.len() + slot] = (card.registry_key + 1) as f32;
     }
     if config.turn_state {
         encode_turn_state(obs, config, out.player_turn_state, out.card_turn_state);
@@ -700,8 +700,8 @@ pub fn encode_into(
     }
 
     let mut object_to_index: HashMap<i32, i32> = HashMap::with_capacity(
-        2 + obs.agent_cards.len()
-            + obs.opponent_cards.len()
+        2 + obs.agent_objects.len()
+            + obs.opponent_objects.len()
             + obs.agent_sideboard.len()
             + obs.agent_permanents.len()
             + obs.opponent_permanents.len(),
@@ -726,24 +726,24 @@ pub fn encode_into(
     );
     out.opponent_player_valid[0] = 1.0;
 
-    let card_context = CardContext {
+    let object_context = ObjectContext {
         max_cards: config.max_cards_per_player,
         viewer_id: obs.agent.id,
         turn_number: obs.turn.turn_number,
     };
-    encode_cards(
-        &obs.agent_cards,
+    encode_objects(
+        &obs.agent_objects,
         1.0,
-        &card_context,
+        &object_context,
         out.agent_cards,
         out.agent_cards_valid,
         &mut object_to_index,
         &mut current_object_index,
     );
-    encode_cards(
-        &obs.opponent_cards,
+    encode_objects(
+        &obs.opponent_objects,
         0.0,
-        &card_context,
+        &object_context,
         out.opponent_cards,
         out.opponent_cards_valid,
         &mut object_to_index,
@@ -751,7 +751,7 @@ pub fn encode_into(
     );
 
     for (offset, card) in obs.agent_sideboard.iter().enumerate() {
-        let index = obs.agent_cards.len() + offset;
+        let index = obs.agent_objects.len() + offset;
         let width = CARD_DIM;
         let row = &mut out.agent_cards[index * width..(index + 1) * width];
         row[card::IS_MINE] = 1.0;
@@ -860,9 +860,9 @@ fn encode_turn_state(
     players: &mut [f32],
     cards: &mut [f32],
 ) {
-    for (seat, (player, seat_cards)) in [
-        (&obs.agent, &obs.agent_cards),
-        (&obs.opponent, &obs.opponent_cards),
+    for (seat, (player, seat_objects)) in [
+        (&obs.agent, &obs.agent_objects),
+        (&obs.opponent, &obs.opponent_objects),
     ]
     .into_iter()
     .enumerate()
@@ -879,9 +879,9 @@ fn encode_turn_state(
                 row[turn_state::NONARTIFACT_MANA_WHITE + slot] += class.mana[slot] as f32 / 10.0;
             }
         }
-        for (slot, card) in seat_cards.iter().enumerate() {
+        for (slot, object) in seat_objects.iter().enumerate() {
             cards[seat * config.max_cards_per_player + slot] =
-                bool_to_f32(card.from_battlefield_this_turn);
+                bool_to_f32(object.from_battlefield_this_turn);
         }
     }
 }
@@ -981,13 +981,13 @@ pub fn unrepresentable_state(obs: &Observation) -> Option<String> {
 
 /// The v10-only state this observation needs, if any: a definition visible
 /// to the viewer reads it and it is present. V9 refuses such an observation
-/// before writing a buffer rather than hide state a visible card reads.
+/// before writing a buffer rather than hide state a visible object reads.
 pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
     let players = [&obs.agent, &obs.opponent];
-    let cards = || obs.agent_cards.iter().chain(&obs.opponent_cards);
+    let objects = || obs.agent_objects.iter().chain(&obs.opponent_objects);
     let visible_reads = || {
-        cards()
-            .map(|card| card.registry_key)
+        objects()
+            .map(|object| object.registry_key)
             .chain(
                 obs.agent_permanents
                     .iter()
@@ -997,7 +997,7 @@ pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
             .chain(
                 obs.stack_objects
                     .iter()
-                    .map(|object| object.source_card_registry_key),
+                    .map(|object| object.source_registry_key),
             )
             .map(turn_state_reads)
     };
@@ -1008,7 +1008,7 @@ pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
     {
         return Some("life lost this turn");
     }
-    if cards().any(|card| card.from_battlefield_this_turn)
+    if objects().any(|object| object.from_battlefield_this_turn)
         && visible_reads().any(|reads| reads.from_battlefield)
     {
         return Some("a card put into a graveyard from the battlefield this turn");
@@ -1132,31 +1132,31 @@ fn encode_player_features(
     *current_object_index += 1;
 }
 
-/// Facts every card row of one observation reads.
-struct CardContext {
+/// Facts every object row of one observation reads.
+struct ObjectContext {
     max_cards: usize,
     viewer_id: i32,
     turn_number: u32,
 }
 
-fn encode_cards(
-    cards: &[CardData],
+fn encode_objects(
+    objects: &[ObjectData],
     is_mine: f32,
-    context: &CardContext,
+    context: &ObjectContext,
     out: &mut [f32],
     out_valid: &mut [f32],
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
-    let ordered_cards = cards.iter().take(context.max_cards);
+    let ordered_objects = objects.iter().take(context.max_cards);
     let mut encoded_count = 0;
 
-    for (i, card) in ordered_cards.enumerate() {
+    for (i, object) in ordered_objects.enumerate() {
         let start = i * CARD_DIM;
         let end = start + CARD_DIM;
-        encode_card_features(card, is_mine, context, &mut out[start..end]);
+        encode_object_features(object, is_mine, context, &mut out[start..end]);
         out_valid[i] = 1.0;
-        object_to_index.insert(card.id, *current_object_index);
+        object_to_index.insert(object.id, *current_object_index);
         *current_object_index += 1;
         encoded_count += 1;
     }
@@ -1164,44 +1164,49 @@ fn encode_cards(
     *current_object_index += (context.max_cards.saturating_sub(encoded_count)) as i32;
 }
 
-fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, out: &mut [f32]) {
-    let zone_index = (card.zone as i32 & 0xFF) as usize;
+fn encode_object_features(
+    object: &ObjectData,
+    is_mine: f32,
+    context: &ObjectContext,
+    out: &mut [f32],
+) {
+    let zone_index = (object.zone as i32 & 0xFF) as usize;
     if zone_index < ZONE_DIM {
         out[card::ZONE_LIBRARY + zone_index] = 1.0;
     }
     out[card::IS_MINE] = is_mine;
-    out[card::POWER] = card.power as f32 / 10.0;
-    out[card::TOUGHNESS] = card.toughness as f32 / 10.0;
-    out[card::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
-    out[card::IS_LAND] = bool_to_f32(card.card_types.is_land);
-    out[card::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
-    out[card::IS_ARTIFACT] = bool_to_f32(card.card_types.is_artifact);
-    out[card::IS_ENCHANTMENT] = bool_to_f32(card.card_types.is_enchantment);
-    out[card::IS_PLANESWALKER] = bool_to_f32(card.card_types.is_planeswalker);
-    out[card::IS_BATTLE] = bool_to_f32(card.card_types.is_battle);
-    out[card::FLYING] = bool_to_f32(card.keywords.flying);
-    out[card::REACH] = bool_to_f32(card.keywords.reach);
-    out[card::HASTE] = bool_to_f32(card.keywords.haste);
-    out[card::VIGILANCE] = bool_to_f32(card.keywords.vigilance);
-    out[card::TRAMPLE] = bool_to_f32(card.keywords.trample);
-    out[card::FIRST_STRIKE] = bool_to_f32(card.keywords.first_strike);
-    out[card::DOUBLE_STRIKE] = bool_to_f32(card.keywords.double_strike);
-    out[card::DEATHTOUCH] = bool_to_f32(card.keywords.deathtouch);
-    out[card::LIFELINK] = bool_to_f32(card.keywords.lifelink);
-    out[card::DEFENDER] = bool_to_f32(card.keywords.defender);
-    out[card::MENACE] = bool_to_f32(card.keywords.menace);
-    out[card::FLASH] = bool_to_f32(card.keywords.flash);
-    out[card::IS_TOKEN] = bool_to_f32(card.is_token);
-    out[card::IS_ALLY] = bool_to_f32(card.is_ally);
-    out[card::IS_LESSON] = bool_to_f32(card.is_lesson);
-    out[card::HAS_WARD] = bool_to_f32(card.ward_cost > 0);
-    out[card::WARD_COST] = card.ward_cost as f32 / 10.0;
-    out[card::HAS_KICKER] = bool_to_f32(card.kicker_cost > 0);
-    out[card::KICKER_COST] = card.kicker_cost as f32 / 10.0;
-    out[card::HEXPROOF] = bool_to_f32(card.keywords.hexproof);
-    out[card::INDESTRUCTIBLE] = bool_to_f32(card.keywords.indestructible);
-    out[card::IS_LEGENDARY] = bool_to_f32(card.is_legendary);
-    if let Some(permission) = &card.cast_permission {
+    out[card::POWER] = object.power as f32 / 10.0;
+    out[card::TOUGHNESS] = object.toughness as f32 / 10.0;
+    out[card::MANA_VALUE] = object.mana_cost.mana_value as f32 / 10.0;
+    out[card::IS_LAND] = bool_to_f32(object.card_types.is_land);
+    out[card::IS_CREATURE] = bool_to_f32(object.card_types.is_creature);
+    out[card::IS_ARTIFACT] = bool_to_f32(object.card_types.is_artifact);
+    out[card::IS_ENCHANTMENT] = bool_to_f32(object.card_types.is_enchantment);
+    out[card::IS_PLANESWALKER] = bool_to_f32(object.card_types.is_planeswalker);
+    out[card::IS_BATTLE] = bool_to_f32(object.card_types.is_battle);
+    out[card::FLYING] = bool_to_f32(object.keywords.flying);
+    out[card::REACH] = bool_to_f32(object.keywords.reach);
+    out[card::HASTE] = bool_to_f32(object.keywords.haste);
+    out[card::VIGILANCE] = bool_to_f32(object.keywords.vigilance);
+    out[card::TRAMPLE] = bool_to_f32(object.keywords.trample);
+    out[card::FIRST_STRIKE] = bool_to_f32(object.keywords.first_strike);
+    out[card::DOUBLE_STRIKE] = bool_to_f32(object.keywords.double_strike);
+    out[card::DEATHTOUCH] = bool_to_f32(object.keywords.deathtouch);
+    out[card::LIFELINK] = bool_to_f32(object.keywords.lifelink);
+    out[card::DEFENDER] = bool_to_f32(object.keywords.defender);
+    out[card::MENACE] = bool_to_f32(object.keywords.menace);
+    out[card::FLASH] = bool_to_f32(object.keywords.flash);
+    out[card::IS_TOKEN] = bool_to_f32(object.is_token);
+    out[card::IS_ALLY] = bool_to_f32(object.is_ally);
+    out[card::IS_LESSON] = bool_to_f32(object.is_lesson);
+    out[card::HAS_WARD] = bool_to_f32(object.ward_cost > 0);
+    out[card::WARD_COST] = object.ward_cost as f32 / 10.0;
+    out[card::HAS_KICKER] = bool_to_f32(object.kicker_cost > 0);
+    out[card::KICKER_COST] = object.kicker_cost as f32 / 10.0;
+    out[card::HEXPROOF] = bool_to_f32(object.keywords.hexproof);
+    out[card::INDESTRUCTIBLE] = bool_to_f32(object.keywords.indestructible);
+    out[card::IS_LEGENDARY] = bool_to_f32(object.is_legendary);
+    if let Some(permission) = &object.cast_permission {
         out[card::PERMISSION] = 1.0;
         out[card::PERMISSION_IS_MINE] = bool_to_f32(permission.player_id == context.viewer_id);
         if let Some(cost) = &permission.cost {
@@ -1224,7 +1229,7 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
         out[card::PERMISSION_FORETOLD] = bool_to_f32(permission.foretold);
         out[card::PERMISSION_THROUGH_NEXT_TURN] = bool_to_f32(permission.through_next_turn);
     }
-    if let Some(x) = card.x {
+    if let Some(x) = object.x {
         out[card::HAS_X] = 1.0;
         out[card::X] = x as f32 / 10.0;
     }
@@ -1712,7 +1717,7 @@ mod tests {
         agent::{
             action::{ActionSpaceKind, ActionType},
             observation::{
-                ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, KeywordData,
+                ActionOption, ActionSpaceData, CardTypeData, EventData, KeywordData, ObjectData,
                 Observation, PermanentData, PlayerData, TurnData,
             },
         },
@@ -1878,9 +1883,9 @@ mod tests {
                 effects: Vec::new(),
             },
             agent_sideboard: Vec::new(),
-            agent_cards: vec![
-                make_card(111, ZoneType::Hand, true, 2, 2, 1),
-                make_card(112, ZoneType::Battlefield, true, 3, 3, 2),
+            agent_objects: vec![
+                make_object(111, ZoneType::Hand, true, 2, 2, 1),
+                make_object(112, ZoneType::Battlefield, true, 3, 3, 2),
             ],
             stack_objects: vec![],
             agent_permanents: vec![make_permanent(333, true)],
@@ -1911,7 +1916,7 @@ mod tests {
                 no_maximum_hand_size: false,
                 effects: Vec::new(),
             },
-            opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
+            opponent_objects: vec![make_object(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
             policy_history: Default::default(),
             recent_events: vec![
@@ -1991,15 +1996,15 @@ mod tests {
         assert_eq!(&encoded.actions_valid[..2], &[1.0, 1.0]);
     }
 
-    fn make_card(
+    fn make_object(
         id: i32,
         zone: ZoneType,
         mine: bool,
         power: i32,
         toughness: i32,
         mana_value: u8,
-    ) -> CardData {
-        CardData {
+    ) -> ObjectData {
+        ObjectData {
             zone,
             owner_id: if mine { 10 } else { 20 },
             id,
@@ -2155,9 +2160,9 @@ mod tests {
         assert_eq!(encoded.actions[last * ACTION_DIM + 14], 1.0);
         assert_eq!(
             encoded.action_focus[last * config.max_focus_objects],
-            2 + obs.agent_cards.len() as i32 + last as i32
+            2 + obs.agent_objects.len() as i32 + last as i32
         );
-        let row = (obs.agent_cards.len() + last) * CARD_DIM;
+        let row = (obs.agent_objects.len() + last) * CARD_DIM;
         assert_eq!(encoded.agent_cards[row..row + ZONE_DIM], [0.0; ZONE_DIM]);
         assert_eq!(encoded.agent_cards[row + 37], 1.0);
         assert_eq!(encoded.agent_cards[row + CARD_DIM - 1], 1.0);

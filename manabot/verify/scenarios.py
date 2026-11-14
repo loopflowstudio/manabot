@@ -46,46 +46,43 @@ PHASE_POSTCOMBAT = int(managym.PhaseEnum.POSTCOMBAT_MAIN)
 # -----------------------------------------------------------------------------
 
 
-def _card_name(raw: Any, object_id: int) -> str | None:
-    """Name of the card with observation ObjectId `object_id`, if visible."""
+def _object_name(raw: Any, object_id: int) -> str | None:
+    """Name of the object with observation ObjectId `object_id`, if visible."""
 
-    for card in raw.agent_cards:
-        if int(card.id) == object_id:
-            return str(card.name)
-    for card in raw.opponent_cards:
-        if int(card.id) == object_id:
-            return str(card.name)
+    for row in [*raw.agent_objects, *raw.opponent_objects]:
+        if int(row.id) == object_id:
+            return str(row.name)
     return None
 
 
 def battlefield_pairs(raw: Any, side: str) -> list[tuple[Any, Any]]:
-    """(CardData, PermanentData) pairs for one side's battlefield.
+    """(ObjectData, PermanentData) pairs for one side's battlefield.
 
-    The engine pushes each permanent and its battlefield card in lockstep
-    (observation.rs add_permanent), so the k-th battlefield-zone card on a
+    The engine pushes each permanent and its battlefield object in lockstep
+    (observation.rs add_permanent), so the k-th battlefield-zone object on a
     side matches the k-th permanent on that side.
     """
 
-    cards = raw.agent_cards if side == "agent" else raw.opponent_cards
+    objects = raw.agent_objects if side == "agent" else raw.opponent_objects
     perms = raw.agent_permanents if side == "agent" else raw.opponent_permanents
-    battlefield_cards = [c for c in cards if int(c.zone) == ZONE_BATTLEFIELD]
-    return list(zip(battlefield_cards, perms))
+    battlefield_objects = [row for row in objects if int(row.zone) == ZONE_BATTLEFIELD]
+    return list(zip(battlefield_objects, perms))
 
 
 def zone_names(raw: Any, side: str, zone: int) -> list[str]:
-    cards = raw.agent_cards if side == "agent" else raw.opponent_cards
-    return [str(c.name) for c in cards if int(c.zone) == zone]
+    objects = raw.agent_objects if side == "agent" else raw.opponent_objects
+    return [str(row.name) for row in objects if int(row.zone) == zone]
 
 
 def stack_names(raw: Any) -> list[str]:
     """Names of spells on the stack, top first (both players' spells)."""
 
     names = [
-        (int(c.id), str(c.name))
-        for c in list(raw.agent_cards) + list(raw.opponent_cards)
-        if int(c.zone) == ZONE_STACK
+        (int(row.id), str(row.name))
+        for row in list(raw.agent_objects) + list(raw.opponent_objects)
+        if int(row.zone) == ZONE_STACK
     ]
-    # populate_cards pushes stack spells top-first per side; merge is
+    # populate_objects pushes stack spells top-first per side; merge is
     # approximate when both players have spells on the stack. Scenario and
     # micro games essentially always have <= 2, with the opponent's below.
     return [name for _, name in names]
@@ -109,7 +106,7 @@ def action_casts(raw: Any, index: int) -> str | None:
     action = raw.action_space.actions[index]
     if int(action.action_type) != CAST or not action.focus:
         return None
-    return _card_name(raw, int(action.focus[0]))
+    return _object_name(raw, int(action.focus[0]))
 
 
 def find_cast_action(raw: Any, name: str) -> int | None:
@@ -128,7 +125,7 @@ def pass_index(raw: Any) -> int:
 
 
 def _count_creatures(pairs: list[tuple[Any, Any]]) -> int:
-    return sum(1 for card, _ in pairs if bool(card.card_types.is_creature))
+    return sum(1 for row, _ in pairs if bool(row.card_types.is_creature))
 
 
 # -----------------------------------------------------------------------------
@@ -226,8 +223,8 @@ class CounterBombTracker:
 
     def observe_state(self, raw: Any) -> None:
         hero_side, villain_side = hero_view(raw)
-        battlefield = [c for c, _ in battlefield_pairs(raw, villain_side)]
-        if any(c.name == self.BOMB for c in battlefield):
+        battlefield = [row for row, _ in battlefield_pairs(raw, villain_side)]
+        if any(row.name == self.BOMB for row in battlefield):
             self.bomb_resolved = True
             self.finished = True
             return
@@ -313,12 +310,12 @@ class BoltThreatTracker:
             return "own_face"
         if focus == int(villain.id):
             return "villain_face"
-        for card, perm in battlefield_pairs(raw, villain_side):
+        for row, perm in battlefield_pairs(raw, villain_side):
             if int(perm.id) == focus:
-                return str(card.name)
-        for card, perm in battlefield_pairs(raw, hero_side):
+                return str(row.name)
+        for row, perm in battlefield_pairs(raw, hero_side):
             if int(perm.id) == focus:
-                return f"own:{card.name}"
+                return f"own:{row.name}"
         return "unknown"
 
     def observe_state(self, raw: Any) -> None:
@@ -326,7 +323,7 @@ class BoltThreatTracker:
             return
         _, villain_side = hero_view(raw)
         on_battlefield = any(
-            card.name == self.KEY for card, _ in battlefield_pairs(raw, villain_side)
+            row.name == self.KEY for row, _ in battlefield_pairs(raw, villain_side)
         )
         if not on_battlefield:
             self.key_died = True
@@ -361,9 +358,9 @@ class RaceBlockTracker:
             focus = int(chosen.focus[0]) if chosen.focus else -1
             hero_side, _ = hero_view(raw)
             name = "unknown"
-            for card, perm in battlefield_pairs(raw, hero_side):
+            for row, perm in battlefield_pairs(raw, hero_side):
                 if int(perm.id) == focus:
-                    name = str(card.name)
+                    name = str(row.name)
                     break
             # Attacker spaces are [attack, decline] in that order.
             (self.attacked if action == 0 else self.declined).append(name)
@@ -419,7 +416,7 @@ class HoldQuenchTracker:
 
     def observe_state(self, raw: Any) -> None:
         _, villain_side = hero_view(raw)
-        battlefield = [c.name for c, _ in battlefield_pairs(raw, villain_side)]
+        battlefield = [row.name for row, _ in battlefield_pairs(raw, villain_side)]
         if self.THREAT in battlefield:
             self.threat_resolved = True
             self.finished = True

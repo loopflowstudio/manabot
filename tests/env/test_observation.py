@@ -273,7 +273,7 @@ class TestObservationEncoder:
 
         # Check cards validity
         agent_cards_valid = encoded["agent_cards_valid"]
-        actual_cards = len(observation.agent_cards)
+        actual_cards = len(observation.agent_objects)
         expected_valid = actual_cards
         valid_sum = int(agent_cards_valid.sum())  # Convert to Python int for comparison
         assert valid_sum == expected_valid, (
@@ -326,14 +326,14 @@ class TestObservationEncoder:
     ):
         encoded = observation_space.encode(observation)
 
-        for i, card in enumerate(observation.agent_cards):
+        for i, card in enumerate(observation.agent_objects):
             vec = encoded["agent_cards"][i]
             assert vec[7] == pytest.approx(1.0)
             assert vec[8] == pytest.approx(card.power / 10.0)
             assert vec[9] == pytest.approx(card.toughness / 10.0)
             assert vec[10] == pytest.approx(card.mana_cost.mana_value / 10.0)
 
-        for i, card in enumerate(observation.opponent_cards):
+        for i, card in enumerate(observation.opponent_objects):
             vec = encoded["opponent_cards"][i]
             assert vec[7] == pytest.approx(0.0)
             assert vec[8] == pytest.approx(card.power / 10.0)
@@ -356,8 +356,8 @@ class TestObservationEncoder:
         mapping = observation_space.encoder.object_to_index
 
         # Find a sample card ID
-        if observation.agent_cards:
-            card_id = observation.agent_cards[0].id
+        if observation.agent_objects:
+            card_id = observation.agent_objects[0].id
             assert card_id in mapping, "Card ID not found in mapping"
             idx = mapping[card_id]
             # Index should be after players but before max objects
@@ -426,15 +426,17 @@ class TestObservationEncoder:
     @pytest.mark.parametrize(
         "method, capacity, label",
         [
-            ("_encode_cards", "max_cards_per_player", "Card list"),
+            ("_encode_object_rows", "max_cards_per_player", "Object list"),
             ("_encode_perms", "max_permanents_per_player", "Permanent list"),
         ],
     )
-    def test_object_capacity_rejects_omitted_objects(self, method, capacity, label):
+    def test_object_capacity_rejects_omitted_objects(
+        self, method: str, capacity: str, label: str
+    ) -> None:
         encoder = ObservationEncoder(ObservationConfig(**{capacity: 1}))
         objects = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
-        # Card rows also read the viewer and turn for cast permissions.
-        context = {"viewer": 0, "turn": 1} if method == "_encode_cards" else {}
+        # Object rows also read the viewer and turn for cast permissions.
+        context = {"viewer": 0, "turn": 1} if method == "_encode_object_rows" else {}
         with pytest.raises(ValueError, match=f"capacity exceeded: {label} 2 > 1"):
             getattr(encoder, method)(objects, is_mine=1.0, **context)
         assert encoder.object_to_index == {}

@@ -1870,13 +1870,13 @@ mod content_pack_contract_tests {
         assert_eq!(player_one.agent.player_index, 1);
         assert_eq!(player_one.opponent.player_index, 0);
         assert!(player_zero
-            .opponent_cards
+            .opponent_objects
             .iter()
-            .all(|card| card.zone != crate::state::zone::ZoneType::Hand));
+            .all(|object| object.zone != crate::state::zone::ZoneType::Hand));
         assert!(player_one
-            .opponent_cards
+            .opponent_objects
             .iter()
-            .all(|card| card.zone != crate::state::zone::ZoneType::Hand));
+            .all(|object| object.zone != crate::state::zone::ZoneType::Hand));
         assert_eq!(
             env.observation_for_player(2)
                 .expect_err("only two seats exist")

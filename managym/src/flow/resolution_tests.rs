@@ -1760,9 +1760,9 @@ fn surveil_kept_order_retains_private_choices_forks_and_suffix() {
         let inspected = |game: &Game, viewer: PlayerId| {
             let observation = Observation::for_player(game, viewer);
             observation
-                .agent_cards
+                .agent_objects
                 .into_iter()
-                .chain(observation.opponent_cards)
+                .chain(observation.opponent_objects)
                 .filter(|object| object.zone == ZoneType::Library)
                 .map(|object| object.id)
                 .collect::<Vec<_>>()
@@ -1970,9 +1970,9 @@ fn retained_inspection_survives_nested_choices_and_hidden_world_sampling() {
         game.publish_action_space(game.suspended_decision_action_space().unwrap());
         let visible_library = |game: &Game, viewer| {
             let obs = Observation::for_player(game, viewer);
-            obs.agent_cards
+            obs.agent_objects
                 .into_iter()
-                .chain(obs.opponent_cards)
+                .chain(obs.opponent_objects)
                 .filter(|object| object.zone == ZoneType::Library)
                 .map(|object| object.id)
                 .collect::<Vec<_>>()
@@ -2051,14 +2051,14 @@ fn retained_search_permission_preserves_opponent_membership_until_caller_finishe
         assert!(game.searches_private_zones(player, opponent));
         let obs = Observation::for_player(&game, player);
         assert_eq!(
-            obs.opponent_cards
+            obs.opponent_objects
                 .iter()
                 .filter(|object| object.zone == ZoneType::Hand)
                 .count(),
             hand.len()
         );
         assert_eq!(
-            obs.opponent_cards
+            obs.opponent_objects
                 .iter()
                 .filter(|object| object.zone == ZoneType::Library)
                 .count(),
@@ -2091,7 +2091,7 @@ fn retained_search_permission_preserves_opponent_membership_until_caller_finishe
         assert!(!game.searches_private_zones(player, opponent));
         let obs = Observation::for_player(&game, player);
         assert!(obs
-            .opponent_cards
+            .opponent_objects
             .iter()
             .all(|object| object.zone != ZoneType::Hand && object.zone != ZoneType::Library));
     }
@@ -2995,7 +2995,7 @@ fn hidden_selection_child_and_saved_caller_share_one_sampled_binding() {
             .contains(selected, ZoneType::Hand, player));
         let hidden_after = Observation::for_player(&branch, viewer);
         assert_eq!(
-            hidden_after.opponent_cards, hidden_before.opponent_cards,
+            hidden_after.opponent_objects, hidden_before.opponent_objects,
             "private selection membership is not observation data"
         );
         checked_command(
@@ -3080,8 +3080,8 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
     let mut known = root.clone();
     known.determinize(player, 13).unwrap();
     assert_eq!(
-        Observation::for_player(&known, player).agent_cards,
-        owner_before.agent_cards,
+        Observation::for_player(&known, player).agent_objects,
+        owner_before.agent_objects,
         "inspection reveals membership, never a shuffled draw order"
     );
     assert_eq!(
@@ -3134,7 +3134,7 @@ fn hidden_selection_library_commitments_survive_sampling_without_revealing_order
         );
         assert_eq!(branch.state.objects[selected].name, "Lightning Bolt");
         assert!(Observation::for_player(&branch, viewer)
-            .opponent_cards
+            .opponent_objects
             .iter()
             .all(|object| object.zone != ZoneType::Library && object.zone != ZoneType::Hand));
         checked_command(&mut branch, Action::Decline { player });
@@ -3292,7 +3292,7 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
         ));
         assert!(
             Observation::for_player(&root, viewer)
-                .opponent_cards
+                .opponent_objects
                 .iter()
                 .any(
                     |object| object.id == root.state.objects[entering].id.0 as i32
@@ -3665,9 +3665,9 @@ fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unkn
             )));
             let observation = crate::agent::observation::Observation::for_player(&branch, viewer);
             assert!(!observation
-                .agent_cards
+                .agent_objects
                 .iter()
-                .chain(&observation.opponent_cards)
+                .chain(&observation.opponent_objects)
                 .any(|object| object.zone == ZoneType::Library));
             let action = branch.action_space().unwrap().actions[0].clone();
             checked_command(&mut branch, action);

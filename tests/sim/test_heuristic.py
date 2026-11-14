@@ -160,7 +160,7 @@ def test_closed_decklists_stay_closed_for_native_selector() -> None:
     env = managym.Env(seed=42)
     raw, _ = env.reset(configs)
     assert raw.opponent.main_counts is None
-    assert not any(card.zone == managym.ZoneEnum.HAND for card in raw.opponent_cards)
+    assert not any(row.zone == managym.ZoneEnum.HAND for row in raw.opponent_objects)
     before = env.state_digest()
     selector = managym.Heuristic()
     selected = selector.select_action(raw)

@@ -120,7 +120,7 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
             for o in frame.offers
         )
         assert game.env is not None and game.trace is not None and game.obs is not None
-        hand = len([c for c in game.obs.agent_cards if c.zone == managym.ZoneEnum.HAND])
+        hand = len([c for c in game.obs.agent_objects if c.zone == managym.ZoneEnum.HAND])
         space = ObservationSpace(ObservationConfig(policy_input_version=9))
         vector = managym.VectorEnv(num_envs=1, seed=seed)
         buffers = space.encoder.allocate(1)
@@ -178,6 +178,6 @@ def test_force_of_negation_exile_payment_reconnect_vector_and_fork(
         # The exiled card and Force of Negation both left the hand.
         assert game.obs is not None
         assert (
-            len([c for c in game.obs.agent_cards if c.zone == managym.ZoneEnum.HAND])
+            len([c for c in game.obs.agent_objects if c.zone == managym.ZoneEnum.HAND])
             == hand - 2
         )

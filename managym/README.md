@@ -131,7 +131,7 @@ absence from game zones. They are not part of the library or a new game zone.
 
 Viewer observations carry remaining owner copies in `agent_sideboard`, using
 private `candidate_id` values that join Learn action focus. These are outside-game
-descriptors, not `CardData` with a fabricated zone or in-game `ObjectRef`.
+descriptors, not `ObjectData` with a fabricated zone or in-game `ObjectRef`.
 Both players expose definition-only initial and remaining sideboard counts;
 only the owner gets copy candidates. Python observation JSON and validation
 use the native Rust implementations so new visibility fields cannot drift.
@@ -299,7 +299,7 @@ immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a
 battlefield permanent's characteristics, legendary and ward included: the
-legend rule reads its `is_legendary`, and every `CardData` field that states a
+legend rule reads its `is_legendary`, and every `ObjectData` field that states a
 characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
 

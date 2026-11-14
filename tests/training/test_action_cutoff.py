@@ -58,7 +58,7 @@ def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
             unrestricted = HeuristicPlayer().act(env, obs)
             retained = HeuristicPlayer(max_actions=64).act(env, obs)
             assert unrestricted == 65 and retained == 0
-            cards = {card.id: card.name for card in raw.agent_cards}
+            cards = {card.id: card.name for card in raw.agent_objects}
             assert (
                 cards[raw.action_space.actions[unrestricted].focus[0]]
                 == "Shivan Dragon"

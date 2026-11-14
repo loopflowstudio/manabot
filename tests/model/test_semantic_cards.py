@@ -148,7 +148,7 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     after = engine.observation_for_player(1 - actor)
     public = tensors(space, after)
     assert public["known_hand"][0, 1, :, 1].sum() == 1
-    assert all(int(card.zone) != 1 for card in after.opponent_cards)
+    assert all(int(card.zone) != 1 for card in after.opponent_objects)
     _, value = agent(admit_observation(agent, public))
     forgotten = {key: value.clone() for key, value in public.items()}
     forgotten["known_hand"].zero_()

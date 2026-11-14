@@ -45,7 +45,7 @@ def _hand(env: managym.Env, player: int) -> dict[str, int]:
     return dict(
         Counter(
             card.name
-            for card in env.observation_for_player(player).agent_cards
+            for card in env.observation_for_player(player).agent_objects
             if int(card.zone) == int(managym.ZoneEnum.HAND)
         )
     )
@@ -89,7 +89,7 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
         assert sum(snapshot.cards.values()) == 7
         assert max(snapshot.cards.values()) > 1
         assert not any(
-            int(card.zone) == int(managym.ZoneEnum.HAND) for card in obs.opponent_cards
+            int(card.zone) == int(managym.ZoneEnum.HAND) for card in obs.opponent_objects
         )
         assert obs.opponent.known_hand == {}
         expected = space.encode(scalar.observation_for_player(obs.agent.player_index))

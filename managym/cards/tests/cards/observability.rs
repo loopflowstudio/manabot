@@ -32,8 +32,8 @@ use managym::{
             RELATION_DIM,
         },
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, CopyData, EventData, Observation, PermanentData, PlayerData,
+            ActionOption, ActionSpaceData, CardTypeData, CastPermissionData, ContinuousEffectData,
+            CopyData, EventData, ObjectData, Observation, PermanentData, PlayerData,
             PooledManaClassData, RestrictedManaData, SideboardCardData, StackObjectData,
             StackTargetData, TurnData, KEYWORD_COUNT,
         },
@@ -642,7 +642,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
         ),
         (
             "graveyard_from_battlefield",
-            Seen::Via("input v10 card_turn_state of each graveyard card row (CardData.from_battlefield_this_turn)"),
+            Seen::Via("input v10 card_turn_state of each graveyard card row (ObjectData.from_battlefield_this_turn)"),
         ),
         (
             "history.attacked",
@@ -1436,7 +1436,7 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
         ),
         StaticAbility::LookAtLibraryTop => witnessed(
             "StaticAbility::LookAtLibraryTop",
-            Seen::Via("the controller's library top is a visible CardData row"),
+            Seen::Via("the controller's library top is a visible ObjectData row"),
             "Hakoda, Selfless Commander",
             "tla",
             "hakoda_reveals_the_top_card_to_you_and_casts_allies_from_it",
@@ -1783,7 +1783,7 @@ fn card_index(game: &Game, observation: &Observation, permanent: PermanentId) ->
     let object = game.state.permanents[permanent].as_ref().unwrap().object;
     let id = game.state.objects[object].id.0 as i32;
     observation
-        .agent_cards
+        .agent_objects
         .iter()
         .position(|object| object.id == id)
         .unwrap()
@@ -2696,7 +2696,7 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
         game.create_token(token.key, PlayerId(0), false);
         let (observation, encoded) = observe(&game, 0);
         let object = observation
-            .agent_cards
+            .agent_objects
             .iter()
             .position(|object| object.name == token.name && object.is_token)
             .unwrap_or_else(|| panic!("{} is not observed", token.key));
@@ -2830,11 +2830,11 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         turn => [Rows("player")],
         action_space => [Rows("actions")],
         agent => [Rows("agent_player")],
-        agent_cards => [Rows("agent_cards")],
+        agent_objects => [Rows("agent_cards")],
         agent_sideboard => [Rows("agent_cards")],
         agent_permanents => [Rows("agent_permanents")],
         opponent => [Rows("opponent_player")],
-        opponent_cards => [Rows("opponent_cards")],
+        opponent_objects => [Rows("opponent_cards")],
         opponent_permanents => [Rows("opponent_permanents")],
         stack_objects => [Rows("relations")],
         recent_events => [Rows("events")],
@@ -2896,7 +2896,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         bent => [Columns(Player, player::BENT_WATER, 4)],
         life_lost => [column(PlayerTurnState, turn_state::LIFE_LOST)],
     }));
-    fields.extend(encoding!(CardData {
+    fields.extend(encoding!(ObjectData {
         zone => [Columns(Card, card::ZONE_LIBRARY, 7)],
         owner_id => [column(Card, card::IS_MINE), Side],
         id => [Identity],
@@ -3046,7 +3046,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         stack_object_id => [Rows("relations")],
         kind => [column(Relation, relation::FRAME_KIND)],
         controller_id => [column(Relation, relation::CONTROLLER)],
-        source_card_registry_key => [Join(Relation, relation::SOURCE_DEFINITION)],
+        source_registry_key => [Join(Relation, relation::SOURCE_DEFINITION)],
         source_permanent_id => [Join(Relation, relation::SOURCE)],
         chosen_mode => [column(Relation, relation::MODE)],
         ability_index => [column(Relation, relation::ABILITY)],
@@ -3230,7 +3230,7 @@ fn every_observed_field_names_its_encoding_and_every_column_is_claimed() {
 // ---------------------------------------------------------------------------
 // Where a card row's values come from on the battlefield.
 
-/// Where a `CardData` field reads while its card is on the battlefield (Jack
+/// Where an `ObjectData` field reads while its card is on the battlefield (Jack
 /// Heart, 2026-11-02). A layered field reads `Game::characteristics` there
 /// and the printed card plus its CDAs elsewhere; a printed field never states a
 /// characteristic continuous effects change. The pattern is exhaustive, so a
@@ -3253,7 +3253,7 @@ macro_rules! sources {
 
 fn card_sources() -> Vec<(&'static str, CardSource)> {
     use CardSource::*;
-    sources!(CardData {
+    sources!(ObjectData {
         zone => Printed("where the card is"),
         owner_id => Printed("identity"),
         id => Printed("identity"),
@@ -3384,7 +3384,7 @@ fn card_rows_off_the_battlefield_read_the_printed_card() {
     let id = s.game().state.objects[object].id.0 as i32;
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let row = observation
-        .agent_cards
+        .agent_objects
         .iter()
         .find(|row| row.id == id)
         .unwrap();
@@ -4233,8 +4233,8 @@ fn object_id(s: &Scenario, object: ObjectId) -> i32 {
 fn listed_card_row(observation: &Observation, object: i32) -> Option<Vec<f32>> {
     let encoded = encoded_default(observation);
     for (objects, rows) in [
-        (&observation.agent_cards, &encoded.agent_cards),
-        (&observation.opponent_cards, &encoded.opponent_cards),
+        (&observation.agent_objects, &encoded.agent_cards),
+        (&observation.opponent_objects, &encoded.opponent_cards),
     ] {
         if let Some(slot) = objects.iter().position(|c| c.id == object) {
             return Some(rows[slot * CARD_DIM..(slot + 1) * CARD_DIM].to_vec());
@@ -4261,7 +4261,7 @@ fn airbend_permission_reaches_both_viewers_tensors() {
 
     let airbender = Observation::for_player(s.game(), PlayerId(0));
     let listed = airbender
-        .opponent_cards
+        .opponent_objects
         .iter()
         .find(|c| c.id == id)
         .expect("the exiled Ogre is public");
@@ -4470,7 +4470,11 @@ fn announced_x_reaches_the_stack_card_row() {
     choose_mode(&mut s, 3);
     let id = object_id(&s, front);
     let observation = Observation::for_player(s.game(), PlayerId(0));
-    let object = observation.agent_cards.iter().find(|c| c.id == id).unwrap();
+    let object = observation
+        .agent_objects
+        .iter()
+        .find(|c| c.id == id)
+        .unwrap();
     assert_eq!(object.x, Some(3));
     let row = listed_card_row(&observation, id).unwrap();
     assert_eq!(&row[card::HAS_X..card::HAS_X + 2], &[1.0, 0.3]);
@@ -4674,7 +4678,7 @@ fn off_battlefield_cda_power_reaches_card_tensor_and_learning_tokens() {
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let suki = observation
-        .agent_cards
+        .agent_objects
         .iter()
         .find(|c| c.name == "Suki, Kyoshi Warrior" && c.zone == ZoneType::Hand)
         .unwrap();
@@ -4914,7 +4918,7 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     );
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let slot = observation
-        .agent_cards
+        .agent_objects
         .iter()
         .position(|object| object.id == s.game().state.objects[ogre_card].id.0 as i32)
         .expect("graveyard row");

@@ -70,7 +70,7 @@ class PaymentMismatchEnv:
         ):
             raw = self.native.observation_for_player(frame["actor"])
             mountains = {
-                card.registry_key for card in raw.agent_cards if card.name == "Mountain"
+                card.registry_key for card in raw.agent_objects if card.name == "Mountain"
             }
             red = sum(raw.agent.mana) + sum(
                 not permanent.tapped and permanent.registry_key in mountains

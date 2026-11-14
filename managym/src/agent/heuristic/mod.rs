@@ -54,7 +54,7 @@
 mod knowledge;
 use crate::agent::{
     action::{ActionSpaceKind as Space, ActionType as Action, AgentError},
-    observation::{ActionOption, CardData, EventType, KeywordData, Observation, PermanentData},
+    observation::{ActionOption, ObjectData, EventType, KeywordData, Observation, PermanentData},
 };
 use crate::{flow::turn::StepKind, state::zone::ZoneType};
 use knowledge::{knowledge, Knowledge, Polarity, Spell};
@@ -63,20 +63,20 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 struct Board<'a> {
     raw: &'a Observation,
     actions: &'a [ActionOption],
-    cards: HashMap<i32, &'a CardData>,
-    by_key: HashMap<i32, &'a CardData>,
+    objects: HashMap<i32, &'a ObjectData>,
+    by_key: HashMap<i32, &'a ObjectData>,
     permanents: HashMap<i32, &'a PermanentData>,
 }
 impl<'a> Board<'a> {
     fn new(raw: &'a Observation, max_actions: Option<usize>) -> Self {
-        let cards = raw.agent_cards.iter().chain(&raw.opponent_cards);
+        let objects = raw.agent_objects.iter().chain(&raw.opponent_objects);
         Self {
             raw,
             actions: &raw.action_space.actions[..max_actions
                 .unwrap_or(usize::MAX)
                 .min(raw.action_space.actions.len())],
-            cards: cards.clone().map(|c| (c.id, c)).collect(),
-            by_key: cards.map(|c| (c.registry_key, c)).collect(),
+            objects: objects.clone().map(|c| (c.id, c)).collect(),
+            by_key: objects.map(|c| (c.registry_key, c)).collect(),
             permanents: raw
                 .agent_permanents
                 .iter()
@@ -124,12 +124,12 @@ impl<'a> Board<'a> {
             })
             .count() as i32
     }
-    fn can_kick(&self, c: &CardData) -> bool {
+    fn can_kick(&self, c: &ObjectData) -> bool {
         c.kicker_cost > 0 && self.lands(true) >= c.mana_cost.mana_value as i32 + c.kicker_cost
     }
-    fn hand(&self) -> impl Iterator<Item = &'a CardData> {
+    fn hand(&self) -> impl Iterator<Item = &'a ObjectData> {
         self.raw
-            .agent_cards
+            .agent_objects
             .iter()
             .filter(|c| c.zone == ZoneType::Hand)
     }
@@ -153,7 +153,7 @@ impl<'a> Board<'a> {
             .enumerate()
             .filter(|(_, a)| a.action_type != Action::DeclineChoice)
             .filter_map(|(i, a)| {
-                let card = self.cards.get(a.focus.first()?)?;
+                let card = self.objects.get(a.focus.first()?)?;
                 let rank = if card.card_types.is_land {
                     land_rank
                 } else {
@@ -301,7 +301,7 @@ impl Heuristic {
         let mut activations = vec![];
         for (i, a) in b.actions.iter().enumerate() {
             if a.action_type == Action::PriorityCastSpell && a.focus.len() == 1 {
-                if let Some(c) = b.cards.get(&a.focus[0]) {
+                if let Some(c) = b.objects.get(&a.focus[0]) {
                     casts.push((-(c.mana_cost.mana_value as i32), i, *c));
                 }
             } else if a.action_type == Action::PriorityActivateAbility {
@@ -354,7 +354,7 @@ impl Heuristic {
             knowledge(&c.name).filter(|k| matches(k)).map(|_| *i)
         })
     }
-    fn timely(&self, b: &Board<'_>, c: &CardData) -> bool {
+    fn timely(&self, b: &Board<'_>, c: &ObjectData) -> bool {
         let Some(k) = knowledge(&c.name) else {
             return true;
         };
@@ -369,7 +369,7 @@ impl Heuristic {
         }
         !b.own_turn() && b.raw.turn.step == StepKind::End
     }
-    fn worth_casting(&self, b: &Board<'_>, c: &CardData) -> bool {
+    fn worth_casting(&self, b: &Board<'_>, c: &ObjectData) -> bool {
         let Some(s) = knowledge(&c.name)
             .and_then(|k| k.spell.as_ref())
             .filter(|s| s.polarity.is_some())
@@ -391,7 +391,7 @@ impl Heuristic {
     fn pay(&mut self, b: &Board<'_>) -> Option<usize> {
         if b.raw.action_space.focus.len() == 1 {
             if let Some(c) = b
-                .cards
+                .objects
                 .get(&b.raw.action_space.focus[0])
                 .filter(|c| c.kicker_cost > 0 && c.owner_id == b.raw.agent.id)
             {
@@ -503,7 +503,7 @@ impl Heuristic {
             .action_space
             .focus
             .iter()
-            .find_map(|id| b.cards.get(id))?;
+            .find_map(|id| b.objects.get(id))?;
         let spell = knowledge(&source.name)?.spell.as_ref()?;
         let polarity = spell.polarity?;
         let damage = b.damage(spell, self.kicked.get(&source.id).copied().unwrap_or(false));
@@ -531,7 +531,7 @@ impl Heuristic {
                 b.permanents
                     .get(&id)
                     .map(|p| p.controller_id)
-                    .or_else(|| b.cards.get(&id).map(|c| c.owner_id))
+                    .or_else(|| b.objects.get(&id).map(|c| c.owner_id))
                     .map(|c| c == b.raw.agent.id)
             };
             if own != Some(polarity == Polarity::Beneficial) {
@@ -555,7 +555,7 @@ impl Heuristic {
                         b.mana_value(p),
                     ]
                 }
-            } else if b.cards.contains_key(&id) {
+            } else if b.objects.contains_key(&id) {
                 vec![3]
             } else {
                 vec![if damage >= b.raw.opponent.life { 4 } else { 1 }]

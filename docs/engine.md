@@ -129,6 +129,40 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
   mechanic that reaches one reaches all three in the same change
   ([observations and the policy network](observation-and-model.md)).
 
+In Python, the viewer's visible objects are
+`observation.agent_objects`, and the opponent's visible ones are
+`observation.opponent_objects`. Each row is a `managym.Object`: a card, a token
+or a copy of a spell (CR 109.1), in the zone it names.
+
+```python
+import managym
+
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+rows = observation.agent_objects
+print(type(rows[0]).__name__, len(rows), {str(row.zone).rsplit(".", 1)[-1] for row in rows})
+# Object 7 {'Hand'}
+print(len(observation.opponent_objects))
+# 0: the opponent's hand is absent, not masked
+```
+
+`is_token` is set for tokens and for copies of spells: it reads "not a card",
+which is what a viewer can tell. `registry_key` joins a row to its definition
+([card definition IDs](#card-definition-ids)). Permanents are
+`agent_permanents` / `opponent_permanents`, and each `StackObject` names the
+definition of its spell or ability source, a token source included, in
+`source_registry_key`.
+
+Names for things that are only ever cards keep `card`: `agent_sideboard` rows
+are `SideboardCard`, `known_hand` and the draw counts count cards, and a
+`StackTarget.card_id` names a graveyard card. `card_types` is the rules term
+for a token's types too (CR 205.2). The earlier `Card`, `agent_cards`,
+`opponent_cards` and `source_card_registry_key` are
+[deprecated names](#deprecated-names).
+
 Consumers read the encoded arrays by name; see
 [encoded observations](#encoded-observations).
 
@@ -603,14 +637,41 @@ seen.
 
 ### Deprecated names
 
-Engine names describe what managym produces. These earlier spellings, named for
-manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
+Engine names describe what managym produces. These earlier spellings still
+work with a `DeprecationWarning` and are removed in 0.3.0:
 
 | Deprecated | Use |
 |---|---|
 | `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
 | `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
 | `managym.learning_record_names()` | `managym.record_vocabulary()` |
+| `managym.Card` | `managym.Object` |
+| `Observation.agent_cards` / `opponent_cards` | `Observation.agent_objects` / `opponent_objects` |
+| `StackObject.source_card_registry_key` | `StackObject.source_registry_key` |
+
+The first three were named for manabot's use. The last three were named for
+cards, although the rows also hold tokens and copies of spells
+([observations](#observations)).
+
+A deprecated name gives the same value as its replacement: `managym.Card is
+managym.Object`, `agent_cards` returns the rows of `agent_objects`, and
+assigning to a deprecated attribute writes the renamed one. Each warning names
+the replacement:
+
+```text
+DeprecationWarning: managym.Observation.agent_cards is deprecated and removed in 0.3.0; use managym.Observation.agent_objects
+```
+
+Python shows a `DeprecationWarning` only for code in `__main__` and under test
+runners. To find every remaining use before upgrading, run your tests with
+`-W error::DeprecationWarning`.
+
+Only names in code changed (the Rust records are renamed outright, without
+aliases; see [names](#names)). Observation JSON still writes `agent_cards`,
+`opponent_cards` and `source_card_registry_key`, and the encoded arrays keep
+their keys (`agent_cards`, `agent_cards_valid`, `semantic_cards`,
+`card_turn_state`), shapes and columns, so saved observations, datasets and
+checkpoints read as before.
 
 ## Cards as programs
 
@@ -813,10 +874,13 @@ pub(crate) fn play_land(&mut self, player: PlayerId, card: CardId) -> Result<(),
 
 Names that do not bind runtime ids keep `card`: definitions
 (`CardDefinition`, `CardDefId`, `card.rs`, which describe a card rather than
-name an object in a game), card-name strings, and the published observation
-and Python names
-(`CardData`, `StackTargetData.card_id`, serialized `card` fields), which keep
-their spelling for recorded evidence.
+name an object in a game), card-name strings, names that hold only cards
+(`SideboardCardData`, and `StackTargetData.card_id`, which only a
+graveyard-card target writes) and every serialized spelling: observation JSON
+keys, encoded array keys and columns keep `card` for recorded evidence. The
+observation records themselves are named for objects (`ObjectData`,
+`Observation::agent_objects`, `StackObjectData::source_registry_key`), each
+with a serde rename to the JSON key it has always written.
 
 #### What is built
 
@@ -932,9 +996,10 @@ zone.
   that object is a transient token. Card-only selection skips that token, but
   drawing does not skip ahead to another object.
 - **Ante is not modeled** (CR 407).
-- **Observations keep their names and columns.** The observation API's
-  `CardData` rows cover cards, tokens and copies alike, and its `is_token`
-  column is set for tokens and for copies of spells. Observations stay
+- **Observations keep their serialized names and columns.** The observation
+  API's `ObjectData` rows cover cards, tokens and copies alike, under the JSON
+  and array keys `agent_cards` / `opponent_cards`, and the `is_token` column
+  is set for tokens and for copies of spells. Observations stay
   byte-identical to the layout frozen evidence was recorded with; the column
   reads "not a card", which is what a viewer can tell. The match-state hash
   likewise records a token's or copy's characteristics with `is_token` set.

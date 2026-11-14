@@ -291,6 +291,11 @@ files you changed, not whole directories; CI runs the suite.
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.
 
+The Python text-observation field guard enumerates PyO3 class properties with
+`dir`. A deprecated property aliases existing state: explicitly exclude that
+property from the guard and cover its warning and shared value in the alias test;
+keep the replacement property in the exhaustive field map.
+
 Use distinct Python test filenames across test directories: the configured
 pytest import mode shares their module namespace, so duplicate basenames fail
 collection even when the tests pass individually.

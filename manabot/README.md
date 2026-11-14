@@ -456,9 +456,11 @@ The input version is explicit in saved observation and configuration
 identities, and main loads only v9; see
 [policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
 and the saved-checkpoint and world admission requirements. Text representation
-`manabot-text-6` renders each native payload once with exact public source and
-member labels and timestamp ranks. Its within-observation token reducer is not
-persistent game memory.
+`manabot-text-7` renders each native payload once with exact public source and
+member labels and timestamp ranks. It lists the rows of `agent_objects` and
+`opponent_objects` under "Visible objects", since they include tokens and
+copies of spells. Retained receipts keep the version they recorded. Its
+within-observation token reducer is not persistent game memory.
 
 ## Policy action capacity
 

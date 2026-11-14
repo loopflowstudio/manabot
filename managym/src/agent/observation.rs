@@ -281,16 +281,16 @@ impl CardTypeData {
     }
 }
 
-/// An object in any zone, under the published `CardData` name. Every field
+/// A viewer-safe object in any zone, including tokens and copies of spells. Every field
 /// that states a characteristic (name,
 /// power/toughness, types, supertypes, subtypes, keywords, ward) reads
-/// `Game::characteristics` while the card is on the battlefield and the
+/// `Game::characteristics` while the object is on the battlefield and the
 /// printed card elsewhere; identity, token status and the costs paid when
 /// casting are printed by definition. `tests/cards/observability.rs`
 /// classifies each field as layered or printed.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CardData {
+pub struct ObjectData {
     #[serde(deserialize_with = "super::observation_json::zone")]
     pub zone: ZoneType,
     pub owner_id: i32,
@@ -461,7 +461,8 @@ pub struct StackObjectData {
     #[serde(deserialize_with = "super::observation_json::stack_kind")]
     pub kind: StackObjectKindData,
     pub controller_id: i32,
-    pub source_card_registry_key: i32,
+    #[serde(rename = "source_card_registry_key")]
+    pub source_registry_key: i32,
     pub source_permanent_id: Option<i32>,
     pub chosen_mode: Option<usize>,
     pub ability_index: Option<i32>,
@@ -939,11 +940,13 @@ pub struct Observation {
     pub turn: TurnData,
     pub action_space: ActionSpaceData,
     pub agent: PlayerData,
-    pub agent_cards: Vec<CardData>,
+    #[serde(rename = "agent_cards")]
+    pub agent_objects: Vec<ObjectData>,
     pub agent_sideboard: Vec<SideboardCardData>,
     pub agent_permanents: Vec<PermanentData>,
     pub opponent: PlayerData,
-    pub opponent_cards: Vec<CardData>,
+    #[serde(rename = "opponent_cards")]
+    pub opponent_objects: Vec<ObjectData>,
     pub opponent_permanents: Vec<PermanentData>,
     pub stack_objects: Vec<StackObjectData>,
     pub recent_events: Vec<EventData>,
@@ -1094,11 +1097,11 @@ impl Observation {
             turn,
             action_space,
             agent,
-            agent_cards: Vec::new(),
+            agent_objects: Vec::new(),
             agent_sideboard: Vec::new(),
             agent_permanents: Vec::new(),
             opponent,
-            opponent_cards: Vec::new(),
+            opponent_objects: Vec::new(),
             opponent_permanents: Vec::new(),
             stack_objects: Vec::new(),
             policy_history: game.policy_history.clone(),
@@ -1108,7 +1111,7 @@ impl Observation {
                 .collect(),
         };
 
-        obs.populate_cards(game, agent_player);
+        obs.populate_objects(game, agent_player);
         obs.populate_permanents(game, agent_player);
         obs.populate_stack_objects(game);
         obs
@@ -1266,7 +1269,7 @@ impl Observation {
         }
     }
 
-    fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
+    fn populate_objects(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
             if game.state.zones.zone_of(*card).is_none() {
                 let record = &game.state.objects[*card];
@@ -1285,8 +1288,8 @@ impl Observation {
         let mut seen = HashSet::new();
         let mut add_object = |object_id: ObjectId, zone: ZoneType| {
             if seen.insert(object_id) {
-                self.push_card(
-                    Self::card_data(game, object_id, zone),
+                self.push_object(
+                    Self::object_data(game, object_id, zone),
                     game.state.objects[object_id].owner,
                 );
             }
@@ -1389,7 +1392,7 @@ impl Observation {
 
         for stack_object in game.state.stack_objects.iter().rev() {
             if let StackObject::Spell(spell) = stack_object {
-                let mut card = Self::card_data(game, spell.object, ZoneType::Stack);
+                let mut card = Self::object_data(game, spell.object, ZoneType::Stack);
                 let definition = &game.state.objects[spell.object];
                 // A replicated spell's announced count is its X.
                 if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
@@ -1397,7 +1400,7 @@ impl Observation {
                 {
                     card.x = Some(i32::from(spell.x));
                 }
-                self.push_card(card, game.state.objects[spell.object].owner);
+                self.push_object(card, game.state.objects[spell.object].owner);
             }
         }
     }
@@ -1419,13 +1422,13 @@ impl Observation {
         }
     }
 
-    /// List a card on `side`: its owner's, except that battlefield cards
+    /// List an object on `side`: its owner's, except that battlefield objects
     /// sit with their permanent's controller, in permanent order.
-    fn push_card(&mut self, card_data: CardData, side: PlayerId) {
+    fn push_object(&mut self, object_data: ObjectData, side: PlayerId) {
         if side.0 == self.agent.player_index as usize {
-            self.agent_cards.push(card_data);
+            self.agent_objects.push(object_data);
         } else {
-            self.opponent_cards.push(card_data);
+            self.opponent_objects.push(object_data);
         }
     }
 
@@ -1543,20 +1546,20 @@ impl Observation {
             self.opponent_permanents.push(pdat);
         }
 
-        self.push_card(
-            Self::card_data(game, permanent.object, ZoneType::Battlefield),
+        self.push_object(
+            Self::object_data(game, permanent.object, ZoneType::Battlefield),
             permanent.controller,
         );
     }
 
     /// A card's row. On the battlefield every characteristic reads the
     /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
-    fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
-        let printed = Self::printed_card_data(game, object_id, zone);
+    fn object_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> ObjectData {
+        let printed = Self::printed_object_data(game, object_id, zone);
         match game.state.object_to_permanent[object_id] {
             Some(permanent) if zone == ZoneType::Battlefield => {
                 let view = game.characteristics(permanent);
-                CardData {
+                ObjectData {
                     name: view.name.clone(),
                     power: view.power,
                     toughness: view.toughness,
@@ -1569,16 +1572,16 @@ impl Observation {
                     ..printed
                 }
             }
-            _ => CardData {
+            _ => ObjectData {
                 power: game.object_power(object_id),
                 ..printed
             },
         }
     }
 
-    fn printed_card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
+    fn printed_object_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> ObjectData {
         let object = &game.state.objects[object_id];
-        CardData {
+        ObjectData {
             zone,
             owner_id: game.state.players[object.owner.0].id.0 as i32,
             id: object.id.0 as i32,
@@ -1649,7 +1652,7 @@ impl Observation {
                 StackObject::TriggeredAbility(_) => StackObjectKindData::TriggeredAbility,
             },
             controller_id: game.state.players[stack_object.controller().0].id.0 as i32,
-            source_card_registry_key: stack_object.source_card_registry_key().0 as i32,
+            source_registry_key: stack_object.source_card_registry_key().0 as i32,
             source_permanent_id: match stack_object {
                 StackObject::ActivatedAbility(ability) => game
                     .object_event_ref(ability.source_ref)
@@ -2166,8 +2169,8 @@ impl Observation {
         }
         // A battlefield card sits with its controller, who may not own it.
         for (objects, side) in [
-            (&self.agent_cards, self.agent.id),
-            (&self.opponent_cards, self.opponent.id),
+            (&self.agent_objects, self.agent.id),
+            (&self.opponent_objects, self.opponent.id),
         ] {
             if objects
                 .iter()

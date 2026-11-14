@@ -159,7 +159,7 @@ fn cr_602_observation_exposes_stack_object_metadata_for_ability() {
     let stack_object = &observation.stack_objects[0];
     assert_eq!(stack_object.kind, StackObjectKindData::ActivatedAbility);
     assert_eq!(stack_object.controller_id, controller_id);
-    assert_eq!(stack_object.source_card_registry_key, shivan_registry_key);
+    assert_eq!(stack_object.source_registry_key, shivan_registry_key);
     assert_eq!(stack_object.source_permanent_id, Some(shivan_obj_id));
     assert_eq!(stack_object.ability_index, Some(0));
     assert!(stack_object.targets.is_empty());
