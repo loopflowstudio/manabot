@@ -18,20 +18,20 @@ import math
 from pathlib import Path
 import statistics
 from typing import (
-    TYPE_CHECKING,
     Annotated,
     Any,
     Callable,
     Iterable,
     Literal,
     Mapping,
+    Protocol,
     Sequence,
     TypeAlias,
 )
 
 from pydantic import Field, TypeAdapter, model_validator
 
-from academy.advice_identity import (
+from managym.academy.advice_identity import (
     AbiIdentity,
     AdviceIdentity,
     AdviceRequestIdentity,
@@ -39,21 +39,34 @@ from academy.advice_identity import (
     CheckpointArtifact,
     CodeSourceArtifact,
 )
-from academy.replay_index import (
+from managym.academy.replay_index import (
     InvalidAddressError,
     ReplayDecisionAddress,
 )
-from academy.shared_table_protocol import BeliefScenario, ViewerIdentity
-from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
+from managym.academy.shared_table_protocol import BeliefScenario, ViewerIdentity
+from managym.academy.study_protocol import (
+    DecisionEvidence,
+    StudyArtifact,
+    StudyLandmark,
+)
+from managym.bots import BotArtifactError
 from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
 
-if TYPE_CHECKING:
-    from manabot.sim.search.conditional import (
-        ConditionalStrategyResult,
-        ConditionResult,
-    )
+from .extensions import CheckpointRegistration, bot_extension
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+
+class ConditionResult(Protocol):
+    visit_counts: Sequence[int]
+    q_values: Sequence[float]
+    world_q_values: Sequence[Sequence[float]]
+    sampled_worlds: int
+
+
+class ConditionalStrategyResult(Protocol):
+    condition_by_id: Mapping[str, ConditionResult]
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = REPO_ROOT / "protocol" / "fixtures" / "advice-curated-decision.json"
 VERSIONED_FIXTURE_PATH = (
     REPO_ROOT / "protocol" / "fixtures" / "advice-belief-conditioned-v1.json"
@@ -448,6 +461,8 @@ def load_advice_fixture() -> AdviceArtifact:
     viewer-safety, bindings, and opponent-hand privacy) and the scenarios
     cross-reference landmarks by id.
     """
+    if not FIXTURE_PATH.is_file():
+        raise AdvisorUnavailable("advisor_artifact_unavailable")
     payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
     return AdviceArtifact.model_validate(payload)
 
@@ -807,26 +822,27 @@ class RegisteredAdvisor:
     def verify_artifact(self) -> None:
         artifact = self.identity.artifact
         if isinstance(artifact, CodeSourceArtifact):
-            if source_bundle_sha256(self.source_paths) != artifact.source_bundle_sha256:
+            try:
+                actual = source_bundle_sha256(self.source_paths)
+            except OSError as exc:
+                raise AdvisorUnavailable("advisor_artifact_unavailable") from exc
+            if actual != artifact.source_bundle_sha256:
                 raise AdvisorUnavailable("advisor_artifact_mismatch")
             return
         self._checkpoint_registration(artifact)
 
-    def _checkpoint_registration(self, artifact: CheckpointArtifact) -> Any:
-        from manabot.sim.search.runtime import (
-            RetainedCheckpointMismatchError,
-            RetainedCheckpointUnavailableError,
-            retained_int7_policy_only_checkpoint,
-        )
-
+    def _checkpoint_registration(
+        self, artifact: CheckpointArtifact
+    ) -> CheckpointRegistration:
+        extension = bot_extension()
+        if extension is None:
+            raise AdvisorUnavailable("advisor_artifact_unavailable")
         try:
-            registration = retained_int7_policy_only_checkpoint(
+            registration = extension.checkpoint_registration(
                 int(artifact.training_seed)
             )
-        except RetainedCheckpointUnavailableError as exc:
-            raise AdvisorUnavailable("advisor_artifact_unavailable") from exc
-        except RetainedCheckpointMismatchError as exc:
-            raise AdvisorUnavailable("advisor_artifact_mismatch") from exc
+        except BotArtifactError as exc:
+            raise AdvisorUnavailable(exc.reason) from exc
         expected_observation_abi = AbiIdentity(
             name="manabot_observation",
             version=registration.world_id,

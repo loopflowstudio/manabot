@@ -11,15 +11,15 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from managym.experience import ExperienceFrame, InteractionOffer
 import numpy as np
 import pytest
 
-from academy import server, trace as trace_store
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
+from managym.academy import server, trace as trace_store
+from managym.experience import ExperienceFrame, InteractionOffer
 
 
 def _command(

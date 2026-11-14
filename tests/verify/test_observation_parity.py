@@ -218,13 +218,13 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
         num_envs=num_envs,
         seed=123,
         skip_trivial=True,
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
     hot = managym.VectorEnv(
         num_envs=num_envs,
         seed=123,
         skip_trivial=True,
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
     buffers = allocate_vector_buffers(num_envs, config)
     hot.set_buffers(buffers)
@@ -275,7 +275,7 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         num_envs=num_envs,
         seed=999,
         skip_trivial=True,
-        opponent_policy="none",
+        player_policies=("agent", "agent"),
     )
     good = allocate_vector_buffers(num_envs, config)
 
@@ -309,7 +309,7 @@ def test_vector_env_set_buffers_validates_contract() -> None:
         num_envs=num_envs,
         seed=1000,
         skip_trivial=True,
-        opponent_policy="none",
+        player_policies=("agent", "agent"),
     )
     with pytest.raises(RuntimeError):
         unconfigured.reset_all_into_buffers(player_configs)

@@ -19,7 +19,8 @@ website
 scratch
 paper
 experiments
-docs
+docs/*
+!docs/experiment-metrics.md
 wave
 conformance
 tests

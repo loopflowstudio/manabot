@@ -180,3 +180,17 @@ def test_delegated_search_keeps_viewer_and_resource_ownership(
     assert not any(c.zone == "LIBRARY" for c in after.agent.inspected or [])
     assert after.agent.player_index == caster
     assert after.opponent.known_hand
+
+
+@pytest.mark.parametrize("caster", [0, 1])
+def test_native_heuristic_uses_published_chooser_under_control(caster: int) -> None:
+    env = _controlled_root(False, caster=caster)
+    raw = env.observation_for_player(caster)
+    assert raw.agent.player_index == caster == env.current_agent_index()
+    assert raw.turn.active_player_id != raw.agent.id
+    before = env.state_digest()
+    choice = managym.Heuristic().select_action(raw)
+    assert env.state_digest() == before
+    assert 0 <= choice < len(raw.action_space.actions)
+    env.step(choice)
+    assert env.state_digest() != before

@@ -5,7 +5,8 @@ once, decides what is legal at every point, shows each seat only what that seat
 may see, and can copy, replay or re-deal a game exactly. It never chooses among
 a learner's legal actions. Forced single actions are played automatically, and
 every other choice comes from outside, whether from a policy, a search player,
-a script or a person; a native random opponent is an explicit opt-in.
+a script or a person; a native opponent (`random`, `heuristic`) is an
+explicit opt-in.
 
 This guide is for anyone who needs to trust what the engine guarantees.
 Building and testing it is in [managym/README.md](../managym/README.md); the
@@ -15,6 +16,8 @@ cross-package contract is in the
 - [One decision](#one-decision)
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
+- [Per-seat players](#per-seat-players)
+- [Built-in heuristic](#built-in-heuristic)
 - [Hand snapshots](#hand-snapshots)
 - [Encoded observations](#encoded-observations)
 - [Cards as programs](#cards-as-programs)
@@ -277,19 +280,125 @@ is scored and reset in place. By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
 
-`opponent_policy="none"` (the default) surfaces both seats' decisions to the
-caller. `opponent_policy="random"` plays the opponent's decisions natively and
-returns seat 0's next decision. These are the only built-in vector policies;
-`"passive"` is removed and raises an unsupported-policy `ValueError`, including
-through CapturedVector and Torch. Retained failure evidence keeps its original
-policy name, but replaying a passive-policy receipt requires its original source.
-
 Collection was 75–83% of active time across the profiled training runs
 ([training time](../experiments/training-time.md)), so engine and inference
 throughput are the cost levers. CI keeps an
 [engine performance budget](development.md#engine-performance-budget): a
 change more than 10% slower than the reference, or one that moves the
 search/decision digest, fails.
+
+### Per-seat players
+
+Both `managym.Env` and `managym.VectorEnv` accept a two-seat
+`player_policies` tuple. Each player policy is `"agent"` (external human, model
+or tool), `"random"` or `"heuristic"`. The default `("agent", "agent")`
+surfaces both seats' decisions. The native published chooser selects the seat,
+including under control effects; built-ins receive only that chooser's live
+viewer observation. Player policies are separate from game/deck configuration
+and world identity.
+
+For example, step a batch with an external learner in seat 0 and the built-in
+heuristic in seat 1:
+
+```python
+import managym
+
+games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "heuristic"))
+players = [
+    managym.PlayerConfig(name, {"Forest": 20, "Llanowar Elves": 20})
+    for name in ("learner", "heuristic")
+]
+observations = games.reset_all(players)
+# Illustrate the action-index interface with the first legal action in each slot.
+transitions = games.step([0, 0])
+```
+
+The supplied lists are small development decks. Each reset returns an
+`(observation, info)` pair; each step returns an
+`(observation, reward, terminated, truncated, info)` tuple per slot. Replace the
+zero indices with choices from your learner.
+
+With one external seat, reset and positional step advance built-ins until the
+external chooser or a terminal state. A scalar terminal must be explicitly reset;
+vector steps auto-reset finished slots. Terminal rewards belong to the external
+seat, including when a built-in finishes the game. Reset never silently starts
+a second game if a built-in wins before an external choice.
+
+With two built-in seats, reset only constructs a game. Call scalar `step()`
+(with no action) or vector `step([-1, ...])` to execute exactly one published
+built-in decision per game; terminal rewards belong to that decision's chooser.
+This makes autonomous games bounded and inspectable.
+
+Command and structured submission methods commit exactly their requested
+external action, preserving atomic receipts and stale rejection. If the
+resulting chooser is a built-in, call scalar `step()` to continue native play.
+Supplying an external index for a built-in chooser raises an error. Native
+trivial skipping still applies. Each seat owns independent heuristic memory;
+reset clears both, even with the same seed, and forks copy both.
+
+The Python training wrapper accepts the same tuple. The public vector
+`opponent_policy` argument is deprecated, warns, and will be removed in 0.3.0:
+`none` maps to `(agent, agent)`, other values to `(agent, value)`. Supplying both
+arguments or an unknown name raises `ValueError`.
+Encoding capacity failures remain errors under the configured overflow policy;
+they do not switch a player policy to random play.
+`"passive"` is removed and raises an unsupported-policy `ValueError`, including
+through CapturedVector and Torch. Retained failure evidence keeps its original
+policy name; replaying a passive-policy receipt requires its original source.
+
+### Built-in heuristic
+
+The scalar `HeuristicPlayer` adapter and arena `heuristic` anchor use the same
+native rules as the built-in player policy. Direct native callers can create
+`managym.Heuristic()`, call
+`select_action(observation)` for each decision, and call `reset()` between
+independent games. Keep one selector per seat. Selection returns an original
+legal action index and rejects an empty action space. The optional
+`max_actions` constructor argument restricts selection to that legal prefix;
+it must be positive and is used only by explicitly bounded policies.
+
+To evaluate an existing compatible checkpoint, use the
+[local evaluation command](evaluation.md#quick-local-evaluation) with
+`--opponent heuristic`.
+
+The heuristic reads only information available to its chooser: visible cards,
+legal offers and public combat history. It respects closed decklists and native
+information sharing under control effects. The chooser may differ from whose
+turn it is or whose resources pay for an action; control effects do not give it
+private sideboard access. Hidden hands and library order are never strategic
+inputs.
+
+Its rules are deliberately approximate:
+
+- Play lands and activate fetch lands, then cast the highest-mana-value useful
+  spell, letting its own spell resolve before casting another. Estimate mana
+  from untapped lands; pay kicker when that estimate covers spell plus kicker.
+- Delay instants in its own upkeep and draw step. Save untargeted instants
+  and draw/life abilities for the opponent's end step.
+- Derive target polarity from card definitions: harmful effects target the
+  opponent's side, beneficial effects its own. Hold removal for a kill, burn
+  for lethal damage to a creature or player, and counters for opposing spells.
+- Learn a Lesson, preferring removal while opposing creatures remain. Discard
+  spare lands once five are in play, otherwise the costliest card; decline an
+  optional discard without a spare land. Look-and-select favors a land while
+  fewer than four are available across hand and battlefield.
+- Keep enough tough defenders to avoid a lethal swing back. Avoid attacks
+  where a blocker kills the attacker and survives, unless an available trick
+  rescues it; attack for lethal unblockable damage. Plan one blocker per
+  attacker, preferring kills that survive, trades up and free absorption, then
+  chump to prevent lethal damage.
+- Use its own pumps when they change a fight or make unblocked damage lethal;
+  ignore hypothetical opposing combat tricks. Pay offered optional ward and
+  “unless pays” costs.
+
+Choices are deterministic for the same visible state and decision history.
+Equal-value casts use the first legal offer; equal-ranked discard and
+look-and-select choices use the last. Combat rankings use visible permanent
+IDs or observation order to resolve ties. Unhandled prompts use a fallback:
+prefer land, spell, then pass at priority; attack or block when offered;
+otherwise take the first non-decline choice, or the last choice when all
+decline. These rules are a baseline, not a claim of optimal play or exact
+combat search.
 
 ### Choosing a Python API
 
@@ -353,10 +462,10 @@ Read authoritative hand contents for explicit native seats at the current
 read boundary in scalar or batched games. This is an opt-in hidden-information API:
 
 ```python
-from manabot import managym
+import managym
 from manabot.env.match import Match
 
-games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="none")
+games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))
 observations = games.reset_all(Match().to_rust())
 snapshots = games.hand_snapshots([1, 0])
 

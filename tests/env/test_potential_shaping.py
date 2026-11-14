@@ -34,7 +34,7 @@ def make_vector_env(reward_config: RewardConfig, seed: int = 0) -> VectorEnv:
         reward=Reward(reward_config),
         device="cpu",
         seed=seed,
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
 
 

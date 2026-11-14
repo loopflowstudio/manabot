@@ -3499,23 +3499,29 @@ impl PySelectedBranchRuntime {
 #[pymethods]
 impl PyEnv {
     #[new]
-    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false))]
+    #[pyo3(signature = (seed=0, skip_trivial=true, enable_profiler=false, enable_behavior_tracking=false, *, player_policies=None))]
     fn new(
         seed: u64,
         skip_trivial: bool,
         enable_profiler: bool,
         enable_behavior_tracking: bool,
-    ) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(Env::new(
-                seed,
-                skip_trivial,
-                enable_profiler,
-                enable_behavior_tracking,
-            ))),
+        player_policies: Option<Vec<String>>,
+    ) -> PyResult<Self> {
+        let policies =
+            crate::python::vector_env_bindings::parse_player_policies(player_policies, None)?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(
+                Env::new(
+                    seed,
+                    skip_trivial,
+                    enable_profiler,
+                    enable_behavior_tracking,
+                )
+                .with_player_policies(policies),
+            )),
             selected_guard: false,
             prepared_lease: None,
-        }
+        })
     }
 
     fn reset(
@@ -3561,10 +3567,11 @@ impl PyEnv {
         Ok(())
     }
 
+    #[pyo3(signature = (action=None))]
     fn step(
         &self,
         py: Python<'_>,
-        action: i64,
+        action: Option<i64>,
     ) -> PyResult<(PyObservation, f64, bool, bool, PyObject)> {
         self.reject_guarded_mutation("Env.step(index)")?;
         let mut env = self
@@ -3572,7 +3579,8 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
 
-        let (obs, reward, terminated, truncated, info) = env.step(action).map_err(map_agent_err)?;
+        let (obs, reward, terminated, truncated, info) =
+            env.step(action.unwrap_or(-1)).map_err(map_agent_err)?;
         let py_dict = info_dict_to_pydict(py, &info);
         Ok((
             PyObservation::from(obs),
@@ -4909,6 +4917,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
+    m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;
     m.add_class::<HandSnapshot>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())

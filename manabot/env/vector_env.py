@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import torch
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import CapturedVector, resolve_player_policies
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 import managym
@@ -23,10 +23,14 @@ class VectorEnv:
         reward: Reward,
         device: str,
         seed: int = 0,
-        opponent_policy: str = "none",
+        opponent_policy: str | None = None,
+        *,
+        player_policies: tuple[str, str] | None = None,
     ) -> None:
         self._skip_trivial = True
-        self._policy_name = opponent_policy
+        self._player_policies = resolve_player_policies(
+            opponent_policy, player_policies
+        )
         self._player_configs = match.to_rust()
         self.observation_space = observation_space
         self.reward = reward
@@ -57,7 +61,7 @@ class VectorEnv:
             num_envs=self.num_envs,
             seed=seed,
             skip_trivial=self._skip_trivial,
-            opponent_policy=self._policy_name,
+            player_policies=self._player_policies,
         )
 
     def _allocate_buffers(self) -> Dict[str, np.ndarray]:

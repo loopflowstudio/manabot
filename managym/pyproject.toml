@@ -10,6 +10,12 @@ readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = ["numpy>=1.24.0", "pydantic>=2.12.0"]
 
+[project.optional-dependencies]
+academy = ["fastapi>=0.116.0", "uvicorn[standard]>=0.34.0"]
+
+[project.scripts]
+managym = "managym.cli:main"
+
 [project.urls]
 Homepage = "https://manabot.gg"
 Repository = "https://github.com/loopflowstudio/manabot"
@@ -20,18 +26,22 @@ features = ["python"]
 manifest-path = "Cargo.toml"
 module-name = "managym._managym"
 python-source = ".."
-python-packages = ["managym"]
-include = [{ path = "content/semantic/**/*.json", format = "sdist" }]
-# The wheel keeps managym/Cargo.lock: manabot's runtime provenance
-# (`manabot.infra.provenance.engine_source_paths`) hashes it from the install.
+python-packages = ["managym", "academy"]
+include = [
+    { path = "content/semantic/**/*.json", format = "sdist" },
+    { path = "managym/academy/site/**/*", format = ["sdist", "wheel"] },
+]
+# Keep src/**/*.rs and Cargo.lock at their original package paths: heuristic
+# registrations and manabot runtime provenance hash these installed bytes.
 exclude = [
+    "academy/ui/**",
+    "academy/README.md",
     "**/__pycache__/**", "**/*.pyc", "**/target/**", "**/*.dSYM/**",
-    { path = "**/*.rs", format = "wheel" },
     { path = "**/Cargo.toml", format = "wheel" },
     { path = "**/uv.lock", format = "wheel" },
     { path = "**/pyproject.toml", format = "wheel" },
-    { path = "**/state/**", format = "wheel" },
-    { path = "**/cards/**", format = "wheel" },
+    { path = "**/state/src/**", format = "wheel" },
+    { path = "**/cards/src/**", format = "wheel" },
     { path = "**/tests/**", format = "wheel" },
     { path = "**/examples/**", format = "wheel" },
     { path = "**/perf/**", format = "wheel" },
