@@ -19,10 +19,11 @@ Remaining: gate/review and the caller's delivery steps. No PR created here.
 ## Demo and done when
 
 A reviewer opens `experiments/mana_spending.md` and, before any table, reads:
-the recommended design (one native payment-outcome decision, automatic plan
-first), then three numbered questions, each with its options and the measured
-price of each. Evidence and limits follow; run logistics sit in a collapsed
-appendix. Headless: `sed -n 1,60p experiments/mana_spending.md`.
+the summary with the recommendation (one native payment-outcome decision,
+automatic plan first), then three numbered questions, each with its options as
+bullets and the measured price of each. The design, evidence and limits follow;
+run logistics sit in a collapsed appendix. Headless:
+`sed -n 1,95p experiments/mana_spending.md` (first table is at line 100).
 
 Done when the report recommends that single decision with D's costs, names no
 entry step as part of the design, and every number it quotes is one already in
@@ -148,11 +149,11 @@ A checkout with no `.venv` makes `uv run --no-sync` create an empty one and
 imports fail. Sync from the lock (`uv run --extra dev`) and keep the existing
 `managym/_managym.cpython-313-darwin.so`.
 
-## Compress (2026-11-13, report text)
+## Report-text passes (2026-11-13)
 
-Prose only, on top of `78397f2042`: the four counting definitions
-(redundant/non-redundant, capability/identity) are stated once under "Decision
-shapes" and referenced from the paired section; repeated shape restatements,
-duplicate pilot caveats and appendix query-plan detail are cut.
-Check: all 140 table rows and every heading are identical to `78397f2042`,
-all in-page anchors resolve, `git diff --check` clean.
+Prose only, on top of `78397f2042`: the four counting definitions are stated
+once under "Decision shapes"; repeated restatements are cut. The three review
+questions then moved ahead of the design, their options as bullets rather than
+tables. Check: the 126 remaining table rows are the 140 of `78397f2042` minus
+the three option tables (14 rows); option text and every quoted figure are
+unchanged; all in-page anchors resolve; `git diff --check` clean.

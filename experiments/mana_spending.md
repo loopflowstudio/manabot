@@ -27,6 +27,67 @@ Three [questions for review](#questions-for-review) decide the size of the menu
 and where a player opts out of automation. This report makes no claim about
 learning; the comparison of compound and sequential decisions is MTG-265's.
 
+## Questions for review
+
+Nobody has answered these. Each lists its options with the measured price.
+
+### 1. Where does deliberate surplus tapping live?
+
+Tapping a land the cost does not need, to float its mana, is rules-legal and
+occasionally matters. It is a different act from paying: a player may tap for
+mana whenever they have priority (CR 605.3a). Without it, the payment menu is
+the set of minimal payments, the same set MTG-342's fixed tapper picks from.
+
+- **Not offered.** Under the equal-output collapse: exact maximum 22, no cast
+  certified above 64 offers, so a flat menu suffices on completely enumerated
+  casts. The 420 casts that hit the enumeration cap remain unknown; their lower
+  bounds reach 30. A land's fixed output could then never be floated on purpose,
+  as today.
+- **A tap-for-mana action at priority.** The same payment menu. Activated mana
+  abilities are already offered at priority and during payment; a land's fixed
+  output is tapped only by the automatic payer, so this extends an existing
+  action to fixed sources. Its cost in offers per priority window is not
+  measured here.
+- **In the payment chooser.** 422 casts certified above 64 offers, an exact
+  maximum of 712 and a 95th percentile of 49–59 on ordinary decks, so groups are
+  required. Decisions per game rise 4–11% over today before any group
+  navigation.
+
+### 2. Which sources are the same choice?
+
+- **Exact object identity.** Without redundant taps, 493 casts certified above
+  64 offers (291 completely enumerated, 202 capped), with an exact maximum of
+  252; groups are required. The excess includes combinatorial subsets of
+  identical basic lands.
+- **Equal definition and state.** Not measured: the capture holds outputs and
+  resource transitions, not complete object state. It lies between the other two
+  options and needs a rules argument before implementation.
+- **Equal mana output.** The menu above (exact maximum 22). Not a safe rule by
+  itself: it merges a land with a mana creature that could also attack or block.
+
+The recommendation preserves exact identity until an equivalence rule is
+reviewed, and does not assume that every subset of identical basics needs its
+own visible offer.
+
+### 3. Where does the player opt out of automation?
+
+- **At the payment decision (recommended).** One decision at each cast whose
+  outcomes differ: 2.5–7.0% more decisions per game, without redundant taps and
+  under equal-output collapse. Exact identity has the larger D costs in the
+  paired table. The plan is visible when chosen, because modes, targets, X and
+  the cost are already known.
+- **At cast selection: "cast X" beside "cast X, choosing payment".** No added
+  decision unless used. Decisions per game lie between the [folded
+  column](#matched-payment-shape-results) (305.60, 210.91, 437.26 and 216.22 for
+  the four ordinary-deck rows; never override) and the single-decision column
+  (always override). A priority window gains at most one offer per cast offer;
+  fully measured windows held at most 13 offers, so at most 26. The automatic
+  path commits before modes, targets, X, the cost and therefore the plan are
+  known, so the plan cannot be inspected when it is chosen.
+
+The cast-selection option is arithmetic on published columns, not a measured shape.
+Learning effects of either stay with MTG-265.
+
 ## Recommended design
 
 **One native payment-outcome decision, with the automatic plan first.** This is
@@ -121,45 +182,6 @@ Existing explicit mana-ability decisions stay at their native boundaries.
 experiment's frozen A/B revision; the follow-up replaces it with the automatic
 offer above. No Academy code, default training behavior or deployment changes
 here.
-
-## Questions for review
-
-Nobody has answered these. Each lists its options with the measured price.
-
-### 1. Where does deliberate surplus tapping live?
-
-Tapping a land the cost does not need, to float its mana, is rules-legal and
-occasionally matters. It is a different act from paying: a player may tap for
-mana whenever they have priority (CR 605.3a). Without it, the payment menu is
-the set of minimal payments, the same set MTG-342's fixed tapper picks from.
-
-| option | price |
-| --- | --- |
-| Not offered | Under the equal-output collapse: exact maximum 22, no cast certified above 64 offers, so a flat menu suffices on completely enumerated casts. The 420 casts that hit the enumeration cap remain unknown; their lower bounds reach 30. A land's fixed output could then never be floated on purpose, as today. |
-| A tap-for-mana action at priority | The same payment menu. Activated mana abilities are already offered at priority and during payment; a land's fixed output is tapped only by the automatic payer, so this extends an existing action to fixed sources. Its cost in offers per priority window is not measured here. |
-| In the payment chooser | 422 casts certified above 64 offers, an exact maximum of 712 and a 95th percentile of 49–59 on ordinary decks, so groups are required. Decisions per game rise 4–11% over today before any group navigation. |
-
-### 2. Which sources are the same choice?
-
-| option | price |
-| --- | --- |
-| Exact object identity | Without redundant taps, 493 casts certified above 64 offers (291 completely enumerated, 202 capped), with an exact maximum of 252; groups are required. The excess includes combinatorial subsets of identical basic lands. |
-| Equal definition and state | Not measured: the capture holds outputs and resource transitions, not complete object state. It lies between the other two rows and needs a rules argument before implementation. |
-| Equal mana output | The menu above (exact maximum 22). Not a safe rule by itself: it merges a land with a mana creature that could also attack or block. |
-
-The recommendation preserves exact identity until an equivalence rule is
-reviewed, and does not assume that every subset of identical basics needs its
-own visible offer.
-
-### 3. Where does the player opt out of automation?
-
-| option | price |
-| --- | --- |
-| At the payment decision (recommended) | One decision at each cast whose outcomes differ: 2.5–7.0% more decisions per game, without redundant taps and under equal-output collapse. Exact identity has the larger D costs in the paired table. The plan is visible when chosen, because modes, targets, X and the cost are already known. |
-| At cast selection: "cast X" beside "cast X, choosing payment" | No added decision unless used. Decisions per game lie between the [folded column](#matched-payment-shape-results) (305.60, 210.91, 437.26 and 216.22 for the four ordinary-deck rows; never override) and the single-decision column (always override). A priority window gains at most one offer per cast offer; fully measured windows held at most 13 offers, so at most 26. The automatic path commits before modes, targets, X, the cost and therefore the plan are known, so the plan cannot be inspected when it is chosen. |
-
-The second row is arithmetic on published columns, not a measured shape.
-Learning effects of either stay with MTG-265.
 
 ## Run it
 
