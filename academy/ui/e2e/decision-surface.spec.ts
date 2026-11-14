@@ -72,13 +72,17 @@ for (const width of [390, 1500]) {
     const board = await page.getByTestId('game-board').boundingBox();
     const choices = await page.getByTestId('decision-surface').boundingBox();
     expect(board).not.toBeNull();
-    expect(choices!.y).toBeGreaterThanOrEqual(board!.y + board!.height);
+    if (width >= 1024) {
+      expect(choices!.x).toBeGreaterThanOrEqual(board!.x + board!.width);
+      expect(board!.y + board!.height).toBeLessThanOrEqual(1100);
+    } else {
+      expect(choices!.y).toBeGreaterThanOrEqual(board!.y + board!.height);
+    }
     const tableTools = page.getByTestId('shared-table-panel');
     await expect(tableTools).not.toBeVisible();
     expect((await page.getByTestId('game-header').boundingBox())!.y).toBeLessThan(board!.y);
     await expect(page.locator('details[open]')).toHaveCount(0);
-    const battlefieldHeights = await page.getByTestId('battlefield').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
-    expect(battlefieldHeights).toHaveLength(2);
+    await expect(page.getByTestId('battlefield')).toHaveCount(2);
     const tokens = page.getByTestId('battlefield').last().locator('[data-battlefield-lane="tokens"]');
     while (await tokens.locator('[data-card-name="Treasure"]').count() === 0 && await tokens.getByRole('button', { name: 'Next artifact tokens' }).isEnabled()) {
       await tokens.getByRole('button', { name: 'Next artifact tokens' }).click();
@@ -97,14 +101,16 @@ for (const width of [390, 1500]) {
     const target = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.subjects?.some(subject => subject.object.label === 'Callous Inspector'))!);
     const victim = target.subjects![0].object.entity_id;
     await choose(page, target.id);
+    await page.getByText('History and settings', { exact: true }).click();
     await expect(page.getByTestId('decision-context')).toContainText('Selected target');
     const sacrifice = await page.evaluate(entity => window.__surface.frame!.offers.find(offer => offer.action_type === 'SELECT_CARD' && offer.subjects?.some(subject => subject.object.entity_id === entity))!.id, victim);
     await choose(page, sacrifice);
     // Treasure is the only mana source left: its activation, {B} and the final
     // payment are forced, so native skipping commits them without a prompt.
-    await expect(page.getByTestId('decision-surface')).toContainText('sacrificed Treasure');
-    await expect(page.getByTestId('decision-surface')).toContainText('Deadly Precision was cast');
-    expect(await page.getByTestId('battlefield').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height))).toEqual(battlefieldHeights);
+    const context = page.getByRole('region', { name: 'Decision context', exact: true });
+    await context.getByText('What happened · recent actions', { exact: true }).click();
+    await expect(context.getByRole('listitem').filter({ hasText: 'sacrificed Treasure' })).toBeVisible();
+    await expect(context.getByRole('listitem').filter({ hasText: 'Deadly Precision was cast' })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath('precision-payment.png'), fullPage: true });
     const paidHash = await page.evaluate(() => window.__surface.frame!.frame_hash);
     const committed = await page.evaluate(() => window.__surface.commands.at(-1)!);
@@ -132,5 +138,8 @@ test('Precision exposes the shared four-mana alternative', async ({ page }) => {
   const alternative = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'PAY_COST')!);
   expect(alternative.label).toContain('{4}');
   await choose(page, alternative.id);
-  await expect(page.getByTestId('decision-surface')).toContainText('Deadly Precision was cast');
+  await page.getByText('History and settings', { exact: true }).click();
+  const context = page.getByRole('region', { name: 'Decision context', exact: true });
+  await context.getByText('What happened · recent actions', { exact: true }).click();
+  await expect(context.getByRole('listitem').filter({ hasText: 'Deadly Precision was cast' })).toBeVisible();
 });

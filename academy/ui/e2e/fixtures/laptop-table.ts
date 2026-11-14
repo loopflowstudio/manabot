@@ -1,15 +1,4 @@
-// Dense-board stress rig: renders a heavy mid-game battlefield (18 hero /
-// 15 villain permanents plus loaded graveyards) through the WebSocket mock
-// and captures full-page screenshots across viewports and color schemes.
-// It asserts almost nothing on purpose — the captures under
-// e2e/dense-board-captures/ are the deliverable for design review.
-import { expect, test, type Page } from '@playwright/test';
-
-// The rig is an on-demand design tool, not a gate: run it with
-//   DENSE_BOARD=1 npx playwright test e2e/dense-board.spec.ts
-test.skip(!process.env.DENSE_BOARD, 'stress rig runs only with DENSE_BOARD=1');
-
-import boltFixtureJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
+import boltFixtureJson from '../../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type {
   CardState,
   ExperienceFrame,
@@ -17,11 +6,9 @@ import type {
   Observation,
   PermanentState,
   RecoveryEnvelope,
-} from '../src/lib/types';
+} from '../../src/lib/types';
 
 const boltFixture = boltFixtureJson as { recovery: RecoveryEnvelope };
-
-const CAPTURE_DIR = 'e2e/dense-board-captures';
 
 interface PermanentSpec {
   name: string;
@@ -51,6 +38,8 @@ function permanent(controllerId: number, spec: PermanentSpec): PermanentState {
     base_power: isCreature ? (spec.basePower ?? spec.power ?? null) : null,
     base_toughness: isCreature ? (spec.baseToughness ?? spec.toughness ?? null) : null,
     plus1_counters: spec.counters ?? 0,
+    types: { is_creature: isCreature, is_land: !isCreature, is_artifact: false,
+      is_enchantment: false, is_planeswalker: false, is_spell: false, is_battle: false },
   };
 }
 
@@ -124,6 +113,10 @@ function denseObservation(): Observation {
     graveCard(0, 'First-Time Flyer', true, 1),
     graveCard(0, 'Dragonfly Swarm', true, 4),
   ];
+  observation.agent.hand = Array.from({ length: 12 }, (_, index) => ({
+    ...graveCard(0, index % 2 ? 'Island' : 'Boomerang Toss', false, 0), zone: 'HAND',
+  }));
+  observation.agent.zone_counts.HAND = observation.agent.hand.length;
   observation.agent.life = 11;
 
   // Villain: 15 permanents — GW allies with tokens and tapped lands.
@@ -171,7 +164,7 @@ function passPriorityOffer(): InteractionOffer {
   };
 }
 
-function denseFrame(): ExperienceFrame {
+export function denseFrame(): ExperienceFrame {
   const base = structuredClone(boltFixture.recovery.frame);
   return {
     ...base,
@@ -190,65 +183,4 @@ function denseFrame(): ExperienceFrame {
     action_space: 'PRIORITY',
     deck_names: { hero: 'UR Lessons', villain: 'GW Allies' },
   };
-}
-
-async function installDenseAuthority(page: Page): Promise<void> {
-  await page.routeWebSocket('**/ws/play', (socket) => {
-    socket.onMessage((raw) => {
-      const message = JSON.parse(String(raw)) as { type?: string };
-      if (message.type !== 'new_game') {
-        return;
-      }
-      const frame = denseFrame();
-      socket.send(JSON.stringify({
-        type: 'observation',
-        data: frame.projection,
-        actions: [],
-        session_id: 'dense-board-session',
-        resume_token: 'dense-board-resume-token',
-        recovery: {
-          ...structuredClone(boltFixture.recovery),
-          reason: 'initial_connect',
-          frame,
-          presentation_tail: [],
-          accepted_commands: [],
-          replay_cursor: frame.revision,
-        },
-      }));
-    });
-  });
-}
-
-const viewports = [
-  { label: 'desktop-1500x1000', width: 1500, height: 1000 },
-  { label: 'narrow-900x1000', width: 900, height: 1000 },
-] as const;
-
-const schemes = ['light', 'dark'] as const;
-
-for (const viewport of viewports) {
-  for (const scheme of schemes) {
-    test(`dense board renders at ${viewport.label} in ${scheme} mode`, async ({ browser }) => {
-      const context = await browser.newContext({
-        viewport: { width: viewport.width, height: viewport.height },
-        colorScheme: scheme,
-      });
-      const page = await context.newPage();
-      await installDenseAuthority(page);
-      await page.goto('/');
-      await expect(page.getByTestId('connection-badge')).toHaveText('connected');
-      await page.getByRole('button', { name: 'New Game' }).first().click();
-
-      // The board is up once both battlefields have rendered every permanent.
-      await expect(page.getByRole('button', { name: 'Otter-Penguin' })).toHaveCount(3);
-      await expect(page.getByRole('button', { name: 'Ally' })).toHaveCount(5);
-      await page.evaluate(() => document.fonts.ready);
-
-      await page.screenshot({
-        path: `${CAPTURE_DIR}/${viewport.label}-${scheme}.png`,
-        fullPage: true,
-      });
-      await context.close();
-    });
-  }
 }
