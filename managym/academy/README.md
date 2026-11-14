@@ -51,14 +51,15 @@ pending choice with the same legal offers and permitted information.
 - **`card_art.py`**: Scryfall art and credits, fetched on first view into a
   local cache and served from `/api/card-art/`
 - **`villain.py`**: opponent policies for the hero to face
-- **`opponent.py`**: trained opponents — the checkpoint catalog
-  (`GET /api/opponents`), chosen by exact SHA-256 and verified before play
+- **`opponent.py`**: the server-scoped registered policy catalog
+  (`GET /api/opponents`), chosen by exact Policy ID and verified before play
 
-Academy never imports manabot or Torch, eagerly or lazily. Trained opponents,
-greedy and heuristic Watch players and game file import come from the one
-`managym.academy.bots` entry point that manabot declares; without it those
-features report that they need manabot, and play, replay and Study are
-unaffected. Study validates the existing
+Academy never imports manabot or Torch, eagerly or lazily. Direct Python factories
+and installed `managym.bots` providers supply playing policies, including manabot's
+trained, greedy and heuristic players. Optional historical replay/advice uses the
+separate `managym.academy.bots` group; when several such extensions are installed,
+the first by entry-point name supplies those legacy capabilities. Built-in play
+and finished replay work without a provider. Study validates the existing
 `ed2` address against the pre-command frame, and validates the played Command
 against its landmark separately. Retained `erd1` addresses still bind the
 recorded offer and Command.
@@ -195,6 +196,8 @@ Play and both Watch seats use the same registered policy picker and
 Direct factories need no manifest. Optional `PolicySpec` values name installed
 providers in `managym.bots`; multiple providers coexist. `serve(policies=...,
 sources=...)` scopes sources to the server without rewriting environment variables.
+Providers also discover their ambient configuration once per server start; explicit
+sources add to that discovery.
 The CLI accepts repeatable `--policy <spec.json>` and uses each file stem as an alias.
 
 manabot owns checkpoint/run/Tournament discovery, bound-setup admission and
@@ -204,7 +207,7 @@ search support. Action-only policies retain no fabricated probabilities or value
 One-use decision bindings and complete legal-set validation precede native bound
 Commands. The descriptor pins artifact, runner, config and provider identity in
 existing recordings; old checkpoint records and finished replays need no loader.
-The browser renders provider/run groups and precise unavailable reasons;
+The browser renders provider-authored groups and detail lines and precise unavailable reasons;
 missing training counts remain "not recorded". Optional advice/import capabilities
 are separate from policy loading.
 

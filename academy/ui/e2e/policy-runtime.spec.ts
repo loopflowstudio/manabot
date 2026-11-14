@@ -27,7 +27,25 @@ for (const theme of ['light', 'dark'] as const) {
     expect(frames.at(-1)!.match_id).toBe(before.match_id);
     expect(frames.at(-1)!.revision).toBe(before.revision);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
-    await page.goto(addresses.watch);
+    // Reopen an exact selection after a server's runner has changed. Only the
+    // runner differs from the retained descriptor; the ID must stay stale until clicked.
+    const priorId = 'f'.repeat(64);
+    await page.evaluate(async ({ id, priorId }) => {
+      const catalog = await (await fetch('/api/opponents')).json();
+      const current = catalog.opponents.find((p: { sha256: string }) => p.sha256 === id).policy;
+      localStorage.setItem('etude.policy.selections', JSON.stringify([
+        { ...current, id: priorId, runner: 'previous-runner' },
+      ]));
+    }, { id: addresses.ids.independent, priorId });
+    const stale = new URL(addresses.watch);
+    stale.searchParams.set('seat1', `policy:${priorId}`);
+    await page.goto(stale.href);
+    await page.reload();
+    await expect(page.getByTestId('checkpoint-select').nth(0)).toHaveValue(`policy:${priorId}`);
+    await expect(page.getByText('The runner changed since this was selected.', { exact: false })).toBeVisible();
+    await page.screenshot({ path: fileURLToPath(new URL(`../test-results/policy/watch-reselect-${theme}.png`, import.meta.url)) });
+    await page.getByRole('button', { name: /^Reselect Independent/ }).focus();
+    await page.keyboard.press('Enter');
     const selections = page.getByTestId('checkpoint-select');
     await expect(selections).toHaveCount(2);
     await expect(selections.nth(0)).toHaveValue(`policy:${addresses.ids.independent}`);
@@ -46,6 +64,8 @@ for (const theme of ['light', 'dark'] as const) {
     const status = page.locator('details.player-status').first();
     await status.locator('summary').click();
     await expect(status).toContainText('Runner:');
+    await expect(status).toContainText('Policy ID:');
+    await expect(status).not.toContainText('SHA-256:');
     expect(errors).toEqual([]);
   });
 }

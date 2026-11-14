@@ -592,6 +592,7 @@ export interface PolicyRuntimeIdentity {
   artifacts: Record<string, string>;
   config: Record<string, unknown>;
   supports_search: boolean;
+  contract_version?: number;
 }
 
 export interface RecordedPlayer {
@@ -626,26 +627,15 @@ export interface TraceSummary {
 
 export type VillainType = 'passive' | 'random' | 'search' | 'policy';
 
-// One entry of GET /api/opponents: a checkpoint the server found. `reason` names why an unavailable entry cannot play.
+// Provider-authored presentation from GET /api/opponents.
 export interface TrainedOpponent {
   supports_search?: boolean;
   policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
   producer: string;
-  source: string;
-  world: string | null;
-  model: string | null;
-  parameters: number | null;
-  step: number | null;
-  run?: string | null;
-  run_id?: string | null;
-  stage?: string | null;
-  weights?: string | null;
-  updates?: number | null;
-  transitions?: number | null;
-  // Display names of the decks the checkpoint was bound to (either seat).
-  decks: string[];
+  group: string;
+  details: { label: string; value: string }[];
   available: boolean;
   reason: string | null;
 }

@@ -21,6 +21,7 @@ from managym.policy import (
     JSONValue,
     PolicyDecision,
     PolicyDescriptor,
+    PolicyDetail,
     PolicyEvaluation,
     PolicyFactory,
     PolicySession,
@@ -43,6 +44,17 @@ def runner_identity() -> str:
     return f"manabot/{version('manabot')}:{digest.hexdigest()}:torch/{version('torch')}"
 
 
+def _deck_name(deck: managym.Deck) -> str:
+    # Names are presentation only. Admission below always compares full decks,
+    # including sideboards; an unrecognized list keeps its own content identity.
+    for preset in ("two_deck", "optional_payments", "jeong_increment"):
+        for key in managym.authored_deck_keys(preset):
+            player = managym.authored_deck_setup(preset, key)
+            if deck == managym.Deck(dict(player.decklist), dict(player.sideboard)):
+                return key
+    return f"custom deck {deck.identity[:10]}"
+
+
 @dataclass(frozen=True)
 class BaselineFactory:
     spec: PolicySpec
@@ -59,30 +71,35 @@ class BaselineFactory:
                 "manabot",
                 runner_identity(),
                 config=self.spec.config,
-                metadata={"alias": str(kind)},
+                alias=str(kind),
             )
         if self.spec.artifact is None:
             raise ValueError("Manabot policy requires an artifact.")
         summary = inspect_checkpoint(Path(self.spec.artifact), backend=resolve("torch"))
-        metadata: dict[str, JSONValue] = {
-            key: getattr(self.summary or summary, key)
-            for key in (
-                "source",
-                "world",
-                "model",
-                "parameters",
-                "step",
-                "run",
-                "run_id",
-                "stage",
-                "weights",
-                "updates",
-                "transitions",
+        displayed = self.summary or summary
+        details = tuple(
+            PolicyDetail(label, "not recorded" if value is None else str(value))
+            for label, value in (
+                ("Run", displayed.run),
+                ("Run ID", displayed.run_id),
+                ("Stage", displayed.stage),
+                ("Weights", displayed.weights),
+                ("Updates", displayed.updates),
+                ("Transitions", displayed.transitions),
+                ("World", displayed.world),
+                ("Model", displayed.model),
+                ("Parameters", displayed.parameters),
+                ("Step", displayed.step),
+                ("Source", displayed.source),
             )
-        }
-        metadata["setups"] = [
-            {"deck": deck.main, "sideboard": deck.sideboard} for deck in summary.setups
-        ]
+        )
+        if summary.setups:
+            details += (
+                PolicyDetail(
+                    "Bound decks",
+                    " vs ".join(_deck_name(deck) for deck in summary.setups),
+                ),
+            )
         # Search admission belongs to the shared composition, not a bare flag.
         return PolicyDescriptor(
             (self.summary or summary).label,
@@ -94,8 +111,9 @@ class BaselineFactory:
                 ).hexdigest()
             },
             self.spec.config,
-            metadata,
-            summary.incompatibility,
+            group=displayed.run or displayed.run_id,
+            details=details,
+            incompatibility=summary.incompatibility,
             supports_search=summary.supports_search,
         )
 
@@ -244,10 +262,23 @@ class BaselineProvider:
             raise ValueError("Unknown manabot policy config fields.")
         return BaselineFactory(spec)
 
-    def discover(self, config: dict[str, JSONValue]) -> list[PolicyFactory]:
+    def discover(self, config: dict[str, JSONValue] | None) -> list[PolicyFactory]:
         from manabot.backends import resolve
         from manabot.model.catalog import discover_checkpoints
 
+        ambient = config is None
+        if config is None:
+            config = {
+                "paths": [
+                    p
+                    for p in os.environ.get("ACADEMY_PLAY_CHECKPOINTS", "").split(
+                        os.pathsep
+                    )
+                    if p
+                ],
+                "runs_dir": os.environ.get("MANABOT_RUNS_DIR")
+                or str(Path.cwd() / ".runs"),
+            }
         paths = config.get("paths", [])
         root = config.get("runs_dir", str(Path.cwd() / ".runs"))
         if (
@@ -263,6 +294,11 @@ class BaselineProvider:
         )
         return [
             *(
+                self.policy(PolicySpec("manabot", config={"kind": kind}))
+                for kind in ("heuristic", "greedy")
+                if ambient
+            ),
+            *(
                 BaselineFactory(PolicySpec("manabot", str(summary.path)), summary)
                 for summary in summaries
             ),
@@ -273,31 +309,12 @@ class BaselineProvider:
                         "manabot",
                         runner_identity(),
                         {"actor": entry.sha256},
-                        metadata={"source": "tournament"},
+                        details=(PolicyDetail("Source", "tournament"),),
                         incompatibility=entry.reason,
                     )
                 )
                 for entry in missing
             ),
-        ]
-
-    def defaults(self) -> list[PolicyFactory]:
-        config: dict[str, JSONValue] = {
-            "paths": [
-                p
-                for p in os.environ.get("ACADEMY_PLAY_CHECKPOINTS", "").split(
-                    os.pathsep
-                )
-                if p
-            ],
-            "runs_dir": os.environ.get("MANABOT_RUNS_DIR") or str(Path.cwd() / ".runs"),
-        }
-        return [
-            *(
-                self.policy(PolicySpec("manabot", config={"kind": kind}))
-                for kind in ("heuristic", "greedy")
-            ),
-            *self.discover(config),
         ]
 
 

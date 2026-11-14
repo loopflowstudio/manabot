@@ -157,7 +157,7 @@
   {#if identity.digest || identity.producer || identity.full !== identity.compact}
   <div class="identity-details" data-testid="player-identity">
     <p>{identity.full}</p>
-    {#if identity.digest}<p>SHA-256: {identity.digest}</p>{/if}
+    {#if identity.digest}<p>{runtime ? 'Policy ID' : 'SHA-256'}: {identity.digest}</p>{/if}
     {#if identity.producer}<p>Producer: {identity.producer}</p>{/if}
     {#if runtime}
       <p>Runner: {runtime.runner}</p>

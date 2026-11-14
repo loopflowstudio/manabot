@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { runnerReplacement, rememberPolicy, rememberedPolicy } from '$lib/policy-selection';
+  import type { PolicyRuntimeIdentity } from '$lib/types';
   import { policyChoice, type PlayerChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
 
@@ -20,8 +23,18 @@
   const selected = $derived(trained.find(entry => policyChoice(entry.sha256) === value));
   const custom = $derived(value.startsWith('policy:'));
   let chosenGroup = $state('');
+  let prior = $state<PolicyRuntimeIdentity | null>(null);
+  let mounted = $state(false);
+  onMount(() => { mounted = true; });
+  $effect(() => {
+    if (!mounted) return;
+    prior = custom && !selected ? rememberedPolicy(value.slice(7)) : null;
+    if (selected?.policy) rememberPolicy(selected.policy);
+  });
+  const replacement = $derived(prior ? runnerReplacement(prior, trained) : null);
   function groupKey(entry: TrainedOpponent): string {
-    return `${entry.producer} · ${entry.run ?? entry.run_id ?? 'Registered policies'}`;
+    return entry.group && entry.group !== entry.producer
+      ? `${entry.producer} · ${entry.group}` : entry.producer;
   }
   const groups = $derived([...new Set(trained.map(groupKey))].sort());
   const group = $derived(chosenGroup || (selected ? groupKey(selected) : ''));
@@ -29,11 +42,8 @@
   const native = $derived(referencePlayers
     ? ['random', 'search-16', 'search-64', 'search-256', ...referencePlayers.filter(p => !['random', 'search'].includes(p))]
     : ['search-16', 'search-64', 'search-256', 'random', 'passive']);
-  const number = (n: number | null | undefined) => n == null ? 'not recorded' : n.toLocaleString('en-US');
   function title(entry: TrainedOpponent): string {
-    const position = entry.model != null || entry.weights || entry.updates != null || entry.transitions != null
-      ? ` · ${entry.weights ?? 'weights'} · update ${number(entry.updates)} · ${number(entry.transitions)} transitions` : '';
-    return `${entry.name}${position} · ${entry.sha256.slice(0, 10)}${entry.available ? '' : ` — ${entry.reason ?? 'unavailable'}`}`;
+    return `${entry.name} · ${entry.sha256.slice(0, 10)}${entry.available ? '' : ` — ${entry.reason ?? 'unavailable'}`}`;
   }
 </script>
 
@@ -53,10 +63,10 @@
   </label>
   {#if custom}
     <label class="flex min-w-0 max-w-full flex-col gap-1.5">
-      <span class="type-label text-ink-2">Provider / run</span>
+      <span class="type-label text-ink-2">Provider / group</span>
       <select class="min-w-0 max-w-[24rem] rounded border border-line bg-field px-3 py-2" value={group} {disabled}
         onchange={event => { chosenGroup = event.currentTarget.value; onChange?.('policy:'); }}>
-        <option value="" disabled>Choose a provider or run</option>
+        <option value="" disabled>Choose a provider or group</option>
         {#each groups as key}<option value={key}>{key}</option>{/each}
       </select>
     </label>
@@ -74,19 +84,20 @@
   {/if}
   <p id={`${uid}-details`} data-testid="opponent-details" class="type-caption min-w-0 w-full break-words text-ink-2">
     {#if selected}
-      {selected.sha256} · {selected.producer}
-      {#if selected.run_id} · run {selected.run_id}{/if}
-      {#if selected.world} · {selected.world}{/if}
-      {#if selected.model} · {selected.model}{/if}
-      {#if selected.parameters != null} · {number(selected.parameters)} parameters{/if}
-      {#if selected.decks.length} · {selected.decks.join(' vs ')}{/if}
+      Policy ID: {selected.sha256} · {selected.producer}
+      {#each selected.details as detail} · {detail.label}: {detail.value}{/each}
       {#if !selected.available} · {selected.reason}{/if}
       {#if !selected.supports_search} · Mirror search unavailable: this policy does not advertise compatible search evaluation.{/if}
 
+    {:else if replacement}The runner changed since this was selected. Reselect the policy to use the current runner.
     {:else if custom && value !== 'policy:'}The selected policy is no longer available.
     {:else if catalogError}{catalogError}
     {:else if !trained.length && extension !== undefined}No policies registered on this server. Supply a Python policy factory or a saved specification.{/if}
   </p>
+  {#if replacement}
+    <button type="button" {disabled} class="rounded border border-line px-3 py-2"
+      onclick={() => { chosenGroup = groupKey(replacement); onChange?.(policyChoice(replacement.sha256)); }}>Reselect {replacement.name}</button>
+  {/if}
   {#if selected?.policy}
     <details class="type-caption min-w-0 w-full break-words text-ink-2">
       <summary>Policy provenance</summary>

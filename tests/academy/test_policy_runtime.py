@@ -219,3 +219,97 @@ def test_completed_independent_game_replays_without_a_provider(
     assert retained["finished"]
     assert retained["outputs"]["probabilities"] == []
     assert retained["identities"][0]["inference"]["runtime"]["id"] == key
+
+
+def test_provider_presentation_alias_and_additive_discovery(
+    registry: PolicyRegistry,
+) -> None:
+    from managym.policy import JSONValue, PolicyDetail, PolicySource, PolicySpec
+
+    class Factory(IndependentFactory):
+        def describe(self) -> PolicyDescriptor:
+            return replace(
+                super().describe(),
+                group="Language agents",
+                details=(PolicyDetail("Context", "8192 tokens"),),
+                alias=self.name,
+            )
+
+    class Provider:
+        ambient_seen: bool = False
+
+        def policy(self, spec: PolicySpec) -> Factory:
+            return Factory(str(spec.artifact))
+
+        def discover(self, config: dict[str, JSONValue] | None) -> list[Factory]:
+            if config is None:
+                if self.ambient_seen:
+                    raise ValueError("Ambient discovery repeated")
+                self.ambient_seen = True
+            return [Factory("Ambient" if config is None else str(config["name"]))]
+
+    registry.providers = {"example": Provider()}
+    registry.discover([PolicySource("example", {"name": "Explicit"})])
+    assert {d.name for d in registry.descriptors()} == {"Ambient", "Explicit"}
+    assert registry.descriptor("Ambient").alias == "Ambient"
+    entry = opponent_catalog()["opponents"][0]
+    assert entry["group"] == "Language agents"
+    assert entry["details"] == [{"label": "Context", "value": "8192 tokens"}]
+    assert "updates" not in entry and "model" not in entry
+    # A later explicit discovery does not reread the provider's environment.
+    registry.discover([PolicySource("example", {"name": "Another"})])
+    assert registry.discovery_errors == []
+    assert {d.name for d in registry.descriptors()} == {
+        "Ambient",
+        "Explicit",
+        "Another",
+    }
+
+
+def test_presentation_does_not_change_execution_identity() -> None:
+    from managym.policy import PolicyDetail
+
+    original = IndependentFactory().describe()
+    assert (
+        replace(
+            original,
+            group="Other",
+            alias="stable",
+            details=(PolicyDetail("Note", "value"),),
+        ).id
+        == original.id
+    )
+
+
+def test_historical_extension_selection_has_no_named_provider_preference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+
+    from managym.academy import extensions
+    from managym.academy.extensions import CheckpointRegistration
+    from managym.bots import VerifiedArena
+
+    class Extension:
+        name = "Independent replay tools"
+
+        def checkpoint_registration(self, seed: int) -> CheckpointRegistration:
+            raise NotImplementedError
+
+        def verify_arena(self, record: dict[str, object]) -> VerifiedArena:
+            raise NotImplementedError
+
+    independent = Extension()
+    monkeypatch.setattr(
+        extensions,
+        "entry_points",
+        lambda **kwargs: [
+            SimpleNamespace(name="manabot", load=lambda: object()),
+            SimpleNamespace(name="a-independent", load=lambda: independent),
+        ],
+    )
+    extensions.bot_extension.cache_clear()
+    try:
+        assert extensions.bot_extension() is independent
+    finally:
+        extensions.bot_extension.cache_clear()

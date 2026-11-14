@@ -33,11 +33,11 @@ class BotExtension(Protocol):
 
 @cache
 def bot_extension() -> BotExtension | None:
-    providers = list(entry_points(group="managym.academy.bots"))
+    providers = sorted(entry_points(group="managym.academy.bots"), key=lambda p: p.name)
     if not providers:
         return None
     # These legacy capabilities are selected separately from playing policies.
-    provider = next((p for p in providers if p.name == "manabot"), providers[0]).load()
+    provider = providers[0].load()
     if not isinstance(provider, BotExtension):
         raise TypeError(f"Invalid Academy bot extension: {providers[0].name}")
     return provider

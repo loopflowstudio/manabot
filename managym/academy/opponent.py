@@ -20,19 +20,7 @@ def policy_registry() -> PolicyRegistry:
     global _registry
     if _registry is None:
         _registry = PolicyRegistry()
-        # Default discovery is opt-in at each installed provider, including its
-        # own environment configuration. Core knows no model directory layout.
-        for name, provider in _registry.providers.items():
-            defaults = getattr(provider, "defaults", None)
-            if defaults is not None:
-                try:
-                    for factory in defaults():
-                        alias = factory.describe().metadata.get("alias")
-                        _registry.register(
-                            factory, name=alias if isinstance(alias, str) else None
-                        )
-                except (ImportError, OSError, ValueError) as exc:
-                    _registry.discovery_errors.append(f"{name}: {exc}")
+        _registry.discover()
     return _registry
 
 
@@ -74,29 +62,13 @@ def opponent_catalog() -> dict[str, Any]:
         provider_names = sorted(registry.providers)
         error = "; ".join(registry.discovery_errors) or None
         for descriptor in registry.descriptors():
-            metadata = descriptor.metadata
             entries.append(
                 {
                     "sha256": descriptor.id,
                     "name": descriptor.name,
                     "producer": descriptor.provider,
-                    "source": metadata.get("source", "provider"),
-                    **{
-                        key: metadata.get(key)
-                        for key in (
-                            "world",
-                            "model",
-                            "parameters",
-                            "step",
-                            "run",
-                            "run_id",
-                            "stage",
-                            "weights",
-                            "updates",
-                            "transitions",
-                        )
-                    },
-                    "setups": metadata.get("setups", []),
+                    "group": descriptor.group or descriptor.provider,
+                    "details": descriptor.record()["details"],
                     "available": descriptor.incompatibility is None,
                     "reason": descriptor.incompatibility,
                     "supports_search": descriptor.supports_search,

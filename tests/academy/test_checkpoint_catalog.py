@@ -61,10 +61,12 @@ def test_catalog_lists_admissible_and_refused_checkpoints(runs: Path) -> None:
     current = entries["self-play/step_0"]
     assert current["available"] and current["reason"] is None
     assert current["sha256"] == _id(runs / "self-play" / "step_0.pt")
-    assert current["world"] == WORLD
-    assert current["source"] == "runs"
-    assert current["model"].startswith("width 64")
-    assert sorted(current["decks"]) == ["GW Allies", "UR Lessons"]
+    details = {line["label"]: line["value"] for line in current["details"]}
+    assert details["World"] == WORLD
+    assert details["Source"] == "runs"
+    assert details["Model"].startswith("width 64")
+    assert set(details["Bound decks"].split(" vs ")) == {"ur_lessons", "gw_allies"}
+    assert details["Updates"] == "not recorded"
     older = entries["older/step_0"]
     assert not older["available"]
     assert older["reason"] == f"trained in w5, engine is {WORLD}"
