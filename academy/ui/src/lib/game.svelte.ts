@@ -29,9 +29,7 @@ import type {
 
 // Trained opponents are chosen by exact checkpoint digest: `checkpoint:<sha256>`.
 export type OpponentChoice =
-  | 'search-16'
-  | 'search-64'
-  | 'search-256'
+  | `search-${number}`
   | 'random'
   | 'passive'
   | `checkpoint:${string}`;

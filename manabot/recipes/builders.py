@@ -189,7 +189,7 @@ def ataraxos_baseline(
         ),
         wall_seconds=wall_seconds,
     )
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def sampled_self_play(
@@ -253,7 +253,7 @@ def sampled_self_play(
         wall_seconds=wall_seconds,
         schedule_clock="iteration_fraction",
     )
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def with_agent(
@@ -261,7 +261,7 @@ def with_agent(
 ) -> TrainingRegime:
     """Replace only model settings and label; reject incompatible stage targets."""
     return TrainingRegime.model_validate(
-        {**regime.model_dump(), "id": id, "agent": agent.model_dump()}
+        {**regime.authored_dump(), "id": id, "agent": agent.model_dump()}
     )
 
 

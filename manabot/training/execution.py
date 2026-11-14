@@ -18,6 +18,11 @@ import numpy as np
 import psutil
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import NumericalError
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
     collect_frozen_policy,
@@ -36,15 +41,10 @@ from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.infra.runtime import RunContext
 from manabot.infra.source import source_commit
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_ema, update_iteration
-from manabot.training.precision import apply_matmul_precision
+from manabot.training.mps import mps_torch_error
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
@@ -57,6 +57,7 @@ from manabot.training.regime import (
     CheckpointCadence,
     CollectBelief,
     CollectSelection,
+    DampedPolicyLearning,
     ImportPolicy,
     TrainBelief,
     TrainingRegime,
@@ -88,7 +89,14 @@ from manabot.training.state.recovery import (
     save_update,
     settle_orphan,
 )
-from manabot.training.update_metrics import metric_row, phase_seconds, time_since
+from manabot.training.update_metrics import (
+    OUTCOME_TABLE,
+    metric_row,
+    phase_seconds,
+    time_since,
+)
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.ppo import update_iteration
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -265,6 +273,8 @@ def _runtime_identities(
     if any(stage.execution.device == "mps" for stage in regime.stages):
         if not torch.backends.mps.is_available():
             raise ValueError("MPS requested but unavailable; CPU fallback is forbidden")
+        if (error := mps_torch_error()) is not None:
+            raise ValueError(error)
     return identities
 
 
@@ -806,7 +816,7 @@ def _execute_regime(
             incident_learner = None
             batch = None
             torch.set_num_threads(stage.execution.threads)
-            apply_matmul_precision(stage.execution.precision)
+            apply_matmul_precision(stage.execution.resolved_precision)
             cuda = stage.execution.device == "cuda"
             mps = stage.execution.device == "mps"
             if cuda and not torch.cuda.is_available():
@@ -1111,7 +1121,9 @@ def _execute_regime(
                     record.inputs["frozen_opponent"] = artifact(opponent_path)
                     if not stage.initial or snapshot is not None:
                         opponent_agent, opponent_space = load_checkpoint(
-                            str(opponent_path)
+                            str(opponent_path),
+                            bucketed_shapes=stage.execution.resolved_bucketed_shapes,
+                            live_tokens=stage.execution.resolved_live_tokens,
                         )
                         validate_agent_setup(
                             opponent_agent, Match(regime.root_match).to_rust()
@@ -1128,7 +1140,12 @@ def _execute_regime(
                     learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = ActorCritic(space, regime.agent).to(stage.execution.device)
+                    agent = ActorCritic(
+                        space,
+                        regime.agent,
+                        bucketed_shapes=stage.execution.resolved_bucketed_shapes,
+                        live_tokens=stage.execution.resolved_live_tokens,
+                    ).to(stage.execution.device)
                     if stage.initial_weights is not None:
                         reference = stage.initial_weights
                         copied = out / f"{stage.id}-initialization-source.pt"
@@ -1271,7 +1288,7 @@ def _execute_regime(
                         device=stage.execution.device,
                         workers=stage.execution.workers,
                         adaptive=stage.adaptive,
-                        precision=stage.execution.precision,
+                        precision=stage.execution.resolved_precision,
                     )
                     producers.callback(collector.close)
                     experiment = RunContext(
@@ -1328,7 +1345,7 @@ def _execute_regime(
                         agent,
                         experiment.device,
                         minibatch_rows=stage.streams,
-                        precision=stage.execution.precision,
+                        precision=stage.execution.resolved_precision,
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
@@ -1442,8 +1459,25 @@ def _execute_regime(
                         # queued work (EMA, last step) counts toward learning.
                         with learner.profiler.track("Learning"):
                             try:
-                                diagnostic = (
-                                    update_iteration(
+                                if stage.trainable != "policy_value":
+                                    diagnostic = {
+                                        "rows": batch.actions.size,
+                                        "optimizer_exposures": 0,
+                                        "retained": 0,
+                                        "numerical": {"optimizer_steps": 0},
+                                    }
+                                elif isinstance(stage.learning, DampedPolicyLearning):
+                                    diagnostic = update_damped_iteration(
+                                        torch_backend,
+                                        learner,
+                                        batch,
+                                        stage.learning,
+                                        iteration + 1,
+                                        bootstrap_agent=behavior_agent,
+                                    )
+                                else:
+                                    diagnostic = update_iteration(
+                                        torch_backend,
                                         learner,
                                         batch,
                                         stage.learning,
@@ -1459,14 +1493,6 @@ def _execute_regime(
                                         iteration=iteration + 1,
                                         bootstrap_agent=behavior_agent,
                                     )
-                                    if stage.trainable == "policy_value"
-                                    else {
-                                        "rows": batch.actions.size,
-                                        "optimizer_exposures": 0,
-                                        "retained": 0,
-                                        "numerical": {"optimizer_steps": 0},
-                                    }
-                                )
                                 adaptive_diagnostics = collector.commit_adaptive(batch)
                                 if adaptive_diagnostics is not None:
                                     diagnostic["adaptive"] = adaptive_diagnostics
@@ -1500,10 +1526,6 @@ def _execute_regime(
                         record.learning_timings = _phase_timings(
                             learner.profiler, "Learning"
                         )
-                    if collector.opponent_mode == "self":
-                        diagnostic["self_play_outcomes"] = (
-                            collector.stats.self_play.drain()
-                        )
                     record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     if record.optimizer_updates is not None:
@@ -1533,6 +1555,15 @@ def _execute_regime(
                             diagnostic["coordinates"]["learner_transitions"]
                         ),
                     )
+                    if collector.opponent_mode == "self":
+                        experiment.log_table(
+                            OUTCOME_TABLE,
+                            collector.stats.self_play.drain(),
+                            updates=int(diagnostic["coordinates"]["updates"]),
+                            transitions=int(
+                                diagnostic["coordinates"]["learner_transitions"]
+                            ),
+                        )
                     timed = spent
                     if stage.active_seconds is None or (
                         record.collection_seconds + record.learning_seconds

@@ -17,6 +17,7 @@ import torch
 
 from experiments import learning_signal, value_readout_252
 from experiments.learning_signal import ELEMENTAL_PAIRS
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
@@ -26,7 +27,6 @@ from manabot.infra.config import (
     RewardConfig,
     ValueAggregation,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_agent
 from manabot.training.rollout.collection import SeatRoutedCollector
 
@@ -293,6 +293,9 @@ def _stored(run: str, *updates: int) -> TrainingRun:
     return TrainingRun(
         name=run,
         experiment=value_readout_252.EXPERIMENT,
+        job=run,
+        launch=run,
+        line=run,
         state="finished",
         checkpoints=Checkpoints(
             Checkpoint(
@@ -304,7 +307,7 @@ def _stored(run: str, *updates: int) -> TrainingRun:
                     sha256="a" * 64,
                     size_bytes=1,
                 ),
-                clocks={"updates": float(update)},
+                at={"updates": float(update)},
                 line=run,
             )
             for ordinal, update in enumerate(updates, start=1)

@@ -3,11 +3,11 @@
 import json
 from pathlib import Path
 
-from managym.decision import Command, DecisionFrame
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
@@ -19,9 +19,9 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.training.rollout.collection import SeatRoutedCollector
+from managym.decision import Command, DecisionFrame
 
 
 def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
@@ -115,10 +115,10 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
             collector.close()
     rows = batch.observations()
     valid = rows.observation["actions_valid"].astype(bool)
-    assert rows.probabilities.shape == valid.shape
-    assert np.all(rows.probabilities[~valid] == 0)
-    assert np.all(rows.probabilities[valid] > 0)
-    np.testing.assert_allclose(rows.probabilities.sum(-1), 1, atol=1e-6)
+    assert rows.log_probabilities.shape == valid.shape
+    assert np.all(np.isneginf(rows.log_probabilities[~valid]))
+    assert np.all(np.isfinite(rows.log_probabilities[valid]))
+    np.testing.assert_allclose(np.exp(rows.log_probabilities).sum(-1), 1, atol=1e-6)
     assert np.all(np.take_along_axis(valid, batch.actions[..., None], -1))
     reports = [
         json.loads(path.read_bytes()) for path in tmp_path.glob("action-cutoff-*.json")

@@ -7,12 +7,12 @@ import hashlib
 import json
 from typing import Any, Mapping
 
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
 from manabot.belief.range import BeliefError, BeliefState
+from managym.possible_worlds import PossibleWorldSpace
 
 OPPONENT_OWNER_ROLE_ID = 1
 LIBRARY_ZONE_ID = 0
@@ -227,7 +227,11 @@ def belief_schema_from_engine(
     *,
     count_buckets: int,
 ) -> BeliefEncodingSchema:
-    """Build fixed opponent hand/library rows from the native content manifest."""
+    """Build fixed opponent hand/library rows from non-token definitions.
+
+    Tokens cannot remain in either hidden zone (CR 111.7); their printed names
+    can match cards or other tokens, so they do not belong to deck-count rows.
+    """
 
     try:
         manifest = engine.content_pack_manifest()
@@ -235,6 +239,7 @@ def belief_schema_from_engine(
         definitions = tuple(
             (int(row["card_def_id"]), str(row["registry_name"]))
             for row in manifest["definitions"]
+            if not str(row["key"]).startswith("token.")
         )
     except Exception as error:
         raise BeliefError(

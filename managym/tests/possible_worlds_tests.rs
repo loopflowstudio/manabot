@@ -163,7 +163,7 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
     let source_opponent_hand: Vec<usize> = game
         .state
         .zones
-        .zone_cards(ZoneType::Hand, OPPONENT)
+        .zone_objects(ZoneType::Hand, OPPONENT)
         .iter()
         .map(|c| c.0)
         .collect();
@@ -183,7 +183,7 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
     let after_opponent_hand: Vec<usize> = game
         .state
         .zones
-        .zone_cards(ZoneType::Hand, OPPONENT)
+        .zone_objects(ZoneType::Hand, OPPONENT)
         .iter()
         .map(|c| c.0)
         .collect();
@@ -197,7 +197,7 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
     let opponent_hand_ids: HashSet<i32> = branch
         .state
         .zones
-        .zone_cards(ZoneType::Hand, OPPONENT)
+        .zone_objects(ZoneType::Hand, OPPONENT)
         .iter()
         .map(|c| c.0 as i32)
         .collect();
@@ -211,7 +211,7 @@ fn viewer_relative_slice_preserves_observation_and_hides_truth() {
                 .as_array()
                 .expect("opponent cards array"),
         )
-        .map(|card| card["id"].as_i64().expect("public card id") as i32)
+        .map(|object| object["id"].as_i64().expect("public card id") as i32)
         .collect();
     for id in &opponent_hand_ids {
         assert!(
@@ -410,9 +410,9 @@ fn direct_sampled_hands_match_indexed_materialization_and_reject_invalid_roots()
 fn direct_sampled_hand_preserves_public_known_minima() {
     use managym::possible_worlds::HiddenHandConstraints;
     let mut game = gwallies_decision_with_lesson();
-    let card = game.state.zones.zone_cards(ZoneType::Hand, OPPONENT)[0];
-    let name = game.state.cards[card].name.clone();
-    let definition = game.state.cards[card].definition_id;
+    let object = game.state.zones.zone_objects(ZoneType::Hand, OPPONENT)[0];
+    let name = game.state.objects[object].name.clone();
+    let definition = game.state.objects[object].definition_id;
     game.state.players[OPPONENT.0]
         .known_hand
         .insert(definition, 1);

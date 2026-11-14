@@ -17,6 +17,8 @@ from pydantic import JsonValue
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.card_capture import CapturedCards
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
@@ -50,8 +52,6 @@ from manabot.eval.match import play_cell
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.card_evidence import (
     GameEvidence,
     GameTrace,
@@ -579,6 +579,17 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
         )
         assert pooled.runs == ("first", "second") and pooled.deals == 2
         assert pooled.games == 14 and pooled.excluded == {"crash": 2}
+        opponent = card_data(
+            db,
+            CardSelection(
+                experiment=spec.experiment,
+                subjects=(subject,),
+                opponents=(spec.players[1].player_id,),
+            ),
+        )
+        assert opponent.model_dump(exclude={"selection"}) == pooled.model_dump(
+            exclude={"selection"}
+        )
         one = card_data(
             db,
             CardSelection(

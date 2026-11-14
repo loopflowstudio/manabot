@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use unicode_normalization::UnicodeNormalization;
 
 use super::{
-    deck_admission::{admit_in_world, DeckIssue, DeckSection},
+    deck_admission::{admit_in_world, named_definition, DeckIssue, DeckSection},
     world_pool, ContentPool, PoolDefinition,
 };
 use crate::state::deck::Deck;
@@ -31,10 +31,7 @@ pub const MAX_SOURCE_BYTES: usize = 65_536;
 /// One counted line. Resolution replaces `name` with the world's registry name
 /// and fills the definition identity; parsing alone leaves them empty.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, eq, module = "managym"))]
 #[serde(deny_unknown_fields)]
 pub struct DeckEntry {
     pub line: usize,
@@ -46,10 +43,7 @@ pub struct DeckEntry {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, eq, module = "managym"))]
 #[serde(deny_unknown_fields)]
 pub struct Decklist {
     pub dialect: String,
@@ -61,10 +55,7 @@ pub struct Decklist {
 
 /// One document's admission: its resolved source record and the admitted deck.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, eq, module = "managym"))]
 #[serde(deny_unknown_fields)]
 pub struct DeckImport {
     pub decklist: Decklist,
@@ -275,9 +266,9 @@ fn admit_with_world(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImpor
             code: code.into(),
             message,
         };
-        let definition = match candidates {
-            [definition] => *definition,
-            [] if reverse_faces.contains_key(&key) => {
+        let definition = match (candidates, named_definition(candidates)) {
+            (_, Some(definition)) => definition,
+            ([], _) if reverse_faces.contains_key(&key) => {
                 issues.push(issue(
                     "face",
                     format!(
@@ -287,14 +278,14 @@ fn admit_with_world(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImpor
                 ));
                 continue;
             }
-            [] => {
+            ([], _) => {
                 issues.push(issue(
                     "unknown",
                     format!("Unknown card name: {}.", entry.name),
                 ));
                 continue;
             }
-            _ => {
+            (_, None) => {
                 issues.push(issue(
                     "ambiguous",
                     format!("Ambiguous card name: {}.", entry.name),
@@ -307,11 +298,11 @@ fn admit_with_world(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImpor
             .entry((entry.section, name.clone()))
             .or_default()
             .push(entry.line);
-        let cards = match entry.section {
+        let objects = match entry.section {
             DeckSection::Main => &mut deck.main,
             DeckSection::Sideboard => &mut deck.sideboard,
         };
-        *cards.entry(name.clone()).or_default() += entry.count;
+        *objects.entry(name.clone()).or_default() += entry.count;
         entries.push(DeckEntry {
             name,
             card_def_id: Some(definition.card_def_id.0),
@@ -524,6 +515,38 @@ mod tests {
         });
         let ambiguous = admit_with_world(&parse_decklist("10 Forest", "x"), &pool).unwrap_err();
         assert!(lines(&ambiguous).contains(&(Some(1), "ambiguous")));
+    }
+
+    #[test]
+    fn tokens_sharing_a_printed_name_are_unsupported_not_ambiguous() {
+        let mut pool = world_pool().clone();
+        let ally = pool
+            .definitions
+            .iter()
+            .find(|row| row.key.as_deref() == Some("token.ally"))
+            .unwrap()
+            .clone();
+        pool.definitions.push(PoolDefinition {
+            key: Some("token.ally_two".into()),
+            ..ally
+        });
+        let rejected =
+            admit_with_world(&parse_decklist("10 Forest\n1 Ally", "x"), &pool).unwrap_err();
+        assert_eq!(lines(&rejected), [(Some(2), "unsupported")]);
+    }
+
+    #[test]
+    fn a_card_is_admitted_when_a_token_shares_its_printed_name() {
+        let mut pool = world_pool().clone();
+        let token = pool
+            .definitions
+            .iter_mut()
+            .find(|row| row.key.as_deref() == Some("token.ally"))
+            .unwrap();
+        token.registry_name = "Forest".into();
+        let imported = admit_with_world(&parse_decklist("10 Forest", "x"), &pool).unwrap();
+        assert_eq!(imported.deck.main, BTreeMap::from([("Forest".into(), 10)]));
+        assert!(admit_in_world(&pool, &imported.deck).is_empty());
     }
 
     /// The pool with Forest renamed to a two-face registry name.

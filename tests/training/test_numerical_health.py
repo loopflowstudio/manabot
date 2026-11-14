@@ -17,28 +17,35 @@ import torch
 from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.learner import Learner, gradient_step
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import (
+    NumericalError,
+    check_behavior,
+    check_logs,
+    check_probabilities,
+    damped_policy_loss,
+    legal_mask,
+    policy_logs,
+    selected_moves,
+)
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.policy_distribution import (
-    NumericalError,
-    check_behavior,
-    check_probabilities,
-    legal_mask,
-    policy_logs,
-)
+from manabot.model.inference import admit_on_device
 from manabot.training import execution
-from manabot.training.learning.damped_policy import (
-    damped_policy_loss,
-    update_damped_iteration,
-)
-from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.selection import selected_moves, value_scale
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
+from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.health import (
+    NumericalHealth,
+    OptimizerHealth,
+    batch_health,
+)
+from manabot.training.updates.selection import value_scale
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -73,9 +80,7 @@ def test_extreme_logs_loss_and_gradients_match_double(gap: float) -> None:
     valid = torch.tensor([[True, True, False]], device=DEVICE)
     behavior_logs = policy_logs(_tensor([[0.0, -gap, 900.0]]), valid)
     actions = torch.tensor([0], device=DEVICE)
-    check_behavior(
-        behavior_logs, behavior_logs.exp(), actions, behavior_logs[:, 0], valid
-    )
+    check_behavior(behavior_logs, actions, behavior_logs[:, 0], valid)
     # Moving away from concentrated behavior exercises reverse KL on the
     # underflowed alternative, which cannot be recovered from behavior.exp().
     logits = _tensor([[-0.3, 0.4, 900.0]], grad=True)
@@ -182,16 +187,34 @@ def test_forced_action_is_finite_with_exact_zero_gradient() -> None:
     assert torch.isfinite(loss).all()
 
 
-def test_behavior_mismatch_rejected_without_epsilon() -> None:
-    valid = torch.tensor([[True, True]], device=DEVICE)
-    logs = policy_logs(_tensor([[0.0, -104.0]]), valid)
+@pytest.mark.parametrize("gap", [87.5, 92.0, 94.75, 103.9, 104.0, 124.0])
+def test_behavior_logs_admit_subnormal_and_underflowed_alternatives(gap: float) -> None:
+    # Incident 2be568a65518: the unsampled -94.75 alternative's device/host
+    # exponentials differed by one subnormal spacing (5046 vs 5047).
+    logits = torch.tensor([[0.0, -6.0, -15.0, -93.0, -gap]])
+    logs = policy_logs(logits, torch.ones_like(logits, dtype=torch.bool)).numpy()
+    packed = PackedActions.pack({"actions_valid": np.ones_like(logs)}, logs)
+    packed.check(np.array([0]), logs[:, 0])
+    health = batch_health(packed, np.ones(1), np.ones(1, dtype=bool), actor_only=False)
+    weights = np.exp(logs)
+    assert health["legal_probability_min"] == float(weights.min())
+    assert health["legal_underflow_count"] == int((weights == 0).sum())
+    if gap < 104:
+        assert 0 < health["legal_probability_min"] < np.finfo(np.float32).tiny
+    else:
+        assert health["legal_underflow_count"] == 1
+
+
+def test_behavior_rejects_corrupt_logs_and_actions() -> None:
+    valid = torch.tensor([[True, True, False]], device=DEVICE)
+    logs = policy_logs(_tensor([[0.0, -104.0, 0.0]]), valid)
     action = torch.tensor([0], device=DEVICE)
-    with pytest.raises(NumericalError, match="behavior_log_probability_mismatch"):
-        check_behavior(logs, _tensor([[1.0, 1e-30]]), action, logs[:, 0], valid)
     with pytest.raises(NumericalError, match="selected_log_mismatch"):
-        check_behavior(logs, logs.exp(), action, logs[:, 0] - 1, valid)
-    with pytest.raises(NumericalError, match="zero_sampled_probability"):
-        check_behavior(logs, logs.exp(), action + 1, logs[:, 1], valid)
+        check_behavior(logs, action, logs[:, 0] - 1, valid)
+    with pytest.raises(NumericalError, match="illegal_sampled_action"):
+        check_behavior(logs, action + 2, logs[:, 0], valid)
+    with pytest.raises(NumericalError, match="log_normalization"):
+        check_behavior(logs - 1, action, logs[:, 0] - 1, valid)
 
 
 def _health() -> NumericalHealth:
@@ -213,7 +236,7 @@ def test_known_learning_and_ineffective_controls(mode: str) -> None:
         model.parameters(), lr=0 if mode == "zero_rate" else 0.05
     )
     health = _health()
-    observer = OptimizerHealth(model, optimizer, health, iteration=1)
+    observer = OptimizerHealth(health, iteration=1)
     before_rng = torch.get_rng_state().clone()
     valid = torch.ones((2, 2), device=DEVICE, dtype=torch.bool)
     initial = model.weight.detach().clone()
@@ -236,14 +259,22 @@ def test_known_learning_and_ineffective_controls(mode: str) -> None:
         ).sum()
         if mode == "detached":
             with pytest.raises(NumericalError, match="detached_objective"):
-                observer.step(loss.detach(), 1.0)
+                gradient_step(loss.detach(), model, optimizer, 1.0, recorder=observer)
             assert health["rejected_steps"] == 1
             break
         if mode == "invalid":
             with pytest.raises(NumericalError, match="nonfinite_objective"):
-                observer.step(loss * float("nan"), 1.0)
+                gradient_step(
+                    loss * float("nan"), model, optimizer, 1.0, recorder=observer
+                )
             break
-        observer.step(loss * 0 if mode == "zero" else loss, 1.0)
+        gradient_step(
+            loss * 0 if mode == "zero" else loss,
+            model,
+            optimizer,
+            1.0,
+            recorder=observer,
+        )
     torch.testing.assert_close(torch.get_rng_state(), before_rng)
     if mode == "learning":
         assert model(torch.ones((1, 1), device=DEVICE)).softmax(-1)[0, 0] > 0.7
@@ -267,13 +298,17 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
     optimizer = torch.optim.Adam(model.parameters())
     health = _health()
     loss = model[0](torch.ones((1, 1), device=DEVICE)).square().mean()
-    OptimizerHealth(model, optimizer, health, 1).step(loss, 0.01)
+    gradient_step(loss, model, optimizer, 0.01, recorder=OptimizerHealth(health, 1))
     assert health["gradient_missing_tensors"] == 1
     assert health["frozen_parameter_tensors"] == 1
     assert health["gradient_norm_after"] <= 0.010001
     health = _health()
-    OptimizerHealth(model, optimizer, health, 2).step(
-        model(torch.ones((1, 1), device=DEVICE)).square().mean(), 1.0
+    gradient_step(
+        model(torch.ones((1, 1), device=DEVICE)).square().mean(),
+        model,
+        optimizer,
+        1.0,
+        recorder=OptimizerHealth(health, 2),
     )
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
 
@@ -295,10 +330,13 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         device=DEVICE,
     )
     batch = collector.collect(agent, 1)
-    obs = {
-        key: torch.from_numpy(value).to(DEVICE)
-        for key, value in batch.observations(np.array([0])).observation.items()
-    }
+    obs = admit_on_device(
+        agent,
+        {
+            key: torch.from_numpy(value)
+            for key, value in batch.observations(np.array([0])).observation.items()
+        },
+    )
     optimizer = torch.optim.Adam(agent.parameters())
 
     def measure(loss: Literal["policy", "value"]) -> NumericalHealth:
@@ -310,7 +348,13 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
             else values.square().sum()
         )
         health = _health()
-        OptimizerHealth(agent, optimizer, health, iteration=1).step(objective, 1e9)
+        gradient_step(
+            objective,
+            agent,
+            optimizer,
+            1e9,
+            recorder=OptimizerHealth(health, iteration=1),
+        )
         return health
 
     policy = measure("policy")
@@ -361,7 +405,7 @@ def test_extreme_real_collector_to_learner() -> None:
     learning = DampedPolicyLearning(
         gradient="damped_policy", advantage_quantile=0, min_advantage=0
     )
-    result = update_damped_iteration(trainer, batch, learning, 1)
+    result = update_damped_iteration(torch_backend, trainer, batch, learning, 1)
     assert result["numerical"]["legal_underflow_count"] > 0
     assert (
         result["numerical"]["optimizer_steps"]
@@ -439,7 +483,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     # collector's clocks real, so CPU/CUDA speed cannot decide this assertion.
     clock = _AccountingClock()
     monkeypatch.setattr(execution, "time", clock)
-    original_update = execution.update_iteration
+    original_update = execution.update_damped_iteration
     calls = [0]
     corrupted_rows: list[int] = []
 
@@ -450,16 +494,12 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
             clock.elapsed += 10.0
             return result
         clock.elapsed += 0.25
-        batch = args[1]
+        batch = args[2]
         rows = batch.observations()
-        probabilities = torch.as_tensor(rows.probabilities).clone()
-        probabilities[-1, -1, 0] = float("nan")
-        corrupted_rows.append(probabilities.numel() // probabilities.shape[-1] - 1)
-        check_probabilities(
-            probabilities,
-            torch.as_tensor(rows.observation["actions_valid"]) > 0,
-            positive=False,
-        )
+        logs = torch.as_tensor(rows.log_probabilities).clone()
+        logs[-1, -1, 0] = float("nan")
+        corrupted_rows.append(logs.numel() // logs.shape[-1] - 1)
+        check_logs(logs, torch.as_tensor(rows.observation["actions_valid"]) > 0)
         raise AssertionError("expected invariant failure")
 
     original_save = VerifyStore.save_training_run
@@ -479,7 +519,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         if run.status == "running":
             clock.elapsed += 2.0
 
-    monkeypatch.setattr(execution, "update_iteration", update)
+    monkeypatch.setattr(execution, "update_damped_iteration", update)
     monkeypatch.setattr(VerifyStore, "save_training_run", save)
     if fault == "capture":
 
@@ -488,18 +528,18 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
 
         monkeypatch.setattr(execution, "save_incident", failed_capture)
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        with pytest.raises(NumericalError, match="nonfinite_probabilities"):
+        with pytest.raises(NumericalError, match="nonfinite_behavior_logs"):
             execution.execute_regime(recipe, 123, tmp_path / "run", store)
     if fault == "telemetry":
         assert (
-            "nonfinite_probabilities"
+            "nonfinite_behavior_logs"
             in json.loads((tmp_path / "run/terminal-error.json").read_text())["error"]
         )
         return
     run = json.loads((tmp_path / "run/run.json").read_text())
     record = run["stages"][0]
     assert run["status"] == "failed"
-    assert record["numerical_failure"]["invariant"] == "nonfinite_probabilities"
+    assert record["numerical_failure"]["invariant"] == "nonfinite_behavior_logs"
     if fault == "capture":
         assert "incident capture failed: OSError" in run["error"]
         return
@@ -521,9 +561,10 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert "packed_actions/offsets" in metadata["tensors"]
     assert "packed_actions/slots" in metadata["tensors"]
     assert "packed_actions/log_probabilities" in metadata["tensors"]
+    assert "packed_actions/probabilities" not in metadata["tensors"]
     assert metadata["source"]["training_source_sha256"]
     tensors = torch.load(artifacts["numerical/tensors.pt"]["path"], weights_only=True)
-    assert torch.isnan(tensors["probabilities"]).any()
+    assert torch.isnan(tensors["logs"]).any()
     assert tensors["row_indexes"].tolist() == corrupted_rows
     state = torch.load(artifacts["numerical/state.pt"]["path"], weights_only=False)
     assert (
@@ -572,7 +613,7 @@ def test_nonfinite_gradient_rejects_before_adam() -> None:
     health = _health()
     loss = model.weight.sqrt().sum()  # finite loss, infinite derivative at zero
     with pytest.raises(NumericalError, match="nonfinite_gradients") as caught:
-        OptimizerHealth(model, optimizer, health, 1).step(loss, 1.0)
+        gradient_step(loss, model, optimizer, 1.0, recorder=OptimizerHealth(health, 1))
     assert caught.value.health["rejected_steps"] == 1
     assert not optimizer.state
     assert torch.isfinite(model.weight).all()
@@ -588,7 +629,9 @@ def test_optimizer_health_preserves_exact_updates_and_device_rng() -> None:
     cuda_rng = torch.cuda.get_rng_state().clone() if DEVICE == "cuda" else None
     for iteration in (1, 2, 25):
         loss = model(torch.ones((4, 2), device=DEVICE)).square().mean()
-        OptimizerHealth(model, optimizer, _health(), iteration).step(loss, 0.5)
+        gradient_step(
+            loss, model, optimizer, 0.5, recorder=OptimizerHealth(_health(), iteration)
+        )
         baseline.zero_grad(set_to_none=True)
         control(torch.ones((4, 2), device=DEVICE)).square().mean().backward()
         torch.nn.utils.clip_grad_norm_(

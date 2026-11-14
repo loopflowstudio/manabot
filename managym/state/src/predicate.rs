@@ -2,7 +2,10 @@
 // Reusable structural predicates over cards, shared by trigger subjects,
 // blocking restrictions, and zone counting (no scattered string compares).
 
-use super::card::{Card, CardType, Keyword};
+use super::card::{CardType, Keyword};
+
+use super::game_object::{Object, ObjectKind};
+use super::mana::Color;
 
 /// A structural predicate over cards. Every populated field must match.
 /// Deserialization reads a definition's serialized predicate back, so
@@ -36,8 +39,17 @@ pub struct CardPredicate {
     /// "tapped": only permanents are tapped.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tapped: bool,
+    /// "card in a graveyard that was put there from the battlefield this
+    /// turn" (Brought Back): game history, so card-only matching refuses it
+    /// and `Game::card_matches_predicate` answers it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_battlefield_this_turn: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
+    /// Has at least one of these colors ("white or blue"), as its
+    /// characteristics are now (layer 5).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub colors_any: Vec<Color>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub not_subtypes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -105,55 +117,66 @@ impl CardPredicate {
             || self.any_of.iter().any(CardPredicate::reads_power)
     }
 
-    /// Match against a card's printed characteristics.
-    pub fn matches_card(&self, card: &Card) -> bool {
-        self.matches_card_with_power(card, card.power.unwrap_or(0))
+    /// Match against an object's printed characteristics.
+    pub fn matches_object(&self, object: &Object) -> bool {
+        self.matches_object_with_power(object, object.power.unwrap_or(0))
     }
 
-    /// Match against a card, substituting `power` (e.g. a permanent's
+    /// Match against an object, substituting `power` (e.g. a permanent's
     /// effective power including counters and until-EOT modifiers).
-    pub fn matches_card_with_power(&self, card: &Card, power: i32) -> bool {
-        self.matches(card, power, &[])
+    pub fn matches_object_with_power(&self, object: &Object, power: i32) -> bool {
+        self.matches(object, power, &[])
     }
 
     /// Full matching: `power` substitutes the card's printed power and
     /// `added_types` are card types the object has in addition to its printed
     /// types (an animated land's creature type, a granted land type).
-    pub fn matches(&self, card: &Card, power: i32, added_types: &[CardType]) -> bool {
+    pub fn matches(&self, object: &Object, power: i32, added_types: &[CardType]) -> bool {
         if self.namesake
             || self.with_counter
             || self.attacking
             || self.tapped
-            || (self.flying && !card.keywords.has(Keyword::Flying))
+            || self.from_battlefield_this_turn
+            || (self.flying && !object.keywords.has(Keyword::Flying))
         {
             return false;
         }
-        if self.token.is_some_and(|token| token != card.is_token) {
+        if self
+            .token
+            .is_some_and(|token| token != (object.kind() == ObjectKind::Token))
+        {
             return false;
         }
-        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {
+        if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| object.has_subtype(s))
+        {
             return false;
+        }
+        if !self.colors_any.is_empty() {
+            let colors = object.colors();
+            if !self.colors_any.iter().any(|color| colors.contains(color)) {
+                return false;
+            }
         }
         if !self.any_of.is_empty()
             && !self
                 .any_of
                 .iter()
-                .any(|alternative| alternative.matches(card, power, added_types))
+                .any(|alternative| alternative.matches(object, power, added_types))
         {
             return false;
         }
-        if self.not_subtypes.iter().any(|s| card.has_subtype(s)) {
+        if self.not_subtypes.iter().any(|s| object.has_subtype(s)) {
             return false;
         }
         if self
             .supertype
             .as_ref()
-            .is_some_and(|s| !card.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
+            .is_some_and(|s| !object.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
         {
             return false;
         }
         if self.nonbasic
-            && card
+            && object
                 .supertypes
                 .iter()
                 .any(|t| t.eq_ignore_ascii_case("basic"))
@@ -164,7 +187,7 @@ impl CardPredicate {
             return false;
         }
         let has_type = |card_type: CardType| {
-            card.types.types.contains(&card_type) || added_types.contains(&card_type)
+            object.types.types.contains(&card_type) || added_types.contains(&card_type)
         };
         if let Some(card_type) = self.card_type {
             if !has_type(card_type) {
@@ -178,7 +201,7 @@ impl CardPredicate {
             return false;
         }
         if let Some(subtype) = &self.subtype {
-            if !card.has_subtype(subtype) {
+            if !object.has_subtype(subtype) {
                 return false;
             }
         }
@@ -187,7 +210,7 @@ impl CardPredicate {
                 return false;
             }
         }
-        let mana_value = card
+        let mana_value = object
             .mana_value_cost()
             .map(|cost| cost.mana_value)
             .unwrap_or(0);

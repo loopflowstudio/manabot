@@ -8,13 +8,14 @@ from pathlib import Path
 import time
 from typing import Any, Callable, Mapping
 
-from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
 from manabot.belief.range import BeliefState
 from manabot.infra.identity import file_sha256
+from manabot.model.inference import admit_on_device
+from managym.decision import DecisionFrame, PublicCommitment, SemanticContractError
 
 
 class RulesProviderGap(RuntimeError):
@@ -107,7 +108,7 @@ class FrozenPolicyLikelihood:
         self.device = torch.device(device)
         self.counterfactual_seed = counterfactual_seed
         self.batch_observer = batch_observer
-        from manabot.model.checkpoint import load_checkpoint
+        from manabot.backends.torch.checkpoint import load_checkpoint
 
         self.agent, self.obs_space = load_checkpoint(str(path))
         self.agent.to(self.device)
@@ -151,10 +152,10 @@ class FrozenPolicyLikelihood:
                 key: np.stack([encoded[key] for encoded in encoded_batch])
                 for key in encoded_batch[0]
             }
-            tensors = {
-                key: torch.from_numpy(value).to(self.device)
-                for key, value in buffers.items()
-            }
+            tensors = admit_on_device(
+                self.agent,
+                {key: torch.from_numpy(value) for key, value in buffers.items()},
+            )
             with torch.inference_mode():
                 logits, _ = self.agent.forward(tensors)
                 probabilities = torch.softmax(logits, dim=-1).cpu().numpy()

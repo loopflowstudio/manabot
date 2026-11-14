@@ -1,7 +1,7 @@
 """Static abilities and additional costs reach the policy as learning tokens.
 
 Each card's `statics` and `additional_costs` serialize into its characteristics
-span of `managym.learning_catalog`; the native guard in
+span of `managym.catalog_tokens`; the native guard in
 `managym/cards/tests/cards/observability.rs` covers every variant exhaustively. This
 checks the same tokens through the Python boundary, one real card per variant.
 """
@@ -33,7 +33,7 @@ VARIANTS = [
 
 
 def _characteristics(
-    catalog: managym.LearningCatalog, name: str
+    catalog: managym.CatalogTokens, name: str
 ) -> list[tuple[int, int]]:
     row = catalog["registry_names"].index(name)
     start, end = catalog["definition_offsets"][row : row + 2]
@@ -48,12 +48,12 @@ def _characteristics(
 
 @pytest.mark.parametrize("name,variant", VARIANTS)
 def test_variant_token_is_in_the_card_characteristics(name: str, variant: str) -> None:
-    tokens = _characteristics(managym.learning_catalog(), name)
+    tokens = _characteristics(managym.catalog_tokens(), name)
     assert (TOKEN_KINDS["variant"], token_value(variant)) in tokens
 
 
 def test_cards_without_statics_carry_no_static_tokens() -> None:
-    tokens = _characteristics(managym.learning_catalog(), "Gray Ogre")
+    tokens = _characteristics(managym.catalog_tokens(), "Gray Ogre")
     values = {value for kind, value in tokens if kind == TOKEN_KINDS["field"]}
     assert token_value("statics") not in values
     assert token_value("additional_costs") not in values

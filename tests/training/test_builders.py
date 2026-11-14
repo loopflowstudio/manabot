@@ -136,9 +136,7 @@ def test_checkpoint_builders_chain_stages_with_independent_settings() -> None:
         ppo_checkpoints(0, learning)
 
 
-@pytest.mark.parametrize(
-    "name", ["tla-trophy-213-v10.json", "tla-frontier-c5fba4-w64.json"]
-)
+@pytest.mark.parametrize("name", ["tla-frontier-c5fba4-w64.json"])
 def test_current_regime_files_round_trip_to_their_bytes(name: str) -> None:
     """Producer and horizon defaults live in builders, so saved regimes keep meaning.
 
@@ -151,7 +149,7 @@ def test_current_regime_files_round_trip_to_their_bytes(name: str) -> None:
 
 def test_sampled_self_play_fits_its_horizon_and_recovers_capacity() -> None:
     frozen = TrainingRegime.model_validate_json(
-        (ROOT / "experiments/regimes/tla-trophy-213-v10.json").read_bytes()
+        (ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json").read_bytes()
     )
     assert fitted_horizon(194_400, 150) == 1_296
     assert fitted_horizon(194_400, 10) == REFERENCE_UPDATES

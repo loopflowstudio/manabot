@@ -62,7 +62,7 @@ class ShardedVectorEnv:
                     seed_stride=num_envs,
                     stream_offset=index * num_envs // workers,
                     skip_trivial=True,
-                    opponent_policy="none",
+                    player_policies=("agent", "agent"),
                 ),
             )
             for index in range(workers)

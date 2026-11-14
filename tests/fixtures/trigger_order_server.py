@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from academy import server
 from manabot.verify.trigger_order import DECK, SEED, configure_root
+from managym.academy import server
 
 _new_game = server.GameSession.new_game
 

@@ -25,8 +25,8 @@ use crate::{
     state::{
         card::ActivatedAbilityDefinition,
         game_object::{
-            CardId, CardVec, IdGenerator, Incarnation, ObjectLkiLog, ObjectRef, PermanentId,
-            PermanentVec, PlayerId, Target,
+            CardId, IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef, ObjectVec,
+            PermanentId, PermanentVec, PlayerId, Target,
         },
         mana::Mana,
         permanent::{CounterKind, Permanent},
@@ -37,11 +37,13 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
-    pub cards: CardVec<crate::state::card::Card>,
+    /// Every object a game has made: its cards, tokens and copies of spells,
+    /// told apart by `Object::kind` (CR 109.1).
+    pub objects: ObjectVec<crate::state::game_object::Object>,
     pub permanents: PermanentVec<Option<crate::state::permanent::Permanent>>,
-    pub card_to_permanent: CardVec<Option<PermanentId>>,
-    /// Current CR 400.7 generation for each stable physical card entity.
-    pub object_incarnations: CardVec<Incarnation>,
+    pub object_to_permanent: ObjectVec<Option<PermanentId>>,
+    /// Current CR 400.7 generation for each stored object.
+    pub object_incarnations: ObjectVec<Incarnation>,
     /// Last-known battlefield facts keyed by the departed exact object.
     pub object_lki: ObjectLkiLog,
     pub players: [crate::state::player::Player; 2],
@@ -72,6 +74,40 @@ pub struct GameState {
     pub trigger_enqueue_counter: u64,
     pub rng: ChaCha8Rng,
     pub id_gen: IdGenerator,
+}
+
+impl GameState {
+    /// Update raw membership, certifying card-zone occupants. Callers own
+    /// rules events; ordinary play uses `Game::move_object`.
+    pub fn place_object(&mut self, object: impl Into<ObjectId>, holder: PlayerId, zone: ZoneType) {
+        self.zones.move_object(&self.objects, object, holder, zone);
+    }
+
+    /// Materialize hidden-zone contents, retaining transient occupants and order.
+    pub fn reassign_hidden(
+        &mut self,
+        player: PlayerId,
+        hand: Vec<ObjectId>,
+        library: Vec<ObjectId>,
+    ) {
+        self.zones
+            .reassign_hidden(&self.objects, player, hand, library);
+    }
+
+    /// A card keeps its kind across moves, transformations and copy effects.
+    pub fn card_id(&self, object: ObjectId) -> Option<CardId> {
+        self.objects.card_id(object)
+    }
+
+    /// Card-only consumers narrow at the zone boundary; the ordered zone itself
+    /// also retains transient tokens and copies until state-based actions.
+    pub fn zone_cards(
+        &self,
+        zone: ZoneType,
+        player: PlayerId,
+    ) -> impl Iterator<Item = CardId> + '_ {
+        self.zones.zone_objects(zone, player).cards(&self.objects)
+    }
 }
 
 /// The object whose activated ability is being activated: a battlefield
@@ -108,7 +144,8 @@ pub struct CastChoices {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Payment {
     Spell {
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
         mode: Option<usize>,
@@ -142,12 +179,16 @@ pub enum PendingChoice {
         cost: Box<crate::state::card::SacrificeCost>,
     },
     /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
-    /// `chosen` holds those already selected for its single clause.
+    /// `chosen` holds those already selected, clause by clause, and
+    /// `requirement` is the clause being chosen. `player` activates; a
+    /// clause the opponent chooses is offered to them.
     ActivatedTarget {
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
         chosen: Vec<Target>,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        requirement: usize,
     },
     /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
     /// control" activation cost.
@@ -156,6 +197,15 @@ pub enum PendingChoice {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        #[serde(skip_serializing_if = "is_single_tap")]
+        remaining: usize,
+    },
+    /// Choosing the card from hand to exile for a spell's alternative cost
+    /// (`AdditionalCost::ExileFromHandAlternative`), before the rest of its
+    /// payment.
+    ExileFromHandPayment {
+        player: PlayerId,
+        payment: Box<Payment>,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {
@@ -167,14 +217,16 @@ pub enum PendingChoice {
     /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
     AnnounceX {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
     },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
     KickerChoice {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
     },
@@ -187,7 +239,8 @@ pub enum PendingChoice {
     },
     SpellMode {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
     },
@@ -195,7 +248,8 @@ pub enum PendingChoice {
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
         mode: Option<usize>,
@@ -468,10 +522,16 @@ impl TrackedState {
 
     // Zone changes feed the derivations that read the zones they touch.
 
-    /// Move `card` to `to_zone` under `holder`. Characteristics read the
+    /// Move `object` to `to_zone` under `holder`. Characteristics read the
     /// battlefield and graveyards; the trigger index reads the battlefield.
-    pub(crate) fn move_card(&mut self, card: CardId, holder: PlayerId, to_zone: ZoneType) {
-        let from_zone = self.state.zones.zone_of(card);
+    pub(crate) fn move_object(
+        &mut self,
+        object: impl Into<ObjectId>,
+        holder: PlayerId,
+        to_zone: ZoneType,
+    ) {
+        let object: ObjectId = object.into();
+        let from_zone = self.state.zones.zone_of(object);
         let touches = |zone: ZoneType| matches!(zone, ZoneType::Battlefield | ZoneType::Graveyard);
         if touches(to_zone) || from_zone.is_some_and(touches) {
             self.revisions.characteristics += 1;
@@ -479,13 +539,15 @@ impl TrackedState {
         if to_zone == ZoneType::Battlefield || from_zone == Some(ZoneType::Battlefield) {
             self.revisions.triggers += 1;
         }
-        self.state.zones.move_card(card, holder, to_zone);
+        self.state
+            .zones
+            .move_object(&self.state.objects, object, holder, to_zone);
     }
 
-    /// Advance the card's CR 400.7 incarnation as it leaves `from_zone`.
+    /// Advance the object's CR 400.7 incarnation as it leaves `from_zone`.
     /// Only a battlefield object's exact identity reaches a cached derivation
     /// (through its effect records and static attachments).
-    pub(crate) fn advance_incarnation(&mut self, card: CardId, from_zone: ZoneType) {
+    pub(crate) fn advance_incarnation(&mut self, object: ObjectId, from_zone: ZoneType) {
         if from_zone == ZoneType::Battlefield {
             self.revisions.characteristics += 1;
             self.revisions.triggers += 1;
@@ -493,7 +555,7 @@ impl TrackedState {
         let incarnation = self
             .state
             .object_incarnations
-            .get_mut(card.0)
+            .get_mut(object.0)
             .expect("card entity must have an incarnation");
         *incarnation = incarnation
             .checked_next()
@@ -542,6 +604,9 @@ pub struct Game {
     /// `state` at its current revisions; cloned with it (its `Arc`s are
     /// immutable), never hashed.
     pub(crate) derived: RefCell<DerivedCache>,
+    /// One player's mana sources for the questions of a live `PaymentScan`;
+    /// empty outside one and in every clone.
+    pub(crate) payment_sources: RefCell<crate::flow::mana::SharedSources>,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
@@ -568,6 +633,7 @@ impl Clone for Game {
         Self {
             state: self.state.clone(),
             derived: RefCell::new(self.derived.borrow().clone()),
+            payment_sources: Default::default(),
             policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),
@@ -585,4 +651,8 @@ impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }
+}
+
+fn is_single_tap(remaining: &usize) -> bool {
+    *remaining == 1
 }

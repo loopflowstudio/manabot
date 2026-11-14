@@ -357,6 +357,8 @@ pub struct LegacyCastPermissionView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyRestrictedManaView {
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub except_nonartifact_spells: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spells: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -489,7 +491,20 @@ pub struct SideboardCardView {
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct PooledManaView {
+    pub mana: [i32; 6],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restriction: Option<String>,
+    pub combat: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LegacyPlayerView {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pooled_mana_classes: Vec<PooledManaView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mana: Option<[i32; 6]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -536,6 +551,9 @@ pub struct LegacyPlayerView {
     /// What this player has done this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: crate::flow::turn::PlayerTurnHistory,
+    /// Spells this player cast this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spells_cast: u32,
     /// Extra turns this player will take after this one.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,

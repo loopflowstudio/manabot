@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(frozen, eq, hash, module = "manabot.managym")
+    pyo3::pyclass(frozen, eq, hash, module = "managym")
 )]
 #[serde(deny_unknown_fields)]
 pub struct Deck {

@@ -37,6 +37,7 @@
   } from '$lib/study-runtime';
   import type {
     GameLogEntry,
+    OpponentCatalog,
     InteractionOffer,
     Trace,
     TraceSummary,
@@ -66,6 +67,13 @@
 
   async function loadAdviceMeta(): Promise<void> {
     try {
+      const response = await fetch('/api/opponents');
+      if (!response.ok) throw new Error('Capabilities could not be loaded.');
+      const capabilities: OpponentCatalog = await response.json();
+      if (!capabilities.advice_available) {
+        adviceStatus = 'unavailable';
+        return;
+      }
       const meta = await fetchAdviceMeta();
       adviceMetaState = meta;
       adviceSelectedScenario = meta.scenarios[0]?.landmark_id ?? '';
@@ -128,21 +136,21 @@
     return new Set(plan ? offerFocus(plan.offer) : []);
   });
 
-  $effect(() => {
-    if (
-      !currentFrame
-      || studyStore.phase !== 'score'
-      || (activeDecisionAddress !== null && studyStore.restored !== null)
-    ) {
-      untrack(() => presentationPlayer.recover());
-      return;
-    }
-    untrack(() =>
-      presentationPlayer.recover(
-        currentFrame.presentation,
-        currentFrame.presentationLabels,
-      ),
+  function loadCanonicalHistory(animate: boolean): void {
+    const frames = replayStore.frames.slice(0, replayStore.currentFrameIndex + 1);
+    presentationPlayer.loadPrefix(
+      frames.map(frame => ({ events: frame.presentation, labels: frame.presentationLabels })),
+      `replay:${replayStore.trace?.id ?? ''}:canonical`,
+      animate,
     );
+  }
+
+  $effect(() => {
+    currentFrame;
+    const phase = studyStore.phase;
+    const active = activeDecisionAddress;
+    if (phase !== 'score') return;
+    untrack(() => loadCanonicalHistory(active === null));
   });
 
   async function loadTraces(): Promise<void> {
@@ -243,7 +251,7 @@
       activeDecisionAddress = decision.address;
       originatingDecisionButton = button;
       focusedPlan = null;
-      presentationPlayer.recover();
+      loadCanonicalHistory(false);
     } catch (error) {
       studyStore.setError(error instanceof Error ? error.message : 'Failed to restore decision.');
     } finally {
@@ -277,12 +285,13 @@
       if (!response.ok) throw new Error(await responseError(response, 'Retry failed.'));
       const payload = (await response.json()) as StudyRetryResponse;
       studyStore.acceptRetry(payload);
-      presentationPlayer.recover(
+      presentationPlayer.loadEvents(
         payload.retry.presentation,
         mergePresentationLabels(
           presentationLabelsFromFrame(restored.frame),
           presentationLabelsFromObservation(payload.retry.projection),
         ),
+        `replay:${traceId}:study:${payload.attempt_id}:retry`,
       );
     } catch (error) {
       studyStore.setError(error instanceof Error ? error.message : 'Retry failed.');
@@ -323,7 +332,7 @@
       const payload = (await response.json()) as StudyPlanPreviewResponse;
       studyStore.acceptPreview(payload);
       const restored = studyStore.restored;
-      presentationPlayer.recover(
+      presentationPlayer.loadEvents(
         payload.presentation,
         restored
           ? mergePresentationLabels(
@@ -331,6 +340,7 @@
               presentationLabelsFromObservation(payload.projection),
             )
           : presentationLabelsFromObservation(payload.projection),
+        `replay:${replayStore.trace?.id}:study:${studyStore.attemptId}:${plan}`,
       );
     } catch (error) {
       studyStore.setError(error instanceof Error ? error.message : 'Plan preview failed.');
@@ -359,7 +369,7 @@
       if (!returned) throw new Error('The canonical Study decision is unavailable.');
       studyStore.returnToScore(returned);
       focusedPlan = null;
-      presentationPlayer.recover();
+      loadCanonicalHistory(false);
       restoreFocus = true;
     } catch (error) {
       studyStore.setError(error instanceof Error ? error.message : 'Return failed.');
@@ -680,9 +690,9 @@
             </div>
 
             {#if studyStore.branchObservation}<DecisionContext observation={studyStore.branchObservation} actor={studyStore.branchObservation.decision_context?.actor ?? null} />{/if}
-            <PresentationHistory player={presentationPlayer} />
+            <PresentationHistory player={presentationPlayer} observation={boardObservation} />
 
-            {#if studyStore.phase === 'score'}
+            {#if studyStore.phase === 'score' && adviceMetaState}
               <div class="mt-3 border-t border-line pt-4">
                 <DecisionAdvice
                   mode="study"
@@ -699,7 +709,7 @@
                   onSelectScenario={(id) => void loadAdvice(id)}
                 />
               </div>
-            {:else if studyStore.restored}
+            {:else if studyStore.phase !== 'score' && studyStore.restored}
               <StudyPanel
                 phase={studyStore.phase}
                 restored={studyStore.restored}

@@ -1,15 +1,23 @@
 """Policy-version-scoped preparation for inference from CPU observations.
 
-PolicyInference admits definition references before device transfer and lazily
-encodes the fixed semantic catalog once. PreparedObservation keeps the ordinary
-tensor dictionary interface used by forward instrumentation. Neither prepared
-inputs nor the cached catalog may cross an update boundary or enter autograd.
+PolicyInference admits each CPU batch (`manabot.model.admission`) before device
+transfer and lazily encodes the fixed semantic catalog once. PreparedObservation
+is an AdmittedObservation, so it keeps the ordinary tensor dictionary interface
+used by forward instrumentation. Neither prepared inputs nor the cached catalog
+may cross an update boundary or enter autograd.
 The caller owns the model exclusively for the scope and must not mutate prepared
 observations. No serving state is persisted in the model or its checkpoints.
 
 Device inputs move with one contiguous copy per dtype (`transfer`): serving's
 float32 observation keys and int64 catalog references are two copies per batch
 instead of one per key.
+
+With bucketed shapes, admission measures each batch's buckets on the host
+before transfer (`manabot.policy.buckets`); the forward trims the device tensors
+to them without a device read (`trim_admitted`). The prepared dictionary itself
+keeps full-capacity tensors. With live tokens, preparation likewise counts the
+batch's live attention tokens, so the forward packs them without reading the
+count back.
 """
 
 from collections.abc import Mapping
@@ -18,21 +26,21 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX
-from manabot.model.semantic_cards import CardReferences, admit_definition_ids
+from manabot.backends.torch.arrays import device_of
+from manabot.model.admission import AdmittedObservation, admit_observation
+from manabot.model.semantic_cards import CardReferences
+from manabot.policy.buckets import (
+    ONE_BASED_REFERENCES,
+    ROW_KEYS,
+    SEAT_KEYS,
+    ZERO_BASED_REFERENCES,
+    BucketSizes,
+    has_history_events,
+    object_segments,
+)
 
 if TYPE_CHECKING:
-    from manabot.model.actor_critic import ActorCritic
-
-
-_VALIDITY_KEYS = (
-    "agent_player_valid",
-    "opponent_player_valid",
-    "agent_cards_valid",
-    "opponent_cards_valid",
-    "agent_permanents_valid",
-    "opponent_permanents_valid",
-)
+    from manabot.backends.torch.policy import ActorCritic
 
 
 def transfer(
@@ -63,25 +71,150 @@ def transfer(
     return moved, len(groups)
 
 
-class PreparedObservation(dict[str, torch.Tensor]):
+def transfer_admitted(
+    admitted: AdmittedObservation, device: torch.device
+) -> tuple[AdmittedObservation, int]:
+    """Move an admitted CPU batch and its checked references to `device`.
+
+    One copy per dtype covers the observation and its references; the result
+    keeps the admission. Returns it with the copy count.
+    """
+    references = admitted.references
+    joins = {"cards": references.cards, "permanents": references.permanents}
+    if references.known is not None:
+        joins["known"] = references.known
+    if references.decklists is not None:
+        joins["decklists"] = references.decklists
+    moved, transfers = transfer(
+        {**admitted, **{f"references/{key}": value for key, value in joins.items()}},
+        device,
+    )
+    return AdmittedObservation(
+        {key: moved[key] for key in admitted},
+        admitted.binding,
+        CardReferences(
+            moved["references/cards"],
+            moved["references/permanents"],
+            moved.get("references/known"),
+            moved.get("references/decklists"),
+        ),
+        admitted.legal,
+        admitted.buckets,
+        admitted.needs,
+    ), transfers
+
+
+def admit_on_device(
+    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+) -> AdmittedObservation:
+    """Admit a CPU batch for `agent`, then move it to the agent's device.
+
+    For one-off forwards outside a PolicyInference scope.
+    """
+    device = device_of(agent)
+    return transfer_admitted(admit_observation(agent, obs), device)[0]
+
+
+class PreparedObservation(AdmittedObservation):
     """Device tensors and CPU-admitted joins, valid only in their owning scope.
 
-    `transfers` counts the host-to-device copies that produced them.
+    `transfers` counts the host-to-device copies that produced them;
+    `live_token_count` is the host-measured number of packed tokens when the
+    policy uses live tokens.
     """
 
     def __init__(
         self,
-        tensors: dict[str, torch.Tensor],
+        admitted: AdmittedObservation,
         scope: "PolicyInference",
-        references: CardReferences,
-        objects_checked: bool,
         transfers: int,
+        live_token_count: int | None = None,
     ) -> None:
-        super().__init__(tensors)
+        super().__init__(
+            admitted,
+            admitted.binding,
+            admitted.references,
+            admitted.legal,
+            admitted.buckets,
+            admitted.needs,
+        )
         self.scope = scope
-        self.references = references
-        self.objects_checked = objects_checked
         self.transfers = transfers
+        self.live_token_count = live_token_count
+
+
+def _object_remap(values: torch.Tensor, buckets: BucketSizes) -> torch.Tensor:
+    """Map zero-based full object coordinates to trimmed ones.
+
+    Each value shifts by the rows trimmed from segments ending at or before
+    it. Integer parts, signs and out-of-range values keep their meaning, so
+    reference checks accept and reject exactly what they would at full capacity.
+    """
+    shift = torch.zeros_like(values)
+    for axis, start, rows in object_segments(buckets.capacities):
+        cut = rows - buckets.sizes[axis]
+        shift = shift + (values >= start + rows).to(values.dtype) * cut
+    return values - shift
+
+
+def trim_observation(
+    obs: Mapping[str, torch.Tensor], buckets: BucketSizes
+) -> dict[str, torch.Tensor]:
+    """Slice every variable axis to its bucket; other keys pass through."""
+    trimmed = dict(obs)
+    for axis, keys in ROW_KEYS.items():
+        for key in keys:
+            trimmed[key] = obs[key][:, : buckets.sizes[axis]]
+    for axis, keys in SEAT_KEYS.items():
+        for key in keys:
+            trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
+    if not buckets.trims_objects:
+        return trimmed
+    trimmed["action_focus"] = _object_remap(trimmed["action_focus"], buckets)
+    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
+        for key in dict.fromkeys(key for key, _ in references):
+            if key == "events" and not has_history_events(trimmed):
+                continue
+            columns = [column for name, column in references if name == key]
+            value = trimmed[key].clone()
+            value[..., columns] = (
+                _object_remap(value[..., columns] - base, buckets) + base
+            )
+            trimmed[key] = value
+    return trimmed
+
+
+def trim_admitted(
+    obs: AdmittedObservation, buckets: BucketSizes
+) -> AdmittedObservation:
+    """Trim admitted tensors and their checked joins to `buckets`.
+
+    Trimming removes only rows nothing reads, so the admission still holds. A
+    prepared observation stays prepared, in the same scope. The result carries
+    no buckets: it is already trimmed.
+    """
+    sizes = buckets.sizes
+    references = obs.references
+    trimmed = AdmittedObservation(
+        trim_observation(obs, buckets),
+        obs.binding,
+        CardReferences(
+            references.cards[:, :, : sizes["cards"]],
+            references.permanents[:, :, : sizes["permanents"]],
+            None
+            if references.known is None
+            else references.known[:, :, : sizes["known"]],
+            None
+            if references.decklists is None
+            else references.decklists[:, :, : sizes["decklists"]],
+        ),
+        obs.legal,
+    )
+    if isinstance(obs, PreparedObservation):
+        return PreparedObservation(
+            trimmed, obs.scope, obs.transfers, obs.live_token_count
+        )
+    return trimmed
 
 
 class PolicyInference:
@@ -89,21 +222,17 @@ class PolicyInference:
 
     Version counters reject optimizer/load_state_dict/in-place updates and tensor
     replacement. As with autograd, mutation through unsafe `.data` aliases is outside
-    the contract. Ordinary tensor dictionaries still use ActorCritic's differentiable path.
+    the contract. Observations admitted outside a scope keep ActorCritic's
+    differentiable path.
     """
 
     def __init__(self, agent: "ActorCritic") -> None:
         self.agent = agent
-        self.device = next(agent.parameters()).device
+        self.device = device_of(agent)
         self._closed = False
         self._versions = self._state()
         self._modes = tuple(module.training for module in agent.modules())
         self._spec = agent.config.model_dump_json()
-        self._lookup = (
-            agent.semantic_cards.definition_rows.detach().cpu().clone()
-            if agent.semantic_cards is not None
-            else None
-        )
         self._catalog: torch.Tensor | None = None
 
     def _state(self) -> tuple[tuple[int, int, torch.device, torch.dtype], ...]:
@@ -149,54 +278,7 @@ class PolicyInference:
         self.check(self.agent)
         if any(tensor.device.type != "cpu" for tensor in obs.values()):
             raise ValueError("inference preparation requires CPU observations")
-        embedding = self.agent.card_definitions
-        size = (
-            len(self._lookup)
-            if self._lookup is not None
-            else (embedding.num_embeddings if embedding is not None else 0)
-        )
-        permanent_ids = torch.stack(
-            [
-                obs[key][..., PERMANENT_DEFINITION_INDEX]
-                for key in ("agent_permanents", "opponent_permanents")
-            ],
-            dim=1,
-        )
-        references = CardReferences(
-            admit_definition_ids(obs["semantic_cards"], size, self._lookup),
-            admit_definition_ids(permanent_ids, size, self._lookup),
-            admit_definition_ids(obs["known_hand"][..., 0], size, self._lookup)
-            if self._lookup is not None
-            else None,
-            admit_definition_ids(obs["decklists"][..., 0], size, self._lookup)
-            if self._lookup is not None and "decklists" in obs
-            else None,
-        )
-        # Belief-enabled policies add validity rows inside ActorCritic; retain their
-        # complete check there. Plain policies can check the same rows on CPU.
-        objects_checked = self.agent.belief_count_buckets == 0
-        if objects_checked and self.agent.config.value_aggregation != "historical_mean":
-            validity = torch.cat([obs[key] for key in _VALIDITY_KEYS], dim=1)
-            if (validity.sum(1) == 0).any():
-                raise ValueError("value aggregation requires a valid object")
-        joins = {"cards": references.cards, "permanents": references.permanents}
-        if references.known is not None:
-            joins["known"] = references.known
-        if references.decklists is not None:
-            joins["decklists"] = references.decklists
-        moved, transfers = transfer(
-            {**obs, **{f"references/{key}": value for key, value in joins.items()}},
-            self.device,
-        )
-        return PreparedObservation(
-            {key: moved[key] for key in obs},
-            self,
-            CardReferences(
-                moved["references/cards"],
-                moved["references/permanents"],
-                moved.get("references/known"),
-                moved.get("references/decklists"),
-            ),
-            objects_checked,
-            transfers,
-        )
+        admitted = admit_observation(self.agent, obs)
+        live = self.agent.live_token_count(admitted)
+        moved, transfers = transfer_admitted(admitted, self.device)
+        return PreparedObservation(moved, self, transfers, live)

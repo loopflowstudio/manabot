@@ -1,6 +1,6 @@
 //! Return to Ravnica.
 use managym_state::{
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -15,14 +15,17 @@ fn fencing_ace() -> CardDefinition {
     CardDefinition {
         key: "rtr.fencing_ace",
         scryfall_id: "a42d3066-f4ec-4d28-83ab-e48141206c72",
-        name: "Fencing Ace".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Soldier".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::DoubleStrike]),
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Fencing Ace".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Soldier".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::DoubleStrike]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

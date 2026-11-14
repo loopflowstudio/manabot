@@ -569,7 +569,6 @@ def build_scenario_env(
         obs_space or ObservationSpace(),
         Reward(RewardConfig()),
         seed=seed,
-        auto_reset=False,
         enable_profiler=False,
         enable_behavior_tracking=False,
     )

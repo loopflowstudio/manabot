@@ -10,11 +10,11 @@ import pytest
 import torch
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.execution import execute_regime, validate_regime
@@ -228,7 +228,7 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
                 opponent_mode=mode,
                 root=root,
             )
-    native = managym.VectorEnv(num_envs=1, seed=174, opponent_policy="none")
+    native = managym.VectorEnv(num_envs=1, seed=174, player_policies=("agent", "agent"))
     with pytest.raises(RuntimeError, match="every exact Elemental"):
         native.set_uniform_roster(roster[:-1])
     with pytest.raises(RuntimeError, match="every exact Elemental"):

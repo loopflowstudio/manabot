@@ -1,4 +1,4 @@
-"""Inference players for scalar simulation; model admission lives in model.checkpoint."""
+"""Inference players for scalar simulation; model admission lives in backends.torch.checkpoint."""
 
 from enum import Enum
 from typing import Dict
@@ -6,8 +6,10 @@ from typing import Dict
 import numpy as np
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
+
 # Local imports
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.inference import admit_on_device
 
 # -----------------------------------------------------------------------------
 # Player Classes
@@ -57,10 +59,13 @@ class ModelPlayer(Player):
     def get_action(self, obs: Dict[str, np.ndarray]) -> int:
         """Get action from model."""
         # Convert numpy arrays to tensors with batch dimension
-        tensor_obs = {
-            k: torch.tensor(v, dtype=torch.float32).unsqueeze(0).to(self.device)
-            for k, v in obs.items()
-        }
+        tensor_obs = admit_on_device(
+            self.agent,
+            {
+                k: torch.tensor(v, dtype=torch.float32).unsqueeze(0)
+                for k, v in obs.items()
+            },
+        )
 
         # Get action from model
         with torch.no_grad():

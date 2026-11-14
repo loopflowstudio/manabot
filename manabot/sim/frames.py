@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from manabot.env.env import Env
+from manabot.env.observation import ActionSpaceEnum
+from manabot.infra.identity import canonical_sha256
 from managym.experience import PROTOCOL_VERSION, Command, ExperienceFrame
 from managym.experience_projection import (
     describe_actions,
@@ -18,9 +21,6 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
-
-from manabot.env.observation import ActionSpaceEnum
-from manabot.infra.identity import canonical_sha256
 
 
 def _action_space_name(raw: Any) -> str:
@@ -104,3 +104,24 @@ def build_command(frame: dict[str, Any], action: int) -> dict[str, Any]:
         answers=[],
     )
     return command.model_dump(mode="json")
+
+
+def decision_row(env: Env, frame: dict[str, Any], offer_id: int) -> dict[str, Any]:
+    """Build pre-command evidence without stepping or acknowledging the Command.
+
+    The caller owns execution and adds post_state_digest only after success.
+    Keeping these separate preserves durable evidence of rejected Commands.
+    """
+    offer = next((o for o in frame["offers"] if int(o["id"]) == offer_id), None)
+    if offer is None:
+        raise ValueError(f"action not offered: {offer_id}")
+    command = build_command(frame, offer_id)
+    return {
+        "actor": int(env.last_raw_obs.agent.player_index),
+        "action_space_kind": frame["action_space"],
+        "frame_sha256": canonical_sha256(frame),
+        "command": command,
+        "command_sha256": canonical_sha256(command),
+        "chosen_offer": offer,
+        "pre_state_digest": env._engine.state_digest(),
+    }

@@ -12,6 +12,9 @@ import json
 import re
 from typing import Callable
 
+from pydantic import ValidationError
+
+import managym
 from managym.decision import Command, SemanticContractError, SemanticTransition
 from managym.decision_capture import (
     CardReference,
@@ -24,9 +27,6 @@ from managym.decision_capture import (
     PlayerReference,
     UnavailableReference,
 )
-from pydantic import ValidationError
-
-import managym
 
 REPRESENTATION_VERSION = "manabot-text-6"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
@@ -90,7 +90,9 @@ _STAGES = frozenset(
         "declare_attackers",
         "declare_blockers",
         "mana_payment",
+        "tap_payment",
         "mana_color",
+        "mana_spend",
         "resolution_choice",
         "private_search",
         "learn",
@@ -205,6 +207,8 @@ _OBLIGATIONS = (
     "order library top",
     "select cards",
     "order replacements",
+    "enter as a copy",
+    "spend mana",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -256,8 +260,9 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
-def _turn_history(history: managym.PlayerTurnHistory) -> str:
+def _turn_history(player: managym.Player) -> str:
     """What a player has done this turn, or empty when nothing yet."""
+    history = player.turn_history
     parts = []
     if history.attacked:
         parts.append("attacked")
@@ -273,11 +278,17 @@ def _turn_history(history: managym.PlayerTurnHistory) -> str:
             kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
         )
         parts.append(f"bent {bent}")
+    if amount := history.life_lost:
+        parts.append(f"lost {amount} life")
+    if count := player.spells_cast:
+        parts.append(f"cast {count} spell{'' if count == 1 else 's'}")
     return "; ".join(parts)
 
 
 def _spending(restricted: managym.RestrictedMana) -> str:
     """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
+    if restricted.except_nonartifact_spells:
+        return "anything but nonartifact spells"
     parts = []
     if restricted.spells:
         parts.append(" or ".join(restricted.spells) + " spells")
@@ -298,9 +309,15 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     )
     if generic < 0:
         raise TextEncodingError("inconsistent mana value")
-    symbols = (f"{{{generic}}}" if generic else "") + "".join(
-        f"{{{symbol}}}" * count
-        for symbol, count in zip("WUBRGC", cost.cost[:6], strict=True)
+    if cost.x < 0:
+        raise TextEncodingError("unsupported mana cost")
+    symbols = (
+        "{X}" * cost.x
+        + (f"{{{generic}}}" if generic else "")
+        + "".join(
+            f"{{{symbol}}}" * count
+            for symbol, count in zip("WUBRGC", cost.cost[:6], strict=True)
+        )
     )
     colors = {
         name: symbol
@@ -361,9 +378,19 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "CantBeBlocked": "can't be blocked",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
+        "CantActivateAbilities": "its activated abilities can't be activated",
+        "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
+        "ExileIfWouldLeave": "exiled instead if it would leave the battlefield",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
+        "NextCreatureCastFlash": (
+            "the next creature card cast can be cast as though it had flash"
+        ),
+        "SkipsCombatPhasesNextTurn": "skips all combat phases of their next turn",
+        "LifeTotalCantChange": "life total can't change",
+        "ProtectionFromEverything": "protection from everything",
+        "PhasedOut": "phased out (treated as though it doesn't exist)",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (
@@ -548,7 +575,10 @@ class _Renderer:
         ]
         if relation.parent is not None:
             details.append(f"parent R{relation.parent + 1}")
-        if relation.kind == 6 and relation.decision == 25:
+        if relation.kind == 6 and relation.decision == 2 and relation.mode:
+            details.append(f"{relation.mode} tap selections still required")
+            details += _selectors(None, relation.ability)
+        elif relation.kind == 6 and relation.decision == 25:
             details.append(f"may exile up to {relation.mode} more cards")
         elif relation.kind == 6 and relation.decision == 27:
             details.append(f"{relation.mode or 0} kept cards already ordered on top")
@@ -703,6 +733,22 @@ class _Renderer:
                     )
                     + "."
                 )
+            for pooled in player.pooled_mana_classes:
+                lines.append(
+                    "Of the mana above: "
+                    + ", ".join(
+                        f"{symbol} {count}"
+                        for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
+                        if count
+                    )
+                    + (f"; only for {pooled.restriction}" if pooled.restriction else "")
+                    + (f"; puts {pooled.effect}" if pooled.effect else "")
+                    + (
+                        "; expires at end of combat."
+                        if pooled.combat
+                        else "; expires at step end."
+                    )
+                )
             if player.hand_only_until is not None:
                 lines.append(
                     "Can cast spells only from hand, overriding permissions to cast "
@@ -713,7 +759,7 @@ class _Renderer:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
                 lines.append("Keeps unspent red mana until end of turn.")
-            if history := _turn_history(player.turn_history):
+            if history := _turn_history(player):
                 lines.append(f"This turn: {history}.")
             if player.extra_turns:
                 lines.append(
@@ -785,6 +831,8 @@ class _Renderer:
                 optional += "; foretold, face down (hidden from other players)"
             if card.x is not None:
                 optional += f"; announced X {card.x}"
+            if card.from_battlefield_this_turn:
+                optional += "; put into the graveyard from the battlefield this turn"
             if card.cast_permission is not None:
                 optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(
@@ -935,6 +983,7 @@ class _Renderer:
         until = {
             "EndOfTurn": "until end of turn: ",
             "WhileYouControlSource": "while its source's controller controls it: ",
+            "UntilYourNextTurn": "until its controller's next turn: ",
         }.get(effect.duration, "")
         source = (
             f" (from {self.definition(effect.source_registry_key)})"

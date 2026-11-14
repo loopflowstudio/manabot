@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from academy import trace as trace_store
-from academy.server import GameSession
+from managym.academy import trace as trace_store
+from managym.academy.server import GameSession
 
 
 def _command_payload(

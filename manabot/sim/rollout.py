@@ -8,7 +8,7 @@ default for every policy-in-the-loop consumer:
 - ``BatchedSampler``: one masked forward pass for many observations at once,
   straight from the zero-copy numpy buffers the Rust envs write into.
 - ``run_vector_games``: K parallel game streams on managym.VectorEnv
-  (opponent_policy="none", both seats surfaced) with per-seat controllers —
+  (player_policies=("agent", "agent"), both seats surfaced) with per-seat controllers —
   seat-balanced policy-vs-random and policy-vs-policy evaluation without a
   per-stream Python round trip.
 - ``PolicyRolloutMCPlayer``: flat determinized MC search whose rollout
@@ -25,12 +25,13 @@ from typing import Any
 import numpy as np
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.inference import admit_on_device
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
@@ -74,10 +75,13 @@ class BatchedSampler:
     def select(self, buffers: dict[str, np.ndarray], rows: np.ndarray) -> np.ndarray:
         """Actions (len(rows),) for the given rows of the observation buffers."""
 
-        obs = {
-            key: torch.from_numpy(buffers[key][rows]).to(self.device)
-            for key in self.agent.observation_space.shapes
-        }
+        obs = admit_on_device(
+            self.agent,
+            {
+                key: torch.from_numpy(buffers[key][rows])
+                for key in self.agent.observation_space.shapes
+            },
+        )
         with torch.inference_mode():
             logits, _ = self.agent.forward(obs)
             if self.deterministic:
@@ -171,7 +175,10 @@ def run_vector_games(
         validate_agent_setup(getattr(controller, "agent", None), match.to_rust())
     num_streams = min(num_streams, max(2, num_games))
     env = CapturedVector(
-        num_envs=num_streams, seed=seed, skip_trivial=True, opponent_policy="none"
+        num_envs=num_streams,
+        seed=seed,
+        skip_trivial=True,
+        player_policies=("agent", "agent"),
     )
     buffers = _allocate_buffers(obs_space, num_streams)
     env.set_buffers(buffers)

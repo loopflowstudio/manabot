@@ -13,7 +13,7 @@ fn cast_llanowar_elves(
     seed: u64,
 ) -> (
     Scenario,
-    managym::state::game_object::CardId,
+    managym::state::game_object::ObjectId,
     Vec<GameEvent>,
 ) {
     let mut s = Scenario::new(
@@ -35,7 +35,7 @@ fn cast_llanowar_elves(
         .stack_objects
         .last()
         .and_then(|stack_object| match stack_object {
-            StackObject::Spell(spell) => Some(spell.card),
+            StackObject::Spell(spell) => Some(spell.object),
             _ => None,
         })
         .expect("elf should be on stack");
@@ -55,18 +55,17 @@ fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
     let islands: Vec<_> = s
         .game()
         .state
-        .cards
+        .objects
         .iter()
         .enumerate()
-        .filter(|(_, card)| card.owner == PlayerId(0) && card.name == "Island")
-        .map(|(idx, _)| managym::state::game_object::CardId(idx))
+        .filter(|(_, object)| object.owner == PlayerId(0) && object.name == "Island")
+        .map(|(idx, _)| managym::state::game_object::ObjectId(idx))
         .take(3)
         .collect();
     for island in islands {
         s.game_mut()
             .state
-            .zones
-            .move_card(island, PlayerId(0), ZoneType::Hand);
+            .place_object(island, PlayerId(0), ZoneType::Hand);
     }
     s.force_card_in_hand(0, "Man-o'-War");
     let _ = s.drain_events();
@@ -94,19 +93,19 @@ fn spell_events_are_observable_for_creature_spells() {
     let (_s, elf, events) = cast_llanowar_elves(7101);
 
     assert!(events.contains(&GameEvent::SpellCast {
-        card: elf,
+        object_id: elf,
         targets: Vec::new(),
     }));
-    assert!(events.contains(&GameEvent::SpellResolved { card: elf }));
+    assert!(events.contains(&GameEvent::SpellResolved { object_id: elf }));
     assert!(events.contains(&GameEvent::CardMoved {
-        card: elf,
+        object_id: elf,
         from: Some(ZoneType::Hand),
         to: ZoneType::Stack,
         controller: PlayerId(0),
         face_down: false,
     }));
     assert!(events.contains(&GameEvent::CardMoved {
-        card: elf,
+        object_id: elf,
         from: Some(ZoneType::Stack),
         to: ZoneType::Battlefield,
         controller: PlayerId(0),
@@ -115,11 +114,13 @@ fn spell_events_are_observable_for_creature_spells() {
 
     let spell_cast_index = events
         .iter()
-        .position(|event| matches!(event, GameEvent::SpellCast { card, .. } if *card == elf))
+        .position(|event| matches!(event, GameEvent::SpellCast { object_id: object, .. } if *object == elf))
         .expect("spell cast event should exist");
     let spell_resolved_index = events
         .iter()
-        .position(|event| matches!(event, GameEvent::SpellResolved { card, .. } if *card == elf))
+        .position(
+            |event| matches!(event, GameEvent::SpellResolved { object_id: object, .. } if *object == elf),
+        )
         .expect("spell resolved event should exist");
     assert!(spell_cast_index < spell_resolved_index);
 }
@@ -147,7 +148,7 @@ fn combat_damage_emits_damage_and_life_change_events() {
     // Find the attacker's card to use as source
     let attacker_card = s.game().state.permanents[attacker]
         .as_ref()
-        .map(|p| p.card)
+        .map(|p| p.object)
         .expect("attacker permanent should exist");
 
     assert!(events.contains(&GameEvent::DamageDealt {

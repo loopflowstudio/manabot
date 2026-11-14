@@ -40,8 +40,15 @@ def batched_baseline() -> TrainingRegime:
                 learning=move_learning(
                     IterationSchedule(steps=128, reference_steps=2048)
                 ),
+                # The study ran padded; the frozen family keeps that layout and
+                # its digests while fresh CUDA recipes resolve `auto` to the
+                # bucketed, live-token layout.
                 execution=Execution(
-                    device="cuda", wall_seconds=1740, memory_bytes=48 * GIB
+                    device="cuda",
+                    wall_seconds=1740,
+                    memory_bytes=48 * GIB,
+                    bucketed_shapes=False,
+                    live_tokens=False,
                 ),
             )
         ],
@@ -68,11 +75,15 @@ def scale_ladder() -> TrainingRegime:
     stage.batch_closure = "exact-quota"
     stage.learning = move_learning()
     stage.execution = Execution(
-        device="cuda", wall_seconds=400_000, memory_bytes=40 * GIB
+        device="cuda",
+        wall_seconds=400_000,
+        memory_bytes=40 * GIB,
+        bucketed_shapes=False,
+        live_tokens=False,
     )
     regime.wall_seconds = 400_000
     regime.schedule_clock = "iteration_fraction"
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def seat_comparison(seats: Literal["one", "both"], updates: int) -> TrainingRegime:
@@ -93,7 +104,7 @@ def seat_comparison(seats: Literal["one", "both"], updates: int) -> TrainingRegi
     stage.learning_seats = seats
     stage.batch_closure = "complete-games"
     stage.games_per_stream = 1 if seats == "both" else 2
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def scale_ladder_both() -> TrainingRegime:
@@ -104,7 +115,7 @@ def scale_ladder_both() -> TrainingRegime:
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = "both"
     stage.batch_closure = "complete-games"
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def closure_comparison(closure: BatchClosure, updates: int) -> TrainingRegime:
@@ -125,7 +136,7 @@ def closure_comparison(closure: BatchClosure, updates: int) -> TrainingRegime:
     stage.transitions = (
         CLOSURE_QUOTA if closure == "exact-quota" else CLOSURE_COMPLETE_FLOOR
     )
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def lambda_sweep(
@@ -138,4 +149,4 @@ def lambda_sweep(
     assert isinstance(stage, TrainSelfPlay)
     stage.learning.policy_lambda = policy_lambda
     stage.learning.value_lambda = value_lambda
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())

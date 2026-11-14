@@ -156,11 +156,11 @@ fn prepared_rejects_invalid_construction_and_changed_hidden_pool() {
     let root = managym::Game::new(authored_configs(), 0, true);
     let space = managym::possible_worlds::PossibleWorldSpace::for_viewer(&root, PlayerId(0));
     let mut changed = root.clone();
-    let card = changed
+    let object = changed
         .state
         .zones
-        .zone_cards(ZoneType::Library, PlayerId(1))[0];
-    changed.state.cards[card].name = "changed hidden pool".into();
+        .zone_objects(ZoneType::Library, PlayerId(1))[0];
+    changed.state.objects[object].name = "changed hidden pool".into();
     // The viewer cannot see this change; only the additional pool check catches it.
     assert_eq!(
         serde_json::to_value(changed.semantic_observation(PlayerId(0)).unwrap()).unwrap(),

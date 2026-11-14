@@ -10,12 +10,12 @@ from etude.train.run import track
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_etude_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
+from manabot.infra import artifacts
 from manabot.infra.config import ModelConfig, RuntimeConfig, SimulationConfig
-from manabot.model import checkpoint
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_etude_checkpoint, save_checkpoint
 from manabot.reports import training
 from manabot.sim import sim
 from manabot.sim.player import ModelPlayer
@@ -48,7 +48,7 @@ def test_simulation_admits_exact_etude_checkpoint(
         record.write_text(
             stored.model_copy(update={"artifact": reference}).model_dump_json()
         )
-        monkeypatch.setattr(checkpoint, "storage_from_uri", lambda _: storage)
+        monkeypatch.setattr(artifacts, "storage_from_uri", lambda _: storage)
         retained = tmp_path / "bucket/policy.pt"
     policy.unlink()  # The SDK retained its own bytes.
     player = sim.load_player(str(record))
@@ -107,8 +107,8 @@ def test_dashboard_delivery_failure_retries_without_duplicate_rows(
     assert list(copied.points("rl/loss", "observation").y) == [0.5]
     settled = [
         table.row(index)
-        for table in copied.tables
+        for table in copied.columns
         for index in range(table.rows)
-        if "projection/row_sha256" in table.row(index)["values"]
+        if "projection/row_sha256" in table.row(index).values
     ]
     assert len(settled) == 1

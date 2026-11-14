@@ -8,10 +8,11 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from tests.training.test_recovery import recipe
@@ -20,7 +21,6 @@ from tests.training.test_recovery import recipe
 def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
     rows = batch.observations()
     result = {
-        "probabilities": torch.from_numpy(rows.probabilities),
         "log_probabilities": torch.from_numpy(rows.log_probabilities),
         **{
             f"obs/{key}": torch.from_numpy(value)
@@ -72,6 +72,31 @@ def _policy(*, semantic: bool = True, history: bool = False) -> PolicyFixture:
     return PolicyFixture(agent, collector, collector._slice_obs_tensors(np.arange(2)))
 
 
+def test_half_precision_head_keeps_finite_public_logits() -> None:
+    """The output boundary handles half scores without overflowing -1e8."""
+    case = _policy()
+
+    def half_scores(
+        module: torch.nn.Module, args: tuple[torch.Tensor, ...], output: torch.Tensor
+    ) -> torch.Tensor:
+        return output.half()
+
+    # Inject the autocast head's output dtype without depending on a GPU or
+    # running unrelated encoder operators in CPU half precision.
+    handle = case.agent.policy_head.register_forward_hook(half_scores)
+    try:
+        logits, _ = case.agent(admit_observation(case.agent, case.obs))
+        legal = case.obs["actions_valid"].bool()
+        assert logits.dtype == torch.float32
+        assert torch.isfinite(logits).all()
+        assert (logits[~legal] == -1e8).all()
+        logits[legal].sum().backward()
+        parameter = case.agent.policy_head[-1].weight
+        assert parameter.grad is not None and torch.isfinite(parameter.grad).all()
+    finally:
+        handle.remove()
+
+
 @pytest.mark.parametrize("semantic", [False, True])
 def test_preparation_preserves_forward_and_training_gradients(semantic: bool) -> None:
     case = _policy(semantic=semantic)
@@ -80,12 +105,14 @@ def test_preparation_preserves_forward_and_training_gradients(semantic: bool) ->
         for _ in range(2):
             prepared = scope.prepare(case.obs)
             actual = case.agent.forward_distribution(prepared)
-            expected = reference.forward_distribution(case.obs)
+            expected = reference.forward_distribution(
+                admit_observation(reference, case.obs)
+            )
             for a, b in zip(actual, expected, strict=True):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
     # Serving must not detach or reuse a catalog during a subsequent update.
     for agent in (case.agent, reference):
-        logits, values = agent.forward_distribution(case.obs)
+        logits, values = agent.forward_distribution(admit_observation(agent, case.obs))
         loss = (
             logits[case.obs["actions_valid"].bool()].square().mean()
             + values.square().mean()
@@ -133,7 +160,7 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     full._referenced_definitions = lambda obs, ids: None  # type: ignore[method-assign,assignment,return-value]
     outputs = []
     for agent in (case.agent, full):
-        logits, values = agent.forward_distribution(case.obs)
+        logits, values = agent.forward_distribution(admit_observation(agent, case.obs))
         outputs.append((logits, values))
         (
             logits[case.obs["actions_valid"].bool()].square().mean()
@@ -196,8 +223,8 @@ def test_preparation_preserves_object_validity_and_mode_checks() -> None:
     with PolicyInference(case.agent) as scope:
         with pytest.raises(ValueError, match="valid object"):
             scope.prepare(case.obs)
-    with torch.no_grad(), pytest.raises(ValueError, match="valid object"):
-        case.agent(case.obs)
+    with pytest.raises(ValueError, match="valid object"):
+        admit_observation(case.agent, case.obs)
 
 
 def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
@@ -214,7 +241,7 @@ def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
     with torch.no_grad(), pytest.raises(RuntimeError, match="closed"):
         case.agent(prepared)
     with PolicyInference(case.agent) as fresh, torch.no_grad():
-        expected = case.agent(case.obs)
+        expected = case.agent(admit_observation(case.agent, case.obs))
         actual = case.agent(fresh.prepare(case.obs))
         for a, b in zip(actual, expected, strict=True):
             torch.testing.assert_close(a, b, atol=0, rtol=0)
@@ -225,8 +252,9 @@ def test_prepared_collection_and_restored_continuation_match_reference() -> None
 
     def plain_inputs(
         scope: PolicyInference, obs: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
-        return {key: value.to(scope.device) for key, value in obs.items()}
+    ) -> AdmittedObservation:
+        """Admitted outside the scope: no cached catalog or scope checks."""
+        return admit_observation(scope.agent, obs)
 
     actual = optimized.collector.collect(optimized.agent, 8)
     with patch.object(PolicyInference, "prepare", plain_inputs):

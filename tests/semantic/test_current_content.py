@@ -7,13 +7,13 @@ checks cover the Python consumers.
 import json
 from pathlib import Path
 
-from managym.decision import Command, DecisionFrame, Observation
-from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
 from manabot.semantic.learning import FROZEN_VOCABULARY_LABELS, BoundSemanticPack
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
+from managym.decision import Command, DecisionFrame, Observation
+from managym.experience_projection import describe_actions, serialize_observation
 
 CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic"
 SETUPS = json.loads((CONTENT_ROOT / "current/setups.json").read_text())
@@ -25,7 +25,11 @@ def _manifest() -> dict:
         "schema_version": 1,
         "content_digest": pool["content_digest"],
         "definitions": [
-            {"card_def_id": row["card_def_id"], "registry_name": row["registry_name"]}
+            {
+                "card_def_id": row["card_def_id"],
+                "key": row["key"],
+                "registry_name": row["registry_name"],
+            }
             for row in pool["definitions"]
         ],
     }

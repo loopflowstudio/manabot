@@ -1,7 +1,7 @@
 """Viewer-safe projection of card rules for learning.
 
 The rules engine remains authoritative and is also the only source of card
-programs: ``managym.learning_catalog`` walks each catalog definition (the same
+programs: ``managym.catalog_tokens`` walks each catalog definition (the same
 ``CardDefinition`` the engine runs) into typed tokens. This module binds that
 catalog to a ContentPack manifest of the world's one catalog and maps only
 already-viewer-safe Observation objects into it. Rows are ``CardDefId`` values.
@@ -77,7 +77,7 @@ def token_value(name: str) -> int:
     """The engine's stable token value for a Rust name or printed category."""
     import managym  # Native only on this path.
 
-    return int(managym.learning_token_value(name))
+    return int(managym.catalog_token_value(name))
 
 
 class SemanticProjectionError(ValueError):
@@ -242,7 +242,7 @@ class SemanticCatalog:
 
     @classmethod
     def from_native(cls, raw: Mapping[str, Any]) -> "SemanticCatalog":
-        """Read the arrays ``managym.learning_catalog`` returns."""
+        """Read the arrays ``managym.catalog_tokens`` returns."""
 
         def array(name: str, dtype: type) -> np.ndarray:
             value = np.asarray(_sequence(raw.get(name), name), dtype=dtype)
@@ -403,7 +403,8 @@ class BoundSemanticPack:
 
         The catalog's content digest must equal the manifest's, so the tokens
         describe exactly the definitions the match runs. Manifest IDs join
-        catalog rows by registry name, so rows never depend on ID allocation.
+        catalog rows by definition identity (key, else printed name), so rows
+        never depend on ID allocation.
         """
         import managym  # Native only on this path; historical readers stay pure.
 
@@ -415,7 +416,7 @@ class BoundSemanticPack:
                 f"authored content pack {manifest['pack_key']!r} is retired"
             )
         schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
-        raw = _mapping(managym.learning_catalog(), "learning_catalog")
+        raw = _mapping(managym.catalog_tokens(), "catalog_tokens")
         pack_schema = _integer(
             manifest.get("schema_version"), "content_pack_manifest.schema_version"
         )
@@ -426,38 +427,52 @@ class BoundSemanticPack:
             raise ContentPackBindingError("learning catalog differs from the live pack")
         catalog = SemanticCatalog.from_native(raw)
 
-        row_by_name = {
-            _string(name, "learning_catalog.registry_names[]"): row
-            for row, name in enumerate(
-                _sequence(raw.get("registry_names"), "learning_catalog.registry_names")
+        # A definition is identified by its key, or by its printed name when
+        # it has none (a back face or rules fixture). Two tokens may print one
+        # name, and a token may print a card's, so names alone do not bind.
+        names = tuple(
+            _string(name, "catalog_tokens.registry_names[]")
+            for name in _sequence(
+                raw.get("registry_names"), "catalog_tokens.registry_names"
             )
-        }
+        )
+        keys = _sequence(raw.get("keys"), "catalog_tokens.keys")
+        if len(keys) != len(names):
+            raise ContentPackBindingError("catalog keys and names differ in length")
+        row_by_identity: dict[str, int] = {}
+        for row, (key, name) in enumerate(zip(keys, names, strict=True)):
+            identity = name if key is None else _string(key, "catalog_tokens.keys[]")
+            if identity in row_by_identity:
+                raise ContentPackBindingError(
+                    f"duplicate catalog definition {identity!r}"
+                )
+            row_by_identity[identity] = row
+
         rows_by_id: dict[int, int] = {}
         for index, raw_definition in enumerate(
             _sequence(manifest.get("definitions"), "content_pack_manifest.definitions")
         ):
-            definition = _mapping(
-                raw_definition, f"content_pack_manifest.definitions[{index}]"
-            )
+            field = f"content_pack_manifest.definitions[{index}]"
+            definition = _mapping(raw_definition, field)
             card_def_id = _integer(
-                definition.get("card_def_id"),
-                f"content_pack_manifest.definitions[{index}].card_def_id",
+                definition.get("card_def_id"), f"{field}.card_def_id"
             )
-            registry_name = _string(
-                definition.get("registry_name"),
-                f"content_pack_manifest.definitions[{index}].registry_name",
+            key = definition.get("key")
+            identity = (
+                _string(definition.get("registry_name"), f"{field}.registry_name")
+                if key is None
+                else _string(key, f"{field}.key")
             )
             if card_def_id in rows_by_id:
                 raise ContentPackBindingError(f"duplicate CardDefId {card_def_id}")
-            try:
-                row = row_by_name[registry_name]
-            except KeyError as error:
+            row = row_by_identity.get(identity)
+            if row is None:
                 raise ContentPackBindingError(
-                    f"manifest definition {registry_name!r} does not bind"
-                ) from error
+                    f"manifest definition {identity!r} does not bind"
+                )
             if row in rows_by_id.values():
                 raise ContentPackBindingError(
-                    f"duplicate ContentPack registry name {registry_name!r}"
+                    f"duplicate ContentPack definition {identity!r}"
                 )
             rows_by_id[card_def_id] = row
         if len(rows_by_id) != catalog.definitions:
@@ -484,7 +499,7 @@ class BoundSemanticPack:
             semantic_pack_hash=semantic_pack_hash,
             definition_row_by_card_def_id=rows_by_id,
             catalog=catalog,
-            registry_names=tuple(row_by_name),
+            registry_names=names,
         )
 
     @classmethod

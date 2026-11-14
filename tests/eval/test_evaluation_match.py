@@ -276,13 +276,13 @@ def test_policy_exception_retains_player_failure(monkeypatch):
 def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     import torch
 
+    from manabot.backends.torch.checkpoint import save_checkpoint
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
     from manabot.eval.evaluate import validate_registered_player
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.model.checkpoint import save_checkpoint
     from manabot.sim.matchup import selected_match
     from manabot.sim.registration import PlayerRegistration
     from manabot.sim.replay import replay_environment

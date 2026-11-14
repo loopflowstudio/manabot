@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import manifest from '../src/lib/packs/elemental-world/v2/manifest.json' with { type: 'json' };
+import manifest from '../../../managym/academy/packs/elemental-world/v2/manifest.json' with { type: 'json' };
 import { selectDeck } from './deck-selection';
 
 test('Watch uses the same browser to assign both bot seats', async ({ page }) => {
@@ -116,6 +116,7 @@ test('priority automation advances into a real choice and remains visible in the
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'New Game', exact: true }).click();
   await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
+  await page.getByText('History and settings', { exact: true }).click();
   await page.getByText('Decision log', { exact: true }).click();
   const automated = page.getByTestId('log-entry').filter({ hasText: 'Auto: Pass priority' });
   for (let input = 0; input < 6 && await automated.count() === 0; input++) {

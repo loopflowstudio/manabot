@@ -5,14 +5,14 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        game_object::{CardId, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, Target},
         zone::ZoneType,
     },
 };
 
 use crate::support::game::*;
 
-fn resolve_player_bolt(seed: u64) -> (Scenario, CardId, Vec<GameEvent>) {
+fn resolve_player_bolt(seed: u64) -> (Scenario, ObjectId, Vec<GameEvent>) {
     let mut s = Scenario::new(deck_of("Mountain", "Lightning Bolt"), deck(&[("Mountain", 40)]), seed);
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Mountain");
@@ -41,12 +41,12 @@ fn event_log_records_zone_changes() {
     let (_s, bolt, events) = resolve_player_bolt(7001);
 
     assert!(events.contains(&GameEvent::CardMoved {
-        card: bolt,
+        object: bolt,
         from: ZoneType::Hand,
         to: ZoneType::Stack,
     }));
     assert!(events.contains(&GameEvent::CardMoved {
-        card: bolt,
+        object: bolt,
         from: ZoneType::Stack,
         to: ZoneType::Graveyard,
     }));
@@ -120,7 +120,7 @@ fn event_log_records_counterspell() {
     let events = s.drain_events();
 
     assert!(events.contains(&GameEvent::SpellCountered {
-        card: bolt,
+        object: bolt,
         by: Some(counterspell),
     }));
 }

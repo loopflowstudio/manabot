@@ -6,13 +6,19 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.architecture import architecture_identity, architecture_receipt
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.facts import FactEncoder
+from manabot.infra.identity import canonical_sha256
+from manabot.model.admission import admit_observation
+from manabot.model.architecture import (
+    architecture_identity,
+    architecture_receipt,
+    validate_architecture_receipt,
+)
+from manabot.model.facts import FactEncoder, admit_facts
 from manabot.training.rollout.collection import SeatRoutedCollector
 
 
@@ -34,7 +40,7 @@ def test_capacity_export_and_real_legal_policy(
         ),
     )
     before = torch.get_rng_state().clone()
-    receipt = architecture_receipt(agent)
+    receipt = agent.architecture_receipt()
     assert torch.equal(before, torch.get_rng_state())
     assert receipt.parameters.total == sum(p.numel() for p in agent.parameters())
     assert receipt.parameters.trainable == receipt.parameters.total
@@ -49,9 +55,13 @@ def test_capacity_export_and_real_legal_policy(
         batch_closure="exact-quota",
     )
     batch = collector.collect(agent, 2)
-    obs = {
-        k: torch.from_numpy(v[0]) for k, v in batch.observations().observation.items()
-    }
+    obs = admit_observation(
+        agent,
+        {
+            k: torch.from_numpy(v[0])
+            for k, v in batch.observations().observation.items()
+        },
+    )
     policy, value = agent(obs)
     assert policy.shape == obs["actions_valid"].shape
     assert value.shape == (2,)
@@ -64,7 +74,7 @@ def test_capacity_export_and_real_legal_policy(
         agent, agent.observation_space, path, player_configs=Match().to_rust()
     )
     loaded, _ = load_checkpoint(str(path))
-    assert architecture_receipt(loaded) == receipt
+    assert loaded.architecture_receipt() == receipt
     actual = loaded(obs)
     for expected, observed in zip((policy, value), actual, strict=True):
         torch.testing.assert_close(expected, observed, rtol=0, atol=0)
@@ -95,14 +105,51 @@ def test_resolved_identity_and_accounting_follow_meaning() -> None:
     masked = ModelConfig(value_aggregation="masked_mean")
     agent = ActorCritic(space, implicit)
     other = ActorCritic(space, masked)
-    baseline = architecture_receipt(agent)
-    assert baseline.parameters == architecture_receipt(other).parameters
-    assert baseline.identity != architecture_receipt(other).identity
+    baseline = agent.architecture_receipt()
+    assert baseline.parameters == other.architecture_receipt().parameters
+    assert baseline.identity != other.architecture_receipt().identity
     agent.requires_grad_(False)
-    frozen = architecture_receipt(agent)
+    frozen = agent.architecture_receipt()
     assert frozen.parameters.trainable == 0
     assert frozen.parameters.total == baseline.parameters.total
     assert frozen.identity == baseline.identity
+
+
+def test_receipt_counts_named_sizes_by_owner() -> None:
+    space = ObservationSpace()
+    spec = ModelConfig(hidden_dim=8)
+    receipt = architecture_receipt(
+        spec,
+        space,
+        {
+            "heads.policy.weight": (6, True),
+            "heads.value": (2, False),
+            "embed": (4, True),
+        },
+    )
+    assert receipt.identity == architecture_identity(spec, space)
+    assert receipt.parameters.model_dump() == {"total": 12, "trainable": 10}
+    assert {k: v.model_dump() for k, v in receipt.components.items()} == {
+        "embed": {"total": 4, "trainable": 4},
+        "heads": {"total": 8, "trainable": 6},
+    }
+
+
+def test_receipt_saved_in_a_checkpoint_verifies_byte_for_byte(tmp_path: Path) -> None:
+    agent = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16))
+    agent.policy_head.requires_grad_(False)
+    path = tmp_path / "policy.pt"
+    save_checkpoint(
+        agent, agent.observation_space, path, player_configs=Match().to_rust()
+    )
+    saved = torch.load(path, weights_only=False)["architecture"]
+    loaded, _ = load_checkpoint(str(path))
+    loaded.policy_head.requires_grad_(False)
+    recomputed = loaded.architecture_receipt()
+    assert canonical_sha256(saved) == canonical_sha256(
+        recomputed.model_dump(mode="json")
+    )
+    validate_architecture_receipt(recomputed, saved)
 
 
 def test_deep_feedforward_identity_and_weights() -> None:
@@ -144,53 +191,40 @@ def test_invalid_expansion(fields: dict[str, object]) -> None:
         ModelConfig.model_validate(fields)
 
 
-def test_world_selector_reads_and_hashes_its_frozen_key() -> None:
-    # The retained receipt used v5 with the historical 64-action capacity.
-    space = ObservationSpace(
-        ObservationConfig.from_checkpoint({"policy_input_version": 5})
-    )
+def test_world_selector_reads_its_frozen_key() -> None:
     current = ModelConfig(world="elemental-world-v2", policy_film=True)
+    # Configurations written before the selector was named `world`.
     frozen = ModelConfig.model_validate(
         {"semantic_pack": "elemental-world-v2", "policy_film": True}
     )
     assert frozen == current
-    # Receipts written before the selector was named `world`.
-    assert architecture_identity(current, space) == (
-        "8ebdcf30559998e753b3afe514b1bcf975f45b745c97bd2304c12034baafe0d6"
-    )
 
 
-@pytest.mark.parametrize(
-    ("version", "rows"), [(1, 0), (2, 0), (3, 0), (4, 0), (5, 128), (6, 512)]
-)
-def test_fact_capacity_checkpoint_contract(
-    tmp_path: Path, version: int, rows: int
-) -> None:
-    payload = {"policy_input_version": version} if version != 1 else {}
-    config = ObservationConfig.from_checkpoint(payload)
+def test_fact_capacity_checkpoint_contract(tmp_path: Path) -> None:
+    config = ObservationConfig()
     serialized = config.model_dump(mode="json")
-    assert ("max_facts" in serialized) == (version == 6)
-    assert ("policy_input_version" in serialized) == (version != 1)
-    assert config.fact_rows == rows
+    assert serialized["max_facts"] == 512
+    assert serialized["policy_input_version"] == 9
+    assert ObservationConfig.from_checkpoint(serialized) == config
     space = ObservationSpace(config)
+    assert space.shapes["facts"] == (512, 12)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
     path = tmp_path / "policy.pt"
     save_checkpoint(agent, space, path, player_configs=Match().to_rust())
     loaded, loaded_space = load_checkpoint(str(path))
     assert loaded_space.encoder.config.model_dump(mode="json") == serialized
-    assert architecture_receipt(loaded) == architecture_receipt(agent)
-    if version == 6:
-        different = ActorCritic(
-            ObservationSpace(ObservationConfig(max_facts=256)), agent.config
-        )
-        assert (
-            architecture_receipt(different).identity
-            != architecture_receipt(agent).identity
-        )
-        assert (
-            architecture_receipt(different).parameters
-            == architecture_receipt(agent).parameters
-        )
+    assert loaded.architecture_receipt() == agent.architecture_receipt()
+    different = ActorCritic(
+        ObservationSpace(ObservationConfig(max_facts=256)), agent.config
+    )
+    assert (
+        different.architecture_receipt().identity
+        != agent.architecture_receipt().identity
+    )
+    assert (
+        different.architecture_receipt().parameters
+        == agent.architecture_receipt().parameters
+    )
 
 
 @pytest.mark.parametrize("capacity", [256, 512])
@@ -219,12 +253,4 @@ def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) ->
     assert (facts.grad[0, 128:140, 9] != 0).all()
     assert facts.grad[0, 140:].count_nonzero() == 0
     with pytest.raises(ValueError, match="expected"):
-        old(facts, objects)
-
-
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
-def test_legacy_fact_capacity_cannot_be_overridden(version: int) -> None:
-    with pytest.raises(ValueError, match="max_facts requires"):
-        ObservationConfig.model_validate(
-            {"policy_input_version": version, "max_facts": 512}
-        )
+        admit_facts(facts, old.max_facts, objects.shape[1], None)

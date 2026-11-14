@@ -10,6 +10,8 @@ import httpx
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
@@ -17,8 +19,6 @@ from manabot.llm.budget import BudgetConfig, BudgetLedger
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterResult, OpenRouterSession
 from manabot.llm.schema import DecisionInput
 from manabot.llm.selection import REPAIR, decision_messages
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.verify.llm_game import CheckpointOpponent, GameConfig, play
 import managym
 
@@ -333,7 +333,7 @@ def test_preloaded_campaign_opponent_keeps_timing_and_model_seat_control(
 ) -> None:
     config = GameConfig(max_decisions=8)
     path = tmp_path / "policy.pt"
-    space = ObservationSpace(ObservationConfig(policy_input_version=1))
+    space = ObservationSpace(ObservationConfig())
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(91)
         agent = ActorCritic(space, ModelConfig(hidden_dim=16, attention_layers=1))
@@ -359,11 +359,11 @@ def test_preloaded_campaign_opponent_keeps_timing_and_model_seat_control(
     assert summary.observations["policy_inference"] >= 0
 
 
-def test_checkpoint_opponent_preserves_legacy_inputs_and_replays(
+def test_checkpoint_opponent_records_its_inputs_and_replays(
     tmp_path: Path,
 ) -> None:
     config = GameConfig(max_decisions=8, opponent_checkpoint=tmp_path / "policy.pt")
-    space = ObservationSpace(ObservationConfig(policy_input_version=1))
+    space = ObservationSpace(ObservationConfig())
     with torch.random.fork_rng(devices=[]):
         torch.manual_seed(91)
         agent = ActorCritic(space, ModelConfig(hidden_dim=16, attention_layers=1))
@@ -380,7 +380,7 @@ def test_checkpoint_opponent_preserves_legacy_inputs_and_replays(
     assert summary.mode == "random-v-checkpoint-control"
     assert summary.origins["checkpoint-opponent"] > 0
     identity = json.loads((tmp_path / "game/opponent.json").read_text())
-    assert identity["policy_input_version"] == 1
+    assert identity["policy_input_version"] == 9
     assert identity["policy_history_version"] == 0
     assert identity["sha256"]
 

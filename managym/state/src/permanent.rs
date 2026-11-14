@@ -1,8 +1,8 @@
 use smallvec::SmallVec;
 
 use super::{
-    card::{ActivatedAbilityDefinition, Card, Keyword},
-    game_object::{CardId, ObjectId, ObjectRef, PlayerId},
+    card::{ActivatedAbilityDefinition, Keyword},
+    game_object::{Object, ObjectId, ObjectRef, PlayerId, PublicId},
 };
 
 /// Counter kinds the engine knows (CR 122). A new kind is one variant here.
@@ -29,6 +29,13 @@ pub enum CounterKind {
     /// CR 714.2: a Saga's chapter abilities trigger as these are put on it.
     Lore,
     Trample,
+    /// CR 122.1a: -1/-1 to power and toughness (layer 7c); annihilates with
+    /// +1/+1 counters as a state-based action (CR 704.5q).
+    MinusOneMinusOne,
+    /// No rules meaning of its own; cumulative upkeep counts it (CR 702.24a).
+    Age,
+    /// No rules meaning of its own; cards count it (Dark Depths).
+    Ice,
 }
 
 impl CounterKind {
@@ -46,6 +53,9 @@ impl CounterKind {
             CounterKind::Loyalty => "loyalty",
             CounterKind::Defense => "defense",
             CounterKind::Trample => "trample",
+            CounterKind::MinusOneMinusOne => "minus_one_minus_one",
+            CounterKind::Age => "age",
+            CounterKind::Ice => "ice",
         }
     }
 
@@ -57,7 +67,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 11] = [
+    pub const ALL: [CounterKind; 14] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -69,6 +79,9 @@ impl CounterKind {
         CounterKind::Defense,
         CounterKind::Lore,
         CounterKind::Trample,
+        CounterKind::MinusOneMinusOne,
+        CounterKind::Age,
+        CounterKind::Ice,
     ];
 }
 
@@ -131,8 +144,9 @@ pub struct Permanent {
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
-    pub id: ObjectId,
-    pub card: CardId,
+    pub id: PublicId,
+    #[serde(rename = "card")]
+    pub object: ObjectId,
     pub controller: PlayerId,
     pub tapped: bool,
     pub summoning_sick: bool,
@@ -149,11 +163,11 @@ pub struct Permanent {
     pub counters: Counters,
     /// Keyword-counter timestamps, renewed on additions (CR 613.7c).
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub keyword_counter_timestamps: std::collections::BTreeMap<CounterKind, ObjectId>,
+    pub keyword_counter_timestamps: std::collections::BTreeMap<CounterKind, PublicId>,
     /// Its timestamp (CR 613.7d/e): when it entered, renewed when an Aura or
     /// Equipment becomes attached. Static abilities apply in this order among
     /// continuous-effect records.
-    pub timestamp: ObjectId,
+    pub timestamp: PublicId,
     pub attacking: bool,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
@@ -161,6 +175,10 @@ pub struct Permanent {
     /// entering-the-battlefield triggers; 0 otherwise.
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub cast_x: u8,
+    /// The mana spent to cast that spell (CR 601.2h), read by its own
+    /// entering-the-battlefield triggers; empty otherwise.
+    #[serde(skip_serializing_if = "crate::mana::ManaSpent::is_empty")]
+    pub cast_spent: crate::mana::ManaSpent,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -193,17 +211,17 @@ impl Permanent {
         }
     }
 
-    pub fn new(id: ObjectId, card_id: CardId, card: &Card) -> Self {
+    pub fn new(id: PublicId, object_id: ObjectId, object: &Object) -> Self {
         Self {
             transforms: 0,
             id,
-            card: card_id,
-            controller: card.owner,
+            object: object_id,
+            controller: object.owner,
             tapped: false,
             // CR 302.6 applies to any permanent that is a creature; only
             // creatures and Vehicles can attack or pay {T} as creatures here.
-            summoning_sick: (card.types.is_creature() || card.has_subtype("Vehicle"))
-                && !card.keywords.has(Keyword::Haste),
+            summoning_sick: (object.types.is_creature() || object.has_subtype("Vehicle"))
+                && !object.keywords.has(Keyword::Haste),
             damage: 0,
             deathtouch_damage: false,
             dealt_damage_this_turn: false,
@@ -213,6 +231,7 @@ impl Permanent {
             attacking: false,
             was_cast: false,
             cast_x: 0,
+            cast_spent: Default::default(),
             attached_to: None,
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),

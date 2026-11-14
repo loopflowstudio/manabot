@@ -12,10 +12,13 @@ import sys
 import time
 
 from etude.experiment import observe
+from etude.launch.records import Until
 from etude.train.read import read_all
 import pytest
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.experiment.config import Baseline, Case, Experiment
 from manabot.experiment.execution import PlannedRun
 from manabot.experiment.job import (
@@ -27,8 +30,6 @@ from manabot.experiment.job import (
 from manabot.experiment.numerics import _suite_environment
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
 import manabot.training.execution as execution
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
@@ -86,7 +87,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     spec = specification()
     job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
     assert job.max_attempts == 1
-    assert job.until == "updates=2"
+    assert job.until == Until(clock="updates", value=2)
     assert job.config is not None
     frozen = TrainingJob.model_validate_json(job.config)
     # Etude unpacks the commit without .git; the config carries its bundle.
@@ -98,7 +99,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     # locked sync builds the engine, and the command keeps it on PATH.
     assert job.setup is not None and job.setup.startswith("set -eu\n")
     assert "--default-toolchain 1.98.1" in job.setup
-    assert "uv sync --locked --python 3.12\n" in job.setup
+    assert "uv sync --locked --python 3.13\n" in job.setup
     assert "RUSTUP_TOOLCHAIN=1.98.1" in job.command
     assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
     gated = TrainingJob(
@@ -388,7 +389,7 @@ def test_continuation_trains_parent_learner_to_absolute_target(
         ("parent-ema.pt", "mtg-fixture/parent-ema.pt"),
         ("parent-optimizer.pt", "mtg-fixture/parent-optimizer.pt"),
     }
-    assert job.until == "updates=4"
+    assert job.until == Until(clock="updates", value=4)
     worker_environment(tmp_path, monkeypatch, spec)
     monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
     run = run_worker()
@@ -453,10 +454,10 @@ def test_worker_imports_exact_initial_weights_and_keeps_optimizer_fresh(
 ) -> None:
     import torch
 
+    from manabot.backends.torch.checkpoint import save_checkpoint
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.match import Match
     from manabot.env.observation import ObservationSpace
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.model.checkpoint import save_checkpoint
 
     spec = specification()
     inputs = tmp_path / "inputs"

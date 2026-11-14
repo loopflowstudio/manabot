@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import positionsJson from '../../fixtures/choice-navigation-w17.json' with { type: 'json' };
+import positionsJson from '../../../managym/academy/fixtures/choice-navigation-w17-token-cards.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 
@@ -78,6 +78,8 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     await expect(options).toHaveCount(offers.length);
     await filter.fill(choice.label);
     await page.keyboard.press('Tab'); // Clear filter
+    await page.keyboard.press('Tab'); // keyboard-scrollable offer region
+    await expect(page.getByRole('group', { name: 'Legal choices', exact: true })).toBeFocused();
     await page.keyboard.press('Tab'); // first matching offer
     await expect(options.first()).toBeFocused();
     await page.keyboard.press('Enter');

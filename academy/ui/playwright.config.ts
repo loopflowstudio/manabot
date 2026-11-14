@@ -21,7 +21,7 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: `${uvicorn} academy.server:app --port ${apiPort}`,
+          command: `${uvicorn} managym.academy.server:app --port ${apiPort}`,
           cwd: '../..',
           url: `http://localhost:${apiPort}/api/traces`,
           reuseExistingServer: true,

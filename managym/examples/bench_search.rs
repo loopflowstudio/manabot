@@ -33,6 +33,8 @@ fn main() {
     for &seed in if layers { &[244][..] } else { &SEEDS[..] } {
         #[cfg(feature = "benchmark")]
         managym::benchmark_layers::reset();
+        #[cfg(feature = "benchmark")]
+        managym::benchmark_payments::reset();
         let mut env = Env::new(seed, true, false, false);
         env.reset(curated::players()).unwrap();
         if layers {
@@ -84,7 +86,7 @@ fn main() {
         #[cfg(feature = "benchmark")]
         println!(
             "{}",
-            serde_json::json!({"attribution_seed":seed, "layer_metrics":managym::benchmark_layers::snapshot()})
+            serde_json::json!({"attribution_seed":seed, "layer_metrics":managym::benchmark_layers::snapshot(), "payment_metrics":managym::benchmark_payments::snapshot()})
         );
     }
     println!("{{\"worst_overall_s\":{worst_overall:.3},\"total_overall_s\":{total_overall:.3}}}");

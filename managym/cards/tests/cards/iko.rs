@@ -5,7 +5,7 @@ use crate::support::{
     inspect::permanent_named,
     play::{
         activate_first, cast, choose, pass_until, play_and_settle, select_card, settle,
-        target_opponent,
+        spend_colorless, target_opponent,
     },
 };
 use managym::{
@@ -39,6 +39,7 @@ fn death_rewards_and_selected_activation_costs() {
         Some(ZoneType::Battlefield)
     );
     select_card(&mut s, fodder);
+    spend_colorless(&mut s);
     assert_eq!(
         s.game().state.zones.zone_of(fodder),
         Some(ZoneType::Graveyard)
@@ -57,10 +58,11 @@ fn bastion_uses_a_sacrificed_lands_last_known_creature_type() {
     animate(&mut s, land);
     let source = s.game_mut().state.permanents[land].as_mut().unwrap();
     source.change_counters(CounterKind::PlusOnePlusOne, 1);
-    let card = source.card;
+    let object = source.object;
     cast(&mut s, "Cycle of Renewal");
+    spend_colorless(&mut s);
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
-    select_card(&mut s, card);
+    select_card(&mut s, object);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     settle(&mut s);
     assert_eq!(s.game().state.players[0].life, 21);
@@ -81,10 +83,35 @@ fn weaponize_keeps_its_exact_damage_source_after_removal() {
     activate_first(&mut s, source);
     target_opponent(&mut s);
     select_card(&mut s, fodder);
+    spend_colorless(&mut s);
     // Model a completed removal response before the activated ability resolves.
-    s.game_mut().move_card(weapon, ZoneType::Graveyard);
+    s.game_mut().move_object(weapon, ZoneType::Graveyard);
     settle(&mut s);
     assert_eq!(s.game().state.players[0].life, 21); // Inspector -1, Weaponize lifelink +2.
     assert_eq!(s.game().state.players[1].life, 18);
-    assert!(s.game().state.events.iter().any(|event|matches!(event,managym::flow::event::GameEvent::DamageDealt {source:Some(card),target:managym::flow::event::DamageTarget::Player(PlayerId(1)),amount:2} if *card==weapon)));
+    assert!(s.game().state.events.iter().any(|event|matches!(event,managym::flow::event::GameEvent::DamageDealt {source:Some(object),target:managym::flow::event::DamageTarget::Player(PlayerId(1)),amount:2} if *object==weapon)));
+}
+
+#[test]
+fn drannith_magistrate_stops_opponents_casting_from_the_graveyard() {
+    use crate::support::{game::plant_in_graveyard, inspect::can_cast, play::castable};
+    let mut s = five_color_setup(&["Drannith Magistrate", "Join the Dance"]);
+    let dance = plant_in_graveyard(&mut s, 0, "Join the Dance");
+    assert!(castable(&mut s, dance));
+    // Your own Magistrate does not restrict you.
+    let mine = s.force_permanent_on_battlefield(0, "Drannith Magistrate");
+    assert!(castable(&mut s, dance));
+    let theirs = s.force_permanent_on_battlefield(1, "Drannith Magistrate");
+    assert!(!castable(&mut s, dance));
+    // The restriction ends with the source.
+    for magistrate in [mine, theirs] {
+        let object = s.game().state.permanents[magistrate]
+            .as_ref()
+            .unwrap()
+            .object;
+        s.game_mut()
+            .move_object(object, managym::state::zone::ZoneType::Graveyard);
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, dance));
 }

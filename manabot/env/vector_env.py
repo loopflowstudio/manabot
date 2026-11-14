@@ -8,13 +8,10 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import torch
 
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import CapturedVector, resolve_player_policies
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 import managym
-
-from .match import Match, Reward
-from .observation import ObservationSpace
-
-VALID_OPPONENT_POLICIES = ("none", "passive", "random")
 
 
 class VectorEnv:
@@ -26,16 +23,14 @@ class VectorEnv:
         reward: Reward,
         device: str,
         seed: int = 0,
-        opponent_policy: str = "none",
-    ):
-        if opponent_policy not in VALID_OPPONENT_POLICIES:
-            raise ValueError(
-                f"Unsupported opponent_policy: {opponent_policy!r}. "
-                f"Must be one of {VALID_OPPONENT_POLICIES}"
-            )
-        self._base_seed = seed
+        opponent_policy: str | None = None,
+        *,
+        player_policies: tuple[str, str] | None = None,
+    ) -> None:
         self._skip_trivial = True
-        self._policy_name = opponent_policy
+        self._player_policies = resolve_player_policies(
+            opponent_policy, player_policies
+        )
         self._player_configs = match.to_rust()
         self.observation_space = observation_space
         self.reward = reward
@@ -66,7 +61,7 @@ class VectorEnv:
             num_envs=self.num_envs,
             seed=seed,
             skip_trivial=self._skip_trivial,
-            opponent_policy=self._policy_name,
+            player_policies=self._player_policies,
         )
 
     def _allocate_buffers(self) -> Dict[str, np.ndarray]:
@@ -292,9 +287,10 @@ class VectorEnv:
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict] = None
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
-        if seed is not None and seed != self._base_seed:
+        """Restart every slot at ``seed + slot`` when a seed is given, so equal
+        seeds reproduce deals; without one, continue native seed succession."""
+        if seed is not None:
             self._rust_env.close()
-            self._base_seed = seed
             self._rust_env = self._build_rust_env(seed=seed)
             self._rust_env.set_buffers(
                 self._buffers, self.observation_space.encoder.config.action_overflow
@@ -332,6 +328,14 @@ class VectorEnv:
     def get_last_info(self) -> Dict[str, Any]:
         infos = [dict(info) for info in self._rust_env.get_last_info()]
         return self._stack_infos(infos)
+
+    def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
+        """Privileged CPU hand snapshots of the current games, including autoresets."""
+        return self._rust_env.hand_snapshots(players)
+
+    def current_agent_indices(self) -> list[int]:
+        """Native seat choosing in each slot, including under control effects."""
+        return self._rust_env.current_agent_indices()
 
     def skip_trivial_counts(self) -> np.ndarray:
         """Per-env trivial-decision collapse counters for the current games."""

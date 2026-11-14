@@ -102,7 +102,7 @@ fn cr_405_counterspell_targets_stack_object() {
         .stack_objects
         .iter()
         .find_map(|obj| match obj {
-            managym::state::stack_object::StackObject::Spell(spell) => Some(spell.card),
+            managym::state::stack_object::StackObject::Spell(spell) => Some(spell.object),
             _ => None,
         })
         .expect("bolt should be on stack");

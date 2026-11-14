@@ -11,9 +11,6 @@ import typer
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
-from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
-from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
-from manabot.sim.sim import run_simulation
 from manabot.training.regime import TrainingRegime
 import managym
 
@@ -79,6 +76,17 @@ def train_command(
         None,
         help="Training device (default: CUDA, then MPS; local alone falls back to CPU)",
     ),
+    padded_shapes: bool = typer.Option(
+        False,
+        "--padded-shapes",
+        help="Train local/baseline recipes on CUDA without bucketed shapes or live tokens",
+    ),
+    bucketed_shapes: bool = typer.Option(
+        False,
+        "--bucketed-shapes",
+        help="Deprecated and removed in 0.3.0; bucketed shapes are the CUDA default",
+        hidden=True,
+    ),
     steps: int | None = typer.Option(
         None, min=1, help="Recipe horizon in collection/update iterations"
     ),
@@ -118,6 +126,12 @@ def train_command(
             "or an explicit --regime JSON. Historical reward and optimizer settings "
             "are not translated."
         )
+    if bucketed_shapes:
+        typer.echo(
+            "--bucketed-shapes is deprecated and removed in 0.3.0; CUDA recipes "
+            "use bucketed shapes by default (--padded-shapes turns them off)",
+            err=True,
+        )
     if recipe is None and regime is None and regime_name is None:
         recipe = "local"
     if recipe is not None:
@@ -139,6 +153,8 @@ def train_command(
                 "--recipe cannot be combined with regime inputs or resume/cadence controls"
             )
         if recipe == "local":
+            from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
+
             result = run_local(
                 steps=LOCAL_STEPS if steps is None else steps,
                 seed=197 if seed is None else seed,
@@ -146,6 +162,7 @@ def train_command(
                 seconds=LOCAL_SECONDS if seconds is None else seconds,
                 learning_seats=learning_seats or "both",
                 device=device,
+                padded_shapes=padded_shapes,
             )
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
@@ -154,6 +171,8 @@ def train_command(
             elif result.error:
                 typer.echo(result.error, err=True)
         else:
+            from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
+
             baseline_result = run_baseline(
                 steps=BASELINE_STEPS if steps is None else steps,
                 seed=197 if seed is None else seed,
@@ -161,6 +180,7 @@ def train_command(
                 seconds=seconds,
                 learning_seats=learning_seats or "both",
                 device=device,
+                padded_shapes=padded_shapes,
             )
             status = baseline_result.status
             typer.echo(
@@ -169,9 +189,12 @@ def train_command(
         if status != "completed":
             raise typer.Exit(1)
         return
-    if any(value is not None for value in (steps, seconds, learning_seats, device)):
+    if padded_shapes or any(
+        value is not None for value in (steps, seconds, learning_seats, device)
+    ):
         raise typer.BadParameter(
-            "--steps, --seconds, --learning-seats and --device require a recipe"
+            "--steps, --seconds, --learning-seats, --device and --padded-shapes "
+            "require a recipe; a regime sets them in its stages' execution"
         )
     if regime is not None and regime_name is not None:
         raise typer.BadParameter("select --regime or --regime-name, not both")
@@ -232,6 +255,8 @@ def sim_command(
             )
     except (ValueError, OSError) as error:
         raise typer.BadParameter(str(error)) from error
+    from manabot.sim.sim import run_simulation
+
     run_simulation(sim_config, runtime_config)
 
 
@@ -325,6 +350,49 @@ def belief_learn_demo_command(
         steps=steps,
         seed=seed,
     )
+
+
+@app.command("export-game")
+def export_game_command(
+    source: Path = typer.Argument(..., help="Recorded games directory or receipt"),
+    out: Path = typer.Option(..., help="Output .game.jsonl.gz"),
+    game: str | None = typer.Option(None, help="Game index or receipt digest prefix"),
+    players: tuple[str, str] | None = typer.Option(None, help="Names of the two seats"),
+) -> None:
+    """Export one complete training game without loading its policy."""
+    from manabot.sim.recording import TrainingGames
+
+    try:
+        recorded = TrainingGames(source)
+        games = recorded.games()
+        if not games:
+            raise ValueError(
+                f"{source} holds no complete game ({recorded.cut_off} cut off)"
+            )
+        if game is None and len(games) != 1:
+            typer.echo(
+                f"{source} holds {len(games)} complete games ({recorded.cut_off} cut off); select one with --game <index-or-digest>."
+            )
+            seed_width = max(4, *(len(str(item.seed)) for item in games))
+            typer.echo(f"  game  {'seed':<{seed_width}}  stream  decisions  receipt")
+            for index, item in enumerate(games):
+                typer.echo(
+                    f"  {index:4}  {item.seed:<{seed_width}}  {item.stream:<6}  {item.decisions:<9}  {item.receipt_sha256[:12]}"
+                )
+            raise typer.Exit(2)
+        if game is None:
+            selected = games
+        elif game.isdecimal():
+            selected = games[int(game) : int(game) + 1]
+        else:
+            selected = [g for g in games if g.receipt_sha256.startswith(game)]
+        if len(selected) != 1:
+            raise ValueError(
+                "select exactly one complete game by index or receipt digest prefix"
+            )
+        typer.echo(str(selected[0].export(out, players=players)))
+    except (ValueError, OSError) as error:
+        raise typer.BadParameter(str(error)) from error
 
 
 def main(argv: Sequence[str] | None = None) -> None:

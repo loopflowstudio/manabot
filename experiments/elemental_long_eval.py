@@ -120,9 +120,9 @@ from experiments.elemental_long import (
 )
 from manabot.data import cache_directory
 from manabot.eval.card_evaluation import trace_card_tables
+from manabot.infra.artifacts import fetch_etude_checkpoint
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
-from manabot.model.checkpoint import fetch_etude_checkpoint
 from manabot.sim.execution import EvalAllocation
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.threads import child_environment
@@ -669,10 +669,10 @@ def play_h2h_group(
     """
     import torch
 
+    from manabot.backends.torch.checkpoint import load_checkpoint
     from manabot.eval.models import EvaluationKey
     from manabot.infra.identity import canonical_sha256
     from manabot.infra.provenance import runtime_fingerprints
-    from manabot.model.checkpoint import load_checkpoint
     from manabot.sim.matchup import AuthoredMatchup
     from manabot.sim.registration import PlayerRegistration
 

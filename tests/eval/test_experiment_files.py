@@ -5,7 +5,10 @@ its panels name and a flame graph of its phases; `eval(state)` asks for the
 same games the MTG-183 follower plays.
 """
 
+from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
+import sys
 
 from etude.eval.records import Match
 from etude.experiment import Checkpoint, Checkpoints, ExperimentState, TrainingRun
@@ -13,10 +16,11 @@ from etude.jobs import evaluation_spec
 from etude.launch.job_file import read_job_file
 from etude.page import build, experiment_files
 from etude.report import Counters, Series
+from etude.run.errors import EtudeError
 from etude.run.records import ArtifactRef
 import pytest
 
-from experiments import elemental
+from experiments import elemental, tla_frontier
 from experiments.elemental_long_eval import (
     Checkpoint as FollowedCheckpoint,
     EvalState,
@@ -34,30 +38,52 @@ ROOT = Path(__file__).resolve().parents[2]
 EXPERIMENTS = ROOT / "experiments"
 
 
+@pytest.fixture
+def keep_imported_modules() -> Iterator[None]:
+    """Restore modules `build` drops so later tests keep their imported objects.
+
+    `etude.page.build` re-imports repository neighbours. Restore saved modules
+    and remove newly imported neighbours so later imports, pickling and
+    monkeypatching agree with module-level references.
+    """
+    saved = dict(sys.modules)
+    yield
+    for name in set(sys.modules) - saved.keys():
+        source = getattr(sys.modules[name], "__file__", None)
+        if isinstance(source, str):
+            path = Path(source).resolve()
+            if path.is_relative_to(ROOT) and not any(
+                part.startswith(".") for part in path.relative_to(ROOT).parts
+            ):
+                del sys.modules[name]
+    sys.modules.update(saved)
+
+
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
         "batch_closure",
-        "curriculum_adapters",
+        "bf16_behavior_logs",
         "elemental",
         "elemental_closure",
         "elemental_lambda",
-        "growing_pool",
         "lambda_sweep",
+        "mlx_pilot",
+        "mps_retest",
         "mtg183-elemental-eval",
+        "precision_ladder",
         "seat_comparison",
-        "state_representation_v7",
-        "state_representation_gpu",
         "tla_frontier",
         "tla_frontier_calibration",
         "tla_frontier_vocabulary",
-        "tla_pilot_v10",
         "two_seat",
         "value_readout_252",
     }
 
 
-def test_a_tracked_self_play_run_draws_every_named_metric(tmp_path: Path) -> None:
+def test_a_tracked_self_play_run_draws_every_named_metric(
+    tmp_path: Path, keep_imported_modules: None
+) -> None:
     stage = TrainSelfPlay(
         id="learn",
         operation="train_self_play",
@@ -124,12 +150,15 @@ def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
                 experiment="elemental",
                 ordinal=ordinal,
                 artifact=ArtifactRef(uri=path.as_uri(), sha256="0" * 64, size_bytes=1),
-                clocks={"updates": float(update)},
+                at={"updates": float(update)},
             )
         )
     return TrainingRun(
         name="seed-1",
         experiment="elemental",
+        job="seed-1",
+        launch="seed-1",
+        line="seed-1",
         state="finished",
         checkpoints=Checkpoints(saved),
     )
@@ -155,7 +184,7 @@ def test_elemental_eval_asks_for_the_followers_design(tmp_path: Path) -> None:
 
     asked: list[Match] = []
     for spec in specs.values():
-        for matchup in spec.tournament.matchups:
+        for matchup in spec.tournament.seatings:
             if matchup.fixed:
                 asked += matchup.matches()
             else:
@@ -164,8 +193,8 @@ def test_elemental_eval_asks_for_the_followers_design(tmp_path: Path) -> None:
 
     followed = EvalState(
         checkpoints={
-            int(each.clocks["updates"]): FollowedCheckpoint(
-                updates=int(each.clocks["updates"]),
+            int(each.at["updates"]): FollowedCheckpoint(
+                updates=int(each.at["updates"]),
                 run=each.run,
                 artifact=each.artifact,
                 coordinates={},
@@ -193,3 +222,24 @@ def test_elemental_eval_asks_for_the_followers_design(tmp_path: Path) -> None:
         )
 
     assert {renamed(each) for each in _design(asked)} == _design(expected)
+
+
+def test_frontier_keeps_its_recorded_lost_endpoint_without_a_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unavailable(name: str) -> None:
+        raise EtudeError(f"no run '{name}'")
+
+    monkeypatch.setattr(tla_frontier.client, "status", unavailable)
+    stored = _finished_run(tmp_path, range(1, 3))
+    lost = replace(stored, name="5b7d8fa7b38c", state="running")
+    state = ExperimentState(experiment="tla_frontier", runs=(lost, stored))
+    closed = tla_frontier.with_launcher_ends(state)
+    assert closed.runs[0].state == "failed"
+    assert closed.runs[0].checkpoints == lost.checkpoints
+    assert closed.runs[1] == stored
+    assert lost.state == "running"
+
+    unknown = replace(lost, name="unknown-run")
+    with pytest.raises(EtudeError, match="unknown-run"):
+        tla_frontier.with_launcher_ends(replace(state, runs=(unknown,)))

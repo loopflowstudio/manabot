@@ -61,11 +61,11 @@ passing the corresponding directory instead of `report.md`.
 
 ## Implementation map
 
-- [ActorCritic](../manabot/model/actor_critic.py) and
+- [ActorCritic](../manabot/backends/torch/policy.py) and
   [continuation input](../manabot/model/continuation.py): model and versioned context.
 - [Collection](../manabot/training/rollout/collection.py),
-  [returns](../manabot/training/learning/returns.py) and
-  [damped policy learning](../manabot/training/learning/damped_policy.py):
+  [returns](../manabot/backends/torch/rl.py) and
+  [damped policy learning](../manabot/training/updates/damped_policy.py):
   seat trajectories, targets and update ownership.
 - [Ordinary baseline](../manabot/recipes/baseline.py) and
   [Elemental recipe](../experiments/regimes/elemental-two-seat-181-v1.json):

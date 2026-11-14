@@ -5,7 +5,7 @@ use super::{
         effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
         TargetRequirement, TargetSpec,
     },
-    game_object::{ObjectId, ObjectRef, PlayerId},
+    game_object::ObjectRef,
     mana::{Color, Colors, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -123,12 +123,56 @@ pub struct ManaAbility {
     pub mana: Mana,
 }
 
-/// A triggered mana ability (CR 605.1b): "Whenever you tap a [predicate]
-/// for mana, add [mana]." Resolves immediately — no stack, no priority.
+/// A triggered mana ability (CR 605.1b): "Whenever [who] taps a
+/// [predicate] for mana, [that player] adds [output]." It triggers when a
+/// mana ability with the permanent's own {T} in its cost resolves and
+/// produces mana (CR 106.12, 106.12a) and resolves immediately after that
+/// ability, off the stack (CR 605.4a). The tapping player receives the mana,
+/// whoever controls this ability.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TriggeredManaAbility {
+    /// Who taps, relative to this ability's controller: `You` for
+    /// "whenever you tap", `AnyPlayer` for "whenever a player taps".
+    pub who: crate::ability::Actor,
     pub predicate: CardPredicate,
-    pub mana: Mana,
+    pub output: TriggeredManaOutput,
+}
+
+/// What a triggered mana ability adds.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum TriggeredManaOutput {
+    /// "add an additional {G}" (Badgermole Cub).
+    Fixed(Mana),
+    /// "adds one mana of any type that [permanent] produced" (Heartbeat of
+    /// Spring): one mana of a type, colorless included, among the mana the
+    /// triggering ability actually produced (CR 106.12a). The tapping player
+    /// chooses when it produced more than one type.
+    OneProducedType,
+}
+
+impl TriggeredManaOutput {
+    /// Each mana this output can add after `produced`; empty after a
+    /// production of no mana, which triggers nothing (CR 106.12a).
+    pub fn alternatives(&self, produced: &Mana) -> Vec<Mana> {
+        if produced.total() == 0 {
+            return Vec::new();
+        }
+        match self {
+            Self::Fixed(mana) => vec![mana.clone()],
+            Self::OneProducedType => {
+                let restricted = produced.restricted_colors();
+                let unrestricted = produced.unrestricted_colors();
+                (0..6)
+                    .filter(|&slot| unrestricted[slot] != 0 || restricted[slot] != 0)
+                    .map(|slot| {
+                        let mut mana = Mana::default();
+                        mana.mana[slot] = 1;
+                        mana
+                    })
+                    .collect()
+            }
+        }
+    }
 }
 
 // One declaration owns the enum, iteration order and storage capacity. Append
@@ -284,7 +328,7 @@ pub enum PowerCda {
     CreaturesYouControl,
     /// "This creature's power is equal to the number of [predicate] cards
     /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
-    GraveyardMatching(CardPredicate),
+    GraveyardMatching(Box<CardPredicate>),
 }
 
 /// Which battlefield permanents a static P/T buff applies to.
@@ -459,6 +503,8 @@ pub enum ReplacementEffect {
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
     EntersWithXCounters { kind: CounterKind },
+    /// This object enters with `count` counters of `kind` (CR 614.1c).
+    EntersWithCounters { kind: CounterKind, count: i32 },
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the
     /// number of `kind` counters on this permanent (CR 614.1a).
@@ -482,13 +528,42 @@ pub enum ReplacementEffect {
     /// Replace a logical creation under your control, before any token enters
     /// (CR 616.1g). Entry and copy terms belong to every resulting token.
     MultiplyTokens { multiplier: i32 },
+    /// "You may have this creature enter as a copy of [a creature in
+    /// `scope` matching `predicate`]" (CR 707.5, 614.1c): its entering
+    /// controller chooses before the move commits, and the copy's own entry
+    /// replacements then apply (CR 614.12, 616.1c). `exceptions` become part
+    /// of the copiable values ("except it has this card's other abilities",
+    /// CR 707.9b). It leaves the battlefield as its printed card.
+    EntersAsCopy {
+        scope: crate::ability::Scope,
+        predicate: CardPredicate,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        exceptions: Vec<crate::effect::Modification>,
+    },
+}
+
+/// A mana ability's later instruction: it adds no mana and targets nothing
+/// (CR 605.1a), so the ability stays a mana ability and resolves at once.
+fn is_mana_suffix_effect(effect: &Effect) -> bool {
+    !matches!(
+        effect,
+        Effect::AddMana { .. }
+            | Effect::AddOneColorManaValue { .. }
+            | Effect::Modal { .. }
+            | Effect::If { .. }
+    ) && effect.target_spec().is_none()
 }
 
 impl ActivatedAbilityDefinition {
+    /// The outputs of a mana ability (CR 605.1a): an untargeted activation
+    /// whose leading effect adds one of these mana, optionally followed by
+    /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`
+    /// for an ability that uses the stack.
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        let [effect] = self.effects.as_slice() else {
+        let (effect, suffix) = self.effects.split_first()?;
+        if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
-        };
+        }
         match effect {
             Effect::AddMana {
                 mana,
@@ -510,17 +585,46 @@ impl ActivatedAbilityDefinition {
         }
     }
 
-    /// The activation's targeting clause (CR 602.2b, 601.2c); activated
-    /// abilities have at most one.
-    pub fn target_requirement(&self) -> Option<TargetRequirement> {
-        self.target_spec()?;
-        effect_target_requirements(&self.effects).into_iter().next()
+    /// What a mana ability does besides adding mana ("You gain 2 life"),
+    /// resolving with it, off the stack, once per activation (CR 605.3b).
+    /// Empty for an ability that is not a mana ability.
+    pub fn mana_suffix(&self) -> &[Effect] {
+        match self.mana_choices() {
+            Some(_) => &self.effects[1..],
+            None => &[],
+        }
+    }
+
+    /// The activation's targeting clauses (CR 602.2b, 601.2c), in order.
+    /// Of several clauses each names a fixed number of targets, so a target's
+    /// position names its clause (`target_clause_indices`).
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        if self.target_spec().is_none() {
+            return Vec::new();
+        }
+        effect_target_requirements(&self.effects)
     }
 
     /// The activation cannot proceed without choosing a target.
     pub fn requires_target(&self) -> bool {
-        self.target_requirement()
-            .is_some_and(|requirement| requirement.min > 0)
+        self.target_requirements()
+            .iter()
+            .any(|requirement| requirement.min > 0)
+    }
+
+    /// The clause of each of the first `count` chosen targets; empty for a
+    /// single clause, whose targets are all clause 0.
+    pub fn target_clause_indices(&self, count: usize) -> Vec<usize> {
+        let requirements = self.target_requirements();
+        if requirements.len() < 2 {
+            return Vec::new();
+        }
+        requirements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, requirement)| std::iter::repeat_n(index, requirement.max))
+            .take(count)
+            .collect()
     }
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
@@ -568,6 +672,27 @@ pub struct AbilityGrant {
     pub index: usize,
 }
 
+/// A chosen set of distinct untapped permanents, not a source {T} symbol.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TapCost {
+    pub predicate: CardPredicate,
+    pub count: usize,
+}
+
+impl serde::Serialize for TapCost {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Preserve existing single-object definition digests and learning tokens.
+        if self.count == 1 {
+            return self.predicate.serialize(serializer);
+        }
+        use serde::ser::SerializeStruct;
+        let mut cost = serializer.serialize_struct("TapCost", 2)?;
+        cost.serialize_field("predicate", &self.predicate)?;
+        cost.serialize_field("count", &self.count)?;
+        cost.end()
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
     /// Omitted for battlefield abilities so existing definition digests hold.
@@ -584,7 +709,7 @@ pub struct ActivatedAbilityDefinition {
     /// source itself qualifies, and summoning sickness doesn't matter (not a
     /// {T} cost, CR 302.6).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tap_cost: Option<CardPredicate>,
+    pub tap_cost: Option<TapCost>,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
@@ -601,6 +726,10 @@ pub struct ActivatedAbilityDefinition {
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sorcery_timing: bool,
+    /// "Activate only ... before attackers are declared": before the turn's
+    /// declare attackers step.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub before_attackers: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -686,9 +815,20 @@ pub enum StaticAbility {
     /// "This spell costs {1} less to cast for each [predicate] you control"
     /// (CR 601.2f); functions while casting, generic floor 0.
     CostsLessPerPermanent(CardPredicate),
+    /// "This spell can't be countered" (CR 101.2): an effect that would
+    /// counter it does nothing to it; it may still be targeted, and still
+    /// leaves the stack when all its targets are illegal (CR 608.2b).
+    CantBeCountered,
+    /// "This spell costs {1} less to cast for each [predicate] on the
+    /// battlefield", whoever controls them (Blasphemous Act); generic floor 0.
+    CostsLessPerPermanentOnBattlefield(CardPredicate),
     /// "This spell costs {1} less to cast for each [predicate] card in your
     /// graveyard"; functions while casting, generic floor 0.
     CostsLessPerGraveyardCard(CardPredicate),
+    /// "This spell costs {X} less to cast, where X is the greatest power
+    /// among [predicate] you control" (The Great Henge); functions while
+    /// casting, generic floor 0.
+    CostsLessByGreatestPower(CardPredicate),
     /// "If [condition], you may cast this spell as though it had flash";
     /// functions from hand (see `Game::has_instant_timing`).
     FlashIf(Condition),
@@ -700,6 +840,22 @@ pub enum StaticAbility {
     Foretell(ManaCost),
     /// "You have no maximum hand size."
     NoMaximumHandSize,
+    /// "Your opponents can't cast spells from anywhere other than their
+    /// hands" while this is on the battlefield (Drannith Magistrate).
+    OpponentsCastOnlyFromHand,
+    /// "Each player may play an additional land on each of their turns"
+    /// (CR 305.2): one more land play per such permanent, for every player.
+    AdditionalLandPlayEachPlayer,
+    /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
+    LegendRuleDoesntApply,
+    /// "Activated abilities of [predicate] you control cost {generic} less to
+    /// activate. This effect can't reduce the mana in that cost to less than
+    /// one mana" (Training Grounds); applies to the generic part, mana
+    /// abilities included.
+    ActivatedAbilitiesCostLess {
+        predicate: CardPredicate,
+        generic: u8,
+    },
     /// A continuous P/T effect (layer 7c).
     PtBuff(StaticPtBuff),
     /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is
@@ -785,22 +941,33 @@ pub enum AdditionalCost {
     /// otherwise the life is paid as it is cast (CR 119.4: only from a life
     /// total of at least that much).
     PayLifeOrMana { life: u32, mana: ManaCost },
+    /// "[If it's not your turn,] you may exile a [predicate] card from your
+    /// hand rather than pay this spell's mana cost" (CR 118.9): chosen like
+    /// kicker, which marks the spell kicked; it then costs no mana, and its
+    /// caster exiles another matching card from hand as it is paid.
+    ExileFromHandAlternative {
+        predicate: crate::predicate::CardPredicate,
+        not_your_turn: bool,
+    },
     /// "As an additional cost to cast this spell, waterbend [cost]": required,
     /// and its {X} is announced with the spell's. It adds to the total cost,
     /// not the mana value (CR 202.3).
     RequiredWaterbend(ManaCost),
+    /// Replicate (CR 702.56): an optional cost paid any number of times,
+    /// announced like X (the spell's announced X holds the count). When the
+    /// spell is cast, a trigger copies it once per payment; each copy may
+    /// take new targets. Payments add to the total cost, not the mana value.
+    Replicate(ManaCost),
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
-pub struct CardDefinition {
-    /// `<set>.<card>`: the set file of the card's first printing and its slug.
-    /// Identity metadata, not rules: excluded from content digests and tokens.
-    #[serde(skip)]
-    pub key: &'static str,
-    /// Scryfall card-object id of the printing in `key`'s set; Oracle text,
-    /// rulings and images are reachable from it. Play never reads it.
-    #[serde(skip)]
-    pub scryfall_id: &'static str,
+/// An object as printed (CR 108.4, 111.3): what cards and tokens share,
+/// before any continuous effect. It is the input to the layer system;
+/// `Game::characteristics(id)` is the layered view computed from it. Identity
+/// (key, Scryfall id) belongs to the [`CardDefinition`] or [`TokenDefinition`]
+/// that prints it, and token status to its [`ObjectDefinition`] and game
+/// objects, so a copy effect copies these values and nothing else.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrintedCharacteristics {
     pub name: String,
     pub mana_cost: Option<ManaCost>,
     pub types: CardTypes,
@@ -808,7 +975,6 @@ pub struct CardDefinition {
     pub subtypes: Vec<String>,
     pub abilities: Vec<Ability>,
     /// Static abilities (CR 604), in printed order.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub statics: Vec<StaticAbility>,
     pub mana_abilities: Vec<ManaAbility>,
     pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
@@ -819,43 +985,201 @@ pub struct CardDefinition {
     /// targeted spell effect.
     pub targeting: Vec<TargetRequirement>,
     /// Additional costs of casting this spell (CR 601.2b, 601.2f).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub additional_costs: Vec<AdditionalCost>,
     pub keywords: Keywords,
-    /// Explicit color identity for cards without a mana cost (tokens).
+    /// Explicit color identity for objects without a mana cost (tokens).
     pub color_override: Option<Colors>,
-    /// Tokens cease to exist outside the battlefield (CR 111.7, 704.5d).
-    pub is_token: bool,
     /// Replacement/prevention definitions consumed by the proposed-event
-    /// pipeline. Empty vectors are omitted so existing content-pack digests
-    /// remain stable until production content actually adopts the feature.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// pipeline.
     pub replacement_effects: Vec<ReplacementEffect>,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
-    /// The back face of a transforming double-faced card (CR 712.1): its own
-    /// characteristics, registered by the content pack as its own row after
-    /// this one. Serialized as its name, a reference to that row, so the
-    /// front's digest and tokens name it without repeating it.
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "serialize_back_face"
-    )]
-    pub back_face: Option<Box<CardDefinition>>,
 }
 
-fn serialize_back_face<S: serde::Serializer>(
-    face: &Option<Box<CardDefinition>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    match face {
-        Some(face) => serializer.serialize_some(&face.name),
-        None => serializer.serialize_none(),
+/// A card (CR 108.1), as its set file writes it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CardDefinition {
+    /// `<set>.<card>`: the set file of the card's first printing and its slug.
+    pub key: &'static str,
+    /// Scryfall card-object id of the printing in `key`'s set; Oracle text,
+    /// rulings and images are reachable from it. Play never reads it.
+    pub scryfall_id: &'static str,
+    pub printed: PrintedCharacteristics,
+    /// The back face of a transforming double-faced card (CR 712.1),
+    /// registered by the content pack as its own row after the front.
+    pub back_face: Option<Box<PrintedCharacteristics>>,
+}
+
+/// A token definition (CR 111.1): not a card, so it has its own catalog,
+/// keyed `token.<name>`. Effects create tokens by key, so two tokens may
+/// share a printed name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TokenDefinition {
+    /// `token.<name>`, unique in the token catalog.
+    pub key: &'static str,
+    /// Scryfall card-object id of the token's first token printing; `None`
+    /// only for a token with no printing.
+    pub scryfall_id: Option<&'static str>,
+    /// What every token created from this definition starts with.
+    pub printed: PrintedCharacteristics,
+}
+
+/// A registered row of the engine's catalog, the definition a [`CardDefId`]
+/// names: a card face, a back face, a token or a rules fixture. Token status
+/// is not a printed characteristic, so it lives here and on game objects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectDefinition {
+    /// The card's or token's key; empty for a back face or rules fixture.
+    pub key: &'static str,
+    pub scryfall_id: Option<&'static str>,
+    /// Shared with every object instantiated from this row.
+    pub printed: Arc<PrintedCharacteristics>,
+    /// Token status (CR 111.1): rows from a [`TokenDefinition`].
+    pub is_token: bool,
+    /// The printed name of this front face's back face, registered as the
+    /// next row.
+    pub back_face: Option<String>,
+}
+
+impl ObjectDefinition {
+    /// The front face of `card` as a row; its back face is registered apart.
+    pub fn card(card: &CardDefinition) -> Self {
+        Self {
+            key: card.key,
+            scryfall_id: (!card.scryfall_id.is_empty()).then_some(card.scryfall_id),
+            printed: Arc::new(card.printed.clone()),
+            is_token: false,
+            back_face: card.back_face.as_ref().map(|face| face.name.clone()),
+        }
+    }
+
+    /// A row with no identity of its own: a back face.
+    pub fn face(printed: PrintedCharacteristics) -> Self {
+        Self {
+            key: "",
+            scryfall_id: None,
+            printed: Arc::new(printed),
+            is_token: false,
+            back_face: None,
+        }
+    }
+
+    pub fn token(token: &TokenDefinition) -> Self {
+        Self {
+            key: token.key,
+            scryfall_id: token.scryfall_id,
+            printed: Arc::new(token.printed.clone()),
+            is_token: true,
+            back_face: None,
+        }
     }
 }
 
-impl CardDefinition {
+/// The serialized row, field for field as the content digest, learning
+/// tokens and match-state hashes have always read it (struct name included):
+/// printed characteristics with token status between `color_override` and
+/// `replacement_effects`, and the back face by name. Identity is never
+/// serialized.
+#[derive(serde::Serialize)]
+#[serde(rename = "CardDefinition")]
+struct DefinitionWire<'a> {
+    name: &'a String,
+    mana_cost: &'a Option<ManaCost>,
+    types: &'a CardTypes,
+    supertypes: &'a Vec<String>,
+    subtypes: &'a Vec<String>,
+    abilities: &'a Vec<Ability>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    statics: &'a Vec<StaticAbility>,
+    mana_abilities: &'a Vec<ManaAbility>,
+    triggered_mana_abilities: &'a Vec<TriggeredManaAbility>,
+    activated_abilities: &'a Vec<ActivatedAbilityDefinition>,
+    spell_effects: &'a Vec<Effect>,
+    targeting: &'a Vec<TargetRequirement>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    additional_costs: &'a Vec<AdditionalCost>,
+    keywords: &'a Keywords,
+    color_override: &'a Option<Colors>,
+    is_token: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    replacement_effects: &'a Vec<ReplacementEffect>,
+    text_box: &'a String,
+    power: &'a Option<i32>,
+    toughness: &'a Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    back_face: Option<&'a str>,
+}
+
+impl PrintedCharacteristics {
+    fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
+        DefinitionWire {
+            name: &self.name,
+            mana_cost: &self.mana_cost,
+            types: &self.types,
+            supertypes: &self.supertypes,
+            subtypes: &self.subtypes,
+            abilities: &self.abilities,
+            statics: &self.statics,
+            mana_abilities: &self.mana_abilities,
+            triggered_mana_abilities: &self.triggered_mana_abilities,
+            activated_abilities: &self.activated_abilities,
+            spell_effects: &self.spell_effects,
+            targeting: &self.targeting,
+            additional_costs: &self.additional_costs,
+            keywords: &self.keywords,
+            color_override: &self.color_override,
+            is_token,
+            replacement_effects: &self.replacement_effects,
+            text_box: &self.text_box,
+            power: &self.power,
+            toughness: &self.toughness,
+            back_face,
+        }
+    }
+}
+
+impl serde::Serialize for ObjectDefinition {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.printed
+            .wire(self.is_token, self.back_face.as_deref())
+            .serialize(serializer)
+    }
+}
+
+/// Copiable values alone, in the row's shape: not a token, no back face.
+impl serde::Serialize for PrintedCharacteristics {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.wire(false, None).serialize(serializer)
+    }
+}
+
+/// Reads of a card's, token's or row's printed characteristics.
+impl std::ops::Deref for CardDefinition {
+    type Target = PrintedCharacteristics;
+
+    fn deref(&self) -> &Self::Target {
+        &self.printed
+    }
+}
+
+impl std::ops::Deref for TokenDefinition {
+    type Target = PrintedCharacteristics;
+
+    fn deref(&self) -> &Self::Target {
+        &self.printed
+    }
+}
+
+impl std::ops::Deref for ObjectDefinition {
+    type Target = PrintedCharacteristics;
+
+    fn deref(&self) -> &Self::Target {
+        &self.printed
+    }
+}
+
+impl PrintedCharacteristics {
     /// A Saga (CR 714.1): an enchantment with the Saga subtype.
     pub fn is_saga(&self) -> bool {
         self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")
@@ -868,7 +1192,22 @@ impl CardDefinition {
             AdditionalCost::Kicker(kicker)
             | AdditionalCost::Waterbend(kicker)
             | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
-            AdditionalCost::Sacrifice(_) | AdditionalCost::RequiredWaterbend(_) => None,
+            AdditionalCost::Sacrifice(_)
+            | AdditionalCost::RequiredWaterbend(_)
+            | AdditionalCost::Replicate(_)
+            | AdditionalCost::ExileFromHandAlternative { .. } => None,
+        })
+    }
+
+    /// The exile-from-hand alternative cost and whether it is offered only
+    /// outside its caster's turn.
+    pub fn exile_alternative(&self) -> Option<(&crate::predicate::CardPredicate, bool)> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::ExileFromHandAlternative {
+                predicate,
+                not_your_turn,
+            } => Some((predicate, *not_your_turn)),
+            _ => None,
         })
     }
 
@@ -891,6 +1230,14 @@ impl CardDefinition {
     pub fn required_waterbend(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
             AdditionalCost::RequiredWaterbend(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    /// The replicate cost, paid once per announced copy.
+    pub fn replicate(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::Replicate(cost) => Some(cost),
             _ => None,
         })
     }
@@ -964,197 +1311,8 @@ impl CardDefinition {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Card {
-    pub id: ObjectId,
-    pub definition_id: CardDefId,
-    /// Compatibility name for the existing observation ABI. This is always
-    /// the numeric representation of `definition_id`.
-    pub registry_key: ObjectId,
-    pub owner: PlayerId,
-    /// The copy effect that made this object a copy (CR 707.2); its
-    /// definition is then the copiable values that effect produced.
-    pub copy: Option<crate::effect::CopyEffect>,
-    definition: Arc<CardDefinition>,
-    /// The front face's row while the back face is up (CR 712.8): set by
-    /// [`Card::turn_back_face_up`], cleared by [`Card::turn_front_face_up`].
-    front: Option<(CardDefId, Arc<CardDefinition>)>,
-}
-
-impl Card {
-    pub fn from_definition(
-        id: ObjectId,
-        owner: PlayerId,
-        definition_id: CardDefId,
-        definition: Arc<CardDefinition>,
-    ) -> Self {
-        Self {
-            id,
-            definition_id,
-            registry_key: ObjectId(definition_id.0),
-            owner,
-            copy: None,
-            definition,
-            front: None,
-        }
-    }
-
-    /// Its mana cost for mana value: a transformed permanent's is its front
-    /// face's (CR 712.8e).
-    pub fn mana_value_cost(&self) -> Option<&ManaCost> {
-        match &self.front {
-            Some((_, front)) => front.mana_cost.as_ref(),
-            None => self.mana_cost.as_ref(),
-        }
-    }
-
-    /// Whether its back face is up (CR 712.8).
-    pub fn is_transformed(&self) -> bool {
-        self.front.is_some()
-    }
-
-    /// The front face's row while the back face is up.
-    pub fn front_face(&self) -> Option<&(CardDefId, Arc<CardDefinition>)> {
-        self.front.as_ref()
-    }
-
-    /// Carry a copied object's front face, keeping its mana value (CR 712.8).
-    pub fn set_front_face(&mut self, front: Option<(CardDefId, Arc<CardDefinition>)>) {
-        self.front = front;
-    }
-
-    /// Show the back face, a row of the engine catalog’s `ContentPack::back_face`.
-    pub fn turn_back_face_up(&mut self, (id, definition): (CardDefId, Arc<CardDefinition>)) {
-        let front = (self.definition_id, Arc::clone(&self.definition));
-        self.show(id, definition);
-        self.front = Some(front);
-    }
-
-    /// Show the front face, if the back face is up.
-    pub fn turn_front_face_up(&mut self) {
-        if let Some((id, definition)) = self.front.take() {
-            self.show(id, definition);
-        }
-    }
-
-    /// Show one face. A token is a double-faced token on either face, and a
-    /// copy's exceptions are in the copiable values of each (CR 707.8a, 707.9b).
-    fn show(&mut self, id: CardDefId, definition: Arc<CardDefinition>) {
-        let token = self.is_token;
-        self.definition_id = id;
-        self.registry_key = ObjectId(id.0);
-        self.definition = definition;
-        if token && !self.is_token {
-            self.is_token = true;
-        }
-        if let Some(mut copy) = self.copy.take() {
-            copy.of = id;
-            for exception in &copy.exceptions {
-                exception.apply_copiable(self);
-            }
-            self.copy = Some(copy);
-        }
-    }
-
-    /// Snapshot the current copiable face without copying its ability programs.
-    pub fn copiable_definition(&self) -> Arc<CardDefinition> {
-        Arc::clone(&self.definition)
-    }
-
-    pub fn shares_definition_with(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.definition, &other.definition)
-    }
-
-    pub fn has_subtype(&self, subtype: &str) -> bool {
-        self.subtypes.iter().any(|s| s == subtype)
-    }
-
-    pub fn is_legendary(&self) -> bool {
-        self.supertypes
-            .iter()
-            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
-    }
-
-    /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
-    /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
-    /// `Game::has_instant_timing`.
-    pub fn is_instant_speed(&self) -> bool {
-        self.types.is_instant() || self.keywords.has(Keyword::Flash)
-    }
-
-    /// Modes are announced before targets (CR 601.2b-c). Only spell-level
-    /// modal effects participate; choices inside resolving abilities do not.
-    pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
-        self.spell_effects.iter().find_map(|effect| match effect {
-            Effect::Modal { modes } => Some(modes.as_slice()),
-            _ => None,
-        })
-    }
-
-    /// An Aura's enchant restriction (CR 303.4a, 702.5c): what its spell
-    /// targets and what its attached object must keep matching (CR 704.5m).
-    pub fn enchant(&self) -> Option<&TargetSpec> {
-        if !self.has_subtype("Aura") {
-            return None;
-        }
-        self.spell_effects.iter().find_map(|effect| match effect {
-            Effect::AttachSourceTo { what } => what.target_spec(),
-            _ => None,
-        })
-    }
-
-    pub fn spell_effects_for_mode(&self, mode: Option<usize>) -> Vec<Effect> {
-        self.spell_effects
-            .iter()
-            .flat_map(|effect| match (effect, mode) {
-                (Effect::Modal { modes }, Some(index)) => {
-                    modes.get(index).map(Vec::as_slice).unwrap_or_default()
-                }
-                _ => std::slice::from_ref(effect),
-            })
-            .cloned()
-            .collect()
-    }
-
-    pub fn target_requirements_for_mode(&self, mode: Option<usize>) -> Vec<TargetRequirement> {
-        if !self.targeting.is_empty() {
-            return self.targeting.clone();
-        }
-        crate::ability::effect_target_requirements(&self.spell_effects_for_mode(mode))
-    }
-
-    /// Explicit clauses bind distinct targets; repeated effects on "that"
-    /// target share the inferred single clause.
-    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
-        self.target_requirements_for_mode(None)
-    }
-}
-
-impl std::ops::Deref for Card {
-    type Target = CardDefinition;
-
-    fn deref(&self) -> &Self::Target {
-        &self.definition
-    }
-}
-
-/// Preserve the existing Rust scenario-test seam without making ordinary
-/// match clones copy definitions. Mutating printed characteristics detaches
-/// only that physical card from the shared pack definition.
-impl std::ops::DerefMut for Card {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        Arc::make_mut(&mut self.definition)
-    }
-}
-
-impl std::fmt::Display for Card {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{name: {}}}", self.name)
-    }
-}
-
-pub fn basic_land(name: &str, color: Color) -> CardDefinition {
-    CardDefinition {
+pub fn basic_land(name: &str, color: Color) -> PrintedCharacteristics {
+    PrintedCharacteristics {
         name: name.to_string(),
         types: CardTypes::new([CardType::Land]),
         supertypes: vec!["basic".to_string()],

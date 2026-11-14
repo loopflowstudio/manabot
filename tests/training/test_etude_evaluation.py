@@ -11,7 +11,7 @@ from tests.training.test_monitor_evaluation import _manifest, _rows
 pytest.importorskip("etude.eval.match")
 
 from etude.eval.query import statsdb  # noqa: E402
-from etude.eval.tournament import curves  # noqa: E402
+from etude.eval.tournament import scores  # noqa: E402
 
 from manabot.eval import benchmark as evaluation
 from manabot.eval.endpoint import InferenceEndpoint
@@ -136,7 +136,7 @@ def test_etude_resumes_complete_deals_and_report_counts_them(
         assert len(list((target / "allocation").glob("*/execution.json"))) == 2
     db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
     try:
-        points = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
+        points = scores(db, evaluation.BENCHMARK, table="plays", value="score")[
             0
         ].points
         assert points[0].rows == 16
@@ -269,7 +269,7 @@ def test_etude_explicit_reentry_continues_failed_deal_and_keeps_completed_cache(
     assert all(evaluation_status(panel).status == "completed" for panel in panels)
     db = statsdb(evaluation.BENCHMARK, tmp_path / "track")
     try:
-        point = curves(db, evaluation.BENCHMARK, table="plays", value="score")[
+        point = scores(db, evaluation.BENCHMARK, table="plays", value="score")[
             0
         ].points[0]
         assert point.rows == 16 and point.matches == 2 and point.value == 0.5

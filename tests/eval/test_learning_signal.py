@@ -3,18 +3,18 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from etude.eval.records import Code, Matchup
+from etude.eval.records import Code, Seating
 from etude.experiment import read_experiment
 from etude.jobs import evaluation_spec
 import pytest
 import torch
 
 from experiments import learning_signal
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as GameMatch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.matchup import selected_match
 
 
@@ -111,7 +111,7 @@ def test_discovered_studies_keep_the_evaluation_callback_importable(
 ) -> None:
     source = [Path(learning_signal.__file__)]
     heuristic = Code(name="heuristic", source=source)
-    matchup = Matchup(
+    matchup = Seating(
         name="fixture", players=(heuristic, heuristic), conditions=({},), games=8
     )
     monkeypatch.setattr(

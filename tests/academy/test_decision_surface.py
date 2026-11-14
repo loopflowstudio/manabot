@@ -6,20 +6,20 @@ import json
 from pathlib import Path
 from typing import Any
 
-from managym.experience import Command, ExperienceFrame, InteractionOffer
 from pydantic import ValidationError
 import pytest
 
-from academy.bot_decision import BeliefSummary, BotDecision, PolicyFactor
-from academy.replay_index import (
+from managym.academy.replay_index import (
     CanonicalReplayV1,
     DecisionAddressV2,
     ReplayDecision,
     project_replay,
     restore_decision,
 )
-from academy.server import GameSession, viewer_view
-from academy.trace import GameConfig, Trace, TraceEvent
+from managym.academy.server import GameSession, viewer_view
+from managym.academy.trace import GameConfig, Trace, TraceEvent
+from managym.bots import BeliefSummary, BotDecision, PolicyFactor
+from managym.experience import Command, ExperienceFrame, InteractionOffer
 
 
 def _frame(session: GameSession) -> ExperienceFrame:

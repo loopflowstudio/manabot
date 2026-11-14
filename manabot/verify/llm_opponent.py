@@ -11,7 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel
 import torch
 
-from manabot.model.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import TextDecision
 from manabot.verify.util import _select_agent_action

@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
-from manabot.model.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.update_metrics import read_updates, stage_rows

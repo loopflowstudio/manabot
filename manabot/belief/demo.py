@@ -7,10 +7,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.agent import AgentStep
 from manabot.belief.encoding import (
     HAND_ZONE_ID,
@@ -25,10 +26,9 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.search.flat_mc import make_player
 from manabot.verify.games import INTERACTIVE_DECK
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
 def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
@@ -46,7 +46,6 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
         observation_space,
         Reward(RewardConfig()),
         seed=19,
-        auto_reset=False,
         enable_profiler=False,
         enable_behavior_tracking=False,
     )

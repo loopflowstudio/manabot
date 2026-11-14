@@ -4,19 +4,19 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from managym.experience import ExperienceFrame
 import pytest
 
-from academy import server, trace as trace_store
-from academy.curated_pack import CURATED_PACK, JEONG_INCREMENT_PACK
-from academy.play_demo import load_play_demo
-from academy.server import viewer_view
-from academy.trace import GameConfig, load_trace
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
+from managym.academy import server, trace as trace_store
+from managym.academy.curated_pack import CURATED_PACK, JEONG_INCREMENT_PACK
+from managym.academy.play_demo import load_play_demo
+from managym.academy.server import viewer_view
+from managym.academy.trace import GameConfig, load_trace
+from managym.experience import ExperienceFrame
 
 
 def test_session_reveal_evidence_uses_definition_identity(tmp_path: Path) -> None:
@@ -279,7 +279,7 @@ def test_checked_demo_uses_normal_commands_and_viewer_safe_projection(
 def test_checked_demo_rejects_wrong_runtime_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from academy import play_demo
+    from managym.academy import play_demo
 
     demo = play_demo.load_play_demo("learn").model_copy(
         update={"decision_digest": "wrong"}

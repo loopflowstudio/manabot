@@ -4,15 +4,17 @@ import gc
 import json
 import weakref
 
-from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
-from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 import numpy as np
 import pytest
 import torch
 
+from manabot.belief import likelihood as likelihood_module
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
+from manabot.model.admission import admit_observation
 import managym
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
+from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 from tests.belief.fresh_env import fresh_env
 
 
@@ -179,6 +181,19 @@ class _FakeAgent:
         return logits, torch.zeros_like(row)
 
 
+@pytest.fixture(autouse=True)
+def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fake agent reads a synthetic row column, not a policy input."""
+    admit = likelihood_module.admit_on_device
+
+    def fake_admission(
+        agent: object, tensors: dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        return tensors if isinstance(agent, _FakeAgent) else admit(agent, tensors)
+
+    monkeypatch.setattr(likelihood_module, "admit_on_device", fake_admission)
+
+
 def test_frozen_likelihood_uses_one_prepared_handle_and_releases_each_batch() -> None:
     prepared = _FakePrepared()
     root = _FakeRoot(prepared)
@@ -272,9 +287,9 @@ def test_batch_observer_aborts_before_the_next_provider_call() -> None:
 
 
 def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
-    from manabot.model.actor_critic import ActorCritic
 
     root = managym.Env(seed=157)
     deck = {"Mountain": 4, "Raging Goblin": 4}
@@ -303,7 +318,9 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
         encoded = likelihood.obs_space.encode(branch.observation_for_player(1 - viewer))
         tensors = {key: torch.from_numpy(value[None]) for key, value in encoded.items()}
         with torch.inference_mode():
-            logits, _ = likelihood.agent.forward(tensors)
+            logits, _ = likelihood.agent.forward(
+                admit_observation(likelihood.agent, tensors)
+            )
             expected.append(float(torch.softmax(logits, dim=-1)[0, indexes].sum()))
         legal.append(count)
         matching.append(len(indexes))

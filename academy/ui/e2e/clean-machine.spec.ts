@@ -46,7 +46,7 @@ function sha256(value: string | Buffer): string {
 function expectedPack(): AssetPackReference {
   const manifestPath = path.resolve(
     process.cwd(),
-    'src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json',
+    '../../managym/academy/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json',
   );
   const bytes = readFileSync(manifestPath);
   const manifest = JSON.parse(bytes.toString('utf8')) as {

@@ -41,7 +41,7 @@ from statistics import median
 from typing import Literal
 
 from etude.eval.query import statsdb
-from etude.eval.records import Matchup
+from etude.eval.records import Seating
 from etude.experiment import ExperimentState, TrainingRun
 from etude.launch import client
 from etude.launch.records import Job, Run
@@ -68,7 +68,7 @@ from experiments.tla_frontier import (
     tagged_runs,
     with_launcher_ends,
 )
-from experiments.tla_pilot_analysis import stored_game_columns
+from experiments.tla_frontier_analysis import stored_game_columns
 from manabot.infra.identity import StrictModel
 from manabot.recipes.builders import fitted_horizon
 from manabot.training.regime import TrainingRegime
@@ -211,7 +211,7 @@ def _furthest_run(state: ExperimentState, label: SizeLabel) -> TrainingRun:
 
 def rehearsal_matchups(
     state: ExperimentState, protocol: Protocol
-) -> tuple[Matchup, Matchup]:
+) -> tuple[Seating, Seating]:
     """W160l8 against its own start, then against w64; both last checkpoints.
 
     W160l8 in both seats is the slowest game the frontier schedules. A w160l8 that

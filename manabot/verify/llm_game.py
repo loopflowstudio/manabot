@@ -19,16 +19,16 @@ import subprocess
 import time
 from typing import TYPE_CHECKING
 
-from managym.decision import DecisionFrame, apply_semantic_command
 from pydantic import BaseModel, Field
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.env.match import Match
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.session import InferenceSession
-from manabot.model.checkpoint import load_checkpoint
+from manabot.model.inference import admit_on_device
 from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import (
     TextDecision,
@@ -40,6 +40,7 @@ from manabot.verify.llm_opponent import (
     CheckpointOpponent as ConfiguredCheckpointOpponent,
 )
 import managym
+from managym.decision import DecisionFrame, apply_semantic_command
 
 if TYPE_CHECKING:
     from manabot.llm.openrouter import OpenRouterResult, OpenRouterSession
@@ -158,10 +159,13 @@ class CheckpointOpponent:
         encoded = self.space.encode(raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
-        tensors = {
-            name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-            for name, value in encoded.items()
-        }
+        tensors = admit_on_device(
+            self.agent,
+            {
+                name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
+                for name, value in encoded.items()
+            },
+        )
         with torch.inference_mode():
             action, _, _, _ = self.agent.get_action_and_value(tensors)
         index = int(action.item())

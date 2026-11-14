@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 import pytest
 import torch
 
-from academy import server, trace as trace_store
-from academy.server import app
 from manabot.model.world import WORLD
+from managym.academy import server, trace as trace_store
+from managym.academy.server import app
 from tests.academy.test_play_modes import _recorded_traces, _write_tiny_checkpoint
 
 
@@ -158,10 +158,10 @@ def _deck_import() -> dict[str, object]:
 def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
     runs: Path,
 ) -> None:
+    from manabot.backends.torch.checkpoint import save_checkpoint
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.model.checkpoint import save_checkpoint
 
     space = ObservationSpace()
     agent = ActorCritic(space, ModelConfig(world="world"))

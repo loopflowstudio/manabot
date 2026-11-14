@@ -15,8 +15,8 @@ import numpy as np
 import torch
 from torch import Tensor
 
-from manabot.model.policy_distribution import NumericalError
-from manabot.training.learning.learner import Learner
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.rl import NumericalError
 
 if TYPE_CHECKING:
     from manabot.training.records import TrainingRun
@@ -69,7 +69,7 @@ def save_incident(
         # Packed rows remain compact in incident artifacts. Offsets and slots
         # are required to reconstruct original Commands and full distributions.
         packed = batch.action_data
-        for name in ("offsets", "slots", "probabilities", "log_probabilities"):
+        for name in ("offsets", "slots", "log_probabilities"):
             batch_tensors[f"packed_actions/{name}"] = torch.as_tensor(
                 getattr(packed, name)
             )

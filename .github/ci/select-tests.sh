@@ -32,19 +32,21 @@ else
       .github/workflows/*) ;; # Separate workflows own their own triggers.
       scripts/audit_rules.py) select_jobs python_unit ;;
       content/DECKS.md|AGENTS.md|README.md|VISUAL_DESIGN.md|WORLDS.md|*/README.md) ;;
+      managym/academy/packs/*) select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
+      managym/academy/fixtures/*|managym/academy/server.py|managym/academy/presentation.py|managym/academy/play_demo.py|managym/academy/curated_pack.py|managym/academy/villain.py|managym/academy/presets.py)
+        select_jobs academy_integration protocol_v1 frontend ;;
+      managym/academy/*|academy/__init__.py) select_jobs academy_integration protocol_v1 ;;
       content/*|conformance/*|manabot/managym/*|managym/src/*|managym/state/src/*|managym/cards/src/*|managym/*.py|managym/*.pyi)
         all ;;
       tests/semantic/fixtures/elemental/*) select_jobs academy_integration ;;
       protocol/*) select_jobs rust protocol_v1 frontend semantic_conformance ;;
       managym/tests/*|managym/cards/tests/*) select_jobs rust semantic_conformance ;;
       managym/.config/nextest.toml) select_jobs rust ;;
-      academy/ui/src/lib/packs/*|academy/ui/src/lib/fixtures/*)
+      academy/ui/src/lib/fixtures/*)
         select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
-      academy/ui/package.json|academy/ui/package-lock.json|academy/ui/*config.*|academy/ui/scripts/*|academy/ui/static/*|academy/ui/src/lib/card-art/*)
+      academy/ui/package.json|academy/ui/package-lock.json|academy/ui/*config.*|academy/ui/scripts/*|academy/ui/static/*)
         select_jobs frontend clean_machine_play ;;
       academy/ui/*) select_jobs frontend ;;
-      academy/fixtures/*|academy/server.py|academy/presentation.py|academy/play_demo.py|academy/curated_pack.py|academy/villain.py|academy/presets.py)
-        select_jobs academy_integration protocol_v1 frontend ;;
       academy/*) select_jobs academy_integration protocol_v1 ;;
       tests/academy/test_play_launcher.py|tests/academy/test_clean_machine_verifier.py)
         select_jobs python_unit clean_machine_play ;;
@@ -53,7 +55,7 @@ else
         select_jobs python_unit protocol_v1 clean_machine_play ;;
       scripts/play-elemental|scripts/play_elemental.py)
         select_jobs academy_integration clean_machine_play ;;
-      manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
+      manabot/sim/table_bots.py|manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
         select_jobs integration academy_integration protocol_v1 frontend ;;
       tests/infra/*) select_jobs python_unit ;;
       manabot/infra/*) select_jobs python_unit integration ;;

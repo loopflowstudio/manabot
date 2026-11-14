@@ -53,10 +53,10 @@ from manabot.eval.evaluate import (
 )
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
+from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.source import source_commit, source_dirty
-from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.card_evidence import (
     CAPTURE_VERSION,
     EvidenceRef,

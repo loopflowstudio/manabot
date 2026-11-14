@@ -8,20 +8,20 @@ from pathlib import Path
 from pydantic import ValidationError
 import pytest
 
-from academy.replay_index import (
+import managym
+from managym.academy.replay_index import (
     CanonicalReplayV1,
     DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecisionAddress,
     restore_decision,
 )
-from academy.server import GameSession
-from academy.study_branch import (
+from managym.academy.server import GameSession
+from managym.academy.study_branch import (
     StudyBranchUnavailableError,
     StudyExecutionReceipt,
     StudyForkProvider,
 )
-import managym
 
 
 def _completed_session(tmp_path: Path) -> tuple[GameSession, CanonicalReplayV1]:

@@ -8,20 +8,23 @@ training receipt or an admitted replay world.
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import numpy as np
 from pydantic import BaseModel, JsonValue, TypeAdapter
-import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace, _timestamp_ranks
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 from manabot.managym.decision_capture import DecisionInput
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import priority_root
 import managym
+
+# Relation decision code of a pending native `Decision::SelectCards`.
+SELECTION_OBLIGATION = 28
 
 
 class ExecutionEvidence(BaseModel):
@@ -50,7 +53,7 @@ def _evidence() -> list[ExecutionEvidence]:
     )
 
 
-def test_real_fetch_search_keeps_frozen_input_admission_and_encoder_parity() -> None:
+def test_real_fetch_search_has_native_python_encoder_parity() -> None:
     env = priority_root((), ("Fabled Passage", "Mountain"))
     observation = env.scenario_refresh()
     activate = next(
@@ -60,7 +63,9 @@ def test_real_fetch_search_keeps_frozen_input_admission_and_encoder_parity() -> 
     )
     observation, *_ = env.step(activate)
     for _ in range(8):
-        if any(frame.legacy_decision == 6 for frame in observation.continuation):
+        if any(
+            frame.decision == SELECTION_OBLIGATION for frame in observation.continuation
+        ):
             break
         passing = next(
             index
@@ -70,26 +75,18 @@ def test_real_fetch_search_keeps_frozen_input_admission_and_encoder_parity() -> 
         observation, *_ = env.step(passing)
     else:
         raise AssertionError("fetch search not reached")
-    for version in range(1, 9):
-        expected = ObservationSpace(
-            ObservationConfig(policy_input_version=version)
-        ).encode(observation)
-        actual = env.encode_observation(observation, policy_input_version=version)
-        for key, value in expected.items():
-            np.testing.assert_array_equal(
-                actual[key], value, err_msg=f"v{version}: {key}"
-            )
+    expected = ObservationSpace().encode(observation)
+    actual = env.encode_observation(observation)
+    assert actual.keys() == expected.keys()
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
 
 
-@pytest.mark.parametrize("state_encoder", ["rows", "typed_pool", "typed_gru"])
-def test_effect_execution_pairs_reach_actual_model_and_text(
-    state_encoder: Literal["rows", "typed_pool", "typed_gru"],
-) -> None:
+def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(241)
-    space = ObservationSpace(ObservationConfig(policy_input_version=8))
-    model = ActorCritic(space, ModelConfig(hidden_dim=16, state_encoder=state_encoder))
-    assert model.facts is not None
+    space = ObservationSpace()
+    model = ActorCritic(space, ModelConfig(hidden_dim=16))
     # Facts deliberately start with zero output weights. A fixed nonzero
     # readout tests representability without fitting weights or running training.
     with torch.no_grad():
@@ -111,7 +108,7 @@ def test_effect_execution_pairs_reach_actual_model_and_text(
             # Native arrays in the receipt came directly from the full live
             # observation. Only schema-7 storage separates frames from viewer JSON.
             tensors["facts"] = space.encoder._encode_facts(
-                cast(managym.Observation, joined), _timestamp_ranks(obs, shared=True)
+                cast(managym.Observation, joined), _timestamp_ranks(obs)
             )
             tensors["relations"] = space.encoder._encode_relations(
                 capture.frames, obs.agent.player_index
@@ -136,13 +133,12 @@ def test_effect_execution_pairs_reach_actual_model_and_text(
             key: torch.from_numpy(np.stack([value[key] for value in encoded]))
             for key in encoded[0]
         }
-        logits, values = model(batch)
+        logits, values = model(admit_observation(model, batch))
         assert torch.isfinite(values).all()
         assert not torch.equal(values[0], values[1]), records[start].case
         assert not torch.equal(logits[0], logits[1]), records[start].case
         model.zero_grad()
         (values.sum() + logits[batch["actions_valid"].bool()].sum()).backward()
-        assert model.facts is not None
         assert any(
             p.grad is not None and p.grad.abs().sum() > 0
             for p in model.facts.parameters()

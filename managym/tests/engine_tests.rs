@@ -216,13 +216,12 @@ fn invalid_game_action_preserves_action_space() {
 
 #[test]
 fn env_reports_negative_action_index() {
-    let (mut env, obs) = reset_env(7, true);
-    let action_count = obs.action_space.actions.len();
+    let (mut env, _) = reset_env(7, true);
 
     let error = env.step(-1).expect_err("negative action index should fail");
     assert_eq!(
         error.to_string(),
-        format!("Action index -1 out of bounds: {action_count}")
+        "external chooser (seat 0) requires an action index"
     );
 
     env.step(0)

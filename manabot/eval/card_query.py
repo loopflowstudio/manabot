@@ -31,7 +31,7 @@ import duckdb
 from etude.eval.query import REPLICATES, Estimate, estimate, read_blobs, statsdb
 from etude.eval.records import Match, TournamentRun, assemble
 from etude.run.errors import EtudeError
-from etude.run.listing import as_storage, places
+from etude.run.listing import as_storage, run_folders
 from etude.run.storage import Storage
 import numpy as np
 import numpy.typing as npt
@@ -189,7 +189,7 @@ def _select(
     if selection.subjects:
         among("r.player", _players(db, selection.subjects))
     if selection.opponents:
-        among("r.opponents", _players(db, selection.opponents))
+        among("r.opponents[1]", _players(db, selection.opponents))
     if selection.runs:
         among("r.run", selection.runs)
     if selection.commits:
@@ -210,7 +210,7 @@ def _select(
         f"create or replace temp table {table} as"
         " select r.*, s.name as subject, o.name as opponent"
         f" from {rollup} r join players s on s.player = r.player"
-        " join players o on o.player = r.opponents"
+        " join players o on o.player = r.opponents[1]"
         f" where {' and '.join(where)}",
         parameters,
     )
@@ -725,7 +725,7 @@ def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardDa
 
 def _folder(store: Storage, run: str, key: str) -> str:
     """The folder of `run` that holds `key`; replicas hold the same bytes."""
-    for folder in places(store).get(run, []):
+    for folder in run_folders(store.keys("")).get(run, []):
         if folder + key in store.keys(folder):
             return folder
     raise ValueError(f"{key} unavailable for run {run}")

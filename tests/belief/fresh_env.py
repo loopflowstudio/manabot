@@ -24,7 +24,6 @@ def fresh_env(seed: int) -> Env:
         ObservationSpace(),
         Reward(RewardConfig()),
         seed=seed,
-        auto_reset=False,
     )
     env.reset(seed=seed)
     return env

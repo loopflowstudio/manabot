@@ -21,11 +21,11 @@ fn proft_etb_draw_and_combat_counts_at_resolution() {
     put_onto_battlefield(&mut s, 0, "Island");
     let gran = put_onto_battlefield(&mut s, 0, "Gran-Gran");
     s.game_mut().state.turn.history[0].cards_drawn = 1;
-    let card = cast_owned(&mut s, "Proft's Eidetic Memory");
+    let object = cast_owned(&mut s, "Proft's Eidetic Memory");
     let before = s.zone_size(0, ZoneType::Hand);
     resolve_top(&mut s); // permanent enters, ETB on stack
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Battlefield)
     );
     resolve_top(&mut s);
@@ -76,7 +76,7 @@ fn proft_hand_limit_only_while_controlled_and_legend_rule_for_both_card_types() 
             .action_space()
             .actions
             .iter()
-            .position(|a| matches!(a, Action::SelectCard { card, .. } if *card == second_card))
+            .position(|a| matches!(a, Action::SelectCard { object, .. } if *object == second_card))
             .unwrap();
         s.step_action(index);
         assert_eq!(
@@ -98,8 +98,8 @@ fn proft_hand_limit_only_while_controlled_and_legend_rule_for_both_card_types() 
     s.advance_to_active_step(0, StepKind::End);
     resolve_top(&mut s);
     assert_eq!(s.zone_size(0, ZoneType::Hand), before);
-    let card = card_of(&s, proft);
-    s.game_mut().move_card(card, ZoneType::Hand);
+    let object = card_of(&s, proft);
+    s.game_mut().move_object(object, ZoneType::Hand);
     s.advance_to_active_step(0, StepKind::End);
     resolve_top(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
@@ -119,10 +119,10 @@ fn proft_has_no_effect_if_its_only_target_leaves() {
     s.game_mut().state.turn.history[0].cards_drawn = 3;
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     assert!(s.choose_target(Target::Permanent(gran)));
-    let card = card_of(&s, gran);
-    s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().move_card(card, ZoneType::Battlefield);
-    let new = s.game().state.card_to_permanent[card].unwrap();
+    let object = card_of(&s, gran);
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let new = s.game().state.object_to_permanent[object].unwrap();
     resolve_top(&mut s);
     assert_eq!(counters(&s, new), 0);
 }

@@ -57,7 +57,7 @@ def test_opponent_lists_appear_exactly_when_open(decklists: Decklists) -> None:
     else:
         assert fields == (None, None, None, None)
 
-    # Policy input v5: Python reference and native encoders agree.
+    # Python reference and native encoders agree.
     space = ObservationSpace(ObservationConfig())
     python = space.encode(obs)["decklists"]
     native = env.encode_observation(obs)["decklists"]
@@ -66,9 +66,6 @@ def test_opponent_lists_appear_exactly_when_open(decklists: Decklists) -> None:
     assert python[0, :, 1].sum() == 41
     assert python[1, :, 1].sum() == (40 if decklists == "open" else 0)
     assert not python[1].any() if decklists == "closed" else python[1].any()
-    assert "decklists" not in ObservationSpace(
-        ObservationConfig(policy_input_version=4)
-    ).encode(obs)
 
     # LLM text and the Academy projection carry the same disclosure.
     text = capture_text_decision(env).text

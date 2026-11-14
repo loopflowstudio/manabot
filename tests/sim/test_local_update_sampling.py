@@ -4,6 +4,30 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Callable, Sequence, cast
 
+import numpy as np
+import pytest
+import torch
+
+from manabot.belief.sampling import AutoregressiveBeliefSampler
+from manabot.belief.sampling_types import SamplerSchema, _digest
+from manabot.belief.state import ViewerHistory
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
+from manabot.infra.identity import file_sha256
+from manabot.model.admission import admit_observation
+from manabot.sim.search.branch import BranchSession
+from manabot.sim.search.local_update import LocalUpdatePlayer, LocalUpdateTeacher
+from manabot.sim.search.local_update_receipt import (
+    FloatArray,
+    LocalSearchConfig,
+    LocalUpdateReceipt,
+    SamplerArtifact,
+)
+from manabot.sim.search.rollout import Rollout
+from manabot.sim.search.rollout_receipt import RolloutReceipt
+from manabot.sim.search.sampling import PhysicalHandSampler
+from manabot.sim.search.sampling_receipt import HandBatch, HandSample, PreparedHands
+import managym
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
     Command,
@@ -11,34 +35,6 @@ from managym.decision import (
     Observation,
 )
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
-import numpy as np
-import pytest
-import torch
-
-from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
-from manabot.belief.sampling_data import _digest
-from manabot.belief.state import ViewerHistory
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ObservationConfig
-from manabot.infra.identity import file_sha256
-from manabot.sim.search.branch import BranchSession
-from manabot.sim.search.local_update import (
-    FloatArray,
-    LocalSearchConfig,
-    LocalUpdatePlayer,
-    LocalUpdateReceipt,
-    LocalUpdateTeacher,
-    SamplerArtifact,
-)
-from manabot.sim.search.rollout import Rollout
-from manabot.sim.search.rollout_receipt import RolloutReceipt
-from manabot.sim.search.sampling import (
-    HandBatch,
-    HandSample,
-    PhysicalHandSampler,
-    PreparedHands,
-)
-import managym
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher
 
@@ -440,22 +436,25 @@ def test_batched_search_checks_deadline_after_forward(
         teacher.search(env._engine, history, seed=17)
 
 
+@pytest.mark.parametrize("native_encoder", [True, False])
 def test_batch_rejects_incomplete_and_nonfinite_rows(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, native_encoder: bool
 ) -> None:
-    teacher, env = make_teacher(tmp_path)
+    teacher, env = make_teacher(tmp_path, native_encoder=native_encoder)
+    # A fresh teacher, so native frontier buffers are first sized for this space.
+    narrow, _ = make_teacher(tmp_path, native_encoder=native_encoder)
     with monkeypatch.context() as patch:
         patch.setattr(
-            teacher,
+            narrow,
             "space",
             ObservationSpace(
-                teacher.space.encoder.config.model_copy(
+                narrow.space.encoder.config.model_copy(
                     update={"max_actions": 1, "action_overflow": "first-legal"}
                 )
             ),
         )
-        with pytest.raises(ValueError, match="complete legal offers"):
-            teacher.predict_batch([env._engine, env._engine])
+        with pytest.raises(ValueError, match="complete legal offers|capacity exceeded"):
+            narrow.predict_batch([env._engine, env._engine])
     forward = teacher.agent.forward
 
     def nonfinite(
@@ -470,18 +469,16 @@ def test_batch_rejects_incomplete_and_nonfinite_rows(
         teacher.predict_batch([env._engine, env._engine])
 
 
-@pytest.mark.parametrize("version", range(1, 10))
 @pytest.mark.parametrize("history", [0, 1])
 def test_batch_inputs_match_python_at_selected_capacities(
-    tmp_path: Path, version: int, history: int
+    tmp_path: Path, history: int
 ) -> None:
     """Every selected key and row reaches inference, with no shared buffer state."""
     teacher, env = make_teacher(
         tmp_path,
         observation=ObservationConfig(
-            policy_input_version=version,
             policy_history_version=history,
-            max_facts=17 if version >= 6 else None,
+            max_facts=17,
             max_cards_per_player=33,
             max_permanents_per_player=7,
             max_actions=37,
@@ -519,7 +516,7 @@ def test_batch_inputs_match_python_at_selected_capacities(
     finally:
         handle.remove()
     with torch.inference_mode():
-        logits, values = teacher.agent(tensors)
+        logits, values = teacher.agent(admit_observation(teacher.agent, tensors))
     for i, (probabilities, value) in enumerate(predictions):
         count = int(expected[i]["actions_valid"].sum())
         np.testing.assert_array_equal(

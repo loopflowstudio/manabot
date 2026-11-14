@@ -13,15 +13,15 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.decks import UniformDecks, pair_match
@@ -295,6 +295,9 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "rules",
         "input_schema",
         "learning_schema_sha256",
+        "naming_representation",
+        "naming_branching",
+        "naming_vocabulary",
     }
     assert binding["world"] == managym.WORLD_VERSION
     assert inspect_checkpoint(target).compatible

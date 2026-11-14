@@ -26,9 +26,10 @@ proof_error() {
   proof_error proof.dirty "academy/ui/test-results exists before the clean proof"
 [ ! -e .cache ] || proof_error proof.dirty ".cache exists before the clean proof"
 [ ! -e managym/target ] || proof_error proof.dirty "managym/target exists before the clean proof"
-if find managym -maxdepth 1 -name '_managym*.so' -print -quit | grep -q .; then
-  proof_error proof.dirty "a managym native extension exists before the clean proof"
-fi
+for extension in managym/_managym*.so manabot/managym/_managym*.so; do
+  [ ! -e "$extension" ] || \
+    proof_error proof.dirty "a managym native extension exists before the clean proof"
+done
 if find gui/traces -name '*.json' -print -quit 2>/dev/null | grep -q .; then
   proof_error proof.dirty "GUI traces exist before the clean proof"
 fi
@@ -38,9 +39,9 @@ log=$ROOT/.cache/clean-machine/launch.log
 receipt=$ROOT/.cache/clean-machine/proof.json
 api_port=${ACADEMY_CLEAN_API_PORT:-18011}
 frontend_port=${ACADEMY_CLEAN_FRONTEND_PORT:-15183}
-start_ms=$(uv run --no-project --python 3.12 python -c \
+start_ms=$(uv run --no-project --python 3.13 python -c \
   'import time; print(time.time_ns() // 1_000_000)') || \
-  proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
+  proof_error prerequisite.uv "uv could not run the provisioned CPython 3.13"
 
 # A hang guard, not the 90-second budget: a cold Cargo/npm build's duration
 # depends on the hosted runner, so the browser proof records the budget in its

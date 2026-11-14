@@ -6,6 +6,9 @@ Judge measured gains against preserved semantics and the remaining useful opport
 
 1. Compare representative workloads on the same hardware/build profile. Confirm
    source/workload identities and behavior digests, not just elapsed time.
+   Read the `bench_states` table for the large-board states the change touches
+   beside the ordinary workloads: a cell whose work grows much faster than its
+   size is a finding even when the curated decks are no slower.
 2. Inspect debug invariant checks and affected behavior evidence. If semantics
    changed, invalidate the speed comparison and repair the working contract before
    accepting dependent results. Never accept narrower choices or lost observations

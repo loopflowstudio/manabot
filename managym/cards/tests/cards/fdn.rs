@@ -2,7 +2,7 @@
 use crate::support::{
     game::five_color_setup,
     inspect::{card_of, permanent_named},
-    play::{activate, attack_with, enter_and_settle, settle},
+    play::{activate, attack_with, enter_and_settle, settle, spend_colorless},
 };
 use managym::{
     flow::turn::StepKind,
@@ -16,6 +16,7 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
     let k = permanent_named(&s, "Kellan, Planar Trailblazer");
     s.set_player_mana_pool(0, "3RR");
     activate(&mut s, k, 0);
+    spend_colorless(&mut s);
     settle(&mut s);
     let first = s.game().characteristics(k);
     assert!(first.has_subtype("Detective") && !first.has_subtype("Scout"));
@@ -38,10 +39,10 @@ fn kellan_upgrades_replace_types_keep_trigger_and_pay_real_costs() {
         s.game().state.zones.size(ZoneType::Exile, PlayerId(0)),
         before + 2
     );
-    let card = card_of(&s, k);
-    s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().move_card(card, ZoneType::Battlefield);
-    let reentered = s.game().state.card_to_permanent[card].unwrap();
+    let object = card_of(&s, k);
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let reentered = s.game().state.object_to_permanent[object].unwrap();
     assert!(s.game().characteristics(reentered).has_subtype("Scout"));
     assert!(s
         .game()

@@ -5,13 +5,13 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
-from academy import server, trace as trace_store
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.managym.experience import ExperienceFrame, InteractionOffer
 import managym
+from managym.academy import server, trace as trace_store
 
 HERO = "56 Island\n4 Secret of Bloodbending"
 VILLAIN = "56 Island\n4 Accumulate Wisdom"

@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 import pytest
 
 # Local imports
-from academy import server, trace as trace_store
-from academy.server import app
+from managym.academy import server, trace as trace_store
+from managym.academy.server import app
 
 MAX_HERO_MOVES = 3000
 

@@ -242,6 +242,10 @@ class TestObservationEncoder:
             "decklists",
             "relations",
             "facts",
+            "effects",
+            "effect_details",
+            "effect_members",
+            "name_candidates",
         }
 
     def test_encode_observation(
@@ -407,15 +411,12 @@ class TestObservationEncoder:
                 atol=1e-6,
             )
 
-    @pytest.mark.parametrize("version", [6, 8])
     def test_action_space_overflow_rejects_incomplete_policy_input(
-        self, observation: managym.Observation, version: int
+        self, observation: managym.Observation
     ) -> None:
         count = len(observation.action_space.actions)
         assert count > 1
-        encoder = ObservationEncoder(
-            ObservationConfig(policy_input_version=version, max_actions=count - 1)
-        )
+        encoder = ObservationEncoder(ObservationConfig(max_actions=count - 1))
         with pytest.raises(
             ValueError, match=rf"capacity exceeded: actions {count} > {count - 1}"
         ):
@@ -451,6 +452,9 @@ class TestObservationEncoder:
                         mode_index=None,
                         ability_index=None,
                         continuation_index=None,
+                        name_index=None,
+                        name_definition=None,
+                        name_group=None,
                     )
                 ]
             )

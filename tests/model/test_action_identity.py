@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     ACTION_ABILITY_INDEX,
     ACTION_MODE_INDEX,
@@ -14,7 +15,7 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import (
     Family,
     decision_case,
@@ -61,23 +62,24 @@ def test_policy_choice_can_learn_either_preference(
         ),
     )
     # Erasing precisely the repaired information reproduces the forced tie.
-    logits, _ = agent(identity_removed(case))
+    logits, _ = agent(admit_observation(agent, identity_removed(case)))
     torch.testing.assert_close(
         logits[0, candidates[0]], logits[0, candidates[1]], rtol=0, atol=0
     )
     optimizer = torch.optim.Adam(agent.parameters(), lr=0.02)
+    admitted = admit_observation(agent, obs)
     preferred = candidates[preference]
     for _ in range(60):
-        logits, _ = agent(obs)
+        logits, _ = agent(admitted)
         optimizer.zero_grad()
         (-logits.log_softmax(-1)[0, preferred]).backward()
         optimizer.step()
     with torch.no_grad():
-        logits, _ = agent(obs)
+        logits, _ = agent(admitted)
         assert float(logits.softmax(-1)[0, preferred]) > 0.95
         count = int(obs["actions_valid"].sum())
         order = torch.arange(count - 1, -1, -1)
-        actual, _ = agent(reorder_offers(obs, order))
+        actual, _ = agent(admit_observation(agent, reorder_offers(obs, order)))
         torch.testing.assert_close(actual[:, :count], logits[:, order])
 
 
@@ -93,7 +95,7 @@ def test_generic_definition_rejects_unadmitted_ids(bad: float, key: str) -> None
         ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
     )
     with pytest.raises(ValueError, match="unadmitted card definition"):
-        agent(obs)
+        admit_observation(agent, obs)
 
 
 def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:
@@ -106,7 +108,8 @@ def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:
     restored = ActorCritic(ObservationSpace(), spec)
     restored.load_state_dict(torch.load(path, weights_only=True))
     with torch.no_grad():
-        for expected, actual in zip(agent(obs), restored(obs), strict=True):
+        admitted = admit_observation(agent, obs)
+        for expected, actual in zip(agent(admitted), restored(admitted), strict=True):
             torch.testing.assert_close(actual, expected, rtol=0, atol=0)
 
 

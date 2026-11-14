@@ -8,6 +8,8 @@ from typing import Any, Literal
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.eval import monitor as monitor
@@ -16,8 +18,6 @@ from manabot.experiment import checkpoint_evaluation
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.reports.training import evaluation_dashboard
 from manabot.sim import anchors
 from manabot.sim.execution import EvalExecution

@@ -21,7 +21,7 @@ use crate::{
     },
     flow::game::Game,
     state::{
-        game_object::{CardId, ObjectLookupError, PlayerId},
+        game_object::{ObjectId, ObjectLookupError, PlayerId},
         zone::ZoneType,
     },
 };
@@ -373,7 +373,7 @@ impl Game {
                 || self.shares_information(viewer, PlayerId(1 - viewer.0))
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
                 || public_entries.iter().any(|object| {
-                    self.state.cards[CardId::from(object.entity)].id.0 as i32 == card.id
+                    self.state.objects[ObjectId::from(object.entity)].id.0 as i32 == card.id
                 })
         }) {
             return Err(SemanticError::ViewerSafetyViolation);
@@ -658,7 +658,7 @@ mod tests {
             .as_array()
             .expect("opponent_cards array")
             .iter()
-            .filter(|card| card["zone"].as_i64() == Some(hand_zone))
+            .filter(|object| object["zone"].as_i64() == Some(hand_zone))
             .collect();
         assert!(
             opponent_hand.is_empty(),
@@ -806,11 +806,11 @@ mod tests {
             .to_string()
             .contains(&format!("\"incarnation\":{}", object_ref.incarnation.0)));
 
-        let card = game.state.permanents[permanent]
+        let object = game.state.permanents[permanent]
             .as_ref()
             .expect("permanent")
-            .card;
-        game.move_card(card, ZoneType::Graveyard);
+            .object;
+        game.move_object(object, ZoneType::Graveyard);
         let current = game.semantic_decision_frame().expect("current frame");
         let pass = current
             .offers

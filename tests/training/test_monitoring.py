@@ -8,8 +8,8 @@ import pytest
 import torch
 
 from experiments.direct_self_play import direct_self_play
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.experiment.evaluation_queue import checkpoints
-from manabot.model.checkpoint import load_checkpoint
 from manabot.reports import training as monitoring
 from manabot.reports.training import (
     Dashboard,
@@ -60,10 +60,10 @@ def test_retained_rows_without_coordinates_stay_unavailable() -> None:
 def _history(directory: Path, run_id: str) -> list[dict[str, object]]:
 
     return [
-        table.row(index)["values"]
-        for table in read(directory / "etude", "manabot-monitoring", run_id).tables
+        table.row(index).values
+        for table in read(directory / "etude", "manabot-monitoring", run_id).columns
         for index in range(table.rows)
-        if "projection/row_sha256" in table.row(index)["values"]
+        if "projection/row_sha256" in table.row(index).values
     ]
 
 
@@ -165,10 +165,10 @@ def test_publisher_waits_for_evaluation_completion_without_losing_local_progress
     assert dashboard.rows[0]["monitor/attempted_games"] == 8
 
     summaries = [
-        table.row(index)["values"]["projection/summary_json"]
+        table.row(index).values["projection/summary_json"]
         for table in read(
             tmp_path / "etude", "manabot-monitoring", dashboard.run_id
-        ).tables
+        ).columns
         for index in range(table.rows)
     ]
     assert any(json.loads(summary)["attempted_games"] == 8 for summary in summaries)

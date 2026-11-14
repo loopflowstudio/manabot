@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from manabot.infra.identity import canonical_sha256, file_sha256
-
-DEFAULT_MAX_PLAYOUT_STEPS = 2000
+from managym.bots import DEFAULT_MAX_PLAYOUT_STEPS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INT7_VALUE_TARGET_MANIFEST_SHA256 = (

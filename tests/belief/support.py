@@ -1,9 +1,8 @@
 """Focused test fixtures for belief contracts; production demos use managym."""
 
-from managym.decision import SEMANTIC_DECISION_VERSION, Command, Observation
-from managym.possible_worlds import PossibleWorldSpace
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief import (
     HAND_ZONE_ID,
     LIBRARY_ZONE_ID,
@@ -17,7 +16,8 @@ from manabot.belief import (
 )
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
+from managym.decision import SEMANTIC_DECISION_VERSION, Command, Observation
+from managym.possible_worlds import PossibleWorldSpace
 
 
 def fixture_history() -> ViewerHistory:

@@ -126,7 +126,6 @@ def test_env_reset_seed_reaches_engine_rng():
         ObservationSpace(config.observation),
         Reward(config.reward),
         seed=0,
-        auto_reset=False,
     )
 
     obs_a, _ = env.reset(seed=123)

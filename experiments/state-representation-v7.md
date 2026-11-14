@@ -94,7 +94,7 @@ billing/cleanup receipts and the exact frozen source archive are included.
 Bytes are stored by digest through `experiments/data.manifest.json`.
 
 The maintained runner is now
-[state_representation_v7.py](state_representation_v7.py), matching the unchanged
+[state_representation_v7.py](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/state_representation_v7.py), matching the unchanged
 v7 tracking namespace. Its previous filename at the scientific source commit
 remains in the frozen source archive. This post-run move and report declaration
 do not alter the experiment inputs or retained receipts.

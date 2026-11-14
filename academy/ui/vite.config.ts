@@ -1,6 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 
 const apiPort = process.env.ACADEMY_API_PORT ?? '8000';
 const proxy = {
@@ -16,6 +16,7 @@ const proxy = {
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
   server: {
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), "../../managym/academy/packs"] },
     proxy,
     warmup: {
       clientFiles: [

@@ -22,11 +22,11 @@ from typing import Any
 
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (

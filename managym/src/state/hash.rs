@@ -11,8 +11,8 @@ use crate::{
     state::{
         card::CardDefId,
         game_object::{
-            CardVec, Incarnation, ObjectId, ObjectLki, ObjectRef, PermanentId, PermanentVec,
-            PlayerId,
+            Incarnation, ObjectLki, ObjectRef, ObjectVec, PermanentId, PermanentVec, PlayerId,
+            PublicId,
         },
     },
 };
@@ -52,11 +52,13 @@ impl fmt::Display for MatchStateHash {
 
 #[derive(Serialize)]
 struct CanonicalCard {
-    /// Copied tokens can differ from their registered source definition.
-    copied_characteristics: Option<super::card::CardDefinition>,
+    /// A token's or spell copy's characteristics, which can differ from its
+    /// registered source definition. They carry `is_token: true`, which
+    /// encodes the object being no card rather than a row fact.
+    copied_characteristics: Option<super::card::ObjectDefinition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     copy: Option<super::effect::CopyEffect>,
-    object_id: ObjectId,
+    object_id: PublicId,
     definition_id: CardDefId,
     owner: PlayerId,
 }
@@ -68,7 +70,7 @@ struct CanonicalTurn {
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
-    spells_cast: [Vec<crate::state::game_object::CardId>; 2],
+    spells_cast: [Vec<crate::state::game_object::ObjectId>; 2],
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
@@ -105,7 +107,7 @@ impl From<&TurnState> for CanonicalTurn {
             ability_resolutions_this_turn: turn
                 .ability_resolutions_this_turn
                 .iter()
-                .map(|(&(card, ability), &count)| (card, ability, count))
+                .map(|(&(object, ability), &count)| (object, ability, count))
                 .collect(),
             extra_turns: turn.extra_turns.clone(),
             resume_with: turn.resume_with,
@@ -148,10 +150,12 @@ struct CanonicalMatchState<'a> {
     hash_contract_version: u32,
     content_schema_version: u32,
     content_digest: String,
-    cards: Vec<CanonicalCard>,
+    #[serde(rename = "cards")]
+    objects: Vec<CanonicalCard>,
     permanents: &'a PermanentVec<Option<crate::state::permanent::Permanent>>,
-    card_to_permanent: &'a CardVec<Option<PermanentId>>,
-    object_incarnations: &'a CardVec<Incarnation>,
+    #[serde(rename = "card_to_permanent")]
+    object_to_permanent: &'a ObjectVec<Option<PermanentId>>,
+    object_incarnations: &'a ObjectVec<Incarnation>,
     object_lki: Vec<(ObjectRef, ObjectLki)>,
     players: &'a [crate::state::player::Player; 2],
     zones: &'a crate::state::zone::ZoneManager,
@@ -186,9 +190,9 @@ impl<'a> CanonicalMatchState<'a> {
         // Keep this exhaustive: adding a mutable GameState field must break the
         // build until its canonical representation is deliberately chosen.
         let GameState {
-            cards,
+            objects,
             permanents,
-            card_to_permanent,
+            object_to_permanent,
             object_incarnations,
             object_lki,
             players,
@@ -213,14 +217,14 @@ impl<'a> CanonicalMatchState<'a> {
             id_gen,
         } = state;
 
-        let cards = cards
+        let objects = objects
             .iter()
-            .map(|card| CanonicalCard {
-                copied_characteristics: card.is_token.then(|| (**card).clone()),
-                copy: card.copy.clone(),
-                object_id: card.id,
-                definition_id: card.definition_id,
-                owner: card.owner,
+            .map(|object| CanonicalCard {
+                copied_characteristics: (!object.is_card()).then(|| content.object_row(object)),
+                copy: object.copy.clone(),
+                object_id: object.id,
+                definition_id: object.definition_id,
+                owner: object.owner,
             })
             .collect();
         let object_lki = object_lki
@@ -237,9 +241,9 @@ impl<'a> CanonicalMatchState<'a> {
             hash_contract_version: MATCH_STATE_HASH_VERSION,
             content_schema_version: content.schema_version,
             content_digest: content.content_digest(),
-            cards,
+            objects,
             permanents,
-            card_to_permanent,
+            object_to_permanent,
             object_incarnations,
             object_lki,
             players,

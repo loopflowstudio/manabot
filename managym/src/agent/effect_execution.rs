@@ -3,7 +3,7 @@
 //! One exhaustive walk over the suspended caller chain writes the policy
 //! occurrence: learning tokens carrying rules payloads and scalar progress, with
 //! object identities replaced by slots in an explicit visible-reference table
-//! that v8 relation rows join to the same objects legal actions use. The same
+//! that relation rows join to the same objects legal actions use. The same
 //! walk renders the complete text and plain-language summaries, but only when
 //! a decision context or capture asks for them: every policy observation runs
 //! it without strings. Neither raw game serialization nor storage IDs enter
@@ -13,22 +13,23 @@ use serde::Serialize;
 
 use crate::{
     agent::{
-        ability_description::effects_description,
+        ability_description::{effects_description, mana_description},
         continuation::{ContinuationFrame, VisibleReference},
     },
     cards::{content_pack::default_content_pack, tokens::TokenWriter},
     flow::{
-        decision::{Decision, EffectFrame, FrameCompletion, SelectionOrigin},
+        decision::{Decision, EffectFrame, FrameCompletion, SpendCompletion},
         event::GameEvent,
         game::{ActivationSource, Game, Payment},
         proposed_event::{
-            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenDefinition,
-            ZoneEntry,
+            EventBatch, EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
     },
     state::{
         ability::Effect,
-        game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+        card::CardDefId,
+        game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, Target},
+        mana::{Mana, ManaSpent},
     },
 };
 
@@ -47,6 +48,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "bind result",
     "caller frame",
     "captured activation",
+    "cascade exiled",
     "cast choices",
     "cast from exile",
     "cast from hand",
@@ -74,8 +76,10 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "damaged player",
     "discard from hand",
     "discards remaining",
+    "distinct name search",
     "effect execution",
     "end batch",
+    "entering card",
     "entering definition",
     "enters face down",
     "enters tapped",
@@ -104,7 +108,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
-    "land choices remaining",
     "last known characteristics",
     "last known definition",
     "legend group",
@@ -115,7 +118,11 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "linked exile",
     "linked return",
     "linked source",
+    "mana spent",
+    "spending option",
+    "cost sacrifice",
     "maximum total power",
+    "may copy",
     "mode",
     "moved",
     "moving object",
@@ -149,8 +156,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "sacrificing player",
     "saved decision",
     "selected",
+    "selected distinct names",
     "selected for graveyard",
-    "selected lands",
     "selected so far",
     "selection",
     "selection domain",
@@ -285,8 +292,8 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn card(&mut self, name: &str, card: CardId) {
-        self.reference(name, self.game.card_reference(card, self.viewer));
+    fn object_id(&mut self, name: &str, object_id: impl Into<ObjectId>) {
+        self.reference(name, self.game.object_reference(object_id, self.viewer));
     }
 
     fn target(&mut self, name: &str, target: Target) {
@@ -314,24 +321,24 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn cards(&mut self, name: &str, cards: &[CardId]) {
-        if cards.is_empty() {
+    fn object_ids(&mut self, name: &str, object_ids: &[ObjectId]) {
+        if object_ids.is_empty() {
             return;
         }
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
                 "{name}: {}.",
-                cards
+                object_ids
                     .iter()
-                    .map(|card| Self::label(game.card_reference(*card, viewer)))
+                    .map(|object_id| Self::label(game.object_reference(*object_id, viewer)))
                     .collect::<Vec<_>>()
                     .join(", ")
             )
         });
-        self.field(name, &cards.len());
-        for card in cards {
-            self.card(name, *card);
+        self.field(name, &object_ids.len());
+        for object_id in object_ids {
+            self.object_id(name, *object_id);
         }
     }
 
@@ -410,52 +417,28 @@ impl<'a> Projection<'a> {
                     _ => unreachable!("only operation completion events are retained"),
                 }
             }
-            FrameCompletion::Spell { card, attach_to } => {
+            FrameCompletion::Spell {
+                object: object_id,
+                attach_to,
+            } => {
                 self.field("return", &"finish spell");
-                self.card("spell", *card);
+                self.object_id("spell", *object_id);
                 if let Some(object) = attach_to {
                     self.object("attach to", *object);
                 }
             }
-            FrameCompletion::Paid { player, payment } => {
+            FrameCompletion::Paid {
+                player,
+                payment,
+                spent,
+            } => {
                 self.paid_summary();
+                if !spent.is_empty() {
+                    self.receipt(spent);
+                }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
-                match payment {
-                    Payment::Spell {
-                        card,
-                        cast,
-                        mode,
-                        targets,
-                        target_req_indices,
-                    } => {
-                        self.card("paid spell", *card);
-                        self.field("cast choices", cast);
-                        self.field("mode", mode);
-                        self.field("target clauses", target_req_indices);
-                        for target in targets {
-                            self.target("target", *target);
-                        }
-                    }
-                    Payment::Activation {
-                        source,
-                        ability_index,
-                        targets,
-                        x,
-                    } => {
-                        match source {
-                            ActivationSource::Permanent(id) => {
-                                self.target("paid source", Target::Permanent(*id))
-                            }
-                            ActivationSource::Card(card) => self.card("paid source", *card),
-                        }
-                        self.field("ability", ability_index);
-                        self.field("X", x);
-                        for target in targets {
-                            self.target("target", *target);
-                        }
-                    }
-                }
+                self.payment(payment);
             }
             FrameCompletion::Activated {
                 ability,
@@ -480,11 +463,67 @@ impl<'a> Projection<'a> {
                     self.object("grantor", grant.grantor);
                     self.field("grant index", &grant.index);
                 }
-                if let Some(card) = source_after_cost {
-                    self.card("source after cost", *card);
+                if let Some(object_id) = source_after_cost {
+                    self.object_id("source after cost", *object_id);
                 }
             }
         }
+    }
+
+    fn payment(&mut self, payment: &Payment) {
+        match payment {
+            Payment::Spell {
+                object,
+                cast,
+                mode,
+                targets,
+                target_req_indices,
+            } => {
+                self.object_id("paid spell", *object);
+                self.field("cast choices", cast);
+                self.field("mode", mode);
+                self.field("target clauses", target_req_indices);
+                for target in targets {
+                    self.target("target", *target);
+                }
+            }
+            Payment::Activation {
+                source,
+                ability_index,
+                targets,
+                x,
+            } => {
+                match source {
+                    ActivationSource::Permanent(id) => {
+                        self.target("paid source", Target::Permanent(*id))
+                    }
+                    ActivationSource::Card(card) => self.object_id("paid source", *card),
+                }
+                self.field("ability", ability_index);
+                self.field("X", x);
+                for target in targets {
+                    self.target("target", *target);
+                }
+            }
+        }
+    }
+
+    /// The mana actually spent to cast (CR 601.2h) and the entry counters
+    /// its spend effects add.
+    fn receipt(&mut self, spent: &ManaSpent) {
+        self.field("mana spent", spent);
+        self.summary(|| {
+            let mana = mana_description(&Mana {
+                mana: spent.amounts,
+                ..Default::default()
+            });
+            match spent.entry_counters {
+                0 => format!("Mana spent to cast: {mana}."),
+                counters => format!(
+                    "Mana spent to cast: {mana}; it enters with {counters} additional +1/+1 counter(s)."
+                ),
+            }
+        });
     }
 
     fn paid_summary(&mut self) {
@@ -505,16 +544,17 @@ impl<'a> Projection<'a> {
         // While the exact object still has this view, its ordinary object row
         // and catalog already carry the snapshot. After departure or a changed
         // view, retain the non-identity facts explicitly.
-        if self.game.snapshot_current_permanent(lki.card).as_ref() == Some(lki) {
+        if self.game.snapshot_current_permanent(lki.object).as_ref() == Some(lki) {
             self.field("snapshot", &"current characteristics");
             return;
         }
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
-                "Last known {}: power {}; counters {:?}.",
+                "Last known {}: power {}, toughness {}; counters {:?}.",
                 Self::label(game.visible_reference(lki.object_ref, viewer)),
                 lki.power,
+                lki.toughness,
                 lki.counters
             )
         });
@@ -529,9 +569,10 @@ impl<'a> Projection<'a> {
             abilities_lost,
             dealt_damage_this_turn,
             power,
+            toughness,
             counters,
             object_ref: _,
-            card: _,
+            object: _,
             from_zone,
             owner,
             controller,
@@ -555,6 +596,7 @@ impl<'a> Projection<'a> {
                     abilities_lost,
                     dealt_damage_this_turn,
                     power,
+                    toughness,
                     counter_values,
                     from_zone,
                     owner,
@@ -649,7 +691,7 @@ impl<'a> Projection<'a> {
                     });
                 }
                 ProposedEvent::ZoneMove {
-                    card,
+                    object_id,
                     object,
                     from,
                     to,
@@ -661,7 +703,9 @@ impl<'a> Projection<'a> {
                         self.reference(
                             "entering definition",
                             VisibleReference {
-                                definition: Some(self.game.state.cards[*card].definition_id.0),
+                                definition: Some(
+                                    self.game.state.objects[*object_id].definition_id.0,
+                                ),
                                 ..Default::default()
                             },
                         );
@@ -684,19 +728,19 @@ impl<'a> Projection<'a> {
                     self.field("create tokens", &(controller, count));
                     self.entry(entry);
                     match definition.as_ref() {
-                        TokenDefinition::Registered(name) => {
+                        TokenSource::Registered(key) => {
+                            let content = default_content_pack();
                             self.reference(
                                 "token definition",
                                 VisibleReference {
-                                    definition: default_content_pack()
-                                        .definition_id(name)
-                                        .map(|id| id.0),
+                                    definition: content.token_id(key).map(|id| id.0),
                                     ..Default::default()
                                 },
                             );
+                            let name = content.token_name(key);
                             self.summary(|| format!("Pending: create {count} {name} tokens."));
                         }
-                        TokenDefinition::Copy {
+                        TokenSource::Copy {
                             definition_id,
                             definition,
                             front,
@@ -736,8 +780,8 @@ impl<'a> Projection<'a> {
                     unreachable!("normalized batch")
                 }
             }
-            if let Some((card, controller)) = pending.sacrifice {
-                self.card("sacrificed object", card);
+            if let Some((object_id, controller)) = pending.sacrifice {
+                self.object_id("sacrificed object", object_id);
                 self.field("sacrificing player", &controller);
             }
             // One ordered rules record per identity, reusing visible source
@@ -774,6 +818,45 @@ impl<'a> Projection<'a> {
         }
         self.field("end batch", &true);
     }
+}
+
+/// Whether a rule still reads `spent`, the mana spent to cast the spell that
+/// is, or became the source of, the object defined by `definition`: its
+/// definition counts that mana (Toph, converge), or a spend effect applied
+/// (Animal Attendant's counter). Other receipts are not projected.
+pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) -> bool {
+    static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
+    if spent.is_empty() {
+        return false;
+    }
+    if spent.entry_counters > 0 {
+        return true;
+    }
+    let reads = READS.get_or_init(|| {
+        // The catalog iterates definitions in CardDefId order.
+        default_content_pack()
+            .definitions()
+            .map(|definition| {
+                let json = serde_json::to_string(definition).expect("serializable definition");
+                json.contains("ManaSpentToCast") || json.contains("ColorsSpentToCast")
+            })
+            .collect()
+    });
+    definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
+}
+
+/// Project the cast receipt of a stack spell, or of the stack ability an
+/// entering permanent's own trigger became.
+pub(crate) fn project_receipt(
+    game: &Game,
+    spent: &ManaSpent,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    let mut out = Projection::new(game, viewer, text);
+    out.receipt(spent);
+    out.finish(frame);
 }
 
 /// Project a suspended effect frame's retained work. `text` additionally
@@ -821,6 +904,12 @@ pub(crate) fn project_frame(
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);
     }
+    let source_definition = effect
+        .source
+        .map(|object| game.state.objects[object].definition_id);
+    if receipt_matters(&effect.spent, source_definition) {
+        out.receipt(&effect.spent);
+    }
     if let Some(player) = effect.triggering_player {
         out.field("triggering player", &player);
     }
@@ -846,36 +935,7 @@ pub(crate) fn project_frame(
     if let Some(batch) = &effect.batch {
         out.batch(batch);
     }
-    // Ordinary catalog execution keeps its frozen projection: v1-v7 never
-    // encoded earlier instructions' results (selected, moved, created), so a
-    // later choice in the same program stays admissible. These retained domains
-    // have no predecessor representation and must be admitted explicitly.
-    frame.effect_execution_requires_v8 = effect.batch.is_some()
-        || effect.iteration.is_some()
-        || completion_requires_v8(game, &effect.completion);
     out.finish(frame);
-}
-
-fn completion_requires_v8(game: &Game, completion: &FrameCompletion) -> bool {
-    match completion {
-        FrameCompletion::Paid { .. }
-        | FrameCompletion::Activated { .. }
-        | FrameCompletion::StateBased { .. }
-        | FrameCompletion::CombatNormal => true,
-        FrameCompletion::Event { event, .. } => {
-            // The frozen obligation already names these operation completions.
-            // A different saved event under the same current offers (e.g. a
-            // nested modal choice) is not implied and needs the v8 payload.
-            let decision = game.state.suspended_decision.as_ref().map(|s| &s.decision);
-            !matches!((event, decision),
-                (GameEvent::Scried { player }, Some(Decision::Scry { player: chooser, .. }))
-                | (GameEvent::Surveilled { player }, Some(Decision::Surveil { player: chooser, .. }))
-                | (GameEvent::LibrarySearched { player }, Some(Decision::SelectCards {
-                    player: chooser, origin: SelectionOrigin::Library, ..
-                })) if player == chooser)
-        }
-        _ => false,
-    }
 }
 
 /// Project a suspended decision's retained progress; see [`project_frame`].
@@ -888,6 +948,50 @@ pub(crate) fn project_decision(
 ) {
     let mut out = Projection::new(game, viewer, text);
     match decision {
+        Decision::ManaSpend {
+            player,
+            cost,
+            spent,
+            completion,
+        } => {
+            out.field("mana spent", spent);
+            out.summary(|| {
+                format!(
+                    "Mana already spent in this payment: {}.",
+                    mana_description(&crate::state::mana::Mana {
+                        mana: spent.amounts,
+                        ..Default::default()
+                    })
+                )
+            });
+            for (mode, choice) in game.mana_spend_choices(*player, cost).iter().enumerate() {
+                out.field("mode", &mode);
+                out.field("spending option", &choice.unit);
+            }
+            match completion.as_ref() {
+                SpendCompletion::Announced {
+                    payment, sacrifice, ..
+                } => {
+                    out.payment(payment);
+                    if let Some(permanent) = sacrifice {
+                        out.target(
+                            "cost sacrifice",
+                            crate::state::game_object::Target::Permanent(*permanent),
+                        );
+                    }
+                }
+                SpendCompletion::Resolution(payment) => {
+                    out.effects("if paid", &payment.if_paid);
+                    out.objects("waterbend contributions", &payment.waterbend_paid);
+                    if let Some(key) = payment.spends {
+                        out.object("once each turn source", key.0);
+                        out.field("once each turn ability", &key.1);
+                    }
+                }
+                SpendCompletion::Foretell(card) => out.object_id("cast from hand", *card),
+                SpendCompletion::Upfront(_) => {}
+            }
+        }
         Decision::SelectCards {
             selected,
             min,
@@ -906,9 +1010,6 @@ pub(crate) fn project_decision(
             });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
-            // A migrated domain keeps its frozen obligation code across picks:
-            // its predecessor never encoded the picks already made either.
-            frame.effect_execution_requires_v8 = frame.legacy_decision.is_none();
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {
@@ -917,7 +1018,6 @@ pub(crate) fn project_decision(
                 out.field("replacement", &candidate.effect);
                 out.note(|| candidate.description());
             }
-            frame.effect_execution_requires_v8 = true;
         }
         Decision::Scry {
             looked,
@@ -926,21 +1026,24 @@ pub(crate) fn project_decision(
             bottom,
             ..
         } => {
-            out.cards("inspected", looked);
-            out.cards("remaining", remaining);
-            out.cards("kept on top", top);
-            out.cards("placed on bottom", bottom);
+            out.object_ids("inspected", looked);
+            out.object_ids("remaining", remaining);
+            out.object_ids("kept on top", top);
+            out.object_ids("placed on bottom", bottom);
         }
         Decision::Surveil {
             looked, graveyard, ..
         } => {
-            out.cards("inspected", looked);
-            out.cards("selected for graveyard", graveyard);
+            out.object_ids("inspected", looked);
+            out.object_ids("selected for graveyard", graveyard);
         }
         Decision::OrderLibrary {
-            cards, next, end, ..
+            object_ids,
+            next,
+            end,
+            ..
         } => {
-            out.cards("library order", cards);
+            out.object_ids("library order", object_ids);
             out.field("ordered prefix", next);
             out.field("library end", end);
         }
@@ -955,7 +1058,7 @@ pub(crate) fn project_decision(
             max_select,
             ..
         } => {
-            out.cards("inspected", looked);
+            out.object_ids("inspected", looked);
             out.field("selection", &(predicate, selected, min_select, max_select));
             out.field("placement", &(random_order, reveal, to_battlefield));
         }
@@ -995,14 +1098,15 @@ pub(crate) fn project_decision(
             remaining,
             ..
         } => out.field("named search", &(owner, name, remaining)),
-        Decision::SearchDistinctLands {
+        Decision::SearchDistinctNames {
+            predicate,
             remaining,
             selected,
-            opponent_picks,
+            end,
             ..
         } => {
-            out.cards("selected lands", selected);
-            out.field("land choices remaining", &(remaining, opponent_picks));
+            out.object_ids("selected distinct names", selected);
+            out.field("distinct name search", &(predicate, remaining, end));
         }
         Decision::OpponentSplitsRevealed {
             owner,
@@ -1010,7 +1114,7 @@ pub(crate) fn project_decision(
             remaining,
             ..
         } => {
-            out.cards("revealed lands", revealed);
+            out.object_ids("revealed lands", revealed);
             out.field("graveyard choices remaining", &(owner, remaining));
         }
         Decision::DiscardFromRevealedHand {
@@ -1046,9 +1150,19 @@ pub(crate) fn project_decision(
         }
         Decision::LegendRule { groups, keep, .. } => {
             for group in groups {
-                out.cards("legend group", group);
+                out.object_ids("legend group", group);
             }
-            out.cards("legends kept", keep);
+            out.object_ids("legends kept", keep);
+        }
+        Decision::EnterAsCopy {
+            object_id,
+            candidates,
+            ..
+        } => {
+            out.object_id("entering card", *object_id);
+            for id in candidates {
+                out.target("may copy", Target::Permanent(*id));
+            }
         }
         Decision::Retarget {
             object,
@@ -1087,8 +1201,21 @@ pub(crate) fn project_decision(
             out.field("pay casting costs", paid);
             match offer {
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
-                ResolutionCastOffer::Exiled { card } => out.card("cast from exile", *card),
-                ResolutionCastOffer::LibraryTop { card } => out.card("cast from library", *card),
+                ResolutionCastOffer::Exiled { object: object_id } => {
+                    out.object_id("cast from exile", *object_id)
+                }
+                ResolutionCastOffer::Cascade {
+                    object: object_id,
+                    exiled,
+                } => {
+                    out.object_id("cast from exile", *object_id);
+                    for exiled in exiled {
+                        out.object_id("cascade exiled", *exiled);
+                    }
+                }
+                ResolutionCastOffer::LibraryTop { object: object_id } => {
+                    out.object_id("cast from library", *object_id)
+                }
                 ResolutionCastOffer::ExiledWith { source, predicate } => {
                     out.object("exiled with", *source);
                     out.field("cast predicate", predicate);

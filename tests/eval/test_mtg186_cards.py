@@ -12,14 +12,14 @@ import torch
 
 from experiments import mtg186_cards as cards
 from experiments.mtg186_eval import GW, UR, Checkpoint, Pairing, Player
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval.card_metrics import CARD_ROLLUPS
 from manabot.eval.card_query import CardSelection, card_data, card_db
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 
 
 def _checkpoint(path: Path, seed: int, trial: str) -> Player:

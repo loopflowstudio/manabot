@@ -178,10 +178,10 @@ def play_group(
     """Run the frozen deck/seat group, optionally on a caller-owned allocation."""
     import torch
 
+    from manabot.backends.torch.checkpoint import load_checkpoint
     from manabot.eval.models import EvaluationKey
     from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
-    from manabot.model.checkpoint import load_checkpoint
     from manabot.sim.heuristic import heuristic_source_paths
     from manabot.sim.matchup import AuthoredMatchup
     from manabot.sim.registration import PlayerRegistration

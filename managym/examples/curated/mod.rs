@@ -4,8 +4,8 @@
 use managym::state::player::PlayerConfig;
 use std::collections::BTreeMap;
 
-fn deck(cards: &[(&str, usize)]) -> BTreeMap<String, usize> {
-    cards
+fn deck(objects: &[(&str, usize)]) -> BTreeMap<String, usize> {
+    objects
         .iter()
         .map(|&(name, n)| (name.to_string(), n))
         .collect()

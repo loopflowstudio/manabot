@@ -84,7 +84,7 @@ The finite capacities are allocations, not bounds on reachable game states.
 Larger capacities, grouping and variable-length inputs remain exploratory.
 
 The [corpus](data/mtg213/corpus-v1/corpus.json) and
-[original protocol](protocols/tla-trophy-213-v1.md) retain the first 1,000 observed
+[original protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/tla-trophy-213-v1.md) retain the first 1,000 observed
 seven-win events from the permitted public TLA PremierDraft dump: 134 eligible
 whole lists and 866 rejected, including main decks and sideboards. No card or
 event was substituted. Missing source losses remain unknown. Each seat draws

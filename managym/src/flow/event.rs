@@ -4,7 +4,7 @@ use crate::{
     flow::turn::StepKind,
     state::{
         card::CardDefId,
-        game_object::{CardId, Incarnation, ObjectId, PermanentId, PlayerId, Target},
+        game_object::{Incarnation, ObjectId, PermanentId, PlayerId, PublicId, Target},
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -16,7 +16,7 @@ use crate::{
 /// experience adapter decides which typed `PresentationEvent` to project.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectEventRef {
-    pub entity: ObjectId,
+    pub entity: PublicId,
     pub incarnation: Incarnation,
 }
 
@@ -28,7 +28,7 @@ pub enum EventSubject {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EventEntity {
-    Card(CardId),
+    Card(ObjectId),
     Permanent(PermanentId),
     Player(PlayerId),
 }
@@ -36,7 +36,8 @@ pub enum EventEntity {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum GameEvent {
     PermanentSacrificed {
-        card: CardId,
+        #[serde(rename = "card")]
+        object_id: ObjectId,
         controller: PlayerId,
     },
     /// Public definition reveal; outside/hidden copies have no public object identity.
@@ -45,7 +46,8 @@ pub enum GameEvent {
         definition: CardDefId,
     },
     CardMoved {
-        card: CardId,
+        #[serde(rename = "card")]
+        object_id: ObjectId,
         from: Option<ZoneType>,
         to: ZoneType,
         controller: PlayerId,
@@ -54,7 +56,7 @@ pub enum GameEvent {
         face_down: bool,
     },
     DamageDealt {
-        source: Option<CardId>,
+        source: Option<ObjectId>,
         target: DamageTarget,
         amount: u32,
     },
@@ -64,31 +66,36 @@ pub enum GameEvent {
         new: i32,
     },
     SpellCast {
-        card: CardId,
+        #[serde(rename = "card")]
+        object_id: ObjectId,
         targets: Vec<Target>,
     },
     SpellResolved {
-        card: CardId,
+        #[serde(rename = "card")]
+        object_id: ObjectId,
     },
     SpellCountered {
-        card: CardId,
-        by: Option<CardId>,
+        #[serde(rename = "card")]
+        object_id: ObjectId,
+        by: Option<ObjectId>,
     },
     /// An activated or triggered ability was countered (CR 701.6b): its
     /// stack id, the card it came from, its controller and the countering
     /// source.
     AbilityCountered {
-        ability: ObjectId,
-        source_card: CardId,
+        ability: PublicId,
+        #[serde(rename = "source_card")]
+        source_object: ObjectId,
         controller: PlayerId,
-        by: Option<CardId>,
+        by: Option<ObjectId>,
     },
     /// A triggered ability was put on the stack as `ability`; `attacker` is
     /// the attacking creature whose attack triggered its own ability.
     AbilityTriggered {
-        source_card: CardId,
+        #[serde(rename = "source_card")]
+        source_object: ObjectId,
         controller: PlayerId,
-        ability: ObjectId,
+        ability: PublicId,
         #[serde(skip_serializing_if = "Option::is_none")]
         attacker: Option<PermanentId>,
     },

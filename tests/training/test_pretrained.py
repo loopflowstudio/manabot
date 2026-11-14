@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.model.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import PretrainedPolicy, TrainingRegime, TrainSelfPlay

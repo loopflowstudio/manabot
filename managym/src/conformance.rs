@@ -1032,8 +1032,8 @@ pub fn verify_properties(spec: &CaseSpec) -> Result<(), String> {
 
 fn rename_compatibility_cards(pair: &mut ConformancePair) {
     for game in [&mut pair.reference, &mut pair.optimized] {
-        for (index, card) in game.state.cards.iter_mut().enumerate() {
-            card.name = format!("compatibility-name-{index}");
+        for (index, object) in game.state.objects.iter_mut().enumerate() {
+            object.name = format!("compatibility-name-{index}");
         }
     }
 }

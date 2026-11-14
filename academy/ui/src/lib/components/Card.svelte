@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { getContext } from 'svelte';
+  import { PRESENTATION_CONTEXT, presentationSubjects, type PresentationEvent } from '$lib/presentation';
   import CardImage from './CardImage.svelte';
 
   // A printed plate and the things a print shop does to it: turned and
@@ -6,6 +8,7 @@
   // for the printer (targeted), reproduced as an etching (spent), counted
   // in brass (+1/+1), annotated in the margin (other effect-derived state).
   interface Props {
+    objectId?: number;
     name: string;
     copyDescription?: string;
     power?: number | null;
@@ -26,6 +29,7 @@
   }
 
   let {
+    objectId = undefined,
     name,
     copyDescription = '',
     power = null,
@@ -44,6 +48,12 @@
     onHoverStart = undefined,
     onHoverEnd = undefined,
   }: Props = $props();
+
+  const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
+  const narrated = $derived.by(() => {
+    const event = narratedEvent?.();
+    return event && presentationSubjects(event).some(subject => subject.kind === 'object' && subject.id.incarnation === 0 && subject.id.entity === objectId) ? event.seq : undefined;
+  });
 
   // Tapped cards are landscape: the footprint turns with the card, so
   // rows never shingle and names never read sideways.
@@ -77,6 +87,8 @@
 </script>
 
 <button
+  data-object-id={objectId}
+  data-narrated-seq={narrated}
   type="button"
   aria-label={accessibleName}
   aria-disabled={!clickable}
@@ -170,6 +182,7 @@
 </button>
 
 <style>
+  [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
   .spent {
     outline: 1px dashed var(--border);
   }

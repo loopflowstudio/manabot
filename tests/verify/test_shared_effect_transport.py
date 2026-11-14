@@ -9,6 +9,7 @@ import pytest
 
 from manabot.env.failures import GameInputs
 from manabot.env.observation import ObservationEncoder
+from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.representation import (
@@ -54,8 +55,7 @@ def test_retained_drill_prefix_admits_shared_effects(
     ]
     scalar = managym.Env(seed=game.seed, skip_trivial=receipt.skip_trivial)
     scalar.reset(players)
-    config = ObservationConfig(policy_input_version=7)
-    encoder = ObservationEncoder(config)
+    encoder = ObservationEncoder(ObservationConfig())
     buffers = encoder.allocate(1)
     buffers.update(
         rewards=np.zeros(1, dtype=np.float64),
@@ -98,7 +98,7 @@ def test_retained_drill_prefix_admits_shared_effects(
         if closed:
             assert not obs.opponent.main_counts
             assert not reference["decklists"][1].any()
-        native = scalar.encode_observation(obs, 7)
+        native = scalar.encode_observation(obs)
         into = encoder.allocate()
         scalar.encode_observation_into(obs, into)
         for key in reference:
@@ -111,17 +111,11 @@ def test_retained_drill_prefix_admits_shared_effects(
         assert np.count_nonzero(native["effects"][:, -1]) == receipt.payloads
         assert np.count_nonzero(native["effect_members"][:, 0]) == receipt.memberships
         assert not (native["facts"][:, 1] == 6).any()
-        with pytest.raises(ValueError, match=f"facts {fragments} >"):
-            scalar.encode_observation(
-                obs,
-                5 if fragments == 140 else 6,
-                **({} if fragments == 140 else {"max_facts": 256}),
-            )
 
 
 def test_source_dependent_shared_transport_has_exact_public_join() -> None:
     env = source_effect_root()
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=7))
+    encoder = ObservationEncoder(ObservationConfig())
     for viewer in (0, 1):
         obs = env.observation_for_player(viewer)
         assert obs.shared_effects is not None
@@ -132,7 +126,7 @@ def test_source_dependent_shared_transport_has_exact_public_join() -> None:
         )
         assert record.source is not None and record.source.incarnation is not None
         expected = encoder.encode(obs)
-        actual = env.encode_observation(obs, 7)
+        actual = env.encode_observation(obs)
         for key in expected:
             np.testing.assert_array_equal(expected[key], actual[key], err_msg=key)
         row = actual["effects"][actual["effects"][:, -1] == 1][0]
@@ -148,12 +142,12 @@ def _history(env: managym.Env, viewer: int) -> np.ndarray:
 
 
 def _effect_durations(env: managym.Env, viewer: int) -> set[float]:
-    headers = env.encode_observation(env.observation_for_player(viewer), 7)["effects"]
+    headers = env.encode_observation(env.observation_for_player(viewer))["effects"]
     return set(headers[headers[:, -1] == 1, 8].tolist())
 
 
 def test_effect_older_than_history_window_survives_only_in_current_state() -> None:
-    """History cannot say which grant cleanup will end; v7 headers can.
+    """History cannot say which grant cleanup will end; effect headers can.
 
     The roots differ in payload and target as well as duration, so this shows
     only that the window cannot separate them. Equal effective state with
@@ -186,22 +180,17 @@ def test_historical_projection_cannot_invent_shared_provenance() -> None:
     payload.pop("shared_effects")
     old = managym.Observation.from_json(json.dumps(payload))
     for encode in (
-        lambda: env.encode_observation(old, 7),
-        lambda: ObservationEncoder(ObservationConfig(policy_input_version=7)).encode(
-            old
-        ),
+        lambda: env.encode_observation(old),
+        lambda: ObservationEncoder(ObservationConfig()).encode(old),
     ):
         with pytest.raises(ValueError, match="provenance"):
             encode()
     assert "shared_effects" not in json.loads(old.toJSON())
 
 
-@pytest.mark.parametrize(
-    "field,limit", (("effects", 128), ("effect_details", 512), ("effect_members", 2048))
-)
-def test_shared_transport_rejects_each_capacity_without_truncation(
-    field: str, limit: int
-) -> None:
+@pytest.mark.parametrize("field", ("effects", "effect_details", "effect_members"))
+def test_shared_transport_rejects_each_capacity_without_truncation(field: str) -> None:
+    limit = SHARED_EFFECT_SHAPES[field][0]
     env = source_effect_root()
     payload = json.loads(env.observation_for_player(0).toJSON())
     record = payload["shared_effects"][0]
@@ -213,10 +202,8 @@ def test_shared_transport_rejects_each_capacity_without_truncation(
         record["members"] = [record["members"][0]] * (limit + 1)
     obs = managym.Observation.from_json(json.dumps(payload))
     for encode in (
-        lambda: env.encode_observation(obs, 7),
-        lambda: ObservationEncoder(ObservationConfig(policy_input_version=7)).encode(
-            obs
-        ),
+        lambda: env.encode_observation(obs),
+        lambda: ObservationEncoder(ObservationConfig()).encode(obs),
     ):
         with pytest.raises(ValueError, match=field):
             encode()
@@ -236,10 +223,8 @@ def test_shared_payload_preserves_absence_zero_duration_and_every_detail() -> No
         color="Red",
     )
     obs = managym.Observation.from_json(json.dumps(payload))
-    native = env.encode_observation(obs, 7)
-    reference = ObservationEncoder(ObservationConfig(policy_input_version=7)).encode(
-        obs
-    )
+    native = env.encode_observation(obs)
+    reference = ObservationEncoder(ObservationConfig()).encode(obs)
     for key in reference:
         np.testing.assert_array_equal(reference[key], native[key], err_msg=key)
     np.testing.assert_array_equal(native["effects"][0, 5:9], [0, 1, 1, 3])
@@ -264,28 +249,11 @@ def test_shared_capture_and_text_ignore_hidden_hand_permutations() -> None:
         assert decision.text == original.text
         assert decision.capture_json == original.capture_json
         for key, expected in env.encode_observation(
-            env.observation_for_player(viewer), 7
+            env.observation_for_player(viewer)
         ).items():
             np.testing.assert_array_equal(
                 expected,
-                branch.encode_observation(branch.observation_for_player(viewer), 7)[
-                    key
-                ],
+                branch.encode_observation(branch.observation_for_player(viewer))[key],
                 err_msg=key,
             )
     assert changed > 0
-
-
-@pytest.mark.parametrize("version", range(1, 7))
-def test_frozen_inputs_ignore_shared_projection(version: int) -> None:
-    env = source_effect_root()
-    obs = env.observation_for_player(0)
-    payload = json.loads(obs.toJSON())
-    payload.pop("shared_effects")
-    historical = managym.Observation.from_json(json.dumps(payload))
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
-    for key, expected in encoder.encode(historical).items():
-        np.testing.assert_array_equal(expected, encoder.encode(obs)[key], err_msg=key)
-        np.testing.assert_array_equal(
-            expected, env.encode_observation(obs, version)[key], err_msg=key
-        )

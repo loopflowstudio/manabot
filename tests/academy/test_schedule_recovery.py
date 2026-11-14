@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from managym.experience import ExperienceFrame, InteractionOffer
-from managym.experience_projection import decision_surface_view
 import pytest
 
-from academy import server, trace as trace_store
+from managym.academy import server, trace as trace_store
+from managym.experience import ExperienceFrame, InteractionOffer
+from managym.experience_projection import decision_surface_view
 
 
 def _command(

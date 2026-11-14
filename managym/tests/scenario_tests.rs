@@ -14,7 +14,7 @@ use managym::{
     },
     flow::event::GameEvent,
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         player::PlayerConfig,
         zone::ZoneType,
     },
@@ -56,7 +56,7 @@ fn observation_preserves_committed_card_move_zones() {
     let observation = Observation::new(
         &game,
         &[GameEvent::CardMoved {
-            card: CardId(0),
+            object_id: ObjectId(0),
             from: Some(ZoneType::Battlefield),
             to: ZoneType::Graveyard,
             controller: PlayerId(1),
@@ -254,13 +254,13 @@ fn clear_hand_moves_cards_to_library_bottom() {
     let library_before: Vec<_> = game
         .state
         .zones
-        .zone_cards(ZoneType::Library, PlayerId(0))
+        .zone_objects(ZoneType::Library, PlayerId(0))
         .to_vec();
     let top_before = *library_before.last().expect("library nonempty");
     let hand: Vec<_> = game
         .state
         .zones
-        .zone_cards(ZoneType::Hand, PlayerId(0))
+        .zone_objects(ZoneType::Hand, PlayerId(0))
         .to_vec();
     assert!(!hand.is_empty(), "opening hand should be nonempty");
 
@@ -269,7 +269,7 @@ fn clear_hand_moves_cards_to_library_bottom() {
     let library_after: Vec<_> = game
         .state
         .zones
-        .zone_cards(ZoneType::Library, PlayerId(0))
+        .zone_objects(ZoneType::Library, PlayerId(0))
         .to_vec();
     assert_eq!(
         library_after.len(),
@@ -284,7 +284,7 @@ fn clear_hand_moves_cards_to_library_bottom() {
     assert!(game
         .state
         .zones
-        .zone_cards(ZoneType::Hand, PlayerId(0))
+        .zone_objects(ZoneType::Hand, PlayerId(0))
         .is_empty());
 }
 

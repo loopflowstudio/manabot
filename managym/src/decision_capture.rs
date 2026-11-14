@@ -66,34 +66,34 @@ impl Game {
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
         for visible in agent.agent_cards.iter().chain(&agent.opponent_cards) {
-            let (index, card) = self
+            let (index, object) = self
                 .state
-                .cards
+                .objects
                 .iter()
                 .enumerate()
-                .find(|(_, card)| card.id.0 as i32 == visible.id)
+                .find(|(_, object)| object.id.0 as i32 == visible.id)
                 .ok_or(SemanticError::ViewerSafetyViolation)?;
             let reference = self
-                .current_object_ref(crate::state::game_object::CardId(index))
+                .current_object_ref(crate::state::game_object::ObjectId(index))
                 .ok_or(SemanticError::ViewerSafetyViolation)?;
             let permanent = self
                 .state
-                .card_to_permanent
+                .object_to_permanent
                 .get(index)
                 .and_then(|id| *id)
                 .and_then(|id| self.state.permanents[id].as_ref())
                 .map(|permanent| permanent.id.0);
             objects.insert(
-                card.id.0 as i32,
+                object.id.0 as i32,
                 json!({"permanent_id": permanent, "incarnation": reference.incarnation.0}),
             );
         }
         let mut ids = BTreeSet::new();
-        for card in agent.agent_cards.iter().chain(&agent.opponent_cards) {
-            ids.insert(card.registry_key as u32);
+        for object in agent.agent_cards.iter().chain(&agent.opponent_cards) {
+            ids.insert(object.registry_key as u32);
         }
-        for card in &agent.agent_sideboard {
-            ids.insert(card.registry_key as u32);
+        for object in &agent.agent_sideboard {
+            ids.insert(object.registry_key as u32);
         }
         for stack in &agent.stack_objects {
             ids.insert(stack.source_card_registry_key as u32);
@@ -129,7 +129,7 @@ impl Game {
                             .agent_cards
                             .iter()
                             .chain(&agent.opponent_cards)
-                            .any(|card| card.id == *id)
+                            .any(|object| object.id == *id)
                     });
                     json!({"kind": "card", "definition": definition, "owner": owner.0,
                         "zone": zone.map(|zone| zone as i32), "context_id": visible})

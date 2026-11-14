@@ -6,22 +6,23 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{event::ObjectEventRef, game::Game},
     state::{
-        card::CardDefinition,
+        card::ObjectDefinition,
         game_object::{
-            CardId, EntityId, ObjectLki, ObjectLookupError, ObjectRef, PermanentId, PlayerId,
+            EntityId, ObjectId, ObjectLki, ObjectLookupError, ObjectRef, PermanentId, PlayerId,
         },
         zone::ZoneType,
     },
 };
 
 impl Game {
-    /// Exact identity of the object currently represented by `card` in a
-    /// zone. Cards removed from all zones have no current rules object.
-    pub fn current_object_ref(&self, card: CardId) -> Option<ObjectRef> {
-        self.state.zones.zone_of(card)?;
-        let incarnation = *self.state.object_incarnations.get(card.0)?;
+    /// Exact identity of `object` in its current zone. An object removed
+    /// from every zone has no current rules identity.
+    pub fn current_object_ref(&self, object: impl Into<ObjectId>) -> Option<ObjectRef> {
+        let object: ObjectId = object.into();
+        self.state.zones.zone_of(object)?;
+        let incarnation = *self.state.object_incarnations.get(object.0)?;
         Some(ObjectRef {
-            entity: EntityId::from(card),
+            entity: EntityId::from(object),
             incarnation,
         })
     }
@@ -29,7 +30,7 @@ impl Game {
     /// Exact identity of a live battlefield permanent.
     pub fn permanent_object_ref(&self, permanent_id: PermanentId) -> Option<ObjectRef> {
         let permanent = self.state.permanents.get(permanent_id.0)?.as_ref()?;
-        let object_ref = self.current_object_ref(permanent.card)?;
+        let object_ref = self.current_object_ref(permanent.object)?;
         (self.lookup_current_permanent(object_ref) == Ok(permanent_id)).then_some(object_ref)
     }
 
@@ -39,20 +40,21 @@ impl Game {
         &self,
         object_ref: ObjectRef,
     ) -> Result<PermanentId, ObjectLookupError> {
-        let card = CardId::from(object_ref.entity);
-        let Some(current_incarnation) = self.state.object_incarnations.get(card.0).copied() else {
+        let object = ObjectId::from(object_ref.entity);
+        let Some(current_incarnation) = self.state.object_incarnations.get(object.0).copied()
+        else {
             return Err(ObjectLookupError::MissingEntity);
         };
         if current_incarnation != object_ref.incarnation {
             return Err(ObjectLookupError::StaleIncarnation);
         }
-        if self.state.zones.zone_of(card) != Some(ZoneType::Battlefield) {
+        if self.state.zones.zone_of(object) != Some(ZoneType::Battlefield) {
             return Err(ObjectLookupError::WrongZone);
         }
         let permanent_id = self
             .state
-            .card_to_permanent
-            .get(card.0)
+            .object_to_permanent
+            .get(object.0)
             .copied()
             .flatten()
             .ok_or(ObjectLookupError::WrongZone)?;
@@ -62,18 +64,22 @@ impl Game {
             .get(permanent_id.0)
             .and_then(Option::as_ref)
             .ok_or(ObjectLookupError::WrongZone)?;
-        if permanent.card != card {
+        if permanent.object != object {
             return Err(ObjectLookupError::WrongZone);
         }
         Ok(permanent_id)
     }
 
     /// Snapshot the current battlefield object for triggers and LKI.
-    pub(crate) fn snapshot_current_permanent(&self, card: CardId) -> Option<ObjectLki> {
-        let object_ref = self.current_object_ref(card)?;
+    pub(crate) fn snapshot_current_permanent(
+        &self,
+        object: impl Into<ObjectId>,
+    ) -> Option<ObjectLki> {
+        let object: ObjectId = object.into();
+        let object_ref = self.current_object_ref(object)?;
         let permanent_id = self.lookup_current_permanent(object_ref).ok()?;
         let permanent = self.state.permanents[permanent_id].as_ref()?;
-        let definition = &self.state.cards[card];
+        let definition = &self.state.objects[object];
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
             transforms: permanent.transforms,
@@ -95,9 +101,10 @@ impl Game {
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             power: characteristics.power,
+            toughness: characteristics.toughness,
             counters: permanent.counters.clone(),
             object_ref,
-            card,
+            object,
             from_zone: ZoneType::Battlefield,
             owner: definition.owner,
             controller: permanent.controller,
@@ -116,9 +123,9 @@ impl Game {
         self.state.object_lki.for_permanent(permanent_id)
     }
 
-    /// Last known information of `card`'s most recent battlefield object.
-    pub(crate) fn latest_card_lki(&self, card: CardId) -> Option<&ObjectLki> {
-        self.state.object_lki.latest_for_card(card)
+    /// Last known information of `object`'s most recent battlefield appearance.
+    pub(crate) fn latest_object_lki(&self, object: impl Into<ObjectId>) -> Option<&ObjectLki> {
+        self.state.object_lki.latest_for_object(object.into())
     }
 
     /// Capture the stable viewer identity for a current or departed object.
@@ -128,7 +135,10 @@ impl Game {
         } else if let Some(lki) = self.object_lki(object_ref) {
             lki.presentation_id
         } else {
-            self.state.cards.get(CardId::from(object_ref.entity).0)?.id
+            self.state
+                .objects
+                .get(ObjectId::from(object_ref.entity).0)?
+                .id
         };
         Some(ObjectEventRef {
             entity,
@@ -143,7 +153,7 @@ impl Game {
     /// Resolve a departed object's immutable meaning through the match's
     /// shared content pack. LKI stores only `CardDefId`, never a definition
     /// clone.
-    pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&CardDefinition> {
+    pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&ObjectDefinition> {
         let lki = self.object_lki(object_ref)?;
         default_content_pack().definition(lki.definition_id)
     }

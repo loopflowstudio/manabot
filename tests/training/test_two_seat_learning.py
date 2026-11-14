@@ -7,6 +7,12 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import transition_gae
+from manabot.backends.torch.rollout import observation_tensors
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -14,12 +20,8 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
+from manabot.model.admission import admit_observation
 from manabot.training.execution import execute_regime
-from manabot.training.learning.learner import Learner, observation_tensors
-from manabot.training.learning.objectives import update_iteration
-from manabot.training.learning.returns import transition_gae
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
@@ -27,6 +29,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates
@@ -105,19 +108,23 @@ def _collector(
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     rows = batch.observations()
-    obs = observation_tensors(
-        {
-            key: value.reshape((-1,) + value.shape[2:])
-            for key, value in rows.observation.items()
-        },
-        "cpu",
+    obs = admit_observation(
+        agent,
+        observation_tensors(
+            {
+                key: value.reshape((-1,) + value.shape[2:])
+                for key, value in rows.observation.items()
+            }
+        ),
     )
     with torch.no_grad():
         logits, values = agent(obs)
     np.testing.assert_allclose(batch.values.ravel(), values.numpy().ravel(), atol=1e-6)
     np.testing.assert_allclose(
-        rows.probabilities.reshape(logits.shape),
-        logits.softmax(-1).numpy(),
+        rows.log_probabilities.reshape(logits.shape),
+        logits.masked_fill(obs["actions_valid"] == 0, -torch.inf)
+        .log_softmax(-1)
+        .numpy(),
         atol=1e-6,
     )
     selected = np.take_along_axis(rows.log_probabilities, batch.actions[..., None], -1)
@@ -220,9 +227,6 @@ def test_two_seat_real_native_games_and_recovery() -> None:
             actual_rows.observation[key], expected_rows.observation[key]
         )
     np.testing.assert_array_equal(
-        actual_rows.probabilities, expected_rows.probabilities
-    )
-    np.testing.assert_array_equal(
         actual_rows.log_probabilities, expected_rows.log_probabilities
     )
 
@@ -324,15 +328,14 @@ def test_move_learning_consumes_complete_seat_trajectories(
     collector = _collector(agent)
     batch = collector.collect(agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    result = update_iteration(
+    result = update_damped_iteration(
+        torch_backend,
         trainer,
         batch,
         DampedPolicyLearning(
             gradient="damped_policy", advantage_quantile=0, min_advantage=0
         ),
-        0,
-        np.random.default_rng(1),
-        iteration=1,
+        1,
     )
     assert result["rows"] == 8
     assert result["optimizer_exposures"] == result["retained"]

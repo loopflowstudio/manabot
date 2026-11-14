@@ -105,3 +105,14 @@ only this plan, so no runtime tests or extension rebuild are needed here.
 Unrelated b015d5/C1/C2 notes, including exact quotes, budgets, run IDs and
 contrary findings, remain at
 `757bb6257ef07cf2536ad7f7ec24f0f7309628c6:scratch/questions.md`.
+
+## Sync resolution — 2026-11-14
+
+Retain this branch's fixed-seat plan despite main deleting the shared scratch
+file. Combine main's engine guide additions with the fixed-seat section, placing
+it after Hand snapshots. Use current `player_policies` and pair each hand
+snapshot by its list index: `HandSnapshot` has no `slot` field. These are
+reversible integration choices; the fixed-seat API still needs implementation.
+This sync brings in HandSnapshot, generation-based capture synchronization and
+the wrapper read interfaces; the earlier missing-interface statements describe
+the pre-sync checkout. Recheck their final contracts before implementation.

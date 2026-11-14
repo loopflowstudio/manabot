@@ -18,6 +18,7 @@ use managym::{
 
 use crate::support::game::*;
 use crate::support::inspect::card_of;
+use managym::state::game_object::ObjectKind;
 
 /// Player 0's Gray Ogre (no printed keywords) in player 0's main phase.
 fn ogre_scenario() -> (Scenario, PermanentId) {
@@ -123,10 +124,10 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     let old = s.game().affected_permanent(ogre).unwrap();
     assert!(s.game().characteristics(ogre).keywords.has(Keyword::Flying));
 
-    let card = card_of(&s, ogre);
-    s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().move_card(card, ZoneType::Battlefield);
-    let returned = s.game().state.card_to_permanent[card].expect("returned");
+    let object = card_of(&s, ogre);
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
+    let returned = s.game().state.object_to_permanent[object].expect("returned");
     assert_ne!(s.game().affected_permanent(returned), Some(old));
     assert!(s.game().state.effects.is_empty());
     assert_eq!(s.game().effects_on(returned).count(), 0);
@@ -172,8 +173,8 @@ fn fork_restore_restores_continuous_effect_records_and_the_state_hash() {
     let effects = branch.state.effects.clone();
     let hash = branch.state.deterministic_hash();
     let mark = branch.clone();
-    let card = branch.state.permanents[ogre].as_ref().unwrap().card;
-    branch.move_card(card, ZoneType::Hand);
+    let object = branch.state.permanents[ogre].as_ref().unwrap().object;
+    branch.move_object(object, ZoneType::Hand);
     assert!(branch.state.effects.is_empty());
     branch = mark;
     assert_eq!(branch.state.effects, effects);
@@ -235,14 +236,14 @@ fn a_nonlegendary_record_exempts_its_permanent_from_the_legend_rule() {
     }
 }
 
-/// Shared payloads are admitted before the old per-keyword/per-object gate.
+/// One shared record per effect, however many keywords and objects it covers.
 #[test]
-fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
+fn shared_effects_admit_many_memberships_without_changing_rules_records() {
     use managym::agent::{
         observation::Observation,
         observation_encoder::{encode, ObservationEncoderConfig},
     };
-    for (activations, targets, version, capacity) in [(7, 10, 5, 128), (9, 15, 6, 256)] {
+    for (activations, targets) in [(7, 10), (9, 15)] {
         let (mut s, _) = ogre_scenario();
         let objects: Vec<_> = (0..targets)
             .map(|_| s.force_permanent_on_battlefield(1, "Mountain"))
@@ -266,15 +267,6 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
         let before = s.game().state.deterministic_hash();
         for viewer in [PlayerId(0), PlayerId(1)] {
             let obs = Observation::for_player(s.game(), viewer);
-            let config = ObservationEncoderConfig {
-                policy_input_version: version,
-                max_facts: capacity,
-                ..Default::default()
-            };
-            assert!(encode(&obs, &config)
-                .unwrap_err()
-                .to_string()
-                .contains("facts"));
             let shared = obs.shared_effects.as_ref().unwrap();
             assert_eq!(shared.len(), activations);
             assert!(
@@ -283,14 +275,7 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
                     .all(|effect| effect.effect.keywords.len() == 2
                         && effect.members.len() == targets)
             );
-            let encoded = encode(
-                &obs,
-                &ObservationEncoderConfig {
-                    policy_input_version: 7,
-                    ..config
-                },
-            )
-            .unwrap();
+            let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
             assert_eq!(
                 encoded
                     .effects
@@ -370,7 +355,7 @@ fn shared_effects_keep_intervening_grants_and_different_expiries() {
     assert!(s.game().characteristics(ogre).keywords.has(Keyword::Flying));
 }
 
-/// Equal old payloads bound to different exact sources have different futures.
+/// Equal payloads bound to different exact sources have different futures.
 #[test]
 fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
     use managym::agent::{
@@ -381,14 +366,14 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
     let (mut s, target) = ogre_scenario();
     let a = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let b = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let source_card = card_of(&s, a);
+    let source_object = card_of(&s, a);
     let affected = s.game().affected_permanent(target).unwrap();
     let mut games = [s.game().clone(), s.game().clone()];
     for (game, source) in games.iter_mut().zip([a, b]) {
         let timestamp = game.state.id_gen.next_id();
         let record = ContinuousEffect {
             timestamp,
-            source: Some(game.state.cards[source_card].definition_id),
+            source: Some(game.state.objects[source_object].definition_id),
             controller: PlayerId(0),
             affected,
             modification: flying(),
@@ -402,25 +387,14 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
         let observations = games
             .each_ref()
             .map(|game| Observation::for_player(game, viewer));
-        let old = ObservationEncoderConfig {
-            policy_input_version: 6,
-            ..Default::default()
-        };
-        assert_eq!(
-            encode(&observations[0], &old).unwrap(),
-            encode(&observations[1], &old).unwrap()
-        );
-        let new = ObservationEncoderConfig {
-            policy_input_version: 7,
-            ..old
-        };
+        let new = ObservationEncoderConfig::default();
         let encoded = observations
             .each_ref()
             .map(|obs| encode(obs, &new).unwrap());
         assert_ne!(encoded[0].effects[12], encoded[1].effects[12]);
     }
     for game in &mut games {
-        game.move_card(source_card, ZoneType::Hand);
+        game.move_object(source_object, ZoneType::Hand);
     }
     assert!(!games[0]
         .characteristics(target)
@@ -437,14 +411,20 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
 fn layer_fixture(
     s: &mut Scenario,
     name: &str,
-    definition: managym::state::card::CardDefinition,
+    definition: managym::state::card::PrintedCharacteristics,
 ) -> PermanentId {
-    use managym::state::card::Card;
+    use managym::state::game_object::Object;
     let id = s.force_permanent_on_battlefield(0, name);
-    let card_id = card_of(s, id);
-    let old = &s.game().state.cards[card_id];
-    let card = Card::from_definition(old.id, old.owner, old.definition_id, Arc::new(definition));
-    s.game_mut().state.cards[card_id] = card;
+    let object_id = card_of(s, id);
+    let old = &s.game().state.objects[object_id];
+    let object = Object::from_definition(
+        old.id,
+        old.owner,
+        old.definition_id,
+        Arc::new(definition),
+        old.kind() == ObjectKind::Token,
+    );
+    s.game_mut().state.objects[object_id] = object;
     id
 }
 
@@ -466,14 +446,14 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
     use managym::state::{
         ability::Condition,
         card::{
-            CardDefinition, CardType, CardTypes, LayerValue, StaticAbility, StaticLandType,
+            CardType, CardTypes, LayerValue, PrintedCharacteristics, StaticAbility, StaticLandType,
             StaticScope,
         },
         predicate::CardPredicate,
     };
     for moon_first in [false, true] {
         let (mut s, _) = ogre_scenario();
-        let moon = CardDefinition {
+        let moon = PrintedCharacteristics {
             name: "Moon witness".into(),
             types: CardTypes::new([CardType::Enchantment]),
             statics: vec![StaticAbility::SetsLandType(StaticLandType {
@@ -487,7 +467,7 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
             })],
             ..Default::default()
         };
-        let urborg = CardDefinition {
+        let urborg = PrintedCharacteristics {
             name: "Urborg witness".into(),
             types: CardTypes::new([CardType::Land]),
             statics: vec![continuous(
@@ -513,14 +493,14 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
         // Ability removal in layer 6 cannot erase the layer-4 Moon effect.
         indefinitely(&mut s, moon_id, Modification::LoseAllAbilities);
         assert!(s.game().characteristics(urborg_id).has_subtype("Mountain"));
-        let card = card_of(&s, moon_id);
-        s.game_mut().move_card(card, ZoneType::Graveyard);
+        let object = card_of(&s, moon_id);
+        s.game_mut().move_object(object, ZoneType::Graveyard);
         assert!(s.game().characteristics(urborg_id).has_subtype("Swamp"));
     }
     // Lattice/March: March depends on Lattice, even with the older timestamp.
     for lattice_first in [false, true] {
         let (mut s, _) = ogre_scenario();
-        let lattice = CardDefinition {
+        let lattice = PrintedCharacteristics {
             name: "Lattice witness".into(),
             types: CardTypes::new([CardType::Artifact]),
             mana_cost: Some(managym::state::mana::ManaCost::parse("{6}")),
@@ -530,7 +510,7 @@ fn cr_613_dependency_overrides_timestamps_and_continues_across_layers() {
             )],
             ..Default::default()
         };
-        let march = CardDefinition {
+        let march = PrintedCharacteristics {
             name: "March witness".into(),
             types: CardTypes::new([CardType::Enchantment]),
             mana_cost: Some(managym::state::mana::ManaCost::parse("{3}{U}")),
@@ -575,8 +555,8 @@ fn witness(
     types: &[managym::state::card::CardType],
     cost: &str,
     statics: Vec<managym::state::card::StaticAbility>,
-) -> managym::state::card::CardDefinition {
-    managym::state::card::CardDefinition {
+) -> managym::state::card::PrintedCharacteristics {
+    managym::state::card::PrintedCharacteristics {
         name: name.into(),
         types: managym::state::card::CardTypes::new(types.iter().copied()),
         mana_cost: Some(managym::state::mana::ManaCost::parse(cost)),
@@ -657,8 +637,8 @@ fn cr_613_humility_opalescence_and_dress_down_cda_timestamp_orders() {
     );
     goyf.toughness = Some(1);
     let g = layer_fixture(&mut s, "Gray Ogre", goyf);
-    let card = crate::support::inspect::library_card(&s, 0, "Mountain");
-    s.game_mut().move_card(card, ZoneType::Graveyard);
+    let object = crate::support::inspect::library_card(&s, 0, "Mountain");
+    s.game_mut().move_object(object, ZoneType::Graveyard);
     assert_eq!(s.game().characteristics(g).pt(), (1, 2));
     let dress = layer_fixture(
         &mut s,
@@ -674,8 +654,8 @@ fn cr_613_humility_opalescence_and_dress_down_cda_timestamp_orders() {
         ),
     );
     assert_eq!(s.game().characteristics(g).pt(), (0, 1));
-    let card = card_of(&s, dress);
-    s.game_mut().move_card(card, ZoneType::Graveyard);
+    let object = card_of(&s, dress);
+    s.game_mut().move_object(object, ZoneType::Graveyard);
     assert_eq!(s.game().characteristics(g).pt(), (2, 3));
 }
 
@@ -769,8 +749,8 @@ fn cr_613_ygra_imprisoned_retains_food_grants_and_painter_retains_color() {
     let p = layer_fixture(&mut s, "Gray Ogre", painter);
     indefinitely(&mut s, p, Modification::LoseAllAbilities);
     assert!(s.game().characteristics(ogre).colors.contains(&Color::Blue));
-    let card = card_of(&s, p);
-    s.game_mut().move_card(card, ZoneType::Graveyard);
+    let object = card_of(&s, p);
+    s.game_mut().move_object(object, ZoneType::Graveyard);
     assert!(!s.game().characteristics(ogre).colors.contains(&Color::Blue));
     // Modifiers and counters precede the layer-7d switch.
     indefinitely(
@@ -891,7 +871,7 @@ fn cr_613_sun_urborg_magus_and_saga_keep_earlier_layers_and_external_grants() {
             tap_source: true,
             // Existing Construct token witnesses the retained creation program;
             // Saga-specific token sizing is independent of this layer interaction.
-            effects: vec![Effect::create_tokens("Ballistic Boulder", 1)],
+            effects: vec![Effect::create_tokens("token.ballistic_boulder", 1)],
             ..Default::default()
         })),
     );
@@ -910,7 +890,9 @@ fn cr_613_sun_urborg_magus_and_saga_keep_earlier_layers_and_external_grants() {
 #[test]
 fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
     use managym::state::{
-        ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, Actor, Effect, EffectValue, TriggerCondition, TriggerSubject, TurnStep,
+        },
         card::{CardType, LayerValue, StaticScope},
         predicate::CardPredicate,
     };
@@ -957,19 +939,19 @@ fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
             }],
         },
         Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: None,
             effects: vec![Effect::sacrifice_this()],
         },
     ];
     let d = layer_fixture(&mut s, "Gray Ogre", dress);
-    let card = card_of(&s, d);
-    s.game_mut().move_card(card, ZoneType::Hand);
+    let object = card_of(&s, d);
+    s.game_mut().move_object(object, ZoneType::Hand);
     let hand = s.game().state.zones.size(ZoneType::Hand, PlayerId(0));
-    s.game_mut().move_card(card, ZoneType::Battlefield);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     crate::support::play::settle(&mut s);
-    let id = s.game().state.card_to_permanent[card].unwrap();
+    let id = s.game().state.object_to_permanent[object].unwrap();
     assert_eq!(s.game().characteristics(id).pt(), (2, 2));
     assert!(s.game().characteristics(id).triggered_abilities.is_empty());
     assert_eq!(
@@ -978,7 +960,7 @@ fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
     );
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Battlefield)
     );
 }
@@ -1093,15 +1075,15 @@ fn cr_613_dependency_loop_keeps_timestamp_order_and_copy_ignores_grants_and_loss
         assert!(s.game().characteristics(late).abilities_lost);
     }
     let (mut s, source) = ogre_scenario();
-    let card = card_of(&s, source);
-    s.game_mut().state.cards[card].keywords = Keywords::of(&[Keyword::Flying]);
+    let object = card_of(&s, source);
+    s.game_mut().state.objects[object].keywords = Keywords::of(&[Keyword::Flying]);
     indefinitely(&mut s, source, Modification::LoseAllAbilities);
     indefinitely(
         &mut s,
         source,
         Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
             effects: vec![Effect::CreateTokenCopy {
-                of: None,
+                of: managym::state::ability::ObjectSelector::This,
                 exceptions: vec![],
             }],
             ..Default::default()
@@ -1117,7 +1099,7 @@ fn cr_613_dependency_loop_keeps_timestamp_order_and_copy_ignores_grants_and_loss
     let copy = s
         .battlefield_permanents_named(0, "Gray Ogre")
         .into_iter()
-        .find(|&id| s.game().state.cards[card_of(&s, id)].is_token)
+        .find(|&id| s.game().state.objects[card_of(&s, id)].kind() == ObjectKind::Token)
         .unwrap();
     let view = s.game().characteristics(copy);
     assert!(view.keywords.has(Keyword::Flying));
@@ -1145,7 +1127,7 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
             mana_cost: ManaCost::parse("{2}"),
             // Existing Construct token witnesses the retained creation program;
             // Saga-specific token sizing is independent of this layer interaction.
-            effects: vec![Effect::create_tokens("Ballistic Boulder", 1)],
+            effects: vec![Effect::create_tokens("token.ballistic_boulder", 1)],
             ..Default::default()
         },
     ];
@@ -1178,13 +1160,13 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
         }],
     });
     let old = layer_fixture(&mut s, "Mountain", saga);
-    let card = card_of(&s, old);
-    s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().move_card(card, ZoneType::Battlefield);
+    let object = card_of(&s, old);
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
     crate::support::play::settle(&mut s);
-    let saga = s.game().state.card_to_permanent[card].unwrap();
+    let saga = s.game().state.object_to_permanent[object].unwrap();
     assert_eq!(
         s.game().state.permanents[saga]
             .as_ref()
@@ -1237,7 +1219,7 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
         2
     );
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Battlefield)
     );
 }
@@ -1263,20 +1245,13 @@ fn cr_613_granted_activation_retains_program_after_sacrificing_source_and_suspen
     );
     crate::support::play::activate(&mut s, source, 0);
     assert!(s.game().state.permanents[source].is_none());
-    let config = ObservationEncoderConfig {
-        policy_input_version: 8,
-        ..Default::default()
-    };
+    let config = ObservationEncoderConfig::default();
     let obs = Observation::for_player(s.game(), PlayerId(0));
     assert!(obs
         .continuation
         .iter()
         .any(|frame| frame.kind == 2 && !frame.program.is_empty()));
     assert!(obs.shared_effects.as_ref().unwrap().is_empty());
-    assert!(encode(&obs, &ObservationEncoderConfig::default())
-        .unwrap_err()
-        .to_string()
-        .contains("select v8"));
     assert!(encode(&obs, &config).is_ok());
     for _ in 0..4 {
         if s.game().state.suspended_decision.is_some() {
@@ -1399,14 +1374,14 @@ fn cr_613_copiable_definition_changes_detach_warmed_forks() {
     use managym::state::card::{LayerValue, StaticScope};
 
     let (s, ogre) = ogre_scenario();
-    let card = card_of(&s, ogre);
+    let object = card_of(&s, ogre);
     let root = s.game();
     let before = root.characteristics(ogre);
     let mut branch = root.clone();
     // Copy exceptions and transformed faces can change copiable values without
     // assigning a new catalog row. Keep the same slot, row and timestamp here.
-    branch.state.cards[card].power = Some(7);
-    branch.state.cards[card].statics.push(continuous(
+    branch.state.objects[object].power = Some(7);
+    branch.state.objects[object].statics.push(continuous(
         StaticScope::This,
         vec![Modification::ModifyPt {
             power: LayerValue::Fixed(2),
@@ -1418,7 +1393,7 @@ fn cr_613_copiable_definition_changes_detach_warmed_forks() {
     assert_eq!(before.pt(), (2, 2));
 
     let mut sibling = branch.clone();
-    sibling.state.cards[card].statics.clear();
+    sibling.state.objects[object].statics.clear();
     assert_eq!(sibling.characteristics(ogre).pt(), (7, 2));
     assert_eq!(branch.characteristics(ogre).pt(), (9, 5));
     assert_eq!(root.characteristics(ogre).pt(), (2, 2));

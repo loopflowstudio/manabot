@@ -8,13 +8,13 @@ the batched sampler (valid-action guarantees), the K-stream vector driver
 import numpy as np
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim.rollout import (
     BatchedSampler,
     PolicyRolloutMCPlayer,
@@ -36,7 +36,7 @@ def make_env(seed: int = 3) -> tuple[Env, dict]:
             villain_deck=dict(INTERACTIVE_DECK),
         )
     )
-    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed, auto_reset=False)
+    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
     return env, obs
 

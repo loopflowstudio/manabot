@@ -8,13 +8,13 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 import pytest
 
-from academy.replay_index import (
+from managym.academy.replay_index import (
     CanonicalReplayProjectionV1,
     DecisionAddressV2,
     ReplayDecisionAddress,
     canonical_projection_sha256,
 )
-from academy.study_protocol import (
+from managym.academy.study_protocol import (
     KnowledgeScope,
     RecordedDecisionInput,
     StudyArtifact,

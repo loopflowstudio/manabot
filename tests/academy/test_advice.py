@@ -13,7 +13,8 @@ from jsonschema import Draft202012Validator
 import numpy as np
 import pytest
 
-from academy.advice import (
+from manabot.sim.search.conditional import ConditionalStrategyResult, ConditionResult
+from managym.academy.advice import (
     AdviceArtifact,
     AdviceRequestIdentity,
     advice_meta,
@@ -24,9 +25,8 @@ from academy.advice import (
     policy_mass_is_non_uniform,
     request_advice,
 )
-from academy.server import app
-from academy.study_protocol import DecisionEvidence, StudyArtifact
-from manabot.sim.search.conditional import ConditionalStrategyResult, ConditionResult
+from managym.academy.server import app
+from managym.academy.study_protocol import DecisionEvidence, StudyArtifact
 
 PROTOCOL_DIR = Path(__file__).parents[2] / "protocol"
 FIXTURE = json.loads(
@@ -73,12 +73,12 @@ def guarded(name, globals=None, locals=None, fromlist=(), level=0):
     return real_import(name, globals, locals, fromlist, level)
 
 builtins.__import__ = guarded
-import academy.server
+import managym.academy.server
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 with TemporaryDirectory() as directory:
-    game = academy.server.GameSession(trace_dir=Path(directory))
+    game = managym.academy.server.GameSession(trace_dir=Path(directory))
     game.new_game({
         **json.loads(sys.argv[1]),
         'villain_type': 'passive', 'seed': 197, 'auto_pass': False,

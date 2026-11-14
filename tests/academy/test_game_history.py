@@ -7,8 +7,8 @@ import sqlite3
 from fastapi.testclient import TestClient
 import pytest
 
-from academy import server, trace
-from academy.attempts import AttemptStore, RecordedPlayer, participant_id
+from managym.academy import server, trace
+from managym.academy.attempts import AttemptStore, RecordedPlayer, participant_id
 
 TOKEN_A = "a" * 36
 TOKEN_B = "b" * 36

@@ -3,17 +3,16 @@
 from dataclasses import replace
 import itertools
 
-from managym.possible_worlds import PossibleWorldSpace
 import pytest
 import torch
 
 from manabot.belief.sampling import (
     AutoregressiveBeliefSampler,
-    SamplerInput,
-    SamplerSchema,
     physical_deal_log_prob,
     sample_physical_deal,
 )
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema
+from managym.possible_worlds import PossibleWorldSpace
 
 
 def _input() -> SamplerInput:

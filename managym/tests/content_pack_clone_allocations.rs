@@ -62,8 +62,8 @@ fn measure(operation: impl FnOnce()) -> AllocationCounts {
 /// copy-on-write seam a scenario mutation uses.
 fn with_large_definitions(game: &Game) -> Game {
     let mut expanded = game.clone();
-    for card in expanded.state.cards.iter_mut() {
-        card.text_box = "x".repeat(SYNTHETIC_TEXT_BYTES);
+    for object in expanded.state.objects.iter_mut() {
+        object.text_box = "x".repeat(SYNTHETIC_TEXT_BYTES);
     }
     expanded
 }
@@ -71,7 +71,7 @@ fn with_large_definitions(game: &Game) -> Game {
 fn warm_clone_fixture(game: &Game) {
     for _ in 0..WARMUP_CLONE_COUNT {
         let cloned = black_box(game).clone();
-        black_box(cloned.state.cards.len());
+        black_box(cloned.state.objects.len());
         drop(cloned);
     }
 }
@@ -80,7 +80,7 @@ fn measure_game_state_clones(game: &Game) -> AllocationCounts {
     measure(|| {
         for _ in 0..MEASURED_CLONE_COUNT {
             let cloned = black_box(&game.state).clone();
-            black_box(cloned.cards.len());
+            black_box(cloned.objects.len());
             drop(cloned);
         }
     })
@@ -90,7 +90,7 @@ fn measure_game_clones(game: &Game) -> AllocationCounts {
     measure(|| {
         for _ in 0..MEASURED_CLONE_COUNT {
             let cloned = black_box(game).clone();
-            black_box(cloned.state.cards.len());
+            black_box(cloned.state.objects.len());
             drop(cloned);
         }
     })
@@ -112,15 +112,15 @@ fn content_pack_clone_allocations_do_not_scale_with_definition_bytes() {
     let root = build_fixture(FIXTURE_ID).expect("deterministic fixture");
     let baseline_game = root.clone();
     let expanded_game = with_large_definitions(&baseline_game);
-    let payload_delta = root.state.cards.len() * SYNTHETIC_TEXT_BYTES;
+    let payload_delta = root.state.objects.len() * SYNTHETIC_TEXT_BYTES;
     assert!(
         payload_delta >= MINIMUM_PAYLOAD_DELTA_BYTES,
         "expanded immutable payload is only {payload_delta} bytes larger"
     );
 
     assert_eq!(
-        baseline_game.state.cards.len(),
-        expanded_game.state.cards.len()
+        baseline_game.state.objects.len(),
+        expanded_game.state.objects.len()
     );
     assert_eq!(
         baseline_game.state.permanents.len(),
@@ -158,7 +158,7 @@ fn content_pack_clone_allocations_do_not_scale_with_definition_bytes() {
             "release"
         },
         fixture: FIXTURE_ID,
-        fixture_cards: root.state.cards.len(),
+        fixture_cards: root.state.objects.len(),
         fixture_permanent_slots: root.state.permanents.len(),
         fixture_committed_events: root.state.events.len(),
         warmup_clone_count: WARMUP_CLONE_COUNT,

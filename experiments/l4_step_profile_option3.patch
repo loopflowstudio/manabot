@@ -1,0 +1,522 @@
+diff --git a/manabot/model/actor_critic.py b/manabot/model/actor_critic.py
+index 10abbc2f9..1850fed90 100644
+--- a/manabot/model/actor_critic.py
++++ b/manabot/model/actor_critic.py
+@@ -13,8 +13,6 @@ import torch.nn as nn
+ 
+ # Local imports
+ from manabot.env.observation import (
+-    FACT_SOURCE_INDEX,
+-    FACT_VALID_INDEX,
+     PERMANENT_DEFINITION_INDEX,
+     PERMANENT_LINK_INDEXES,
+     RELATION_VALID_INDEX,
+@@ -509,15 +507,10 @@ class ActorCritic(nn.Module):
+             dim=1,
+         )
+         if self.semantic_cards is not None:
+-            # Learning encodes only referenced definitions (same values within
+-            # float rounding, identical gradient support); without autograd the
+-            # full table keeps unprepared inference bitwise equal to serving.
++            # A fixed catalog support keeps recurrent batch sizes independent
++            # of observed ids. Inference caches the same table within its scope.
+             if isinstance(obs, PreparedObservation):
+                 programs = obs.scope.catalog()
+-            elif torch.is_grad_enabled():
+-                programs = self.semantic_cards.definitions(
+-                    self._referenced_definitions(obs, permanent_ids)
+-                )
+             else:
+                 programs = self.semantic_cards.definitions()
+             assert programs is not None
+@@ -682,42 +675,6 @@ class ActorCritic(nn.Module):
+             ).masked_fill(~linked, 0)
+         return objects + delta
+ 
+-    def _referenced_definitions(
+-        self, obs: Dict[str, torch.Tensor], permanent_ids: torch.Tensor
+-    ) -> torch.Tensor:
+-        """Unique catalog rows + 1 this batch can index: visible cards,
+-        permanents, known hands, decklists, public history, relations and names.
+-
+-        A source added to the forward pass must be added here, or its rows
+-        read zero embeddings.
+-        """
+-        assert self.semantic_cards is not None
+-        ids = [obs["semantic_cards"], permanent_ids, obs["known_hand"][..., 0]]
+-        if self.semantic_cards.decklist_projection is not None:
+-            ids.append(obs["decklists"][..., 0])
+-        events, valid = obs.get("events"), obs.get("events_valid")
+-        if (
+-            self.recent_events is not None
+-            and events is not None
+-            and valid is not None
+-            and events.ndim == 3
+-            and events.shape[-1] == 12
+-            and valid.shape == events.shape[:2]
+-        ):
+-            # Malformed history is rejected by RecentEventEncoder itself.
+-            ids.extend(events[..., column][valid == 1] for column in (2, 7))
+-        ids.append(obs["relations"][..., [5, 23]])
+-        if self.semantic_cards.records:
+-            # Catalog fact and effect sources read their definitions' rows.
+-            facts = obs["facts"]
+-            ids.append(facts[..., FACT_SOURCE_INDEX][facts[..., FACT_VALID_INDEX] == 1])
+-            effects = obs["effects"]
+-            ids.append(effects[..., 11][effects[..., 17] == 1])
+-        # Names share the same program table as objects. Only legal naming
+-        # rows widen the learner's support to the complete naming catalog.
+-        ids.append(obs["name_candidates"][..., 1][obs["actions_valid"].bool()])
+-        return self.semantic_cards.referenced_rows(ids)
+-
+     def _generic_definitions(
+         self, ids: torch.Tensor, admitted: torch.Tensor | None = None
+     ) -> torch.Tensor:
+diff --git a/manabot/model/facts.py b/manabot/model/facts.py
+index bb4e8d87b..6cad9eb2e 100644
+--- a/manabot/model/facts.py
++++ b/manabot/model/facts.py
+@@ -24,7 +24,6 @@ from typing import Literal
+ 
+ import torch
+ import torch.nn as nn
+-from torch.nn.utils.rnn import pack_sequence, unpack_sequence
+ 
+ from manabot.env.observation import (
+     FACT_COMBAT_RESTRICTION,
+@@ -105,7 +104,7 @@ class FactEncoder(nn.Module):
+     def _programs(
+         self, hidden: torch.Tensor, facts: torch.Tensor, kinds: torch.Tensor
+     ) -> torch.Tensor:
+-        """Reduce each complete program independently, visiting only live tokens.
++        """Reduce each complete program independently over fixed fact slots.
+ 
+         Native/Python encoders emit contiguous programs with zero-based ordinals.
+         An ordinal reset starts a new occurrence, even for duplicate grants with
+@@ -113,50 +112,59 @@ class FactEncoder(nn.Module):
+         meaning; token order within each program does. No state crosses programs.
+         """
+         program = _isin(kinds, _PROGRAM_KINDS)
+-        if not program.any():
++        # One host admission preserves the historical error priority. Metadata
++        # is not a learned feature; device arithmetic below retains every slot.
++        rows = facts.detach().cpu().tolist()
++        tokens_host = [
++            (batch, row)
++            for batch, batch_rows in enumerate(rows)
++            for row in batch_rows
++            if row[FACT_KIND_INDEX] in _PROGRAM_KINDS
++        ]
++        if not tokens_host:
++            # Unused recurrent parameters must retain absent gradients.
+             return hidden
+-        positions = program.nonzero()
+-        rows = facts[program]
+-        ordinals = rows[:, FACT_VALUE_INDEX + 1]
+-        starts = (ordinals == 0).nonzero().flatten().tolist()
+-        if not starts or starts[0] != 0:
++        if tokens_host[0][1][FACT_VALUE_INDEX + 1] != 0:
+             raise ValueError("fact program must start at ordinal zero")
+-        ends = [*starts[1:], len(rows)]
+-        lengths = [end - start for start, end in zip(starts, ends, strict=True)]
+-        expected = torch.cat(
+-            [torch.arange(length, device=facts.device) for length in lengths]
+-        )
+-        if not torch.equal(ordinals, expected):
+-            raise ValueError("fact program ordinals must be consecutive")
+-        # A sequence cannot change batch, holder, kind, frame/modification ID,
+-        # duration, timestamp or source halfway through its program.
+-        owners = torch.cat(
+-            (
+-                positions[:, :1],
+-                rows[:, :FACT_DETAIL_INDEX],
+-                rows[:, FACT_DURATION_INDEX:FACT_VALID_INDEX],
+-            ),
+-            -1,
+-        )
+-        expected_owners = torch.repeat_interleave(
+-            owners[starts], owners.new_tensor(lengths, dtype=torch.long), dim=0
+-        )
+-        if not torch.equal(owners, expected_owners):
++        expected = 0
++        owner: list[float] = []
++        owner_error = False
++        for batch, row in tokens_host:
++            ordinal = row[FACT_VALUE_INDEX + 1]
++            current = [
++                batch,
++                *row[:FACT_DETAIL_INDEX],
++                *row[FACT_DURATION_INDEX:FACT_VALID_INDEX],
++            ]
++            if ordinal == 0:
++                expected, owner = 0, current
++            if ordinal != expected:
++                raise ValueError("fact program ordinals must be consecutive")
++            owner_error |= any(a != b for a, b in zip(current, owner, strict=True))
++            expected += 1
++        if owner_error:
+             raise ValueError("fact program changes owner or provenance")
+-        word = _word(rows, FACT_DETAIL_INDEX)
++        word = _word(facts, FACT_DETAIL_INDEX)
+         signed = torch.where(word >= 2**31, word - 2**32, word).float()
+-        token_kind = rows[:, FACT_VALUE_INDEX]
+-        # TokenKind Integer (4) and Boolean (5) retain their numeric value.
+-        number = torch.where((token_kind == 4) | (token_kind == 5), signed, 0)
+-        tokens = hidden[program] + self.program_numeric(
+-            program_number(number).unsqueeze(-1)
+-        )
+-        packed, _ = self.program_sequence(
+-            pack_sequence(list(tokens.split(lengths)), enforce_sorted=False)
++        token_kind = facts[..., FACT_VALUE_INDEX]
++        number = torch.where(
++            program & ((token_kind == 4) | (token_kind == 5)), signed, 0
+         )
+-        sequence = torch.cat(unpack_sequence(packed))
+-        return hidden.masked_scatter(
+-            program.unsqueeze(-1), (tokens + sequence).to(hidden.dtype)
++        tokens = hidden + self.program_numeric(program_number(number).unsqueeze(-1))
++        state = hidden.new_zeros((1, hidden.shape[0], hidden.shape[-1]))
++        outputs: list[torch.Tensor] = []
++        # The fact axis bounds execution. Padding preserves state and a zero
++        # ordinal resets it, so independent occurrences never share history.
++        for slot in range(facts.shape[1]):
++            live = program[:, slot].reshape(1, -1, 1)
++            reset = (facts[:, slot, FACT_VALUE_INDEX + 1] == 0).reshape(1, -1, 1)
++            initial = torch.where(live & reset, 0, state)
++            _, candidate = self.program_sequence(tokens[:, slot : slot + 1], initial)
++            state = torch.where(live, candidate, state)
++            outputs.append(state[0])
++        sequence = torch.stack(outputs, dim=1)
++        return torch.where(
++            program.unsqueeze(-1), (tokens + sequence).to(hidden.dtype), hidden
+         )
+ 
+     def _catalog_ids(
+@@ -180,24 +188,11 @@ class FactEncoder(nn.Module):
+         detail_space = torch.where(
+             restriction, RecordNamespace.RESTRICTION, RecordNamespace.TOKEN
+         )
+-        zeros = catalog.cards.token_embedding.weight.new_zeros(
+-            (*kinds.shape, self.kind.embedding_dim)
+-        )
+-
+-        def scatter(mask: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
+-            return zeros.index_put(
+-                torch.nonzero(mask, as_tuple=True), rows.to(zeros.dtype)
+-            )
+-
+         return (
+-            scatter(named, catalog.names(id_space[named], ident[named]))
+-            + scatter(
+-                named_detail,
+-                catalog.names(detail_space[named_detail], detail[named_detail]),
+-            )
+-            + scatter(
+-                program,
+-                catalog.tokens(facts[..., FACT_VALUE_INDEX][program], detail[program]),
++            catalog.names(id_space, ident, named)
++            + catalog.names(detail_space, detail, named_detail)
++            + catalog.tokens(facts[..., FACT_VALUE_INDEX], detail, program).reshape(
++                *kinds.shape, self.kind.embedding_dim
+             )
+             + catalog.sources(facts[..., FACT_SOURCE_INDEX])
+         )
+@@ -218,15 +213,6 @@ class FactEncoder(nn.Module):
+         if not ((valid == 0) | (valid == 1)).all():
+             raise ValueError("fact validity must be binary")
+         valid = valid.bool()
+-        if facts.device.type == "cpu" and not torch.is_grad_enabled():
+-            # Padding contributes no object delta. Select the ordered union of
+-            # live columns for this forward only, including the empty union;
+-            # ordinals, batch ownership and duplicate program occurrences stay
+-            # intact. No encoded state survives a call. Learning retains fixed
+-            # shapes and device inference avoids a host synchronization.
+-            used = valid.any(0).nonzero().flatten()
+-            facts = facts.index_select(1, used)
+-            valid = valid.index_select(1, used)
+         facts = torch.where(valid.unsqueeze(-1), facts, 0)
+         links = facts[..., FACT_OBJECT_INDEX]
+         kinds = facts[..., FACT_KIND_INDEX]
+diff --git a/manabot/model/name_candidates.py b/manabot/model/name_candidates.py
+index fa57c6d49..5efb0d5a9 100644
+--- a/manabot/model/name_candidates.py
++++ b/manabot/model/name_candidates.py
+@@ -95,5 +95,7 @@ class NameCandidateEncoder(nn.Module):
+         assert self.program_rows is not None
+         named = self.definitions != 0
+         return programs.index_add(
+-            0, self.program_rows[named], self.embedding.weight[named].to(programs.dtype)
++            0,
++            torch.where(named, self.program_rows, 0),
++            torch.where(named[:, None], self.embedding.weight, 0).to(programs.dtype),
+         )
+diff --git a/manabot/model/semantic_cards.py b/manabot/model/semantic_cards.py
+index dcf3d74f9..7daa7f2d9 100644
+--- a/manabot/model/semantic_cards.py
++++ b/manabot/model/semantic_cards.py
+@@ -87,12 +87,14 @@ def _sorted_keys(
+ def _lookup(
+     keys: torch.Tensor, rows: torch.Tensor, query: torch.Tensor, message: str
+ ) -> torch.Tensor:
+-    if len(query) == 0:
+-        return query.new_zeros(0, dtype=torch.long)
+-    index = torch.searchsorted(keys, query).clamp_max(len(keys) - 1)
+-    if not torch.equal(keys[index], query):
++    # A sentinel makes even a zero-capacity request a nonempty search. Callers
++    # replace inactive keys with keys[0], a vocabulary member, before this join.
++    count = query.numel()
++    padded = torch.cat((query.reshape(-1), keys[:1]))
++    index = torch.searchsorted(keys, padded).clamp_max(len(keys) - 1)
++    if not torch.equal(keys[index], padded):
+         raise ValueError(message)
+-    return rows[index]
++    return rows[index][:count].reshape(query.shape)
+ 
+ 
+ @dataclass(frozen=True)
+@@ -117,11 +119,7 @@ def admit_definition_ids(
+     """Check transport IDs before indexing; optionally resolve semantic rows."""
+     kind = "semantic" if lookup is not None else "card"
+     message = f"policy received an unadmitted {kind} definition"
+-    if (
+-        not torch.equal(ids, ids.floor())
+-        or bool((ids < 0).any())
+-        or bool((ids >= size).any())
+-    ):
++    if not bool(((ids == ids.floor()) & (ids >= 0) & (ids < size)).all()):
+         raise ValueError(message)
+     rows = ids.long()
+     if lookup is not None:
+@@ -243,35 +241,71 @@ class SemanticCardEncoder(nn.Module):
+             )
+ 
+     def record_names(
+-        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
++        self,
++        namespace: RecordNamespace | torch.Tensor,
++        words: torch.Tensor,
++        active: torch.Tensor | None = None,
+     ) -> torch.Tensor:
+-        """Embed name ids (u32 words) of one namespace, or of one namespace
+-        each; [*] -> [*, D]."""
++        """Embed [*] name ids, with inactive capacity rows contributing zero.
++
++        Only active ids are admitted. Substitution precedes lookup so absent
++        rows, including poisoned padding, never query an unknown vocabulary key.
++        """
++        query = record_key(torch.as_tensor(namespace, device=words.device), words)
++        if active is not None:
++            query = torch.where(active, query, self.record_name_keys[0])
+         rows = _lookup(
+             self.record_name_keys,
+             self.record_name_rows,
+-            record_key(torch.as_tensor(namespace), words).reshape(-1),
++            query.reshape(-1),
+             "policy received an id outside the record vocabulary",
+         )
+-        return embedding_rows(self.token_embedding, rows).reshape(
++        # Embedding also gets one neutral sentinel, including for empty callers.
++        padded = torch.cat((rows, rows.new_zeros(1)))
++        result = embedding_rows(self.token_embedding, padded)[:-1].reshape(
+             *words.shape, self.token_embedding.embedding_dim
+         )
++        return (
++            result if active is None else torch.where(active.unsqueeze(-1), result, 0)
++        )
++
++    def record_tokens(
++        self,
++        kinds: torch.Tensor,
++        words: torch.Tensor,
++        active: torch.Tensor | None = None,
++    ) -> torch.Tensor:
++        """Embed all program slots, substituting neutral inputs before lookup.
+ 
+-    def record_tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
+-        """Embed program learning tokens: ids read their vocabulary row; numbers
+-        read their kind's row (callers add the exact value). [*] -> [*, D]."""
++        Numbers read their kind's row; callers add the signed numeric value.
++        The historical result layout is [number of slots, D].
++        """
+         kinds, words = kinds.long().reshape(-1), words.reshape(-1)
+-        number = (kinds == NUMBER_TOKEN_KINDS[0]) | (kinds == NUMBER_TOKEN_KINDS[1])
+-        if bool(((kinds < 1) | (kinds > 9)).any()):
++        present = (
++            torch.ones_like(kinds, dtype=torch.bool)
++            if active is None
++            else active.reshape(-1)
++        )
++        if bool((present & ((kinds < 1) | (kinds > 9))).any()):
+             raise ValueError("policy received an invalid program token kind")
+-        rows = self.record_number_rows[kinds.clamp(0, 5)].clone()
+-        rows[~number] = _lookup(
++        number = (kinds == NUMBER_TOKEN_KINDS[0]) | (kinds == NUMBER_TOKEN_KINDS[1])
++        query = torch.where(
++            present & ~number,
++            record_key(kinds, words),
++            self.record_token_keys[0],
++        )
++        named_rows = _lookup(
+             self.record_token_keys,
+             self.record_token_rows,
+-            record_key(kinds[~number], words[~number]),
++            query,
+             "policy received a program token outside the vocabulary",
+         )
+-        return embedding_rows(self.token_embedding, rows)
++        rows = torch.where(
++            number, self.record_number_rows[kinds.clamp(0, 5)], named_rows
++        )
++        padded = torch.cat((rows, rows.new_zeros(1)))
++        result = embedding_rows(self.token_embedding, padded)[:-1]
++        return torch.where(present.unsqueeze(-1), result, 0)
+ 
+     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
+         return admit_definition_ids(
+@@ -282,13 +316,9 @@ class SemanticCardEncoder(nn.Module):
+         """Encode catalog programs into a [definitions + 1, hidden] table; row 0
+         is the zero padding row and every consumer indexes by catalog row + 1.
+ 
+-        With `rows` (unique catalog rows + 1, from `referenced_rows`), only
+-        those programs run through the GRU and the rest of the table is zero.
+-        Each program is encoded independently, so selected rows and parameter
+-        gradients agree with full encoding up to floating-point roundoff;
+-        unreferenced rows receive none. Training uses this because the catalog
+-        grows with the world while a batch references a small subset. Inference
+-        caches the full table once per policy scope instead.
++        Explicit `rows` remain available to offline callers. Model forwards
++        encode the complete catalog, keeping recurrent batch sizes independent
++        of observation contents. Inference caches it once per policy scope.
+         """
+         count = len(self.tokens)
+         if rows is None:
+@@ -340,24 +370,6 @@ class SemanticCardEncoder(nn.Module):
+         assert packed.unsorted_indices is not None
+         return encoded[packed.unsorted_indices]
+ 
+-    def referenced_rows(self, ids: list[torch.Tensor]) -> torch.Tensor:
+-        """Unique catalog rows + 1 named by admissible transport IDs in `ids`.
+-
+-        Inadmissible IDs are skipped here, not rejected: each consumer admits
+-        its own references and raises its own error, and padding is ignored.
+-        """
+-        found = []
+-        for values in ids:
+-            values = values.reshape(-1)
+-            admissible = (
+-                (values == values.floor())
+-                & (values >= 0)
+-                & (values < len(self.definition_rows))
+-            )
+-            found.append(self.definition_rows[values[admissible].long()])
+-        rows = torch.cat(found).unique()
+-        return rows[rows > 0]
+-
+     def embed_definitions(
+         self, ids: torch.Tensor, definitions: torch.Tensor
+     ) -> torch.Tensor:
+@@ -409,12 +421,20 @@ class RecordEmbeddings:
+     definitions: torch.Tensor
+ 
+     def names(
+-        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
++        self,
++        namespace: RecordNamespace | torch.Tensor,
++        words: torch.Tensor,
++        active: torch.Tensor | None = None,
+     ) -> torch.Tensor:
+-        return self.cards.record_names(namespace, words)
++        return self.cards.record_names(namespace, words, active)
+ 
+-    def tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
+-        return self.cards.record_tokens(kinds, words)
++    def tokens(
++        self,
++        kinds: torch.Tensor,
++        words: torch.Tensor,
++        active: torch.Tensor | None = None,
++    ) -> torch.Tensor:
++        return self.cards.record_tokens(kinds, words, active)
+ 
+     def sources(self, ids: torch.Tensor) -> torch.Tensor:
+         """Source definition ids (definition id + 1) to their program rows."""
+diff --git a/manabot/model/shared_effects.py b/manabot/model/shared_effects.py
+index 7944f9d7a..a8a41261f 100644
+--- a/manabot/model/shared_effects.py
++++ b/manabot/model/shared_effects.py
+@@ -81,8 +81,8 @@ class SharedEffectEncoder(nn.Module):
+         if len(live_positions) == 0:
+             return objects
+         live = host[live_positions[:, 0], live_positions[:, 1]]
+-        halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
+-        source = record_indexes(live[:, 11], 2**24, "effect source definition")
++        record_indexes(live[:, :2], 65535, "effect vocabulary half")
++        record_indexes(live[:, 11], 2**24, "effect source definition")
+         links = record_indexes(
+             live[:, [10, 12]], object_count, "effect source/controller"
+         )
+@@ -130,7 +130,7 @@ class SharedEffectEncoder(nn.Module):
+         # Validate all live details/members together, ignoring poisoned padding.
+         detail_host = details.detach().cpu().reshape(-1, DETAIL_DIM)[detail_indexes]
+         kinds = record_indexes(detail_host[:, 0], 19, "effect detail kind")
+-        ids = record_indexes(detail_host[:, 1:], 65535, "effect detail half")
++        record_indexes(detail_host[:, 1:], 65535, "effect detail half")
+         if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
+             raise ValueError("live effect detail has no kind")
+         member_host = members.detach().cpu().reshape(-1, MEMBER_DIM)[member_indexes]
+@@ -155,25 +155,34 @@ class SharedEffectEncoder(nn.Module):
+             objects, batches[:, None], links
+         ).unbind(1)
+         header = self.header(torch.cat((numeric, controller, source_object), -1))
+-        modification = ((halves[:, 0] << 16) | halves[:, 1]).to(device)
+-        source = source.to(device)
++        # Lookup capacities come from the buffers, not live CSR lengths.
++        header_live = (host[..., 17] != 0).to(device)
++        all_halves = host[..., :2].long().to(device)
++        modifications = (all_halves[..., 0] << 16) | all_halves[..., 1]
++        all_sources = torch.where(header_live, host[..., 11].to(device), 0)
+         if catalog is None:
+-            mod = self.modification(modification % 4096)
+-            sources = self.source(source % 4096)
++            mod = self.modification(modifications % 4096)
++            sources = self.source(all_sources.long() % 4096)
+         else:
+-            mod = catalog.names(RecordNamespace.TOKEN, modification)
+-            sources = catalog.sources(source)
+-        unsigned = ((ids[:, 0] << 16) | ids[:, 1]).to(device)
+-        kinds = kinds.to(device)
++            mod = catalog.names(RecordNamespace.TOKEN, modifications, header_live)
++            sources = catalog.sources(all_sources)
++        mod = mod.flatten(0, 1)[header_indexes]
++        sources = sources.flatten(0, 1)[header_indexes]
++        # Admit only the CSR-owned rows; padding may contain arbitrary data.
++        present = torch.zeros(batch * self.detail_rows, dtype=torch.bool, device=device)
++        indexes = torch.tensor(detail_indexes, dtype=torch.long, device=device)
++        present[indexes] = True
++        all_details = details.reshape(-1, DETAIL_DIM)
++        kinds = torch.where(present, all_details[:, 0], 0).long()
++        halves = torch.where(present[:, None], all_details[:, 1:], 0).long()
++        unsigned = (halves[:, 0] << 16) | halves[:, 1]
+         if catalog is None:
+             detail = embedding_rows(self.detail, unsigned % 4096)
+         else:
+-            # Kinds 1-3 name a keyword, subtype or color; 11-19 carry
+-            # a learning token of kind 1-9.
+             program = kinds > 10
+-            detail = mod.new_zeros((len(kinds), mod.shape[-1]))
+-            detail[~program] = catalog.names(RecordNamespace.TOKEN, unsigned[~program])
+-            detail[program] = catalog.tokens(kinds[program] - 10, unsigned[program])
++            names = catalog.names(RecordNamespace.TOKEN, unsigned, present & ~program)
++            programs = catalog.tokens(kinds - 10, unsigned, present & program)
++            detail = torch.where(program[:, None], programs, names)
+         detail_tokens = detail + embedding_rows(self.detail_kind, kinds)
+         # Integer/boolean tokens retain signed numeric meaning;
+         # the GRU retains the ordered shared program structure.
+@@ -182,6 +191,7 @@ class SharedEffectEncoder(nn.Module):
+         detail_tokens = detail_tokens + self.detail_number(
+             program_number(signed.to(device=device, dtype=objects.dtype)).unsqueeze(-1)
+         ).masked_fill(~is_number, 0)
++        detail_tokens = detail_tokens[indexes]
+         tokens = torch.cat(
+             (
+                 torch.stack((mod, sources, torch.tanh(header)), 1).flatten(0, 1),

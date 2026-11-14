@@ -7,6 +7,10 @@ mean, and how interrupted or failed work is recovered. Comparisons are declared
 in [experiments.md](experiments.md); metric definitions live in
 [experiment-metrics.md](experiment-metrics.md); evaluation protocols live in
 [evaluation.md](evaluation.md).
+An update learns from one collected batch, a loop keeps playing and updating
+until it is done, and a recipe is our loops with our settings;
+[training loops](training-loop.md) lists the updates, their pieces and a loop
+to copy.
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)
@@ -26,6 +30,7 @@ in [experiments.md](experiments.md); metric definitions live in
 ```bash
 uv run manabot train                                   # --recipe local: bounded smoke
 uv run manabot train --recipe baseline --seed 197      # baseline-v3 with evaluation
+uv run manabot train --recipe baseline --seed 197 --padded-shapes  # CUDA comparison without bucketed shapes or live tokens
 uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
 uv run manabot train --regime regime.json --seed 197 --out .runs/example
 ```
@@ -33,22 +38,40 @@ uv run manabot train --regime regime.json --seed 197 --out .runs/example
 `--recipe local` (`manabot.recipes.local`) is a two-update production-path
 smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
-with initial and endpoint evaluation. `--steps`, `--seconds` and
-`--learning-seats` and `--device cpu|mps|cuda` apply only to these recipes.
-Without `--device`, both select CUDA first, then Apple MPS. Baseline requires
-an accelerator and rejects CPU; use `--recipe local` on CPU-only machines.
-Local defaults to CPU when no accelerator is available and accepts an explicit
-CPU override.
+with initial and endpoint evaluation. `--steps`, `--seconds`,
+`--learning-seats`, `--device cpu|mps|cuda` and `--padded-shapes` apply only
+to these recipes; a regime sets the same choices in its stages' `Execution`.
+Without `--device`, both select CUDA when available; Apple MPS is used only
+when requested with `--device mps`. Baseline requires an accelerator and
+rejects CPU; use `--recipe local` on machines without CUDA. Local defaults to
+CPU otherwise, including on Apple Silicon, and accepts an explicit override.
 `--preset` and `--set` are
-retired and fail.
+retired and fail. On CUDA the recipes train with
+[bucketed padding](observation-and-model.md#bucketed-padding) and
+[live-token attention](observation-and-model.md#live-token-attention), and
+record both in `run.json`; `--padded-shapes` turns both off to compare against
+the padded path. Off CUDA both stay off. `--bucketed-shapes` is a deprecated
+alias that warns, does nothing beyond the default, and is removed in 0.3.0.
 
-Apple Silicon MPS is admitted for float32 ordinary self-play through
-`execute_regime` and both CLI recipes.
-An unavailable device fails explicitly. Float64 loss and diagnostic arithmetic
-runs on the host with gradients preserved; no automatic operator fallback is
-enabled. Reduced precision remains CUDA-only. MPS process recovery, belief
+CPU is the default and recommended device on Apple Silicon. On a quiet Apple
+M2, MPS was slower than CPU for collection at every measured batch size, only
+tied 8-thread CPU for learning, and its driver memory grew past 20 GB within a
+few learner steps; `torch.compile` and fixed minibatch sizes did not change
+that. Apple Silicon MPS remains admitted, on explicit request, for
+ordinary self-play through `execute_regime` and both CLI recipes, and requires
+Torch 2.15 or newer: on an
+Apple M2, Torch 2.10–2.13 compute wrong MPS linear-layer weight gradients,
+which gradient clipping then applies (see `manabot/training/mps.py`). The
+repository lock installs 2.15. With an older Torch, an explicit `--device mps`
+and any MPS stage stop before training with a message naming both versions. An unavailable
+device fails explicitly. Float64 loss and diagnostic arithmetic runs on the
+host with gradients preserved; no automatic operator fallback is enabled.
+Precision follows the [one rule for every GPU backend](#reduced-precision);
+TF32 is CUDA-only. MPS process recovery, belief
 inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
-for this workflow. The baseline coordinator reserves a CPU evaluator thread
+for this workflow. A separate [MLX backend](../manabot/backends/mlx.md) of the policy
+and the damped update reads the same checkpoints, converted to the shared container,
+for measurement on Apple Silicon; no recipe runs on it. The baseline coordinator reserves a CPU evaluator thread
 alongside accelerator training. Monitoring exports do not require process
 recovery; accelerator runs cannot resume a stopped learner. This support makes
 no speed or strength claim.
@@ -99,7 +122,7 @@ interpretation and serialized identity.
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
 | `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](../README.md#beside-the-loop). |
 
-Every stage declares device, float32 precision, worker count, Torch thread
+Every stage declares device, [numeric precision](#reduced-precision), worker count, Torch thread
 count, wall and memory limits (`Execution`). `execution.workers` accepts 1
 (default), 2 or 4 CPU observation producers for self-play only: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
@@ -114,6 +137,16 @@ damping horizon fitted to the run's expected updates and `recover_capacity`.
 The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
+`execution.bucketed_shapes` and `execution.live_tokens` select
+[bucketed padding](observation-and-model.md#bucketed-padding) and
+[live-token attention](observation-and-model.md#live-token-attention) for the
+stage's collection and learner policies. Both default to `auto`, which the
+regime resolves when it is built: on for a CUDA `train_self_play` stage, off
+otherwise. A stage serializes them only when on, and a saved stage that omits
+them reads as off, so saved regimes keep their identity and fresh CUDA regimes
+record `true`. An explicit `live_tokens=True` off CUDA fails validation
+(`live tokens require CUDA`). A continuation stage must resolve both to the
+same values as the stage it continues.
 
 Self-play `initial` continues the live collector, learner and optimizer of an
 earlier stage in the same execution. External checkpoints never act as
@@ -332,10 +365,38 @@ Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
 phase seconds under `time/` (`time/collection`,
 `time/learning/minibatches/forward_and_loss`), CUDA high-water marks
 (`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
-`selection_groups/<action type>/<terminal distance>/rows` and
-`self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline readers use
-`manabot.training.update_metrics.read_updates`. Selection and belief
-summaries stay in their stage's `diagnostics`.
+`selection_groups/<action type>/<terminal distance>/rows`. Completed self-play
+outcomes are a row table, logged once per update with Etude's
+`run.log_table("self_play_outcomes", rows, updates=...)`. Each row has `deck`
+and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
+`losses` and `draws`, so deck pairs add rows rather than metric columns. Etude
+stores the table as an immutable JSON file under the metric run's `artifacts/` and carries it with the
+metrics, including for launched jobs; keep `artifacts/` when copying a run for
+offline analysis. Read the rows directly through Etude:
+
+```python
+from etude.train.read import read
+
+# The runs directory holding the metric run, its experiment (the stage id
+# unless the experiment names one) and TrainingRun.id.
+history = read(runs_dir, experiment, run_id)
+for table in history.read_table("self_play_outcomes", "updates"):
+    print(table.x, table.rows)
+```
+
+```text
+1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, ...)
+```
+
+`manabot.training.update_metrics.read_updates` reads the same tables and
+projects their counts as `self_play_outcomes/<deck>/<opponent>/<play|draw>/wins`
+(and `losses`/`draws`) for existing reports. Etude selects resumed and duplicate
+updates before fetching tables; unreferenced tables supply no results, and a
+missing or damaged selected table raises, naming the file to restore. Historical
+scalar outcome metrics remain readable unchanged. Runs that recorded
+`self_play_outcomes/table` references (written from `1659b0e29`) are refused;
+read them from a revision that still reads that format, such as `bf4e280f7`.
+Selection and belief summaries stay in their stage's `diagnostics`.
 
 The Perf panel's "Update time" series shows where an update goes:
 `environment_step_and_encoding`, which compares a run to retained ones, divides by
@@ -425,24 +486,37 @@ experiment report has a Numerical health section.
 
 For each legal offer, `log_softmax` gives normalized log probabilities after
 masking padding to negative infinity; legal logs must be finite. Collection
-samples with `torch.multinomial` on their exponentials and stores the weights,
-full logs and chosen-action log likelihood. Learners validate masks, nonempty
-support, zero illegal mass, normalization, agreement between weights and logs,
-legal sampled actions and the saved chosen log. Float32 `exp(-104)` can round
-to zero: a finite legal log with zero weight is accepted only when its own
-exponential rounds to zero. There is no epsilon, floor, mixture,
-renormalization repair or skipped corrupt batch; nonfinite values fail with a
-named invariant. A rounded-zero action cannot be sampled; underflow counts
-expose that limit. Reverse KL uses saved logs with padding removed, and ratios
-exponentiate in float64. The PPO-style learner uses the same contract (no
-`1e-12` KL clamp).
+samples with `torch.multinomial` on their exponentials and stores the full
+logs and the chosen-action log likelihood. The logs are the only stored
+behavior distribution; the sampling weights are not kept. Learners validate
+masks, nonempty support, negative-infinity padding, normalization of the logs,
+legal sampled actions and the saved chosen log. There is no epsilon, floor,
+mixture, renormalization repair or skipped corrupt batch; nonfinite values fail
+with a named invariant.
+
+A legal action may be arbitrarily unlikely. A row whose legal logs are
+
+```text
+max − {0, 6, 15, 93, 94.75}
+```
+
+is admitted: the last two probabilities are float32 subnormals (logs below
+−87.34), and a log below about −103.97 has a float32 probability of zero. An
+action whose weight rounds to zero on the collecting device cannot be sampled;
+the underflow count exposes that limit. No check compares an exponential
+computed on one device with one computed on another: two correct `exp`
+implementations can return neighbouring floats, and one float spacing of a
+subnormal is a relative difference no tolerance should absorb.
+
+Reverse KL uses saved logs with padding removed, and ratios exponentiate in
+float64. The PPO-style learner uses the same contract (no `1e-12` KL clamp).
 
 ### Metrics
 
 | Metric | Population and meaning |
 | --- | --- |
-| `legal_logit_gap_max`, `legal_probability_min` | All collected learner rows before filtering; minimum includes rounded zeros. |
-| `legal_underflow_count` | Legal entries with zero sampling weight and finite logs. A count, not proof of harmless exploration loss. |
+| `legal_logit_gap_max`, `legal_probability_min` | All collected learner rows before filtering. The minimum is the float32 exponential of the stored logs, computed on the host, and includes rounded zeros. |
+| `legal_underflow_count` | Legal entries whose finite log rounds to probability zero in float32. A count, not proof of harmless exploration loss. |
 | `nonfinite_count` | Zero in admitted batches; failures name their invariant. |
 | `actor_rows`, `critic_rows` | Unique selected rows before epoch reuse. Actor-only filtering can leave zero actor rows. |
 | `forced_rows`, `zero_advantage_rows`, `empty_actor_batch` | Forced decisions have zero policy gradient but critic/shared updates can still move parameters. |
@@ -469,6 +543,78 @@ uv run python scripts/benchmark_numerical_health.py --device cpu
 
 Measured 1.74× (about 0.27 ms per step) on CPU on 2026-10-07 and 1.33× on an
 NVIDIA L4 on 2026-10-08; neither is full training throughput.
+
+### Reduced precision
+
+A stage's `Execution.precision` defaults to `auto`. The regime resolves it
+alongside `bucketed_shapes` and `live_tokens` when it is built, and records
+only the resolved precision. One rule covers every GPU backend:
+
+| Model width (`hidden_dim`) | CUDA | MPS | MLX | CPU |
+| --- | --- | --- | --- | --- |
+| below 256 | float32 | float32 | float32 | float32 |
+| 256 or wider (`BF16_MIN_HIDDEN_DIM` in `manabot.infra.config`) | bfloat16 | bfloat16 | bfloat16 | float32 |
+
+**Wide models train in half precision (bfloat16) by default on GPU backends;
+narrower models and CPU train in float32.** On CUDA and MPS the rule applies to
+`train_self_play` stages through `ladder_precision`; every other operation is
+float32. The [MLX backend](../manabot/backends/mlx.md#compute-precision) applies
+the same width to a policy built without a precision. On every backend only the
+policy forwards run in bfloat16: logits, values, log-softmax, behavior
+log-probabilities, losses, master weights and optimizer state stay float32, and
+no loss scaling is used, since bfloat16 keeps float32's exponent range.
+Float16 is not offered. Apple M1 and M2 machines have weaker bfloat16 support
+and are unmeasured; a fallback for them is possible future work.
+
+An explicit choice always wins:
+
+```python
+from manabot.training.regime import Execution
+
+execution = Execution(device="cuda", precision="bf16")
+```
+
+Builders (`with_capacity`, `with_agent`) resolve automatic settings again
+for the new model and device; explicit choices stay as written. Saved regimes
+keep their recorded precision, and a saved stage from before the field existed
+reads as `float32`. Only fresh authoring meets the automatic policy.
+
+| `precision` | What changes |
+| --- | --- |
+| `auto` (default) | `bf16` for a `train_self_play` stage on CUDA or MPS at width 256 or more, else `float32`; never serialized. |
+| `float32` | Nothing; the process's own TF32 switches are left as they were. |
+| `tf32` | For the stage, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
+| `bf16` | `torch.autocast(device, bfloat16)` on CUDA or MPS around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
+
+`tf32` off CUDA and `bf16` on CPU fail validation (`precision tf32 requires
+CUDA`, `precision bf16 requires CUDA or MPS`). Checkpoint evaluation and search
+run on CPU in float32. Precision changes no `ModelConfig` field, checkpoint or
+world binding: a checkpoint trained in any precision loads in any other.
+
+The measured speed crossover is width 256. On an L4 with bucketed shapes,
+BF16 is slower than float32 at w160l8, 1.66× faster per learner step at w256l8,
+and 2–2.7× faster at w384l8 ([measurement](../experiments/cuda_precision.md)).
+On an M4 Max at w384l8 with 256 streams, a whole update took 261 s in bfloat16
+against 277 s in float32 on MPS, and 208 s against 263 s on MLX ([measurement](../experiments/mps_retest.md)).
+
+In the earlier [learning A/B](../experiments/precision_ladder.md), BF16 seed
+32401 stopped after 140 completed updates with
+`behavior_log_probability_mismatch`, which kept `auto` at float32. Playing
+strength was not scored, and the failure does not establish a strength
+difference. Its cause was independent of precision: a check then compared
+collection's device `exp` of a subnormal legal probability with the host's,
+which the [sampling contract](#sampling-contract) no longer stores or compares
+([cause and proof](../experiments/bf16_behavior_logs.md)). The A/B
+used bucketed shapes without live-token attention; their combination with
+BF16 has no learning admission from this run. TF32 remains explicit.
+
+Before training a reduced precision on another GPU, run the
+[CUDA numerics validation](#validation), which checks float32, and the bf16
+dtype-join admission on that host:
+
+```bash
+MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest tests/model/test_semantic_card_precision.py -q
+```
 
 ### Terminal incidents
 

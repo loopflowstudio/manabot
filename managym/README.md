@@ -1,10 +1,140 @@
 # managym
 
 The deterministic Magic: The Gathering rules engine and training environment
-behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
-and `academy` (the optional play UI). The Python API is `manabot.managym`,
-bundled with the `manabot` distribution; `import managym` remains a compatibility
-alias. Rust sources stay in this directory.
+behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent).
+Install the `managym` distribution for `import managym` without the training
+stack. `manabot` depends on the exact same version and keeps `manabot.managym`
+as a compatibility alias. Rust sources stay in this directory. Start with the
+[Python installation example](https://github.com/loopflowstudio/manabot/blob/main/docs/engine-python.md).
+Both `Env` and `VectorEnv` accept `player_policies=("agent", "heuristic")`:
+each native seat can use an external agent, random play or the built-in
+heuristic, without installing `manabot`. See
+[per-seat players](https://github.com/loopflowstudio/manabot/blob/main/docs/engine.md#per-seat-players).
+
+## Play in the browser
+
+The distribution includes Academy, a browser table for playing a game against
+the engine's built-in opponents and stepping through recorded games:
+
+```bash
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
+uv run --no-project managym academy
+```
+
+This starts a local server and opens `http://127.0.0.1:8000` with a game
+ready; Ctrl-C stops it. It needs CPython 3.12 or 3.13 and nothing else: no
+manabot, Torch, Node or Rust. Finished and unfinished games are listed under
+**Games** and open in **Replay**. `uv run --no-project python -m managym.academy` is the same
+command, and `uv run --no-project managym academy --help` lists the port, host and storage
+options. Cards show their Scryfall art with no extra step: the server fetches
+each image the first time it is shown and keeps it in `~/.cache/managym/card-art`;
+`ACADEMY_CARD_ART=off` turns that off ([card art](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#card-art)).
+Installing `manabot` in the same environment adds trained opponents.
+The [Academy guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy)
+covers playing, replays, trained bots and launch troubleshooting.
+
+### Start a game with your chosen decks
+
+```bash
+uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt \
+    --opponent search --sims 64 --seed 7
+```
+
+The browser opens already in that game: UR Lessons against the decklist in
+`my-deck.txt`, played by Search 64, with deal seed 7. Each deck is a bundled
+deck name or a decklist file; `--opponent` is `search`, `random`, `passive`
+or a checkpoint digest. A rejected decklist or unknown deck stops the command
+with the reason before anything opens.
+Bundled names take precedence over same-named files; use `./ur_lessons` to
+select a file named `ur_lessons`.
+
+The same choices are in the browser. Open **Choose decks**. Browse a bundled deck and
+select **Use for me** or **Use for opponent** to assign each seat, choose an
+opponent such as **Search 64**, then click **New Game**.
+
+For your own lists, expand **Import decklist files** and check **Use imported
+decks for the next game**. Upload or paste both decks, one `count card name`
+per line, with optional `Main` and `Sideboard` headings. Click **Check decklists**,
+fix any reported issues, and select **New Game**. Imported decks use the
+development format and supported cards; choose a built-in opponent, since
+checkpoint opponents do not accept imported decks. See the
+[play guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#play-a-game).
+
+### Watch a replay from an evaluation
+
+Evaluation trace import needs the optional manabot integration, installed in
+the same environment and at the same release version as managym:
+
+```bash
+uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
+```
+
+With any earlier Academy server stopped, open one game of the evaluation's
+retained command trace, usually
+`traces/<cell-id>.commands.jsonl.gz` in its output directory (download the
+artifact first if the evaluation ran remotely):
+
+```bash
+uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
+```
+
+The browser opens in **Replay** on that game's first decision; use **Step
+decision**, **Previous decision** or **Play**. `--game` is the game's
+position in the file, counted from 0, or the start of its trace digest; run
+the command without it to list the file's games. `managym academy replay
+<recording-id>` reopens a game from **Games**, with or without manabot, in the
+same browser and address (including port), or when it is shared and finished. In
+the browser, the same import is **Open a game file** under
+**Watch** (`/replay?watch=1`). Import verifies the
+recorded actions and state digests without running the original players or
+loading their checkpoints. Incompatible historical worlds need their original
+revision. The [evaluation replay guide](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-an-evaluation)
+covers supported files and troubleshooting.
+
+### Watch a game from your training loop
+
+A game the training loop itself played opens the same way, once manabot has
+exported it:
+
+```bash
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+**Replay** opens headed **Training game** with both players' names, on the
+first of the decisions the loop actually made; an evaluation's game is headed
+**Evaluation game**. Recording the games is one `with record_games(...)` block
+around the loop:
+[Watch a game from your training loop](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#watch-a-game-from-your-training-loop).
+
+### Launch from Python
+
+```python
+from pathlib import Path
+
+from managym.academy.launch import serve
+
+with serve(port=0) as academy:
+    game = academy.new_game(deck="ur_lessons", opponent_deck=Path("my-deck.txt"), seed=7)
+    replay = academy.replay(Path("out/traces/c41.commands.jsonl.gz"), game=3)
+    academy.open(game.url)
+    academy.wait()  # until Ctrl-C; leaving the block stops the server
+```
+
+`serve` opens no browser; call `academy.open()` to open the bare table.
+`game.url` and imported evaluation replay URLs open in any browser that can
+reach the server; recording ids retain the access rules above. Failures raise
+`AcademyLaunchError` with a `code`. See
+[Launch from Python](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#launch-from-python).
+
+For building a deck before play, see [Limited deck building](../docs/deck-building.md):
+`CardPool` holds the cards available, `format.Limited` holds the rules, and a
+build started from both reports the copies still available and when stopping
+is legal. The same rules read and write NumPy arrays over the card axis for
+batched builders.
+Format rules live in `src/format/` (`format::limited`); they build on the
+definitions, decklists and world admission in `src/cards/`.
 
 [Engine development principles](PRINCIPLES.md) records the lessons from
 Allies–Lessons, Elemental and TLA: shared rule ownership, preserved choices and
@@ -23,17 +153,27 @@ are in the [README](../README.md#contracts-the-code-enforces).
    types (cards, zones, mana, effects), re-exported here as `managym::state`;
    **`src/state/`** adds players, decks and the canonical match-state hash
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
-   and their tests, reached by the engine only through `managym_cards::catalog()`;
+   and their tests, reached by the engine only through `managym_cards::catalog()` and `token_catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
-5. **`src/infra/`**: Logging and profiler infrastructure
-6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
+5. **`src/format/`**: Format construction rules and card selection;
+   `limited.rs` adds Limited pool counts and deck size rules to world admission
+6. **`src/infra/`**: Logging and profiler infrastructure
+7. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
-`cards/src/`, returning the engine's own `CardDefinition` in its rules types
-(`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
-the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
+`cards/src/`, returning the engine's own `CardDefinition` (key, Scryfall id and
+`PrintedCharacteristics`) in its rules types (`Effect`, `Ability`, `TargetSpec`,
+…). Tokens are not cards: each is a `TokenDefinition` in `cards/src/tokens.rs`
+with the same `PrintedCharacteristics`, keyed `token.*` and created by that
+key, with a Scryfall id unless it has no printing. The engine registers both
+as `ObjectDefinition` rows with token status. In a game every object has a kind
+(`ObjectKind::Card`, `Token` or `SpellCopy`): a token is never a card, and
+each zone holds only the objects the Comprehensive Rules allow it
+([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values
+directly, and
+the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
-support check (defined non-token cards, excluding rules fixtures) and the set
+support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
 [the content contract](../content/semantic/README.md).
@@ -58,14 +198,14 @@ Both players expose definition-only initial and remaining sideboard counts;
 only the owner gets copy candidates. Python observation JSON and validation
 use the native Rust implementations so new visibility fields cannot drift.
 
-Input v7 factors resolved `EffectRecords` through `agent/shared_effects.rs`
+The policy input factors resolved `EffectRecords` through `agent/shared_effects.rs`
 before admission: complete equal payloads share one header and typed detail
 slice, with one explicit membership per original record. Controller, exact
 source incarnation, timestamps, fixed affected sets and duplicate edges survive.
-Public object IDs are joins; private card storage IDs do not enter this view.
+Public object IDs are joins; private object storage IDs (`ObjectId`) do not enter this view.
 Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
-512 × 3 and 2048 × 2; every capacity fails explicitly. V1–v6 still use their
-frozen per-holder fact projection, while v7 local facts exclude active effects.
+4096 × 3 and 2048 × 2; every capacity fails explicitly. Local facts exclude
+active effects.
 Projection never mutates or semantically coalesces the engine’s records.
 
 Catalog naming uses `Decision::NameCard` over a shared immutable `NameVocabulary`.
@@ -76,9 +216,8 @@ records its digest. A decision holds a `NameScope`; a scope over
 contiguous groups, and choosing one only narrows the scope. Selecting a name
 constructs one `ExileNamed` effect, then enters the existing private search
 continuation. Public names and optional learning definition references are not
-in-game card objects or deck admission. Explicit policy input v9 carries name
-joins and group spans in `name_candidates[A,4]` at ordinary action capacity,
-beside v8's layer layout; v1–v8 layouts and fresh v6 defaults are frozen.
+in-game card objects or deck admission. The policy input carries name joins and
+group spans in `name_candidates[A,4]` at ordinary action capacity.
 See [policy inputs](../docs/observation-and-model.md#catalog-naming-input).
 
 Spell-level modes are announced before targets and payment. Independent target
@@ -110,10 +249,10 @@ ability is created. Its exact incarnations travel through placement, stack and
 suspended resolution; `ObjectSelector::Remembered` never follows a departed
 object into a new incarnation. Event context (such as the spell just cast) stays
 separate. End-step timing can wait for either player's step or the controller's,
-independently of what was captured. Viewer-safe v5/v6 relations and text expose
+independently of what was captured. Viewer-safe relations and text expose
 the remembered references, expiry and frequency. Relation row kind 9 carries
 frequency (column 28: 1 once, 2 each match); column 48 keeps its expiry meaning.
-Missing historical frequency is unknown. Widths and existing meanings stay fixed; earlier input versions retain their exclusions.
+Missing historical frequency is unknown.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
 not a set of revealed physical cards. Search forks by full clone: clone the
@@ -143,9 +282,14 @@ without rewriting earlier receipts. The current corpus is
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
 ```bash
-uv run --python 3.12 --extra play maturin develop --release \
+uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
+
+Run this from the repository root with its CPython 3.13 development environment.
+For a 3.12 compatibility check, use a separate environment and rebuild for that
+interpreter; a `cp313` extension cannot be reused by `cp312`. Follow
+[AGENTS.md](../AGENTS.md#commands) when replacing an already loaded extension.
 
 The [pinned Comprehensive Rules audit](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/README.md)
 inventories every numbered entry, with explicit unknowns and scoped evidence.
@@ -203,10 +347,16 @@ import](../docs/engine.md#decks)) or reset fails. Fixed setups and tests leave
 it unset and run as given without submitted-deck construction checks.
 Any other `world` value is rejected: authored content packs are retired.
 
-Mana feasibility and production share typed costs and pools. `Mana.lesson`
-retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
-casting context, while resolving costs and activations remain unrestricted
-contexts. Chosen-color mana abilities pay their activation costs before their
+Mana feasibility and production share typed costs and pools. `ManaClass`
+retains each class's spending restriction and spend effect; `SpendingContext`
+distinguishes casting, activation and resolving costs. A spell's payment records
+`ManaSpent`, carried to resolution and the entering permanent's own triggers.
+Spending is a native unit/class decision whenever receipts or remaining pools
+differ, including generic colors, restrictions, riders and combat expiry. Each
+offer can complete every saved payment. Partial spending, nested activation
+fees and their saved caller survive exact forks and Command replay; the spell's
+receipt excludes those fees. Academy and policy inputs expose the same choices.
+Chosen-color mana abilities pay their activation costs before their
 immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana. The view is the one reader of a
@@ -249,14 +399,75 @@ commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
 
-Every registered chosen-output mana mode consumes a tap (sometimes also a
-sacrifice), so each source has one use during a payment. The registry contract
-requires a model extension before introducing separate tap/sacrifice mana uses,
-repeatable free sources, or additional mana-ability cost methods.
-Search retains identities rather than grouping equal outputs. Its total and
-spend-purpose bounds only reject impossible branches; every accepted payment
-still requires a complete witness. This is finite search, without a general
-large-board performance guarantee.
+Most payment questions never reach the search. With four untapped Islands and
+an empty pool, "can this player pay `{2}{U}`?" is answered by adding: the pool
+plus every source's output either covers the cost or does not, and the first
+witness taps sources in source order until the pool pays, useful or not. That
+direct answer applies when the question is one mana cost and no available
+source has a mana ability beyond tapping itself for one fixed output: no color
+choice, upfront cost, life payment, counted tap, sacrifice or limited use.
+Restricted fixed outputs (CR 106.6) stay in the class, counted only toward the
+purposes they may pay. A waterbend cost stays in it too: every source worth
+mana is tapped for mana, artifacts and creatures worth none cover the generic
+that taps may pay, and each candidate tap of one waterbend decision is judged
+against one model instead of a new search. Automatic production never
+activates abilities, so its single cost is direct on any board.
+
+Legal actions computed for one decision build each player's sources once
+(`PaymentScan`). Those sources are a function of the game alone, which cannot
+change while the computation borrows it; the pending payment's reservations, a
+sacrifice under consideration and payable life are applied per question. Debug
+builds rebuild the sources on every reuse and assert they match.
+
+The direct answer is exact or it is not used. Modal lands, filters, mana
+abilities with other costs, counted taps, nested activations and the automatic
+prefix of a nested activation go to the search described below, which stays
+the one definition of a legal payment: debug builds run it beside every direct
+answer and assert the same affordability and the same first witness, so
+automatic tapping order cannot differ between the two. Adding a kind of mana
+source needs no change here unless it should join the direct class, which
+requires a test comparing both paths on that source.
+
+Payment search tracks an object's untapped resource, presence and limited
+ability uses separately. Counted tap costs select distinct untapped matching
+permanents through ordinary SelectCard decisions; The Cabbage Merchant can
+activate twice by tapping four distinct Foods without tapping itself. Each
+selected tap commits before the next selection and is unavailable to nested
+costs or waterbending. Pending tap
+counts use the continuation mode field; source and ability retain their usual
+joins. Single-object costs keep their serialized definition shape.
+Every registered mana ability must consume a finite resource. Search bounds
+count repeatable outputs optimistically; every accepted payment still requires
+an identity-preserving witness with explicit tap choices. Every saved counted-tap
+cost must retain enough present, untapped candidates throughout the search;
+production and spending cannot restore a consumed resource. The whole-payment
+bound counts only outputs a pending cost could spend and takes the maximum of
+competing uses of one tap; the color-set bound applies the same supply to every
+set of owed colors, so one "U or R" source cannot cover `{U}{R}`. Search
+memoization shares feasibility across interchangeable sources (including
+membership in every counted-tap set), while retaining source order and exact
+identities in the first witness. Repeated lands therefore contribute resource
+counts instead of all identity subsets. A search checks the color-set bound at
+its root and keeps identity keys until it has expanded 16 states; only then
+does it classify the sources and apply both to every state, so ordinary small
+payments pay nothing for them. Distinct
+source behaviors, overlapping tap sets, nested obligations and concrete pool
+remainders can still make exact search combinatorial; there is no general
+large-board work limit or truncation of legal payments. The
+[stress states](../docs/development.md#stress-states) measure payment and every
+other engine layer on large duplicative and large diverse boards; run them when
+changing this search.
+
+Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
+`SpendPredicate`s naming any subtype a spell must have or an activation's
+source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
+Every cost carries a `SpendingContext`: `Cast` with the spell's announced
+subtypes and types, `Activate` with the source's zone and subtypes, or
+`Resolving`, which only exclusions admit. Observation data names each
+restriction whole. The policy input's restricted-mana columns name exactly
+Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
+mana); every encoder refuses other restricted mana (`unrepresentable_state`)
+rather than drop it.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v5: the schema-8 semantic Observation, shared native continuation frames, bound public card
@@ -272,21 +483,27 @@ The opaque native capture binds an Env and reset generation. Use
 current-digest validation plus ordinary semantic execution. Portable capture JSON
 is evidence, not execution authority; clones need their own live capture.
 
+Frozen viewer JSON omits continuation frames. To reconstruct a complete
+stateless policy observation, use
+`Observation.from_json(viewer_json, continuation_json=frames_json)`; the frames
+pass through the same canonical validator as retained decision captures.
+Neither input creates an executable decision binding.
 
-Fresh policy input v6 has configurable fact capacity (512 by default), with
-v5 frozen at 128 rows and identical column meanings. It keeps v4's trigger-placement action joins and retained
+
+The policy input has configurable fact capacity (512 by default). It keeps
+trigger-placement action joins and retained
 resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its
-layout, legacy checkpoint admission and measurement commands are documented in
+layout, checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 
-`Game::card_power` reads contextual power in every zone: the layered view on
+`Game::object_power` reads contextual power in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
-filters use `card_matches_predicate`; printed-only matching belongs to
+filters use `object_matches_predicate`; printed-only matching belongs to
 structural definition checks and private layer stages. `LookAndSelect` names
 whether the remainder is random; chosen order suspends on native
 `OrderLibrary`, placing cards first-to-draw first through ordinary SelectCard
@@ -316,14 +533,12 @@ changed and pending; a pending turn action cannot enter priority stabilization.
 Immediate fixture/arithmetic helpers require completion without a question and
 fail explicitly if used for a choice-bearing event. Sacrifice facts match their
 pre-move subjects after replacement choices and before any batch member leaves;
-trigger placement still waits for resolution. Explicit input v8 projects the
+trigger placement still waits for resolution. The policy input projects the
 retained program, results, completion and proposals through fact-kind 14 as bare
 name/value facts, with viewer-safe reference slots in relation kind 10; a frame
 that retains nothing emits no occurrence. Academy's pending-resolution summary
 and LLM text are rendered by the same walk only through `describe_effect_execution`
-(decision context and capture), never by a policy observation. Earlier inputs reject
-novel retained state before buffer writes; migrated searches retain their frozen
-obligation codes and implied completion events.
+(decision context and capture), never by a policy observation.
 
 `SelectCards` snapshots eligible exact objects from its selector, retains min/max
 cardinality across choices, and runs the chosen effects in a child scope with

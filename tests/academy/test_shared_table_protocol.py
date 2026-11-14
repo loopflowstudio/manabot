@@ -8,8 +8,8 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 import pytest
 
-from academy import server
-from academy.shared_table_protocol import (
+from managym.academy import server
+from managym.academy.shared_table_protocol import (
     REQUEST_ADAPTER,
     REQUEST_TYPES,
     BeliefScenario,

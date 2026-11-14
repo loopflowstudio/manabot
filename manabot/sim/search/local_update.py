@@ -4,7 +4,11 @@
 values using canonical worlds, actor-view policy rollouts and signed leaf values.
 Live branches share one policy/value forward per ply. `Rollout` owns each
 branch's execution state and independent RNG; immutable `RolloutReceipt` values
-carry its evidence into the local-update receipt.
+carry its evidence into the local-update receipt. Full rollout evidence (v3
+receipts) keeps per-Command native witnesses and actor viewer hashes; opt-in
+compact evidence (v4) keeps Command counts reconciled with native counters.
+Opt-in native frontier encoding writes every live branch's view into
+teacher-owned buffers with one `managym.encode_observations_into` call.
 `LocalUpdatePlayer` maintains viewer history, or an explicitly selected exact
 reference tracker. The closed-form
 update follows Ataraxos supplement S3.7 (7)-(8); model mismatch and truncated
@@ -13,27 +17,21 @@ rollouts preclude an equilibrium guarantee. Receipts are private training data.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
-import hashlib
+from dataclasses import asdict, replace
 import json
 from pathlib import Path
 import time
-from typing import Callable, Literal, Sequence
+from typing import Callable, Sequence
 
-import managym._managym as native
-from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
-from managym.possible_worlds import WorldQuery
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
 from manabot.belief.range import BeliefState
-from manabot.belief.sampling import SamplerInput
-from manabot.belief.sampling_data import _digest
+from manabot.belief.sampling_types import _digest
 from manabot.belief.state import (
     EmptyBeliefSupport,
     ViewerHistory,
@@ -43,360 +41,30 @@ from manabot.belief.state import (
 from manabot.env.env import Env
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
+from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
+from manabot.sim.search.local_update_receipt import (
+    FloatArray,
+    LearnedBeliefReceipt,
+    LocalSearchConfig,
+    LocalUpdateReceipt,
+    SamplerArtifact,
+    _validate_rollout_audit,
+    regularized_update,
+)
 from manabot.sim.search.rollout import Rollout
 from manabot.sim.search.rollout_receipt import RolloutReceipt
 from manabot.sim.search.sampling import (
-    HandBatch,
-    HandSample,
     LearnedHandSampler,
     PhysicalHandSampler,
     SearchHandSampler,
-    validate_hand,
 )
+from manabot.sim.search.sampling_receipt import validate_hand
 import managym
-
-FloatArray = NDArray[np.float64]
-
-
-class LocalSearchConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
-    worlds: int = Field(default=1, ge=1)
-    depth: int = Field(default=2, ge=1)
-    full_probability: float = Field(default=1, ge=0, le=1)
-    cheap_worlds: int = Field(default=1, ge=1)
-    alpha: float = Field(default=0.02, ge=0)
-    beta: float = Field(default=1.0, gt=0)
-    decision_seconds: float = Field(default=1, gt=0)
-    max_support: int = Field(default=20000, ge=1)
-    sampling: Literal["belief", "compatible_prior", "learned"] = "compatible_prior"
-
-
-class SamplerArtifact(BaseModel):
-    """Exact learned-belief provenance; policy and world are checked at admission."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    path: Path
-    sha256: str
-    dataset_identity: str
-    schema_identity: str
-    policy_identity: str
-    world_identity: str
-
-
-@dataclass(frozen=True)
-class LearnedBeliefReceipt:
-    artifact: SamplerArtifact
-    history_identity: str
-    inputs: SamplerInput
-    constraints_json: str
-    sampling_seed: int
-    hands: tuple[HandSample, ...]
-
-
-def regularized_update(
-    base: FloatArray,
-    values: FloatArray,
-    reference: FloatArray,
-    *,
-    alpha: float,
-    beta: float,
-) -> FloatArray:
-    """Maximize p·Q - alpha KL(p||reference) - beta KL(p||base).
-
-    All vectors have shape [legal_actions]. Base zeros restrict the feasible
-    simplex; values outside its support may be NaN and are never consulted.
-    The reference remains strictly positive. Values are signed expected outcomes;
-    beta is the inverse step scale. This is one detached local simplex update,
-    not a gradient through a determinized game or an argmax improvement claim.
-    """
-    if not np.isfinite([alpha, beta]).all() or alpha < 0 or beta <= 0:
-        raise ValueError("local update requires finite alpha >= 0 and beta > 0")
-    arrays = [np.asarray(item, dtype=np.float64) for item in (base, values, reference)]
-    base, values, reference = arrays
-    if base.ndim != 1 or not base.size or any(a.shape != base.shape for a in arrays):
-        raise ValueError("local update vectors must align with legal offers")
-    support = base > 0
-    if not np.isfinite(values[support]).all() or any(
-        not np.isfinite(a).all() for a in (base, reference)
-    ):
-        raise ValueError("local update vectors must be finite")
-    for probabilities in (base, reference):
-        if np.any(probabilities < 0) or not np.isclose(probabilities.sum(), 1):
-            raise ValueError(
-                "base and reference require normalized nonnegative support"
-            )
-    if np.any(reference <= 0):
-        raise ValueError("reference requires positive support")
-    # beta > 0 restricts the feasible simplex to the base support. Missing Q
-    # outside it is deliberately unused, never treated as a zero-valued rollout.
-    logits = (
-        values[support]
-        + alpha * np.log(reference[support])
-        + beta * np.log(base[support])
-    ) / (alpha + beta)
-    if not np.isfinite(logits).all():
-        raise ValueError("local update logits are nonfinite")
-    target = np.exp(logits - logits.max())
-    target /= target.sum()
-    if np.any(target == 0):
-        raise ValueError("local update numerically lost mixed support")
-    aligned = np.zeros_like(base)
-    aligned[support] = target
-    return aligned
-
-
-@dataclass(frozen=True)
-class CompoundPrefixReceipt:
-    """Decoder prefix retained by receipts from removed compound policies.
-
-    Current searches never write one. The type remains so historical receipts
-    still validate and keep their replay identities.
-    """
-
-    root_observation_json: str
-    projection_json: str
-    tokens: tuple[int, ...]
-    commands: tuple[Command, ...]
-
-
-@dataclass(frozen=True)
-class LocalUpdateReceipt:
-    schema: str
-    policy_sha256: str
-    runtime_sha256: str
-    teacher_source_sha256: str
-    world_identity: str
-    belief_digest: str
-    belief_model: str
-    sampling_probabilities: tuple[float, ...]
-    query_json: str
-    condition_mass: float
-    viewer: int
-    revision: int
-    viewer_state_hash: str
-    offer_ids: tuple[int, ...]
-    base: tuple[float, ...]
-    values: tuple[float | None, ...]
-    reference: tuple[float, ...]
-    target: tuple[float, ...]
-    allocation_counts: tuple[int, ...]
-    config_json: str
-    seed: int
-    seconds: float
-    rollouts: tuple[RolloutReceipt, ...]
-    belief_seconds: float = 0.0
-    learned_belief: LearnedBeliefReceipt | None = None
-    direct_belief: HandBatch | None = None
-    compound_prefix: CompoundPrefixReceipt | None = None
-
-    @classmethod
-    def from_json(cls, encoded: str) -> LocalUpdateReceipt:
-        receipt = _RECEIPT_ADAPTER.validate_json(encoded)
-        if receipt.schema not in (
-            "regularized-local-update/v1",
-            "regularized-local-update/v2",
-            "regularized-local-update/v3",
-        ):
-            raise ValueError("unsupported local update receipt")
-        config = LocalSearchConfig.model_validate_json(receipt.config_json)
-        target = regularized_update(
-            np.asarray(receipt.base),
-            np.asarray(receipt.values, dtype=np.float64),
-            np.asarray(receipt.reference),
-            alpha=config.alpha,
-            beta=config.beta,
-        )
-        support = np.asarray(receipt.base) > 0
-        if receipt.schema != "regularized-local-update/v3" and (
-            not support.all() or any(value is None for value in receipt.values)
-        ):
-            raise ValueError("historical receipts require complete positive support")
-        if any(
-            (value is None) == bool(active)
-            for value, active in zip(receipt.values, support)
-        ):
-            raise ValueError("local values must be available exactly on policy support")
-        count = len(target)
-        if len(receipt.offer_ids) != count or len(set(receipt.offer_ids)) != count:
-            raise ValueError("local receipt offers do not align")
-        if (
-            len(receipt.target) != count
-            or not np.allclose(target, receipt.target)
-            or not np.array_equal(np.asarray(receipt.target) > 0, support)
-            or not np.isfinite(receipt.target).all()
-            or np.any(np.asarray(receipt.target) < 0)
-        ):
-            raise ValueError("local target differs from retained update")
-        if any(
-            row.action_index < 0 or row.action_index >= count
-            for row in receipt.rollouts
-        ):
-            raise ValueError("local rollout references an absent action")
-        counts = np.bincount(
-            [row.action_index for row in receipt.rollouts], minlength=count
-        )
-        if not np.array_equal(counts > 0, support) or not np.array_equal(
-            counts, receipt.allocation_counts
-        ):
-            raise ValueError("local update lacks complete policy-support coverage")
-        sums = np.bincount(
-            [row.action_index for row in receipt.rollouts],
-            weights=[row.signed_value for row in receipt.rollouts],
-            minlength=count,
-        )
-        if not np.allclose(
-            sums[support] / counts[support],
-            np.asarray(receipt.values, dtype=np.float64)[support],
-        ):
-            raise ValueError("local values differ from retained rollouts")
-        if receipt.schema != "regularized-local-update/v1" and any(
-            row.canonical_commands != len(row.actor_observation_hashes)
-            or not 1 <= row.canonical_commands <= config.depth
-            for row in receipt.rollouts
-        ):
-            raise ValueError("local receipt canonical Command count differs")
-        prefix = receipt.compound_prefix
-        if any(row.decoder_factors < 0 for row in receipt.rollouts):
-            raise ValueError("negative compound decoder-factor count")
-        if prefix is None:
-            if any(row.decoder_factors for row in receipt.rollouts):
-                raise ValueError("compound factors lack retained prefix provenance")
-        else:
-            root = Observation.from_json(prefix.root_observation_json)
-            revisions = [command.expected_revision for command in prefix.commands]
-            if (
-                receipt.schema == "regularized-local-update/v1"
-                or root.viewer != receipt.viewer
-                or root.revision > receipt.revision
-                or any(a >= b for a, b in zip(revisions, revisions[1:]))
-                or (
-                    revisions
-                    and (
-                        revisions[0] != root.revision
-                        or revisions[-1] >= receipt.revision
-                    )
-                )
-                or (
-                    not revisions
-                    and (
-                        root.revision != receipt.revision
-                        or root.viewer_state_hash != receipt.viewer_state_hash
-                    )
-                )
-                or (bool(prefix.tokens) != bool(prefix.commands))
-            ):
-                raise ValueError("compound prefix does not bind this decision")
-        learned = receipt.learned_belief
-        direct = receipt.direct_belief
-        if (config.sampling == "learned") != (learned is not None):
-            raise ValueError("local receipt sampling provenance differs")
-        if direct is not None:
-            if (
-                receipt.schema == "regularized-local-update/v1"
-                or config.sampling == "belief"
-            ):
-                raise ValueError("direct sampling requires a production sampling mode")
-            prepared = direct.prepared
-            if not prepared.history_identity or not prepared.distribution_identity:
-                raise ValueError("direct sampling identities are missing")
-            constraints_json, hands, sampling_seed = (
-                prepared.constraints_json,
-                direct.hands,
-                direct.seed,
-            )
-            if (
-                learned is not None
-                or prepared.distribution_identity != PhysicalHandSampler.identity
-            ):
-                raise ValueError("physical sampler identity differs")
-            source = json.loads(constraints_json)
-            names = prepared.card_names
-            if (
-                len(set(names)) != len(names)
-                or set(source["pool"]) - set(names)
-                or prepared.inputs.pool_counts
-                != tuple(source["pool"].get(n, 0) for n in names)
-                or prepared.inputs.known_minima
-                != tuple(source["known_hand"].get(n, 0) for n in names)
-                or prepared.inputs.hand_size != source["hand_size"]
-            ):
-                raise ValueError(
-                    "direct sampling coordinates differ from native constraints"
-                )
-        elif learned is not None:
-            constraints_json, hands, sampling_seed = (
-                learned.constraints_json,
-                learned.hands,
-                learned.sampling_seed,
-            )
-        else:
-            if (
-                receipt.schema != "regularized-local-update/v1"
-                and config.sampling != "belief"
-            ):
-                raise ValueError("production receipt lacks direct sampling evidence")
-            if any(
-                row.world_index is None or row.sampled_hand is not None
-                for row in receipt.rollouts
-            ):
-                raise ValueError("enumerated local receipt lacks world indexes")
-            return receipt
-        if (
-            learned is not None
-            and learned.artifact.policy_identity != receipt.policy_sha256
-        ):
-            raise ValueError("local receipt sampler and policy identities differ")
-        source = json.loads(constraints_json)
-        identity = source["source_observation"]
-        if (
-            identity["viewer"] != receipt.viewer
-            or identity["revision"] != receipt.revision
-            or identity["viewer_state_hash"] != receipt.viewer_state_hash
-            or _digest(source) != receipt.world_identity
-            or sampling_seed != receipt.seed
-            or receipt.sampling_probabilities
-            or receipt.condition_mass != 1.0
-            or json.loads(receipt.query_json) != {"kind": "true"}
-            or len(receipt.rollouts) != len(hands) * int(support.sum())
-        ):
-            raise ValueError("local receipt sampled root identity differs")
-        width = int(support.sum())
-        for ordinal, hand in enumerate(hands):
-            validate_hand(hand, constraints_json)
-            rows = receipt.rollouts[ordinal * width : (ordinal + 1) * width]
-            if [row.action_index for row in rows] != list(np.flatnonzero(support)):
-                raise ValueError("sampled hand lacks policy-support coverage")
-            if any(
-                row.world_index is not None or row.sampled_hand != hand for row in rows
-            ):
-                raise ValueError("local receipt rollout sampled hand differs")
-        return receipt
-
-    def to_json(self) -> str:
-        payload = _RECEIPT_ADAPTER.dump_python(self, mode="json")
-        if self.schema == "regularized-local-update/v1":
-            payload.pop("direct_belief")
-            payload.pop("compound_prefix")
-            for rollout in payload["rollouts"]:
-                rollout.pop("decoder_factors")
-                rollout.pop("canonical_commands")
-        return json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        )
-
-    def replay_identity(self) -> str:
-        payload = json.loads(self.to_json())
-        payload.pop("seconds")
-        payload.pop("belief_seconds")
-        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
-
-
-_RECEIPT_ADAPTER = TypeAdapter(LocalUpdateReceipt)
+import managym._managym as native
+from managym.decision import DecisionFrame, Observation, SemanticTransition
+from managym.possible_worlds import WorldQuery
 
 
 def local_search_source_sha256() -> str:
@@ -404,10 +72,13 @@ def local_search_source_sha256() -> str:
     root = Path(__file__).resolve().parents[3]
     paths = (
         "manabot/sim/search/local_update.py",
+        "manabot/sim/search/local_update_receipt.py",
+        "manabot/sim/search/sampling_receipt.py",
+        "manabot/belief/sampling_types.py",
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
-        "manabot/model/actor_critic.py",
+        "manabot/backends/torch/policy.py",
         "manabot/model/facts.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
@@ -427,6 +98,7 @@ class LocalUpdateTeacher:
         *,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
+        native_encoder: bool = True,
     ) -> None:
         self.likelihood = FrozenPolicyLikelihood(checkpoint, expected_sha256=sha256)
         self.agent = self.likelihood.agent
@@ -442,6 +114,10 @@ class LocalUpdateTeacher:
             )
         self.agent.requires_grad_(False)
         self.space = self.likelihood.obs_space
+        # Native frontier encoding reuses these teacher-owned buffers across
+        # forwards, so one teacher serves one search at a time.
+        self.native_encoder = native_encoder
+        self._frontier_buffers: dict[str, NDArray[np.generic]] = {}
         self.config = config
         if file_sha256(checkpoint) != sha256:
             raise ValueError("checkpoint changed during local-search admission")
@@ -493,6 +169,51 @@ class LocalUpdateTeacher:
         """
         if not engines:
             return []
+        if self.native_encoder:
+            encodings, counts = self._encode_native(engines)
+        else:
+            encodings, counts = self._encode_rows(engines)
+        tensors = admit_observation(
+            self.agent,
+            {key: torch.as_tensor(value) for key, value in encodings.items()},
+        )
+        with torch.inference_mode():
+            logits, values = self.agent(tensors)
+            predictions = [
+                (logits[i, :count].double().softmax(-1).numpy(), float(values[i]))
+                for i, count in enumerate(counts)
+            ]
+        if any(not np.isfinite(value) for _, value in predictions):
+            raise ValueError("nonfinite leaf value")
+        # Scalar PPO heads are unconstrained; retain their actual signed estimate.
+        return predictions
+
+    def _encode_native(
+        self, engines: Sequence[managym.Env]
+    ) -> tuple[dict[str, NDArray[np.generic]], list[int]]:
+        """One native call writes every actor view into the reused frontier buffers.
+
+        The returned arrays are views of the first `len(engines)` rows and are
+        valid until the next frontier encoding.
+        """
+        capacity = len(self._frontier_buffers.get("actions_valid", ()))
+        if len(engines) > capacity:
+            capacity = len(engines)
+            self._frontier_buffers = self.space.encoder.allocate(capacity)
+        counts = managym.encode_observations_into(
+            engines, self._frontier_buffers, capacity
+        )
+        encodings = {
+            key: value[: len(engines)] for key, value in self._frontier_buffers.items()
+        }
+        for index, count in enumerate(counts):
+            if count == 0 or int(encodings["actions_valid"][index].sum()) != count:
+                raise ValueError("policy cannot represent complete legal offers")
+        return encodings, counts
+
+    def _encode_rows(
+        self, engines: Sequence[managym.Env]
+    ) -> tuple[dict[str, NDArray[np.generic]], list[int]]:
         # The selected space owns every axis, including historical inputs and
         # nondefault capacities. Each row is a contiguous view of this call's
         # fresh batch; no observation buffers survive into the next frontier.
@@ -511,17 +232,7 @@ class LocalUpdateTeacher:
             if int(encoded["actions_valid"].sum()) != count:
                 raise ValueError("policy cannot represent complete legal offers")
             counts.append(count)
-        tensors = {key: torch.as_tensor(value) for key, value in encodings.items()}
-        with torch.inference_mode():
-            logits, values = self.agent(tensors)
-            predictions = [
-                (logits[i, :count].double().softmax(-1).numpy(), float(values[i]))
-                for i, count in enumerate(counts)
-            ]
-        if any(not np.isfinite(value) for _, value in predictions):
-            raise ValueError("nonfinite leaf value")
-        # Scalar PPO heads are unconstrained; retain their actual signed estimate.
-        return predictions
+        return encodings, counts
 
     def _run_rollouts(self, rollouts: list[Rollout], check: Callable[[], None]) -> None:
         """Advance one Command per live branch, then one forward for the frontier.
@@ -555,11 +266,12 @@ class LocalUpdateTeacher:
         *,
         query: WorldQuery | None = None,
     ) -> None:
-        """Re-execute the sampled branches and compare every retained witness.
+        """Re-execute the sampled branches and compare the retained evidence.
 
         The caller supplies the exact historical root and its tracked belief;
         receipts are not a substitute for the canonical source trajectory.
-        Elapsed time is the only excluded field. Receipts of removed compound
+        Elapsed time is the only excluded field. Compact receipts check values
+        and Command counts, not the per-Command witnesses they omit. Receipts of removed compound
         policies are readable but not replayable here.
         """
         if receipt.compound_prefix is not None:
@@ -709,6 +421,7 @@ class LocalUpdateTeacher:
             assert isinstance(belief, BeliefState)
             indexes = list(belief.sample_indexes(world_count, seed=seed))
         supported_actions = [int(action) for action in np.flatnonzero(base > 0)]
+        full_evidence = self.config.rollout_evidence == "full"
         rollouts: list[Rollout] = []
         for sample_number, index in enumerate(indexes):
             check()
@@ -739,7 +452,7 @@ class LocalUpdateTeacher:
                 check()
                 rollout_seed = int(rng.integers(0, 2**63))
                 session = SelectedFullCloneBackend().open_session(
-                    match_id=f"local-{seed}-{len(rollouts)}", audit=True
+                    match_id=f"local-{seed}-{len(rollouts)}", audit=full_evidence
                 )
                 rollouts.append(
                     Rollout(
@@ -751,6 +464,7 @@ class LocalUpdateTeacher:
                         rollout_seed=rollout_seed,
                         sampled_hand=sampled_hand,
                         probabilities=base,
+                        record_hashes=full_evidence,
                     )
                 )
         self._run_rollouts(rollouts, check)
@@ -760,6 +474,11 @@ class LocalUpdateTeacher:
         for row in rollouts:
             check()
             receipt = row.receipt(viewer)
+            _validate_rollout_audit(
+                receipt.branch_audit_json,
+                receipt.canonical_commands,
+                full=full_evidence,
+            )
             sums[row.action_index] += receipt.signed_value
             counts[row.action_index] += 1
             receipts.append(receipt)
@@ -771,7 +490,11 @@ class LocalUpdateTeacher:
             base, values, reference, alpha=self.config.alpha, beta=self.config.beta
         )
         receipt = LocalUpdateReceipt(
-            schema="regularized-local-update/v3",
+            schema=(
+                "regularized-local-update/v3"
+                if full_evidence
+                else "regularized-local-update/v4"
+            ),
             policy_sha256=self.likelihood.checkpoint_sha256,
             runtime_sha256=self.runtime_sha256,
             teacher_source_sha256=self.source_sha256,
@@ -792,7 +515,7 @@ class LocalUpdateTeacher:
             reference=tuple(reference),
             target=tuple(target),
             allocation_counts=tuple(int(n) for n in counts),
-            config_json=self.config.model_dump_json(),
+            config_json=self.config.receipt_config_json(),
             seed=seed,
             seconds=time.perf_counter() - started,
             rollouts=tuple(receipts),

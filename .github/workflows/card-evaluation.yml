@@ -15,7 +15,7 @@ jobs:
           workspaces: managym -> target
       - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
       - name: Build native engine
         run: uv run --extra play --extra evaluation maturin develop --release --manifest-path managym/Cargo.toml
       - name: Verify 1024 native games and retained rebuild

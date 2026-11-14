@@ -11,7 +11,7 @@ use crate::{
     state::{
         ability::DelayedExpiry,
         card::StaticAbility,
-        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectRef, PermanentId, PlayerId},
         permanent::CounterKind,
     },
 };
@@ -55,7 +55,7 @@ impl Game {
         if amount <= 0 {
             return false;
         }
-        let source_card = source.map(|object_ref| CardId::from(object_ref.entity));
+        let source_object = source.map(|object_ref| ObjectId::from(object_ref.entity));
         let source_has_deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
@@ -72,15 +72,24 @@ impl Game {
 
         match target {
             ProposedDamageTarget::Player(player) => {
+                // Protection from everything prevents all damage (CR 702.16e).
+                if self.has_protection_from_everything(player) {
+                    return false;
+                }
+                // Damage is still dealt to a player whose life total can't
+                // change; only the life loss doesn't happen (CR 119.7).
+                let locked = self.life_total_cant_change(player);
                 let Some(life) = self.state.life_mut(player) else {
                     return false;
                 };
                 let old_life = *life;
-                *life = life.saturating_sub(amount);
+                if !locked {
+                    *life = life.saturating_sub(amount);
+                }
                 let new_life = *life;
 
                 self.emit(GameEvent::DamageDealt {
-                    source: source_card,
+                    source: source_object,
                     target: DamageTarget::Player(player),
                     amount: amount as u32,
                 });
@@ -91,11 +100,13 @@ impl Game {
                         amount: amount as u32,
                     });
                 }
-                self.emit(GameEvent::LifeChanged {
-                    player,
-                    old: old_life,
-                    new: new_life,
-                });
+                if old_life != new_life {
+                    self.emit(GameEvent::LifeChanged {
+                        player,
+                        old: old_life,
+                        new: new_life,
+                    });
+                }
             }
             ProposedDamageTarget::Object(object_ref) => {
                 let event_target = self.object_event_ref(object_ref);
@@ -121,7 +132,7 @@ impl Game {
                     self.commit_counter_change(object_ref, CounterKind::Defense, -amount, None);
                 }
                 self.emit(GameEvent::DamageDealt {
-                    source: source_card,
+                    source: source_object,
                     target: DamageTarget::Permanent(permanent_id),
                     amount: amount as u32,
                 });
@@ -146,6 +157,9 @@ impl Game {
     }
 
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> bool {
+        if self.life_total_cant_change(player) {
+            return false;
+        }
         if delta > 0
             && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
                 self.battlefield_permanents(owner).into_iter().any(|id| {
@@ -190,11 +204,14 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);
         }
-        let card = CardId::from(source.entity);
-        if let Some(controller) = self.stack_spell_controller(card) {
-            return Some(self.spell_keywords(card, controller));
+        let object = ObjectId::from(source.entity);
+        if let Some(controller) = self.stack_spell_controller(object) {
+            return Some(self.spell_keywords(object, controller));
         }
-        self.state.cards.get(card.0).map(|card| card.keywords)
+        self.state
+            .objects
+            .get(object.0)
+            .map(|object| object.keywords)
     }
 
     fn source_controller(&self, source: ObjectRef) -> Option<PlayerId> {
@@ -206,8 +223,8 @@ impl Game {
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.controller);
         }
-        let card = CardId::from(source.entity);
-        self.state.cards.get(card.0).map(|card| card.owner)
+        let object = ObjectId::from(source.entity);
+        self.state.objects.get(object.0).map(|object| object.owner)
     }
 
     pub(crate) fn gain_life(&mut self, player: PlayerId, amount: i32) {
@@ -220,6 +237,7 @@ impl Game {
     /// "once each turn" limits and "dealt damage this turn" reset.
     pub(crate) fn end_turn_modifiers(&mut self) {
         self.end_turn_effects();
+        self.end_skipped_combat_phases(self.active_player());
         if self
             .state
             .delayed_triggers

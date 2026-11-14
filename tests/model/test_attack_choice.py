@@ -2,9 +2,12 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
     ACTION_DECLARED_INDEX,
@@ -13,11 +16,10 @@ from manabot.env.observation import (
 )
 from manabot.experiment.config import Experiment
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
+from manabot.model.admission import admit_observation
 from manabot.model.world import WORLD, checkpoint_world
+from manabot.policy.prepare import reference_distribution
 from manabot.training.execution import execute_regime
-from manabot.training.learning.references import reference_distribution
 from manabot.verify.action_cases import (
     DecisionCase,
     decision_case,
@@ -58,24 +60,30 @@ def test_native_attack_choice_can_learn_either_preference(
                 ModelConfig(hidden_dim=8, num_attention_heads=2, attention_on=False),
             )
         # Erasing the declaration reproduces the old, weight-independent tie.
-        logits, _ = agent(identity_removed(attack_case))
+        logits, _ = agent(admit_observation(agent, identity_removed(attack_case)))
         torch.testing.assert_close(logits[0, 0], logits[0, 1], rtol=0, atol=0)
 
         optimizer = torch.optim.Adam(agent.parameters(), lr=0.02)
         for _ in range(40):
-            logits, _ = agent(attack_observation)
+            logits, _ = agent(admit_observation(agent, attack_observation))
             loss = -logits.log_softmax(-1)[0, preferred]
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
         with torch.no_grad():
-            logits, _ = agent(attack_observation)
+            logits, _ = agent(admit_observation(agent, attack_observation))
             assert float(logits.softmax(-1)[0, preferred]) > 0.95
-            swapped, _ = agent(reorder_offers(attack_observation, torch.tensor([1, 0])))
+            swapped, _ = agent(
+                admit_observation(
+                    agent, reorder_offers(attack_observation, torch.tensor([1, 0]))
+                )
+            )
             torch.testing.assert_close(swapped[:, :2], logits[:, [1, 0]])
         for kind in ("uniform", "action_type_uniform"):
-            prior = reference_distribution(attack_observation, kind)
-            torch.testing.assert_close(prior[0, :2], torch.tensor([0.5, 0.5]))
+            prior = reference_distribution(
+                {k: v.numpy() for k, v in attack_observation.items()}, kind
+            )
+            np.testing.assert_allclose(prior[0, :2], [0.5, 0.5])
             assert not prior[0, 2:].any()
     finally:
         torch.set_num_threads(previous_threads)

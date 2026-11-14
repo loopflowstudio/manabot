@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from academy.shared_table_protocol import shared_table_schema
+from managym.academy.shared_table_protocol import shared_table_schema
 
 
 def main() -> None:

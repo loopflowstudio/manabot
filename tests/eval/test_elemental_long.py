@@ -4,6 +4,7 @@ from collections import Counter
 import json
 from pathlib import Path
 
+from etude.launch.records import Until
 from etude.run.storage import DirectoryStorage
 import pytest
 
@@ -56,7 +57,7 @@ def test_segment_continues_the_frozen_recipe_on_the_cadence() -> None:
     assert spec.milestones[0] == 2600 and spec.milestones[-1] == 3950
     assert all(m % CADENCE == 0 for m in spec.milestones)
     job = spec.job(repo=REGIME.parent, revision="HEAD", max_hours=24)
-    assert job.until == "updates=4000" and len(job.inputs) == 4
+    assert job.until == Until(clock="updates", value=4000) and len(job.inputs) == 4
 
 
 def _window(tmp_path: Path, checkpoint_updates: int | None = None) -> Path:

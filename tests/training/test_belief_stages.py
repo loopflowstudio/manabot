@@ -6,10 +6,10 @@ from typing import Literal
 
 import pytest
 
+from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import read_dataset
 from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.regime import (
     CollectBelief,

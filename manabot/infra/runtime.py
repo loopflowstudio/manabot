@@ -6,7 +6,7 @@ Experiment definitions live in experiment.config; this module owns only
 per-run setup and tracking.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import logging
 import os
 from pathlib import Path
@@ -139,6 +139,22 @@ class RunContext:
         self._updates = updates
         self._transitions = transitions
         self.run.log(metrics, updates=updates, learner_transitions=transitions)
+
+    def log_table(
+        self,
+        name: str,
+        rows: Sequence[Mapping[str, object]],
+        *,
+        updates: int,
+        transitions: int,
+    ) -> None:
+        """Store one update's JSON rows as an Etude table artifact at its coordinates.
+
+        The rows are durable before return; `RunData.read_table` reads them back.
+        """
+        if self._closed:
+            raise RuntimeError("cannot log to a closed run context")
+        self.run.log_table(name, rows, updates=updates, learner_transitions=transitions)
 
     def checkpoint(self, path: Path, *, transitions: int) -> ArtifactRef:
         """Retain exact exported bytes; this is not policy or resume admission."""

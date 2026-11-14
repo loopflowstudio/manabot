@@ -192,8 +192,8 @@ def scored_runs(storage: Storage, experiment: str, legs: int) -> dict[str, Score
     database = statsdb(experiment, storage)
     found = database.execute(
         """
-        select regexp_extract(s.matchup, '^(.*) u[0-9]+ vs heuristic$', 1) as run,
-               cast(regexp_extract(s.matchup, ' u([0-9]+) vs heuristic$', 1) as int) as update,
+        select regexp_extract(s.seating, '^(.*) u[0-9]+ vs heuristic$', 1) as run,
+               cast(regexp_extract(s.seating, ' u([0-9]+) vs heuristic$', 1) as int) as update,
                cast(json_extract(m.conditions, '$.deal') as bigint) as deal,
                avg(p.score) as score,
                count(*) as plays

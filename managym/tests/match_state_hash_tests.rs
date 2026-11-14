@@ -6,8 +6,8 @@ use rand_chacha::ChaCha8Rng;
 use managym::{
     cards::content_pack::{default_content_pack, ContentPack},
     state::{
-        card::{CardDefId, CardDefinition, Keyword, Keywords},
-        game_object::{CardId, ObjectId, PlayerId},
+        card::{CardDefId, CardDefinition, Keyword, Keywords, PrintedCharacteristics},
+        game_object::{ObjectId, PlayerId, PublicId},
         permanent::{CounterKind, Counters},
         stack_object::{SpellOnStack, StackObject},
         zone::ZoneType,
@@ -131,7 +131,7 @@ fn clone_and_allocation_addresses_do_not_change_the_hash() {
     let game = make_game(11);
     let clone = game.clone();
 
-    assert_ne!(game.state.cards.as_ptr(), clone.state.cards.as_ptr());
+    assert_ne!(game.state.objects.as_ptr(), clone.state.objects.as_ptr());
     assert_eq!(
         game.state.deterministic_hash(),
         clone.state.deterministic_hash()
@@ -172,14 +172,13 @@ fn meaningful_mutable_facts_change_the_hash() {
     library_order
         .state
         .zones
-        .zone_cards_mut(ZoneType::Library, PlayerId(0))
-        .swap(0, 1);
+        .swap(ZoneType::Library, PlayerId(0), 0, 1);
     assert_ne!(baseline, library_order.state.deterministic_hash());
 
     let mut definition = game.clone();
-    let card = CardId(0);
-    let original_id = definition.state.cards[card].definition_id;
-    definition.state.cards[card].definition_id =
+    let object = ObjectId(0);
+    let original_id = definition.state.objects[object].definition_id;
+    definition.state.objects[object].definition_id =
         CardDefId((original_id.0 + 1) % default_content_pack().len() as u32);
     assert_ne!(baseline, definition.state.deterministic_hash());
 
@@ -203,7 +202,10 @@ fn content_schema_and_content_change_the_hash() {
 
     let mut content_pack = default_content_pack().clone();
     content_pack.register_card(CardDefinition {
-        name: "State Hash Test Definition".to_string(),
+        printed: PrintedCharacteristics {
+            name: "State Hash Test Definition".to_string(),
+            ..Default::default()
+        },
         ..Default::default()
     });
     assert_ne!(baseline, game.state.deterministic_hash_over(&content_pack));
@@ -213,7 +215,7 @@ fn content_schema_and_content_change_the_hash() {
 fn card_names_are_compatibility_data_not_state_identity() {
     let game = make_game(23);
     let mut renamed = game.clone();
-    renamed.state.cards[CardId(0)].name = "Compatibility-only rename".to_string();
+    renamed.state.objects[ObjectId(0)].name = "Compatibility-only rename".to_string();
 
     assert_eq!(
         game.state.deterministic_hash(),
@@ -226,14 +228,15 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
     let spell = SpellOnStack {
         cast_from: managym::state::zone::ZoneType::Hand,
         flashback: false,
-        id: ObjectId(101),
-        card: CardId(3),
+        id: PublicId(101),
+        object: ObjectId(3),
         controller: PlayerId(0),
         source_definition_id: CardDefId(7),
         targets: Vec::new(),
         target_req_indices: Vec::new(),
         kicked: false,
         x: 0,
+        spent: Default::default(),
         mode: None,
     };
     let stack_object = StackObject::Spell(spell.clone());
@@ -241,7 +244,7 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
     let typed: CardDefId = spell.source_definition_id;
     assert_eq!(typed, CardDefId(7));
     assert_eq!(stack_object.source_definition_id(), CardDefId(7));
-    assert_eq!(stack_object.source_card_registry_key(), ObjectId(7));
+    assert_eq!(stack_object.source_card_registry_key(), PublicId(7));
 
     let serialized = serde_json::to_value(spell).expect("stack spell serializes");
     assert_eq!(serialized["source_card_registry_key"], 7);
