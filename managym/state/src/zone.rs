@@ -333,6 +333,12 @@ impl ZoneManager {
         self.zone_objects(zone, player).len()
     }
 
+    /// Ordered battlefield appearances, including phased-out permanents.
+    #[inline]
+    pub fn battlefield_objects(&self, player: PlayerId) -> &[ObjectId] {
+        &self.battlefield[player.0]
+    }
+
     #[inline]
     pub fn zone_objects(&self, zone: ZoneType, player: PlayerId) -> ZoneObjects<'_> {
         let idx = player.0;

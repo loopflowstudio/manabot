@@ -209,7 +209,7 @@ impl Game {
     ) -> impl Iterator<Item = PermanentId> + '_ {
         self.state
             .zones
-            .zone_objects(ZoneType::Battlefield, player)
+            .battlefield_objects(player)
             .iter()
             .filter_map(|object| self.state.permanent_of(*object))
     }

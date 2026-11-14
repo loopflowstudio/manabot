@@ -696,3 +696,32 @@ fn cr_400_7_outside_card_is_in_no_zone_until_it_enters_the_game() {
     assert_eq!(s.game().state.cards[card], physical);
     assert_eq!(s.game().state.cards.len(), 83);
 }
+
+/// Battlefield readers retain both seats' insertion order and exact appearances.
+#[test]
+fn cr_400_battlefield_traversal_preserves_empty_and_both_seat_order() {
+    let mut s = Scenario::new(
+        deck(&[("Gray Ogre", 20), ("Mountain", 20)]),
+        deck(&[("Hill Giant", 20), ("Island", 20)]),
+        400_711,
+    );
+    for player in [PlayerId(0), PlayerId(1)] {
+        assert!(s.game().state.zones.battlefield_objects(player).is_empty());
+    }
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    let mountain = s.force_permanent_on_battlefield(0, "Mountain");
+    let island = s.force_permanent_on_battlefield(1, "Island");
+    for (player, permanents) in [
+        (PlayerId(0), [ogre, mountain]),
+        (PlayerId(1), [giant, island]),
+    ] {
+        let state = &s.game().state;
+        let expected = permanents.map(|id| state.permanents[id].as_ref().unwrap().object);
+        assert_eq!(state.zones.battlefield_objects(player), expected);
+        assert!(state.zones.battlefield_objects(player).iter().eq(state
+            .zones
+            .zone_objects(ZoneType::Battlefield, player)
+            .iter()));
+    }
+}
