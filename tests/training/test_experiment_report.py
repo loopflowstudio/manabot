@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from manabot.reports.study import ScientificStudy
 
-from etude.run.records import RunDeclaration, RunFile, SourceKey
+from etude.records import RunRecord
 from nbclient import NotebookClient
 import nbformat
 from pydantic import ValidationError
@@ -77,23 +77,42 @@ def test_game_recovery_summary_does_not_publish_private_inputs(
     assert f"stop reason: {expected}" in html
 
 
+@pytest.mark.parametrize("historical", [False, True])
 def test_tracker_declarations_are_sources_without_extra_trajectories(
     tmp_path: Path,
+    historical: bool,
 ) -> None:
     root = tmp_path / "evidence"
     shutil.copytree(DEMO, root)
     before = load_evidence(root)
     tracker = root / "tracking" / "run.json"
     tracker.parent.mkdir()
-    declaration = RunFile(
+    declaration = RunRecord(
+        id="report-fixture/fixture",
         experiment="report-fixture",
         namespace="manabot",
-        declaration=RunDeclaration(
-            source_key=SourceKey(namespace="manabot", kind="run", source_id="fixture"),
-            clocks=(),
-        ),
+        clocks=(),
     )
-    tracker.write_text(declaration.model_dump_json())
+    if historical:
+        tracker.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "experiment": "report-fixture",
+                    "namespace": "manabot",
+                    "declaration": {
+                        "source_key": {
+                            "namespace": "manabot",
+                            "kind": "run",
+                            "source_id": "fixture",
+                        },
+                        "clocks": [],
+                    },
+                }
+            )
+        )
+    else:
+        tracker.write_text(declaration.model_dump_json())
     after = load_evidence(root)
     assert after.runs == before.runs
     assert tracker in after.paths

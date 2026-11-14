@@ -8,7 +8,7 @@ from etude.experiment import (
     read_experiment,
 )
 from etude.jobs import evaluation_spec
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import pytest
 import torch
 

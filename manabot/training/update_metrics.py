@@ -21,7 +21,7 @@ from pathlib import Path
 import re
 from typing import Protocol
 
-from etude.run.listing import runs
+from etude.run import runs
 from etude.train.manifest import StoredBlock
 from etude.train.read import RunData, read
 
@@ -154,14 +154,14 @@ def _updates(data: RunData) -> Updates:
     # Group blocks, not decoded rows: read one block at a time without populating
     # RunData.columns, which caches the entire history. Keep empty attempts too.
     writers: dict[str, list[StoredBlock]] = {
-        attempt.writer: [] for attempt in data.attempts
+        attempt.writer: [] for attempt in data.writers
     }
-    started = {attempt.writer: attempt.started_ms for attempt in data.attempts}
+    started = {attempt.writer: attempt.started_ms for attempt in data.writers}
     for block in data.blocks:
         writer = block.header.writer
         writers.setdefault(writer, []).append(block)
         started.setdefault(writer, block.header.wall_first)
-    attempts = {attempt.writer: attempt for attempt in data.attempts}
+    attempts = {attempt.writer: attempt for attempt in data.writers}
     selected: dict[int, MetricRow] = {}
     for writer in sorted(writers, key=started.__getitem__):
         attempt = attempts.get(writer)
@@ -184,7 +184,14 @@ def _updates(data: RunData) -> Updates:
         # A later attempt replaces history beyond its resume point, including
         # when it has no rows. Within an attempt each metric's latest write wins.
         if resumed is not None:
-            selected = {u: row for u, row in selected.items() if u <= resumed}
+            # Current writers replace the first logged coordinate itself;
+            # historical checkpoint cuts retain it.
+            first_row = attempt is not None and attempt.first_row
+            selected = {
+                u: row
+                for u, row in selected.items()
+                if u < resumed or (u == resumed and not first_row)
+            }
         selected.update(rows)
     if any(_RETIRED_OUTCOME_REFERENCE in row for row in selected.values()):
         raise ValueError(

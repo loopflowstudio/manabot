@@ -1,74 +1,75 @@
-# MTG-329 implementation evidence
+# MTG-329 evidence
 
-## Earlier cutover evidence (not the new train API)
+Earlier transcripts and contrary findings: 382c653ec8:scratch/implementation.md.
+The earlier state.pt parity proof is not proof of the revised save API.
 
-Full transcripts: `bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/implementation.md`.
-The older executor extraction is implemented and uses state.pt plus the real
-EXP-56 source override at 105abdd. Fresh seed-197 CPU PPO and damped-policy
-runs matched retired executor main 6ce618b8a bitwise on all 87 raw/EMA tensors.
-Two updates, two streams, 16-transition floor, four games, 357 decisions;
-PPO two optimizer updates/179 exposures. Persistence and random streams on
-resume intentionally differ. No provider/service proof follows.
+2026-11-14: uv lock and locked sync install Etude 5708e14 from the development
+source override. Focused loop/minimal/recipe/report/SDK/source/CLI run: 36 passed,
+2 failed (34.35s): guide/source drift and eager simulation import defeating
+SDK-free migration guidance. Both fixed. Follow-up guide/CLI/recipe/experiment
+discovery: 11 passed (5.48s). Existing Etude compatibility deprecations remain.
 
-Earlier focused real-SDK checks covered immutable policies, saved milestone
-repair, numerical incidents, belief provenance, selection caches and tracking.
-They are not proof of the revised resume/save/steps API. No local SDK stub or
-source-path pin is committed. Requirements/lock still name 0.2.16.
+Pinned API imports resolve throughout non-fixture Python sources after following
+removed modules and RunRequest. Report admission selects the producer schema
+before validation; malformed untagged retained runs no longer enter via the
+permissive Etude RunRecord. Frozen evidence was not rewritten.
 
-Contrary findings: retained game-error fixture frame schema 7 vs runtime 8
-fails binding_mismatch; frozen bytes were kept. A bounded rowless-exception
-probe against 105abdd changed a finished run to failed after ValueError or
-KeyboardInterrupt. That fix belongs in Etude.
+- `uv run --no-sync python scratch/parity.py`: PPO and damped-policy raw/EMA,
+  87 tensors each, bitwise equal to retired executor 6ce618b8adacee3a4894d05572399853680bb9fe,
+  including the new saved learner/EMA. Seed 197, two updates/two streams,
+  16-transition floor, four games/357 decisions. PPO: 2 optimizer updates/179
+  exposures; damped: 52/79. Reference used real etude-sdk 0.2.16 in a temporary
+  target; current used pinned 5708e14. Native SHA256:
+  ee798c176871b6a5cb6af0fba49a50a8b4e18104fabbafe9fd74fe4794f567e5.
+- Controlled real SIGINT and SIGTERM at the first completed update, through
+  `etude train`: each exited 75 with saved clocks/counts at 1; `--resume`
+  finished at 3, rows [1,2,3], two writers. No timing or load injection.
+- Real `etude train belief_policy.py`, then `belief_sampler.py` under a fresh
+  ETUDE_HOME: policy succeeded; sampler failed `input not given: 'start'`.
+  Local `_prepare` omits job inputs/environment. No workaround or SDK edit.
+  `runs()` now declares a completed checkpoint, consistent with landed start=;
+  its input digest/owner and recipe given-input provenance are covered, but
+  automatic chaining and actual local input carriage remain unmet.
+- Empty `/tmp/mtg329-deps` locked dev+artifacts environment: artifact storage,
+  SDK, source and recipe files, 14 passed (15.92s). Used uv sync excluding
+  managym install and uv run --no-sync; native came from the existing checkout,
+  so this isolates Python extras, not the engine build.
+- Report admission (new and historical Etude), release, CI selection and
+  Torch-free evaluation-child checks: 94 passed (2.18s).
+- Installed smoke outside the checkout: CPython 3.13.15 and 3.12.12 passed,
+  pure Manabot wheel rebuilt with release/prepare.py; existing paired Managym
+  0.2.3 cp313/cp312 macOS wheels from /tmp/mtg352-release-wheels; Torch 2.15.0,
+  real pinned Etude. No Rust rebuild in this pass. Release smoke initially
+  exposed an overbroad command replacement (`uv train`); corrected to uv run
+  with etude train before both passing smokes.
+- Tiny benchmark consumer proof: seed 197, one Gray Ogre update, real local
+  Etude rows, two games. Generated typed runs() declares the seed. Nightly
+  caller follows that declaration/address shape; its full workload was not run.
+- Etude import inventory resolves; changed guide examples/YAML/Python heredocs
+  parse; minimal guide matches source; Ruff check/format, workflow validator
+  and git diff --check pass.
 
-## Independent CLI deletion — 2026-11-13
+No paid/provider/service run, launch retry/restore, continue proof, publication
+or landing. Gate's broader suites remain for gate. The known frozen replay
+schema 7 versus current 8 mismatch remains unmodified.
 
-`uv run --no-sync manabot train --recipe local --out /tmp/unused`: exit 2,
-replacement and resume guidance, no training (also with etude.stopping and
-self_play imports blocked). Exclusive CLI tests removed; mixed files keep
-tracker, learner, replay/provenance and saved-record tests.
-Validation: test_train_command 5 passed; torch import boundary test passed;
-Ruff clean; loopflow workflow check valid; changed YAML/Python compile; diff
-check clean. Full transcript: `7634686984:scratch/implementation.md`.
-
-## Compress — 2026-11-13
-
-CLI cut: removed the release smoke's `train --help` call, inlined the local
-recipe's update default, restored the dated `experiments/baseline-nightly.md`;
-test_train_command + test_release: 42 passed.
-Client cut: `step` adds each update's collector deltas to `counts` in place,
-so `counted`, the `base` argument and the copy-back loop are gone; `out` is
-required; `learner_settings`, `create_model` and `create_learner` are inlined;
-docs/training.md's loop listing and the stop test follow.
-Ruff check/format and py_compile clean on the six changed files; `git diff
---check` clean. test_self_play_loop was not run: it needs the unreleased SDK.
-
-## Realign probe against EXP-56 source — 2026-11-13 evening
-
-Seen: MTG-348 done; this branch merged main at 0.3.2 (`c3dfd82476`). 0.3.2
-still has `etude.run` and no Run.resume/steps/save. EXP-56 checkout at
-9a762a1 plus uncommitted edits (HEAD 98c8f05 by the end) has local
-`etude run`, explicit `--resume`, job seeds and `etude.tracking`.
-In a throwaway worktree of this HEAD with only `etude.run.` → `etude.tracking.`
-rewritten, EXP-56 `src` on PYTHONPATH (nothing committed):
-- every loop/recipe module imports (self_play, minimal, local, elemental,
-  belief_policy, belief_sampler, baseline, eval.benchmark).
-- `etude run manabot/recipes/local.py --name smoke`: exit 0, run
-  `track/local/smoke-seed-0/` with `out/policies/0000000{0,1,2}-{raw,ema}.pt`,
-  `out/state/current.json` → `save-00000001/{state.json,learner.pt,optimizer.pt,ema.pt}`,
-  checkpoints updates-0..2. Matches the smoke callers' expected path.
-- `--resume smoke-seed-0 --until updates=3`: exit 0, adds 00000003 policies,
-  earlier ones kept, save-00000002 replaces 00000001, outcome finished.
-  `--resume` with no target: `run_already_finished: give --until with a later target`.
-- pytest test_self_play_loop, test_minimal_loop, test_belief_stages,
-  test_recipe_etude: 13 passed (62.97s), 1 warning not inspected.
-Not exercised: signal stop, continue, start= linkage, parity, launched runs.
-
-## Proposed-API client cut — 2026-11-13
-
-Wrote the loop/recipe/consumer cut against the proposed API; no stub or SDK
-change. (Its etude.run import failure is resolved by the rename; see above.)
-
-Validation: 21 changed/new Python sources and both workflow heredocs compile;
-Ruff clean and formatted; minimal guide equals source; diff check clean.
-`PYTHONPATH=. uv run --no-sync --with pytest --with 'etude-sdk==0.2.16' --with torch --with psutil --with gymnasium --with nbformat pytest tests/training/test_train_command.py tests/infra/test_release.py -q`: 42 passed (13.35s).
-No background work, paid run or delivery.
+2026-11-14 compress: PyPI 0.4.0 resolved after `uv lock --refresh-package
+etude-sdk --upgrade-package etude-sdk` (the first cached lookup saw only 0.3.2).
+Locked sync passed. Removed the regime capture adapter and frozen MLX/MPS
+capture bodies; current capture takes SelfPlay + Run. Focused capture/artifact/
+outcome/release/recipe/loop check: 55 passed, 4 failed (97.61s). All four were
+outcome tests using removed SDK APIs. Their cutover exposed first-row
+supersession: new writers replace the boundary; legacy checkpoint cuts keep it.
+Updated reader/tests: `uv run --no-sync pytest tests/training/test_outcome_tables.py
+-q`: 5 passed (3.17s). Capture replay reproduced every minibatch loss.
+0.4.0 local._prepare still has no job-input delivery. No launched proof attempted.
+Report/discovery/CI follow-up: `uv run --no-sync pytest
+tests/training/test_learning_dashboard.py tests/training/test_experiment_report.py
+tests/infra/test_ci_selection.py tests/eval/test_experiment_files.py -q`: 82 passed
+(81.19s); compatibility deprecations remain. Dashboard/simulation check: 7 passed,
+2 failed (22.06s), both stale checkpoint-layout assumptions in test_tracking;
+cut tests over to the public checkpoint reader. Publisher retries now explicitly
+resume and put summaries after settled rows so first-row cuts keep the prefix.
+`uv run --no-sync pytest tests/sim/test_tracking.py -q`: 4 passed (12.09s).
+Ruff check/format (11 changed Python files), `uv lock --check` and
+`git diff --check` pass. No remaining test process or server from this pass.

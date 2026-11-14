@@ -13,7 +13,7 @@ from pathlib import Path
 import subprocess
 from urllib.parse import urlencode
 
-from etude.run.storage import storage_from_uri
+from etude.storage import storage_from_uri
 from etude.train.read import read
 from etude.train.records import CheckpointRecord
 

@@ -3,7 +3,7 @@
 from copy import deepcopy
 from pathlib import Path
 
-from etude.train.run import track
+from etude.train.tracking import track
 import numpy as np
 import pytest
 import torch

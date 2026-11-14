@@ -3,11 +3,11 @@
 import hashlib
 from pathlib import Path
 
-from etude.train.run import track
+from etude.train.tracking import track
 import pytest
 
 from manabot.belief.sampling_data import read_dataset
-from manabot.recipes.belief_sampler import BeliefConfig, train
+from manabot.recipes.belief_sampler import BeliefConfig, runs, train
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.training.loops.self_play import (
     CLOCKS,
@@ -26,9 +26,20 @@ def test_belief_sampler_uses_given_policy_and_restarts_its_work(
 ) -> None:
     monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "policy"))
     with track(
-        experiment="belief", run="policy", clocks=CLOCKS, directory=tmp_path / "track"
+        experiment="belief_policy",
+        run="belief_policy",
+        clocks=CLOCKS,
+        directory=tmp_path / "track",
     ) as run:
         policy = self_play(gray_ogre_self_play(horizon=1), run, updates=1)
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    job = runs()
+    assert len(job.inputs) == 1
+    assert job.inputs[0].name == "start"
+    assert job.inputs[0].sha256 == hashlib.sha256(policy.read_bytes()).hexdigest()
+    assert job.inputs[0].run == "belief_policy"
+    # Exercise the recipe with the verified input supplied. Pinned Etude's
+    # local train command does not yet deliver job inputs (see training guide).
     given = tmp_path / "inputs"
     given.mkdir()
     (given / "start").write_bytes(policy.read_bytes())

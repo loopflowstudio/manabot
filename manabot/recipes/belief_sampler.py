@@ -6,16 +6,16 @@ immutable policy input, and records the resulting sampler checkpoint.
 
 from decimal import Decimal
 
+from etude.experiment import observe
 from etude.jobs import training
-from etude.launch.records import Job
-from etude.train.records import Step
-from etude.train.run import track
+from etude.spec import Job
+from etude.storage import default_root
+from etude.train.tracking import track
 from pydantic import BaseModel, Field
 
 from manabot.belief.collect import collect_belief
 from manabot.belief.train import SamplerConfig, train_belief
 from manabot.recipes import belief_policy
-from manabot.recipes.belief_policy import PolicyConfig
 
 
 class BeliefConfig(BaseModel):
@@ -27,7 +27,7 @@ class BeliefConfig(BaseModel):
 
 
 def train(config: BeliefConfig) -> None:
-    with track(clocks=[Step("steps", "sampler gradient steps")], config=config) as run:
+    with track(clocks=["steps"], config=config) as run:
         policy = run.input("start")  # the policy run's final checkpoint
         histories = collect_belief(
             policy,
@@ -43,22 +43,15 @@ def train(config: BeliefConfig) -> None:
         run.checkpoint(sampler, steps=config.sampler.steps)
 
 
-def runs() -> list[Job]:
-    policy = training(
-        belief_policy.train,
-        name="policy",
-        config=PolicyConfig(),
-        seeds=(197,),
-        max_hours=1,
-        max_usd=Decimal(1),
-    )
-    sampler = training(
+def runs() -> Job:
+    """Fit from the completed local policy; run belief_policy.py first."""
+    policy = observe(default_root(), "belief_policy").run("belief_policy").final
+    if policy is None:
+        raise ValueError("finish belief_policy before starting the sampler")
+    return training(
         train,
-        name="sampler",
         config=BeliefConfig(),
         start=policy,
-        seeds=(197,),
         max_hours=1,
         max_usd=Decimal(1),
     )
-    return [policy, sampler]

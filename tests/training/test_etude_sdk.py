@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlparse
 
 from etude.train.read import read_all
 from etude.train.records import Step
-from etude.train.run import track
+from etude.train.tracking import track
 
 
 def test_public_sdk_records_and_retains_a_checkpoint(tmp_path: Path) -> None:

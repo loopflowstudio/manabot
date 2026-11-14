@@ -11,26 +11,30 @@ their pieces and a loop to copy.
 
 ## Quickstart
 
+Start in the [checkout environment](../docs/development.md#environment-and-commands)
+with the Etude development revision needed by this training API.
+
 ```bash
-uv run etude run manabot/recipes/local.py      # local production-path smoke
-uv run etude run manabot/recipes/baseline.py   # ordinary self-play; evaluate separately
-uv run etude run manabot/recipes/elemental.py --seed 197                    # current recipe; run elemental-seed-197
-uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197   # carry that run on
-uv run etude run experiments/batched_baseline.py  # batched GPU baseline
-uv run etude run manabot/recipes/local.py --config '{"learning_seats": "one"}'  # explicit one-seat control
+uv run etude train manabot/recipes/local.py      # local production-path smoke
+uv run etude train manabot/recipes/baseline.py   # ordinary self-play; evaluate separately
+uv run etude train manabot/recipes/elemental.py   # current recipe; run elemental
+uv run etude train manabot/recipes/elemental.py --resume   # carry that run on
+uv run etude train experiments/batched_baseline.py  # batched GPU baseline
+uv run etude train manabot/recipes/local.py --experiment local-one-seat --config '{"learning_seats": "one"}'  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
 Training runs through [Etude](https://github.com/loopflowstudio/etude):
-`etude run FILE` calls the file's `train(config)` as a new run, prints the
+`etude train FILE` calls the file's `train(config)` as a new run, prints the
 run's id and writes it under `~/.etude/track`. `--config JSON` sets fields of
-the recipe's config, `--seed` the run's seed, `--name` its job's name (the
-run is `NAME-seed-N`), `--until updates=N` its stop target and `--seconds` a
-deadline; `--resume RUN` is another attempt of an existing run, to a later
+the recipe's config, `--experiment` an independent experiment label,
+`--until updates=N` its stop target and `--seconds` a deadline. Files with
+only `train(config)` use seed 0; declare `runs()` for other seeds, then select
+with `--job` and `--seed`. `--resume` is another attempt of an existing run, to a later
 target when `--until` is given ([run training](../docs/training.md#run-training)).
-`manabot train` is removed and names that command.
+`manabot train` exits with migration guidance naming that command.
 
 The `local` recipe runs two collection/update iterations
 through the ordinary self-play loop: two streams, 16 decisions per stream as
@@ -65,7 +69,7 @@ collection/update iteration (four streams, at least 64 combined seat decisions
 each, finishing current games before updating), not an optimizer
 call. Its CPU test variant drives the [nightly learning check](../.github/workflows/baseline.yml).
 `--until updates=N` and `--seconds` stop a run without changing its schedule: a
-run that reaches a deadline saves its state and exits 75, and `--resume RUN`
+run that reaches a deadline saves its state and exits 75, and `--resume`
 carries it on. The baseline is a versioned starting point, not a strength certification.
 
 For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
@@ -653,7 +657,7 @@ with those packages blocked.
   search and batched games.
 - `training/`: loops, seat-routed collection, learning rules and numerical
   health. `loops/self_play.py` is the self-play loop and its resumable state;
-  `regime.py` holds the learning records and reads saved regimes; `records.py`
+  `learning.py` holds learning settings; `regime.py` reads saved regimes; `records.py`
   reads retained run records.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
   complete-game accounting.
@@ -665,14 +669,14 @@ with those packages blocked.
   ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
 - `training/loops/`: a loop keeps playing and updating until it is done; a
   one-page example (`minimal.py`).
-- `training/state/`: policy admission and retained game-failure state.
+- `training/state/`: game-failure ledgers and numerical incidents.
 - `belief/`: viewer histories, world distributions and belief models;
   `collect.py` and `train.py` are the belief recipe's steps; `sampling_fit.py`
   fits and persists hand samplers.
 - `recipes/`: our recipes (`elemental.py`, `belief_sampler.py`, local and
   baseline) and the settings builders they share.
-- `experiment/`: authored comparisons, local scheduling, Etude job adapters,
-  checkpoint staging, evaluation scheduling/followers and artifact publication.
+- `experiment/`: retained comparison records, checkpoint evaluation,
+  machine setup and numerical validation.
 - `eval/`: evaluation protocols, admission, comparisons, population ratings,
   GIH reduction/query and MTG Arena log export.
 - `reports/`: retained-run projections, dashboards, report templates and

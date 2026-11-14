@@ -40,7 +40,7 @@ import threading
 import time
 from typing import Literal
 
-from etude.launch.records import Job, Run
+from etude.spec import Job, RunRequest
 import psutil
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -351,7 +351,7 @@ def collect(output: Path) -> None:
 
 
 def drive(probe: Probe, output: Path) -> list[PhaseResult]:
-    """Run every phase in order on this host; raise after all if any failed."""
+    """RunRequest every phase in order on this host; raise after all if any failed."""
     refuse_frozen_execution()
     root = journal(output)
     root.mkdir(parents=True, exist_ok=True)
@@ -394,7 +394,7 @@ def run(probe: Probe) -> None:
 
 def runs(
     revision: str, machines: int = 1, hours: float = 1.5, usd_per_run: float = 1.05
-) -> list[Run]:
+) -> list[RunRequest]:
     """One probe run per machine; the seed only names the run (phase seeds are fixed)."""
     refuse_frozen_execution()
     probe = Probe(source_bundle=bundle_at(ROOT, revision))

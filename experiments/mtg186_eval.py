@@ -55,8 +55,8 @@ from typing import Literal
 
 from etude.launch.client import default, queue_cohort, quote, status
 from etude.launch.records import Input, Job, Run
-from etude.run.listing import runs as stored_runs
-from etude.run.storage import storage_from_uri
+from etude.run import runs as stored_runs
+from etude.storage import storage_from_uri
 from etude.train.read import read
 from pydantic import BaseModel, ConfigDict
 

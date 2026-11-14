@@ -2,8 +2,7 @@
 
 from copy import deepcopy
 
-from etude.train.records import Step
-from etude.train.run import track
+from etude.train.tracking import track
 import numpy as np
 from pydantic import BaseModel, Field
 import torch
@@ -34,7 +33,7 @@ class MinimalConfig(BaseModel):
 
 def train(config: MinimalConfig) -> None:
     """Train `config.updates` collect/update rounds and publish the EMA policy."""
-    with track(clocks=[Step("updates", "collect/update rounds")], config=config) as run:
+    with track(clocks=["updates"], config=config) as run:
         torch.manual_seed(run.seed)
         agent = ActorCritic(ObservationSpace(), config.model)
         averaged = deepcopy(agent)
@@ -98,7 +97,7 @@ def train(config: MinimalConfig) -> None:
                         )
                         learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
                 learner.update_ema(averaged, agent, rate=0.99)
-                run.log({"loss": float(loss)})  # the last minibatch's
+                run.log({"loss": float(loss.detach())})  # the last minibatch's
                 progress.updates = update
                 run.save()
         finally:

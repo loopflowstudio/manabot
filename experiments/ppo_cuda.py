@@ -11,14 +11,14 @@ alternating original/changed lookup pairs and a candidate profile.
 from decimal import Decimal
 from pathlib import Path
 
-from etude.launch.records import Job, Run
+from etude.spec import Job, RunRequest
 
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 
 
 def runs(
     revision: str, hours: float = 1, diagnostic: bool = False, paired: bool = False
-) -> list[Run]:
+) -> list[RunRequest]:
     """One bounded L4 baseline; no retries or other tasks on this allocation."""
     profile = (
         'uv run --locked python scratch/speed/bench.py "$out/diagnostic.json" '

@@ -14,7 +14,7 @@ import resource
 import sys
 import time
 
-from etude.run.storage import default_root
+from etude.storage import default_root
 
 from manabot.eval.arena_log import CardMapping, export_arena_log
 from manabot.eval.card_evaluation import (

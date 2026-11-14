@@ -1,94 +1,28 @@
-# MTG-329: Etude train API rebuild
+# MTG-329 implementation
 
-## Direction and scope
-
-`scratch/design-train-api.md` is the current design. It replaces the earlier
-`state.pt` cutover, whose implementation is still in this checkout. A recipe
-remains ordinary `train(config)` over a visible loop. Etude owns seeded runs,
-resume/save/steps, stopping, retries and checkpoint publication; Manabot owns
-learning, world-bound policies and game-error evidence. Pydantic is required.
-The affected user docs already describe the new API; preserve those edits.
-
-Jack Heart, 2026-11-13: "you can run both. i dont care that manabot cant be test. just make sure to clarify it should build what ican then stop".
-Latest direction, 2026-11-13: "i still think we should restart mtg-329 to match the proposed API,
-and just have it wait after its done writing to block then". Build the full
-client cut against the proposed API; no local stub and no delivery. EXP-56 owns the SDK and
-its naming migration. The full design conversation and earlier review history
-are preserved at `bd14801a72d48ad38eeca18d08fc1c9e7f99612a:scratch/` (plan, positioning,
-cutover, ontology, etude-api, functional-audit, etude-readme-draft, with exact
-remarks and contrary findings). That history selects no work; Etude's
-README/ontology proposals belong to EXP-56. No Wave is selected.
-
-## Independent CLI cut — 2026-11-13
-
-`manabot train` now exits 2 naming `uv run etude run FILE` and `--resume RUN`.
-Old flags also receive that guidance. Removed its recipe discovery, config
-reflection, automatic device selection, environment/deadline management and
-local_launch handling. The local recipe's CLI-only 120-second constant is
-gone. CI and release smoke callers now use Etude; the installed smoke writes
-an ordinary recipe file importing the installed library. SDK-dependent smoke
-execution remains unproved. This is an incomplete rebuild, not delivery.
+Design: design-train-api.md; historical plan: 382c653ec8:scratch/plan.md.
+Etude 0.4.0 now replaces the development source override; all requirements,
+release checks and lock use the release. No publication or landing in this pass.
 
 ## Delete — do not maintain
 
-Already deleted in earlier commits: training/execution.py;
-training/state/{recovery,learning_state,admission}.py;
-experiment/{job,runner,evaluation_queue,monitor_worker,study}.py;
-recipes/proposed_etude.py; RunContext; TrainingRecipe; obsolete scheduler,
-recovery and stage execution tests. Keep retained record/report readers.
+Deleted: training/execution.py; recovery/admission/learning_state; experiment
+job/runner/study/evaluation queue/monitor worker; TrainingRecipe/RunContext;
+Tracker, LoopState, load/save_state, StateMismatch, resume guards, local_launch,
+CLI recipe discovery/device selection and their exclusive tests. No replacement
+executor, shim or SDK stub. Retain record/report readers and frozen bytes.
+Retired regimes name f4e1822faf46bbc9cdc43909293f8cbc8de4a300; old state.pt folders
+name f577362135562e569033fe33e48c7ef0411a829d. No old-folder loading path.
 
-Deleted in the CLI cut: RECIPES, recipe_names, experiment_recipe, the old
-train_command body, recipes/device.py and its boundary allowlist entry;
-exclusive CLI tests from test_recipe_etude, test_regimes and test_mps_training.
-Their surviving non-CLI coverage remains. test_train_command covers migration.
+Compression removes the backend capture's regime-to-loop adapter: capture takes
+SelfPlay and an Etude Run. Frozen MLX/MPS capture commands refuse at the same
+revision boundary; their saved-data analysis survives. Artifact cache validation
+has one owner (fetch_artifact); dashboard locking has no recovery mode.
 
-Deleted in the proposed-API cut: Tracker/untracked path, saved LoopState,
-load_state/save_state, setting_differences/StateMismatch and resume guards,
-manual stop/resume branches, SelfPlay.save_every, recipe seeds, local_launch
-callers, cached belief pipeline and benchmark Rows. Their exclusive fixtures
-are replaced by real SDK save/resume, immutable-policy and failure tests.
-
-Must survive: raw/Adam/EMA/counts, schedules independent of stop targets,
-checkpoint_source, immutable world-bound policies, game-error ledgers and
-replays, bounded numerical incidents, paired deals and training-seed evidence.
-Frozen TrainingRegime/TrainingRun records retain serialized keys; execution
-refuses with pre-cutover main f4e1822faf46bbc9cdc43909293f8cbc8de4a300.
-Older collector snapshots use 439379869. Never rewrite frozen evidence.
-
-## Remaining implementation
-
-1. When EXP-56 releases, pin it (requirements, runtime pins, lock, consumer
-   checks together) and in the same change rename every `etude.run.*` import
-   to `etude.tracking.*` (same module and symbol names: records, storage,
-   listing, errors, block_file; about 20 files here, more on main under
-   `experiments/`). MTG-348 is done and merged here at 0.3.2, but 0.3.2 still
-   ships `etude.run`; EXP-56 removed it without an alias, so this rename is
-   Manabot's, not MTG-348's. No source override or shim is committed.
-2. Proposed-API client cut is written: self_play and minimal, Pydantic counts,
-   seed-free configs, linked belief jobs, baseline policy evidence, Etude CLI
-   benchmark and nightly/release callers. User docs and surviving tests move
-   with the cut. Its local path now runs against EXP-56 source (implementation.md,
-   Realign probe); launched paths remain unproved.
-3. Still unproved: Ctrl-C/SIGTERM stop then resume, `etude continue`,
-   seed-197 learner parity, linked belief jobs through `start=`, installed
-   consumers, launched `--resume` (not yet in EXP-56), launch restore/retry
-   and service continuation. Do not count the older state.pt evidence.
-4. Gate affected checks once. Resolve/report the frozen replay schema mismatch
-   (fixture 7 vs current 8) without regenerating it. Demo recovery losses:
-   no current-game resume, exact uninterrupted equivalence or in-run source
-   repair. Frozen staged/adaptive/frozen-opponent launchers remain retired.
-
-User docs for the rebuild, written against the proposed API and unrun:
-`docs/training.md` (run, write a recipe, stages, remote, checkpoint cadence,
-recovery), `docs/training-loop.md` (minimal loop), `docs/experiments.md`,
-`README.md`, `manabot/README.md`, `.lf/skills/qa.md`. The 2026-11-13 docs pass
-moved them to the save-folder layout, in-place `Counts`, job-and-seed run ids
-and `--resume RUN --until`; questions.md lists what that took from EXP-56's
-draft. The implementation follows these docs: `step` updates `counts` in
-place, and the smoke callers read `track/local/smoke-seed-0/`.
-
-Validation for this pass is recorded in implementation.md. No paid run,
-publication, landing, or background service is part of this pass.
-
-Historical ontology and Etude README proposals: `bd14801a72:scratch/ontology.md` and
-`bd14801a72:scratch/etude-readme-draft.md`; these belong to EXP-56.
+Keep raw/Adam/EMA/counts, fixed schedules, world-bound immutable policies,
+checkpoint_source, game-error/replay evidence, numerical incidents, paired deals.
+Local start= carriage is still absent in Etude 0.4.0's local._prepare; do not
+build a Manabot fallback. Gate owns broader checks; demo owns recovery tradeoffs
+and automatic dependency review. Launched retry/restore and continue are unproved.
+Frozen replay schema 7 versus runtime 8 remains contrary evidence, never regenerate it.
+Checks and historical observations: implementation.md.

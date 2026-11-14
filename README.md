@@ -348,11 +348,14 @@ uv sync --locked --python 3.13 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-uv run etude run manabot/recipes/local.py  # two-update local smoke
+uv run etude train manabot/recipes/local.py  # two-update local smoke
 uv run python scripts/inspect_batch.py     # one real batch and how credit reaches each decision
 ```
 
-That command trains a small agent on CPU as a new
+For the training API below, use the
+[Etude development dependency](docs/development.md#environment-and-commands).
+
+The local smoke trains a small agent on CPU as a new
 [Etude](https://github.com/loopflowstudio/etude) run, prints the run's id and
 keeps its state and checkpoints under `~/.etude/track`. A recipe's device is a
 field of its config (`--config '{"device": "cuda"}'`): the local and Elemental
@@ -365,8 +368,8 @@ Training recipes are Python functions: ours in [manabot/recipes/](manabot/recipe
 built from the settings in
 [manabot/recipes/builders.py](manabot/recipes/builders.py), and one module per
 current experiment in [experiments/](experiments/). The current recipe is
-`uv run etude run manabot/recipes/elemental.py --seed 197`, which starts the
-run `elemental-seed-197`; `--resume elemental-seed-197` carries that run on
+`uv run etude train manabot/recipes/elemental.py`, which starts the
+run `elemental`; `--resume` carries that run on
 after an interruption.
 [docs/training.md](docs/training.md) covers running, monitoring and recovering
 runs, and [manabot/README.md](manabot/README.md) covers the package.

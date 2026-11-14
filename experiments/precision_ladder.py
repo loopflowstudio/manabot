@@ -18,8 +18,8 @@ from pathlib import Path
 
 from etude.eval.records import Inference, Seating
 from etude.experiment import ExperimentState, TrainingRun
-from etude.launch.records import Job
 from etude.report import Curve, Matches, Ranking, Report, Score
+from etude.spec import Job
 
 from experiments.learning_signal import (
     ELEMENTAL_PAIRS,

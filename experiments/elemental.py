@@ -33,7 +33,6 @@ from pathlib import Path
 from etude.eval.records import Benchmark, Inference, Player, Seating
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation, training
-from etude.launch.records import Job
 from etude.report import (
     Anchors,
     Crosstable,
@@ -44,6 +43,7 @@ from etude.report import (
     Report,
     Score,
 )
+from etude.spec import Job
 
 from experiments.elemental_grid import Game, groups, schedule
 from experiments.elemental_long import (

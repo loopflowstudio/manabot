@@ -12,14 +12,14 @@ anything only it needs to run and report. `manabot/` keeps the reusable
 instruments.
 
 A runnable recipe is a file that defines `train(config)`; run one with
-`uv run etude run FILE` ([training](../docs/training.md#run-training)). Retained
+`uv run etude train FILE` ([training](../docs/training.md#run-training)). Retained
 `TrainingRegime` builders are records; execute them from the pre-cutover main
 revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. Exact reproductions use
 the experiment's recorded revision and lock ([saved regimes](../docs/training.md#saved-regimes)).
 
 | module | current role | execution |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `train(config)`; retained `batched_baseline()` and `scale_ladder()` builders ([scale ladder](scale-ladder.md)) | `uv run etude run experiments/batched_baseline.py`; retained builders require pre-cutover source |
+| [batched_baseline](batched_baseline.py) | `train(config)`; retained `batched_baseline()` and `scale_ladder()` builders ([scale ladder](scale-ladder.md)) | `uv run etude train experiments/batched_baseline.py`; retained builders require pre-cutover source |
 | [value_model_baseline](value_model_baseline.py) | retained regime builder ([value models](value-models.md)) | pre-cutover source |
 | [ataraxos_move](ataraxos_move.py) | retained `ataraxos_move()` and `ataraxos_move_scalar()` builders ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | pre-cutover source |
 | [direct_self_play](direct_self_play.py) | retained regime builder | pre-cutover source |

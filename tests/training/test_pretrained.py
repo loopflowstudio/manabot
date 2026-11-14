@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from etude.train.run import track
+from etude.train.tracking import track
 import pytest
 import torch
 

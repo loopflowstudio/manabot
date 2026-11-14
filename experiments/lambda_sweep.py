@@ -11,8 +11,8 @@ end is each update's `selection_groups` metrics, under the report's ML details.
 """
 
 from etude.experiment import ExperimentState
-from etude.launch.records import Job, Run
 from etude.report import Report
+from etude.spec import Job, RunRequest
 
 from experiments.batched_baseline import lambda_sweep
 from experiments.learning_signal import (
@@ -43,7 +43,7 @@ def runs(
     updates: int = UPDATES,
     seeds: tuple[int, ...] = SEEDS,
     experiment: str = EXPERIMENT,
-) -> list[Run]:
+) -> list[RunRequest]:
     return training_runs(
         (lambda_sweep(*arm, updates) for arm in ARMS),
         updates=updates,

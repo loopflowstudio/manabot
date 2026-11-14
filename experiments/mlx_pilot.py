@@ -67,23 +67,10 @@ def _host() -> dict[str, Any]:
 
 
 def capture(out: Path) -> None:
-    """Run the pilot's one-update capture using the shared recorder."""
-    from experiments.tla_frontier import frozen
-    from manabot.backends.torch.capture import capture as record
-    from manabot.training.regime import TrainingRegime
+    """Frozen capture requires the original executor and world."""
+    from manabot.training.regime import refuse_frozen_execution
 
-    regimes, protocol = frozen()
-    data = regimes["w160l8"].model_dump()
-    stage = data["stages"][0]
-    stage["updates"] = 1
-    stage["execution"].update(device="cpu", workers=1, threads=4, wall_seconds=7200.0)
-    data["wall_seconds"] = 7200.0
-    record(
-        out,
-        TrainingRegime.model_validate(data),
-        protocol.training_seed,
-        experiment="mlx-pilot-capture",
-    )
+    refuse_frozen_execution()
 
 
 # -- arms ------------------------------------------------------------------------------

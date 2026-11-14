@@ -588,6 +588,9 @@ with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
 the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
+CLI subcommands import their execution runtime at the command boundary when
+needed to keep migration/help available without the training SDK.
+
 ### Etude training records
 
 Training row tables belong under the metric run's `artifacts/`, named by their

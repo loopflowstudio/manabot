@@ -44,9 +44,9 @@ from etude.eval.query import statsdb
 from etude.eval.records import Seating
 from etude.experiment import ExperimentState, TrainingRun
 from etude.launch import client
-from etude.launch.records import Job, Run
-from etude.run.listing import as_storage
-from etude.run.storage import Storage, storage_from_uri
+from etude.run import as_storage
+from etude.spec import Job, RunRequest
+from etude.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
@@ -172,7 +172,7 @@ def calibration_regime(regime: TrainingRegime, pod: Pod) -> TrainingRegime:
     )
 
 
-def runs(revision: str) -> list[Run]:
+def runs(revision: str) -> list[RunRequest]:
     """One capped allocation per pod; a pod that fails is itself the reading."""
     regimes, protocol = frozen()
     pods: list[tuple[Pod, TrainingRegime]] = [

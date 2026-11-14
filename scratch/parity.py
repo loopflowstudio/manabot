@@ -1,12 +1,13 @@
 """One-time MTG-329 fresh-run proof; reference code stays in a temporary archive.
 
-Run with uv run --no-sync --with <EXP-56 checkout> python scratch/parity.py.
+Run with uv run --no-sync python scratch/parity.py.
 Each training process has a 120-second timeout and uses one CPU thread.
 """
 
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -85,7 +86,16 @@ def train(root: Path, out: Path, method: str, reference: bool) -> None:
             transitions=16,
             checkpoint_every=1,
         )
-        self_play(settings, out, seed=197, updates=2)
+        from etude.train.tracking import track
+
+        from manabot.training.loops.self_play import CLOCKS
+
+        os.environ["ETUDE_SEED"] = "197"
+        os.environ["ETUDE_OUT"] = str(out)
+        with track(
+            experiment="parity", run=method, clocks=CLOCKS, directory=out / "track"
+        ) as run:
+            self_play(settings, run, updates=2)
 
 
 def main() -> None:
@@ -120,6 +130,19 @@ def main() -> None:
             f"reference={REFERENCE} native_sha256={files[f'managym/{native_name}']}",
             flush=True,
         )
+        sdk = work / "reference-sdk"
+        subprocess.run(
+            [
+                "uv",
+                "pip",
+                "install",
+                "--target",
+                str(sdk),
+                "--no-deps",
+                "etude-sdk==0.2.16",
+            ],
+            check=True,
+        )
         for method in ("ppo", "damped"):
             for label, tree in (("reference", reference), ("current", root)):
                 subprocess.run(
@@ -134,32 +157,42 @@ def main() -> None:
                         label,
                     ],
                     cwd=tree,
+                    env={
+                        **os.environ,
+                        "PYTHONPATH": str(sdk) if label == "reference" else str(root),
+                    },
                     check=True,
                     timeout=120,
                 )
             current = work / f"{method}-current"
-            state = torch.load(current / "state.pt", weights_only=False)
-            assert state["update"] == 2
+            pointer = json.loads((current / "state/current.json").read_text())
+            folder = current / "state" / pointer["save"]
+            state = json.loads((folder / "state.json").read_text())
+            assert state["extra"]["updates"] == 2
             for weights in ("raw", "ema"):
                 old = torch.load(
                     work / f"{method}-reference" / f"self-play-{weights}.pt",
                     weights_only=False,
                 )["model_state_dict"]
                 new = torch.load(
-                    current / "checkpoints" / f"00000002-{weights}.pt",
+                    current / "policies" / f"00000002-{weights}.pt",
                     weights_only=False,
                 )["model_state_dict"]
-                assert old.keys() == new.keys() == state[weights].keys()
+                saved = torch.load(
+                    folder / ("learner.pt" if weights == "raw" else "ema.pt"),
+                    weights_only=True,
+                )
+                assert old.keys() == new.keys() == saved.keys()
                 differences = [
                     name for name in old if not torch.equal(old[name], new[name])
                 ]
                 assert not differences, f"{method}/{weights}: {differences}"
-                assert all(torch.equal(new[name], state[weights][name]) for name in new)
+                assert all(torch.equal(new[name], saved[name]) for name in new)
                 print(
                     f"{method}/{weights}: {len(old)} tensors bitwise equal (checkpoint and resume state)",
                     flush=True,
                 )
-            print(f"{method} counts={state['counts']}", flush=True)
+            print(f"{method} counts={state['extra']}", flush=True)
 
 
 if __name__ == "__main__":

@@ -39,8 +39,8 @@ from etude.eval.records import (
 )
 from etude.experiment import ExperimentState, TrainingRun
 from etude.jobs import evaluation
-from etude.launch.records import Job
 from etude.report import Curve, Matches, Matrix, Ranking, Report, Score
+from etude.spec import Job
 from pydantic import BaseModel, ConfigDict
 import torch
 

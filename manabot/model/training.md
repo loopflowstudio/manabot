@@ -89,7 +89,7 @@ decoder, serialized-tag override or old preset execution path remains.
 
 ## Entry points and retired routes
 
-`uv run etude run manabot/recipes/local.py` is the local smoke: two CPU
+`uv run etude train manabot/recipes/local.py` is the local smoke: two CPU
 updates, two streams, 16 combined decisions per stream as a floor, both seats
 and complete games. It uses the baseline model and horizon-scaled damped
 objective. `--config '{"learning_seats": "one"}'` selects one learning seat.

@@ -11,8 +11,8 @@ from typing import Any
 import duckdb
 from etude.eval.match import Result, Tables, evaluate
 from etude.eval.records import Code, Environment, Match
-from etude.run.delivery import sync
-from etude.run.storage import DirectoryStorage
+from etude.run import sync
+from etude.storage import DirectoryStorage
 from pydantic import JsonValue
 import pytest
 import torch

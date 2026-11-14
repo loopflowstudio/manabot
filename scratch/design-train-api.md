@@ -472,3 +472,26 @@ Status on 2026-11-13 after Jack Heart was asked each point again.
    PufferLib and Coworld examples live under `examples/`.
 5. When `run.save()` writes outside a stop. Not answered. Taken for now: by
    wall time, or by step count when `every=` is given.
+
+## Landed API question exposed by the docs — 2026-11-14
+
+Should the belief recipe still launch policy and sampler in one command,
+with the sampler waiting for the matching policy seed, or should it require
+a completed policy checkpoint before declaring the sampler job?
+
+Etude 5708e14 training(start=) accepts a CheckpointRecord, not a Job; the
+current Manabot recipe passes a Job. The shipping guide now shows the
+supported explicit checkpoint handoff as a reversible documentation choice.
+The automatic dependency remains an implementation gap; nobody has selected
+a replacement product contract here.
+
+## Implementation counterexample — 2026-11-14
+
+At the pinned 5708e14, training(start=) takes a completed CheckpointRecord,
+not a Job. Implement only that explicit handoff in the declaration; the
+automatic dependency remains unmet. A real local two-command probe then
+failed: belief_policy finished, belief_sampler printed its address and exited
+with `input not given: 'start'`. Etude local._prepare ignores Job.inputs and
+Job.environment. Stop dependent runtime work here: Etude must deliver the
+checkpoint before the documented local belief workflow can be proved. The
+recipe's given-input provenance check is not proof of real start= carriage.

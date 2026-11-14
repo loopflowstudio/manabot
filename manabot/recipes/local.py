@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from etude.train.run import track
+from etude.train.tracking import track
 from pydantic import Field
 
 from manabot.recipes.baseline import BaselineConfig, settings

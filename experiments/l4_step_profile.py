@@ -1123,7 +1123,7 @@ def runs(
     name: str = "mtg301-l4-step-profile",
 ) -> Any:
     """`candidate`: option3, bucketed or live (see `_arms`)."""
-    from etude.launch.records import Job, Variable
+    from etude.spec import Job, Variable
 
     from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 

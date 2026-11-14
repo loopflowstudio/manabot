@@ -21,7 +21,7 @@ dependencies = [
     "pydantic>=2.12.0",
     "typer>=0.12.5",
     "psutil>=5.9.0",
-    "etude-sdk>=0.3.2",
+    "etude-sdk>=0.4.0",
 ]
 
 [project.scripts]
@@ -34,7 +34,7 @@ llm = [
     "transformers[chat-template]==5.3.0",
 ]
 reports = [
-    "etude-sdk[s3]>=0.3.2",
+    "etude-sdk[s3]>=0.4.0",
     "matplotlib>=3.9",
 ]
 artifacts = [
@@ -45,7 +45,7 @@ academy = [
     "uvicorn[standard]>=0.34.0",
 ]
 evaluation = [
-    "etude-sdk[eval]>=0.3.2",
+    "etude-sdk[eval]>=0.4.0",
     "matplotlib>=3.9",
 ]
 # Apple Silicon only: the MLX backend (manabot/backends/mlx.md).
@@ -85,7 +85,7 @@ play-runtime = [
     "psutil>=5.9.0",
     "torch==2.15.0",
     "uvicorn[standard]>=0.34.0",
-    "etude-sdk==0.3.2",
+    "etude-sdk==0.4.0",
 ]
 
 [tool.uv]

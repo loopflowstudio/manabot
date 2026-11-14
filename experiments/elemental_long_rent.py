@@ -51,7 +51,7 @@ from typing import Any, Literal
 from etude.eval.match import evaluate
 from etude.eval.records import Match, Model
 from etude.launch.records import Input, Job, Run
-from etude.run.storage import run_directory
+from etude.storage import run_directory
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import ENDPOINT, endpoint_environment

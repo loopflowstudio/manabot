@@ -9,8 +9,8 @@ Recipe: `experiments.batched_baseline.closure_comparison`.
 """
 
 from etude.experiment import ExperimentState
-from etude.launch.records import Job, Run
 from etude.report import Report
+from etude.spec import Job, RunRequest
 
 from experiments.batched_baseline import closure_comparison
 from experiments.learning_signal import (
@@ -37,7 +37,7 @@ def runs(
     updates: int = UPDATES,
     seeds: tuple[int, ...] = SEEDS,
     experiment: str = EXPERIMENT,
-) -> list[Run]:
+) -> list[RunRequest]:
     return [
         run
         for arm, hours, usd_per_run in ARMS

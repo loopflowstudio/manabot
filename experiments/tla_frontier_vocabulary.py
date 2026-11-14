@@ -49,9 +49,9 @@ from typing import Literal
 from etude.eval.query import statsdb
 from etude.eval.records import Environment
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
-from etude.launch.records import Job
-from etude.run.listing import as_storage
-from etude.run.storage import Storage, storage_from_uri
+from etude.run import as_storage
+from etude.spec import Job
+from etude.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (

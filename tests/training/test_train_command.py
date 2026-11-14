@@ -26,8 +26,8 @@ def test_retired_train_names_the_replacement_without_starting_work(
     result = CliRunner().invoke(app, ["train", *options])
     assert result.exit_code == 2, result.output
     assert "manabot train is removed" in result.output
-    assert "uv run etude run FILE" in result.output
-    assert "--resume RUN" in result.output
+    assert "uv run etude train FILE" in result.output
+    assert "--resume" in result.output
     assert "Traceback" not in result.output
     assert list(tmp_path.iterdir()) == []
 
@@ -48,5 +48,5 @@ def test_migration_message_is_available_without_the_training_sdk() -> None:
         timeout=30,
     )
     assert result.returncode == 2, result.stdout + result.stderr
-    assert "uv run etude run FILE" in result.stderr
+    assert "uv run etude train FILE" in result.stderr
     assert "Traceback" not in result.stderr

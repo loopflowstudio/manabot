@@ -50,7 +50,7 @@ import tempfile
 import time
 from typing import Any, Literal, TypedDict
 
-from etude.launch.records import Job, Run
+from etude.spec import Job, RunRequest
 from pydantic import BaseModel, ConfigDict
 import torch
 
@@ -61,7 +61,7 @@ from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 type ArmName = Literal["float32", "tf32", "bf16", "float32-order", "float32-repeat"]
-# Run order inside a group; the float32 repeat last shows host drift.
+# RunRequest order inside a group; the float32 repeat last shows host drift.
 ARMS: tuple[ArmName, ...] = (
     "float32",
     "tf32",
@@ -837,7 +837,7 @@ def measure(probe: Probe) -> None:
 
 def runs(
     revision: str, hours: float = 1.5, usd: float = 1.5, sizes: str = ""
-) -> list[Run]:
+) -> list[RunRequest]:
     """The one L4 job at `revision`; `sizes` (comma-separated `SIZES` keys)
     replaces the default pair, as MTG-324's w256l8 step run does."""
     chosen = tuple(s for s in sizes.split(",") if s) or Probe().sizes

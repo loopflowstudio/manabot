@@ -346,7 +346,7 @@ def _serving(evaluation: Path) -> dict[str, Any]:
 
 def runs(revision: str, hours: str = "1.0", usd: str = "3.00") -> Any:
     """One L4 job at `revision`."""
-    from etude.launch.records import Job
+    from etude.spec import Job
 
     from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 

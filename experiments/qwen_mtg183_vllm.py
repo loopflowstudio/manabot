@@ -19,7 +19,7 @@ import os
 from pathlib import Path
 import time
 
-from etude.launch.records import Job
+from etude.spec import Job
 from pydantic import Field, TypeAdapter
 
 from experiments import qwen_mtg183 as original

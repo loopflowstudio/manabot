@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from etude.train.read import read
-from etude.train.run import Stopped, track
+from etude.train.tracking import Stopped, track
 import numpy as np
 import pytest
 import torch

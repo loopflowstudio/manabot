@@ -20,7 +20,7 @@ import time
 from typing import Any
 
 from etude.train.records import Step
-from etude.train.run import track
+from etude.train.tracking import track
 import numpy as np
 
 from manabot.backends.torch.checkpoint import load_checkpoint, load_etude_checkpoint

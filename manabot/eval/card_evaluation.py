@@ -18,7 +18,6 @@ from pathlib import Path
 import tempfile
 from typing import Literal
 
-from etude.eval.match import EvalRun, Result, Row, Tables
 from etude.eval.records import (
     CheckpointKey,
     CheckpointRef,
@@ -30,8 +29,9 @@ from etude.eval.records import (
     Player,
     RoundRobin,
 )
+from etude.eval.run import EvalResult, Result, Row, Tables
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 from pydantic import Field, model_validator
 
 from manabot.eval.card_metrics import (
@@ -341,7 +341,7 @@ def _game_card_tables(
     }
 
 
-def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
+def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalResult:
     entrants = _entrants(spec)
     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
     runtime = runtime_fingerprints(match_config=setup)

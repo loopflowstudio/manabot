@@ -19,11 +19,11 @@ import time
 import tracemalloc
 from typing import Literal
 
-from etude.run.block_file import block_key
+from etude.block_file import block_key
 from etude.train.block import Builder
 from etude.train.manifest import Index
 from etude.train.records import RowTable
-from etude.train.run import write_block
+from etude.train.tracking import write_block
 
 from manabot.training.rollout.self_play import SelfPlayOutcome
 from manabot.training.update_metrics import OUTCOME_TABLE, metric_row

@@ -34,22 +34,24 @@ launch, track and evaluate it, or bring your own.
 
 A recipe is a file with a `train(config)` function, and
 [Etude](https://github.com/loopflowstudio/etude) runs it. Everything a run
-records is ordinary files in a directory you own.
+records is ordinary files in a directory you own. Use the checkout environment
+from [development](development.md#environment-and-commands), with Etude SDK 0.4.0 or newer.
 
 ```bash
-uv run etude run manabot/recipes/local.py                                # a two-update smoke on CPU
-uv run etude run manabot/recipes/elemental.py --seed 197
+uv run etude train manabot/recipes/local.py  # a two-update smoke on CPU
+uv run etude train manabot/recipes/elemental.py
 ```
 
-Each command starts a new run and prints its id. The second trains the current
+Each command starts a new run and prints its address (`local` or `elemental`).
+A taken address is refused; use `--resume` to carry it on or
+`--experiment NAME` for an independent run. The second trains the current
 Elemental recipe (damped-policy self-play on the ten Elemental decks, both
-seats learning) as the run `elemental-seed-197` of the experiment `elemental`:
-a run is named for its job and its seed, and both the job and the experiment
-take the recipe file's name. Local runs are written under `~/.etude/track`
-(moved by `ETUDE_HOME`):
+seats learning) with seed 0 as the run `elemental`. For a file with only
+`train(config)`, the experiment and run take the file's name. Local runs are
+written under `~/.etude/track` (moved by `ETUDE_HOME`):
 
 ```text
-~/.etude/track/elemental/elemental-seed-197/
+~/.etude/track/elemental/
   run.json                the job, seed, config and clocks
   ...                     logged rows and tables
   out/
@@ -73,11 +75,38 @@ folder it does not name is being written or waiting to be removed.
 | Option | Sets |
 | --- | --- |
 | `--config JSON` | Fields of the recipe's config; the rest keep their defaults. `--config '{"device": "cuda", "streams": 64}'` |
-| `--seed N` | The run's seed (0 when omitted). The seed is the run's, never a config field. |
-| `--name NAME` | The job's name in place of the file's, so the run is `NAME-seed-N`. A run id must be new within its experiment: a taken one is refused, never resumed. |
+| `--experiment NAME` | The experiment label instead of the file stem. Use a new label for another configuration or independent run. |
+| `--job NAME`, `--seed N` | Select declarations from a file with `runs()`. A file with only `train(config)` has one job and seed 0; declare `runs()` for other seeds. The seed is never a config field. |
 | `--until updates=N` | Where this run stops, in place of the recipe's own update count. With `--resume`, a later target for that run. |
 | `--seconds N` | A deadline. A run that reaches it saves its state and stops. |
-| `--resume RUN` | Another attempt of an existing run instead of a new one ([recovery](#recovery)). |
+| `--resume` | Another attempt of the same selection (`--experiment`, `--job`, `--seed`) instead of a new run ([recovery](#recovery)). Omitted config keeps the stored config. |
+
+For repeated training seeds, save a declaration beside the recipe rather
+than putting a seed in its config:
+
+```python
+# elemental_seeds.py
+from etude.jobs import training
+from etude.spec import Job
+
+from manabot.recipes.elemental import ElementalConfig, train
+
+
+def runs() -> Job:
+    return training(train, config=ElementalConfig(), seeds=(197, 198))
+```
+
+```bash
+uv run etude train elemental_seeds.py --seed 197
+uv run etude train elemental_seeds.py --seed 197 --resume --until updates=6400
+```
+
+These select `elemental_seeds@197`, stored under
+`~/.etude/track/elemental_seeds@197/`. Without `--seed`, local training runs
+both declared seeds in order. Multiple jobs use `EXPERIMENT/JOB@SEED`; the
+sole job or sole seed is omitted from the address. Selection does not rename
+anything. Local training needs neither rental limits nor a Git revision;
+launched jobs need both ([remote training](#remote-training)).
 
 The command exits 0 when the run finished, 75 when it saved and stopped on
 purpose (a deadline or a stop request), and with another status when it
@@ -85,23 +114,24 @@ failed. A run that ended without finishing, whether it stopped, failed or was
 interrupted with Ctrl-C, is carried on with `--resume`:
 
 ```bash
-uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197
+uv run etude train manabot/recipes/elemental.py --resume
 ```
 
 That is a new attempt of the same run on the current code, from its last saved
-state, with the config, seed and target the run recorded. Work since that save
-is repeated. `--resume` refuses a config or seed that differs from the run's,
+state, with the config, seed and target the run recorded. Keep the same
+`--experiment`, `--job` and `--seed` selection as the first command. Work
+since that save is repeated. `--resume` refuses a config or seed that differs from the run's,
 naming the fields. A later target takes the same run further, whether or not
 it had finished:
 
 ```bash
-uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197 --until updates=6400
+uv run etude train manabot/recipes/elemental.py --resume --until updates=6400
 ```
 
 Its rows, checkpoints and id go on as one run. A finished run resumed with no
-later target has nothing left to do and is refused. `etude continue` is for
-the other case, a new run that starts from this one's state and leaves it as
-it is ([recovery](#recovery)).
+later target has nothing left to do and is refused. For a launched run,
+`etude continue` creates a child from its saved state and leaves the parent
+unchanged ([recovery](#recovery)).
 
 `--until updates=N` sets only the stop target. It leaves the recipe's own
 update count, which fixes the baseline rates and the checkpoint grid,
@@ -114,12 +144,12 @@ The recipes we maintain are the files in `manabot/recipes/` that define
 installation), `baseline.py`, `elemental.py`, and `belief_policy.py` with
 `belief_sampler.py` ([recipes in stages](#recipes-in-stages)). An experiment
 file that defines `train` runs the same way
-(`uv run etude run experiments/batched_baseline.py`). A recipe's device is a
+(`uv run etude train experiments/batched_baseline.py`). A recipe's device is a
 config field with the recipe's own default (`cpu` for local and Elemental,
 `cuda` for baseline); nothing selects a device automatically. Frozen
 zero-argument regime builders are data readers, not executable recipes.
 
-`manabot train` is removed. It exits naming the `etude run` command above. Its
+`manabot train` exits with migration guidance naming the `etude train` command above. Its
 `--out` directories, which kept the learner in one `state.pt`, are not read
 by this loop and there is no loading path for them; the last revision that
 resumes one is `f577362135562e569033fe33e48c7ef0411a829d`. Their policy
@@ -156,7 +186,7 @@ above retains the executor.
 
 A recipe is a training function: `train(config)`, an ordinary typed function
 whose body shows what runs. It opens its run with Etude's `track` and calls a
-loop. Nothing wraps it; `etude run` and a launched job both simply call it.
+loop. Nothing wraps it; `etude train` and a launched job both simply call it.
 The config holds only what varies between runs of the recipe, and never the
 seed. Everything else is code in the function. This is the Elemental recipe
 (abridged: its optional CUDA numerics gate, `validate_numerics`, is left out):
@@ -165,7 +195,7 @@ seed. Everything else is code in the function. This is the Elemental recipe
 # manabot/recipes/elemental.py
 from typing import Literal
 
-from etude.train.run import track
+from etude.train.tracking import track
 from pydantic import BaseModel, Field
 
 from manabot.recipes.builders import elemental_self_play
@@ -190,10 +220,14 @@ What Etude asks of a recipe:
 
 - The config is a Pydantic model. There is no Etude base class and no required
   field. It survives a trip through JSON, because that is how it reaches a
-  rented machine; Etude checks this at launch and refuses there.
+  rented machine; local training and launch both check before starting.
 - `train` takes that one parameter, annotated with the config's type, and sits
   at the top level of an importable file.
 - A job has no seed; a run is a job with a seed. The loop reads `run.seed`.
+
+Etude supplies identity when calling the recipe. Calling `train(config)`
+directly needs an explicit `track(experiment=..., run=..., config=config)`;
+without that identity it fails with `experiment_not_named`.
 
 Calling `train(config)` is one attempt at the whole job. It returns (the run
 finished), raises `Stopped` (it saved and left on purpose; it is called
@@ -202,8 +236,10 @@ again), or raises anything else (the run failed).
 `CLOCKS` are the two x-axes every self-play run declares:
 
 ```python
+from etude.train.records import Time
+
 CLOCKS = [
-    Step("updates", "collection/update iterations"),
+    "updates",
     Time("training_seconds", "active collection and learning seconds"),
 ]
 ```
@@ -270,9 +306,8 @@ branch, stop check or state file in it. Those are the run's:
 | `run.out` | The run's directory, the same on every attempt. Under a launch Etude carries it to storage as it is written and restores it before an attempt on another machine. |
 | `run.input(name)` | A file this run was given at launch, checked by digest ([recipes in stages](#recipes-in-stages)). |
 
-`track` names no experiment. Under `etude launch` the run belongs to the
-experiment file that launched it, and `etude run` records it under the recipe
-file's name.
+The recipe need not name its experiment in `track`. Etude uses the file
+stem unless `--experiment` overrides it, for both local training and launch.
 
 The pieces that are manabot's:
 
@@ -294,26 +329,26 @@ resumable loop in about ninety lines to copy from.
 
 ## Recipes in stages
 
-A recipe whose later stage reads an earlier stage's result is two jobs, and
-the second names the first as its start. Split this way when the stages want
-different machines or budgets, when several runs start from one, or when the
+A recipe whose later stage reads an earlier stage's result is two jobs.
+The second takes a completed checkpoint of the first as its start. Split this
+way when the stages want different machines or budgets, when several runs start from one, or when the
 earlier result is evaluated on its own. The belief recipe trains a policy,
 then collects hidden-hand histories with it and fits a sampler:
 
 ```python
-# manabot/recipes/belief_sampler.py
+# sampler.py
 from decimal import Decimal
+from pathlib import Path
 
+from etude.experiment import observe
 from etude.jobs import training
-from etude.launch.records import Job
-from etude.train.records import Step
-from etude.train.run import track
+from etude.spec import Job
+from etude.train.tracking import track
 from pydantic import BaseModel, Field
 
 from manabot.belief.collect import collect_belief
 from manabot.belief.train import SamplerConfig, train_belief
 from manabot.recipes import belief_policy
-from manabot.recipes.belief_policy import PolicyConfig
 
 
 class BeliefConfig(BaseModel):
@@ -325,7 +360,7 @@ class BeliefConfig(BaseModel):
 
 
 def train(config: BeliefConfig) -> None:
-    with track(clocks=[Step("steps", "sampler gradient steps")], config=config) as run:
+    with track(clocks=["steps"], config=config) as run:
         policy = run.input("start")  # the policy run's final checkpoint
         histories = collect_belief(
             policy,
@@ -339,41 +374,53 @@ def train(config: BeliefConfig) -> None:
         run.checkpoint(sampler, steps=config.sampler.steps)
 
 
-def runs() -> list[Job]:
-    policy = training(
-        belief_policy.train, name="policy", config=PolicyConfig(), seeds=(197,), max_hours=1, max_usd=Decimal(1)
+def runs() -> Job:
+    source = Path("~/.etude/track").expanduser()
+    policy = observe(source, "belief_policy").run("belief_policy").final
+    if policy is None:
+        raise ValueError("finish belief_policy before starting the sampler")
+    return training(
+        train, config=BeliefConfig(), start=policy,
+        max_hours=1, max_usd=Decimal(1),
     )
-    sampler = training(
-        train, name="sampler", config=BeliefConfig(), start=policy, seeds=(197,), max_hours=1, max_usd=Decimal(1)
-    )
-    return [policy, sampler]
 ```
 
 `manabot/recipes/belief_policy.py` is an ordinary one-stage recipe: PPO
 self-play on the Gray Ogre match, whose rates follow the horizon the recipe
-states (`gray_ogre_self_play(horizon=config.updates)`). `start=policy` gives
-each sampler run the final checkpoint of the policy run with its seed, checked
-by digest, and records that edge between the two runs. The sampler run starts
-only when that policy run has finished.
+states (`gray_ogre_self_play(horizon=config.updates)`). `start=` takes a
+recorded checkpoint. Save the sampler example above as `sampler.py`, then
+train the policy before reading its final checkpoint:
 
 ```bash
-uv run etude smoke manabot/recipes/belief_sampler.py
-uv run etude launch manabot/recipes/belief_sampler.py
+uv run etude train manabot/recipes/belief_policy.py
+uv run etude train sampler.py
 ```
 
-Its defaults are a pilot's: one update, three games and a small sampler, enough
-to exercise both stages in seconds. Each stage's files are in its own run:
+Etude 0.4.0 currently ignores job inputs in `etude train`:
+the second command fails with `input not given: 'start'`. The declaration
+above is the intended checkpoint handoff; it needs Etude's local input
+delivery fixed before this two-command workflow works. Automatic scheduling
+of a sampler behind an unfinished policy is also unavailable. Manabot does
+not provide a scheduler or input-delivery fallback.
+
+The example reads the default local tracking directory; use the matching
+`$ETUDE_HOME/track` path if you moved it. A launched sampler can instead read
+its policy checkpoint from the job store, for example
+`observe("r2://manabot/jobs", "belief_policy")`. Etude delivers the selected
+checkpoint bytes, checked by digest, and records the edge between the runs.
+
+The defaults are a pilot's: one policy update, three games and a small
+sampler. Each stage's files are in its own run:
 
 ```text
-belief_sampler/policy-seed-197/out/policies/00000001-raw.pt
-belief_sampler/sampler-seed-197/out/histories.json
-belief_sampler/sampler-seed-197/out/belief.pt
+~/.etude/track/belief_policy/out/policies/00000001-raw.pt
+~/.etude/track/sampler/out/histories.json
+~/.etude/track/sampler/out/belief.pt
 ```
 
 A policy run taken further publishes later checkpoints beside the one a
-sampler read, which never changes. A sampler for the later policy is another
-sampler run started from it; nothing made from the earlier policy is
-overwritten or mistaken for the later one's.
+sampler read. Use a new sampler experiment label for a sampler trained from
+the later checkpoint; its earlier evidence stays unchanged.
 
 `collect_belief` (`manabot.belief.collect`) plays `games` complete games with a
 frozen policy and writes each viewer's history with its private hand label;
@@ -566,7 +613,7 @@ each of its seeds is one run:
 from decimal import Decimal
 
 from etude.jobs import training
-from etude.launch.records import Job
+from etude.spec import Job
 
 from manabot.experiment.setup import machine_setup
 from manabot.recipes.elemental import ElementalConfig, train
@@ -585,7 +632,11 @@ def runs(revision: str) -> Job:
     )
 ```
 
-One job with two seeds is two runs, named for the job and the seed. A name
+One job with two seeds is two runs, addressed as `elemental@197` and
+`elemental@198` when saved in `experiments/elemental.py`. Multiple jobs use
+`EXPERIMENT/JOB@SEED`; a sole job or seed is omitted. Local
+training selects a declared seed with `--seed` as in
+[the local example](#run-training). A name
 already taken in the experiment is refused before anything is rented.
 
 An experiment whose training differs from a maintained recipe defines its own
@@ -607,7 +658,7 @@ which Etude carries to storage as the function writes it and gives back, whole,
 to the next attempt. An attempt that raised `Stopped`, or lost its machine, is
 called again while the run has hours, dollars and attempts left; any other
 exception ends the run as failed. A run that ended unfinished is brought back
-with `uv run etude launch experiments/elemental.py --resume RUN`, as another
+with `uv run etude launch experiments/elemental.py --resume --seed 197`, as another
 attempt of the same run on the current code. Runs track under the experiment file's stem,
 so that file's `eval(state)` and `report()` find them; every milestone
 checkpoint is recorded with `run.checkpoint`, so Etude evaluation can follow
@@ -617,14 +668,14 @@ Setup installs Rust 1.98.1 with rustup and runs the locked `uv sync`, which
 builds the native engine. An `ElementalConfig` with `validate_numerics=True` runs
 the CUDA numerics gate (`manabot.experiment.numerics`) before its first update
 and refuses to train if it fails. The committed dependency requirements and
-`uv.lock` select the same Etude SDK release for both the launcher and this
+`uv.lock` select the same Etude SDK revision for both the launcher and this
 setup. Refresh it only through the
 [explicit dependency update workflow](development.md#environment-and-commands)
 before freezing a new run; never upgrade dependencies inside a training attempt.
 
 Pick the machine at launch (`--pool`, `--rent`); read progress with
 `etude status`, `etude logs` and `etude usage`. To train an existing run
-further, `uv run etude launch experiments/elemental.py --resume RUN --until
+further, `uv run etude launch experiments/elemental.py --resume --seed 197 --until
 updates=6400` gives the same run a later target, finished or not; `run.steps`
 counts to it, so the config does not change. `etude continue --run RUN` makes
 a child run instead ([recovery](#recovery)).
@@ -914,9 +965,13 @@ registers its learner, Adam, EMA and counts with `run.resume` and calls
 | The run | What carries it on |
 | --- | --- |
 | lost its machine, reached its deadline or was asked to stop, under a launch | Nothing to do: the launcher calls `train` again as another attempt, with the same `run.out`, until the run finishes or uses up its hours, dollars or attempts. |
-| ended unfinished: it failed and the bug is fixed, ran out of hours, was cancelled, or was interrupted locally | `uv run etude run RECIPE --resume RUN` here, `uv run etude launch FILE --resume RUN` on machines: another attempt of the same run on the current code. |
+| ended unfinished: it failed and the bug is fixed, ran out of hours, was cancelled, or was interrupted locally | `uv run etude train RECIPE --resume` here, `uv run etude launch FILE --resume` on machines: another attempt of the same run on the current code. |
 | should go further than its target, finished or not | The same commands with `--until updates=N`: another attempt of the same run to a later target. A finished run is unfinished again until it reaches it. |
 | should branch: changed settings, or further while the first run stays as it is | `uv run etude continue --run RUN --until updates=N`, with `--config JSON` for changed fields: a new run descended from it ([portable learner continuation](#portable-learner-continuation)). |
+
+For a file declaring multiple runs, select one with `--job` and `--seed`
+before a launched resume. `etude continue` operates on launched runs; for an
+independent local variant, use a new `--experiment` label.
 
 A new run and a resumed one are different commands; nothing is inferred from
 a directory that happens to exist. The same config and seed is the same run.

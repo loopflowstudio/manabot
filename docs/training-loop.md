@@ -206,8 +206,7 @@ backend's `rl` and `learner`:
 
 from copy import deepcopy
 
-from etude.train.records import Step
-from etude.train.run import track
+from etude.train.tracking import track
 import numpy as np
 from pydantic import BaseModel, Field
 import torch
@@ -238,7 +237,7 @@ class MinimalConfig(BaseModel):
 
 def train(config: MinimalConfig) -> None:
     """Train `config.updates` collect/update rounds and publish the EMA policy."""
-    with track(clocks=[Step("updates", "collect/update rounds")], config=config) as run:
+    with track(clocks=["updates"], config=config) as run:
         torch.manual_seed(run.seed)
         agent = ActorCritic(ObservationSpace(), config.model)
         averaged = deepcopy(agent)
@@ -302,7 +301,7 @@ def train(config: MinimalConfig) -> None:
                         )
                         learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
                 learner.update_ema(averaged, agent, rate=0.99)
-                run.log({"loss": float(loss)})  # the last minibatch's
+                run.log({"loss": float(loss.detach())})  # the last minibatch's
                 progress.updates = update
                 run.save()
         finally:
@@ -312,18 +311,18 @@ def train(config: MinimalConfig) -> None:
 ```
 
 ```bash
-uv run etude run manabot/training/loops/minimal.py
-uv run etude run manabot/training/loops/minimal.py --config '{"updates": 200}' --seconds 60
-uv run etude run manabot/training/loops/minimal.py --resume RUN
+uv run etude train manabot/training/loops/minimal.py
+uv run etude train manabot/training/loops/minimal.py --experiment minimal-long --config '{"updates": 200}' --seconds 60
+uv run etude train manabot/training/loops/minimal.py --experiment minimal-long --resume
 ```
 
 The first command trains three updates in a few seconds on a laptop CPU and
-prints the run's id; they teach the policy almost nothing. The second stops at
-its deadline, saved, and exits 75; the third carries that run on to update
-200. The run's folder holds everything in ordinary formats:
+prints the run's id; they teach the policy almost nothing. The second trains until its target or deadline; at the deadline it saves
+and exits 75; the third carries that run on to update
+200. The first run's folder holds everything in ordinary formats:
 
 ```text
-~/.etude/track/minimal/RUN/out/
+~/.etude/track/minimal/out/
   state/current.json                     {"save": "save-00000001"}: the save to load
   state/save-00000001/state.json         {"at": {"updates": 3}, "seed": 0, "files": {"agent": "agent.pt", ...}}
   state/save-00000001/agent.pt  averaged.pt  optimizer.pt

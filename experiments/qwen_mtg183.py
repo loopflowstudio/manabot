@@ -18,7 +18,7 @@ import sys
 import tarfile
 import time
 
-from etude.launch.records import Job
+from etude.spec import Job
 from pydantic import BaseModel, Field
 
 from experiments.elemental_grid import DECKS, PACK

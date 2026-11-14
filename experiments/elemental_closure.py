@@ -17,8 +17,8 @@ experiments/protocols/closure-lambda-elemental-v1.md. Recipe:
 """
 
 from etude.experiment import ExperimentState
-from etude.launch.records import Job, Run
 from etude.report import Report
+from etude.spec import Job, RunRequest
 
 from experiments.elemental_variants import closure_comparison
 from experiments.learning_signal import (
@@ -46,7 +46,7 @@ def runs(
     usd_per_run: float = USD_PER_RUN,
     seeds: str = SEEDS,
     arms: str = ",".join(ARMS),
-) -> list[Run]:
+) -> list[RunRequest]:
     """`arms` and `seeds` are comma-separated, so one arm launches all-or-nothing."""
     chosen = tuple(arm for arm in ARMS if arm in arms.split(","))
     return training_runs(

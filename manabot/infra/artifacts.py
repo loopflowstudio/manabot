@@ -18,8 +18,8 @@ import tempfile
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import unquote, urlsplit
 
-from etude.run.records import ArtifactRef
-from etude.run.storage import storage_from_uri
+from etude.records import ArtifactRef
+from etude.storage import storage_from_uri
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 if TYPE_CHECKING:
@@ -200,10 +200,6 @@ def fetch_artifact(
 def materialize_artifact(reference: StoredArtifact) -> Path:
     """Resolve a pinned artifact through the environment's credentials and local cache."""
     cache = Path(os.environ.get("MANABOT_ARTIFACT_CACHE", ".runs/artifact-cache"))
-    target = cache / reference.sha256
-    if target.exists():
-        verify_file(target, reference.sha256, reference.bytes)
-        return target
     return fetch_artifact(reference, cache)
 
 

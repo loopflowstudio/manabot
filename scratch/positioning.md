@@ -72,3 +72,10 @@ EXP-56 told to choose the simplest correct thing and list both as unanswered.
 Jack Heart, 2026-11-13, on MTG-329 having stopped as blocked before writing
 the loop: "i still think we should restart mtg-329 to match the proposed API,
 and just have it wait after its done writing to block then".
+
+Jack Heart, 2026-11-13, on whether EXP-56's module moves need warning aliases
+for Manabot: "i think we dont need warnings, were teh only users".
+
+Jack Heart, 2026-11-14: "56 landed. pin a commit for now, release xoming".
+Etude PR #103 merged as 5708e14cab1459b46f8310a9ec06f97ad154562f; main is
+still version 0.3.2.

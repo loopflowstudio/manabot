@@ -156,7 +156,7 @@ publish, land or choose the next Graph step from here.
   match and checkpoint; with equal player and reset seeds, every evidence and
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
-- Model or training-path changes: `uv run etude run manabot/recipes/local.py`
+- Model or training-path changes: `uv run etude train manabot/recipes/local.py`
   runs the local CPU smoke. Inspect metric rows for per-phase collection and
   learning seconds; the command prints its run id. Play
   checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
@@ -235,16 +235,16 @@ publish, land or choose the next Graph step from here.
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
-- Training recipes: run `uv run etude run manabot/recipes/local.py --name smoke`.
-  Inspect `~/.etude/track/local/smoke-seed-0/` (or `$ETUDE_HOME/track/local/smoke-seed-0/`):
+- Training recipes: run `uv run etude train manabot/recipes/local.py --experiment smoke`.
+  Inspect `~/.etude/track/smoke/` (or `$ETUDE_HOME/track/smoke/`):
   `run.json`, logged rows, `out/state/current.json` and the save folder it
   names (`state.json` with the framework state files), and
   immutable `out/policies/`. A second new run with that name must refuse.
   For a planned stop, use a larger config update count with `--seconds 1`;
-  expect exit 75, then `--resume RUN` to finish the same run. To extend a
-  finished run, use `--resume RUN --until updates=N`; without a later target
+  expect exit 75, then `--experiment smoke --resume` to finish the same run. To extend a
+  finished run, use `--experiment smoke --resume --until updates=N`; without a later target
   it must refuse. `etude continue --run RUN --until updates=N` makes a child
-  run and leaves the first unchanged.
+  run for a launched parent and leaves the first unchanged.
   Device and other recipe fields are passed with `--config JSON`; the seed
   is the run's `--seed`, not a config field. Check raw/EMA checkpoint tensors
   with matched small inputs. Fetch artifacts through Doppler without printing

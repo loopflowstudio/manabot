@@ -23,8 +23,8 @@ from etude.eval.records import (
     digest,
 )
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
-from etude.run.storage import DirectoryStorage, Storage
+from etude.records import ArtifactRef
+from etude.storage import DirectoryStorage, Storage
 import pytest
 
 from experiments import curriculum_report

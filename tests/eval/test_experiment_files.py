@@ -10,12 +10,12 @@ from dataclasses import replace
 from pathlib import Path
 import sys
 
+from etude.errors import EtudeError
 from etude.eval.records import Match
 from etude.experiment import Checkpoint, Checkpoints, ExperimentState, TrainingRun
 from etude.jobs import evaluation_spec
 from etude.page import experiment_files
-from etude.run.errors import EtudeError
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import pytest
 
 from experiments import elemental, tla_frontier

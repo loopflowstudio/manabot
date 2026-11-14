@@ -1,6 +1,7 @@
 """Capture real Torch policy calls and learner inputs for backend comparisons.
 
-`capture` runs a supplied one-update regime, retaining the initial checkpoint,
+`capture` runs one update of supplied self-play settings in an Etude run, retaining
+the initial checkpoint,
 full-capacity observation arrays, selected targets and per-minibatch settings.
 The instrumentation observes the production damped update at its checked-loss
 boundary. Hook frame access is confined here; readers use `backends.parity`.
@@ -16,27 +17,28 @@ import shutil
 import time
 from typing import Any
 
+from etude.train.tracking import Run
 import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.model.admission import AdmittedObservation
 from manabot.model.inference import PolicyInference, PreparedObservation
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.loops import self_play as execution
 from manabot.training.loops.self_play import SelfPlay
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import Collector, RolloutBatch
 from manabot.training.updates.health import OptimizerHealth
 
 
-def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) -> None:
+def capture(out: Path, settings: SelfPlay, run: Run) -> None:
     """Record one real damped update; restore hooks even when execution fails."""
-    if len(regime.stages) != 1 or getattr(regime.stages[0], "updates", None) != 1:
-        raise ValueError("backend capture requires exactly one self-play update")
+    if not isinstance(settings.learning, DampedPolicyLearning):
+        raise ValueError("backend capture requires damped-policy learning")
     out.mkdir(parents=True, exist_ok=False)
     (out / "collection").mkdir()
     (out / "learner").mkdir()
-    (out / "regime.json").write_text(regime.model_dump_json(indent=2))
+    (out / "settings.json").write_text(settings.model_dump_json(indent=2))
 
     calls: list[dict[str, Any]] = []
     minibatches: list[dict[str, Any]] = []
@@ -141,42 +143,16 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
         "torch": torch.__version__,
     }
     try:
-        stage = regime.stages[0]
-        assert isinstance(stage, TrainSelfPlay)
-        settings = SelfPlay(
-            world=regime.world,
-            match=regime.match,
-            deck_source=regime.deck_source,
-            observation=regime.observation,
-            model=regime.agent,
-            learning=stage.learning,
-            behavior=stage.behavior,
-            streams=stage.streams,
-            transitions=stage.transitions,
-            learning_seats=stage.learning_seats,
-            batch_closure=stage.batch_closure,
-            matchup_curriculum=stage.matchup_curriculum,
-            game_errors=stage.game_errors,
-            device=stage.execution.device,
-            precision=stage.execution.precision,
-            workers=stage.execution.workers,
-            threads=stage.execution.threads,
-            bucketed_shapes=stage.execution.bucketed_shapes,
-            live_tokens=stage.execution.live_tokens,
-            checkpoint_every=1,
-        )
-        execution.self_play(settings, out / "execution", seed=seed, updates=1)
+        execution.self_play(settings, run, updates=1)
     finally:
         PolicyInference.prepare = original_prepare  # type: ignore[method-assign]
         ActorCritic.forward = original_forward  # type: ignore[method-assign]
         execution.collect = original_collect  # type: ignore[method-assign]
         OptimizerHealth.check = original_check  # type: ignore[method-assign]
-    initial = sorted((out / "execution").rglob("00000000-raw.pt"))
+    initial = run.out / "policies" / "00000000-raw.pt"
     if not calls or not minibatches:
         raise RuntimeError("capture did not complete one update")
-    if len(initial) != 1:
-        raise RuntimeError(f"expected one initial checkpoint, found {initial}")
-    shutil.copyfile(initial[0], out / "initial.pt")
+    shutil.copyfile(initial, out / "initial.pt")
     policy = sum(c["prepare"] + c["forward"] for c in calls)
     meta.update(
         status="completed",

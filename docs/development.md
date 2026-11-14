@@ -39,16 +39,16 @@ atomically.
   `uv run scripts/play.py` works in an already prepared environment but cannot
   diagnose a missing `uv`. Development flags: `--port`, `--frontend-port`,
   `--no-frontend`, `--demo learn`.
-- `uv run etude run manabot/recipes/local.py` runs a training smoke.
+- `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.3.2` (also for
+The `manabot` public dependency requirements are `etude-sdk>=0.4.0` (also for
 its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
 requirements. A downstream project resolves those with its own dependencies. The repository's
 `uv.lock` records exact versions, and its dedicated training and play runtime
 groups retain exact Torch/backend choices. Those development pins are not
 constraints exported to consumers.
 
-To update the locked Etude version without raising the public minimum:
+For an ordinary released Etude update without raising the public minimum:
 
 ```bash
 uv lock --upgrade-package etude-sdk
@@ -740,7 +740,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.3.2`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.0`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
@@ -769,7 +769,7 @@ In a checkout, use `uv sync --locked --extra notebook`. If a command reports
 a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
 
-Experiment recipes (`etude run experiments/<experiment>.py`), experiment drivers and data-ledger tools need a
+Experiment recipes (`etude train experiments/<experiment>.py`), experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
 

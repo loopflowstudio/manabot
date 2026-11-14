@@ -17,9 +17,9 @@ import re
 from statistics import mean
 from typing import Literal
 
-from etude.run.records import RunFile as EtudeRunFile
+from etude.records import RunRecord as EtudeRunRecord
 from matplotlib.figure import Figure
-from pydantic import ConfigDict, JsonValue, TypeAdapter
+from pydantic import ConfigDict, JsonValue
 
 from manabot.eval.monitor import MonitorResult
 from manabot.experiment.records import ExperimentRun
@@ -40,7 +40,19 @@ from manabot.training.update_metrics import (
     stage_rows,
 )
 
-_RUN_RECORD = TypeAdapter(RetainedRun | EtudeRunFile)
+
+def read_run_record(path: Path) -> RetainedRun | EtudeRunRecord:
+    """Select the producer's schema before validation, never a permissive union.
+
+    Etude writes version 2 or a historical nested declaration. An untagged
+    record is retained training evidence and must satisfy its full contract.
+    """
+    value = json.loads(path.read_text())
+    if isinstance(value, dict) and (
+        value.get("schema_version") == 2 or "declaration" in value
+    ):
+        return EtudeRunRecord.model_validate(value)
+    return RetainedRun.model_validate(value)
 
 
 class RetainedExecution(ExperimentRun):
@@ -125,7 +137,7 @@ def load_evidence(root: Path) -> ReportEvidence:
     """
     root = root.resolve()
     runs = tuple(sorted(root.rglob("run.json")))
-    records = tuple(_RUN_RECORD.validate_json(p.read_text()) for p in runs)
+    records = tuple(read_run_record(p) for p in runs)
     monitors = tuple(sorted(root.rglob("monitor.json")))
     executions = tuple(sorted(root.rglob("experiment.json")))
     attempts = tuple(sorted(root.rglob("attempt-*/attempt.json")))

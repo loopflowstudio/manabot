@@ -7,7 +7,7 @@ the loop. Evaluation is a separate Etude pass over its immutable checkpoints.
 from pathlib import Path
 from typing import Literal
 
-from etude.train.run import track
+from etude.train.tracking import track
 from pydantic import BaseModel, ConfigDict, Field
 
 from manabot.infra.config import ModelConfig

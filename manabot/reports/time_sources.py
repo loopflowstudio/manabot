@@ -25,7 +25,7 @@ from manabot.reports.time_cohort import (
 from manabot.reports.time_profile import TimeSlice, TrainingInterval, TrainingProfile
 
 if TYPE_CHECKING:
-    from etude.run.storage import Storage
+    from etude.storage import Storage
     from etude.train.read import RunData
 
 
@@ -285,7 +285,7 @@ def load_time_sources(
     history. Archives are listed as a coverage gap rather than silently expanded.
     """
     # Optional report entry point: ordinary training does not require Etude.
-    from etude.run.storage import storage_from_uri
+    from etude.storage import storage_from_uri
     from etude.train.read import read_all
 
     native: dict[str, RetainedRun] = {}

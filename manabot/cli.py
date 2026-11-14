@@ -9,7 +9,6 @@ import typer
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
-from manabot.sim.sim import run_simulation
 import managym
 
 app = typer.Typer(
@@ -22,11 +21,11 @@ app = typer.Typer(
     context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
 )
 def train_command() -> None:
-    """Training moved to Etude; run a recipe file with `etude run`."""
+    """Training moved to Etude; run a recipe file with `etude train`."""
     typer.echo(
-        "manabot train is removed. Use: uv run etude run FILE "
+        "manabot train is removed. Use: uv run etude train FILE "
         "(for example, manabot/recipes/local.py). "
-        "Resume an unfinished run with --resume RUN.",
+        "Resume an unfinished run with --resume.",
         err=True,
     )
     raise typer.Exit(2)
@@ -45,6 +44,10 @@ def sim_command(
     ),
     villain_deck_file: Path | None = typer.Option(None, help="UTF-8 opponent decklist"),
 ) -> None:
+    # Runtime imports stay at the command boundary so migration help works
+    # without the training SDK.
+    from manabot.sim.sim import run_simulation
+
     if (hero_deck_file is None) != (villain_deck_file is None):
         raise typer.BadParameter("Supply both --hero-deck-file and --villain-deck-file")
     try:

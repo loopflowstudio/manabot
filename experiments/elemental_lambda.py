@@ -18,8 +18,8 @@ end is each update's `selection_groups` metrics, under the report's ML details.
 """
 
 from etude.experiment import ExperimentState
-from etude.launch.records import Job, Run
 from etude.report import Report
+from etude.spec import Job, RunRequest
 
 from experiments.elemental_variants import lambda_sweep
 from experiments.learning_signal import (
@@ -57,7 +57,7 @@ def runs(
     usd_per_run: float = USD_PER_RUN,
     seeds: str = SEEDS,
     arms: str = ",".join(f"{p:g}/{v:g}" for p, v in ARMS),
-) -> list[Run]:
+) -> list[RunRequest]:
     """`arms` ("0.5/0.8,...") and `seeds` are comma-separated, so one arm launches
     all-or-nothing."""
     chosen = tuple(arm for arm in ARMS if arm in {_arm(a) for a in arms.split(",")})

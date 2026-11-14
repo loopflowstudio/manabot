@@ -44,14 +44,16 @@ report selects them by. A `Benchmark` holds `seatings`, and a checkpoint says
 where it stood on each clock in `Checkpoint.at`, as in
 `checkpoint.at["updates"]`.
 
-These commands need etude-sdk 0.3.2 or later, which the lock pins. Launch,
+Use the repository's locked Etude revision for these commands
+([development dependency](development.md#environment-and-commands)). Launch,
 status and eval commands keep their state in a launcher database named for its
-schema version: etude-sdk 0.3.2 uses `~/.etude/launcher-17.db`. A database an
+schema version: the development revision uses `~/.etude/launcher-19.db`
+(released 0.3.2 uses `launcher-17.db`). A database an
 older client wrote, such as the unversioned `~/.etude/launcher.db` of 0.2.x,
 stays where it is and is never opened, so both clients work from one home:
 
 ```sh
-uv run etude status                                        # launcher-17.db
+uv run etude status                                        # launcher-19.db
 uv run --with "etude-sdk[s3,eval]==0.2.15" etude status    # launcher.db
 ```
 
@@ -175,16 +177,16 @@ and evaluates its checkpoints on the existing paired-deal grid. A local run
 calls the same function:
 
 ```bash
-uv run etude run manabot/recipes/elemental.py --seed 197
-uv run etude run manabot/recipes/elemental.py --resume elemental-seed-197
+uv run etude train manabot/recipes/elemental.py
+uv run etude train manabot/recipes/elemental.py --resume
 ```
 
-The first command is always a new run, named for its job and seed; the second
-is another attempt of that run from its last saved state. `--resume RUN
+The first command starts the seed-0 run `elemental`; the second
+is another attempt of that run from its last saved state. `--resume
 --until updates=N` takes the same run to a later target, and `etude continue`
-starts a new run from its state; neither changes the recipe's settings. See [training](training.md#recovery) for the guarantees and limits.
+starts a child of a launched run from its state; neither changes the recipe's settings. See [training](training.md#recovery) for the guarantees and limits.
 
-The nightly baseline runs `manabot/recipes/baseline.py` with `etude run` and
+The nightly baseline runs `manabot/recipes/baseline.py` with `etude train` and
 then calls `evaluate(config, directory)` on that run's `out`. Evaluation compares the initial and final raw
 checkpoints on the same four deck/seat legs per deal, runs the existing native
 choice inspection, and writes `learning.json` for aggregation across training

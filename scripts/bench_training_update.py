@@ -26,7 +26,7 @@ from typing import TypedDict, cast
 import warnings
 
 from etude.train.read import read
-from etude.train.run import track
+from etude.train.tracking import track
 from pydantic import BaseModel, Field
 
 from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
@@ -119,19 +119,21 @@ def measure(
             if not key.startswith("ETUDE_")
         }
         env["ETUDE_HOME"] = temporary
+        recipe = Path(temporary) / "measurement.py"
+        recipe.write_text(
+            "from etude.jobs import training\nfrom etude.spec import Job\n"
+            "from scripts.bench_training_update import BenchmarkConfig, train\n\n"
+            "def runs() -> Job:\n"
+            "    return training(train, config=BenchmarkConfig.model_validate_json("
+            f"{config.model_dump_json()!r}), seeds=({seed},))\n"
+        )
         subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "etude",
-                "run",
-                str(Path(__file__).resolve()),
-                "--config",
-                config.model_dump_json(),
-                "--seed",
-                str(seed),
-                "--name",
-                "measurement",
+                "train",
+                str(recipe),
             ],
             env=env,
             check=True,
@@ -140,8 +142,8 @@ def measure(
         )
         recorded = read(
             Path(temporary) / "track",
-            "bench_training_update",
-            f"measurement-seed-{seed}",
+            "measurement",
+            "measurement",
         )
         rows: list[dict[str, object]] = [{} for _ in range(updates)]
         for metric in recorded.metrics():

@@ -135,4 +135,4 @@ jobs:
       - name: Training smoke test
         if: matrix.group == 'evaluation'
         run: |
-          ETUDE_HOME="$PWD/.runs/ci-local-smoke" uv run etude run manabot/recipes/local.py --name smoke
+          ETUDE_HOME="$PWD/.runs/ci-local-smoke" uv run etude train manabot/recipes/local.py --experiment smoke

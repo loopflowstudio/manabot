@@ -48,7 +48,6 @@ from statistics import median
 from tempfile import TemporaryDirectory
 from typing import Any, Literal, TypedDict
 
-from etude.eval.match import Row, Tables
 from etude.eval.records import (
     Benchmark,
     Code,
@@ -58,12 +57,13 @@ from etude.eval.records import (
     Model,
     Seating,
 )
+from etude.eval.run import Row, Tables
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch import client
-from etude.launch.records import Job, Run
 from etude.report import Report, Score
-from etude.run.storage import Storage
+from etude.spec import Job, RunRequest
+from etude.storage import Storage
 from etude.train.read import RunData
 from pydantic import Field
 import torch
@@ -335,7 +335,7 @@ def capped_runs(*args: object, **kwargs: object) -> None:
     refuse_frozen_execution()
 
 
-def runs(revision: str) -> list[Run]:
+def runs(revision: str) -> list[RunRequest]:
     """One capped GPU allocation per size; no automatic retry or budget expansion."""
     regimes, protocol = frozen()
     return [

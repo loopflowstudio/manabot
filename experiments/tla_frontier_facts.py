@@ -44,7 +44,7 @@ from tempfile import TemporaryDirectory
 from typing import Literal
 
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
-from etude.run.storage import storage_from_uri
+from etude.storage import storage_from_uri
 import numpy as np
 import numpy.typing as npt
 import torch

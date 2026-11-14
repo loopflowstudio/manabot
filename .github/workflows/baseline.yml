@@ -56,11 +56,20 @@ jobs:
           )
           seed = int(os.environ["BASELINE_SEED"])
           os.environ["ETUDE_HOME"] = str(Path(".runs/baseline").resolve())
+          recipe = Path(".runs/baseline_recipe.py")
+          recipe.parent.mkdir(parents=True, exist_ok=True)
+          recipe.write_text(
+              "from etude.jobs import training\nfrom etude.spec import Job\n"
+              "from manabot.recipes.baseline import BaselineConfig, train\n\n"
+              "def runs() -> Job:\n"
+              "    return training(train, config=BaselineConfig.model_validate_json("
+              f"{config.model_dump_json()!r}), seeds=({seed},))\n"
+          )
           subprocess.run([
-              "uv", "run", "--no-sync", "etude", "run", "manabot/recipes/baseline.py",
-              "--seed", str(seed), "--config", config.model_dump_json(), "--seconds", "1680",
+              "uv", "run", "--no-sync", "etude", "train", str(recipe),
+              "--experiment", "baseline", "--seconds", "1680",
           ], check=True)
-          destination = Path(f".runs/baseline/track/baseline/baseline-seed-{seed}/out")
+          destination = Path(".runs/baseline/track/baseline/out")
           result = evaluate(config, destination, seed=seed)
           raise SystemExit(result.software != "passed")
           PY

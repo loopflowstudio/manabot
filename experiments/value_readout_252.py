@@ -52,8 +52,8 @@ from pathlib import Path
 
 from etude.eval.records import Code, Inference, Seating
 from etude.experiment import Checkpoint, ExperimentState
-from etude.launch.records import Job
-from etude.run.storage import storage_from_uri
+from etude.spec import Job
+from etude.storage import storage_from_uri
 import torch
 
 from experiments.elemental_long import stage_parent

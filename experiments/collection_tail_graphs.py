@@ -866,7 +866,7 @@ def _finish(out: Path, captures: Path) -> None:
 
 
 def runs(revision: str, hours: str = "1.5") -> Any:
-    from etude.launch.records import Job, Variable
+    from etude.spec import Job, Variable
 
     from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 

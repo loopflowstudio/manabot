@@ -18,8 +18,8 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from etude.train.records import Step, Time
-from etude.train.run import Run
+from etude.train.records import Time
+from etude.train.tracking import Run
 import numpy as np
 import psutil
 from pydantic import (
@@ -95,7 +95,7 @@ import managym
 COLLECTION_SEED = 10_000
 MINIBATCH_SEED = 20_000
 CLOCKS = [
-    Step("updates", "collection/update iterations"),
+    "updates",
     Time("training_seconds", "active collection and learning seconds"),
 ]
 
