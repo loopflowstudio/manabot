@@ -726,7 +726,7 @@ navigation. These figures do not imply that every identity distinction matters.
 #### Existing payment-decision overlap
 
 D adds one decision per multi-outcome payment while keeping every observed
-`PayOrNot` decision, so a payment that already had one is counted twice. The
+mana-payment decision, so a payment that already had one is counted twice. The
 capture's `activated_sources` counts sources with abilities still present at
 commit, not whether an activation was offered, so it bounds the saving from
 above. Overlap with Waterbend or `Decline` decisions is not priced.
