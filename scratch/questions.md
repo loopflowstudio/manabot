@@ -105,3 +105,9 @@ frozen pilot or its launcher database.
   question for the report, like the other three, rather than a stop: the
   Task's deliverable is a design for review and the recommendation is not
   changed by listing the alternative.
+
+- Concept review at `15cb04c339`: that entering an outcome group must leave
+  the automatic plan, activations and `Decline` reachable is taken as implied
+  by the report's "only an outcome commits", not as a new product choice. The
+  mechanism (return offer or repeated root offers) is left to the implementing
+  Task; no fifth review question.
