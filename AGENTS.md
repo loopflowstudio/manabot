@@ -308,6 +308,9 @@ admission. Admission-rejection fixtures must mark the config as submitted
   Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+  Scalar `Env.step_semantic` wraps native `AgentError` in `SemanticContractError`;
+  inspect its typed `__cause__` when classifying a rules failure. Contract rejection
+  and observation capacity errors remain fatal to scheduled sampler capture.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
   fixture for synthetic outcomes, with separate real-runtime rejection tests.
   Pin declared input capacities rather than inheriting fresh defaults; never

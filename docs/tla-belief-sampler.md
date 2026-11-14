@@ -1,10 +1,11 @@
 # TLA frozen-player belief sampler
 
 Implementation status (2026-11-14): scheduled capture is implemented and the
-original policy loads in its isolated runtime. The experiment CLI below is the
-planned interface and is not available yet. Admission, fitting and saved demo
-artifacts remain outstanding; see the [current report](../experiments/tla_belief_sampler.md)
-for the launcher compatibility dependency.
+original policy loads in its isolated runtime. The saved-artifact `demo` CLI and
+evidence lifecycle are implemented. Remote `admission` and `run` dispatch are
+not available yet. Experiment fitting and saved demo artifacts remain outstanding;
+see the [current report](../experiments/tla_belief_sampler.md) for the launcher
+compatibility dependency.
 
 Inspect the saved sampler and its held-out comparison from the repository root:
 
@@ -13,11 +14,13 @@ uv run --extra artifacts python experiments/tla_belief_sampler.py demo --artifac
 ```
 
 The demo reloads fit seed 357 against its recorded dataset, schema, policy and
-world hashes. It reproduces the held-out statistics and emits a public text/JSON
-example with visible commitments, prior and learned card-inclusion probabilities,
+world hashes. It retains the held-out statistics and emits a public text/JSON
+example with normalized public commitment features, prior and learned card-inclusion probabilities,
 and learned predictions with history zeroed. The example contains no true hidden
 hand or private game seed. Zeroing history illustrates sensitivity; it does not
-isolate the value of history in a controlled comparison.
+isolate the value of history in a controlled comparison. The example uses the first
+saved test row with nonempty public history, without selecting on predictions.
+If no such row exists, the history example remains unavailable.
 
 This exploratory workflow trains a hidden-hand sampler from complete TLA games
 played by the frozen Small u1952 player from Etude run `59718fe34945`. A negative
@@ -48,7 +51,9 @@ overflow and preserves the retained choices' native offer IDs.
 
 ## Admit, then collect and fit
 
-Run admission on the remote worker before freezing the main schedule:
+The following `admission` and `run` commands remain planned interfaces, not
+executable subcommands. A compatible Etude controller and the frozen worker
+bundle must be admitted first. Run admission remotely before freezing the main schedule:
 
 ```sh
 uv run --extra artifacts python experiments/tla_belief_sampler.py admission --out experiments/data/tla-belief-357 --max-usd 2
@@ -103,7 +108,9 @@ sampler when negative for those losses.
 
 Read equal-game means separately from pooled decision-weighted measurements.
 Whole-game intervals describe uncertainty across games; variation across the
-three fit seeds is reported separately. Inspect both test panels, attempted-game
+three fit seeds is reported separately. The maintained cohort reporter accepts
+declared deal groups, resampling available swapped legs together and exposing
+missing legs. The TLA schedule/panel wiring remains outstanding. Inspect both test panels, attempted-game
 denominators, row-selection coverage and omissions alongside the scores.
 
 The model's history features are order-invariant, square-root-normalized public
@@ -115,13 +122,16 @@ failures and omissions can bias the comparison. Native materialization checks
 on fixed replay-backed observations are reported separately from count-bound
 support checks. Neither establishes an exact posterior.
 
-## Proposed continuation contract
+## Evidence lifecycle and planned continuation
 
 Use one private evidence directory for admission, `run` and `demo`. Admission
 and main collection occupy separate subdirectories; admission games never enter
 the main dataset. The directory retains references to Etude jobs and their
 launcher cost receipts, so the cumulative USD25 limit survives continuation.
-This interface remains proposed; the collector alone does not implement it.
+`EvidenceRoot` implements allocation, settlement, closure and frozen-dataset
+bindings through an injected launcher reader. Its caller must reconcile shared
+capacity and confirm costs and that no queued, retry or active worker can write.
+The live Etude adapter and dispatch commands remain unimplemented.
 
 Repeat the same `run --out` command to reconcile existing jobs and continue
 untouched work. Unknown live jobs or costs stop new dispatch. Verify completed
@@ -157,6 +167,14 @@ before continuing; do not relax bindings, expand a fitted schema or substitute
 a newer checkpoint. Missing split data makes fitting unavailable, with no
 invented empty metrics. Unsupported-row omission applies only to the recognized
 retained-selection and foretell states.
+
+The runtime adapter recognizes native panics and the known `no legal targets`
+rules failure during active steps, including the native cause wrapped by the
+semantic API. Other native errors remain fatal until explicitly classified.
+Capture retains private fatal-stop causes/prefixes, per-viewer saved-row counts
+and distinct omission-reason counts. Restoration requires a recorded repaired
+prerequisite and launcher reconciliation before untouched slots continue.
+`fit_saved_sampler` refuses started seeds without verified complete output.
 
 Keep hidden labels, game seeds and replay prefixes in private artifact storage.
 Before publishing through `manabot.data`, verify the private evidence destination;

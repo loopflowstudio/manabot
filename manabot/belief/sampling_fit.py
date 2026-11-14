@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import hashlib
 import io
+import json
 import math
 import os
 from pathlib import Path
@@ -23,12 +24,15 @@ from typing import Callable, Sequence
 
 import torch
 
+from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling import (
     AutoregressiveBeliefSampler,
     physical_deal_log_prob,
     sample_physical_deal,
 )
+from manabot.belief.sampling_collection import _write_private
 from manabot.belief.sampling_data import SamplerDataset, SamplerExample
+from manabot.belief.sampling_evidence import EvidenceRoot
 from manabot.infra.torch import deterministic_cpu
 
 
@@ -385,3 +389,80 @@ def save_belief_sampler(
         finally:
             temporary.unlink()
     return hashlib.sha256(data).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class SavedFitConfig:
+    """One predeclared sampler treatment; seeds identify attempts, never retries."""
+
+    steps: int = 512
+    batch_size: int = 32
+    hidden_size: int = 64
+    learning_rate: float = 0.001
+    history_dropout: float = 0.0
+    evaluation_samples: int = 16
+
+
+def fit_saved_sampler(
+    root: EvidenceRoot,
+    config: SavedFitConfig,
+    *,
+    seed: int,
+    check: Callable[[], None] | None = None,
+) -> Path:
+    """Fit once from closed evidence, or verify a previously completed candidate.
+
+    Any interruption after the started receipt consumes this seed's attempt.
+    An orphan checkpoint without a completion receipt is unavailable, even if
+    its bytes can be loaded. This is not optimizer recovery.
+    """
+    if seed not in (357, 358, 359):
+        raise ValueError("fit seed is outside the declared three-seed cohort")
+    dataset = root.dataset()
+    directory = root.directory / "fits" / str(seed)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    started = directory / "started.json"
+    complete = directory / "complete.json"
+    checkpoint = directory / "sampler.pt"
+    binding = {
+        "dataset_identity": dataset.identity,
+        "config": asdict(config),
+        "seed": seed,
+    }
+    if started.exists():
+        if json.loads(started.read_text()) != binding:
+            raise ValueError("saved fit configuration changed")
+        if not complete.exists():
+            raise ValueError("fit attempt unavailable; retries are not authorized")
+        receipt = json.loads(complete.read_text())
+        if receipt["binding"] != binding:
+            raise ValueError("saved fit receipt binding changed")
+        load_belief_sampler(
+            checkpoint,
+            expected_dataset_identity=dataset.identity,
+            expected_policy_identity=dataset.policy_identity,
+            expected_world_identity=dataset.world_identity,
+            expected_schema_identity=dataset.schema.identity,
+            expected_checkpoint_identity=receipt["checkpoint_identity"],
+        )
+        return checkpoint
+    _write_private(started, binding)
+    try:
+        result = fit_belief_sampler(dataset, **asdict(config), seed=seed, check=check)
+        identity = save_belief_sampler(checkpoint, result, dataset)
+        load_belief_sampler(
+            checkpoint,
+            expected_dataset_identity=dataset.identity,
+            expected_policy_identity=dataset.policy_identity,
+            expected_world_identity=dataset.world_identity,
+            expected_schema_identity=dataset.schema.identity,
+            expected_checkpoint_identity=identity,
+        )
+        _write_private(complete, {"binding": binding, "checkpoint_identity": identity})
+    except BaseException as error:
+        _write_private(
+            directory / "stop.json",
+            {"error_type": type(error).__name__, "error": str(error)},
+        )
+        raise
+    return checkpoint

@@ -2,7 +2,8 @@
 
 Exploratory. Collection and fitting have not started. There is no trained sampler,
 held-out comparison or public prediction example yet. The experiment CLI described
-in [the guide](../docs/tla-belief-sampler.md) remains to be implemented.
+in [the guide](../docs/tla-belief-sampler.md) supports saved-artifact `demo`;
+remote admission and main dispatch remain to be implemented.
 
 ## Producer verification, 2026-11-14
 
@@ -47,6 +48,36 @@ explicit unsupported-row coverage, per-game private shards and attempt receipts.
 Continuation does not retry started slots; saved completed evidence is verified
 before reuse. The existing fitter and policy loader are unchanged.
 
+`sampling_evidence.EvidenceRoot` retains pre-dispatch Etude allocations and
+requires fresh settlement for every declared run, including no remaining writer
+and a known launcher amount. It applies the USD25 cumulative ceiling and USD2
+admission subcap without counting a receipt twice. Setup belongs to the phase
+it prepares. A process lock serializes allocation and closure mutations.
+
+Collection closure retains every scheduled status, private source hashes and
+launcher receipt references. Orphan shards remain interrupted; completed games
+with no representable rows remain completed. Only closed sources produce the
+single immutable main dataset. Source additions, changes and lost bytes reject
+later fits/reports. Admission stays separate. These guarantees currently have
+injected-fixture validation, not a connected launcher adapter.
+
+The runtime classifies native panics and the known `no legal targets` failure
+at active steps; unknown native, contract, reset and capacity failures remain
+fatal. Private stops retain their cause and delivered Command prefix. Continuing
+untouched slots requires explicit restored-prerequisite evidence after job
+settlement. Coverage retains per-viewer saved rows and distinct retained-selection
+and foretell reasons (overlapping reasons are not disjoint row totals).
+
+`fit_saved_sampler` retains started/completed/stopped attempts and refuses an
+interrupted seed, including an orphan candidate. Verified complete candidates
+reload without optimization. Cohort reports resample declared game groups,
+retain available legs/viewers together, and expose missing-leg counts separately
+from fit-seed uncertainty. TLA same-field/reserved panel wiring remains open.
+The offline `demo` verifies seed357 and frozen sources, retains digest-bound
+16/64-sample reports and a public JSON/Markdown prediction example. It performs
+no collection or optimization. Its history display is the saved normalized
+commitment summary; full ordered public traces are not retained in sampler rows.
+
 Validation on the mini uses an isolated copy of this checkout and the existing
 CPython 3.13 native runtime for current-world collector tests. These controlled
 and tiny-game checks are software validation, separate from experiment admission.
@@ -73,3 +104,35 @@ experiment CLI, then run the separately accounted eight-slot admission under
 USD2. Freeze cohort size and fit allocation from its ordinary pace before main
 collection. The proposed 1,024-slot schedule and three fit seeds remain planning
 choices, not an executed freeze or permission to ignore missing attempts.
+
+## Lifecycle implementation checks, 2026-11-14
+
+On the mini, injected and ordinary tiny current-world fixtures in
+`tests/belief/test_sampling_data.py` and `test_sampling_report.py` passed
+30 checks in 2.22 seconds (final public-history fixture), including fatal-prefix/restoration, unknown/live job
+rejection, cumulative costs, explicit closure, orphan exclusion, missing splits,
+grouped uncertainty, both-viewer capture and a label-free saved demo. The focused
+saved-fit interruption and completed-candidate reuse/corruption checks each
+passed (one check each). These establish software behavior, not experimental
+admission or a fitted TLA result.
+
+A read-only inspection found the mini's shared launcher database has
+`PRAGMA user_version=0`, a `workers` table and attempt references to `worker`;
+its controller heartbeat is dated 2026-10-13. Available 0.2.15/0.3.2 clients
+use a newer `sessions` schema. None of the 27 cached SDK database modules found
+on the mini declares the old `workers` table. This narrows the compatibility
+problem but supplies neither a compatible controller inventory nor proof that
+shared capacity is idle. The database and controller were left unchanged.
+
+The final saved-demo text/seed guard passed its focused check (1 passed, 1.32s).
+The experiment-discovery test module could not collect in the retained worker
+environment: its Etude SDK lacks `etude.eval.records.Seating`, imported by
+`experiments/elemental.py`. Running that test's exact inventory assertion directly,
+without importing the unrelated experiment modules, passed. This does not count
+as a passing run of the whole discovery module; gate still needs the matched SDK.
+Ruff check/format and `git diff --check` passed for the changed files.
+
+The public example selects the first retained test row with nonempty public
+history, without selecting on scores or predictions. Absence of such a row makes
+the history example unavailable. The final 30-check owner run includes nonempty
+public commitment features and validates the label/seed exclusion.

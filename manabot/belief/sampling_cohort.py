@@ -65,6 +65,13 @@ class Contrast(Declaration):
     right: str
 
 
+class EvaluationGroup(Declaration):
+    """Predeclared dependent games, including legs with no retained rows."""
+
+    group_id: str = Field(min_length=1)
+    game_ids: tuple[str, ...] = Field(min_length=1)
+
+
 class CohortSpec(Declaration):
     format: Literal["manabot.sampler-cohort/v1"] = "manabot.sampler-cohort/v1"
     description: str = Field(min_length=1)
@@ -81,9 +88,15 @@ class CohortSpec(Declaration):
     bootstrap_replicates: int = Field(default=2000, ge=100, le=100000)
     attempts: tuple[FitAttempt, ...] = Field(min_length=1)
     contrasts: tuple[Contrast, ...] = ()
+    groups: tuple[EvaluationGroup, ...] = ()
 
     @model_validator(mode="after")
     def check_design(self) -> CohortSpec:
+        grouped_games = [game for group in self.groups for game in group.game_ids]
+        if len({g.group_id for g in self.groups}) != len(self.groups) or len(
+            set(grouped_games)
+        ) != len(grouped_games):
+            raise ValueError("evaluation groups and game membership must be unique")
         if len({a.attempt_id for a in self.attempts}) != len(self.attempts):
             raise ValueError("attempt IDs must be unique")
         if len({(a.treatment, a.training_seed) for a in self.attempts}) != len(
@@ -171,6 +184,15 @@ class CohortReport:
     python_version: str
     complete: bool
     estimates: tuple[Estimate, ...]
+    group_coverage: tuple[GroupCoverage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class GroupCoverage:
+    group_id: str
+    declared_games: tuple[str, ...]
+    retained_games: tuple[str, ...]
+    missing_games: tuple[str, ...]
 
 
 def _value(arm: SamplerArmMetrics, metric: Metric) -> float | None:
@@ -246,6 +268,7 @@ def _estimate(
     *,
     complete: bool,
     spec: CohortSpec,
+    groups: tuple[tuple[int, ...], ...],
 ) -> Estimate:
     if not rows:
         return Estimate(
@@ -270,18 +293,31 @@ def _estimate(
     rng = np.random.default_rng(spec.bootstrap_seed)
 
     def interval(axis: int) -> Interval | None:
-        size = values.shape[axis]
+        size = values.shape[0] if axis == 0 else len(groups)
         if size < 2:
             reasons.append(
                 "independent-fit uncertainty unavailable"
                 if axis == 0
-                else "game uncertainty unavailable: fewer than two games"
+                else "game uncertainty unavailable: fewer than two retained groups"
             )
             return None
         means = values.mean(axis=1 - axis)
         draws = np.empty(spec.bootstrap_replicates)
+        sums = (
+            np.asarray([means[list(group)].sum() for group in groups])
+            if axis == 1
+            else None
+        )
+        counts = np.asarray([len(group) for group in groups])
         for i in range(spec.bootstrap_replicates):
-            draws[i] = means[rng.integers(size, size=size)].mean()
+            indexes = rng.integers(size, size=size)
+            # Keep every available leg/viewer together. Weight by retained games,
+            # preserving the equal-game estimand when groups have missing legs.
+            draws[i] = (
+                means[indexes].mean()
+                if sums is None
+                else sums[indexes].sum() / counts[indexes].sum()
+            )
         low, high = np.quantile(draws, [0.025, 0.975])
         return Interval(float(low), float(high))
 
@@ -341,6 +377,40 @@ def report_sampler_cohort(spec: CohortSpec, *, root: Path = Path(".")) -> Cohort
         membership = current
         panels[attempt.attempt_id] = panel
     complete = len(panels) == len(spec.attempts)
+    game_ids = tuple(row[0] for row in membership) if membership is not None else ()
+    if (
+        membership is not None
+        and not spec.groups
+        and len({row[1] for row in membership}) != len(membership)
+    ):
+        raise ValueError("shared deal seeds require declared evaluation groups")
+    declared_groups = spec.groups or tuple(
+        EvaluationGroup(group_id=game, game_ids=(game,)) for game in game_ids
+    )
+    if set(game_ids) - {game for group in declared_groups for game in group.game_ids}:
+        raise ValueError("retained game is outside declared evaluation groups")
+    seed_groups: dict[int, str] = {}
+    for group in declared_groups:
+        for game_id, seed, _, _ in membership or ():
+            if (
+                game_id in group.game_ids
+                and seed_groups.setdefault(seed, group.group_id) != group.group_id
+            ):
+                raise ValueError("shared deal seed crosses evaluation groups")
+    coverage = tuple(
+        GroupCoverage(
+            group.group_id,
+            group.game_ids,
+            tuple(game for game in group.game_ids if game in game_ids),
+            tuple(game for game in group.game_ids if game not in game_ids),
+        )
+        for group in declared_groups
+    )
+    groups = tuple(
+        tuple(i for i, game in enumerate(game_ids) if game in group.game_ids)
+        for group in declared_groups
+        if any(game in game_ids for game in group.game_ids)
+    )
     treatments = sorted({a.treatment for a in spec.attempts})
     estimates: list[Estimate] = []
     comparisons = [
@@ -404,6 +474,7 @@ def report_sampler_cohort(spec: CohortSpec, *, root: Path = Path(".")) -> Cohort
                 rows,
                 complete=complete and not unsupported,
                 spec=spec,
+                groups=groups,
             )
             if unsupported:
                 estimate = Estimate(
@@ -427,6 +498,7 @@ def report_sampler_cohort(spec: CohortSpec, *, root: Path = Path(".")) -> Cohort
         platform.python_version(),
         complete,
         tuple(estimates),
+        coverage,
     )
 
 
@@ -440,7 +512,7 @@ def render_cohort_report(report: CohortReport) -> str:
         f"Complete: {report.complete}. Declared attempts: {len(report.manifest.attempts)}.",
         "",
         "Equal game and fit weights; differences are left minus right (lower is better).",
-        "95% percentile intervals vary fit seeds or shared games separately; neither is a joint interval.",
+        "95% percentile intervals vary fit seeds or declared game groups separately; neither is a joint interval.",
         "Conditional on this producer and saved population; small fit cohorts are exploratory.",
         "",
         "| Comparison | Metric | Mean | Fit interval | Game interval | Unavailable |",
@@ -458,6 +530,10 @@ def render_cohort_report(report: CohortReport) -> str:
             f"| {estimate.comparison} | {estimate.metric} | {mean} | {display(estimate.fit_interval)} | {display(estimate.game_interval)} | {'; '.join(estimate.unavailable)} |"
         )
     lines.extend(["", "## Declared attempts", ""])
+    missing = sum(len(group.missing_games) for group in report.group_coverage)
+    lines.append(
+        f"Evaluation groups: {len(report.group_coverage)}; missing legs: {missing}. Intervals condition on retained games."
+    )
     lines.extend(
         f"- {a.attempt_id}: {a.status}; training seed {a.training_seed}; {a.reason or 'saved report admitted'}"
         for a in report.manifest.attempts

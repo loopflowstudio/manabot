@@ -76,6 +76,8 @@ class CaptureCoverage:
     selected_moments: int
     overflow_decisions: int
     dropped_actions: int
+    omission_reasons: dict[str, tuple[int, int]]
+    retained_rows: tuple[int, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +116,7 @@ def capture_game(
     moments: int | None = 8,
     omit_unsupported: bool = False,
     check: Callable[[], None] | None = None,
+    on_fatal: Callable[[BaseException, tuple[Command, ...]], None] | None = None,
 ) -> CapturedGame:
     """Select moments without labels; advance both histories on every transition.
 
@@ -123,6 +126,35 @@ def capture_game(
     validation and reservoir admission. A failed game discards both viewers.
     Reset, malformed constraints and infrastructure errors propagate.
     """
+    commands: list[Command] = []
+    try:
+        return _capture_game(
+            runtime,
+            slot,
+            schema,
+            max_steps=max_steps,
+            moments=moments,
+            omit_unsupported=omit_unsupported,
+            check=check,
+            commands=commands,
+        )
+    except BaseException as error:
+        if on_fatal is not None:
+            on_fatal(error, tuple(commands))
+        raise
+
+
+def _capture_game(
+    runtime: CaptureRuntime,
+    slot: CaptureSlot,
+    schema: SamplerSchema,
+    *,
+    max_steps: int,
+    moments: int | None,
+    omit_unsupported: bool,
+    check: Callable[[], None] | None,
+    commands: list[Command],
+) -> CapturedGame:
     if max_steps < 1 or (moments is not None and moments < 1):
         raise ValueError("capture limits must be positive")
     if check is not None:
@@ -136,7 +168,7 @@ def capture_game(
     reservoir: list[tuple[SamplerExample, ...]] = []
     eligible = [0, 0]
     unsupported = [0, 0]
-    commands: list[Command] = []
+    omissions: dict[str, list[int]] = {}
     overflows = dropped = decisions = 0
     failure: str | None = None
     try:
@@ -153,10 +185,12 @@ def capture_game(
                 try:
                     # CaptureRuntime supplies the same native projection method.
                     public, _ = public_sampler_input(runtime, history, schema)
-                except UnsupportedSamplerRow:
+                except UnsupportedSamplerRow as error:
                     if not omit_unsupported:
                         raise
                     unsupported[viewer] += 1
+                    for reason in error.reasons:
+                        omissions.setdefault(reason, [0, 0])[viewer] += 1
                     continue
                 eligible[viewer] += 1
                 if selected:
@@ -222,6 +256,7 @@ def capture_game(
             raise GameCaptureFailure("belief self-play exceeded the declared step cap")
     except GameCaptureFailure as error:
         failure = str(error)
+    rows = tuple(row for moment in reservoir for row in moment)
     coverage = CaptureCoverage(
         decisions,
         (eligible[0], eligible[1]),
@@ -229,8 +264,11 @@ def capture_game(
         len(reservoir),
         overflows,
         dropped,
+        {name: (counts[0], counts[1]) for name, counts in omissions.items()},
+        (sum(row.viewer == 0 for row in rows), sum(row.viewer == 1 for row in rows))
+        if failure is None
+        else (0, 0),
     )
-    rows = tuple(row for moment in reservoir for row in moment)
     game = (
         None
         if failure is not None or not rows
@@ -300,6 +338,14 @@ def collect_schedule(
             raise ValueError("saved capture schedule or bindings differ")
     else:
         _write_private(schedule, {"identity": identity, "capture": binding})
+    if (directory / "closure.json").exists():
+        raise ValueError("collection is closed")
+    for stop in directory.glob("game-*.stop.json"):
+        restored = stop.with_suffix(".restored.json")
+        if not restored.exists() or json.loads(restored.read_text()).get(
+            "stop_identity"
+        ) != _digest(json.loads(stop.read_text())):
+            raise ValueError("fatal capture prerequisite has not been restored")
     for ordinal, slot in enumerate(slots):
         prefix = directory / f"game-{ordinal:06d}"
         started = prefix.with_suffix(".started.json")
@@ -329,6 +375,22 @@ def collect_schedule(
         if check is not None:
             check()
         _write_private(started, {"schedule_identity": identity, "slot": asdict(slot)})
+
+        def retain_fatal(error: BaseException, commands: tuple[Command, ...]) -> None:
+            _write_private(
+                prefix.with_suffix(".stop.json"),
+                {
+                    "schedule_identity": identity,
+                    "error_type": type(error).__name__,
+                    "error": str(error),
+                    "cause_type": None
+                    if error.__cause__ is None
+                    else type(error.__cause__).__name__,
+                    "cause": None if error.__cause__ is None else str(error.__cause__),
+                    "commands": [asdict(c) for c in commands],
+                },
+            )
+
         result = capture_game(
             runtime,
             slot,
@@ -337,6 +399,7 @@ def collect_schedule(
             moments=moments,
             omit_unsupported=True,
             check=check,
+            on_fatal=retain_fatal,
         )
         shard = asdict(result)
         _write_private(prefix.with_suffix(".game.json"), shard)
@@ -354,10 +417,12 @@ def collect_schedule(
 
 
 def read_capture_dataset(directory: Path) -> SamplerDataset:
-    """Assemble verified completed shards; missing split data refuses fitting.
+    """Inspect verified completed shards; require three nonempty splits.
 
     The schedule and all attempt receipts remain beside this dataset, including
     completed games with zero representable rows and failed/interrupted slots.
+    Missing results are skipped. This reader does not establish collection closure
+    or exclude a live writer; the experiment must establish both before fitting.
     """
     saved = json.loads((directory / "schedule.json").read_text())
     binding = saved["capture"]

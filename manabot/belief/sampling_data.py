@@ -35,6 +35,13 @@ class ConstraintSource(Protocol):
 class UnsupportedSamplerRow(ValueError):
     """A recognized native domain outside the count-only sampler's support."""
 
+    def __init__(self, reasons: tuple[str, ...]) -> None:
+        self.reasons = reasons
+        super().__init__(
+            "count-only belief sampler cannot represent retained selections or foretold slots: "
+            + ", ".join(reasons)
+        )
+
 
 Split = Literal["train", "validation", "test"]
 HISTORY_SCHEMA = "manabot.public-commitment-counts/actor-kind-card-sqrt-v1"
@@ -214,10 +221,16 @@ def public_sampler_input(
     """
     encoded = engine.hidden_hand_constraints_json(history.viewer)
     projected = json.loads(encoded)
-    if projected.get("retained_selection", False) or projected["foretold"]:
-        raise UnsupportedSamplerRow(
-            "count-only belief sampler cannot represent retained selections or foretold slots"
+    reasons = tuple(
+        name
+        for name, present in (
+            ("retained_selection", projected.get("retained_selection", False)),
+            ("foretold", projected["foretold"]),
         )
+        if present
+    )
+    if reasons:
+        raise UnsupportedSamplerRow(reasons)
     pool = _counts(projected["pool"])
     known = _counts(projected["known_hand"])
     if (set(pool) | set(known)) - set(schema.card_names):

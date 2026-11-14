@@ -11,12 +11,14 @@ import numpy as np
 from manabot.belief.sampling_collection import (
     CaptureSlot,
     CaptureTransition,
+    GameCaptureFailure,
     retained_offer_count,
 )
 from manabot.env.env import Env
 from manabot.env.match import Match
 from manabot.sim.search.flat_mc import MatchupPlayer
-from managym.decision import Command, DecisionFrame, Observation
+import managym
+from managym.decision import Command, DecisionFrame, Observation, SemanticContractError
 
 
 class EnvCaptureRuntime:
@@ -69,7 +71,28 @@ class EnvCaptureRuntime:
         return action
 
     def step(self, command: Command) -> CaptureTransition:
-        self.obs, _, terminated, truncated, _, transition = self.env.step_semantic(
-            command
-        )
+        # Only native rules failures during active play are game-local. Reset,
+        # encoding capacity, stale Commands and policy/infrastructure errors stay fatal.
+        try:
+            self.obs, _, terminated, truncated, _, transition = self.env.step_semantic(
+                command
+            )
+        except BaseException as error:
+            native = (
+                error.__cause__ if isinstance(error, SemanticContractError) else error
+            )
+            # PyO3's panic type is created at runtime, without an importable module.
+            panic = (
+                type(native).__module__ == "pyo3_runtime"
+                and type(native).__name__ == "PanicException"
+            )
+            known_rules_failure = (
+                isinstance(native, managym.AgentError)
+                and str(native) == "no legal targets"
+            )
+            if panic or known_rules_failure:
+                raise GameCaptureFailure(
+                    f"{type(native).__name__}: {native}"
+                ) from error
+            raise
         return CaptureTransition(transition.receipt, terminated, truncated)

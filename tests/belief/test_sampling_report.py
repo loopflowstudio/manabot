@@ -9,8 +9,15 @@ from pathlib import Path
 import pytest
 import torch
 
+from experiments.tla_belief_sampler import demo
 from manabot.belief.sampling import AutoregressiveBeliefSampler
-from manabot.belief.sampling_cohort import CohortSpec, FitAttempt, report_sampler_cohort
+from manabot.belief.sampling_cohort import (
+    CohortSpec,
+    EvaluationGroup,
+    FitAttempt,
+    _estimate,
+    report_sampler_cohort,
+)
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -21,6 +28,7 @@ from manabot.belief.sampling_data import (
 from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
 from manabot.reports.belief import _pool_games, main, report_saved_sampler
+from tests.belief.test_sampling_data import _collected_root, _settled
 
 
 def _dataset(width: int = 2, capacity: int = 2) -> SamplerDataset:
@@ -361,6 +369,46 @@ def test_saved_fixed_weight_fits_feed_offline_cohort(tmp_path: Path) -> None:
     assert result.complete
     assert all(e.fit_seeds == (10, 11) for e in result.estimates)
     assert result == report_sampler_cohort(spec)
+    grouped = spec.model_copy(
+        update={
+            "groups": (
+                EvaluationGroup(
+                    group_id="deal-a", game_ids=("game-2", "extra-test", "missing-leg")
+                ),
+                EvaluationGroup(
+                    group_id="deal-b", game_ids=("missing-both-0", "missing-both-1")
+                ),
+            )
+        }
+    )
+    grouped_result = report_sampler_cohort(grouped)
+    assert grouped_result.group_coverage[0].missing_games == ("missing-leg",)
+    assert grouped_result.group_coverage[1].retained_games == ()
+    assert all(e.game_interval is None for e in grouped_result.estimates)
+    # Within-pair differences cancel. Resampling legs independently would
+    # fabricate evaluation uncertainty although every retained group averages 5.
+    estimate = _estimate(
+        "paired",
+        "joint_nll",
+        (10, 11),
+        [[0, 10, 0, 10]] * 2,
+        complete=True,
+        spec=spec,
+        groups=((0, 1), (2, 3)),
+    )
+    assert estimate.mean == 5
+    assert estimate.game_interval is not None
+    assert estimate.game_interval.low == estimate.game_interval.high == 5
+    with pytest.raises(ValueError, match="membership must be unique"):
+        spec.model_validate(
+            {
+                **spec.model_dump(),
+                "groups": [
+                    {"group_id": "a", "game_ids": ["game-2"]},
+                    {"group_id": "b", "game_ids": ["game-2"]},
+                ],
+            }
+        )
 
 
 def test_duplicate_saved_views_rejected(tmp_path: Path) -> None:
@@ -391,3 +439,46 @@ def test_pooled_ece_uses_bins_not_mean_game_ece() -> None:
     pooled = _pool_games([arm, replace(arm, calibration_bins=bins_b)], [1, 1])
     assert pooled.inclusion_ece == 0
     assert pooled.conjunction_brier is None
+
+
+def test_tla_saved_demo_is_public_and_never_optimizes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _collected_root(tmp_path)
+    root.close_collection("main", reason="controlled fixture complete", read=_settled)
+    dataset = root.freeze_dataset()
+    fit = tmp_path / "fits/357"
+    fit.mkdir(parents=True)
+    digest = _checkpoint(fit / "sampler.pt", dataset, 357)
+    binding = {"dataset_identity": dataset.identity, "config": {}, "seed": 357}
+    (fit / "started.json").write_text(json.dumps(binding))
+    (fit / "complete.json").write_text(
+        json.dumps({"binding": binding, "checkpoint_identity": digest})
+    )
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        raise AssertionError("offline demo attempted optimization")
+
+    monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", forbidden)
+    path = demo(tmp_path)
+    public = json.loads(path.read_text())
+    assert public["public_commitment_features"]
+    assert all(
+        feature["kind"] == "pass_priority"
+        for feature in public["public_commitment_features"]
+    )
+    assert set(public["inclusion_probabilities"]) == {
+        "prior",
+        "learned",
+        "zero_history",
+    }
+    assert "target_hand" not in path.read_text() and "seed" not in path.read_text()
+    assert len(public["inclusion_probabilities"]["learned"]) == len(
+        dataset.schema.card_names
+    )
+    before = (tmp_path / "demo/quality.json").read_bytes()
+    assert demo(tmp_path) == path
+    assert (tmp_path / "demo/quality.json").read_bytes() == before
+    (tmp_path / "demo/quality.json").write_text("{}")
+    with pytest.raises(ValueError, match="report identity"):
+        demo(tmp_path)

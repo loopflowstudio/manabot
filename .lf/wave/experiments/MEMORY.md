@@ -4,7 +4,32 @@ The Training Wave was renamed experiments in `9f42e4e58` on 2026-11-04.
 The removed Eval memory (hosted LLM comparisons, inference receipts and evidence
 reuse) remains at `19bdee944^:.lf/wave/eval/MEMORY.md`; it is historical context,
 not an active scope or new campaign authorization. Filesystem inspection of
-experiments on 2026-11-11 found no immediate child directories or child memories.
+experiments on 2026-11-14 found no immediate child directories or child memories.
+
+## Frozen-player sampler evidence (MTG-357, 2026-11-14)
+
+The ordinary producer export and endpoint record bind Small/raw/u1952 from
+`59718fe34945` to unchanged staged bytes, despite its missing `checkpoint_source`.
+The original loader and staged capture imports succeeded in an isolated original
+runtime. Neither establishes complete capture, native sample materialization or
+experimental admission. Producer `paused`, launcher `succeeded` and scientific
+completion describe different things. Exact records and hashes live in
+`experiments/tla_belief_sampler.md`; no sampler training or scored result exists.
+
+Both Etude 0.3.2 and original 0.2.15 refused the shared launcher database with
+“was written by another version of etude; move or delete it to start again”.
+The database was preserved and no alternate controller or job was created.
+Failed inventory is unknown capacity/work, not missing credentials or zero cost.
+A compatible control client can remain separate from the frozen worker runtime.
+
+Reusable evidence boundaries: verified available shards and nonempty splits do
+not prove collection is closed or that no worker can still write. A started slot
+and orphan shard prove neither completion nor the cause of a fatal stop.
+Keep job reconciliation, explicit closure, fatal causes and immutable fit data
+distinct from capture continuation. Swapped legs sharing a declared deal seed
+also need group-preserving uncertainty; a whole-game bootstrap alone does not
+preserve their dependence. MTG-357's closure, error classification and grouped
+analysis remain implementation work, not validated guarantees.
 
 ## Self-play metric indexing (MTG-273, 2026-11-11)
 

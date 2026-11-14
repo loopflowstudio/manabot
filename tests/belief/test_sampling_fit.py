@@ -13,9 +13,13 @@ from manabot.belief.sampling_data import (
     SamplerGame,
     Split,
 )
+from manabot.belief.sampling_evidence import EvidenceRoot
 from manabot.belief.sampling_fit import (
+    SamplerFitResult,
+    SavedFitConfig,
     evaluate_sampler,
     fit_belief_sampler,
+    fit_saved_sampler,
     save_belief_sampler,
 )
 from manabot.belief.sampling_types import SamplerInput, SamplerSchema
@@ -166,3 +170,51 @@ def test_foreign_baiting_is_identified_and_safe_baseline_retained() -> None:
     metrics = evaluate_sampler(result.model, bait, samples=8)
     assert metrics.learned.joint_nll > metrics.physical_baseline.joint_nll
     assert metrics.physical_baseline.support_violations == 0
+
+
+def test_saved_fit_attempt_is_never_restarted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = EvidenceRoot(tmp_path)
+    # Bind a controlled immutable dataset; no game generation or optimization.
+    monkeypatch.setattr(root, "dataset", _dataset)
+    config = SavedFitConfig(steps=1)
+
+    def interrupted(dataset: SamplerDataset, **kwargs: object) -> SamplerFitResult:
+        raise TimeoutError("worker stopped during optimizer step")
+
+    monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", interrupted)
+    with pytest.raises(TimeoutError, match="optimizer"):
+        fit_saved_sampler(root, config, seed=357)
+    assert (tmp_path / "fits/357/stop.json").exists()
+
+    def forbidden(dataset: SamplerDataset, **kwargs: object) -> SamplerFitResult:
+        raise AssertionError("fit was retried")
+
+    monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", forbidden)
+    with pytest.raises(ValueError, match="retries"):
+        fit_saved_sampler(root, config, seed=357)
+    with pytest.raises(ValueError, match="configuration changed"):
+        fit_saved_sampler(root, replace(config, steps=2), seed=357)
+    with pytest.raises(ValueError, match="three-seed"):
+        fit_saved_sampler(root, config, seed=360)
+
+
+def test_completed_saved_fit_reuses_verified_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = EvidenceRoot(tmp_path)
+    monkeypatch.setattr(root, "dataset", _dataset)
+    config = SavedFitConfig(steps=1, batch_size=2, hidden_size=4, evaluation_samples=2)
+    checkpoint = fit_saved_sampler(root, config, seed=358)
+    before = checkpoint.read_bytes()
+
+    def forbidden(dataset: SamplerDataset, **kwargs: object) -> SamplerFitResult:
+        raise AssertionError("completed fit optimized again")
+
+    monkeypatch.setattr("manabot.belief.sampling_fit.fit_belief_sampler", forbidden)
+    assert fit_saved_sampler(root, config, seed=358) == checkpoint
+    assert checkpoint.read_bytes() == before
+    checkpoint.write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="byte identity"):
+        fit_saved_sampler(root, config, seed=358)
