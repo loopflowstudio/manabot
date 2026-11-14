@@ -380,6 +380,7 @@ The Torch wrapper and the capture wrapper are separate Python classes:
 |---|---|
 | One game, explicit reset, readable observations | `managym.Env` |
 | A fixed viewer's observation | `Env.observation_for_player(player_index)` |
+| Encoded fixed-viewer observations for every slot, including nonchoosing seats | `VectorEnv.write_observations_for_players` ([fixed-seat observations](#fixed-seat-observations)) |
 | Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
 | Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
 | Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
@@ -503,6 +504,86 @@ remain separate from policy inputs, viewer-safe observations, shared decision
 captures and viewer trace exports. Public `known_hand` counts describe only
 revealed knowledge. Reading snapshots does not change deck disclosure or what a
 player may observe, and requires no policy-input version or checkpoint migration.
+
+### Fixed-seat observations
+
+Read seat 0 in one game and seat 1 in another, even when those seats are not
+choosing. Allocate a separate batch from the observation space used by your
+consumer:
+
+```python
+import managym
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
+
+space = ObservationSpace()
+games = managym.VectorEnv(num_envs=2, seed=42, player_policies=("agent", "agent"))
+games.reset_all(Match().to_rust())
+buffers = space.encoder.allocate(2)
+
+players = [0, 1]
+reads = games.write_observations_for_players(
+    players, buffers, action_overflow=space.encoder.config.action_overflow
+)
+# Row i in every array describes players[i] in slot i.
+
+# Read the opposite hands at the same boundary, without stepping in between.
+hands = games.hand_snapshots([1 - player for player in players])
+for slot, (read, hand) in enumerate(zip(reads, hands, strict=True)):
+    assert (read.slot, read.game_id, read.revision) == (
+        slot, hand.game_id, hand.revision
+    )
+    assert read.player == 1 - hand.player
+```
+
+`write_observations_for_players(players, buffers, action_overflow="error")`
+writes all slots in one native call, with one explicit native seat (`0` or `1`)
+per slot and no implicit opponent. It returns one `ObservationRead` per slot, in
+slot order, naming the game state each row describes:
+
+| Field | Meaning |
+|---|---|
+| `slot: int` | The row in every array, equal to the list index |
+| `player: int` | Requested native seat, unchanged by control effects |
+| `game_id: int`, `seed: int`, `revision: int` | The same values a `HandSnapshot` of that slot reports at this read boundary |
+
+Pair a read with the hand snapshot at the same list index when game ID and
+revision agree, selecting matching or opposite seats as needed. Save a
+collection/run identity too: `game_id` distinguishes resets within the process,
+even to the same seed, but is not a portable replay ID.
+
+The arrays contain the same encoding as scalar
+`Env.observation_for_player(player_index)` for the requested seat and selected
+policy-input version. Native visibility rules apply, including closed decklists
+and information shared through player-control effects. Requesting a seat does
+not remap it to its controller or grant access to hidden information. Only the
+published chooser sees legal actions. Hand snapshots are separate privileged
+records and must stay out of viewer-safe inputs and exports.
+
+`space.encoder.allocate(num_envs)` supplies every required writable, contiguous
+NumPy array at the selected version's shapes, dtypes and capacities. No reward
+or done arrays are needed. Keep these buffers separate from ordinary step
+buffers and copy rows you need to retain before the next write.
+
+`CapturedVector` and the Torch `VectorEnv` wrapper expose the same NumPy-buffer
+method and CPU identity records. For Torch, allocate from the wrapper's
+`observation_space`, then use `torch.from_numpy` and an explicit device transfer
+as needed. Clone shared CPU tensors you need to retain before the next write.
+
+The read does not step, reset or consume randomness. After a successful step,
+done slots describe their replacement games, not the terminal states. Reads
+include every slot, including those left unchanged by an inactive step mask;
+apply that mask when selecting results. Ordinary reset/step calls do not collect
+fixed-seat observations. The read does not replace their chooser observations,
+alter legal choices or create Command or decision-capture authority.
+
+A wrong-length seat list, an invalid seat, reading before reset, or malformed
+buffers raises an error. Encoding uses supplied capacities and the selected
+policy-input version's admission rules. Overflow errors by default;
+`action_overflow="first-legal"` permits only the existing action-prefix policy,
+never truncation of other data. Discard all output rows after a failed read.
+Correct the request, increase capacity or select an input version that supports
+the state before retrying. After a failed step, recover or reset the games first.
 
 ## Encoded observations
 

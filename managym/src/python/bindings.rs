@@ -39,6 +39,7 @@ use crate::{
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         shared_effects,
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
+        vector_env::ObservationRead,
     },
     decision::Command as SemanticCommand,
     experience::{
@@ -4843,6 +4844,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEnv>()?;
     m.add_class::<crate::python::heuristic_bindings::PyHeuristic>()?;
     m.add_class::<HandSnapshot>()?;
+    m.add_class::<ObservationRead>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())
 }
