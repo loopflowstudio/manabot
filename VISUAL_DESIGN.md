@@ -416,8 +416,10 @@ Acknowledged debts, distinct from Reserved features:
   its log.
 - The contrast validator does not yet lint the voice laws (leading
   multiples, no inline font sizes) — they are greppable but unenforced.
-- The experience-proof baseline and release visual references still pin the
-  pre-redesign board and need regeneration on Linux CI.
+- The historical experience timing baseline remains frozen with its original
+  DOM-response definitions. The current release proof records matching-revision
+  rendering opportunities separately; release visual references still need
+  regeneration on Linux CI.
 
 ---
 

@@ -105,15 +105,25 @@ the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
 its [evidence and remaining integration work](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
-The table reads **Who decides / What is happening / Your choices**. Inspect any
-visible card without submitting; choose an explicit legal offer to commit one
-Command. Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
+The table reads **Who decides / What is happening / Your choices**. In **Play**,
+select a hand card, then activate its labeled action; an unambiguous play/cast
+can also be committed by dragging into the play area. Hover, focus and **Inspect
+card** retain inspection without submission. **Inspect**, the initial default,
+keeps card inspection and the complete legal-offer workflow. Switching modes
+clears uncommitted selection without changing the game or priority automation.
+See [Play and Inspect controls](../../docs/academy.md#play-and-inspect-modes)
+for keyboard, drag cancellation, combat and recovery behavior.
+Card locations and copy labels distinguish same-name choices; focusing an offer highlights its exact board subjects. The complete offer count
 is displayed while a card or text filter narrows navigation; **Show all** and
 **Clear filter** restore the full set. In live play at laptop widths and heights,
 the board sits beside independently scrolling offers; instruction, legal count
 and filter navigation stay available. Long instructions have their own scroll
 area. **History and settings** opens decision details, consequences, advice and
-stop configuration while the pending decision stays available. Narrow or short windows stack
+stop configuration while the pending decision stays available. **Edit stops**
+beside the choices opens **Your turn** / **Opponent turn** settings; changing
+them may immediately advance priority. See
+[priority stops](../../docs/academy.md#choosing-priority-stops) for defaults,
+stack responses and F6. Narrow or short windows stack
 the board above choices, with links between them. History, advice and table
 tools can be opened separately; **Compare advice** opens and focuses Advice. Native card
 types group creatures, lands, other
