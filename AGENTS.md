@@ -5,9 +5,8 @@ Never add "Co-Authored by:" tags in commits
 - **Manabot** — the whole project and public brand at `manabot.gg`.
   The repository is `loopflowstudio/manabot` (renamed at Jack Heart's request
   on 2026-10-15).
-- **Academy** — the browser UI for inspecting bots and replays: the `academy`
-  package, its Svelte frontend in `academy/ui`, and their service namespaces. It is a client of
-  manabot and secondary to training. The project website uses Manabot.
+- **Academy** — the browser UI for inspecting bots and replays: the `managym.academy`
+  package, its Svelte frontend in `academy/ui`, and their service namespaces. It is distributed with managym and uses optional training bot capabilities. The project website uses Manabot.
 - **manabot** — the bot, and the Python training library/CLI. Indefinite
   noun: you train *a* manabot.
 - **managym** — the rules environment the agent lives in.
@@ -47,7 +46,9 @@ name the same value by its use. Rename a published name with a deprecated alias
 that warns and states its removal release; serialized configuration keys,
 checkpoint fields and frozen evidence keep their spelling.
 
-Code dependencies flow Academy → manabot → the engine in `managym`.
+Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
+Academy never imports manabot or Torch; optional bot capabilities are discovered
+through the `managym.academy.bots` entry point. manabot never imports Academy.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace
@@ -96,6 +97,9 @@ checkpoints or experiment evidence.
   recorded once; do not reconstruct bills, reserves or settlements.
 - An experiment whose whole cost is at or under USD25 launches under the
   launcher's cap (`--max-usd`). Above that, a person approves the amount first.
+- Etude rental admission includes the on-demand startup allowance in addition
+  to `Job.max_hours`. Size both job and cohort dollar caps for that whole
+  window; a price offer does not guarantee provider capacity.
 - An experiment is `experiments/<name>.py` at a commit with one report,
   `experiments/<name>.md`. Do not add a protocol document, a serialized regime,
   a digest check or a test suite for one experiment's schedule; reusable
@@ -206,6 +210,11 @@ checkpoints or experiment evidence.
 
 ## Commands
 
+- **Use uv everywhere for Python installation and execution guidance.** Never
+  suggest bare `pip install`, including in docs, quickstarts, CLI errors or
+  troubleshooting. Use `uv venv`, `uv pip install` and `uv run`; installed
+  Academy examples use `uv run --no-project managym academy`. Preserve exact
+  historical quotes and frozen evidence.
 - **All Python commands run through uv.** This repo's environment is
   uv-managed; bare `python`, `uvicorn`, `pytest`, `maturin` etc. will miss the
   venv or pick the wrong interpreter. Always `uv run <cmd>` (or

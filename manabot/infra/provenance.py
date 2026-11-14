@@ -11,8 +11,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from managym.experience import UNVERSIONED_CONTENT_HASH
-
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ActionEnum, ObservationSpace
@@ -20,6 +18,7 @@ from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.verify.games import INTERACTIVE_DECK
 import managym
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROTOCOL_SCHEMA = REPO_ROOT / "protocol" / "experience-v1.schema.json"
@@ -27,15 +26,8 @@ PROTOCOL_SCHEMA = REPO_ROOT / "protocol" / "experience-v1.schema.json"
 # default. manabot records its digest as provenance and never loads the pack;
 # tests/academy/test_curated_pack.py checks it equals Academy's served pack.
 RECORDED_ASSET_MANIFEST = (
-    REPO_ROOT
-    / "academy"
-    / "ui"
-    / "src"
-    / "lib"
-    / "packs"
-    / "tla-ur-lessons-vs-gw-allies"
-    / "v2"
-    / "manifest.json"
+    Path(managym.__file__).parent
+    / "academy/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json"
 )
 
 

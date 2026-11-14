@@ -12,7 +12,6 @@ from pydantic import ValidationError
 import pytest
 import torch
 
-from academy.villain import CheckpointVillain
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
@@ -27,6 +26,7 @@ from manabot.infra.config import (
 )
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.sim.replay import replay_environment
+from manabot.sim.table_bots import CheckpointVillain
 
 SETUP = "ur-lessons-vs-gw-allies"
 

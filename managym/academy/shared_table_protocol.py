@@ -12,8 +12,9 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Literal, TypeAlias
 
-from managym.experience import Command, ProtocolModel, UInt64
 from pydantic import ConfigDict, Field, TypeAdapter
+
+from managym.experience import Command, ProtocolModel, UInt64
 
 from .advice_identity import AdviceIdentity
 

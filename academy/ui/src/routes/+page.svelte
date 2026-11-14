@@ -42,14 +42,19 @@
   let showSetup = $state(false);
 
   let trainedOpponents = $state<TrainedOpponent[]>([]);
+  // undefined until the catalog answers, so absence is never claimed early.
+  let botExtension = $state<string | null | undefined>(undefined);
   let catalogError = $state<string | null>(null);
   async function loadOpponents(): Promise<void> {
     try {
       const response = await fetch('/api/opponents');
       if (!response.ok) throw new Error('Trained opponents could not be loaded.');
       const data: OpponentCatalog = await response.json();
+      botExtension = data.extension ?? null;
       trainedOpponents = data.opponents;
       catalogError = data.catalog_error;
+      if (data.advice_available) void loadAdviceMeta();
+      else adviceStatus = 'unavailable';
     } catch {
       catalogError = 'Trained opponents could not be loaded.';
     }
@@ -72,7 +77,7 @@
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
     connect();
-    void loadAdviceMeta();
+
     void loadOpponents();
     return () => {
       disconnect();
@@ -319,6 +324,7 @@
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
           {catalogError}
+          extension={botExtension}
           decklists={gameStore.decklists}
           onChange={(value) => gameStore.setOpponentChoice(value)}
         />
@@ -438,6 +444,7 @@
 
         <PresentationHistory player={presentationPlayer} />
 
+        {#if adviceMetaState}
         <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
           <DecisionAdvice
             mode="live"
@@ -454,6 +461,7 @@
             onSelectScenario={(id) => void loadAdvice(id)}
           />
         </details>
+        {/if}
 
         <div class="border-t border-line pt-4">
           <fieldset disabled={!gameStore.hasCapability('configure_match')}>

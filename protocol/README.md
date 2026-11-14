@@ -74,7 +74,7 @@ limit or string encoding before long-lived counters can approach that boundary.
 
 The shared table is where a pilot and a watcher share one game. Its wire schema
 keeps the frozen identifier `testing-house-v1` (`testing-house-v1.schema.json`).
-`academy/shared_table_protocol.py` owns the Game control envelope around the
+`managym/academy/shared_table_protocol.py` owns the Game control envelope around the
 unchanged match protocol. It closes the one-pilot/one-watcher request
 vocabulary, server-derived roles and capabilities, participant leases,
 personal-until-shared GAM-6 scenario references, and participant-local Study
@@ -152,7 +152,7 @@ Regenerate and verify it with:
 cargo run --locked --manifest-path managym/Cargo.toml \
   --example export_study_protocol -- protocol/study-v1.schema.json
 cargo test --locked --manifest-path managym/Cargo.toml --test study_protocol_tests
-uv run pytest -q tests/academy/test_study_protocol.py
+uv run pytest -q tests/managym/academy/test_study_protocol.py
 npm --prefix academy/ui test -- --run src/lib/study-protocol.test.ts
 ```
 

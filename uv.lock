@@ -1142,8 +1142,7 @@ dependencies = [
 
 [package.optional-dependencies]
 academy = [
-    { name = "fastapi" },
-    { name = "uvicorn", extra = ["standard"] },
+    { name = "managym", extra = ["academy"] },
 ]
 artifacts = [
     { name = "boto3" },
@@ -1207,7 +1206,6 @@ requires-dist = [
     { name = "etude-sdk", specifier = ">=0.3.2" },
     { name = "etude-sdk", extras = ["eval"], marker = "extra == 'evaluation'", specifier = ">=0.3.2" },
     { name = "etude-sdk", extras = ["s3"], marker = "extra == 'reports'", specifier = ">=0.3.2" },
-    { name = "fastapi", marker = "extra == 'academy'", specifier = ">=0.116.0" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.116.0" },
     { name = "gymnasium", specifier = ">=1.0.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
@@ -1216,6 +1214,7 @@ requires-dist = [
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23.0" },
     { name = "jupyterlab", marker = "extra == 'notebook'", specifier = ">=4.0" },
     { name = "managym", editable = "managym" },
+    { name = "managym", extras = ["academy"], marker = "extra == 'academy'", editable = "managym" },
     { name = "matplotlib", marker = "extra == 'evaluation'", specifier = ">=3.9" },
     { name = "matplotlib", marker = "extra == 'notebook'", specifier = ">=3.9" },
     { name = "matplotlib", marker = "extra == 'reports'", specifier = ">=3.9" },
@@ -1233,7 +1232,6 @@ requires-dist = [
     { name = "torch", marker = "sys_platform == 'linux'", specifier = ">=2.15.0" },
     { name = "transformers", extras = ["chat-template"], marker = "extra == 'llm'", specifier = "==5.3.0" },
     { name = "typer", specifier = ">=0.12.5" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'academy'", specifier = ">=0.34.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'dev'", specifier = ">=0.34.0" },
 ]
 provides-extras = ["openrouter", "llm", "reports", "artifacts", "academy", "evaluation", "mlx", "play", "dev", "notebook"]
@@ -1263,11 +1261,20 @@ dependencies = [
     { name = "pydantic" },
 ]
 
+[package.optional-dependencies]
+academy = [
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
 [package.metadata]
 requires-dist = [
+    { name = "fastapi", marker = "extra == 'academy'", specifier = ">=0.116.0" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "pydantic", specifier = ">=2.12.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'academy'", specifier = ">=0.34.0" },
 ]
+provides-extras = ["academy"]
 
 [[package]]
 name = "markdown-it-py"

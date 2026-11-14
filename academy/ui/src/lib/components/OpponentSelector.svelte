@@ -7,6 +7,8 @@
     // Trained opponents from GET /api/opponents; unavailable entries stay
     // listed, disabled, with the server's reason.
     trained?: TrainedOpponent[];
+    // undefined while the catalog is loading; null when no bot extension is installed.
+    extension?: string | null;
     catalogError?: string | null;
     // Closed decklists keep the Search options listed, disabled, with why.
     decklists?: Decklists;
@@ -18,6 +20,7 @@
     value = 'search-64',
     trained = [],
     catalogError = null,
+    extension = undefined,
     decklists = 'open',
     disabled = false,
     onChange = undefined,
@@ -92,6 +95,6 @@
     </select>
   </label>
   <p id="opponent-details" data-testid="opponent-details" class="type-caption min-w-0 break-words text-ink-2">
-    {#if details}{details}{:else if catalogError}{catalogError}{:else if !trained.length}No trained checkpoints found.{/if}
+    {#if details}{details}{:else if catalogError}{catalogError}{:else if !trained.length && extension !== undefined}{extension ? "No trained checkpoints found." : "Trained bots need manabot installed on this server."}{/if}
   </p>
 </div>

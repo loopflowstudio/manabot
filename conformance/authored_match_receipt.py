@@ -12,9 +12,8 @@ from typing import Any
 
 from manabot.semantic.learning import PROGRAM_KINDS
 import managym
+from managym.academy.server import DecisionContext, GameSession
 from managym.experience import InteractionOffer
-
-from .server import DecisionContext, GameSession
 
 ROOT = Path(__file__).parents[1]
 DEFAULT_RECEIPT_PATH = (

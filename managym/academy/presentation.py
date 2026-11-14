@@ -11,10 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import managym
 from managym.enums import EventTypeEnum
 from managym.experience import InteractionOffer, PresentationEvent
-
-import managym
 
 
 @dataclass(frozen=True)

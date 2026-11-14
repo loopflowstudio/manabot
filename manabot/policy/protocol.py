@@ -19,7 +19,7 @@ import numpy as np
 from manabot.policy.checkpoint import PolicyCheckpoint
 from manabot.policy.prepare import Prepared
 
-Precision = Literal["float32", "bfloat16", "float16"]
+Precision = Literal["float32", "bfloat16"]
 
 
 @dataclass(frozen=True)
