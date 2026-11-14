@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { replaceState } from '$app/navigation';
   import GameBoard from './GameBoard.svelte';
   import DecisionSurface from './DecisionSurface.svelte';
   import DecisionContext from './DecisionContext.svelte';
@@ -91,7 +92,7 @@
       id = next.id; token = next.token; revision = 0; current = null; count = 0; finished = false;
       localStorage.setItem(`etude.watch.${id}`, token);
       rememberRecordCredential(token);
-      history.replaceState(null, '', `/replay?watch=1&trace=${encodeURIComponent(id)}`);
+      replaceState(`/replay?watch=1&trace=${encodeURIComponent(id)}`, {});
     } catch (reason) { fail(reason); }
     finally { busy = false; }
     if (id && !error) await nextDecision();
@@ -190,7 +191,7 @@
       const result = await api<{id: string; token: string}>('/api/watch/import', importedGames[selectedGame]);
       id = result.id; token = result.token;
       localStorage.setItem(`etude.watch.${id}`, token); rememberRecordCredential(token);
-      history.replaceState(null, '', `/replay?watch=1&trace=${encodeURIComponent(id)}`);
+      replaceState(`/replay?watch=1&trace=${encodeURIComponent(id)}`, {});
       await inspect(0);
     } catch (reason) { fail(reason); }
     finally { busy = false; }
@@ -199,27 +200,33 @@
 
 <main class="mx-auto w-full max-w-[1400px] px-4 py-6">
   <div class="rounded-sm border border-line bg-panel p-6 shadow-sheet">
-    <h1 class="type-title text-display">Watch two bots</h1>
+    <h1 class="type-title text-display">{id ? 'Replay' : 'Watch two bots'}</h1>
+    {#if current}
+      <p class="type-annotation mt-2 text-ink-2">Seat 1: {current.players[0]} · Seat 2: {current.players[1]}</p>
+    {/if}
     <p class="type-annotation mt-2 text-ink-2">Start with the acting bot's view; Show both hands opens spectator analysis. Each bot chooses using only its own information.</p>
-    <fieldset disabled={!ready || busy || restored !== null} class="mt-6 flex flex-wrap items-end gap-4 border-b border-line pb-6">
-      <legend class="sr-only">Bot matchup</legend>
-      {#each [0, 1] as seat}
-        <label class="flex flex-col gap-2 type-label">Seat {seat + 1}
-          <select bind:value={players[seat]} class="rounded border border-line bg-field p-2">
-            {#each choices as choice}<option value={choice}>{choice}</option>{/each}
-          </select>
-        </label>
-      {/each}
-      <DeckSelector {hero} {villain} heroLabel="Seat 1 deck" villainLabel="Seat 2 deck" onHeroChange={v => hero = v} onVillainChange={v => villain = v} />
-      <label class="flex flex-col gap-2 type-label">Deal seed<input class="w-32 rounded border border-line bg-field p-2" bind:value={seed} inputmode="numeric" /></label>
-      <button class="btn btn-primary" onclick={() => void start()}>Start watching</button>
-      {#if extension === null}<p class="type-caption">Trained bots need manabot installed on this server.</p>{/if}
-      {#if extension}<label class="flex flex-col gap-2 type-caption">Open arena / Tournament game<input aria-label="Open arena game" type="file" accept=".json,.jsonl,.gz" onchange={e => void importGame(e)} /></label>{/if}
-      {#if importedGames.length > 1}
-        <label>Recorded game <select bind:value={selectedGame}>{#each importedGames as _, index}<option value={index}>Game {index + 1}</option>{/each}</select></label>
-        <button class="btn btn-secondary" onclick={() => void openImportedGame()}>Open selected game</button>
-      {/if}
-    </fieldset>
+    <details open={!id} class="mt-4">
+      <summary class="cursor-pointer type-label">{id ? 'Watch another matchup' : 'Choose a bot matchup'}</summary>
+      <fieldset disabled={!ready || busy || restored !== null} class="mt-6 flex flex-wrap items-end gap-4 border-b border-line pb-6">
+        <legend class="sr-only">Bot matchup</legend>
+        {#each [0, 1] as seat}
+          <label class="flex flex-col gap-2 type-label">Seat {seat + 1}
+            <select bind:value={players[seat]} class="rounded border border-line bg-field p-2">
+              {#each choices as choice}<option value={choice}>{choice}</option>{/each}
+            </select>
+          </label>
+        {/each}
+        <DeckSelector {hero} {villain} heroLabel="Seat 1 deck" villainLabel="Seat 2 deck" onHeroChange={v => hero = v} onVillainChange={v => villain = v} />
+        <label class="flex flex-col gap-2 type-label">Deal seed<input class="w-32 rounded border border-line bg-field p-2" bind:value={seed} inputmode="numeric" /></label>
+        <button class="btn btn-primary" onclick={() => void start()}>Start watching</button>
+        {#if extension === null}<p class="type-caption">Trained bots need manabot installed on this server.</p>{/if}
+        {#if extension}<label class="flex flex-col gap-2 type-caption">Open arena / Tournament game<input aria-label="Open arena game" type="file" accept=".json,.jsonl,.gz" onchange={e => void importGame(e)} /></label>{/if}
+        {#if importedGames.length > 1}
+          <label>Recorded game <select bind:value={selectedGame}>{#each importedGames as _, index}<option value={index}>Game {index + 1}</option>{/each}</select></label>
+          <button class="btn btn-secondary" onclick={() => void openImportedGame()}>Open selected game</button>
+        {/if}
+      </fieldset>
+    </details>
     {#if error}<p role="alert" class="my-4 text-mountain-ink">{error}</p>{/if}
     {#if busy}<p role="status" class="my-4 type-caption">{current ? 'Advancing the authority…' : 'Preparing watch…'}</p>{/if}
     {#if current}
@@ -250,6 +257,6 @@
           {/if}
         </aside>
       </div>
-    {:else}<p class="py-12 text-center type-annotation">Choose both seats, then start watching.</p>{/if}
+    {:else if !id}<p class="py-12 text-center type-annotation">Choose both seats, then start watching.</p>{/if}
   </div>
 </main>

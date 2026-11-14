@@ -46,7 +46,43 @@ test('launch replaces unrelated resume, reloads pending game and opens selected 
   await expect(page.getByTestId('action-option').first()).toBeEnabled();
   expect(frames.at(-1)!.match_id).toBe(ordinary);
   await page.goto(addresses.replay);
+  await expect(page.getByRole('heading', { name: 'Replay', exact: true })).toBeVisible();
+  await expect(page.getByText('Seat 1: first-legal-a · Seat 2: first-legal-b', { exact: true })).toBeVisible();
+  await expect(page.getByRole('banner').getByRole('link', { name: 'Replay', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', { name: 'Start watching' })).toBeHidden();
+  await expect(page.getByTestId('deck-browser')).toBeHidden();
   await expect(page.getByTestId('game-board')).toBeVisible();
-  await expect(page.getByText(/^Decision 1 of \d+/)).toBeVisible();
+  // This tiny retained game ends at its first decision.
+  await expect(page.getByText(/^Decision 1 of 1 ·/)).toBeVisible();
+  const step = page.getByRole('button', { name: 'Step decision', exact: true });
+  await expect(step).toBeInViewport();
+  await expect(step).toBeDisabled();
+  await page.screenshot({ path: 'test-results/launch/replay-landing.png' });
+  await page.getByText('Watch another matchup', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Start watching' })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('imported launch setup shows selected sources and switches back to bundled decks', async ({ page }) => {
+  const addresses = JSON.parse(readFileSync(proof, 'utf8')) as { imported_game: string };
+  await page.goto(addresses.imported_game);
+  await expect(page.getByTestId('action-option').first()).toBeEnabled();
+  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  const imports = page.getByRole('checkbox', { name: 'Use imported decks for the next game' });
+  await expect(imports).toBeVisible();
+  await expect(imports).toBeChecked();
+  await expect(page.getByTestId('deck-browser')).toHaveCount(0);
+  await expect(page.getByLabel('Your deck source', { exact: true })).toHaveValue(/Mountain/);
+  await expect(page.getByLabel('Opponent deck source', { exact: true })).toHaveValue('20 Mountain\n');
+  await expect(page.getByText('Selected source: my-deck.txt', { exact: true })).toBeVisible();
+  await page.screenshot({ path: 'test-results/launch/imported-setup.png', fullPage: true });
+  await imports.uncheck();
+  await expect(page.getByTestId('deck-browser')).toBeVisible();
+  await imports.check();
+  await expect(page.getByTestId('deck-browser')).toHaveCount(0);
+  await expect(page.getByLabel('Opponent deck source', { exact: true })).toHaveValue('20 Mountain\n');
+  await page.getByRole('button', { name: 'New Game', exact: true }).first().click();
+  await expect(page.getByTestId('action-option').first()).toBeEnabled();
+  expect(page.url()).not.toContain('launch=');
+  await expect(page.getByTestId('deck-names')).toContainText('Imported deck');
 });

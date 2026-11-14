@@ -23,8 +23,24 @@ def main() -> None:
             opponent="passive",
             seed=7,
         )
+        deck_file = output.parent / "my-deck.txt"
+        deck_file.write_text("20 Mountain\n")
+        imported_game = academy.new_game(
+            deck="ur_lessons",
+            opponent_deck=deck_file,
+            opponent="passive",
+            seed=7,
+        )
         replay = academy.replay(source)
-        output.write_text(json.dumps({"game": game.url, "replay": replay.url}))
+        output.write_text(
+            json.dumps(
+                {
+                    "game": game.url,
+                    "imported_game": imported_game.url,
+                    "replay": replay.url,
+                }
+            )
+        )
         print("ACADEMY_LAUNCH_PROOF_READY", flush=True)
         academy.wait()
 

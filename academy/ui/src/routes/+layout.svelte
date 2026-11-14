@@ -22,8 +22,9 @@
   ];
 
   function isActive(href: string): boolean {
-    if (href.includes('?watch')) return page.url.pathname === '/replay' && page.url.searchParams.has('watch');
-    if (href === '/replay' && page.url.searchParams.has('watch')) return false;
+    const watchSetup = page.url.searchParams.has('watch') && !page.url.searchParams.has('trace');
+    if (href.includes('?watch')) return page.url.pathname === '/replay' && watchSetup;
+    if (href === '/replay' && watchSetup) return false;
     return href === '/' ? page.url.pathname === '/' : page.url.pathname.startsWith(href);
   }
 </script>

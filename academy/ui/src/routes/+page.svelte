@@ -384,6 +384,7 @@
     {#if gameStore.observation && !gameStore.gameOver}
       <p class="type-caption mt-4 text-ink-2">Choose your next matchup. New Game ends this attempt and starts the selected decks; Return to game keeps playing.</p>
     {/if}
+    {#if !gameStore.deckImport}
     <DeckSelector
       hero={gameStore.decks.hero}
       villain={gameStore.decks.villain}
@@ -391,6 +392,7 @@
       onHeroChange={(value) => gameStore.setHeroDeck(value)}
       onVillainChange={(value) => gameStore.setVillainDeck(value)}
     />
+    {/if}
     <DecklistsSelector
       value={gameStore.decklists}
       opponent={gameStore.opponentChoice}

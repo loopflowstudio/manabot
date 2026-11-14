@@ -153,7 +153,9 @@ decklists.
 
 Reloading the page returns to the same game and its pending decision; it does
 not deal again. **New Game** returns to ordinary setup with the launched
-decks, opponent and decklist mode selected.
+decks, opponent and decklist mode selected. For imported matchups, setup shows
+both selected source files and their editable lists. Uncheck **Use imported
+decks for the next game** to choose bundled decks instead.
 
 The launch address is good for as long as that server runs. Opened in another
 browser it starts that browser's own game with the same decks and opponent.
@@ -309,6 +311,9 @@ Every game you start is recorded as you play.
 - **Watch** (`/replay?watch=1`) plays two bots against each other, one decision
   per step, and saves the result to the same list. A managym-only install
   offers the Random and Search players.
+
+An opened bot recording shows **Replay**, its actual players and decision
+controls first. Expand **Watch another matchup** to set up a new bot game.
 
 Games are stored in `play.sqlite` under the traces directory, which defaults
 to `academy/traces` in the directory you launched from. Launch from the same
