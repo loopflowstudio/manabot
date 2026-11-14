@@ -26,14 +26,6 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from academy.advice import AdviceArtifact, int13_condition_to_decision_evidence
-from academy.replay_index import (
-    CanonicalReplayV1,
-    ReplayDecisionAddress,
-    project_replay,
-)
-from academy.server import GameSession
-from academy.study_protocol import StudyArtifact
 from manabot.sim.search.branch import REFERENCE_BRANCH_DRIVER_ID
 from manabot.sim.search.conditional import (
     ConditionalStrategyResult,
@@ -46,6 +38,14 @@ from manabot.sim.search.conditional import (
     make_prior,
     make_query_plan,
 )
+from managym.academy.advice import AdviceArtifact, int13_condition_to_decision_evidence
+from managym.academy.replay_index import (
+    CanonicalReplayV1,
+    ReplayDecisionAddress,
+    project_replay,
+)
+from managym.academy.server import GameSession
+from managym.academy.study_protocol import StudyArtifact
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = ROOT / "protocol" / "fixtures"

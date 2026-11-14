@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Build a self-contained engine sdist and prove its wheel outside this checkout.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+proof_dir=$(mktemp -d "${TMPDIR:-/tmp}/academy-package.XXXXXX")
+trap 'rm -rf "$proof_dir"' EXIT
+npm --prefix academy/ui ci --ignore-scripts
+ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
+uv run --no-project python scripts/release/prepare.py "$proof_dir/stage" --site academy/ui/build
+uv build --no-sources --sdist "$proof_dir/stage/managym" --out-dir "$proof_dir/dist"
+mkdir "$proof_dir/source"
+tar -xzf "$proof_dir"/dist/managym-*.tar.gz -C "$proof_dir/source" --strip-components=1
+uv build --no-sources --wheel "$proof_dir/source" --out-dir "$proof_dir/dist"
+uv venv --python 3.13 "$proof_dir/venv"
+wheel=$(echo "$proof_dir"/dist/*.whl)
+uv pip install --python "$proof_dir/venv/bin/python" --only-binary :all: "${wheel}[academy]"
+mkdir "$proof_dir/no-tools"
+for command in node npm cargo rustc rustup; do
+  printf '#!/bin/sh\necho "Build tools unavailable in consumer proof" >&2\nexit 1\n' > "$proof_dir/no-tools/$command"
+  chmod +x "$proof_dir/no-tools/$command"
+done
+cp scripts/release/academy_smoke.py "$proof_dir/smoke.py"
+(cd "$proof_dir"; unset PYTHONPATH; PATH="$proof_dir/no-tools:$PATH" uv run --no-project --python "$proof_dir/venv/bin/python" smoke.py)
+ACADEMY_WHEEL_NO_TOOLS="$proof_dir/no-tools" ACADEMY_WHEEL_COMMAND="$proof_dir/venv/bin/managym academy" ACADEMY_WHEEL_CWD="$proof_dir" \
+  npm --prefix academy/ui run test:e2e -- --config playwright.wheel.config.ts

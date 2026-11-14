@@ -19,6 +19,7 @@ const staticSpaAdapter = () => ({
 const config = {
   preprocess: vitePreprocess(),
   kit: {
+    alias: { $packs: '../../managym/academy/packs' },
     adapter: process.env.ACADEMY_STATIC_BUILD ? staticSpaAdapter() : adapter()
   }
 };

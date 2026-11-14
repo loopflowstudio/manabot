@@ -7,13 +7,13 @@ from fastapi.testclient import TestClient
 import numpy as np
 import pytest
 
-from academy import server, trace as trace_store
-from academy.server import GameSession
 from manabot.env.observation import ObservationSpace
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.trigger_order import DECK, SEED, configure_root, prefix_index, root
 import managym
+from managym.academy import server, trace as trace_store
+from managym.academy.server import GameSession
 
 
 def _command(session: GameSession, index: int, identity: str) -> dict[str, object]:
@@ -137,7 +137,7 @@ def test_survival_orders_cross_consumers(
     evidence = json.loads(
         (
             Path(__file__).parents[2]
-            / "academy/fixtures/trigger-order-w17-token-cards.json"
+            / "managym/academy/fixtures/trigger-order-w17-token-cards.json"
         ).read_text()
     )
     capture = json.loads(env.capture_decision(0).to_json())
