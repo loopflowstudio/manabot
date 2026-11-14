@@ -21,7 +21,7 @@ from typing import Literal, TypedDict, cast
 from etude.experiment import ExperimentState
 from etude.launch.records import Job, Run
 import numpy as np
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from experiments.elemental_grid import DECKS, PACK
 from experiments.elemental_variants import elemental_recipe
@@ -536,8 +536,20 @@ def _payment_overlap(
 def summarize_shapes(source: Path, *, all_payments: bool = False) -> None:
     """Keep incomplete enumeration out of exact offer quantiles."""
     groups: dict[tuple[str, str], list[ShapeGame]] = defaultdict(list)
+    adapter = TypeAdapter(ShapeGame)
     for line in (source / "shapes.jsonl").read_text().splitlines():
-        game = TypeAdapter(ShapeGame).validate_json(line)
+        try:
+            game = adapter.validate_json(line)
+        except ValidationError as error:
+            # Rows keep the layout of the revision that wrote them; only the
+            # current row layout is summarized here.
+            revision = json.loads((source / "metadata.json").read_text())["revision"]
+            raise SystemExit(
+                f"{source}/shapes.jsonl does not match this revision's row layout "
+                f"({error.error_count()} errors); it was written at {revision}. "
+                "Summarize it from that revision, or use rows written by this one "
+                "(published: current/non-redundant-shapes)."
+            ) from None
         groups[game.deck_set, game.policy].append(game)
     summaries: list[dict[str, object]] = []
     for (deck_set, policy), games in groups.items():
