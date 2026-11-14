@@ -45,3 +45,5 @@ experiments/data/
 *.dSYM/
 academy/ui/e2e/dense-board-captures/
 .DS_Store
+
+/managym/academy/site/

@@ -13,4 +13,4 @@ uv run --extra dev pytest -q \
   tests/belief/test_player.py \
   tests/belief/test_tracker.py \
   tests/academy/test_public_commitment_parity.py
-uv run --extra dev python -m academy.public_commitment_parity verify
+uv run --extra dev python -m conformance.public_commitment_parity verify

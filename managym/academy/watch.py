@@ -5,20 +5,19 @@ view. The mixed canonical record and retained roots remain server-private.
 """
 
 from dataclasses import asdict, replace
-from types import SimpleNamespace
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, TypedDict
 
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
-import managym
+from managym.bots import BotPolicy, choose_bot
 
 from . import server
 from .attempts import AttemptStore, RecordedPlayer, bot_player
-from .bot_decision import BeliefSummary, BotDecision
+from .extensions import bot_extension
 from .replay_index import DecisionAddressV2, load_canonical_replay
 from .trace import load_trace
-from .villain import VillainPolicy, build_villain_policy, choose_bot
+from .villain import NATIVE_WATCH_PLAYERS, build_villain_policy
 
 
 class WatchCreated(TypedDict):
@@ -33,8 +32,8 @@ class WatchStep(TypedDict):
 
 
 class WatchRequest(BaseModel):
-    players: list[Literal["random", "passive", "greedy", "heuristic", "search"]] = (
-        Field(default_factory=lambda: ["random", "random"], min_length=2, max_length=2)
+    players: list[str] = Field(
+        default_factory=lambda: ["random", "random"], min_length=2, max_length=2
     )
     hero_deck: str = "ur_lessons"
     villain_deck: str = "gw_allies"
@@ -42,20 +41,12 @@ class WatchRequest(BaseModel):
     villain_sims: int = Field(default=16, ge=1, le=4096)
 
 
-def _policy(kind: str, request: WatchRequest, seat: int) -> VillainPolicy:
-    if kind in {"greedy", "heuristic"}:
-        from manabot.env.env import Env
-        from manabot.sim.anchors import ScriptedGreedyPlayer
-        from manabot.sim.heuristic import HeuristicPlayer
-
-        player = HeuristicPlayer() if kind == "heuristic" else ScriptedGreedyPlayer()
-
-        def anchor(env: managym.Env, obs: managym.Observation) -> int:
-            # Arena anchors read only last_raw_obs; no encoded features or engine
-            # capability are supplied to this observation-only boundary.
-            return player.act(cast(Env, SimpleNamespace(last_raw_obs=obs)), {})
-
-        return anchor
+def _policy(kind: str, request: WatchRequest, seat: int) -> BotPolicy:
+    if kind not in NATIVE_WATCH_PLAYERS:
+        extension = bot_extension()
+        if extension is None or kind not in extension.watch_players:
+            raise HTTPException(400, "watch_player_unavailable")
+        return extension.watch_policy(kind)
     config = server._parse_game_config({**request.model_dump(), "villain_type": kind})
     config.seed = request.seed + seat
     return build_villain_policy(config)
@@ -80,9 +71,7 @@ def create_watch(
             server._parse_game_config(
                 {
                     **request.model_dump(),
-                    "villain_type": kind
-                    if kind not in {"greedy", "heuristic"}
-                    else "passive",
+                    "villain_type": kind if kind in NATIVE_WATCH_PLAYERS else "passive",
                 }
             )
         )
@@ -189,14 +178,12 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     Source digests and receipt stay in their original namespace; the imported
     Academy match gets its own identity and retained Study roots.
     """
-    from manabot.sim.replay import replay_environment, replay_games
-
     from .trace import GameConfig
 
-    receipt = replay_games([game_record])
-    if not receipt.passed or game_record.get("failure") is not None:
-        raise ValueError("Arena replay verification failed; import rejected")
-    arena, _ = replay_environment(game_record)
+    extension = bot_extension()
+    if extension is None:
+        raise HTTPException(400, "arena_import_unavailable")
+    arena = extension.verify_arena(game_record)
     request = WatchRequest(
         players=["random", "random"],
         hero_deck="interactive",
@@ -223,10 +210,10 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
     record = record_for_watch(created["id"], created["token"])
     game = record.game
     try:
-        configs = arena.match.to_rust()
+        configs = arena.configs
         assert game.trace is not None
-        game.env = arena._engine
-        game.obs = arena.last_raw_obs
+        game.env = arena.env
+        game.obs = arena.observation
         game.published_prompt = None
         game.trace.config = GameConfig(
             hero_deck=dict(configs[0].decklist),
@@ -242,7 +229,9 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
                 "sha256": game_record["game_trace_sha256"],
             },
         )
-        for expected in game_record["decisions"]:
+        for expected, outputs in zip(
+            game_record["decisions"], arena.decisions, strict=True
+        ):
             seat = int(game.obs.agent.player_index)
             if game.env.state_digest() != expected["pre_state_digest"]:
                 raise ValueError("Arena import root drifted")
@@ -258,35 +247,11 @@ def import_arena(game_record: dict[str, Any]) -> dict[str, Any]:
                 for key, action in context.action_by_offer.items()
                 if action == index
             )
-            game._bot_decision = BotDecision(
-                index,
-                unavailable="Policy, value and search outputs were not retained in this arena recording.",
-            )
-            if expected.get("local_update_receipt") is not None:
-                from manabot.sim.search.local_update import LocalUpdateReceipt
-
-                receipt = LocalUpdateReceipt.from_json(expected["local_update_receipt"])
-                if receipt.viewer != seat or len(receipt.target) != len(context.offers):
-                    raise ValueError(
-                        "Arena search evidence differs from the acting offers"
-                    )
-                game._bot_decision = BotDecision(
-                    action=index,
-                    probabilities=list(receipt.target),
-                    search_scores=list(receipt.values),
-                    belief=BeliefSummary(
-                        receipt.belief_model,
-                        receipt.belief_digest,
-                        receipt.condition_mass,
-                        len(
-                            {
-                                (rollout.world_index, rollout.world_seed)
-                                for rollout in receipt.rollouts
-                            }
-                        ),
-                    ),
-                    unavailable="Search values are signed frozen-policy rollout estimates; no separate root critic was retained.",
-                )
+            if outputs.probabilities and len(outputs.probabilities) != len(
+                context.offers
+            ):
+                raise ValueError("Arena search evidence differs from the acting offers")
+            game._bot_decision = outputs
             game._apply_bound_command(
                 context,
                 game._authority_command(context, offer, "policy"),

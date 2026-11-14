@@ -1,10 +1,4 @@
-"""Package dependencies flow academy -> manabot -> managym, never the reverse.
-
-Academy is a client of manabot: it may import manabot and managym, while
-manabot imports only managym. The static check walks every manabot module,
-including imports nested inside functions; the runtime check imports manabot
-entry points with every academy import refused.
-"""
+"""Training and Academy depend on the engine without importing each other."""
 
 import ast
 from collections.abc import Sequence
@@ -35,13 +29,13 @@ def test_manabot_never_imports_academy() -> None:
         f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
         for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
         for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
-        if module == "academy" or module.startswith("academy.")
+        if module == "academy" or module.startswith(("academy.", "managym.academy"))
     ]
     assert violations == []
 
 
 class _RefuseAcademy(importlib.abc.MetaPathFinder):
-    """Fail any attempt to import academy, as if it were not installed."""
+    """Fail any attempt to import managym.academy, as if it were not installed."""
 
     def find_spec(
         self,
@@ -49,7 +43,9 @@ class _RefuseAcademy(importlib.abc.MetaPathFinder):
         path: Sequence[str] | None,
         target: ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
-        if fullname == "academy" or fullname.startswith("academy."):
+        if fullname == "academy" or fullname.startswith(
+            ("academy.", "managym.academy")
+        ):
             raise ImportError(f"manabot must not import {fullname}")
         return None
 
@@ -271,7 +267,8 @@ def test_engine_imports_without_training_or_academy() -> None:
         sys.meta_path.insert(0, _RefuseEngineClients())
         import managym
         for module in pkgutil.iter_modules(managym.__path__, 'managym.'):
-            importlib.import_module(module.name)
+            if module.name != 'managym.academy':
+                importlib.import_module(module.name)
         assert 'manabot' not in sys.modules
         """
     )
@@ -399,6 +396,7 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/sim/search/sampling.py",
         "manabot/sim/search/value.py",
         "manabot/sim/serving.py",
+        "manabot/sim/table_bots.py",
         "manabot/training/execution.py",
         "manabot/training/loops/minimal.py",
         "manabot/training/mps.py",
@@ -528,3 +526,58 @@ def test_updates_take_the_backend_as_an_argument() -> None:
         if module.split(".")[0] in _FRAMEWORKS or module.startswith("manabot.backends")
     ]
     assert violations == []
+
+
+def test_engine_has_no_training_imports() -> None:
+    violations: list[str] = []
+    for path in (REPO_ROOT / "managym").rglob("*.py"):
+        if "target" in path.parts or "tests" in path.parts:
+            continue
+        for line, module in _imported_modules(ast.parse(path.read_text())):
+            root = module.split(".")[0]
+            if root in {"manabot", "torch", "etude", "gymnasium"} or (
+                root in {"fastapi", "starlette", "uvicorn"}
+                and "academy" not in path.parts
+                and path.name != "cli.py"
+            ):
+                violations.append(f"{path}:{line}: {module}")
+    assert not violations
+
+
+def test_academy_without_training_provider() -> None:
+    probe = """
+import importlib.abc
+import sys
+from unittest.mock import patch
+class Refuse(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in {'manabot', 'torch', 'etude', 'gymnasium'}:
+            raise ImportError(fullname)
+sys.meta_path.insert(0, Refuse())
+with patch('managym.academy.extensions.entry_points', return_value=[]):
+    from managym.academy.extensions import bot_extension
+    from managym.academy.server import _parse_game_config
+    from managym.academy.villain import build_villain_policy
+    import managym
+    assert bot_extension() is None
+    config = _parse_game_config({'hero_deck': 'interactive', 'villain_deck': 'interactive', 'villain_type': 'search', 'villain_sims': 1, 'seed': 4})
+    engine = managym.Env(seed=4)
+    observation, _ = engine.reset(config.to_rust())
+    policy = build_villain_policy(config)
+    observation, *_ = engine.step(policy(engine, observation))
+    assert observation.action_space.actions or observation.game_over
+"""
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+def test_deprecated_academy_alias_keeps_module_identity() -> None:
+    probe = """
+import warnings
+with warnings.catch_warnings(record=True) as seen:
+    warnings.simplefilter('always')
+    import academy.server as old
+    import managym.academy.server as current
+assert old is current
+assert any('0.4.0' in str(row.message) for row in seen)
+"""
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

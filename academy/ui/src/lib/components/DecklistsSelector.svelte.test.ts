@@ -45,3 +45,12 @@ it('a non-search opponent offers closed decklists', () => {
     expect(optionTag(body, 'closed')).not.toContain('disabled');
   }
 });
+
+it('names a missing bot extension only after the catalog answers', () => {
+  const note = (extension: string | null | undefined): string =>
+    render(OpponentSelector, { props: { extension } }).body;
+  expect(note(undefined)).not.toContain('Trained bots need manabot');
+  expect(note(undefined)).not.toContain('No trained checkpoints found');
+  expect(note(null)).toContain('Trained bots need manabot installed on this server.');
+  expect(note('manabot')).toContain('No trained checkpoints found.');
+});
