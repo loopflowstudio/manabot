@@ -919,7 +919,9 @@ Card tests see the same rule. `force_permanent_on_battlefield`, `cast` and
 `enter_and_settle` return the id of the object the card is when they return;
 after a later move, use the id the move returned. A test that follows one card
 through moves the engine made asks the support helpers `now`, `zone_of` and
-`permanent_of` (`tests/support/inspect.rs`), which go through the card.
+`permanent_of` (`tests/support/inspect.rs`), which go through the card, and
+moves it with `move_card` (`tests/support/game.rs`), which moves whatever
+object the card is now and returns the one it becomes.
 
 #### Names
 
