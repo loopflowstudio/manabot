@@ -1,8 +1,10 @@
 # MTG-277 native heuristic
 
-Outcome: one native heuristic owner for scalar arena players and
-`VectorEnv(opponent_policy="heuristic")`, preserving viewer visibility, chooser
-semantics, strategy, deterministic ties, optional prefix capacity and rewards.
+Outcome: one native heuristic owner for scalar arena players and per-seat
+native controllers, `Env`/`VectorEnv(player_policies=("agent", "heuristic"))`
+(seats: agent/random/heuristic; deprecated `opponent_policy` warns, removal in
+0.3.0), preserving viewer visibility, chooser semantics, strategy,
+deterministic ties, optional prefix capacity and rewards.
 No rules/world/checkpoint/input-layout change by this Task. Frozen `anchors.py`,
 historical registrations and results keep their bytes and identities. No Wave.
 
@@ -23,7 +25,19 @@ by canonical viewer JSON), never Game state or privileged HandSnapshot.
 Delete — do not maintain: Python heuristic rules, derived knowledge, combat
 memory and their exclusive namespace fixtures. These are removed; native rule
 tests and retained decision parity cover the surviving owner. Do not restore
-the Python policy allowlist or Passive. Final policies: none/random/heuristic.
+the Python policy allowlist or Passive. Rust `OpponentPolicy` is replaced by
+per-seat `PlayerPolicy` (see Required per-seat API below).
+
+## Current state (realign, 2026-11-13)
+
+Branch is level with origin/main; draft PR #518 is open and its CI (including
+Rust debug suite, package matrix 3.12/3.13, integrations and Engine Budget) was
+in progress at `99320eaecb`. Code, stub and docs (`docs/engine.md`,
+`docs/engine-python.md`, both READMEs) agree on `player_policies` and the
+`opponent_policy` deprecation. Remaining, unchanged by realign: CI green
+(full debug Rust, clippy, affected Python suites, consumer interpreter matrix),
+normal same-runner Engine Budget for unused-policy cost, full release training
+smoke, then delivery per steer a0c2b822 with scratch deleted pre-land.
 
 Fresh registrations use native-v2 / heuristic-cpu-v2 and hash the adapter plus
 three Rust files. Main now distributes managym separately; its wheel must ship
