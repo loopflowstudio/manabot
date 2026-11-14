@@ -1,7 +1,7 @@
 """Lossless legal-action storage between collection and minibatch learning.
 
 PackedActions owns row offsets, original action coordinates and every legal
-behavior probability/log probability. Object observations stay on the CPU with
+behavior log probability. Object observations stay on the CPU with
 the rollout; only a selected minibatch reconstructs the dense policy ABI. Native
 buffers and returned logits retain their configured action axis.
 """
@@ -28,7 +28,6 @@ ACTION_FIELDS = frozenset(
 @dataclass
 class ActionRows:
     observation: dict[str, NDArray[np.generic]]
-    probabilities: NDArray[np.generic]
     log_probabilities: NDArray[np.generic]
 
 
@@ -38,14 +37,12 @@ class PackedActions:
     slots: NDArray[np.int32]
     capacity: int
     fields: dict[str, NDArray[np.generic]]
-    probabilities: NDArray[np.generic]
     log_probabilities: NDArray[np.generic]
 
     @classmethod
     def pack(
         cls,
         observation: dict[str, NDArray[np.generic]],
-        probabilities: NDArray[np.generic],
         log_probabilities: NDArray[np.generic],
     ) -> "PackedActions":
         """Copy legal rows from [B,A,...]; reject malformed masks or padding mass.
@@ -54,19 +51,8 @@ class PackedActions:
         Padding must be checked here because it is deliberately not retained.
         """
         valid = legal_mask(torch.as_tensor(observation["actions_valid"])).numpy()
-        if (
-            valid.ndim != 2
-            or probabilities.shape != valid.shape
-            or log_probabilities.shape != valid.shape
-        ):
+        if valid.ndim != 2 or log_probabilities.shape != valid.shape:
             raise ValueError("packed actions require matching [B,A] distributions")
-        if np.any(probabilities[~valid] != 0):
-            require(
-                torch.as_tensor((probabilities == 0) | valid),
-                "illegal_probability_mass",
-                probabilities=torch.as_tensor(probabilities),
-                valid=torch.as_tensor(valid),
-            )
         if np.any(~np.isneginf(log_probabilities[~valid])):
             require(
                 torch.as_tensor(np.isneginf(log_probabilities) | valid),
@@ -91,7 +77,6 @@ class PackedActions:
                 for key, value in observation.items()
                 if key in ACTION_FIELDS and key != "actions_valid"
             },
-            probabilities[valid],
             log_probabilities[valid],
         )
 
@@ -103,7 +88,6 @@ class PackedActions:
             self.slots[start:stop],
             self.capacity,
             {key: value[start:stop] for key, value in self.fields.items()},
-            self.probabilities[start:stop],
             self.log_probabilities[start:stop],
         )
 
@@ -124,7 +108,6 @@ class PackedActions:
                 key: np.concatenate([row.fields[key] for row in rows])
                 for key in first.fields
             },
-            np.concatenate([row.probabilities for row in rows]),
             np.concatenate([row.log_probabilities for row in rows]),
         )
 
@@ -139,19 +122,17 @@ class PackedActions:
             for key, value in self.fields.items()
         }
         obs["actions_valid"] = np.zeros((len(indexes), self.capacity), dtype=np.float32)
-        probabilities = np.zeros(
-            (len(indexes), self.capacity), dtype=self.probabilities.dtype
+        logs = np.full(
+            (len(indexes), self.capacity), -np.inf, dtype=self.log_probabilities.dtype
         )
-        logs = np.full_like(probabilities, -np.inf)
         for dest, row in enumerate(indexes):
             start, stop = self.offsets[row : row + 2]
             slots = self.slots[start:stop]
             for key, value in self.fields.items():
                 obs[key][dest, slots] = value[start:stop]
             obs["actions_valid"][dest, slots] = 1
-            probabilities[dest, slots] = self.probabilities[start:stop]
             logs[dest, slots] = self.log_probabilities[start:stop]
-        return ActionRows(obs, probabilities, logs)
+        return ActionRows(obs, logs)
 
     def check(
         self, actions: NDArray[np.generic], selected_logs: NDArray[np.generic]
@@ -175,7 +156,6 @@ class PackedActions:
             try:
                 check_behavior(
                     torch.as_tensor(rows.log_probabilities),
-                    torch.as_tensor(rows.probabilities),
                     torch.as_tensor(actions.reshape(-1)[indexes]),
                     torch.as_tensor(selected_logs.reshape(-1)[indexes]),
                     torch.as_tensor(rows.observation["actions_valid"]).bool(),
@@ -198,11 +178,5 @@ class PackedActions:
     @property
     def nbytes(self) -> int:
         return sum(value.nbytes for value in self.fields.values()) + sum(
-            value.nbytes
-            for value in (
-                self.offsets,
-                self.slots,
-                self.probabilities,
-                self.log_probabilities,
-            )
+            value.nbytes for value in (self.offsets, self.slots, self.log_probabilities)
         )

@@ -14,7 +14,7 @@ from manabot.backends.torch.rl import (
 from manabot.training.rollout.actions import PackedActions
 
 
-def evidence() -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray, np.ndarray]:
+def evidence() -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray]:
     rng = np.random.default_rng(243)
     valid = np.zeros((4, 928), dtype=np.float32)
     for row, count in enumerate((928, 21, 4, 4)):
@@ -34,14 +34,14 @@ def evidence() -> tuple[dict[str, np.ndarray], np.ndarray, np.ndarray, np.ndarra
     logits[0, 927] = -150
     logs = policy_logs(logits, torch.from_numpy(valid).bool()).numpy()
     actions = valid.argmax(-1).astype(np.int64)
-    return observation, logs, np.exp(logs), actions
+    return observation, logs, actions
 
 
 def test_packed_actions_preserve_sparse_coordinates_distributions_and_copy_ownership() -> (
     None
 ):
-    obs, logs, probabilities, actions = evidence()
-    packed = PackedActions.pack(obs, probabilities, logs)
+    obs, logs, actions = evidence()
+    packed = PackedActions.pack(obs, logs)
     selected = logs[np.arange(4), actions]
     packed.check(actions, selected)
     order = np.array([2, 0, 3, 1])
@@ -49,13 +49,9 @@ def test_packed_actions_preserve_sparse_coordinates_distributions_and_copy_owner
     for key, value in obs.items():
         np.testing.assert_array_equal(restored.observation[key], value[order])
     np.testing.assert_array_equal(restored.log_probabilities, logs[order])
-    np.testing.assert_array_equal(restored.probabilities, probabilities[order])
     assert np.isfinite(packed.log_probabilities).all()
-    assert (packed.probabilities == 0).any()
-    assert (
-        packed.nbytes
-        < sum(v.nbytes for v in obs.values()) + logs.nbytes + probabilities.nbytes
-    )
+    assert (np.exp(packed.log_probabilities) == 0).any()
+    assert packed.nbytes < sum(v.nbytes for v in obs.values()) + logs.nbytes
     obs["actions"].fill(0)
     np.testing.assert_array_equal(
         packed.unpack(order).observation["actions"], restored.observation["actions"]
@@ -64,7 +60,6 @@ def test_packed_actions_preserve_sparse_coordinates_distributions_and_copy_owner
         [
             PackedActions.pack(
                 {k: v[i : i + 1] for k, v in restored.observation.items()},
-                restored.probabilities[i : i + 1],
                 restored.log_probabilities[i : i + 1],
             )
             for i in range(4)
@@ -82,8 +77,8 @@ def test_packed_actions_preserve_sparse_coordinates_distributions_and_copy_owner
 def test_packed_action_learning_loss_and_gradients_match_dense_evidence(
     rule: str,
 ) -> None:
-    obs, logs, probabilities, actions = evidence()
-    packed = PackedActions.pack(obs, probabilities, logs)
+    obs, logs, actions = evidence()
+    packed = PackedActions.pack(obs, logs)
     indexes = np.array([3, 0])
     restored = packed.unpack(indexes)
     gradients = []
@@ -127,31 +122,31 @@ def test_packed_action_learning_loss_and_gradients_match_dense_evidence(
 
 
 def test_packed_action_checks_reject_corruption_in_original_rows() -> None:
-    obs, logs, probabilities, actions = evidence()
-    packed = PackedActions.pack(obs, probabilities, logs)
-    packed.probabilities[-1] = np.nan
-    with pytest.raises(NumericalError, match="nonfinite_probabilities") as caught:
+    obs, logs, actions = evidence()
+    packed = PackedActions.pack(obs, logs)
+    packed.log_probabilities[-1] = np.nan
+    with pytest.raises(NumericalError, match="nonfinite_behavior_logs") as caught:
         packed.check(actions, logs[np.arange(4), actions])
     assert caught.value.tensors["minibatch_indexes"].tolist() == [0, 1, 2, 3]
-    probabilities[1, np.flatnonzero(obs["actions_valid"][1] == 0)[0]] = 0.1
-    with pytest.raises(ValueError, match="illegal_probability_mass"):
-        PackedActions.pack(obs, probabilities, logs)
+    logs[1, np.flatnonzero(obs["actions_valid"][1] == 0)[0]] = -1
+    with pytest.raises(ValueError, match="illegal_log_mass"):
+        PackedActions.pack(obs, logs)
 
 
 def test_rows_of_a_packed_block_reassemble_it_exactly() -> None:
-    obs, logs, probabilities, _ = evidence()
-    packed = PackedActions.pack(obs, probabilities, logs)
+    obs, logs, _ = evidence()
+    packed = PackedActions.pack(obs, logs)
     whole = PackedActions.concatenate([packed.row(index) for index in range(4)])
     np.testing.assert_array_equal(whole.offsets, packed.offsets)
     np.testing.assert_array_equal(whole.slots, packed.slots)
-    np.testing.assert_array_equal(whole.probabilities, packed.probabilities)
+    np.testing.assert_array_equal(whole.log_probabilities, packed.log_probabilities)
     for key, value in packed.fields.items():
         np.testing.assert_array_equal(whole.fields[key], value)
 
 
 def test_selected_types_read_the_chosen_action_of_every_row() -> None:
-    obs, logs, probabilities, actions = evidence()
-    packed = PackedActions.pack(obs, probabilities, logs)
+    obs, logs, actions = evidence()
+    packed = PackedActions.pack(obs, logs)
     expected = obs["actions"][np.arange(4), actions, :6].argmax(-1)
     np.testing.assert_array_equal(
         packed.selected_types(actions.reshape(2, 2), 6), expected.reshape(2, 2)
@@ -159,8 +154,8 @@ def test_selected_types_read_the_chosen_action_of_every_row() -> None:
 
 
 def test_selected_types_reject_an_action_outside_packed_support() -> None:
-    obs, logs, probabilities, actions = evidence()
-    packed = PackedActions.pack(obs, probabilities, logs)
+    obs, logs, actions = evidence()
+    packed = PackedActions.pack(obs, logs)
     illegal = actions.copy()
     illegal[2] = np.flatnonzero(obs["actions_valid"][2] == 0)[0]
     with pytest.raises(ValueError, match="absent from packed support"):

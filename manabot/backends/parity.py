@@ -32,8 +32,7 @@ backend, writes
 backend's worst components if any check fails; it exits 2 when the checkpoint
 or capture is missing, the checkpoint is refused or no backend is installed.
 
-Use `--backend mlx --precision bfloat16` (or `float16`) for explicit half
-precision. Half uses its measured logit/value, loss and full-gradient cosine
+Use `--backend mlx --precision bfloat16` for half precision. Half uses its measured logit/value, loss and full-gradient cosine
 bars in `TOLERANCES`; the minimum per-tensor cosine and one-step difference
 remain diagnostics. Float32 retains all the stricter checks above. Passing half's
 numerical gates does not establish equivalent optimization or playing strength.
@@ -103,7 +102,6 @@ TOLERANCES: dict[Precision, Tolerances] = {
         STEP_PARAMETER_TOLERANCE,
     ),
     "bfloat16": Tolerances(1e-3, 1e-2, 1e-2, 0.99, "full_gradient", None),
-    "float16": Tolerances(1e-4, 2e-3, 2e-3, 0.999, "full_gradient", None),
 }
 
 
@@ -126,13 +124,16 @@ def backend_module(name: str) -> ModuleType:
 
 
 def backend(name: str, *, precision: Precision = "float32") -> Backend:
-    """Select explicit MLX compute precision; Torch remains the float32 reference."""
+    """Select explicit MLX compute precision; Torch remains the float32 reference.
+
+    Parity always names its precision, so MLX's width default never selects
+    the tolerances a report is held to."""
     module = backend_module(name)
-    if precision == "float32":
-        return cast(Backend, module.checkpoint.BACKEND)
-    if name != "mlx":
+    if name == "mlx":
+        return cast(Backend, module.checkpoint.MLXBackend(precision=precision))
+    if precision != "float32":
         raise ValueError("half-precision parity is supported only for the MLX backend")
-    return cast(Backend, module.checkpoint.MLXBackend(precision=precision))
+    return cast(Backend, module.checkpoint.BACKEND)
 
 
 def minibatch_loss(
