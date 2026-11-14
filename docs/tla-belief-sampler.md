@@ -2,7 +2,7 @@
 
 Implementation status (2026-11-14): scheduled capture is implemented and the
 original policy loads in its isolated runtime. The saved-artifact `demo` CLI and
-evidence lifecycle are implemented. Remote `admission` and `run` dispatch are
+evidence lifecycle, exclusive work handoff and frozen worker adapter are implemented. Remote `admission` and `run` dispatch are
 not available yet. Experiment fitting and saved demo artifacts remain outstanding;
 see the [current report](../experiments/tla_belief_sampler.md) for the launcher
 compatibility dependency.
@@ -107,10 +107,16 @@ Brier are better. Learned-minus-prior differences therefore favor the learned
 sampler when negative for those losses.
 
 Read equal-game means separately from pooled decision-weighted measurements.
-Whole-game intervals describe uncertainty across games; variation across the
-three fit seeds is reported separately. The maintained cohort reporter accepts
-declared deal groups, resampling available swapped legs together and exposing
-missing legs. The TLA schedule/panel wiring remains outstanding. Inspect both test panels, attempted-game
+Conditional evaluation intervals resample declared deal groups, keeping available
+swapped legs and viewers together; variation across the three fit seeds is
+reported separately. The maintained cohort reporter supports these groups and
+exposes missing legs. TLA panels now derive their deal groups and expected games
+from the closed schedule, including zero-row and unattempted games. To retain
+these panels with the demo, pass `--cohort <saved-cohort.json>`; report paths in
+that saved fit-cohort declaration resolve from the evidence root. This reads
+saved reports and performs no fitting. The schedule must identify every test
+slot as `same-field` or `reserved` before collection.
+Inspect both test panels, attempted-game
 denominators, row-selection coverage and omissions alongside the scores.
 
 The model's history features are order-invariant, square-root-normalized public
@@ -131,7 +137,16 @@ launcher cost receipts, so the cumulative USD25 limit survives continuation.
 `EvidenceRoot` implements allocation, settlement, closure and frozen-dataset
 bindings through an injected launcher reader. Its caller must reconcile shared
 capacity and confirm costs and that no queued, retry or active worker can write.
-The live Etude adapter and dispatch commands remain unimplemented.
+Allocations bind exact schedule slots or the frozen dataset, fit configuration
+and seed. The root lock covers reservation through submission. Lost responses
+leave work reserved, even without a local started file; another run cannot
+claim it. Fresh launcher observations and delivery digests remain private.
+The continuation view distinguishes unknown/live work, verified delivery and
+ended work with unavailable delivery, and derives untouched slots/seeds.
+The worker adapter executes only the retained intent. A compatible live Etude
+adapter and remote commands remain unavailable; the continuation below describes
+their required user interface. No pre-submit reference contract has been verified
+against the mini's existing controller.
 
 Repeat the same `run --out` command to reconcile existing jobs and continue
 untouched work. Unknown live jobs or costs stop new dispatch. Verify completed

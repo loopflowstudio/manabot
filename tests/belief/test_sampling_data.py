@@ -1,14 +1,18 @@
 """Whole-game immutable evidence and real frozen-policy collection checks."""
 
-from dataclasses import replace
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, replace
 from decimal import Decimal
+import hashlib
 import json
 from pathlib import Path
+from threading import Event
 from typing import Literal
 
 import pytest
 import torch
 
+from experiments.tla_belief_sampler import execute_work
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_collection import (
     CaptureSlot,
@@ -29,9 +33,16 @@ from manabot.belief.sampling_data import (
     read_dataset,
     save_dataset,
 )
-from manabot.belief.sampling_evidence import EvidenceRoot, JobAllocation, JobSettlement
+from manabot.belief.sampling_evidence import (
+    CaptureWork,
+    EvidenceRoot,
+    FitWork,
+    JobAllocation,
+    JobSettlement,
+)
+from manabot.belief.sampling_fit import SavedFitConfig
 from manabot.belief.sampling_runtime import EnvCaptureRuntime
-from manabot.belief.sampling_types import SamplerInput, SamplerSchema
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
 from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -506,6 +517,7 @@ def _settled(refs: tuple[str, ...]) -> tuple[JobSettlement, ...]:
     return tuple(
         JobSettlement(
             run=ref,
+            execution="ended",
             writers_closed=True,
             usd=Decimal("0.1"),
             receipt_identity=f"receipt-{ref}",
@@ -514,9 +526,11 @@ def _settled(refs: tuple[str, ...]) -> tuple[JobSettlement, ...]:
     )
 
 
-def _collected_root(tmp_path: Path) -> EvidenceRoot:
+def _collected_root(
+    tmp_path: Path, slots: tuple[CaptureSlot, ...] | None = None
+) -> EvidenceRoot:
     root = EvidenceRoot(tmp_path)
-    slots = tuple(
+    slots = slots or tuple(
         CaptureSlot(str(i), i, i % 2, split, ("a", "b"))
         for i, split in enumerate(("train", "validation", "test"))
     )
@@ -532,10 +546,21 @@ def _collected_root(tmp_path: Path) -> EvidenceRoot:
     return root
 
 
+def _scheduled_root(tmp_path: Path) -> tuple[EvidenceRoot, str]:
+    root = _collected_root(tmp_path)
+    payload = json.loads((tmp_path / "main/schedule.json").read_text())
+    for path in (tmp_path / "main").glob("game-*.json"):
+        path.unlink()
+    admission = tmp_path / "admission"
+    admission.mkdir(exist_ok=True)
+    (admission / "schedule.json").write_text(json.dumps(payload))
+    return root, payload["identity"]
+
+
 def test_evidence_root_costs_unknown_writers_and_cumulative_admission(
     tmp_path: Path,
 ) -> None:
-    root = EvidenceRoot(tmp_path)
+    root, identity = _scheduled_root(tmp_path)
 
     def full_costs(refs: tuple[str, ...]) -> tuple[JobSettlement, ...]:
         costs = {"admit": Decimal(2), "main": Decimal(23)}
@@ -544,18 +569,37 @@ def test_evidence_root_costs_unknown_writers_and_cumulative_admission(
             for result in _settled(refs)
         )
 
-    root.reserve(
-        JobAllocation(run="admit", phase="admission", max_usd=Decimal(2)), full_costs
+    root.dispatch(
+        JobAllocation(
+            run="admit",
+            phase="admission",
+            max_usd=Decimal(2),
+            work=CaptureWork(schedule_identity=identity, slots=(0,)),
+        ),
+        full_costs,
+        lambda job: None,
     )
     with pytest.raises(ValueError, match="already allocated"):
-        root.reserve(
-            JobAllocation(run="admit", phase="admission", max_usd=Decimal(2)),
+        root.dispatch(
+            JobAllocation(
+                run="admit",
+                phase="admission",
+                max_usd=Decimal(2),
+                work=CaptureWork(schedule_identity=identity, slots=(0,)),
+            ),
             full_costs,
+            lambda job: None,
         )
     with pytest.raises(ValueError, match="USD2"):
-        root.reserve(
-            JobAllocation(run="admit-again", phase="admission", max_usd=Decimal("0.1")),
+        root.dispatch(
+            JobAllocation(
+                run="admit-again",
+                phase="admission",
+                max_usd=Decimal("0.1"),
+                work=CaptureWork(schedule_identity=identity, slots=(1,)),
+            ),
             full_costs,
+            lambda job: None,
         )
     with pytest.raises(ValueError, match="exactly once"):
         root.reconcile(lambda refs: ())
@@ -565,6 +609,7 @@ def test_evidence_root_costs_unknown_writers_and_cumulative_admission(
             return (
                 JobSettlement(
                     run=refs[0],
+                    execution="ended" if closed else "unknown",
                     writers_closed=closed,
                     usd=cost,
                     receipt_identity="unknown",
@@ -572,16 +617,40 @@ def test_evidence_root_costs_unknown_writers_and_cumulative_admission(
             )
 
         with pytest.raises(ValueError, match="unknown"):
-            root.reserve(
-                JobAllocation(run="main", phase="collection", max_usd=Decimal(1)),
+            root.dispatch(
+                JobAllocation(
+                    run="main",
+                    phase="collection",
+                    max_usd=Decimal(1),
+                    work=CaptureWork(schedule_identity=identity, slots=(0,)),
+                ),
                 unknown,
+                lambda job: None,
             )
-    root.reserve(
-        JobAllocation(run="main", phase="collection", max_usd=Decimal(23)), full_costs
+    root.dispatch(
+        JobAllocation(
+            run="main",
+            phase="collection",
+            max_usd=Decimal(23),
+            work=CaptureWork(schedule_identity=identity, slots=(0,)),
+        ),
+        full_costs,
+        lambda job: None,
     )
     with pytest.raises(ValueError, match="USD25"):
-        root.reserve(
-            JobAllocation(run="fit", phase="fit", max_usd=Decimal("0.1")), full_costs
+        root.dispatch(
+            JobAllocation(
+                run="fit",
+                phase="fit",
+                max_usd=Decimal("0.1"),
+                work=FitWork(
+                    dataset_identity="dataset",
+                    configuration_identity="config",
+                    seed=357,
+                ),
+            ),
+            full_costs,
+            lambda job: None,
         )
     assert len(root.allocations()) == 2
 
@@ -589,10 +658,18 @@ def test_evidence_root_costs_unknown_writers_and_cumulative_admission(
 def test_collection_closure_requires_no_writer_and_freezes_sources(
     tmp_path: Path,
 ) -> None:
-    root = _collected_root(tmp_path)
-    root.reserve(
-        JobAllocation(run="capture", phase="collection", max_usd=Decimal(1)), _settled
+    root, identity = _scheduled_root(tmp_path)
+    root.dispatch(
+        JobAllocation(
+            run="capture",
+            phase="collection",
+            max_usd=Decimal(1),
+            work=CaptureWork(schedule_identity=identity, slots=(0, 1, 2)),
+        ),
+        _settled,
+        lambda job: None,
     )
+    _collected_root(tmp_path)
     with pytest.raises(FileNotFoundError):
         root.freeze_dataset()
 
@@ -600,6 +677,7 @@ def test_collection_closure_requires_no_writer_and_freezes_sources(
         return (
             JobSettlement(
                 run=refs[0],
+                execution="running",
                 writers_closed=False,
                 usd=Decimal(0),
                 receipt_identity="still-live",
@@ -615,8 +693,15 @@ def test_collection_closure_requires_no_writer_and_freezes_sources(
     assert root.freeze_dataset() == dataset
     assert [g.game_id for g in dataset.games] == ["0", "1", "2"]
     with pytest.raises(ValueError, match="closed"):
-        root.reserve(
-            JobAllocation(run="more", phase="collection", max_usd=Decimal(1)), _settled
+        root.dispatch(
+            JobAllocation(
+                run="more",
+                phase="collection",
+                max_usd=Decimal(1),
+                work=CaptureWork(schedule_identity=identity, slots=(0,)),
+            ),
+            _settled,
+            lambda job: None,
         )
     (tmp_path / "main/game-000003.started.json").write_text("{}")
     with pytest.raises(ValueError, match="gained or lost"):
@@ -733,3 +818,178 @@ def test_completed_zero_row_games_keep_coverage_and_both_omission_reasons(
     }
     with pytest.raises(ValueError, match="three nonempty"):
         root.freeze_dataset()
+
+
+def test_dispatch_lost_acknowledgement_reserves_exact_work(tmp_path: Path) -> None:
+    root, identity = _scheduled_root(tmp_path)
+    job = JobAllocation(
+        run="lookup-a",
+        phase="collection",
+        max_usd=Decimal(1),
+        work=CaptureWork(schedule_identity=identity, slots=(0, 1)),
+    )
+
+    def lost_acknowledgement(allocation: JobAllocation) -> None:
+        assert allocation == job
+        raise ConnectionError("submission acknowledgement lost")
+
+    with pytest.raises(ConnectionError):
+        root.dispatch(job, _settled, lost_acknowledgement)
+    assert root.allocations() == (job,)
+    with pytest.raises(ValueError, match="already allocated"):
+        root.dispatch(
+            job.model_copy(update={"run": "lookup-b"}),
+            _settled,
+            lambda allocation: pytest.fail("overlapping submission"),
+        )
+    live = JobSettlement(
+        run=job.run,
+        execution="queued",
+        writers_closed=False,
+        usd=Decimal(0),
+        receipt_identity="queued-retry",
+    )
+    assert root.observe(lambda refs: (live,)) == (live,)
+    progress = root.continuation(lambda refs: (live,))
+    assert progress.blocked and not progress.capture_slots
+    settled = root.continuation(_settled)
+    assert settled.capture_slots["collection"] == (2,)
+    assert settled.jobs[0].delivery == "unavailable"
+    assert root.delivery(job, live) == "running"
+    assert (
+        root.delivery(job, live.model_copy(update={"execution": "unknown"}))
+        == "unknown"
+    )
+    with pytest.raises(ValueError, match="writers"):
+        root.close_collection(
+            "main", reason="controller ended", read=lambda refs: (live,)
+        )
+    with pytest.raises(ValueError, match="writers"):
+        root.dispatch(
+            job.model_copy(
+                update={
+                    "run": "lookup-c",
+                    "work": CaptureWork(schedule_identity=identity, slots=(2,)),
+                }
+            ),
+            lambda refs: (live,),
+            lambda allocation: pytest.fail("dispatch before reconciliation"),
+        )
+    assert root.delivery(job, _settled((job.run,))[0]) == "unavailable"
+    assert len(list((tmp_path / "observations").glob("*.json"))) >= 2
+
+
+def test_dispatch_serializes_reservation_through_submit(tmp_path: Path) -> None:
+    root, identity = _scheduled_root(tmp_path)
+    job = JobAllocation(
+        run="first",
+        phase="collection",
+        max_usd=Decimal(1),
+        work=CaptureWork(schedule_identity=identity, slots=(0,)),
+    )
+    submitted = Event()
+    release = Event()
+    launches: list[str] = []
+
+    def submit(allocation: JobAllocation) -> None:
+        launches.append(allocation.run)
+        submitted.set()
+        assert release.wait(timeout=5)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(root.dispatch, job, _settled, submit)
+        try:
+            assert submitted.wait(timeout=5)
+            second = executor.submit(
+                EvidenceRoot(tmp_path).dispatch,
+                job.model_copy(update={"run": "second"}),
+                _settled,
+                submit,
+            )
+        finally:
+            release.set()
+        first.result(timeout=5)
+        with pytest.raises(ValueError, match="already allocated"):
+            second.result(timeout=5)
+    assert launches == ["first"]
+
+
+def test_fit_dispatch_consumes_seed_and_checks_delivery_binding(tmp_path: Path) -> None:
+    root = _collected_root(tmp_path)
+    root.close_collection("main", reason="finished", read=_settled)
+    dataset = root.freeze_dataset()
+    config = asdict(SavedFitConfig())
+    job = JobAllocation(
+        run="fit-357",
+        phase="fit",
+        max_usd=Decimal(1),
+        work=FitWork(
+            dataset_identity=dataset.identity,
+            configuration_identity=_digest(config),
+            seed=357,
+        ),
+    )
+    root.dispatch(job, _settled, lambda allocation: None)
+    running = JobSettlement(
+        run=job.run,
+        execution="running",
+        writers_closed=False,
+        usd=None,
+        receipt_identity="worker-running",
+    )
+    assert root.delivery(job, running) == "running"
+    assert root.continuation(lambda refs: (running,)).fit_seeds == ()
+    assert root.continuation(_settled).fit_seeds == (358, 359)
+    assert root.delivery(job, _settled((job.run,))[0]) == "unavailable"
+    with pytest.raises(ValueError, match="seed already allocated"):
+        root.dispatch(
+            job.model_copy(update={"run": "fit-retry"}),
+            _settled,
+            lambda allocation: pytest.fail("seed retried"),
+        )
+    directory = tmp_path / "fits/357"
+    directory.mkdir(parents=True)
+    binding = {"dataset_identity": dataset.identity, "config": config, "seed": 357}
+    (directory / "started.json").write_text(json.dumps(binding))
+    (directory / "sampler.pt").write_bytes(
+        b"fixture bytes; delivery is not model admission"
+    )
+    digest = hashlib.sha256((directory / "sampler.pt").read_bytes()).hexdigest()
+    (directory / "complete.json").write_text(
+        json.dumps({"binding": binding, "checkpoint_identity": digest})
+    )
+    outputs = {
+        name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest()
+        for name in job.outputs
+    }
+    ended = _settled((job.run,))[0].model_copy(update={"outputs": outputs})
+    assert root.delivery(job, ended) == "delivered"
+    (directory / "sampler.pt").write_bytes(b"changed")
+    with pytest.raises(ValueError, match="byte identity"):
+        root.delivery(job, ended)
+
+
+def test_worker_executes_only_reserved_slots_and_verifies_shards(
+    tmp_path: Path,
+) -> None:
+    root, identity = _scheduled_root(tmp_path)
+    job = JobAllocation(
+        run="capture-one",
+        phase="collection",
+        max_usd=Decimal(1),
+        work=CaptureWork(schedule_identity=identity, slots=(1,)),
+    )
+    root.dispatch(job, _settled, lambda allocation: None)
+    execute_work(root, job, runtime=_CaptureFixture())
+    assert not (tmp_path / "main/game-000000.started.json").exists()
+    assert not (tmp_path / "main/game-000002.started.json").exists()
+    result = json.loads((tmp_path / "main/game-000001.result.json").read_text())
+    assert result["status"] == "completed"
+    outputs = {
+        str(path.relative_to(tmp_path)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (tmp_path / "main").glob("game-*.json")
+    }
+    ended = _settled((job.run,))[0].model_copy(update={"outputs": outputs})
+    assert root.delivery(job, ended) == "delivered"
+    del outputs["main/game-000001.game.json"]
+    assert root.delivery(job, ended) == "unavailable"

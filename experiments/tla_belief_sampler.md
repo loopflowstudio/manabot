@@ -46,7 +46,8 @@ action prefix without remapping offer IDs. Scheduled capture supports a fixed
 public schema, whole-game splits, bounded label-independent decision selection,
 explicit unsupported-row coverage, per-game private shards and attempt receipts.
 Continuation does not retry started slots; saved completed evidence is verified
-before reuse. The existing fitter and policy loader are unchanged.
+before reuse. The sampler optimizer and frozen policy loader are reused;
+`fit_saved_sampler` adds the attempt/reload boundary described below.
 
 `sampling_evidence.EvidenceRoot` retains pre-dispatch Etude allocations and
 requires fresh settlement for every declared run, including no remaining writer
@@ -59,7 +60,10 @@ launcher receipt references. Orphan shards remain interrupted; completed games
 with no representable rows remain completed. Only closed sources produce the
 single immutable main dataset. Source additions, changes and lost bytes reject
 later fits/reports. Admission stays separate. These guarantees currently have
-injected-fixture validation, not a connected launcher adapter.
+injected-fixture validation, not a connected launcher adapter. Allocations
+currently bind only run, phase and cap; exact slot/fit work bindings and a
+serialized reservation-to-submit handoff remain missing. The process lock on
+individual mutations does not establish exclusive dispatch across controllers.
 
 The runtime classifies native panics and the known `no legal targets` failure
 at active steps; unknown native, contract, reset and capacity failures remain
@@ -105,6 +109,13 @@ USD2. Freeze cohort size and fit allocation from its ordinary pace before main
 collection. The proposed 1,024-slot schedule and three fit seeds remain planning
 choices, not an executed freeze or permission to ignore missing attempts.
 
+The next implementation must bind each dispatch to its exact scheduled slots
+or dataset/configuration/fit seed before submission, reconcile lost acknowledgements
+through compatible Etude evidence, and distinguish live work from interrupted
+work before reusing or refusing outputs. Existing local receipts alone cannot
+establish these controller guarantees. No additional experiment was launched
+during realignment.
+
 ## Lifecycle implementation checks, 2026-11-14
 
 On the mini, injected and ordinary tiny current-world fixtures in
@@ -136,3 +147,40 @@ The public example selects the first retained test row with nonempty public
 history, without selecting on scores or predictions. Absence of such a row makes
 the history example unavailable. The final 30-check owner run includes nonempty
 public commitment features and validates the label/seed exclusion.
+
+## Controller continuation implementation, 2026-11-14
+
+The evidence owner now binds each allocation to exact schedule ordinals or a
+frozen dataset/configuration/fit seed. Reservation and submission share one root
+lock. A lost submission response leaves its work consumed; different launcher
+lookup keys cannot authorize overlapping slots or repeat a fit seed. Fresh
+launcher observations retain execution state, queued/retry writer closure,
+cost and delivered byte inventories. Continuation distinguishes unknown/running
+work from ended unavailable delivery and derives untouched work without inferring
+interruption from controller exit. The frozen worker adapter executes the exact
+reserved subset using the maintained collector/fitter. No live launcher adapter
+or new remote command is claimed.
+
+TLA reporting joins complete saved reports to the closed schedule's test panels
+and groups by declared deal seed. Complete zero-row and unattempted games remain
+in coverage even when an entire panel has no measurable predictions. Optional
+`demo --cohort` retains this analysis alongside the public example; the cohort
+contains saved report references, never hand-authored launcher settlements.
+
+Mini validation: the two affected capture/report owner files passed 35 checks
+in 2.36 seconds, including lost acknowledgement, competing controllers, queued
+retry closure rejection, unavailable fit delivery, exact worker subsets and
+schedule-derived panels. The subsequent optional panel-demo serialization check passed (1 check,
+1.42s). After making launcher execution state mandatory and bounding directory
+inventory reads to one scan, the six affected dispatch/worker checks passed
+(0.83s). Ruff, Python compilation and `git diff --check` passed. These controlled checks establish software behavior, not TLA
+admission, optimization or a scored comparison.
+
+A fresh read-only `etude machines` using the retained original environment still
+returned the same shared-database version refusal on 2026-11-14. Its public
+`queue`/`launch` functions delegate to a selected controller and return a string;
+that alone establishes no stable pre-submit lookup contract with the existing
+controller. The database was preserved, no alternate controller or job was
+created, and capacity/cost remain unknown. Connected admission still requires
+a compatible inventory and verified pre-submit lookup path. No new experiment
+cost receipt or result exists.

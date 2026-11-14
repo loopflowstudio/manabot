@@ -28,8 +28,20 @@ and orphan shard prove neither completion nor the cause of a fatal stop.
 Keep job reconciliation, explicit closure, fatal causes and immutable fit data
 distinct from capture continuation. Swapped legs sharing a declared deal seed
 also need group-preserving uncertainty; a whole-game bootstrap alone does not
-preserve their dependence. MTG-357's closure, error classification and grouped
-analysis remain implementation work, not validated guarantees.
+preserve their dependence. MTG-357 now has injected-fixture checks for explicit
+closure/source freezing, fatal-prefix retention/restoration, narrow native
+failure classification, omission reasons, fit reuse/refusal and grouped analysis.
+Those checks establish owner behavior, not connected launcher admission or a
+TLA result; schedule-to-panel wiring remains unfinished.
+
+An allocation is not a work reservation: a run reference, phase and cap do not
+bind the slots or fit seed it may execute. MTG-357's current ledger serializes
+individual mutations but does not yet protect the complete dispatch handoff or
+prevent different run IDs authorizing the same work. A compatible controller
+must reconcile lost submission acknowledgements and live/queued/retry writers
+before continuation, closure or treating a started fit as unavailable. A
+controller exit alone does not establish worker interruption. Keep these live
+execution guarantees distinct from the existing local evidence checks.
 
 ## Self-play metric indexing (MTG-273, 2026-11-11)
 

@@ -12,18 +12,129 @@ import json
 from pathlib import Path
 from typing import Sequence
 
+from pydantic import TypeAdapter
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling import sample_physical_deal
-from manabot.belief.sampling_collection import _write_private
-from manabot.belief.sampling_evidence import EvidenceRoot
+from manabot.belief.sampling_cohort import (
+    CohortReport,
+    CohortSpec,
+    EvaluationGroup,
+    report_sampler_cohort,
+)
+from manabot.belief.sampling_collection import (
+    CaptureRuntime,
+    CaptureSlot,
+    _write_private,
+    collect_schedule,
+)
+from manabot.belief.sampling_evidence import (
+    CaptureWork,
+    EvidenceRoot,
+    JobAllocation,
+)
+from manabot.belief.sampling_fit import SavedFitConfig, fit_saved_sampler
+from manabot.belief.sampling_types import SamplerSchema, _digest
 from manabot.infra.torch import deterministic_cpu
 from manabot.reports.belief import report_saved_sampler
 from managym.decision import PUBLIC_COMMITMENT_KINDS
 
 
-def demo(directory: Path) -> Path:
+def execute_work(
+    root: EvidenceRoot,
+    job: JobAllocation,
+    *,
+    runtime: CaptureRuntime | None = None,
+    config: SavedFitConfig | None = None,
+) -> None:
+    """Frozen worker boundary: execute only the exact retained intent.
+
+    A compatible launcher must admit/stage this worker. This is not a local
+    admission command or a replacement for launcher inventory and placement.
+    """
+    if job not in root.allocations():
+        raise ValueError("worker has no retained dispatch intent")
+    if isinstance(job.work, CaptureWork):
+        if runtime is None or config is not None:
+            raise ValueError("capture worker requires its admitted frozen runtime")
+        directory = root.directory / (
+            "admission" if job.phase == "admission" else "main"
+        )
+        schedule = json.loads((directory / "schedule.json").read_text())
+        capture = schedule["capture"]
+        if (
+            schedule["identity"] != job.work.schedule_identity
+            or _digest(capture) != job.work.schedule_identity
+        ):
+            raise ValueError("worker schedule identity mismatch")
+        collect_schedule(
+            runtime,
+            TypeAdapter(tuple[CaptureSlot, ...]).validate_python(capture["slots"]),
+            TypeAdapter(SamplerSchema).validate_python(capture["schema"]),
+            directory=directory,
+            policy_identity=capture["policy_identity"],
+            world_identity=capture["world_identity"],
+            max_steps=capture["max_steps"],
+            moments=capture["moments"],
+            ordinals=job.work.slots,
+        )
+    else:
+        if config is None or runtime is not None:
+            raise ValueError("fit worker requires its declared configuration")
+        if (
+            root.dataset().identity != job.work.dataset_identity
+            or _digest(asdict(config)) != job.work.configuration_identity
+        ):
+            raise ValueError("worker fit binding mismatch")
+        fit_saved_sampler(root, config, seed=job.work.seed)
+
+
+def report_panels(root: EvidenceRoot, spec: CohortSpec) -> dict[str, CohortReport]:
+    """Join full saved reports to predeclared schedule panels and deal groups.
+
+    Missing legs and complete zero-row games remain declared group members.
+    Their absence from prediction measurements never erases their denominator.
+    """
+    dataset = root.dataset()
+    if spec.evaluation_dataset_identity != dataset.identity:
+        raise ValueError("panel dataset identity mismatch")
+    schedule = json.loads((root.directory / "main/schedule.json").read_text())
+    slots = TypeAdapter(tuple[CaptureSlot, ...]).validate_python(
+        schedule["capture"]["slots"]
+    )
+    panels = {}
+    for name in ("same-field", "reserved"):
+        selected = [
+            slot for slot in slots if slot.split == "test" and slot.panel == name
+        ]
+        if not selected:
+            raise ValueError(f"frozen schedule has no {name} test panel")
+        groups: dict[int, list[str]] = {}
+        for slot in selected:
+            groups.setdefault(slot.seed, []).append(slot.game_id)
+        panel = spec.model_copy(
+            update={
+                "split": "test",
+                "panel_game_ids": tuple(slot.game_id for slot in selected),
+                "groups": tuple(
+                    EvaluationGroup(group_id=f"deal-{seed}", game_ids=tuple(games))
+                    for seed, games in groups.items()
+                ),
+            }
+        )
+        panels[name] = report_sampler_cohort(panel, root=root.directory)
+    if any(slot.split == "test" and slot.panel is None for slot in slots):
+        raise ValueError("test slot has no frozen panel")
+    by_seed: dict[int, set[str | None]] = {}
+    for slot in slots:
+        by_seed.setdefault(slot.seed, set()).add(slot.panel)
+    if any(len(names) != 1 for names in by_seed.values()):
+        raise ValueError("shared deal seed crosses panels")
+    return panels
+
+
+def demo(directory: Path, *, cohort: CohortSpec | None = None) -> Path:
     """Verify the declared demo candidate and retain private reports/public inputs.
 
     Choose the first saved test observation with nonempty public history,
@@ -55,6 +166,16 @@ def demo(directory: Path) -> Path:
         )
         output = directory / "demo"
         output.mkdir(exist_ok=True, mode=0o700)
+        if cohort is not None:
+            panels = TypeAdapter(dict[str, CohortReport]).dump_python(
+                report_panels(root, cohort), mode="json"
+            )
+            panel_path = output / "panels.json"
+            if panel_path.exists():
+                if json.loads(panel_path.read_text()) != json.loads(json.dumps(panels)):
+                    raise ValueError("saved panel analysis changed")
+            else:
+                _write_private(panel_path, panels)
         report = output / "quality.json"
         report_binding = output / "quality-binding.json"
         if not report.exists():
@@ -190,8 +311,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         "demo", help="reload seed357 and report saved observations"
     )
     saved.add_argument("--artifacts", type=Path, required=True)
+    saved.add_argument(
+        "--cohort",
+        type=Path,
+        help="saved fit-cohort declaration for grouped test panels",
+    )
     args = parser.parse_args(argv)
-    print(demo(args.artifacts))
+    cohort = (
+        None
+        if args.cohort is None
+        else CohortSpec.model_validate_json(args.cohort.read_bytes())
+    )
+    print(demo(args.artifacts, cohort=cohort))
 
 
 if __name__ == "__main__":

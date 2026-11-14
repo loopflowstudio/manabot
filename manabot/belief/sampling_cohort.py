@@ -9,7 +9,7 @@ Separate percentile bootstraps vary one axis at a time, never individual rows.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 from pathlib import Path
@@ -89,9 +89,12 @@ class CohortSpec(Declaration):
     attempts: tuple[FitAttempt, ...] = Field(min_length=1)
     contrasts: tuple[Contrast, ...] = ()
     groups: tuple[EvaluationGroup, ...] = ()
+    panel_game_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def check_design(self) -> CohortSpec:
+        if len(set(self.panel_game_ids)) != len(self.panel_game_ids):
+            raise ValueError("panel game identities must be unique")
         grouped_games = [game for group in self.groups for game in group.game_ids]
         if len({g.group_id for g in self.groups}) != len(self.groups) or len(
             set(grouped_games)
@@ -270,7 +273,7 @@ def _estimate(
     spec: CohortSpec,
     groups: tuple[tuple[int, ...], ...],
 ) -> Estimate:
-    if not rows:
+    if not rows or not rows[0]:
         return Estimate(
             label, metric, (), (), None, None, None, ("no supported complete fits",)
         )
@@ -356,6 +359,15 @@ def report_sampler_cohort(spec: CohortSpec, *, root: Path = Path(".")) -> Cohort
             if m.split == spec.split
             and m.samples_per_example == spec.samples_per_example
         )
+        if spec.panel_game_ids:
+            selected = set(spec.panel_game_ids)
+            games = tuple(game for game in panel.games if game.game_id in selected)
+            panel = replace(
+                panel,
+                games=games,
+                game_ids=tuple(g.game_id for g in games),
+                examples=sum(g.examples for g in games),
+            )
         assert report.checkpoint_identity is not None
         if report.checkpoint_identity in checkpoint_ids:
             raise ValueError("repeated checkpoint bytes are not independent fits")

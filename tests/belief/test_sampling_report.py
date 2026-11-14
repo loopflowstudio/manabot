@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from experiments.tla_belief_sampler import demo
+from experiments.tla_belief_sampler import demo, report_panels
 from manabot.belief.sampling import AutoregressiveBeliefSampler
 from manabot.belief.sampling_cohort import (
     CohortSpec,
@@ -18,6 +18,7 @@ from manabot.belief.sampling_cohort import (
     _estimate,
     report_sampler_cohort,
 )
+from manabot.belief.sampling_collection import CaptureSlot
 from manabot.belief.sampling_data import (
     SamplerDataset,
     SamplerExample,
@@ -26,7 +27,7 @@ from manabot.belief.sampling_data import (
     save_dataset,
 )
 from manabot.belief.sampling_fit import CalibrationBin, SamplerArmMetrics
-from manabot.belief.sampling_types import SamplerInput, SamplerSchema
+from manabot.belief.sampling_types import SamplerInput, SamplerSchema, _digest
 from manabot.reports.belief import _pool_games, main, report_saved_sampler
 from tests.belief.test_sampling_data import _collected_root, _settled
 
@@ -482,3 +483,88 @@ def test_tla_saved_demo_is_public_and_never_optimizes(
     (tmp_path / "demo/quality.json").write_text("{}")
     with pytest.raises(ValueError, match="report identity"):
         demo(tmp_path)
+
+
+def test_schedule_panels_retain_zero_row_and_unattempted_games(tmp_path: Path) -> None:
+    slots = tuple(
+        CaptureSlot(str(i), i, i % 2, split, ("a", "b"), panel)
+        for i, (split, panel) in enumerate(
+            (
+                ("train", None),
+                ("validation", None),
+                ("test", "same-field"),
+                ("test", "reserved"),
+                ("test", "reserved"),
+            )
+        )
+    )
+    root = _collected_root(tmp_path, slots)
+    shard_path = tmp_path / "main/game-000003.game.json"
+    shard = json.loads(shard_path.read_text())
+    shard["game"] = None
+    shard_path.write_text(json.dumps(shard))
+    receipt_path = tmp_path / "main/game-000003.result.json"
+    receipt = json.loads(receipt_path.read_text())
+    receipt["shard_identity"] = _digest(shard)
+    receipt_path.write_text(json.dumps(receipt))
+    for path in (tmp_path / "main").glob("game-000004.*.json"):
+        path.unlink()
+    root.close_collection("main", reason="wall bound", read=_settled)
+    dataset = root.freeze_dataset()
+    checkpoint = tmp_path / "fixed.pt"
+    digest = _checkpoint(checkpoint, dataset, 357)
+    report = report_saved_sampler(
+        tmp_path / "dataset.json",
+        checkpoint=checkpoint,
+        checkpoint_identity=digest,
+        training_dataset_path=tmp_path / "dataset.json",
+        sample_counts=(4,),
+        seed=7,
+    )
+    data = json.dumps(asdict(report)).encode()
+    (tmp_path / "quality.json").write_bytes(data)
+    spec = CohortSpec(
+        description="Fixed saved fixture",
+        producer_policy_identity=dataset.policy_identity,
+        evaluation_policy_identity=dataset.policy_identity,
+        evaluation_dataset_identity=dataset.identity,
+        world_identity=dataset.world_identity,
+        schema_identity=dataset.schema.identity,
+        evaluator_identity=report.evaluator_identity,
+        samples_per_example=4,
+        sampling_seed=7,
+        bootstrap_replicates=100,
+        attempts=(
+            FitAttempt(
+                attempt_id="fixed",
+                treatment="fixed",
+                training_seed=357,
+                fit_receipt_identity="fixture",
+                configuration_identity="fixed",
+                training_dataset_identity=dataset.identity,
+                status="complete",
+                report=Path("quality.json"),
+                report_sha256=hashlib.sha256(data).hexdigest(),
+            ),
+        ),
+    )
+    panels = report_panels(root, spec)
+    assert panels["same-field"].group_coverage[0].retained_games == ("2",)
+    assert [group.missing_games for group in panels["reserved"].group_coverage] == [
+        ("3",),
+        ("4",),
+    ]
+    assert all(estimate.mean is None for estimate in panels["reserved"].estimates)
+    closure = json.loads((tmp_path / "main/closure.json").read_text())
+    assert closure["statuses"][-2:] == ["completed", "unattempted"]
+    fit = tmp_path / "fits/357"
+    fit.mkdir(parents=True)
+    (fit / "sampler.pt").write_bytes(checkpoint.read_bytes())
+    binding = {"dataset_identity": dataset.identity, "config": {}, "seed": 357}
+    (fit / "started.json").write_text(json.dumps(binding))
+    (fit / "complete.json").write_text(
+        json.dumps({"binding": binding, "checkpoint_identity": digest})
+    )
+    demo(tmp_path, cohort=spec)
+    saved_panels = json.loads((tmp_path / "demo/panels.json").read_text())
+    assert saved_panels["reserved"]["group_coverage"][0]["missing_games"] == ["3"]

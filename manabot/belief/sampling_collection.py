@@ -35,6 +35,7 @@ class CaptureSlot:
     assignment: int
     split: Split
     deck_ids: tuple[str, str]
+    panel: Literal["same-field", "reserved"] | None = None
 
     def __post_init__(self) -> None:
         if not self.game_id or self.assignment not in (0, 1):
@@ -300,6 +301,7 @@ def collect_schedule(
     world_identity: str,
     max_steps: int = 2000,
     moments: int = 8,
+    ordinals: Sequence[int] | None = None,
     check: Callable[[], None] | None = None,
 ) -> None:
     """Persist each slot before reset and settle before starting the next one.
@@ -346,7 +348,13 @@ def collect_schedule(
             "stop_identity"
         ) != _digest(json.loads(stop.read_text())):
             raise ValueError("fatal capture prerequisite has not been restored")
-    for ordinal, slot in enumerate(slots):
+    selected = tuple(range(len(slots))) if ordinals is None else tuple(ordinals)
+    if tuple(sorted(set(selected))) != selected or any(
+        ordinal < 0 or ordinal >= len(slots) for ordinal in selected
+    ):
+        raise ValueError("capture ordinals must be distinct scheduled slots in order")
+    for ordinal in selected:
+        slot = slots[ordinal]
         prefix = directory / f"game-{ordinal:06d}"
         started = prefix.with_suffix(".started.json")
         settled = prefix.with_suffix(".result.json")

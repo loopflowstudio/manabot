@@ -9,6 +9,7 @@ unknown launch response blocks continuation instead of creating a second job.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from decimal import Decimal
 import fcntl
 from functools import wraps
@@ -16,25 +17,73 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Concatenate, Literal, ParamSpec, TypeVar
+from typing import Annotated, Concatenate, Literal, ParamSpec, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from manabot.belief.sampling_collection import _write_private, read_capture_dataset
 from manabot.belief.sampling_data import SamplerDataset, read_dataset, save_dataset
 from manabot.belief.sampling_types import _digest
 
-Phase = Literal["admission", "collection", "fit", "evaluation"]
+
+class CaptureWork(BaseModel):
+    """An exact subset of one immutable schedule; admission is a separate phase."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["capture"] = "capture"
+    schedule_identity: str = Field(min_length=1)
+    slots: tuple[int, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def unique_slots(self) -> CaptureWork:
+        if tuple(sorted(set(self.slots))) != self.slots or self.slots[0] < 0:
+            raise ValueError("slots must be distinct nonnegative ordinals in order")
+        return self
+
+
+class FitWork(BaseModel):
+    """The seed is consumed by dispatch, even if no started receipt is delivered."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["fit"] = "fit"
+    dataset_identity: str = Field(min_length=1)
+    configuration_identity: str = Field(min_length=1)
+    seed: Literal[357, 358, 359]
 
 
 class JobAllocation(BaseModel):
-    """Charge startup/setup to the phase it prepares, including admission's USD2."""
+    """A pre-submit launcher lookup key, exact work and its whole-window cap.
+
+    The adapter must obtain a durable lookup key from its compatible launcher;
+    this owner does not manufacture run IDs or assume idempotent submission.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-
     run: str = Field(min_length=1)
-    phase: Phase
+    phase: Literal["admission", "collection", "fit"]
     max_usd: Decimal = Field(ge=0, allow_inf_nan=False)
+    work: Annotated[CaptureWork | FitWork, Field(discriminator="kind")]
+
+    @model_validator(mode="after")
+    def matching_phase(self) -> JobAllocation:
+        if (self.phase == "fit") != isinstance(self.work, FitWork):
+            raise ValueError("phase does not match scheduled work")
+        return self
+
+    @property
+    def outputs(self) -> tuple[str, ...]:
+        if isinstance(self.work, CaptureWork):
+            phase = "admission" if self.phase == "admission" else "main"
+            return tuple(
+                f"{phase}/game-{slot:06d}.{suffix}.json"
+                for slot in self.work.slots
+                for suffix in ("started", "result")
+            )
+        return (
+            f"fits/{self.work.seed}/started.json",
+            f"fits/{self.work.seed}/complete.json",
+            f"fits/{self.work.seed}/sampler.pt",
+        )
 
 
 class JobSettlement(BaseModel):
@@ -51,9 +100,29 @@ class JobSettlement(BaseModel):
     writers_closed: bool
     usd: Decimal | None = Field(default=None, ge=0, allow_inf_nan=False)
     receipt_identity: str = Field(min_length=1)
+    execution: Literal["unknown", "queued", "running", "ended"]
+    # Delivered relative paths and byte identities, read from launcher delivery.
+    outputs: dict[str, str] = Field(default_factory=dict)
+    reason: str | None = None
 
 
+LauncherSubmit = Callable[[JobAllocation], None]
 LauncherRead = Callable[[tuple[str, ...]], tuple[JobSettlement, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class WorkProgress:
+    allocation: JobAllocation
+    observation: JobSettlement
+    delivery: Literal["unknown", "running", "unavailable", "delivered"]
+
+
+@dataclass(frozen=True, slots=True)
+class Continuation:
+    jobs: tuple[WorkProgress, ...]
+    capture_slots: dict[str, tuple[int, ...]]
+    fit_seeds: tuple[int, ...]
+    blocked: tuple[str, ...]
 
 
 def _bytes_identity(path: Path) -> str:
@@ -101,7 +170,12 @@ class EvidenceRoot:
             for path in sorted(self.jobs.glob("*.json"))
         )
 
-    def reconcile(self, read: LauncherRead) -> tuple[JobSettlement, ...]:
+    @_serial
+    def observe(self, read: LauncherRead) -> tuple[JobSettlement, ...]:
+        """Retain fresh inventory even when it blocks execution or delivery."""
+        return self._observe(read)
+
+    def _observe(self, read: LauncherRead) -> tuple[JobSettlement, ...]:
         declared = self.allocations()
         refs = tuple(job.run for job in declared)
         settlements = read(refs)  # Even an empty root requires shared inventory.
@@ -111,15 +185,48 @@ class EvidenceRoot:
             raise ValueError(
                 "launcher did not reconcile every declared job exactly once"
             )
+        observations = self.directory / "observations"
+        observations.mkdir(exist_ok=True, mode=0o700)
+        payload = [s.model_dump(mode="json") for s in settlements]
+        path = (
+            observations
+            / f"{hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()}.json"
+        )
+        if not path.exists():
+            _write_private(path, {"jobs": payload})
+        return settlements
+
+    def reconcile(self, read: LauncherRead) -> tuple[JobSettlement, ...]:
+        return self._require_closed(self.observe(read))
+
+    @staticmethod
+    def _require_closed(
+        settlements: tuple[JobSettlement, ...],
+    ) -> tuple[JobSettlement, ...]:
         for result in settlements:
-            if not result.writers_closed or result.usd is None:
+            if (
+                result.execution != "ended"
+                or not result.writers_closed
+                or result.usd is None
+            ):
                 raise ValueError(
                     "launcher job has live/unknown writers or unknown cost"
                 )
         return settlements
 
     @_serial
-    def reserve(self, job: JobAllocation, read: LauncherRead) -> None:
+    def dispatch(
+        self, job: JobAllocation, read: LauncherRead, submit: LauncherSubmit
+    ) -> None:
+        """Reserve through submission under one lock; never resubmit an intent.
+
+        A thrown/lost submission response leaves the durable intent consumed.
+        Reconcile its lookup key, including queued retries, before proceeding.
+        """
+        self._reserve(job, read)
+        submit(job)
+
+    def _reserve(self, job: JobAllocation, read: LauncherRead) -> None:
         """Retain one intent before dispatch. Reusing an intent never submits again.
 
         The caller supplies Etude's stable run identity before invoking launch.
@@ -132,7 +239,7 @@ class EvidenceRoot:
             raise ValueError(
                 "job already allocated; reconcile it instead of dispatching"
             )
-        settlements = self.reconcile(read)
+        settlements = self._require_closed(self._observe(read))
         declared = {j.run: j for j in self.allocations()}
         # All prior jobs are settled, so only their launcher amounts count.
         # The new reservation covers its whole startup/run/finalization window.
@@ -150,13 +257,212 @@ class EvidenceRoot:
         )
         if committed + job.max_usd > Decimal(25):
             raise ValueError("cumulative USD25 allocation exceeded")
-        if job.phase == "admission" and admission + job.max_usd > Decimal(2):
+        if admission + (
+            job.max_usd if job.phase == "admission" else Decimal(0)
+        ) > Decimal(2):
             raise ValueError("USD2 admission allocation exceeded")
         if job.phase in ("admission", "collection"):
             phase = "admission" if job.phase == "admission" else "main"
             if (self.directory / phase / "closure.json").exists():
                 raise ValueError("collection is closed")
+        for previous in declared.values():
+            if previous.phase != job.phase:
+                continue
+            if isinstance(job.work, CaptureWork) and isinstance(
+                previous.work, CaptureWork
+            ):
+                if job.work.schedule_identity != previous.work.schedule_identity or set(
+                    job.work.slots
+                ) & set(previous.work.slots):
+                    raise ValueError(
+                        "scheduled work already allocated or schedule changed"
+                    )
+            elif isinstance(job.work, FitWork) and isinstance(previous.work, FitWork):
+                if job.work.seed == previous.work.seed:
+                    raise ValueError("fit seed already allocated")
+                if (
+                    job.work.dataset_identity != previous.work.dataset_identity
+                    or job.work.configuration_identity
+                    != previous.work.configuration_identity
+                ):
+                    raise ValueError("declared fit dataset/configuration changed")
+        self._validate_work(job)
         _write_private(path, job.model_dump(mode="json"))
+
+    @_serial
+    def continuation(self, read: LauncherRead) -> Continuation:
+        """Inspect fresh launcher state and derive untouched work, never dispatch it.
+
+        The following dispatch rechecks under the handoff lock. Output presence
+        cannot release a reservation or establish that a worker has ended.
+        """
+        observations = {result.run: result for result in self._observe(read)}
+        allocations = self.allocations()
+        jobs = tuple(
+            WorkProgress(
+                job, observations[job.run], self.delivery(job, observations[job.run])
+            )
+            for job in allocations
+        )
+        blocked = [
+            f"{result.run}: live/unknown writers or unknown cost"
+            for result in observations.values()
+            if result.execution != "ended"
+            or not result.writers_closed
+            or result.usd is None
+        ]
+        slots: dict[str, tuple[int, ...]] = {}
+        for phase, directory_name in (
+            ("admission", "admission"),
+            ("collection", "main"),
+        ):
+            directory = self.directory / directory_name
+            schedule_path = directory / "schedule.json"
+            if not schedule_path.exists() or (directory / "closure.json").exists():
+                continue
+            schedule = json.loads(schedule_path.read_text())
+            if _digest(schedule["capture"]) != schedule["identity"]:
+                raise ValueError("capture schedule digest mismatch")
+            unresolved = [
+                stop
+                for stop in directory.glob("game-*.stop.json")
+                if not stop.with_suffix(".restored.json").exists()
+                or json.loads(stop.with_suffix(".restored.json").read_text()).get(
+                    "stop_identity"
+                )
+                != _digest(json.loads(stop.read_text()))
+            ]
+            if unresolved:
+                blocked.append(
+                    f"{phase}: fatal capture prerequisite has not been restored"
+                )
+            claimed = {
+                slot
+                for job in allocations
+                if job.phase == phase and isinstance(job.work, CaptureWork)
+                for slot in job.work.slots
+            }
+            attempted = {
+                path.name.split(".")[0] for path in directory.glob("game-*.json")
+            }
+            slots[phase] = tuple(
+                ordinal
+                for ordinal in range(len(schedule["capture"]["slots"]))
+                if ordinal not in claimed and f"game-{ordinal:06d}" not in attempted
+            )
+        seeds = ()
+        if (self.directory / "dataset-binding.json").exists():
+            self.dataset()
+            claimed_seeds = {
+                job.work.seed for job in allocations if isinstance(job.work, FitWork)
+            }
+            seeds = tuple(
+                seed
+                for seed in (357, 358, 359)
+                if seed not in claimed_seeds
+                and not (self.directory / f"fits/{seed}").exists()
+            )
+        return Continuation(
+            jobs, {} if blocked else slots, () if blocked else seeds, tuple(blocked)
+        )
+
+    def _validate_work(self, job: JobAllocation) -> None:
+        work = job.work
+        if isinstance(work, CaptureWork):
+            phase = "admission" if job.phase == "admission" else "main"
+            directory = self.directory / phase
+            schedule = json.loads((directory / "schedule.json").read_text())
+            if (
+                _digest(schedule["capture"]) != work.schedule_identity
+                or schedule["identity"] != work.schedule_identity
+            ):
+                raise ValueError("dispatch schedule identity mismatch")
+            attempted = {
+                path.name.split(".")[0] for path in directory.glob("game-*.json")
+            }
+            for slot in work.slots:
+                if slot >= len(schedule["capture"]["slots"]):
+                    raise ValueError("dispatch slot outside schedule")
+                if f"game-{slot:06d}" in attempted:
+                    raise ValueError("dispatch slot already attempted")
+            for stop in directory.glob("game-*.stop.json"):
+                restored = stop.with_suffix(".restored.json")
+                if not restored.exists() or json.loads(restored.read_text()).get(
+                    "stop_identity"
+                ) != _digest(json.loads(stop.read_text())):
+                    raise ValueError("fatal capture prerequisite has not been restored")
+        else:
+            if self.dataset().identity != work.dataset_identity:
+                raise ValueError("dispatch dataset identity mismatch")
+            if (self.directory / f"fits/{work.seed}").exists():
+                raise ValueError("fit seed already attempted")
+
+    def delivery(
+        self, job: JobAllocation, observation: JobSettlement
+    ) -> Literal["unknown", "running", "unavailable", "delivered"]:
+        """Delivery is separate from scientific completion and loader admission."""
+        if observation.run != job.run:
+            raise ValueError("delivery lookup identity mismatch")
+        if observation.execution == "unknown":
+            return "unknown"
+        if observation.execution != "ended" or not observation.writers_closed:
+            return "running"
+        if not all(name in observation.outputs for name in job.outputs):
+            return "unavailable"
+        for name in job.outputs:
+            path = self.directory / name
+            if not path.is_file():
+                return "unavailable"
+            if _bytes_identity(path) != observation.outputs[name]:
+                raise ValueError("launcher delivery byte identity mismatch")
+        if isinstance(job.work, FitWork):
+            binding = json.loads((self.directory / job.outputs[0]).read_text())
+            receipt = json.loads((self.directory / job.outputs[1]).read_text())
+            if (
+                binding["dataset_identity"] != job.work.dataset_identity
+                or binding["seed"] != job.work.seed
+                or _digest(binding["config"]) != job.work.configuration_identity
+                or receipt["binding"] != binding
+                or receipt["checkpoint_identity"] != observation.outputs[job.outputs[2]]
+            ):
+                raise ValueError("fit delivery binding mismatch")
+        else:
+            phase = "admission" if job.phase == "admission" else "main"
+            schedule = json.loads(
+                (self.directory / phase / "schedule.json").read_text()
+            )
+            for slot in job.work.slots:
+                prefix = f"{phase}/game-{slot:06d}"
+                started = json.loads(
+                    (self.directory / f"{prefix}.started.json").read_text()
+                )
+                receipt = json.loads(
+                    (self.directory / f"{prefix}.result.json").read_text()
+                )
+                if (
+                    started
+                    != {
+                        "schedule_identity": job.work.schedule_identity,
+                        "slot": schedule["capture"]["slots"][slot],
+                    }
+                    or receipt["schedule_identity"] != job.work.schedule_identity
+                    or receipt["status"] not in ("completed", "failed", "interrupted")
+                ):
+                    raise ValueError("capture delivery binding mismatch")
+                if receipt["status"] != "interrupted":
+                    name = f"{prefix}.game.json"
+                    path = self.directory / name
+                    if name not in observation.outputs or not path.exists():
+                        return "unavailable"
+                    shard = json.loads(path.read_text())
+                    if (
+                        _bytes_identity(path) != observation.outputs[name]
+                        or _digest(shard) != receipt["shard_identity"]
+                        or (receipt["status"] == "failed")
+                        != (shard["failure"] is not None)
+                    ):
+                        raise ValueError("capture delivery shard mismatch")
+        return "delivered"
 
     @_serial
     def restore_capture(
@@ -165,7 +471,7 @@ class EvidenceRoot:
         """Record a repaired prerequisite only after the old jobs cannot write."""
         if not reason.strip():
             raise ValueError("restoration requires the repaired prerequisite")
-        settlements = self.reconcile(read)
+        settlements = self._require_closed(self._observe(read))
         directory = self.directory / phase
         if (directory / "closure.json").exists():
             raise ValueError("collection is closed")
@@ -192,7 +498,7 @@ class EvidenceRoot:
         """
         if not reason.strip():
             raise ValueError("closure requires a stop reason")
-        settlements = self.reconcile(read)
+        settlements = self._require_closed(self._observe(read))
         directory = self.directory / phase
         closure = directory / "closure.json"
         if closure.exists():
