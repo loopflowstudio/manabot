@@ -8,7 +8,8 @@ PolicyRunner to validate proposals before committing their own bound Commands.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 import hashlib
 from importlib.metadata import entry_points
@@ -157,6 +158,8 @@ class PolicyRegistry:
         self._factories: dict[str, PolicyFactory] = {}
         self._descriptors: dict[str, PolicyDescriptor] = {}
         self.aliases: dict[str, str] = {}
+        self._active_sessions: set[int] = set()
+        self.discovery_errors: list[str] = []
 
     def register(
         self, policy: PolicyFactory | PolicySpec, *, name: str | None = None
@@ -168,7 +171,7 @@ class PolicyRegistry:
                     f"Policy provider {policy.provider!r} is not installed."
                 )
             policy = provider.policy(policy)
-        descriptor = policy.describe()
+        descriptor = deepcopy(policy.describe())
         if descriptor.contract_version != 1:
             raise ValueError("Unsupported policy adapter contract version.")
         key = descriptor.id
@@ -196,23 +199,19 @@ class PolicyRegistry:
                 self.register(policy)
 
     def descriptors(self) -> tuple[PolicyDescriptor, ...]:
-        return tuple(self._descriptors.values())
+        return tuple(deepcopy(descriptor) for descriptor in self._descriptors.values())
 
     def descriptor(self, key: str) -> PolicyDescriptor:
         key = self.aliases.get(key, key)
         try:
-            return self._descriptors[key]
+            return deepcopy(self._descriptors[key])
         except KeyError as exc:
             raise ValueError("The selected policy is no longer available.") from exc
 
-    def load(
-        self, key: str, setup: Sequence[managym.PlayerConfig], *, seat: int, seed: int
-    ) -> PolicyRunner:
+    def admit(
+        self, key: str, setup: Sequence[managym.PlayerConfig]
+    ) -> PolicyDescriptor:
         descriptor = self.descriptor(key)
-        if descriptor.incompatibility:
-            raise ValueError(
-                f"{descriptor.name} cannot play here: {descriptor.incompatibility}"
-            )
         factory = self._factories[descriptor.id]
         # Repeat description/admission at load: files and runner may have changed.
         if factory.describe().id != descriptor.id:
@@ -220,26 +219,56 @@ class PolicyRegistry:
                 "The selected policy changed; restore the pinned artifact and runner."
             )
         factory.admit(setup)
-        session = factory.load(seat=seat, seed=seed)
-        if factory.describe().id != descriptor.id:
-            session.close()
+        if descriptor.incompatibility:
             raise ValueError(
-                "The selected policy changed while loading; restore the pinned artifact and runner."
+                f"{descriptor.name} cannot play here: {descriptor.incompatibility}"
             )
-        return PolicyRunner(session, descriptor, seat)
+        return descriptor
+
+    def load(
+        self, key: str, setup: Sequence[managym.PlayerConfig], *, seat: int, seed: int
+    ) -> PolicyRunner:
+        descriptor = self.admit(key, setup)
+        factory = self._factories[descriptor.id]
+        session = factory.load(seat=seat, seed=seed)
+        if id(session) in self._active_sessions:
+            raise ValueError(
+                "Policy factory reused a live mutable session; each game and seat needs its own session."
+            )
+        try:
+            if factory.describe().id != descriptor.id:
+                raise ValueError(
+                    "The selected policy changed while loading; restore the pinned artifact and runner."
+                )
+        except BaseException:
+            session.close()
+            raise
+        self._active_sessions.add(id(session))
+        return PolicyRunner(
+            session,
+            descriptor,
+            seat,
+            release=lambda: self._active_sessions.discard(id(session)),
+        )
 
 
 class PolicyRunner:
     """Bridge to existing game runners without exposing their Env to adapters."""
 
     def __init__(
-        self, session: PolicySession, descriptor: PolicyDescriptor, seat: int
+        self,
+        session: PolicySession,
+        descriptor: PolicyDescriptor,
+        seat: int,
+        *,
+        release: Callable[[], None] | None = None,
     ) -> None:
         self.session = session
         self.descriptor = descriptor
         self.seat = seat
         self.last_decision: BotDecision | None = None
         self._closed = False
+        self._release = release
 
     def observe(self, observation: managym.Observation) -> None:
         self.session.observe(self.view(observation))
@@ -295,4 +324,8 @@ class PolicyRunner:
     def close(self) -> None:
         if not self._closed:
             self._closed = True
-            self.session.close()
+            try:
+                self.session.close()
+            finally:
+                if self._release is not None:
+                    self._release()

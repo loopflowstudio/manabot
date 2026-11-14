@@ -42,9 +42,9 @@ class GameConfig:
     villain_checkpoint: str | None = None  # checkpoint: path to .pt file
     villain_deterministic: bool = False  # checkpoint: argmax instead of sampling
     opponent: dict[str, str] | None = None
-    # Exact trained-opponent identity: digest, source, world, model shape,
-    # training step, checkpoint path and inference setting.
-    opponent_checkpoint: dict[str, str | int | bool | None] | None = None
+    # Historical checkpoint provenance, or a managym-policy-1 descriptor with
+    # complete provider/runner/config/artifact identity. Read without a loader.
+    opponent_checkpoint: dict[str, Any] | None = None
     # Priority-stop configuration at game start (MTGO-style auto-pass).
     # ``stops`` maps "my"/"opponent" to the stop step names that surface;
     # None means the server defaults. set_stops updates the live session,
@@ -287,6 +287,9 @@ def prepare_trace_payload(
         event.pop("analysis_observation", None)
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
+    checkpoint = config.get("opponent_checkpoint")
+    if isinstance(checkpoint, dict):
+        checkpoint.pop("checkpoint", None)
     config.pop("seed", None)
     sources = [config.pop(key, None) for key in ("hero_source", "villain_source")]
     if any(source is not None for source in sources):
