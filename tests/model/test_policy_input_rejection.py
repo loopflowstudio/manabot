@@ -11,7 +11,6 @@ from typing import Any
 from pydantic import ValidationError
 import pytest
 
-from academy.villain import CheckpointVillain
 from manabot.backends.torch.checkpoint import (
     BACKEND as TORCH_BACKEND,
     load_checkpoint,
@@ -30,6 +29,7 @@ from manabot.infra.config import (
 )
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.sim.replay import replay_environment
+from manabot.sim.table_bots import CheckpointVillain
 from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 SETUP = "ur-lessons-vs-gw-allies"

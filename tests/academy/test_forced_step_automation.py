@@ -2,31 +2,31 @@
 
 from pathlib import Path
 
-from managym.experience import Command, ExperienceFrame
 import pytest
 
-from academy import villain
-from academy.bot_decision import BotDecision
-from academy.server import GameSession
 import managym
+from managym.academy import server
+from managym.academy.server import GameSession
+from managym.bots import BotDecision, BotPolicy
+from managym.experience import Command, ExperienceFrame
 
 
 @pytest.mark.parametrize("auto_pass", [True, False])
 def test_forced_decisions_never_surface(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, auto_pass: bool
 ) -> None:
-    choose = villain.choose_bot
+    choose = server.choose_bot
     policy_calls: list[int] = []
 
     def choose_meaningful(
-        policy: villain.VillainPolicy, env: managym.Env, obs: managym.Observation
+        policy: BotPolicy, env: managym.Env, obs: managym.Observation
     ) -> BotDecision:
         count = len(obs.action_space.actions)
         assert count > 1, "Forced actions must not invoke the opponent policy"
         policy_calls.append(count)
         return choose(policy, env, obs)
 
-    monkeypatch.setattr(villain, "choose_bot", choose_meaningful)
+    monkeypatch.setattr(server, "choose_bot", choose_meaningful)
     session = GameSession(tmp_path, capture_authority_evidence=True)
     session.new_game(
         {

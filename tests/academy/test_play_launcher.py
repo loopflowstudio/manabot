@@ -40,6 +40,7 @@ def test_build_output_and_phase_start_survive_an_unfinished_command(
 
 
 def test_gui_wire_enum_mirrors_match_the_native_engine():
+    import managym
     from managym.enums import (
         ActionEnum,
         ActionSpaceEnum,
@@ -48,8 +49,6 @@ def test_gui_wire_enum_mirrors_match_the_native_engine():
         StepEnum,
         ZoneEnum,
     )
-
-    import managym
 
     for mirror, native in (
         (ActionEnum, managym.ActionEnum),
@@ -138,7 +137,7 @@ def test_missing_pack_notice_has_stable_diagnostic(monkeypatch, tmp_path):
 
 
 def test_installed_launcher_pack_matches_the_server_setup():
-    from academy.curated_pack import CURATED_PACK
+    from managym.academy.curated_pack import CURATED_PACK
 
     assert play.validate_pack().reference == CURATED_PACK.reference
 

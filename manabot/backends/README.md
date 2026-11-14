@@ -77,7 +77,7 @@ chooses:
 
 - `experiments/` and `scripts/`;
 - recipe entry points, the CLI and child-process entry points;
-- Academy's opponent loader (`academy/villain.py`);
+- Academy's opponent loader (`manabot/sim/table_bots.py`);
 - the backends' own tests.
 
 They name a backend once, by import or through the resolver:

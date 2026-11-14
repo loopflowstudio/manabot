@@ -15,7 +15,7 @@ from manabot.env.observation import ObservationBuffers
 from manabot.sim.anchors import RandomMatchupPlayer, ScriptedGreedyPlayer
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.search.flat import FlatSearchPolicy
+from managym.bots import FlatSearchPolicy
 
 CODE_PLAYER_KINDS = frozenset({"demo_search", "heuristic", "random", "scripted_greedy"})
 

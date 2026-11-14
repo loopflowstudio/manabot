@@ -7,8 +7,8 @@ from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 import pytest
 
-from academy import server, trace as trace_store
-from academy.replay_index import (
+from managym.academy import server, trace as trace_store
+from managym.academy.replay_index import (
     CanonicalReplayProjectionV1,
     CanonicalReplayV1,
     DecisionAddressV2,
@@ -19,7 +19,7 @@ from academy.replay_index import (
     projection_with_addresses,
     restore_decision,
 )
-from academy.server import GameSession, app
+from managym.academy.server import GameSession, app
 from scripts.generate_replay_fixtures import _play_pinned_match
 
 FIXTURE = json.loads(

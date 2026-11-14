@@ -105,3 +105,8 @@ the existing rental template through CLI, leaving the older database untouched.
 refusal at collection entry now that row slicing is host-only. The preparation
 argument defines purpose even under `no_grad`; focused checks cover learner and
 inference rows, with and without buckets, under both grad modes.
+
+2026-11-14 sync onto main: retain the packaged Academy and native heuristic.
+Move checkpoint backend selection from the deleted Academy villain module to
+`manabot.sim.table_bots`, the new optional training provider; inject it into
+catalog discovery. Keep both sides' package-boundary checks and container fixtures.

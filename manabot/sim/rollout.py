@@ -8,7 +8,7 @@ default for every policy-in-the-loop consumer:
 - ``BatchedSampler``: one masked forward pass for many observations at once,
   straight from the zero-copy numpy buffers the Rust envs write into.
 - ``run_vector_games``: K parallel game streams on managym.VectorEnv
-  (opponent_policy="none", both seats surfaced) with per-seat controllers —
+  (player_policies=("agent", "agent"), both seats surfaced) with per-seat controllers —
   seat-balanced policy-vs-random and policy-vs-policy evaluation without a
   per-stream Python round trip.
 - ``PolicyRolloutMCPlayer``: flat determinized MC search whose rollout
@@ -166,7 +166,10 @@ def run_vector_games(
         validate_agent_setup(getattr(controller, "agent", None), match.to_rust())
     num_streams = min(num_streams, max(2, num_games))
     env = CapturedVector(
-        num_envs=num_streams, seed=seed, skip_trivial=True, opponent_policy="none"
+        num_envs=num_streams,
+        seed=seed,
+        skip_trivial=True,
+        player_policies=("agent", "agent"),
     )
     buffers = _allocate_buffers(obs_space, num_streams)
     env.set_buffers(buffers)

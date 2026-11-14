@@ -56,20 +56,23 @@ were good, and three things make that hard:
   outside the loop. Its scores never enter the loss
   ([evaluation](docs/evaluation.md)).
 
-Two more pieces sit around the loop. **Academy** (`academy/`, `academy/ui/`)
-is the browser UI for inspecting a bot or a replay by hand; it owns transport,
-drafts and presentation, reconstructs no rules meaning, and nothing in
-training depends on it ([Academy](docs/academy.md)). **Etude** launches remote
+Two more pieces sit around the loop. **Academy** (`managym.academy`, with its
+client source in `academy/ui/`) is the browser UI for inspecting a bot or a
+replay by hand; it ships in the `managym` wheel, owns transport, drafts and
+presentation, reconstructs no rules meaning, and nothing in training depends
+on it ([Academy](docs/academy.md)). **Etude** launches remote
 training and evaluation and records what they produce; the machine is chosen
 at launch, never in the experiment ([training](docs/training.md#remote-training)).
 
 Inside `manabot/`, `sim` runs games and registered players, `eval` scores and
 rates, `training` learns, `experiment` declares and executes comparisons, and
 `infra.identity` owns canonical byte identities. Imports follow one direction:
-Academy may import manabot and managym, manabot imports managym and never
-Academy, managym imports neither, and `manabot.sim` imports none of `eval`,
+manabot imports managym and never Academy; managym, Academy included, never
+imports manabot or Torch; and `manabot.sim` imports none of `eval`,
 `training`, `experiment` or `reports` (`tests/test_package_boundaries.py`
-enforces all of it). The observation and action encoding is versioned as a
+enforces all of it). Academy's trained opponents come from manabot through an
+installed entry point, so they appear when manabot is installed and Academy
+runs without it. The observation and action encoding is versioned as a
 *world* ([WORLDS.md](WORLDS.md)); checkpoints load only in the world they were
 trained in.
 
@@ -367,9 +370,20 @@ baseline is
 [docs/training.md](docs/training.md) covers running, monitoring and recovering
 runs, and [manabot/README.md](manabot/README.md) covers the package.
 
-There is also a local browser table (`./scripts/play`, needs Node) for playing
-one game against a checkpoint or stepping through a replay. It is for
-inspecting what a bot does, not a way to play Magic.
+There is also a local browser table, Academy, for playing one game against a
+bot or stepping through a replay. It is for inspecting what a bot does, not a
+way to play Magic. Outside a checkout, install and launch it with uv; it needs no manabot,
+Torch, Node or Rust:
+
+```bash
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --only-binary :all: 'managym[academy]'
+uv run --no-project managym academy                            # opens http://127.0.0.1:8000; Ctrl-C stops it
+```
+
+From this checkout, `./scripts/play` runs it with hot reload and your trained
+checkpoints in the Opponent menu. [Running Academy](docs/academy.md#running-academy)
+covers both, with replays, trained bots and troubleshooting.
 
 For an engine-only project, start with [installing managym](docs/engine-python.md).
 For training, see [installation and dependency choices](docs/development.md#install).
@@ -420,7 +434,7 @@ know and where the code lives.
 | [experiment-metrics.md](docs/experiment-metrics.md) | Metric definitions the experiment reports read |
 | [workflows.md](docs/workflows.md) | Wave responsibilities, Coverage loops and experiment execution boundaries |
 | [development.md](docs/development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |
-| [academy.md](docs/academy.md) | The browser UI: running it, the shared decision surface, presentation, trained challengers, the proof gate |
+| [academy.md](docs/academy.md) | The browser UI: installing and launching it, playing and replays, launch troubleshooting, the shared decision surface, presentation, trained challengers, the proof gate |
 
 | Path | What it is |
 |---|---|
@@ -432,7 +446,7 @@ know and where the code lives.
 | `docs/` | The guides above and their diagrams |
 | `paper/` | A working paper draft |
 | `deploy/` | Hosted service deployment |
-| `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays; `protocol/` holds its [wire protocol](protocol/experience-protocol-v1.md) and schemas |
+| `managym/academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays: the server shipped in the `managym` wheel and its client source; `protocol/` holds its [wire protocol](protocol/experience-protocol-v1.md) and schemas |
 | `.lf/` | Loopflow Waves (`.lf/wave/`), chapters and prompts that organize agent work |
 
 ## Development
@@ -455,7 +469,8 @@ guides are in each package README.
 
 - **manabot**: the bot and the Python library. You train *a* manabot.
 - **managym**: the rules environment the bot lives in.
-- **Academy**: the local bot-testing UI (`academy/`, `academy/ui/`).
+- **Academy**: the local bot-testing UI (`managym.academy`, started with
+  `uv run --no-project managym academy`; client source in `academy/ui/`).
 - **Etude**: the separate system that launches and records experiments
   ([`loopflowstudio/etude`](https://github.com/loopflowstudio/etude)). Older
   documents also use *Etude* and *Fantasia* for this project.

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from academy import server
-from academy.server import GameSession
-from academy.study_protocol import StudyArtifact
-from academy.study_runtime import HistoricalStudyEvidenceRequest
+from managym.academy import server
+from managym.academy.server import GameSession
+from managym.academy.study_protocol import StudyArtifact
+from managym.academy.study_runtime import HistoricalStudyEvidenceRequest
 
 
 class ExactFixtureEvidenceProvider:

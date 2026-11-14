@@ -634,6 +634,9 @@ export interface TrainedOpponent {
 }
 
 export interface OpponentCatalog {
+  advice_available?: boolean;
+  extension?: string | null;
+  watch_players?: string[];
   opponents: TrainedOpponent[];
   catalog_error: string | null;
 }

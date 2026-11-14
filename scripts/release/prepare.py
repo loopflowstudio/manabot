@@ -14,8 +14,10 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def prepare(destination: Path) -> None:
+def prepare(destination: Path, site: Path) -> None:
     """Copy tracked source bytes into a fresh release tree, preserving Rust paths."""
+    if not (site / "index.html").is_file():
+        raise ValueError("Academy site must contain index.html; build academy/ui first")
     destination.mkdir(parents=True, exist_ok=False)
     # The engine project needs its crate and shared content beneath one root,
     # preserving include_str! paths without parent-directory sdist entries.
@@ -43,13 +45,13 @@ def prepare(destination: Path) -> None:
             "protocol/experience-v1.schema.json",
         }:
             continue
-        if name.startswith("academy/ui/") and not name.startswith(
-            "academy/ui/src/lib/packs/"
-        ):
+        if name.startswith("academy/ui/"):
             continue
         if name.startswith("managym/libmanagym.dylib.dSYM/"):
             continue
-        target = (engine if path.parts[0] == "managym" else destination) / path
+        target = (
+            engine if path.parts[0] in {"managym", "academy"} else destination
+        ) / path
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / path, target)
         # Source receipts use installed paths, not staging paths. Bind
@@ -59,6 +61,7 @@ def prepare(destination: Path) -> None:
             and (path.parts[0] == "manabot" or path.parent == Path("managym"))
         ):
             source_files[name] = hashlib.sha256(target.read_bytes()).hexdigest()
+    shutil.copytree(site, engine / "managym/academy/site")
     metadata = (engine / "managym/pyproject.toml").read_text()
     metadata = metadata.replace(
         'manifest-path = "Cargo.toml"', 'manifest-path = "managym/Cargo.toml"'
@@ -87,4 +90,6 @@ def prepare(destination: Path) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("destination", type=Path)
-    prepare(parser.parse_args().destination.resolve())
+    parser.add_argument("--site", type=Path, required=True)
+    args = parser.parse_args()
+    prepare(args.destination.resolve(), args.site.resolve())

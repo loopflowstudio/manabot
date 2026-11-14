@@ -3,12 +3,12 @@
 The catalog lists checkpoints the researcher trained: everything under the
 manabot runs directory (``MANABOT_RUNS_DIR``, default ``./.runs``) plus the
 files, run directories and Tournament files in ``ACADEMY_PLAY_CHECKPOINTS``
-(``os.pathsep``-separated). manabot's ``manabot.model.catalog`` reads and
+(``os.pathsep``-separated). The installed bot extension reads and
 checks them; incompatible entries stay listed with the mismatch so the table
 can say why they cannot play (``opponent_catalog``, ``catalog_opponent``).
 
 Paths are server configuration; the browser only ever names a digest. The
-catalog imports Torch, so it loads lazily and ordinary play never needs it.
+extension owns training dependencies; ordinary play needs no extension.
 """
 
 from __future__ import annotations
@@ -19,8 +19,11 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
+from . import advice
+from .extensions import CheckpointSummary, bot_extension
+from .villain import NATIVE_WATCH_PLAYERS
+
 if TYPE_CHECKING:
-    from manabot.model.catalog import CheckpointSummary, UnavailableEntry
     import managym
 
 OpponentSource = Literal["path", "runs", "tournament"]
@@ -125,15 +128,6 @@ def runs_directory() -> Path:
     return Path(os.environ.get("MANABOT_RUNS_DIR") or Path.cwd() / ".runs")
 
 
-def _discover() -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
-    from academy.villain import checkpoint_backend
-    from manabot.model.catalog import discover_checkpoints
-
-    return discover_checkpoints(
-        checkpoint_sources(), backend=checkpoint_backend(), runs_dir=runs_directory()
-    )
-
-
 def opponent_catalog() -> dict:
     """Every trained opponent this server can name.
 
@@ -141,10 +135,22 @@ def opponent_catalog() -> dict:
     example, a play-only install without Torch).
     """
 
+    extension = bot_extension()
+    capabilities = {
+        "advice_available": advice.FIXTURE_PATH.is_file(),
+        "extension": extension.name if extension else None,
+        "watch_players": [
+            *NATIVE_WATCH_PLAYERS,
+            *(extension.watch_players if extension else ()),
+        ],
+    }
+    if extension is None:
+        return {**capabilities, "opponents": [], "catalog_error": None}
     try:
-        found, missing = _discover()
+        found, missing = extension.discover(checkpoint_sources(), runs_directory())
     except (ImportError, OSError, ValueError) as error:
         return {
+            **capabilities,
             "opponents": [],
             "catalog_error": f"Checkpoints could not be listed: {error}",
         }
@@ -160,7 +166,11 @@ def opponent_catalog() -> dict:
         )
         for entry in missing
     )
-    return {"opponents": [asdict(entry) for entry in entries], "catalog_error": None}
+    return {
+        **capabilities,
+        "opponents": [asdict(entry) for entry in entries],
+        "catalog_error": None,
+    }
 
 
 def catalog_opponent(sha256: str) -> Opponent | None:
@@ -171,8 +181,11 @@ def catalog_opponent(sha256: str) -> Opponent | None:
     with the running engine or its bytes changed since listing.
     """
 
+    extension = bot_extension()
+    if extension is None:
+        return None
     try:
-        found, _ = _discover()
+        found, _ = extension.discover(checkpoint_sources(), runs_directory())
     except ImportError as error:
         raise ValueError(
             "Trained checkpoints need the training dependencies on this server."

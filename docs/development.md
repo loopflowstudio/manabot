@@ -187,6 +187,15 @@ the expected matchup set.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
+Moves between Academy and checkout-only conformance tools also require
+`uv run --extra dev pytest --collect-only tests/academy/test_authored_match_authority.py tests/academy/test_authored_match_parity.py tests/academy/test_public_commitment_parity.py tests/academy/test_learn_evidence.py -q`
+to catch stale module-level imports before running the affected behavior checks.
+Academy package, bot or fixture moves also require
+`uv run --extra dev pytest tests/model/test_world.py tests/model/test_policy_input_rejection.py -q`
+and `npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts --list`.
+These cover checkpoint admission consumers outside Academy's test directory and
+browser fixture imports, which Svelte checks and Vitest do not collect. Run the
+affected browser specs against the built frontend after collection succeeds.
 Package initializer changes also require
 `uv run --extra dev --extra artifacts --extra evaluation pytest tests/test_package_boundaries.py tests/eval/test_inference_receipts.py -q`;
 offline receipt reports must work without probing the native engine, even to
@@ -227,7 +236,7 @@ does not stop semantic beat timers.
 
 **Shared game history.** Exercise `game-history.spec.ts` against an isolated
 built SPA/ASGI instance
-([Academy isolated browser validation](../academy/README.md#isolated-browser-validation)),
+([Academy isolated browser validation](../managym/academy/README.md#isolated-browser-validation)),
 including empty results, visible request errors and retry, shared/private
 replay and feedback. Permission or replay-projection changes add the relevant
 history, replay and shared-table cases; match terminal traces by the live
@@ -333,8 +342,8 @@ neither skipped nor succeeded.
 | Curated packs and UI fixtures | All but Python unit |
 | UI dependency, build config, scripts, static assets, card art | UI, clean-machine |
 | Other Academy UI | UI |
-| Academy server, presentation, demo, pack or villain modules, `academy/fixtures/` | Academy integration, protocol, UI |
-| Other `academy/`, `tests/academy/` | Academy integration, protocol |
+| Academy server, presentation, demo, pack or villain modules, `managym/academy/fixtures/` | Academy integration, protocol, UI |
+| Other `managym/academy/`, `tests/academy/` | Academy integration, protocol |
 | Launcher, `scripts/verify-clean-machine`, `deploy/play/` | Python unit, protocol, clean-machine |
 | `manabot/env/`, world and flat-search/structured-action modules | Integration, Academy integration, protocol, UI |
 | Other `manabot/`, training/eval/sim tests, `scripts/`, `experiments/`, `ops/`, benchmark docs, `docs/experiment-metrics.md` | Integration |
@@ -755,7 +764,7 @@ Choose extras for the features you use:
 
 | Extra | Use |
 |---|---|
-| `academy` | Academy backend; use `./scripts/play` from a checkout for the browser |
+| `academy` | The same as `managym[academy]`: the server dependencies for `managym academy`, the [browser UI](academy.md#running-academy) that the engine wheel carries |
 | `evaluation` | Etude evaluation and plots |
 | `reports` | Reports and Etude S3 report sources |
 | `artifacts` | Artifact-store access |
@@ -786,7 +795,9 @@ From a clean checkout, with a fresh staging path and empty output directory:
 
 ```bash
 uv run --no-project python scripts/release/check.py
-uv run --no-project python scripts/release/prepare.py .runs/release/staging
+npm --prefix academy/ui ci
+ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
+uv run --no-project python scripts/release/prepare.py .runs/release/staging --site academy/ui/build
 uv build --no-sources .runs/release/staging/managym --out-dir dist
 uv build --no-sources .runs/release/staging --out-dir dist
 uv run --no-project python scripts/release/validate.py dist
@@ -832,7 +843,9 @@ uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-releas
 ```
 
 The training smoke checks one shared engine behind both import paths, catalog
-binding, gradients and a tiny CPU training update. Repeat in a separate environment with
+binding, gradients, a CPU update on the native lethal-target fixture, and the
+installed Academy bot entry point and checkpoint catalog. This bounded fixture
+does not certify the default training recipe's completion time. Repeat in a separate environment with
 3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
 then installs and imports the optional extras. Consumer checks run outside the
 checkout with default dependency groups disabled, including the minimum
@@ -955,7 +968,7 @@ takes a legal action, records the session and a canonical visible-state
 signature, reloads, and requires the same session, pack, matchup, state and
 pack-only treatments, then a second action. Installation itself may use package
 registries. The pack authority is
-`academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json`; launcher
+`managym/academy/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json`; launcher
 and receipt derive `{id, version, manifest_sha256}` from its installed bytes. The
 launcher never fetches card data or art.
 
@@ -1007,7 +1020,7 @@ holds older semantic-kernel corpora, superseded authored-match receipts, older
 Learn cohorts, Jeong replays, Elemental w10 evidence and structural-kata inputs.
 
 Retained in source for current consumers: the four w17 corpora in
-[`conformance/`](../conformance/README.md); `academy/learn_lesson_evidence.py`
+[`conformance/`](../conformance/README.md); `conformance/learn_lesson_evidence.py`
 (its `register`/`run`/`verify` modes record new Learn cohorts); `.lf/config.yaml`,
 `.lf/wave/` (formerly top-level `wave/`) and referenced `.lf/chapters/` planning
 evidence; protocol and model fixtures, the rules

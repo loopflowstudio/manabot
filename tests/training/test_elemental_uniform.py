@@ -227,7 +227,7 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
                 opponent_mode=mode,
                 root=root,
             )
-    native = managym.VectorEnv(num_envs=1, seed=174, opponent_policy="none")
+    native = managym.VectorEnv(num_envs=1, seed=174, player_policies=("agent", "agent"))
     with pytest.raises(RuntimeError, match="every exact Elemental"):
         native.set_uniform_roster(roster[:-1])
     with pytest.raises(RuntimeError, match="every exact Elemental"):

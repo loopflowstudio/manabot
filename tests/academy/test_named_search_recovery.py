@@ -14,11 +14,11 @@ import numpy as np
 import pytest
 import torch
 
-from academy import server, trace as trace_store
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 import managym
+from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.experience_projection import decision_surface_view
 from tests.model.prepared_routes import device_input

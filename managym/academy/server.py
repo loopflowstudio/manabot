@@ -28,6 +28,10 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.responses import JSONResponse, Response
+from pydantic import ValidationError
+
+import managym
+from managym.bots import BotDecision, BotPolicy, choose_bot
 from managym.decision import (
     Command as SemanticCommand,
     SemanticTransition,
@@ -55,19 +59,16 @@ from managym.experience_projection import (
     redact_observation,
     serialize_observation,
 )
-from pydantic import ValidationError
-
-import managym
 
 from . import trace as trace_store, villain as villain_module
 from .advice import (
     AdviceRequest,
+    AdvisorUnavailable,
     advice_meta,
     request_advice,
     request_versioned_fixture_advice,
 )
 from .attempts import AttemptStore, decode_cursor, page_cursor, participant_id
-from .bot_decision import BotDecision
 from .curated_pack import (
     CURATED_PACK,
     CURATED_PACK_CATALOG,
@@ -142,7 +143,7 @@ from .study_runtime import (
     select_study_plan,
 )
 from .trace import GameConfig, Trace, TraceEvent
-from .villain import VillainPolicy, build_villain_policy
+from .villain import build_villain_policy
 
 # Interactive remains a lightweight mirror of manabot.verify.util. Curated
 # manifests are checked against the compiled rules setup without importing torch.
@@ -842,9 +843,7 @@ class GameSession:
     ) -> None:
         self.trace_dir = trace_dir or trace_store.TRACES_DIR
         self.watch_mode = watch_mode
-        self.watch_policies: (
-            tuple[villain_module.VillainPolicy, villain_module.VillainPolicy] | None
-        ) = None
+        self.watch_policies: tuple[BotPolicy, BotPolicy] | None = None
         self._bot_decision: BotDecision | None = None
         self._id_factory = id_factory or (lambda _kind: secrets.token_urlsafe(16))
         self._clock = clock or trace_store.utc_now_iso
@@ -862,7 +861,7 @@ class GameSession:
         self._allow_fixture_study_evidence = allow_fixture_study_evidence
         self.env: managym.Env | None = None
         self.obs: managym.Observation | None = None
-        self.villain_policy: VillainPolicy | None = None
+        self.villain_policy: BotPolicy | None = None
         self.trace: Trace | None = None
         self.trace_id: str | None = None
         self._demo_name: str | None = None
@@ -1546,7 +1545,7 @@ class GameSession:
             else:
                 self.authority_fallback_counters["legacy_fixed_action"] += 1
                 try:
-                    self._bot_decision = villain_module.choose_bot(
+                    self._bot_decision = choose_bot(
                         self.villain_policy, self.env, self.obs
                     )
                     action_index = self._bot_decision.action
@@ -2723,7 +2722,12 @@ def _author_belief(
     participant: ParticipantLease,
     scenario_id: str,
 ) -> dict[str, Any]:
-    meta = advice_meta().model_dump(mode="json")
+    try:
+        meta = advice_meta().model_dump(mode="json")
+    except AdvisorUnavailable as exc:
+        raise TableDispatchError(
+            "not_found", "Advice fixtures are unavailable."
+        ) from exc
     scenarios = {
         str(scenario["landmark_id"]): scenario for scenario in meta["scenarios"]
     }
@@ -3479,7 +3483,10 @@ async def get_advice_meta() -> dict[str, Any]:
     Returns the compatibility bootstrap plus the checked advice-v1 comparison
     request consumed by both live play and Study.
     """
-    return advice_meta().model_dump(mode="json")
+    try:
+        return advice_meta().model_dump(mode="json")
+    except AdvisorUnavailable as exc:
+        raise HTTPException(404, "advice_unavailable") from exc
 
 
 @app.post("/api/advice", response_model=None)
