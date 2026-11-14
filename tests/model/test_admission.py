@@ -17,11 +17,25 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
+from manabot.policy.admission import Catalog
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
 from tests.training.test_recovery import recipe
+
+
+def test_unknown_program_token_names_its_missing_key() -> None:
+    """A rejected runtime token must be identifiable from the failure receipt."""
+    catalog = Catalog(
+        definitions=np.array([], dtype=np.int64),
+        names=np.array([], dtype=np.int64),
+        tokens=np.array([(3 << 32) | 0x12345678], dtype=np.int64),
+    )
+    with pytest.raises(
+        ValueError, match=r"program token.*missing keys: \(3, 0x23456789\)"
+    ):
+        catalog.require_tokens(np.array([3]), np.array([0x23456789]))
 
 
 def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:
