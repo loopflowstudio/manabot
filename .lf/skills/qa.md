@@ -166,6 +166,13 @@ publish, land or choose the next Graph step from here.
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
+  `manabot sim` reads `sim.hero` as a checkpoint path (`heuristic` fails
+  with FileNotFoundError). For code players, drive `manabot.env.env.Env(Match(),
+  ObservationSpace(), Reward(RewardConfig()), seed=N)` (`Reward` from
+  `manabot.env.match`, `RewardConfig` from `manabot.infra.config`) with
+  `HeuristicPlayer().act(env, obs)`; three games take seconds. Add
+  `PYTHONWARNINGS='error:managym.:DeprecationWarning'` to prove no repository
+  code reads a deprecated managym name.
 - MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
   run it on the Mac that owns the measurement, not on a shared laptop. The
   published `experiments/data/mlx_pilot/capture/initial.pt` is now refused by
