@@ -14,7 +14,7 @@ import shutil
 
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_decks, validate_agent_setup
@@ -147,7 +147,7 @@ def admit_policy(
         raise ValueError("published checkpoint model/observation differs from regime")
     for setups in (source.regime, regime):
         _admit_setups(agent, setups)
-    payload = torch.load(admitted["path"], map_location="cpu", weights_only=False)
+    payload = load_metadata(admitted["path"])
     metadata = payload.get("bc", {})
     for key, expected in {
         "run_id": source.id,

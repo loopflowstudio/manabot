@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { checkpointIdentity, shortHash } from '$lib/player-identity';
   import { checkpointChoice, type OpponentChoice } from '$lib/game.svelte';
   import type { Decklists, TrainedOpponent } from '$lib/types';
 
@@ -34,10 +35,10 @@
   const searchUnavailable = $derived(decklists === 'closed');
 
   function optionLabel(opponent: TrainedOpponent): string {
-    const parts = [opponent.name];
-    if (opponent.world) parts.push(opponent.world);
+    const parts = [checkpointIdentity(opponent).compact];
     if (opponent.step !== null) parts.push(`step ${opponent.step.toLocaleString('en-US')}`);
-    parts.push(opponent.sha256.slice(0, 10));
+    parts.push(shortHash(opponent.sha256));
+    if (opponent.world) parts.push(opponent.world);
     const label = parts.join(' · ');
     return opponent.available ? label : `${label} — ${opponent.reason ?? 'unavailable'}`;
   }
@@ -50,7 +51,7 @@
   );
   const details = $derived(
     selected
-      ? [selected.producer, selected.decks.length ? selected.decks.join(' vs ') : null,
+      ? [selected.name, selected.producer, selected.decks.length ? selected.decks.join(' vs ') : null,
           selected.model, selected.parameters !== null
           ? `${selected.parameters.toLocaleString('en-US')} parameters`
           : null]
@@ -69,6 +70,7 @@
       {value}
       {disabled}
       aria-describedby="opponent-details"
+      title={selected ? checkpointIdentity(selected).description : undefined}
       onchange={(event) =>
         onChange?.((event.currentTarget as HTMLSelectElement).value as OpponentChoice)}
     >
@@ -97,7 +99,7 @@
       {/if}
     </select>
   </label>
-  <p id="opponent-details" data-testid="opponent-details" class="type-caption min-w-0 break-words text-ink-2">
+  <p id="opponent-details" data-testid="opponent-details" class="type-caption min-w-0 [overflow-wrap:anywhere] text-ink-2">
     {#if details}{details}{:else if catalogError}{catalogError}{:else if !trained.length && extension !== undefined}{extension ? "No trained checkpoints found." : "Trained bots need manabot installed on this server."}{/if}
   </p>
 </div>

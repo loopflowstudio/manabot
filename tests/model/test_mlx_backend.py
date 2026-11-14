@@ -4,6 +4,7 @@ Apple Silicon only (the optional `mlx` extra); elsewhere the module is skipped.
 Whole-policy parity on real checkpoints is `manabot.backends.parity`.
 """
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -11,13 +12,15 @@ import numpy as np
 import pytest
 import torch
 
+from tests.model.checkpoint_fixture import read_checkpoint
+
 mx = pytest.importorskip("mlx.core")
 
 from mlx.utils import tree_flatten  # noqa: E402
 
+from manabot.backends import resolve  # noqa: E402
 from manabot.backends.convert import convert  # noqa: E402
 from manabot.backends.mlx.checkpoint import (  # noqa: E402
-    load_mlx_policy,
     mlx_parameters,
 )
 from manabot.backends.mlx.policy import (  # noqa: E402
@@ -26,7 +29,10 @@ from manabot.backends.mlx.policy import (  # noqa: E402
     attend,
     packed_steps,
 )
-from manabot.backends.torch.checkpoint import save_checkpoint  # noqa: E402
+from manabot.backends.torch.checkpoint import (  # noqa: E402
+    load_metadata,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.env.match import Match  # noqa: E402
 from manabot.env.observation import ObservationSpace  # noqa: E402
@@ -43,6 +49,7 @@ from manabot.policy.checkpoint import (  # noqa: E402
 )
 from manabot.policy.prepare import Tables, pack  # noqa: E402
 from manabot.policy.protocol import Precision  # noqa: E402
+import managym  # noqa: E402
 
 
 def _mlx_names(torch_named: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
@@ -136,6 +143,7 @@ def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:
         MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
     )
     save_checkpoint(agent, space, original, player_configs=match.to_rust())
+    torch.save(read_checkpoint(original), original)
     target, tensors = convert(original)
     assert tensors == len(agent.state_dict())
     return original, target, agent
@@ -150,11 +158,11 @@ def test_converted_checkpoint_is_one_file_carrying_the_original_source(
         "policy.safetensors",
     ]
     _, metadata = read_safetensors(target)
-    source = torch.load(original, weights_only=False)["source"]
+    source = load_metadata(original)["source"]
     assert json.loads(metadata["source"]) == source
     assert metadata["converted_from"] == str(original)
 
-    policy, _ = load_mlx_policy(target)
+    policy, _ = resolve("mlx").load_policy(str(target))
     state = {k: v.detach().numpy() for k, v in agent.state_dict().items()}
     buffers = set(Tables.BUFFERS.values())
     expected = _mlx_names({k: v for k, v in state.items() if k not in buffers})
@@ -177,20 +185,74 @@ def test_a_refused_converted_checkpoint_names_the_original_revision(
     metadata["world_binding"] = json.dumps(binding)
     write_safetensors(target, arrays, metadata)
     with pytest.raises(ValueError) as refused:
-        load_mlx_policy(target)
+        resolve("mlx").load_policy(str(target))
     assert "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in str(
         refused.value
     )
 
 
+def test_prepared_batch_refuses_another_configuration(tmp_path: Path) -> None:
+    _, target, _ = _converted(tmp_path)
+    policy, space = resolve("mlx").load_policy(str(target))
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    obs = space.encode(env.observation_for_player(env.current_agent_index()))
+    batch = policy.prepare({key: value[None] for key, value in obs.items()})
+    with pytest.raises(ValueError, match="another policy configuration"):
+        policy(replace(batch, binding="another model"))
+
+
+@pytest.mark.parametrize("cache_catalog", [False, True])
+def test_mlx_policy_serves_and_samples_through_the_shared_interface(
+    tmp_path: Path, cache_catalog: bool
+) -> None:
+    _, target, _ = _converted(tmp_path)
+    policy, space = resolve("mlx").load_policy(str(target))
+    policy.to("cpu").eval()
+    env = managym.Env(seed=7)
+    env.reset(Match().to_rust())
+    obs = space.encode(env.observation_for_player(env.current_agent_index()))
+    inputs = {key: value[None] for key, value in obs.items()}
+    batch = policy.prepare(inputs, inference=True)
+    logits, values = policy.evaluate(batch)
+    assert policy.device_type == "cpu"
+    assert policy.parameter_count > 0
+    assert policy.resident_bytes > 4 * policy.parameter_count
+    assert policy.world_binding
+    np.testing.assert_allclose(
+        policy.win_probabilities(batch), 1 / (1 + np.exp(-values)), atol=1e-7
+    )
+    with policy.inference_scope(cache_catalog=cache_catalog) as scope:
+        result = scope.infer(inputs)
+        np.testing.assert_array_equal(result.logits, logits)
+        assert result.transfers == 0
+        assert result.transfer_bytes == 0
+        action = policy.sample_rows(result.logits, inputs["actions_valid"], [13], False)
+        assert action == policy.sample_rows(
+            logits, inputs["actions_valid"], [13], False
+        )
+        assert inputs["actions_valid"][0, action[0]]
+        assert (
+            policy.sample(batch, deterministic=True).tolist()
+            == logits.argmax(-1).tolist()
+        )
+    with pytest.raises(RuntimeError, match="closed"):
+        scope.infer(inputs)
+    with policy.inference_scope() as changed:
+        policy.player_embedding.projection.layers[0].weight = (
+            policy.player_embedding.projection.layers[0].weight + 1
+        )
+        with pytest.raises(RuntimeError, match="changed"):
+            changed.infer(inputs)
+
+
 def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -> None:
     """Remapped opponent joins and ownership survive changes in object capacity."""
     import manabot.backends.mlx as backend
-    from manabot.backends.mlx.checkpoint import build
+    from manabot.backends.mlx.checkpoint import assemble
     from manabot.backends.mlx.learner import Learner
     from manabot.backends.parity import minibatch_loss
-    from manabot.model.inference import trim_observation
-    from manabot.policy.buckets import bucket_sizes
+    from manabot.policy.buckets import bucket_sizes, trim_observation
     from manabot.policy.protocol import Settings, Targets
 
     torch.set_num_threads(1)
@@ -209,19 +271,22 @@ def test_bucket_trim_preserves_mlx_logits_values_and_gradients(tmp_path: Path) -
     )
     sizes = bucket_sizes({k: v.numpy() for k, v in obs.items()}, encoder, objects=True)
     assert sizes is not None and sizes.trims_objects
-    trimmed = trim_observation(obs, sizes)
-    policy, _ = build(
-        agent.config,
-        encoder.config,
-        {k: v.numpy() for k, v in agent.state_dict().items()},
+    trimmed = trim_observation({k: v.numpy() for k, v in obs.items()}, sizes)
+    policy = assemble(
+        from_torch_state(
+            agent.config,
+            encoder.config,
+            {k: v.numpy() for k, v in agent.state_dict().items()},
+            parameter_names=dict(agent.named_parameters()),
+        )
     )
     learner = Learner(policy, minibatch_rows=2)
     settings = Settings(1e-4, 0.2, 0.1, 0.05, 0.3)
     policy.check_observation({k: v.numpy() for k, v in obs.items()})
     results = []
-    for tensors in (obs, trimmed):
-        prepared = policy.prepare_admitted({k: v.numpy() for k, v in tensors.items()})
-        assert prepared.ownership.shape == (prepared.validity.shape[1],)
+    for tensors in ({k: v.numpy() for k, v in obs.items()}, trimmed):
+        prepared = policy.prepare_admitted(tensors)
+        assert prepared.is_agent.shape == prepared.validity.shape
         logits, values = policy.evaluate(prepared)
         legal = prepared.legal
         logs = np.where(legal, np.log(0.5), -np.inf).astype(np.float32)
@@ -252,7 +317,7 @@ def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     precision: Precision = "bfloat16"
     import manabot.backends.mlx as backend
     from manabot.backends.mlx.arrays import precision_dtype
-    from manabot.backends.mlx.checkpoint import build
+    from manabot.backends.mlx.checkpoint import assemble
     from manabot.backends.mlx.learner import Learner
     from manabot.backends.parity import minibatch_loss
     from manabot.policy.protocol import Settings, Targets
@@ -263,10 +328,13 @@ def test_mixed_precision_preserves_master_updates(tmp_path: Path) -> None:
     obs["agent_player_valid"][:] = obs["opponent_player_valid"][:] = 1
     obs["actions_valid"][:, :2] = 1
     obs["action_focus"][:] = -1
-    policy, _ = build(
-        agent.config,
-        encoder.config,
-        {k: v.numpy() for k, v in agent.state_dict().items()},
+    policy = assemble(
+        from_torch_state(
+            agent.config,
+            encoder.config,
+            {k: v.numpy() for k, v in agent.state_dict().items()},
+            parameter_names=dict(agent.named_parameters()),
+        )
     )
     assert policy.precision == "float32"
     learner = Learner(policy, precision=precision, minibatch_rows=2)
@@ -352,6 +420,7 @@ def test_omitted_precision_follows_the_shared_width_rule(
         agent.config,
         space.encoder.config,
         {k: v.numpy() for k, v in agent.state_dict().items()},
+        parameter_names=dict(agent.named_parameters()),
     )
     policy, learner = MLXBackend().load(weights)
     assert policy.precision == learner.precision == expected
@@ -366,11 +435,15 @@ def test_omitted_precision_follows_the_shared_width_rule(
 def test_half_policy_loading_and_float32_action_logs(tmp_path: Path) -> None:
     precision: Precision = "bfloat16"
     from manabot.backends.mlx.arrays import precision_dtype
+    from manabot.backends.mlx.checkpoint import MLXBackend
     from manabot.backends.mlx.rl import action_logs, policy_logs
 
     _, path, _ = _converted(tmp_path)
-    policy, _ = load_mlx_policy(str(path), precision=precision)
+    policy, _ = resolve("mlx", precision=precision).load_policy(str(path))
     assert policy.precision == precision
+    served, _ = MLXBackend(precision=precision).load_policy(str(path))
+    assert served.precision == precision
+    assert served.programs().dtype == precision_dtype(precision)
     assert policy.programs().dtype == precision_dtype(precision)
     policy.cache_programs()
     policy.set_precision("float32")
@@ -400,7 +473,7 @@ def test_half_overflow_refuses_update(tmp_path: Path) -> None:
     from manabot.backends.mlx.rl import NumericalError
 
     _, path, _ = _converted(tmp_path)
-    policy, _ = load_mlx_policy(str(path), precision="bfloat16")
+    policy, _ = resolve("mlx", precision="bfloat16").load_policy(str(path))
     learner = Learner(policy, minibatch_rows=1)
     before = learner.parameters()
 

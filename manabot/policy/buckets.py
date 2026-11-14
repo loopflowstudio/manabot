@@ -8,14 +8,11 @@ at least `MIN_BUCKET` and at most the declared capacity. A forward then takes
 one of a few shapes per axis. The setting changes no `ModelConfig` field,
 parameter, buffer, checkpoint or policy input.
 
-This module chooses the sizes, on the host, with NumPy: `row_needs` measures
-what each row of a batch needs on every axis and `sizes_of` buckets a group of
-rows from those needs (`bucket_sizes` does both for one batch). Admission
-measures before any device transfer (`manabot.model.admission`), so a forward
-trims device tensors without reading the device; a learner measures each
-rollout row once and regroups the needs for every epoch's minibatches. Each backend trims its own arrays to these sizes
-(`trim_observation` in `manabot.model.inference` for torch), remapping the
-object references listed here.
+`row_needs` measures what each row needs on every axis; `sizes_of` buckets a
+group of rows from those needs (`bucket_sizes` does both for one batch).
+A learner measures each rollout row once and regroups the needs for every
+epoch's minibatches. `trim_observation` slices admitted NumPy buffers and
+remaps their object references before host index preparation.
 
 An axis's need covers every row the default path could read or reject: the
 last row with any nonzero value (so poisoned padding is kept and still
@@ -34,7 +31,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from manabot.env.observation import ObservationEncoder
+from manabot.env.observation import ObservationBuffers, ObservationEncoder
 from managym import observation_layout
 
 MIN_BUCKET = 8
@@ -208,7 +205,7 @@ def has_history_events(obs: Mapping[str, object]) -> bool:
     return shape is not None and len(shape) == 3 and shape[-1] == _EVENT_WIDTH
 
 
-def _object_references(obs: Mapping[str, np.ndarray]) -> list[np.ndarray]:
+def _object_references(obs: ObservationBuffers) -> list[np.ndarray]:
     """Every object reference in zero-based full object coordinates."""
     references = [obs["action_focus"].astype(np.float32)]
     references.extend(obs[key][..., column] - 1 for key, column in ONE_BASED_REFERENCES)
@@ -276,7 +273,7 @@ AXES: tuple[str, ...] = (
 
 
 def row_needs(
-    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder
+    obs: ObservationBuffers, encoder: ObservationEncoder
 ) -> np.ndarray | None:
     """Rows each batch row needs on every variable axis, [B, len(AXES)] int64.
 
@@ -309,6 +306,8 @@ def row_needs(
     for axis, keys in SEAT_KEYS.items():
         for key in keys:
             need(axis, _extent(obs[key], 2))
+    if "card_turn_state" in obs:
+        need("cards", _extent(obs["card_turn_state"], 2))
     # Live effect headers name detail and member spans [offset, offset + count).
     effects = obs["effects"]
     for axis, (offset, length) in (
@@ -352,7 +351,7 @@ def sizes_of(
 
 
 def bucket_sizes(
-    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder, *, objects: bool
+    obs: ObservationBuffers, encoder: ObservationEncoder, *, objects: bool
 ) -> BucketSizes | None:
     """Measure one batch's buckets; None leaves it untouched (`row_needs`)."""
     needs = row_needs(obs, encoder)
@@ -365,3 +364,39 @@ def object_columns(buckets: BucketSizes) -> list[slice]:
         slice(start, start + buckets.sizes[axis])
         for axis, start, _ in object_segments(buckets.capacities)
     ]
+
+
+def trim_observation(
+    obs: ObservationBuffers, buckets: BucketSizes
+) -> dict[str, np.ndarray]:
+    """Trim admitted host rows and remap every object join to the new table."""
+    trimmed = dict(obs)
+    for axis, keys in ROW_KEYS.items():
+        for key in keys:
+            trimmed[key] = obs[key][:, : buckets.sizes[axis]]
+    for axis, keys in SEAT_KEYS.items():
+        for key in keys:
+            trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
+    if "card_turn_state" in obs:
+        trimmed["card_turn_state"] = obs["card_turn_state"][
+            :, :, : buckets.sizes["cards"]
+        ]
+    if not buckets.trims_objects:
+        return trimmed
+
+    def remap(values: np.ndarray) -> np.ndarray:
+        shift = np.zeros_like(values)
+        for axis, start, rows in object_segments(buckets.capacities):
+            shift += (values >= start + rows) * (rows - buckets.sizes[axis])
+        return values - shift
+
+    trimmed["action_focus"] = remap(trimmed["action_focus"])
+    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
+        for key in dict.fromkeys(key for key, _ in references):
+            if key == "events" and not has_history_events(trimmed):
+                continue
+            columns = [column for name, column in references if name == key]
+            value = trimmed[key].copy()
+            value[..., columns] = remap(value[..., columns] - base) + base
+            trimmed[key] = value
+    return trimmed

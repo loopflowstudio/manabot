@@ -19,6 +19,8 @@ counts steps and rejections; the sampled gradient and parameter detail it
 reads from torch modules stays absent here.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING, Protocol
@@ -27,15 +29,15 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as optim
 from mlx.utils import tree_flatten, tree_map
-import numpy as np
 
 from manabot.backends.mlx.arrays import flat_numpy
 from manabot.backends.mlx.rl import NumericalError, require
 from manabot.infra.profiler import Profiler
-from manabot.policy.protocol import Precision
 
 if TYPE_CHECKING:
     from manabot.backends.mlx.policy import MLXActorCritic
+    from manabot.policy.checkpoint import ParameterArrays
+    from manabot.policy.protocol import Precision
 
 
 class StepRecorder(Protocol):
@@ -175,11 +177,11 @@ class Learner:
                     recorder.record_step([], [])
         return norm
 
-    def gradients(self, loss: mx.array) -> dict[str, np.ndarray]:
+    def gradients(self, loss: mx.array) -> ParameterArrays:
         """Unclipped gradients of `loss` in MLX's layout, without stepping."""
         return flat_numpy(self._gradients(loss))
 
-    def parameters(self) -> dict[str, np.ndarray]:
+    def parameters(self) -> ParameterArrays:
         """A host copy of the parameters in MLX's layout."""
         return flat_numpy(self.agent.parameters())
 

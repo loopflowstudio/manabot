@@ -20,6 +20,7 @@ from manabot.training.regime import (
 )
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
 
 
 def _regime(path: Path) -> TrainingRegime:
@@ -102,9 +103,9 @@ def test_removed_compound_opponent_is_rejected_before_training(
         opponent, space, path, player_configs=Match(MatchConfig()).to_rust()
     )
     # A historical compound checkpoint differs from a flat one in its hypers.
-    payload = torch.load(path, map_location="cpu", weights_only=False)
+    payload = read_checkpoint(path, map_location="cpu", weights_only=False)
     payload["hypers"]["agent_hypers"]["compound_decisions"] = True
-    torch.save(payload, path)
+    write_checkpoint(payload, path)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="no longer executable"):
             execute_regime(_regime(path), 41, tmp_path / "run", store)

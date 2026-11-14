@@ -7,6 +7,7 @@
   import Feedback from '$lib/components/Feedback.svelte';
   import { tick, untrack } from 'svelte';
 
+  import { checkpointIdentity, playerIdentity, recordedIdentity, type PlayerIdentity } from '$lib/player-identity';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import DecisionSurface from '$lib/components/DecisionSurface.svelte';
   import { offerFocus } from '$lib/offer-map';
@@ -461,6 +462,20 @@
     saveNotes();
     editingNote = null;
   }
+  /**
+   * A seat's recorded identity; a trace that predates recorded players falls back to its
+   * configured opponent or `fallback`. Seat 1 carries the checkpoint's producer and provenance.
+   */
+  function seatIdentity(seat: number, fallback: string): PlayerIdentity {
+    const config = replayStore.trace?.config;
+    const opponent = seat === 1 ? config?.opponent : null;
+    const recorded = replayStore.trace?.players?.find(p => p.seat === seat);
+    const identity = recorded ? recordedIdentity(recorded)
+      : opponent ? checkpointIdentity(opponent) : playerIdentity({ name: fallback });
+    return opponent
+      ? { ...identity, producer: opponent.producer, provenance: config?.opponent_checkpoint ?? undefined }
+      : identity;
+  }
 </script>
 
 {#if page.url.searchParams.has('watch')}
@@ -679,8 +694,8 @@
             <div class="mt-3 border-t border-line">
               {#if boardObservation}
                 <GameBoard
-                  heroLabel={replayStore.trace.players?.find((p) => p.seat === 0)?.name ?? 'Hero'}
-                  villainLabel={replayStore.trace.players?.find((p) => p.seat === 1)?.name ?? 'Opponent'}
+                  heroIdentity={seatIdentity(0, 'Hero')}
+                  villainIdentity={seatIdentity(1, 'Opponent')}
                   observation={boardObservation}
                   {focusedIds}
                   winner={boardObservation.game_over ? replayStore.trace.winner : undefined}

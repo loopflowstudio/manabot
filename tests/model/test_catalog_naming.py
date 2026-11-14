@@ -7,7 +7,6 @@ at ordinary action capacity.
 """
 
 from dataclasses import dataclass
-from functools import partial
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -18,14 +17,14 @@ import pytest
 import torch
 
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.observation import ACTION_MODE_INDEX, NAME_DIM, ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
-from manabot.model.inference import PolicyInference
 from manabot.model.world import deck_world
 from manabot.semantic.text_observation import capture_text_decision
 import managym
+from tests.model.checkpoint_fixture import read_checkpoint, write_checkpoint
+from tests.model.prepared_routes import device_input, host_inputs
 
 
 @dataclass(frozen=True)
@@ -197,12 +196,12 @@ def _supervised_step(
     """
     # Keep the witness local: a large step can overshoot as catalog embeddings change.
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
-    logits, _ = model(admit_observation(model, tensors))
+    logits, _ = model(device_input(model, tensors))
     before = torch.nn.functional.cross_entropy(logits, torch.tensor([target]))
     model.zero_grad()
     before.backward()
     optimizer.step()
-    after, _ = model(admit_observation(model, tensors))
+    after, _ = model(device_input(model, tensors))
     assert torch.nn.functional.cross_entropy(after, torch.tensor([target])) < before
     return after
 
@@ -229,11 +228,13 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     assert len(groups) == -(-len(catalog) // managym.NAME_BRANCHING)
     model = ActorCritic(space, ModelConfig(hidden_dim=16, attention_on=False))
     tensors = _tensor(values)
-    logits, _ = model(admit_observation(model, tensors))
+    logits, _ = model(device_input(model, tensors))
     assert logits.shape == (1, 512)
     assert (logits.softmax(-1)[0, : len(groups)] > 0).all()
-    embedded = model.name_candidates(tensors["name_candidates"])
-    assert embedded[0, : len(groups)].unique(dim=0).shape[0] == len(groups)
+    prepared = device_input(model, tensors)
+    assert prepared is not None
+    embedded = model.name_candidates(prepared)
+    assert embedded.unique(dim=0).shape[0] == len(groups)
     # One group contains names on both sides of 512; its preference trains every
     # member's public identity through the group's mean vector.
     target = next(i for i, (a, b) in enumerate(groups) if a <= 512 <= b)
@@ -351,16 +352,16 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     restored = ActorCritic(space, ModelConfig(hidden_dim=16, attention_on=False))
     restored.load_state_dict(model.state_dict())
     torch.testing.assert_close(
-        restored(admit_observation(restored, leaf_tensors))[0], trained
+        restored(device_input(restored, leaf_tensors))[0], trained
     )
     bad = {key: value.clone() for key, value in leaf_tensors.items()}
     bad["name_candidates"][0, row, 1] = managym.CARD_DEFINITION_COUNT + 100
     with pytest.raises(ValueError, match="vocabulary"):
-        admit_observation(model, bad)
+        device_input(model, bad)
     bad = {key: value.clone() for key, value in tensors.items()}
     bad["name_candidates"][0, 0, 3] = 0
     with pytest.raises(ValueError, match="group span"):
-        admit_observation(model, bad)
+        device_input(model, bad)
     world = deck_world(space)
     assert world["naming_representation"] == "public-groups-v1"
     assert world["naming_branching"] == managym.NAME_BRANCHING
@@ -381,7 +382,7 @@ def test_catalog_naming_programs_affect_scores(
     tensors = _tensor(space.encode(raw))
     with torch.no_grad():
         model.name_candidates.embedding.weight.zero_()
-    logits, _ = model(admit_observation(model, tensors))
+    logits, _ = model(device_input(model, tensors))
     # These rows have identical action features/focus and zero name-identity
     # vectors. Different scores must therefore read their different programs.
     assert logits[0, : len(raw.action_space.actions)].unique().numel() > 1
@@ -414,8 +415,8 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
     assert restored_space.shapes == space.shapes
     with torch.no_grad():
         for actual, expected in zip(
-            restored(admit_observation(restored, tensors)),
-            model(admit_observation(model, tensors)),
+            restored(device_input(restored, tensors)),
+            model(device_input(model, tensors)),
             strict=True,
         ):
             torch.testing.assert_close(actual, expected, atol=0, rtol=0)
@@ -432,9 +433,9 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
         assert first.definition is not None
         candidates[0] = managym.NameCandidate(first.name, None)
     else:
-        checkpoint = torch.load(path, weights_only=False)
+        checkpoint = read_checkpoint(path, weights_only=False)
         del checkpoint["world_binding"]["naming_representation"]
-        torch.save(checkpoint, path)
+        write_checkpoint(checkpoint, path)
     monkeypatch.setattr(managym, "naming_catalog", lambda: candidates)
     with patch.object(ActorCritic, "load_state_dict") as load_weights:
         with pytest.raises(ValueError, match="world/setup/input binding differs"):
@@ -460,19 +461,19 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
     semantic = model.semantic_cards
     assert semantic is not None
     with patch.object(semantic, "definitions", wraps=semantic.definitions) as encode:
-        model(admit_observation(model, tensors))
+        model(device_input(model, tensors))
         assert encode.call_count == 1
-        rows = encode.call_args.args[0]
+        rows = encode.call_args.args[0].rows
         if not naming:
             assert len(rows) < semantic.catalog_shape.definitions
 
     with torch.no_grad():
-        expected = model(admit_observation(model, tensors))
+        expected = model(device_input(model, tensors))
         with (
             patch.object(semantic, "definitions", wraps=semantic.definitions) as encode,
             PolicyInference(model) as scope,
         ):
-            prepared = scope.prepare(tensors)
+            prepared = scope.prepare(host_inputs(tensors))
             for _ in range(2):
                 actual = model(prepared)
                 for left, right in zip(actual, expected, strict=True):
@@ -486,7 +487,7 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
         permuted = dict(tensors)
         for key in ("actions", "action_focus", "actions_valid", "name_candidates"):
             permuted[key] = tensors[key][:, order]
-        logits, value = model(admit_observation(model, permuted))
+        logits, value = model(device_input(model, permuted))
         torch.testing.assert_close(logits, expected[0][:, order])
         torch.testing.assert_close(value, expected[1])
 
@@ -594,16 +595,16 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
     for key in ("actions", "actions_valid", "action_focus", "name_candidates"):
         obs[key] = obs[key][:, order]
     targets = obs["actions_valid"].argmax(-1)
-    actual, values = model.forward_distribution(admit_observation(model, obs))
+    actual, values = model.forward_distribution(device_input(model, obs))
     assert reference.semantic_cards is not None
     with patch.object(
         reference.semantic_cards,
         "definitions",
-        side_effect=partial(packed_definitions, reference.semantic_cards),
+        side_effect=lambda programs: packed_definitions(
+            reference.semantic_cards, programs.rows
+        ),
     ):
-        expected, expected_values = reference.forward_distribution(
-            admit_observation(reference, obs)
-        )
+        expected, expected_values = reference.forward_distribution(obs)
     torch.testing.assert_close(actual, expected, atol=2e-6, rtol=2e-5)
     torch.testing.assert_close(values, expected_values, atol=2e-6, rtol=2e-5)
     for net, logits, critic in (
@@ -624,8 +625,8 @@ def test_legal_row_scoring_preserves_mixed_logits_gradients_and_preparation(
                 value.grad, refvalue.grad, atol=2e-6, rtol=3e-4, msg=name
             )
     with torch.no_grad(), PolicyInference(model) as scope:
-        prepared = scope.prepare(obs)
-        direct = model(admit_observation(model, obs))
+        prepared = scope.prepare(host_inputs(obs))
+        direct = model(device_input(model, obs))
         cached = model(prepared)
         for left, right in zip(direct, cached, strict=True):
             torch.testing.assert_close(left, right, atol=0, rtol=0)
@@ -645,7 +646,7 @@ def test_legal_row_scoring_rejects_malformed_joins(naming_root: managym.Env) -> 
         changed = {k: v.clone() for k, v in obs.items()}
         changed[key][row, 0, column] = value
         with pytest.raises(ValueError, match=message):
-            admit_observation(model, changed)
+            device_input(model, changed)
 
 
 def test_equal_rule_names_learn_opposite_public_preferences(
@@ -706,7 +707,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
         "public_definitions",
         side_effect=lambda programs: programs,
     ):
-        indistinguishable, _ = model(admit_observation(model, paired))
+        indistinguishable, _ = model(device_input(model, paired))
         torch.testing.assert_close(
             indistinguishable[0], indistinguishable[1], atol=2e-6, rtol=1e-6
         )
@@ -718,7 +719,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
         features.append(args[0].detach())
 
     hook = model.policy_head[-1].register_forward_pre_hook(retain_features)
-    before, _ = model(admit_observation(model, paired))
+    before, _ = model(device_input(model, paired))
     hook.remove()
     count = len(offers)
     encoded = features[0].reshape(2, count, -1)
@@ -743,7 +744,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     assert encoder.token_embedding.weight.grad.abs().sum() > 0
     with torch.no_grad():
         model.policy_head[-1].weight.copy_(fitted[None].float())
-    logits, _ = model(admit_observation(model, paired))
+    logits, _ = model(device_input(model, paired))
     assert torch.equal(logits[:, choices].argmax(-1), torch.arange(2))
     assert (logits.softmax(-1)[:, :count] > 0).all()
     # Moving choices retains learned identity, not ordinal preferences.
@@ -751,7 +752,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     reordered = dict(paired)
     for key in ("actions", "actions_valid", "action_focus", "name_candidates"):
         reordered[key] = paired[key][:, order]
-    moved, _ = model(admit_observation(model, reordered))
+    moved, _ = model(device_input(model, reordered))
     torch.testing.assert_close(moved, logits[:, order], atol=2e-6, rtol=1e-5)
     # Closed information is the native zero decklist projection; both states
     # then have exactly the same observable evidence. Packed GEMMs can round
@@ -760,5 +761,5 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     closed["decklists"][:, 1].zero_()
     for value in closed.values():
         torch.testing.assert_close(value[0], value[1], atol=0, rtol=0)
-    hidden, _ = model(admit_observation(model, closed))
+    hidden, _ = model(device_input(model, closed))
     torch.testing.assert_close(hidden[0], hidden[1], atol=2e-6, rtol=1e-6)

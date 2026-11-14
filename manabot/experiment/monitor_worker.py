@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 import time
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.monitor import (
     MonitorProtocol,
     MonitorResult,
@@ -67,6 +68,7 @@ def follow_checkpoints(
                         directory,
                         protocol=protocol,
                         concurrent_activity=concurrent_activity,
+                        backend=TORCH_BACKEND,
                     )
                 except Exception:
                     # evaluate_checkpoint owns the admission-failure receipt.
@@ -213,6 +215,7 @@ def main() -> None:
             args.out,
             protocol=protocol,
             concurrent_activity=args.concurrent_activity,
+            backend=TORCH_BACKEND,
         )
     print(
         f"{result.status}: {len(result.rows)}/{result.expected_games} attempted games; {args.out / 'monitor.json'}"

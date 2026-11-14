@@ -8,7 +8,7 @@ from typing import Any, Literal
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -216,6 +216,7 @@ def test_block_failure_retains_prior_rows_and_costs(
         manifest.artifact,
         manifest.coordinates,
         tmp_path / "attempt",
+        backend=TORCH_BACKEND,
     )
     assert result.status == "incomplete"
     assert len(result.rows) == 4
@@ -233,6 +234,7 @@ def test_block_failure_retains_prior_rows_and_costs(
             manifest.artifact,
             manifest.coordinates,
             tmp_path / "attempt",
+            backend=TORCH_BACKEND,
         )
 
 
@@ -367,6 +369,7 @@ def test_real_arena_checkpoint_outcomes(
                 opponent=opponent,
                 comparison_sha256="a" * 64 if opponent == "random" else None,
             ),
+            backend=TORCH_BACKEND,
         )
         assert (
             result.started_unix is not None
@@ -411,6 +414,7 @@ def test_checkpoint_admission_failure_is_saved(tmp_path: Path) -> None:
             manifest.artifact,
             manifest.coordinates,
             tmp_path / "attempt",
+            backend=TORCH_BACKEND,
         )
     failure = json.loads((tmp_path / "attempt/admission-failure.json").read_text())
     assert failure["run_id"] == "failed-admission"
@@ -468,6 +472,7 @@ def test_registration_extraction_preserves_frozen_monitor_identity(
                 stage_id="unused", updates=0, training_seconds=0
             ),
             monitor.MonitorProtocol(deal_seeds=(101,)),
+            backend=TORCH_BACKEND,
         )
         # Freeze the pre-extraction schema, values and serialized null metadata.
         expected = admitted.model_copy(
