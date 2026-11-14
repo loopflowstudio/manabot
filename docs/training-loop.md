@@ -19,9 +19,9 @@ method; [training](training.md) explains running a recipe.
 
 ## The updates we maintain
 
-A recipe's loop ([training](training.md#regimes-and-stages)) runs one update
-each iteration and adds checkpoints, tracking, recovery and evaluation around
-it. Its learning record selects the update; both live in
+A recipe's loop ([training](training.md#write-a-recipe)) runs one update
+each iteration; Etude's run adds saving, resuming, tracking and checkpoints
+around it. Its learning record selects the update; both live in
 `manabot/training/updates/`:
 
 - **Damped policy** (`DampedPolicyLearning`, `update_damped_iteration` in
@@ -39,7 +39,7 @@ Both are written once and take the backend as their first argument: the
 module `manabot.backends.torch`, not an object to configure. Then come a
 `Learner` (`manabot.backends.torch.learner`), which holds the model, its Adam
 optimizer, the precision and a profiler, and a learning record
-(`manabot.training.regime`). Call them directly to reproduce a recipe's
+(`manabot.training.learning`). Call them directly to reproduce a recipe's
 update exactly:
 
 ```python
@@ -55,7 +55,7 @@ update_iteration(backend, learner, batch, Learning(), progress=0.0, rng=np.rando
 diagnostics (`UpdateDiagnostics`, a typed dictionary); EMA and checkpoints
 stay with the caller.
 
-Recipes and the executor pass `manabot.backends.torch`. Inside an update,
+Recipes and the self-play loop pass `manabot.backends.torch`. Inside an update,
 array math goes only through `backend.rl`, `backend.learner` and
 `backend.arrays`, and observations come from `backend.rollout`; NumPy keeps
 the host-side bookkeeping and diagnostics (which rows train, minibatch
@@ -75,7 +75,7 @@ of rows and `A` for padded legal offers.
 
 | Piece | What it does |
 | --- | --- |
-| `SeatRoutedCollector` (`manabot.training.rollout.collection`) | Owns native game streams. `collect(agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close()` stops the streams. |
+| `open_collector` (`manabot.training.rollout.collection`) | Opens native game streams as a `Collector`. `collect(collector, agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(collector, agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close_collector(collector)` stops the streams. |
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (an end belongs to that row), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping an unfinished tail, and `outcome_probabilities` `[T,E,3]` for a categorical critic. `observations(indexes)` materializes flat rows as an observation dict and the full behavior distribution. |
 | `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` and an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
 
@@ -181,8 +181,9 @@ plus reverse KL to the generating policy. Against that design:
 ## Write your own loop
 
 A new method is the pieces in a different arrangement. Write it as a loop of
-your own to try it quickly. When it needs checkpoints, tracking and Etude
-launches, add a learning record for it in `manabot.training.regime` and an
+your own to try it quickly; the loop below already saves, resumes and
+publishes checkpoints through Etude. When it should run in our recipes, add a
+learning record for it in `manabot.training.learning` and an
 update in `manabot/training/updates/` beside the two above; our recipes then
 run it as they run those. Write that update as they are written: take the
 backend first, do array math only through `backend.rl`, `backend.learner`
@@ -194,16 +195,20 @@ it calls.
 
 `manabot/training/loops/minimal.py` trains one model against itself with PPO
 on complete games, on CPU. It writes its update inline, inside the loop, so
-the whole method reads on one page. It is a PyTorch loop: it builds the
+the whole method reads on one page, and it survives losing its machine: seven
+of its lines are Etude's (`track`, `run.seed`, `run.resume`, `run.steps`,
+`run.log`, `run.save`, `run.checkpoint`). It is a PyTorch loop: it builds the
 `ActorCritic` and its optimizer directly and takes its terms from the torch
 backend's `rl` and `learner`:
 
 ```python
-"""A self-play PPO loop written from the pieces alone, with no recipe or executor."""
+"""A resumable self-play PPO loop written from the pieces alone."""
 
 from copy import deepcopy
 
+from etude.train.tracking import track
 import numpy as np
+from pydantic import BaseModel, Field
 import torch
 
 from manabot.backends.torch import learner, rl
@@ -212,92 +217,132 @@ from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    close_collector,
+    collect,
+    open_collector,
+)
 
 
-def train(
-    iterations: int,
-    *,
-    streams: int = 4,
-    decisions: int = 64,
-    seed: int = 0,
-    model: ModelConfig | None = None,
-) -> ActorCritic:
-    """Return the EMA of a policy trained `iterations` collect/update rounds."""
-    torch.manual_seed(seed)
-    rng = np.random.default_rng(seed)
-    agent = ActorCritic(ObservationSpace(), model or ModelConfig(hidden_dim=64))
-    averaged = deepcopy(agent)
-    optimizer = torch.optim.Adam(agent.parameters(), lr=2.5e-4, eps=1e-5)
-    collector = SeatRoutedCollector(
-        agent.observation_space,
-        Match(),
-        Reward(RewardConfig()),
-        num_envs=streams,
-        seed=seed,
-        opponent_mode="self",  # one model plays and learns from both seats
-    )
-    try:
-        for _ in range(iterations):
-            # Whole games, at least `decisions` learner rows per stream.
-            batch = collector.collect(agent, decisions)
-            ends = torch.as_tensor(batch.dones)
-            values = torch.as_tensor(batch.values)
-            # Complete games end every trajectory, so the tail value is never read.
-            tail = torch.zeros(ends.shape[1])
-            advantages, returns = rl.transition_gae(
-                torch.as_tensor(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
-            )
-            # Time-major [T,E] rows, the order `batch.observations` indexes.
-            advantages, returns = advantages.flatten(), returns.flatten()
-            advantages = rl.standardized_advantages(advantages)
-            actions = torch.as_tensor(batch.actions).flatten()
-            behavior = torch.as_tensor(batch.logprobs).flatten()
+class Progress(BaseModel):
+    updates: int = 0
 
-            # Admission checks each row's policy input once, before any epoch.
-            admitted = AdmittedRollout(agent, batch)
-            admitted.admit_rows(np.arange(len(actions)), 256)
-            agent.train()
-            for _epoch in range(2):
-                order = torch.as_tensor(rng.permutation(len(actions)))
-                for rows in order.split(256):
-                    obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
-                    valid = rl.legal_mask(obs["actions_valid"])
-                    logits, value = agent(obs)
-                    logs = rl.policy_logs(logits, valid)
-                    chosen = rl.action_logs(logs, actions[rows])
-                    loss = (
-                        rl.clipped_surrogate(
-                            chosen - behavior[rows], advantages[rows], 0.2
-                        ).mean()
-                        + 0.5 * rl.squared_value_loss(value, returns[rows]).mean()
-                        - 0.01 * rl.entropy(logs, valid).mean()
-                    )
-                    learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
-            learner.update_ema(averaged, agent, rate=0.99)
-    finally:
-        collector.close()
-    return averaged
+
+class MinimalConfig(BaseModel):
+    updates: int = Field(default=3, ge=1)
+    streams: int = Field(default=4, ge=2)
+    decisions: int = Field(default=64, ge=1)
+    model: ModelConfig = ModelConfig(hidden_dim=64)
+
+
+def train(config: MinimalConfig) -> None:
+    """Train `config.updates` collect/update rounds and publish the EMA policy."""
+    with track(clocks=["updates"], config=config) as run:
+        torch.manual_seed(run.seed)
+        agent = ActorCritic(ObservationSpace(), config.model)
+        averaged = deepcopy(agent)
+        optimizer = torch.optim.Adam(agent.parameters(), lr=2.5e-4, eps=1e-5)
+        # Loads the last save into all three; a fresh run starts at update 0.
+        progress = run.resume(
+            agent=agent, averaged=averaged, optimizer=optimizer, extra=Progress()
+        )
+        start = progress.updates
+        # Only the registered objects carry on: an attempt plays fresh games.
+        torch.manual_seed(run.seed + start)
+        rng = np.random.default_rng(run.seed + start)
+        collector = open_collector(
+            agent.observation_space,
+            Match(),
+            Reward(RewardConfig()),
+            num_envs=config.streams,
+            seed=run.seed + start,
+            opponent_mode="self",  # one model plays and learns from both seats
+        )
+        try:
+            for update in run.steps("updates", to=config.updates):
+                # Whole games, at least `decisions` learner rows per stream.
+                batch = collect(collector, agent, config.decisions)
+                ends = torch.as_tensor(batch.dones)
+                values = torch.as_tensor(batch.values)
+                # Complete games end every trajectory, so the tail value is never read.
+                tail = torch.zeros(ends.shape[1])
+                advantages, returns = rl.transition_gae(
+                    torch.as_tensor(batch.rewards),
+                    values,
+                    ends,
+                    tail,
+                    gamma=1.0,
+                    lam=0.95,
+                )
+                # Time-major [T,E] rows, the order `batch.observations` indexes.
+                advantages, returns = advantages.flatten(), returns.flatten()
+                advantages = rl.standardized_advantages(advantages)
+                actions = torch.as_tensor(batch.actions).flatten()
+                behavior = torch.as_tensor(batch.logprobs).flatten()
+
+                # Admission checks each row's policy input once, before any epoch.
+                admitted = AdmittedRollout(agent, batch)
+                admitted.admit_rows(np.arange(len(actions)), 256)
+                agent.train()
+                for _epoch in range(2):
+                    order = torch.as_tensor(rng.permutation(len(actions)))
+                    for rows in order.split(256):
+                        obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
+                        valid = rl.legal_mask(obs["actions_valid"])
+                        logits, value = agent(obs)
+                        logs = rl.policy_logs(logits, valid)
+                        chosen = rl.action_logs(logs, actions[rows])
+                        loss = (
+                            rl.clipped_surrogate(
+                                chosen - behavior[rows], advantages[rows], 0.2
+                            ).mean()
+                            + 0.5 * rl.squared_value_loss(value, returns[rows]).mean()
+                            - 0.01 * rl.entropy(logs, valid).mean()
+                        )
+                        learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
+                learner.update_ema(averaged, agent, rate=0.99)
+                run.log({"loss": float(loss.detach())})  # the last minibatch's
+                progress.updates = update
+                run.save()
+        finally:
+            close_collector(collector)
+        # Reached only at the target: a stopped loop raises `Stopped` instead.
+        run.checkpoint(policy=averaged)
 ```
 
 ```bash
-uv run python -c "from manabot.training.loops.minimal import train; train(3)"
+uv run etude train manabot/training/loops/minimal.py
+uv run etude train manabot/training/loops/minimal.py --experiment minimal-long --config '{"updates": 200}' --seconds 60
+uv run etude train manabot/training/loops/minimal.py --experiment minimal-long --resume
 ```
 
-Three iterations take a few seconds on a laptop CPU and return a policy;
-they teach it almost nothing. To see what it did, wrap the call in
-`record_games` and open one of its games in Academy
-([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)). Keep a run with `save_checkpoint(policy,
-policy.observation_space, "policy.pt", player_configs=Match().to_rust())`
-from `manabot.backends.torch.checkpoint`, which binds it to the decks it
-played, as a recipe's checkpoints are bound to their setups;
-`load_checkpoint("policy.pt")` returns the policy and its observation
-space. `load_checkpoint` also reads the
+The first command trains three updates in a few seconds on a laptop CPU and
+prints the run's id; they teach the policy almost nothing. The second trains until its target or deadline; at the deadline it saves
+and exits 75; the third carries that run on to update
+200. The first run's folder holds everything in ordinary formats:
+
+```text
+~/.etude/track/minimal/out/
+  state/current.json                     {"save": "save-00000001"}: the save to load
+  state/save-00000001/state.json         {"at": {"updates": 3}, "seed": 0, "files": {"agent": "agent.pt", ...}}
+  state/save-00000001/agent.pt  averaged.pt  optimizer.pt
+  checkpoints/updates-00000003/checkpoint.json
+  checkpoints/updates-00000003/policy.pt   torch.save(averaged.state_dict())
+```
+
+To watch the games, wrap the loop in `record_games` and open a recording in
+Academy ([watch a game from your training loop](academy.md#watch-a-game-from-your-training-loop)).
+
+`run.checkpoint(policy=averaged)` publishes plain weights. To publish a policy
+bound to the decks it played, as a recipe's are bound to their setups, write
+it with `save_checkpoint(policy, policy.observation_space, path,
+player_configs=Match().to_rust())` from `manabot.backends.torch.checkpoint`
+and record the file with `run.checkpoint(path)`;
+`load_checkpoint(path)` returns the policy and its observation space.
+`load_checkpoint` also reads the
 [shared container](../manabot/backends/README.md#convert-a-pytorch-checkpoint) that
 other backends load; `uv run python -m manabot.backends.convert` writes one from a
-`.pt` file. `tests/training/test_minimal_loop.py`
-runs the loop on two streams and a tiny model through the `model` argument,
-then saves and reloads its checkpoint.
+`.pt` file.
 
 The entropy bonus is there to show that a term is one line. manabot's own
 updates use none; they regularize with KL penalties instead

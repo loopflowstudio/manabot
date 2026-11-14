@@ -1,5 +1,8 @@
 """One-seat versus two-seat self-play from scratch, matched per learner decision (MTG-165).
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Jack Heart's question (2026-10-22): is score against the heuristic at N
 learner decisions the same whether the decisions come from one seat or both?
 If so, two-seat at E environment decisions matches one-seat at 2E. Four seeds
@@ -23,17 +26,13 @@ evaluation (the two-deck heuristic benchmark, `manabot.eval.benchmark`) is
 bound to each checkpoint's training record, so it is not yet an `eval(state)`.
 """
 
-from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
-from etude.launch.records import Run
 from etude.report import Curve, Matrix, Ranking, Report, Score
 
-from experiments.batched_baseline import seat_comparison
-from manabot.experiment.job import TrainingJob
 from manabot.training.panels import ML, PERF
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = Path(__file__).stem
@@ -49,38 +48,9 @@ SETUP_SECONDS = 900
 FINALIZATION_SECONDS = 300
 
 
-def runs(
-    revision: str,
-    hours: float = 11.9,
-    usd_per_run: float = 7.27,
-    updates: int = UPDATES,
-) -> list[Run]:
-    """Each arm's job, run once per seed, with its watchdog fitted to `hours`.
-
-    A run that has not reached `updates` when its watchdog ends fails, keeping
-    the checkpoints it exported; matched comparisons extend only to the
-    learner decisions every run reached.
-    """
-    found: list[Run] = []
-    for arm in ARMS:
-        regime = seat_comparison(arm, updates)
-        stage = regime.stages[0]
-        assert isinstance(stage, TrainSelfPlay)
-        regime.wall_seconds = hours * 3600 - SETUP_SECONDS - FINALIZATION_SECONDS
-        stage.execution.wall_seconds = regime.wall_seconds
-        job = TrainingJob(
-            regime=TrainingRegime.model_validate(regime.model_dump(mode="json")),
-            experiment=EXPERIMENT,
-            milestones=tuple(range(CHECKPOINT_UPDATES, updates, CHECKPOINT_UPDATES)),
-            finalization_seconds=FINALIZATION_SECONDS,
-        ).job(
-            repo=ROOT,
-            revision=revision,
-            max_hours=hours,
-            max_usd=Decimal(str(usd_per_run)),
-        )
-        found += job.runs(*SEEDS)
-    return found
+def runs(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 def report() -> Report:

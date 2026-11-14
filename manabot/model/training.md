@@ -1,7 +1,7 @@
 # Training ownership and learning rules
 
 RL entry points resolve a `TrainingRegime` and call
-`manabot.training.execution.execute_regime`. Bounded diagnostics may use the
+`manabot.training.loops.self_play.self_play`. Bounded diagnostics may use the
 same `SeatRoutedCollector` and update rules (`update_damped_iteration`,
 `update_iteration`) directly. A new
 loop or optimizer implementation needs a concrete unsupported behavior and a
@@ -89,11 +89,12 @@ decoder, serialized-tag override or old preset execution path remains.
 
 ## Entry points and retired routes
 
-`uv run manabot train` resolves `local-smoke-v1`: two CPU updates, two streams,
-16 combined decisions per stream as a floor, both seats and complete games,
-with a 120-second failure limit. It uses the baseline model and horizon-scaled
-damped objective. `--learning-seats one` selects exact quotas. `--recipe baseline`
-adds the ordinary baseline's independent evaluation. Neither smoke nor successful
+`uv run etude train manabot/recipes/local.py` is the local smoke: two CPU
+updates, two streams, 16 combined decisions per stream as a floor, both seats
+and complete games. It uses the baseline model and horizon-scaled damped
+objective. `--config '{"learning_seats": "one"}'` selects one learning seat.
+`manabot/recipes/baseline.py` is the ordinary baseline, whose evaluation is a
+separate call. Neither smoke nor successful
 export certifies playing strength.
 
 The old standalone `Trainer` and `NetOpponentTrainer` loops, fake environment

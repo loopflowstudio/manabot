@@ -43,7 +43,7 @@ for running training, see [training.md](training.md).
 
 ## 1. Play
 
-`SeatRoutedCollector` steps every stream in lockstep, so one forward pass
+`collect` steps every stream of a `Collector` in lockstep, so one forward pass
 chooses actions for all of them. The network sees only the acting seat's
 [viewer-safe observation](observation-and-model.md). Hidden cards and game
 outcomes never enter it.
@@ -64,16 +64,16 @@ opponent decisions came between them.
 
 ![An interleaved game of decisions by seats A and B, with one forced decision, splits into one row sequence per seat. Seat A's last row has reward +1 and seat B's has -1; all other rows have reward 0.](images/game-to-trajectories.svg)
 
-From `SeatRoutedCollector` in
+From `collect` in
 [`manabot/training/rollout/collection.py`](../manabot/training/rollout/collection.py):
 
 ```python
 slot = (
     2 * int(row) + int(acting[row])
-    if self.learning_seats == "both"
+    if collector.learning_seats == "both"
     else int(row)
 )
-self._pending[slot] = _Pending(...)
+collector._pending[slot] = _Pending(...)
 ```
 
 Each stream and seat has its own slot, and a row stays pending in it until that
@@ -348,7 +348,10 @@ update and declare $S$ as the updates the wall reaches at that cost
 absolute iteration.
 
 The PPO-style `Learning` rule remains as a control. It normalizes advantages
-and shuffles minibatches, and may take several epochs.
+and shuffles minibatches, and may take several epochs. Its learning rate and
+damping decay with the fraction of a declared `horizon` completed
+(`Learning(horizon=64)`), never with the update a run happens to stop at
+([schedules and clocks](training.md#schedules-and-clocks)).
 
 ## Weights, checkpoints and evaluation
 
@@ -532,13 +535,13 @@ each piece they are made of as a public function.
 
 | Step | Code |
 | --- | --- |
-| Iteration loop, checkpoints; which update a stage calls | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
-| Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
+| Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
+| Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
 | Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
 | Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
 | Magnet | `reference_distribution` in [`policy/prepare.py`](../manabot/policy/prepare.py) |
-| Defaults | `DampedPolicyLearning`, `TrainSelfPlay` in [`training/regime.py`](../manabot/training/regime.py) |
+| Defaults | `DampedPolicyLearning` in [`training/learning.py`](../manabot/training/learning.py), `SelfPlay` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

@@ -39,16 +39,16 @@ atomically.
   `uv run scripts/play.py` works in an already prepared environment but cannot
   diagnose a missing `uv`. Development flags: `--port`, `--frontend-port`,
   `--no-frontend`, `--demo learn`.
-- `uv run manabot train --out .runs/<name>` runs a training smoke.
+- `uv run etude train manabot/recipes/local.py` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.3.2` (also for
+The `manabot` public dependency requirements are `etude-sdk>=0.4.0` (also for
 its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
 requirements. A downstream project resolves those with its own dependencies. The repository's
 `uv.lock` records exact versions, and its dedicated training and play runtime
 groups retain exact Torch/backend choices. Those development pins are not
 constraints exported to consumers.
 
-To update the locked Etude version without raising the public minimum:
+For an ordinary released Etude update without raising the public minimum:
 
 ```bash
 uv lock --upgrade-package etude-sdk
@@ -108,7 +108,7 @@ including semantic-kernel conformance, and focused browser interactions. Also:
 
 - `uv run --extra dev pytest tests/semantic/test_elemental_world.py -q`
   for Elemental roster or training-admission changes; its PPO smoke reloads the
-  final checkpoint written by the recipe's `execute_regime` after tracking closes.
+  final checkpoint the recipe's loop writes.
 - `uv run pytest tests/academy/test_choice_navigation.py -q`: browser coverage
   replays only two of its retained positions. Bind refreshed positions to a new
   world file and retain prior evidence.
@@ -124,12 +124,10 @@ including semantic-kernel conformance, and focused browser interactions. Also:
   `npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts trigger-order.spec.ts`
   with isolated `ACADEMY_RELEASE_API_PORT` and `ACADEMY_RELEASE_FRONTEND_PORT`.
 
-**Training recovery.** Resume admission or game-error recovery:
-`uv run --extra dev --extra artifacts pytest tests/training/test_recovery.py tests/training/test_game_error_recovery.py -q`.
-Observation-input or model-cost changes add
-`uv run --extra dev pytest tests/training/test_active_training.py -q`; its
-endpoint checks use injected durations, so never mix host elapsed time into an
-exact-update-count assertion.
+**Training resume and game errors.**
+`uv run --extra dev --extra artifacts pytest tests/training/test_self_play_loop.py tests/training/test_recipe_etude.py tests/training/test_game_errors.py -q`.
+Resume restores learner state at a saved update and opens fresh native streams;
+it does not restore an unfinished collection.
 Changes to observation encoding or action selection also require
 `uv run --extra dev pytest tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py -q`.
 Collector or batch-closure changes also require
@@ -159,21 +157,23 @@ identical tensors. It also checks that v3 receipts and registrations omitting
 `managym.encode_observations_into` also runs `tests/env/test_observation.py`
 and the debug native suite.
 Inspect collector fixtures before selecting laptop-safe model tests:
-`SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
-`collect(model, 1)` can play a complete game.
+`open_collector` defaults to `batch_closure="complete-games"`, so even
+`collect(collector, model, 1)` can play a complete game.
 
 **Tracking and offline reports.** Checkpoint imports or managed evaluation
 adapters:
 `uv run pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`
 (a fresh process rejecting managed evaluation imports; adapter-only tests cannot
 establish that boundary). Tracking or report discovery:
-`uv run pytest tests/training/test_experiment_report.py tests/training/test_experiment_runner.py -q`;
-the live tiny comparison writes both TrainingRun exports and Etude tracker
-declarations named `run.json`.
+`uv run pytest tests/training/test_experiment_report.py tests/training/test_recipe_etude.py -q`;
+the recipe proof checks local tracking, stop/resume, immutable checkpoints and
+belief output provenance.
 
-**Python package and CLI moves.** Experiment imports or recipe discovery:
-`uv run --extra dev pytest tests/training/test_regimes.py -q` (listing recipes
-must not import DuckDB). Adding, renaming or removing an Etude experiment also
+**Python package and CLI moves.** Training command retirement:
+`uv run --extra dev pytest tests/training/test_train_command.py -q` (the
+migration message must be available without training SDK imports). Saved
+regime readers: `uv run --extra dev pytest tests/training/test_regimes.py -q`.
+Adding, renaming or removing an Etude experiment also
 requires updating its exact discovery inventory and running
 `uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_experiment_files.py -q`.
 When integrating a frozen pilot with a changed world or tensor schema, run its
@@ -741,7 +741,7 @@ MPS is admitted, on explicit request, for float32 self-play training with Torch 
 newer. Baseline requires CUDA or an explicit `--device mps`; local selects CUDA when
 available and CPU otherwise.
 Evaluation and search run on CPU for this workflow. GPU-less tests use
-`baseline_test()`, which shares baseline construction and changes only the device.
+`BaselineConfig(device="cpu")` with the same `train` and `evaluate` functions.
 No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 
@@ -749,7 +749,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.15.0` and `etude-sdk>=0.3.2`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.4.0`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
@@ -778,7 +778,7 @@ In a checkout, use `uv sync --locked --extra notebook`. If a command reports
 a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
 
-`--regime-name`, experiment drivers and data-ledger tools need a
+Experiment recipes (`etude train experiments/<experiment>.py`), experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
 

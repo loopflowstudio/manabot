@@ -165,9 +165,9 @@ publish, land or choose the next Graph step from here.
   match and checkpoint; with equal player and reset seeds, every evidence and
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
-- Model or training-path changes: `uv run manabot train --recipe local --device
-  cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
-  seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
+- Model or training-path changes: `uv run etude train manabot/recipes/local.py`
+  runs the local CPU smoke. Inspect metric rows for per-phase collection and
+  learning seconds; the command prints its run id. Play
   checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
   <f> --set sim.hero=<ckpt.pt> --set sim.villain=<ckpt.pt> --set
   sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
@@ -259,32 +259,30 @@ publish, land or choose the next Graph step from here.
   (about 20 s on CPU), save and reload the policy as it says, call both
   maintained rules directly on a collected batch, and compare the tables'
   signatures with `inspect.signature`.
-- Training recipes: write a regime JSON from Python
-  (`TrainingRegime(...).model_dump_json()`) and run
-  `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
-  fresh `--out` each time; success prints nothing, so read `<run>/run.json`
-  (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
-  64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
-  `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
-  an empty directory to act like a new machine. To A/B an `Execution` switch
-  the CLI lacks (such as `live_tokens`), start from
-  `manabot.recipes.local.local_smoke(steps=3, device="cpu")`, set
-  `stages[0].execution.<field>`, re-validate, and dump one regime per arm with
-  the same `--seed`. Equal layouts then give `run.json` files that differ only in
-  `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
-  `bucketed_shapes` makes learning about 7× slower than padded, so time
-  bucketed arms against a bucketed control. Rebuild a regime for another
-  device from `authored_dump()`, not `model_dump()`, so `auto` fields resolve
-  again. To resume, the regime needs `recovery` (e.g.
-  `{"checkpoint_updates": 2}`); without it `--resume-from` passes the digest
-  check, then fails with "no committed recovery boundary". Resume with the same
-  regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
-  time. macOS has no `timeout`; use the tool's own timeout.
+- Training recipes: run `uv run etude train manabot/recipes/local.py --experiment smoke`.
+  Inspect `~/.etude/track/smoke/` (or `$ETUDE_HOME/track/smoke/`):
+  `run.json`, logged rows, `out/state/current.json` and the save folder it
+  names (`state.json` with the framework state files), and
+  immutable `out/policies/`. A second new run with that name must refuse.
+  For a planned stop, use a larger config update count with `--seconds 1`;
+  expect exit 75, then `--experiment smoke --resume` to finish the same run. To extend a
+  finished run, use `--experiment smoke --resume --until updates=N`; without a later target
+  it must refuse. `etude continue --run RUN --until updates=N` makes a child
+  run for a launched parent and leaves the first unchanged.
+  Device and other recipe fields are passed with `--config JSON`; the seed
+  is the run's `--seed`, not a config field. Check raw/EMA checkpoint tensors
+  with matched small inputs. Fetch artifacts through Doppler without printing
+  credentials. `manabot train`, its `--out` identity and `state.pt` are retired.
+  These checks require EXP-56's new train API and its release pin; SDK 0.2.16
+  and source `105abdd` do not provide it. Do not stub the SDK for QA. Until the
+  API lands, report the missing real-path proof and stop dependent checks.
+  `etude smoke experiments/elemental.py --step train --revision HEAD` needs
+  `runs()`'s `--updates/--hours/--usd-per-run`; it builds the revision's own
+  locked venv, so an overlay does not prove the committed dependency works.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
-  `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
-  `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`. Those retained regimes are historical; run them at the named executable revision.
 - Served evaluation without a GPU: `evaluate(request, out_dir=...,
   execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
   runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting

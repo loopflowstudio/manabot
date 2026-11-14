@@ -11,55 +11,67 @@ their pieces and a loop to copy.
 
 ## Quickstart
 
+Start in the [checkout environment](../docs/development.md#environment-and-commands)
+with the Etude development revision needed by this training API.
+
 ```bash
-uv run manabot train              # bounded local production-path smoke
-uv run manabot train --recipe baseline  # ordinary self-play + evaluation
-uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
-uv run manabot train --learning-seats one  # explicit one-seat control
+uv run etude train manabot/recipes/local.py      # local production-path smoke
+uv run etude train manabot/recipes/baseline.py   # ordinary self-play; evaluate separately
+uv run etude train manabot/recipes/elemental.py   # current recipe; run elemental
+uv run etude train manabot/recipes/elemental.py --resume   # carry that run on
+uv run etude train experiments/batched_baseline.py  # batched GPU baseline
+uv run etude train manabot/recipes/local.py --experiment local-one-seat --config '{"learning_seats": "one"}'  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
 uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz  # one recorded training game, for Academy
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
-The default `local-smoke-v1` recipe runs two collection/update iterations
-through the production regime executor: two streams, 16 decisions per stream as
-a floor, both seats and complete games, with a 120-second failure deadline.
+Training runs through [Etude](https://github.com/loopflowstudio/etude):
+`etude train FILE` calls the file's `train(config)` as a new run, prints the
+run's id and writes it under `~/.etude/track`. `--config JSON` sets fields of
+the recipe's config, `--experiment` an independent experiment label,
+`--until updates=N` its stop target and `--seconds` a deadline. Files with
+only `train(config)` use seed 0; declare `runs()` for other seeds, then select
+with `--job` and `--seed`. `--resume` is another attempt of an existing run, to a later
+target when `--until` is given ([run training](../docs/training.md#run-training)).
+`manabot train` exits with migration guidance naming that command.
+
+The `local` recipe runs two collection/update iterations
+through the ordinary self-play loop: two streams, 16 decisions per stream as
+a floor, both seats and complete games.
 It uses the baseline model and horizon-scaled damped policy objective, records
-actual counts through Etude and exports admitted checkpoints. `--steps`,
-`--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
-explicit. This is a software smoke, not playing-strength evidence.
+actual counts through Etude and publishes admitted checkpoints. This is a
+software smoke, not playing-strength evidence.
 
-The local recipe selects CUDA when available and CPU otherwise; Apple MPS is used
-only with an explicit `--device mps`. `--recipe baseline` requires CUDA or an
-explicit `--device mps`. `--device cpu|mps|cuda` overrides the local device;
-baseline rejects CPU. MPS self-play uses float32 and requires
+A recipe's device is a config field: local defaults to CPU, and baseline
+defaults to CUDA and rejects CPU. Apple MPS is used only on explicit request
+(`--config '{"device": "mps"}'`). MPS self-play uses float32 and requires
 Torch 2.15 or newer; evaluation
-and search run on CPU. MPS process recovery, belief inputs and frozen opponents
-are unsupported. This makes no speed or strength claim.
+and search run on CPU. Belief inputs and frozen opponents
+are unsupported on MPS. This makes no speed or strength claim.
 
-Self-play TrainingRegime execution logs cumulative update/transition clocks and
-retains admitted initialization, exact monitoring milestones, and raw stage
-exports in Etude. These are policy artifacts, not portable training recovery. TrainingRun/VerifyStore still hold
-scientific execution records, and the existing scheduler/evaluator has not yet
-been replaced by Etude jobs. This is a partial migration, not end-to-end experiment
-admission. SDK artifact retention alone does not establish portable collector/RNG
-recovery. Remote storage, rentals and scientific runs require explicit allocation.
+The self-play loop logs an update clock and cumulative transition counts to
+the run, publishes each milestone checkpoint there and registers its learner,
+Adam, EMA and counts with the run, which saves them under `out/state/` and
+loads them into the next attempt
+([recovery](../docs/training.md#recovery)). Remote storage, rentals and
+scientific runs require explicit allocation.
 
-Training `--preset` and `--set` routes are retired. Their old reward and
-optimizer contracts are not translated. Use a recipe or an explicit
-`TrainingRegime` JSON. Simulation retains its presets and `--set` overrides.
+Saved `TrainingRegime` files no longer execute; the guide names the last
+revision that runs them ([saved regimes](../docs/training.md#saved-regimes)).
+Simulation retains its presets and `--set` overrides.
 
-`--recipe baseline` selects a complete ordinary training run above the regime
-layer: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
-checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
-collection/update iterations (four streams, at least 64 combined seat decisions
-each, finishing current games before updating), not optimizer
-calls. Its CPU test variant drives the [nightly learning check](../.github/workflows/baseline.yml).
-The bare command remains the small `local` smoke run. Use `--out` for a new output
-directory; otherwise the recipe creates a timestamped directory under `.runs/`.
-`--seconds` sets a failure deadline without changing the step schedule. Saved `--regime` inputs retain their meanings and cannot be combined with
-`--recipe`. The baseline is a versioned starting point, not a strength certification.
+`manabot/recipes/baseline.py` is a complete ordinary training run: current-world Allies/Lessons self-play (128 updates by default), its horizon-dependent schedule,
+and checkpoint exports. Paired outcome evaluation is a separate call to
+`manabot.recipes.baseline.evaluate(config, directory)`; the nightly check runs
+both operations. An update is one completed
+collection/update iteration (four streams, at least 64 combined seat decisions
+each, finishing current games before updating), not an optimizer
+call. Its CPU test variant drives the [nightly learning check](../.github/workflows/baseline.yml).
+`--until updates=N` and `--seconds` stop a run without changing its schedule: a
+run that reaches a deadline saves its state and exits 75, and `--resume`
+carries it on. The baseline is a versioned starting point, not a strength certification.
 
 For GPU training, start from `batched_baseline()` in `experiments/batched_baseline.py`. It is the
 same 64×2 model trained on 64 streams for 524,288 learner transitions (128
@@ -67,7 +79,7 @@ iterations), with the learning-rate schedule mapped onto 2,048 four-stream
 iterations. In the [longer size and batching comparison](../experiments/longer-learning-017.md)
 it met the competence thresholds on both seeds within 7 minutes on an RTX 5090, and the
 full run takes about 13 minutes versus about 110 at four streams; larger models showed no advantage at this
-horizon. The regime is that study's exact tested recipe; it requires CUDA.
+horizon. The recipe is that study's exact tested settings; it requires CUDA.
 
 Build named curated matches with `MatchConfig.authored(setup, hero_deck,
 villain_deck)` (a preset or its `pack_key`) so both main decks and sideboards
@@ -80,22 +92,24 @@ players cannot play closed matches. `Match.swapped()` moves both lists together;
 
 
 Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).
-New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,
-default 1,000); freeze targets and shared intervals before launch. Operational
-lease and spending limits remain in hours/dollars. See [cadence and continuation](../docs/training.md#monitoring).
+Self-play writes checkpoints at exact absolute updates (`SelfPlay.checkpoint_every`,
+50 in Elemental); freeze targets and shared intervals before launch.
+Lease and spending limits remain in hours and dollars. See
+[checkpoint cadence](../docs/training.md#checkpoint-cadence) and
+[continuation](../docs/training.md#portable-learner-continuation).
 
 New self-play training learns from both seats by default (`baseline-v3`).
-Use `TrainSelfPlay(learning_seats="one", ...)` for an explicit one-seat control;
-saved schema-1 recipes retain their historical one-seat behavior.
+Set `SelfPlay.learning_seats="one"` for an explicit one-seat control;
+saved schema-1 regimes read with their historical one-seat behavior.
 Batches close after complete games by default, whoever learns; `batch_closure`
 declares it, and `"exact-quota"` is the one-seat alternative. See
 [batch closure](../docs/training.md#batch-closure).
 Use `games_per_stream` on both arms to match complete-game budgets. Distinct
 learning models can use `PairedLearners` to update both independent optimizers
-from their own seat trajectories. See [both-seat learning](../docs/training.md#regimes-and-stages)
+from their own seat trajectories. See [both-seat learning](../docs/training.md#learning-from-both-seats)
 for collection boundaries, accounting and measurement limits.
 
-Single-stage self-play can opt into bounded [game crash recovery](../docs/training.md#game-failures).
+Self-play can opt into bounded [game crash recovery](../docs/training.md#game-failures).
 It retains private replay inputs, discards both seats' uncommitted experience from
 failed games and regathers under the same policy. A persisted rolling error rate
 strictly above the declared threshold stops training; evaluation remains strict.
@@ -352,7 +366,7 @@ world. The cross-package contracts are in the
 1. **`manabot.env`**: Gymnasium-compatible wrapper around managym
    (`VectorEnv`, `ObservationSpace`, `Match`, `Reward`)
 2. **`manabot.model`**: trainable policy and value models (`ActorCritic`);
-   `manabot.training` owns the regime executor and `Learner`
+   `manabot.training` owns the self-play loop and `Learner`
 3. **`manabot.sim`**: players and game runners.
    `sim/action` owns the structured-offer prototype decoder and its benchmark.
    `sim/search` owns frozen-policy planning, world sampling and search evidence:
@@ -374,10 +388,11 @@ transfer. The generic PPO trainer does not yet produce the
 semantic belief inputs required to train a belief-enabled policy. Historical
 positional-condition checkpoints are rejected rather than reinterpreted.
 
-Training regimes can [import a published raw/EMA policy](../docs/training.md#regimes-and-stages)
-without retraining, preserving producer provenance and separate sunk costs.
-They can freeze a policy, collect private whole-game supervision,
-and fit a constrained autoregressive hand sampler without exact enumeration.
+A recipe can [use a published raw/EMA policy](../docs/training.md#reuse-a-published-policy)
+without retraining, by passing its checkpoint path to the step that reads it.
+The [belief recipe](../docs/training.md#recipes-in-stages) freezes a
+policy, collects private whole-game supervision and fits a constrained
+autoregressive hand sampler without exact enumeration.
 See [frozen-policy belief sampling](../README.md#beside-the-loop). This separately
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
@@ -545,7 +560,7 @@ regimes that select it fail validation. See
 [compound decisions](../docs/training.md#compound-decisions-removed).
 
 Self-play update diagnostics live in the run's Etude metrics and referenced
-outcome tables; TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
+outcome tables. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
 Optional [public recent-event input](../docs/observation-and-model.md#policy-inputs) uses the existing
@@ -563,37 +578,27 @@ it is not ordinary training-match admission or evidence of mirror competence.
 
 ### Etude-owned training jobs
 
-`manabot.experiment.job.TrainingJob` freezes a single fresh self-play
-`TrainingRegime` and its interior update milestones into an `etude.launch.Job`.
-Its `job(repo=..., revision=..., max_hours=...)` method only builds the job;
-`job.runs(*seeds)` only declares runs. Neither submits or reserves resources.
-The job command is:
+A training job is a recipe's `train` function and its config; an experiment
+file's `runs()` builds it with `etude.jobs.training`, and nothing is submitted
+until `etude launch`:
 
-```sh
-uv run --locked python -m manabot.experiment.job
+```python
+from etude.jobs import training
+
+from manabot.recipes.elemental import ElementalConfig, train
+
+job = training(train, config=ElementalConfig(), seeds=(197,), max_hours=12)
 ```
 
-Run that command through an Etude worker, not as a standalone training CLI: it
-requires the SDK's config, seed, target, deadline, output, stop and tracking
-environment. The source revision is explicit, the update target must agree with
-the recipe, and the remaining lifetime must cover the entire recipe watchdog
-plus the declared finalization reserve. A late start fails instead of shortening
-the experiment. The machine must supply this source's built native extension;
-portable source-build setup and the full complexity campaign remain unfinished.
-
-Etude owns job execution and tracking on this path; the old ExperimentSchedule
-runner is not involved. TrainingRun/VerifyStore still retain scientific learning,
-world/ABI admission and failure receipts inside the attempt output. Only a
-completed target emits `etude-result.json` with the admitted policy path.
-Cancellation is checked with the resource watchdog (at most once per second at
-check boundaries) and retains a failed receipt, not a successful partial target.
-The [game-failures guide](../docs/training.md#game-failures) describes opt-in
+On the machine Etude imports `train` from the committed source and calls it.
+Etude owns attempts, deadlines, the stop signal, retries, the run directory's
+carriage, cost, the run record and the saved state; the loop registers its
+learner with `run.resume`, counts with `run.steps` and calls `run.save()`, so a
+retried or stopped job carries on from its last saved update with its Adam and EMA
+([remote training](../docs/training.md#remote-training),
+[recovery](../docs/training.md#recovery)). The
+[game-failures guide](../docs/training.md#game-failures) describes opt-in
 `GameErrorPolicy.recover_capacity`, its recovery boundaries and evaluation limits.
-
-Policy checkpoints cannot resume optimizer, RNG or collector state. Automatic
-retries are disabled (`max_attempts=1`); multi-stage and imported-state jobs are
-not yet admitted. This worker proof does not establish SDK placement, remote
-provisioning, scientific evaluation, artifact upload or learning strength.
 
 ### Semantic catalog dimensions
 
@@ -650,9 +655,10 @@ policy catalog. Research report presentation and Etude evaluation recording are
 still separate remaining integration work.
 
 Runtime configuration uses `Config` names (`ModelConfig`, `MatchConfig`,
-`ObservationConfig`, `RewardConfig`, `RuntimeConfig`). `infra/runtime.py::RunContext`
-owns per-run seeding and tracking; `experiment/config.py::Experiment` describes
-experiment cases and jobs. Built-in recipes live in `manabot/recipes/`.
+`ObservationConfig`, `RewardConfig`, `RuntimeConfig`). Recipes declare tracking
+through Etude and pass their seed to the self-play loop.
+`experiment/config.py::Experiment` retains historical comparison declarations;
+current launch files return Etude jobs. Built-in recipes live in `manabot/recipes/`.
 Search distillation (the exp-10 BC/value loops and the `train_supervised`
 regime stage) is retired; replaying that workflow requires pinned source. Historical checkpoint dictionary keys remain unchanged,
 but old `ataraxos_move` recipes require pinned source rather than runtime aliases.
@@ -681,10 +687,10 @@ with those packages blocked.
   inference preparation, architecture receipts and world binding.
 - `sim/`: registered players, bounded game execution, replay, native card evidence,
   search and batched games.
-- `training/`: regime execution, seat-routed collection, learning rules,
-  numerical health and optimizer/collector recovery.
-  `regime.py` declares recipes; `records.py` holds measured run records.
-  `execution.py` sequences stages and owns the run lifecycle.
+- `training/`: loops, seat-routed collection, learning rules and numerical
+  health. `loops/self_play.py` is the self-play loop and its resumable state;
+  `learning.py` holds learning settings; `regime.py` reads saved regimes; `records.py`
+  reads retained run records.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
   complete-game accounting.
 - `training/updates/`: an update learns from one collected batch. The damped
@@ -695,13 +701,14 @@ with those packages blocked.
   ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
 - `training/loops/`: a loop keeps playing and updating until it is done; a
   one-page example (`minimal.py`).
-- `training/state/`: policy admission, exact learning snapshots, recovery and
-  retained game-failure state.
+- `training/state/`: game-failure ledgers and numerical incidents.
 - `belief/`: viewer histories, world distributions and belief models;
-  `sampling_fit.py` fits and persists hand samplers for `train_belief` stages.
-- `recipes/`: packaged local/baseline/belief recipes and composition helpers.
-- `experiment/`: authored comparisons, local scheduling, Etude job adapters,
-  checkpoint staging, evaluation scheduling/followers and artifact publication.
+  `collect.py` and `train.py` are the belief recipe's steps; `sampling_fit.py`
+  fits and persists hand samplers.
+- `recipes/`: our recipes (`elemental.py`, `belief_sampler.py`, local and
+  baseline) and the settings builders they share.
+- `experiment/`: retained comparison records, checkpoint evaluation,
+  machine setup and numerical validation.
 - `eval/`: evaluation protocols, admission, comparisons, population ratings,
   GIH reduction/query and MTG Arena log export.
 - `reports/`: retained-run projections, dashboards, report templates and
@@ -709,15 +716,15 @@ with those packages blocked.
 - `infra/`: runtime context, shared file operations and provenance identities.
 
 A policy checkpoint can be loaded for play without a trainer. Resuming a run
-also requires the admitted optimizer/collector/RNG snapshot and durable failure
-ledger. Moving files changes source identity; it does not admit an old run under
-new source or alter its frozen world, protocol or cost limits.
+needs its run folder: the save `out/state/current.json` names (weights, EMA,
+Adam and the cumulative counts) and the `game-attempts/` ledgers. Moving files changes source identity;
+it does not admit an old run under new source or alter its frozen world,
+protocol or cost limits.
 
 Reports use `reports.records.RetainedRun` to read recorded stage parameters as
 JSON without translating historical learning tags or adding current execution
-defaults. `TrainingRun` admits the current executable recipe; both share measured
-run fields through `RunRecord`. Reading or publishing a historical result does
-not admit its recipe for a new run or recovery.
+defaults; measured run fields are read through `RunRecord`. Reading or
+publishing a historical result does not make its regime runnable.
 
 [GIH card evaluation](../docs/evaluation.md#card-data) uses simulation replay capture and Etude
 tables for copy-weighted card rankings, explicit cohorts and offline Arena-log export.

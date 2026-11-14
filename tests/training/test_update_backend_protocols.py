@@ -22,7 +22,11 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.policy.checkpoint import PolicyCheckpoint, from_torch_state
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    collect,
+    open_collector,
+)
 from manabot.training.updates.backend import (
     AdmittedRollout,
     Arrays,
@@ -131,7 +135,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         ),
     )
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(MatchConfig()),
         Reward(RewardConfig()),
@@ -141,7 +145,7 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         batch_closure="exact-quota",
         device="cpu",
     )
-    batch = collector.collect(agent, 2)
+    batch = collect(collector, agent, 2)
     return from_torch_state(agent.config, space.encoder.config, state), batch
 
 

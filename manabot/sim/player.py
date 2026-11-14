@@ -1,48 +1,27 @@
-"""Inference players for scalar simulation; model admission lives in backends.torch.checkpoint."""
+"""Inference players for scalar simulation; model admission lives in backends.torch.checkpoint.
 
-from enum import Enum
-from typing import Dict
+`Player` is the interface `manabot.sim.sim` plays: a name and one action per
+encoded observation. `load_player` in that module picks the implementation.
+"""
+
+from typing import Protocol
 
 import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
-
-# Local imports
 from manabot.model.inference import admit_on_device
 
-# -----------------------------------------------------------------------------
-# Player Classes
-# -----------------------------------------------------------------------------
+
+class Player(Protocol):
+    name: str
+
+    def get_action(self, obs: dict[str, np.ndarray]) -> int:
+        """One action index for an encoded observation."""
+        ...
 
 
-class PlayerType(Enum):
-    """Types of players for evaluation."""
-
-    MODEL = "model"
-    RANDOM = "random"
-    DEFAULT = "default"
-
-
-class Player:
-    """Base player class for evaluation."""
-
-    def __init__(self, name: str, player_type: PlayerType):
-        self.name = name
-        self.player_type = player_type
-        self.device = "cpu"
-
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
-        """Get action from observation."""
-        raise NotImplementedError
-
-    def to(self, device: str) -> "Player":
-        """Move player to specified device."""
-        self.device = device
-        return self
-
-
-class ModelPlayer(Player):
+class ModelPlayer:
     """Player that uses a trained model for inference."""
 
     def __init__(
@@ -50,15 +29,12 @@ class ModelPlayer(Player):
         name: str,
         agent: ActorCritic,
         deterministic: bool = False,
-    ):
-        super().__init__(name, PlayerType.MODEL)
+    ) -> None:
+        self.name = name
         self.agent = agent
         self.deterministic = deterministic
-        self.device = next(agent.parameters()).device
 
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
-        """Get action from model."""
-        # Convert numpy arrays to tensors with batch dimension
+    def get_action(self, obs: dict[str, np.ndarray]) -> int:
         tensor_obs = admit_on_device(
             self.agent,
             {
@@ -66,41 +42,31 @@ class ModelPlayer(Player):
                 for k, v in obs.items()
             },
         )
-
-        # Get action from model
         with torch.no_grad():
             action, _, _, _ = self.agent.get_action_and_value(
                 tensor_obs, deterministic=self.deterministic
             )
-            return action.item()
-
-    def to(self, device: str) -> "ModelPlayer":
-        """Move player and model to device."""
-        super().to(device)
-        self.agent = self.agent.to(device)
-        return self
+            return int(action.item())
 
 
-class RandomPlayer(Player):
-    """Player that selects random valid actions."""
+class RandomPlayer:
+    """Player that selects a uniformly random valid action from numpy's global RNG."""
 
-    def __init__(self, name: str):
-        super().__init__(name, PlayerType.RANDOM)
+    def __init__(self, name: str) -> None:
+        self.name = name
 
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
-        """Get random valid action."""
+    def get_action(self, obs: dict[str, np.ndarray]) -> int:
         valid_actions = np.where(obs["actions_valid"] > 0)[0]
         if len(valid_actions) == 0:
             raise ValueError("No valid actions available")
-
         return int(np.random.choice(valid_actions))
 
 
-class DefaultPlayer(Player):
-    """Player that always plays 0."""
+class DefaultPlayer:
+    """Player that always plays action 0."""
 
-    def __init__(self, name: str):
-        super().__init__(name, PlayerType.DEFAULT)
+    def __init__(self, name: str) -> None:
+        self.name = name
 
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
+    def get_action(self, obs: dict[str, np.ndarray]) -> int:
         return 0

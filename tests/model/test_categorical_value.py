@@ -16,7 +16,7 @@ from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.admission import admit_observation
 from manabot.model.world import checkpoint_world
 from manabot.semantic.decision_contract import SemanticDecisionContract
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import Collector, collect, open_collector
 import managym
 
 
@@ -39,8 +39,8 @@ def _agent(
     )
 
 
-def _collector(agent: ActorCritic) -> SeatRoutedCollector:
-    return SeatRoutedCollector(
+def _collector(agent: ActorCritic) -> Collector:
+    return open_collector(
         agent.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -89,7 +89,7 @@ def test_value_interface_and_collection_likelihoods(
 ) -> None:
     agent = _agent(kind, aggregation, depth)
     collector = _collector(agent)
-    batch = collector.collect(agent, 4)
+    batch = collect(collector, agent, 4)
     obs = {
         key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
         for key, value in batch.observations().observation.items()
@@ -199,7 +199,7 @@ def test_checkpoint_rejects_incompatible_architecture_weights(
 def test_distributional_supervision_reaches_shared_encoder() -> None:
     agent = _agent("categorical_wdl")
     collector = _collector(agent)
-    batch = collector.collect(agent, 1)
+    batch = collect(collector, agent, 1)
     obs = {
         key: torch.from_numpy(value[0])
         for key, value in batch.observations().observation.items()

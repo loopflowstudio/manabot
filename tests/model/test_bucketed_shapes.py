@@ -18,6 +18,7 @@ from manabot.policy.buckets import (
     row_needs,
     sizes_of,
 )
+from manabot.training.rollout.collection import collect
 import managym
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -45,7 +46,7 @@ def _host(obs: dict[str, torch.Tensor]) -> dict[str, np.ndarray]:
 
 def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
     """Decisions from played turns: permanents, facts and public history."""
-    batch = case.collector.collect(case.agent, 24)
+    batch = collect(case.collector, case.agent, 24)
     return {
         key: torch.from_numpy(value[-8:, 0]).float()
         for key, value in batch.observations().observation.items()
@@ -194,7 +195,7 @@ def test_row_needs_regroup_to_the_measured_buckets(objects: bool) -> None:
     measuring the group directly gives, so later epochs need not measure."""
     case = _policy(history=True)
     encoder = case.agent.observation_space.encoder
-    batch = case.collector.collect(case.agent, 24)
+    batch = collect(case.collector, case.agent, 24)
     obs = {
         key: torch.from_numpy(value[:, 0]).float()
         for key, value in batch.observations().observation.items()
@@ -218,7 +219,7 @@ def test_collection_records_each_rows_measured_needs() -> None:
     equal to measuring the recorded rows again, so learning reuses them."""
     case = _policy(history=True)
     agent = _bucketed(case)
-    batch = case.collector.collect(agent, 12)
+    batch = collect(case.collector, agent, 12)
     rows = np.arange(batch.actions.size)
     recorded = batch.recorded.gather_needs(rows)
     assert recorded is not None

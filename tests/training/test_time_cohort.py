@@ -209,7 +209,7 @@ def test_etude_written_logs_are_selectable_without_invented_phases(
     tmp_path: Path,
 ) -> None:
     from etude.train.records import Step, Time
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     for seed, seconds in [(1, 10.0), (2, 100.0)]:
         run = track(
@@ -329,7 +329,7 @@ def test_standalone_uses_cohort_page_and_escapes_untrusted_data(tmp_path: Path) 
 
 def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> None:
     from etude.train.records import Step, Time
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
@@ -394,10 +394,10 @@ def test_cli_creates_report_from_saved_native_records(tmp_path: Path) -> None:
 def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
     tmp_path: Path,
 ) -> None:
-    from etude.run.records import Continuation
+    from etude.records import Continuation
     from etude.train.read import read_all
     from etude.train.records import Step, Time
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     clocks = [
         Time("training_seconds", "active seconds"),
@@ -430,7 +430,7 @@ def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
 
 def test_mixed_record_schemas_and_phase_coverage(tmp_path: Path) -> None:
     from etude.train.records import Step
-    from etude.train.run import track
+    from etude.train.tracking import track
 
     native_dir = tmp_path / "native"
     native_dir.mkdir()

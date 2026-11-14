@@ -24,13 +24,8 @@ from manabot.experiment.config import (
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.training.regime import (
-    ArtifactReference,
-    DampedPolicyLearning,
-    Execution,
-    ImportPolicy,
-    Learning,
-)
+from manabot.training.learning import DampedPolicyLearning, Learning
+from manabot.training.regime import ArtifactReference, Execution, ImportPolicy
 from tests.training.wdl_baseline import wdl_baseline
 
 
@@ -346,7 +341,6 @@ def test_resolution_allocates_no_model_training_or_store(
     def forbidden(*args: object, **kwargs: object) -> NoReturn:
         raise AssertionError("resolution attempted execution")
 
-    monkeypatch.setattr("manabot.training.execution.execute_regime", forbidden)
     monkeypatch.setattr("manabot.backends.torch.policy.ActorCritic.__init__", forbidden)
     monkeypatch.setattr("manabot.verify.store.VerifyStore.__init__", forbidden)
     monkeypatch.setattr("managym.Env", forbidden)

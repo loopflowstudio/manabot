@@ -154,6 +154,11 @@ documents them. A backend never carries its own copy of an update's loss:
 
 ## The torch backend
 
+`capture(out, settings, run)` records one damped-policy update from `SelfPlay`
+settings in an open Etude run. It writes `settings.json`, the initial policy,
+collection calls and learner minibatches. Frozen experiment capture commands
+require their original revision; retained captures remain readable.
+
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.capture` | bounded real-call and learner-input capture for backend comparisons |
@@ -266,7 +271,7 @@ parity: pass (torch, mlx)
 The check runs the PyTorch model in float32 on CPU as the reference and every
 installed backend, torch included, on the same inputs, each side computing
 the damped update's `minibatch_objective` through its own backend: a
-capture directory written by `experiments/mlx_pilot.py capture` (real learner
+retained capture directory written by the frozen MLX pilot (real learner
 minibatches with their targets and settings, and real collection calls). Each
 backend loads the reference's weights through the canonical names and is
 compared in its own parameter layout. The check compares logits on legal

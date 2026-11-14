@@ -1,5 +1,8 @@
 """MTG-186: one two-seat seed trained only on UR vs GW, compared with MTG-181.
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Jack Heart's question (2026-10-25): does training on the one matchup beat
 MTG-181's training on all ten Elemental decks, on that matchup and across the
 other 99 grid cells? The protocol is experiments/protocols/mtg186.md; the
@@ -38,11 +41,11 @@ from experiments.elemental_grid import (
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.config import Baseline, Case, Experiment
-from manabot.experiment.execution import PlannedRun
+from manabot.experiment.records import PlannedRun
 from manabot.infra.identity import canonical_json, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.world import checkpoint_world
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, refuse_frozen_execution
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,7 +105,7 @@ def experiment() -> Experiment:
 
 def train(revision: str) -> tuple[Run, ...]:
     """The one training run, frozen at an explicit committed revision."""
-    return experiment().runs(repo=ROOT, revision=revision)
+    refuse_frozen_execution()
 
 
 def identity() -> dict[str, object]:

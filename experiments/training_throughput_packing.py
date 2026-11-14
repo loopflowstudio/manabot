@@ -1,5 +1,9 @@
 """Step 2 of the training-throughput experiment: does packing change learning? (Task b015d5)
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 Protocol: experiments/protocols/training-throughput-b015d5-v1.md, "Step 2". Four
 seeds share one machine through Etude `--slots 4`. Each seed is its own process, so
 a packed seed should learn as a solo seed does unless something leaks between them.

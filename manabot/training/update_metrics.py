@@ -1,6 +1,6 @@
 """Per-update self-play diagnostics as Etude metrics, written once and read back.
 
-The learner logs each update's diagnostics to its Etude run (RunContext);
+The learner logs each update's diagnostics to its Etude run;
 TrainingRun keeps counters and receipts. Matchup outcomes are an Etude row
 table per update (`OUTCOME_TABLE`, logged with `Run.log_table`), so deck pairs
 add rows rather than metric columns. `metric_row` produces flat "/"-joined
@@ -12,8 +12,8 @@ the record's retained rows for every other stage.
 
 `phase_seconds` and `time_since` give each row the seconds its update spent
 in collection and learning, nested by "/" under `time/` for Etude's flame
-graph. They are differences of the stage record's cumulative phase timers, so
-the record stays the one measurement and each row its per-update share.
+graph. They read the live profilers; retained stage timers remain historical
+report data.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -21,11 +21,12 @@ from pathlib import Path
 import re
 from typing import Protocol
 
-from etude.run.listing import runs
+from etude.run import runs
 from etude.train.manifest import StoredBlock
 from etude.train.read import RunData, read
 
-from manabot.training.records import PhaseTiming, StageRecord
+from manabot.infra.profiler import Profiler
+from manabot.training.records import StageRecord
 
 type MetricValue = float | int | str | bool
 type MetricRow = dict[str, MetricValue]
@@ -84,37 +85,22 @@ def metric_row(diagnostic: Mapping[str, object]) -> MetricRow:
     return row
 
 
-def phase_seconds(record: StageRecord) -> dict[str, float]:
-    """A stage's cumulative collection and learning seconds as `time/` metric keys.
-
-    Profiler subphases nest below their phase by path, in lower snake case:
-    learning's `Minibatches/Forward and loss` is
-    `time/learning/minibatches/forward_and_loss`.
-    """
-    found = {
-        "time/collection": record.collection_seconds,
-        "time/learning": record.learning_seconds,
-    }
-    for phase, timings in (
-        ("collection", record.collection_timings),
-        ("learning", record.learning_timings),
-    ):
-        found |= _subphases(phase, timings or {})
-    return found
-
-
-def _subphases(phase: str, timings: Mapping[str, PhaseTiming]) -> dict[str, float]:
+def phase_seconds(collection: Profiler, learning: Profiler) -> dict[str, float]:
+    """Cumulative profiler seconds under the historical normalized `time/` keys."""
     return {
-        f"time/{phase}/"
+        "time/"
         + "/".join(
             re.sub(r"[^a-z0-9]+", "_", part.lower()).strip("_")
             for part in path.split("/")
-        ): timing.seconds
-        for path, timing in timings.items()
+        ): node.running_total()
+        for profiler in (collection, learning)
+        for path, node in profiler.node_cache.items()
     }
 
 
-def time_since(before: Mapping[str, float], now: Mapping[str, float]) -> MetricRow:
+def time_since(
+    before: Mapping[str, float], now: Mapping[str, float]
+) -> dict[str, float]:
     """Seconds each timer gained between two `phase_seconds` readings of one attempt."""
     return {key: value - before.get(key, 0.0) for key, value in now.items()}
 
@@ -168,14 +154,14 @@ def _updates(data: RunData) -> Updates:
     # Group blocks, not decoded rows: read one block at a time without populating
     # RunData.columns, which caches the entire history. Keep empty attempts too.
     writers: dict[str, list[StoredBlock]] = {
-        attempt.writer: [] for attempt in data.attempts
+        attempt.writer: [] for attempt in data.writers
     }
-    started = {attempt.writer: attempt.started_ms for attempt in data.attempts}
+    started = {attempt.writer: attempt.started_ms for attempt in data.writers}
     for block in data.blocks:
         writer = block.header.writer
         writers.setdefault(writer, []).append(block)
         started.setdefault(writer, block.header.wall_first)
-    attempts = {attempt.writer: attempt for attempt in data.attempts}
+    attempts = {attempt.writer: attempt for attempt in data.writers}
     selected: dict[int, MetricRow] = {}
     for writer in sorted(writers, key=started.__getitem__):
         attempt = attempts.get(writer)
@@ -198,7 +184,14 @@ def _updates(data: RunData) -> Updates:
         # A later attempt replaces history beyond its resume point, including
         # when it has no rows. Within an attempt each metric's latest write wins.
         if resumed is not None:
-            selected = {u: row for u, row in selected.items() if u <= resumed}
+            # Current writers replace the first logged coordinate itself;
+            # historical checkpoint cuts retain it.
+            first_row = attempt is not None and attempt.first_row
+            selected = {
+                u: row
+                for u, row in selected.items()
+                if u < resumed or (u == resumed and not first_row)
+            }
         selected.update(rows)
     if any(_RETIRED_OUTCOME_REFERENCE in row for row in selected.values()):
         raise ValueError(

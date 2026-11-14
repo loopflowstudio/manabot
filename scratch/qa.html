@@ -1,0 +1,82 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MTG-329 QA — run execution moved to Etude (second pass)</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em;color:#222}pre{background:#f5f2ea;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}</style></head>
+<body>
+<h1>MTG-329 QA, second pass: manabot train on the Etude run API</h1>
+<p>Revision 8773d51e2 plus the fix below, 2026-11-13, laptop. The first pass's full report is at
+<code>82991cf850:scratch/qa.html</code>; this pass checks its follow-through and goes on to what a person does with a trained policy.
+Etude SDK: EXP-56 source at <code>105abdd</code> (PR #103 still OPEN), overlaid with <code>uv run --no-sync --with &lt;checkout&gt;</code>.
+The native extension (09:26) is newer than the last Rust change (09:10); origin/main has nothing new. Host one-minute load read about 250 from other work, so timings are noisy. I added no load. Outputs went to ignored <code>.runs/qa2/</code>.</p>
+
+<h2>1. Pinned SDK (unchanged)</h2>
+<pre>$ uv run --no-sync manabot --help
+ModuleNotFoundError: No module named 'etude.stopping'</pre>
+<p>Still blocks every subcommand until the SDK release and pin.</p>
+
+<h2>2. Fresh run, Ctrl-C, resume</h2>
+<pre>$ manabot train --out .runs/qa2/local --device cpu          → "local: completed in .runs/qa2/local", exit 0, 7.1 s
+SIGINT to the process group once checkpoint 2 existed, in an 8-update run:
+exit 130
+Interrupted. Rerun with --out .runs/qa2/int to resume from the last saved state.
+$ manabot train --out .runs/qa2/int --device cpu --updates 4   → completed, exit 0; checkpoints 0–2: shasum -c all OK
+$ etude checkpoints --source .runs/qa2/int                      → five records, updates 0–4, training_seconds rising</pre>
+<p>The first pass's silent exit 130 now tells the person what to do. Etude's state.json reads <code>failed</code> after the
+interrupt and <code>finished</code> after the resume (Etude's known status overwrite, below).</p>
+
+<h2>3. Playing the trained policy</h2>
+<p>Deck files written from the checkpoint's <code>world_binding["setups"]</code>.</p>
+<pre>$ manabot sim --hero-deck-file hero.txt --villain-deck-file villain.txt \
+    --set sim.hero=.runs/qa2/local/checkpoints/00000002-ema.pt --set sim.villain=random --set sim.num_games=4 --set sim.num_threads=1
+Simulation complete: 4 games … Villain wins: 2, Timeouts: 2           (a 2-update policy; exit 0)
+$ … --set sim.hero=.runs/qa2/local/etude/local/checkpoints/updates-2.json \
+    --set sim.villain=.runs/qa2/int/checkpoints/00000004-ema.pt --set sim.num_games=2
+Hero wins: 1, Villain wins: 1</pre>
+<p>Both forms the README advertises work: a policy <code>.pt</code> and an Etude checkpoint record. Checkpoints carry
+<code>source = {commit: 8773d51e…, dirty: False, etude_run: 'local'}</code>. <code>global_step</code> is 0, as on main. sim prints
+every observation shape at DEBUG (pre-existing, not from this change).</p>
+
+<h2>4. Other recipes</h2>
+<pre>$ manabot train --list                                  → local, baseline, elemental, belief, batched_baseline
+$ manabot train --out .runs/qa2/steps --device cpu --steps 3
+Warning: --steps is deprecated; use --updates. … will be removed in Manabot 0.3.0.   → 4 checkpoints, exit 0
+$ manabot train --recipe batched_baseline --device cpu --updates 1 --seconds 120   → completed, 22 s, checkpoints 0–1
+$ manabot train --recipe elemental --device cpu --seconds 60
+stopped at update 1; run again to resume                → exit 75 after 72 s; state.pt, checkpoint 0, game-attempts/
+$ manabot train --recipe belief --out .runs/qa2/belief  → belief-00000001-raw.pt, histories-…, policy/</pre>
+<p>Elemental on the laptop (256 CPU streams, the README's local command) stops on the deadline after one update, rather than
+running past it. Its error-handling configuration creates <code>game-attempts/</code>, as the guide now says.</p>
+
+<h2>5. Wrong recipe names</h2>
+<pre>--recipe experiments/batched_baseline.py   (before) Invalid value: recipe must name a module and optional function
+                                            (after)  Invalid value: recipe 'experiments/batched_baseline.py' must be an experiment
+                                                     module name with an optional function (&lt;experiment&gt; or
+                                                     &lt;experiment&gt;:&lt;function&gt;, not a path); use --list
+--recipe batched_baseline:nosuch            Invalid value: recipe must be a function taking one typed config
+--recipe batched_baseline:seat_comparison   (same; a frozen regime builder)
+--recipe nosuchmod:train                    Invalid value: unknown recipe 'nosuchmod:train'; use --list</pre>
+<p>All exit 2 with no traceback. A path is a natural guess because the Etude commands take <code>experiments/&lt;name&gt;.py</code>.</p>
+
+<h2>Fixed</h2>
+<p><code>manabot/cli.py</code> <code>experiment_recipe</code>: a malformed name now shows the accepted form and points to <code>--list</code>.
+Ruff check/format clean; with the SDK overlay <code>tests/training/test_recipe_etude.py</code>: 10 passed (23 s).</p>
+
+<h2>What works now</h2>
+<p>With EXP-56's SDK: fresh run, finished rerun, extension with earlier bytes unchanged, deadline stop (exit 75) and resume for
+local and Elemental, Ctrl-C with resume guidance (exit 130) and resume, belief, batched_baseline, the deprecated
+<code>--steps</code>, clear refusals for malformed recipes, and playing the result with <code>manabot sim</code> by <code>.pt</code> or Etude record.</p>
+
+<h2>Not reached</h2>
+<ul>
+<li>Anything through a released SDK: installed consumers, <code>etude smoke/launch experiments/elemental.py</code>, provider
+retry/restore, <code>etude continue</code>. All wait on PR #103's release and the pin.</li>
+<li><code>--recipe baseline</code>: needs CUDA or explicit MPS; not run on this loaded laptop.</li>
+<li>Game-error ledgers and failure capture with a real game error: none occurred.</li>
+</ul>
+
+<h2>Still wrong, worst first</h2>
+<ol>
+<li>No SDK release: on the committed pin every <code>manabot</code> subcommand fails at import. Blocks publication.</li>
+<li>Etude marks a finished run <code>failed</code> after a refused <code>--out</code> reuse or a Ctrl-C, until the next good rerun
+(seen again here). Belongs to Etude; recorded in plan.md.</li>
+</ol>
+</body></html>

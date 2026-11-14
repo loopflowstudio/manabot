@@ -3,7 +3,7 @@
 Results that runs write under ``experiments/data/`` are evidence, not source, so
 git keeps only ``experiments/data.manifest.json``: each repository-relative path
 with the sha256 and size of its bytes. The bytes live once per digest at
-``<store>sha256/<digest>`` (``ArtifactStore`` owns the bucket protocol).
+``<store>sha256/<digest>`` (``manabot.infra.artifacts`` owns the bucket protocol).
 
 A machine-wide cache, shared by every worktree, holds one read-only file per
 digest at ``$MANABOT_DATA_CACHE/<digest>`` (default
@@ -35,7 +35,12 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from manabot.infra.artifacts import ArtifactStore, StoredArtifact, split_bucket_uri
+from manabot.infra.artifacts import (
+    StoredArtifact,
+    download_artifact,
+    publish_artifact,
+    split_bucket_uri,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "experiments" / "data.manifest.json"
@@ -179,7 +184,6 @@ def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> lis
             files.append(relative)
         else:
             raise ValueError(f"no local file or directory at {request}")
-    store = ArtifactStore()
     cache = cache_directory()
     entries = dict(manifest.files)
     changed: list[str] = []
@@ -187,7 +191,7 @@ def publish_data(paths: Iterable[str], *, manifest_path: Path = MANIFEST) -> lis
         entry = file_entry(ROOT / path)
         if entries.get(path) == entry:
             continue
-        store.publish(
+        publish_artifact(
             ROOT / path, manifest.store, sha256=entry.sha256, size=entry.bytes
         )
         if _cached(cache, entry) is None:
@@ -270,10 +274,9 @@ def _download(entries: list[DataFile], manifest: DataManifest, cache: Path) -> N
     except ImportError as error:
         raise DataUnavailable("fetching needs `uv run --extra artifacts`") from error
     try:
-        store = ArtifactStore()
         for entry in entries:
             reference = manifest.stored(entry)
-            _admit(cache, entry, lambda partial: store.download(reference, partial))
+            _admit(cache, entry, lambda partial: download_artifact(reference, partial))
     except BotoCoreError as error:  # no credentials, endpoint or connection
         raise DataUnavailable(str(error)) from error
     except ClientError as error:

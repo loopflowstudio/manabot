@@ -1,37 +1,17 @@
-"""Execute a frozen attack cohort and retain replayable arena evidence.
+"""Read frozen attack results and report their paired learning curves.
 
-Training uses the ordinary regime executor. Every attacker checkpoint, including
-its untrained baseline, faces the same target on all four seat/deck assignments.
-Failures stop the cohort and remain in its manifest; they are never dropped from
-an aggregate. These are bounded attacks, not exploitability certificates.
+Execution is retired; its entry point names the last runnable revision.
 """
 
 import argparse
-from dataclasses import asdict
 from pathlib import Path
-import signal
-import time
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 from pydantic import Field
-import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.eval.match import play_cell
-from manabot.eval.models import EvaluationKey
 from manabot.experiment.attacks import AttackPlan
-from manabot.infra.files import atomic_json
-from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.infra.provenance import authored_matchup_sha256
-from manabot.reports.analysis import valid_game
-from manabot.sim.matchup import SELECTED_SUITE, selected_match
-from manabot.sim.registration import PlayerRegistration
-from manabot.training.execution import execute_regime
-from manabot.training.records import TrainingRun
-from manabot.training.regime import Strict
-from manabot.verify.scenario_validation import validate_scenarios
-from manabot.verify.store import VerifyStore
+from manabot.training.regime import Strict, refuse_frozen_execution
 
 
 class AttackPoint(Strict):
@@ -54,36 +34,6 @@ class AttackResult(Strict):
     points: list[AttackPoint] = Field(default_factory=list)
     seconds: float = 0
     error: str | None = None
-
-
-def _player(path: Path, name: str, seed: int, run: TrainingRun) -> PlayerRegistration:
-    agent, _ = load_checkpoint(str(path))
-    identity = run.identities
-    return PlayerRegistration(
-        player_id=name,
-        display_name=name,
-        role="challenger",
-        runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "deterministic": False,
-            "device": "cpu",
-            "batch_size": 1,
-        },
-        compute_class_id="policy-cpu-one-thread-one-pass",
-        information_boundary="acting-viewer",
-        world=run.regime.world,
-        content_suite=SELECTED_SUITE,
-        observation_abi_sha256=identity["observation_abi_sha256"],
-        action_abi_sha256=identity["action_abi_sha256"],
-        matchup_sha256=authored_matchup_sha256(identity, "attack arena"),
-        checkpoint_sha256=file_sha256(path),
-        checkpoint_bytes=path.stat().st_size,
-        parameter_count=sum(p.numel() for p in agent.parameters()),
-        training_seed=seed,
-        artifact_id=f"attack/{file_sha256(path)}",
-        player_seed_derivation_id="arena-pair-deal-player-v1",
-    )
 
 
 def _report(plan: AttackPlan, result: AttackResult, out: Path) -> None:
@@ -133,179 +83,13 @@ def _report(plan: AttackPlan, result: AttackResult, out: Path) -> None:
     (out / "report.md").write_text("\n".join(lines) + "\n")
 
 
-def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
-    """Fresh output only; alarm requires a POSIX main-thread caller.
-
-    Legacy arena dictionaries are persisted intact at this boundary. Scores are
-    admitted only after complete terminal games and policy-free Command replay.
-    """
-    plan = AttackPlan.model_validate(plan.model_dump())
-    if plan.template.match != selected_match():
-        raise ValueError("attack arena requires the selected matchup")
-    previous_timer = signal.getitimer(signal.ITIMER_REAL)
-    if previous_timer[0] != 0:
-        raise ValueError("attack runner requires ownership of its deadline timer")
-    out.mkdir(parents=True, exist_ok=False)
-    atomic_json(out / "plan.json", plan.model_dump(mode="json"))
-    result = AttackResult(plan_digest=canonical_sha256(plan.model_dump(mode="json")))
-    start = time.perf_counter()
-    previous_threads = torch.get_num_threads()
-    previous_handler = signal.getsignal(signal.SIGALRM)
-
-    def timeout(_signum: int, _frame: Any) -> None:
-        # Python signal frame is an interpreter boundary, not domain data.
-        raise TimeoutError("attack cohort deadline exceeded")
-
-    def save() -> None:
-        result.seconds = time.perf_counter() - start
-        atomic_json(out / "result.json", result.model_dump(mode="json"))
-        _report(plan, result, out)
-
-    signal.signal(signal.SIGALRM, timeout)
-    signal.setitimer(signal.ITIMER_REAL, plan.total_seconds)
-    torch.set_num_threads(1)
-    evaluation_spent = 0.0
-    try:
-        save()
-        atomic_json(
-            out / "scenarios.json",
-            [
-                asdict(item)
-                for item in validate_scenarios(selected_match=plan.template.root_match)
-            ],
-        )
-        with VerifyStore(out / "training.sqlite") as store:
-            for target in plan.targets:
-                if file_sha256(target.policy.path) != target.policy.sha256:
-                    raise ValueError("target bytes differ from frozen plan")
-                for seed in plan.attacker_seeds:
-                    run_dir = out / f"{target.id}-{seed}"
-                    result.run_paths.append(str(run_dir))
-                    save()
-                    run = execute_regime(plan.regime_for(target), seed, run_dir, store)
-                    result.runs.append(run.id)
-                    target_player = _player(
-                        Path(target.policy.path),
-                        f"target-{target.id}",
-                        target.producer_seeds[0],
-                        run,
-                    )
-                    key = EvaluationKey(
-                        world=run.regime.world,
-                        content_suite=SELECTED_SUITE,
-                        viewer_boundary="acting-viewer",
-                        arena_version="frozen-attack-v1",
-                        rating_model_version="unrated",
-                        rating_prior_sha256=canonical_sha256({}),
-                        anchor_cohort_sha256=canonical_sha256(
-                            [target_player.model_dump()]
-                        ),
-                        evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
-                    )
-                    snapshots = [
-                        (
-                            0,
-                            Path(run.stages[0].artifacts["initial_raw"]["path"]),
-                            run.setup_seconds,
-                        )
-                    ]
-                    snapshots.extend(
-                        (
-                            updates,
-                            Path(stage.artifacts["raw"]["path"]),
-                            float(stage.cumulative_seconds),
-                        )
-                        for updates, stage in zip(
-                            plan.cumulative_updates, run.stages, strict=True
-                        )
-                    )
-                    for updates, path, training_seconds in snapshots:
-                        cell = out / f"arena-{target.id}-{seed}-{updates}"
-                        cell.mkdir()
-                        attacker = _player(
-                            path, f"attacker-{seed}-{updates}", seed, run
-                        )
-                        atomic_json(
-                            cell / "registrations.json",
-                            [attacker.model_dump(), target_player.model_dump()],
-                        )
-                        point = AttackPoint(
-                            target=target.id,
-                            seed=seed,
-                            updates=updates,
-                            training_seconds=training_seconds,
-                            evidence_path=str(cell),
-                        )
-                        result.points.append(point)
-                        save()
-                        available = min(
-                            plan.total_seconds - (time.perf_counter() - start),
-                            plan.evaluation_seconds - evaluation_spent,
-                        )
-                        if available <= 0:
-                            raise TimeoutError("attack evaluation allocation exhausted")
-                        signal.setitimer(signal.ITIMER_REAL, available)
-                        tick = time.perf_counter()
-                        try:
-                            rows, trace, replay = play_cell(
-                                key=key,
-                                player_a=attacker,
-                                player_b=target_player,
-                                deal_seeds=plan.final_deal_seeds,
-                                out_dir=cell,
-                                checkpoint_paths={
-                                    attacker.player_id: str(path),
-                                    target_player.player_id: target.policy.path,
-                                },
-                                comparison_seed_aliases={
-                                    attacker.player_id: "attacker",
-                                    target_player.player_id: "target",
-                                },
-                                game_seconds=plan.game_seconds,
-                                max_commands=plan.max_commands,
-                            )
-                            atomic_json(
-                                cell / "evidence.json",
-                                {"rows": rows, "trace": trace, "replay": replay},
-                            )
-                            point.games = len(rows)
-                            point.replay_passed = bool(replay["passed"])
-                            if (
-                                not point.replay_passed
-                                or len(rows) != 4 * len(plan.final_deal_seeds)
-                                or not all(valid_game(row) for row in rows)
-                            ):
-                                raise ValueError(
-                                    "incomplete, invalid or unreplayable attack cell"
-                                )
-                            point.score = sum(
-                                float(row["score_a"]) for row in rows
-                            ) / len(rows)
-                        finally:
-                            point.evaluation_seconds = time.perf_counter() - tick
-                            evaluation_spent += point.evaluation_seconds
-                            save()
-                            remaining = plan.total_seconds - (
-                                time.perf_counter() - start
-                            )
-                            if remaining > 0:
-                                signal.setitimer(signal.ITIMER_REAL, remaining)
-                    save()
-        result.status = "completed"
-        return result
-    except BaseException as error:
-        result.status = "failed"
-        result.error = f"{type(error).__name__}: {error}"
-        raise
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
-        torch.set_num_threads(previous_threads)
-        save()
+def execute_attack_plan(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 def main() -> None:
-    """`python -m manabot.experiment.attack_execution --plan PLAN --out DIR`."""
+    """`uv run python -m manabot.experiment.attack_execution --plan PLAN --out DIR`."""
     parser = argparse.ArgumentParser(description="Execute a frozen-policy attack plan.")
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)

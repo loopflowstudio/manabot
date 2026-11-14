@@ -3,6 +3,7 @@
 from copy import deepcopy
 from pathlib import Path
 
+from etude.train.tracking import track
 import numpy as np
 import pytest
 import torch
@@ -13,14 +14,13 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.admission import admit_observation
 from manabot.model.shared_effects import SharedEffectEncoder, admit_shared_effects
-from manabot.recipes.local import local_smoke
+from manabot.recipes.baseline import settings
+from manabot.recipes.local import LocalConfig
 from manabot.sim.rollout import BatchedSampler
 from manabot.sim.search.value import ValueScorer
-from manabot.training.execution import execute_regime
-from manabot.training.regime import TrainingRegime
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
 from manabot.verify.action_cases import reorder_objects
 from manabot.verify.representation import shared_effect_root
-from manabot.verify.store import VerifyStore
 import managym
 
 
@@ -117,19 +117,25 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("card_capacity", (60, 128))
 def test_shared_effect_policy_uses_ordinary_learner_and_export(
-    tmp_path: Path, card_capacity: int
+    tmp_path: Path, card_capacity: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    regime = local_smoke(steps=1, seconds=120, device="cpu")
-    regime.id = "shared-effects-engineering-smoke"
-    regime.observation = ObservationConfig(max_cards_per_player=card_capacity)
-    regime = TrainingRegime.model_validate(regime.model_dump())
-    with VerifyStore(tmp_path / "verify.sqlite") as store:
-        run = execute_regime(regime, 73200, tmp_path / "training", store)
-    assert run.status == "completed" and run.updates_through() == 1
-    assert run.stages[0].learner_transitions > 0
-    model, space = load_checkpoint(run.stages[0].artifacts["raw"]["path"])
+    inputs = settings(LocalConfig(updates=1)).model_copy(
+        update={
+            "streams": 2,
+            "transitions": 16,
+            "observation": ObservationConfig(max_cards_per_player=card_capacity),
+        }
+    )
+    inputs = SelfPlay.model_validate(inputs.model_dump())
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "training"))
+    monkeypatch.setenv("ETUDE_SEED", "73200")
+    with track(
+        experiment="test", run="effects", clocks=CLOCKS, directory=tmp_path / "track"
+    ) as run:
+        path = self_play(inputs, run, updates=1)
+    model, space = load_checkpoint(str(path))
     assert isinstance(model.shared_effects, SharedEffectEncoder)
-    assert space.encoder.config == regime.observation
+    assert space.encoder.config == inputs.observation
 
 
 def test_shared_memberships_are_object_joins_under_permutation() -> None:

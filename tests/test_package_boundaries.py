@@ -367,12 +367,7 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/eval/evaluate.py",
         "manabot/eval/local.py",
         "manabot/eval/serving_benchmark.py",
-        "manabot/experiment/attack_execution.py",
-        "manabot/experiment/evaluation_queue.py",
         "manabot/experiment/numerics.py",
-        "manabot/experiment/runner.py",
-        "manabot/experiment/study.py",
-        "manabot/infra/runtime.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
         "manabot/model/admission.py",
@@ -386,7 +381,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/model/records.py",
         "manabot/model/semantic_cards.py",
         "manabot/model/shared_effects.py",
-        "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/reports/selection.py",
         "manabot/sim/guidance.py",
@@ -399,16 +393,13 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/sim/search/value.py",
         "manabot/sim/serving.py",
         "manabot/sim/table_bots.py",
-        "manabot/training/execution.py",
         "manabot/training/loops/minimal.py",
+        "manabot/training/loops/self_play.py",
         "manabot/training/mps.py",
         "manabot/training/rollout/actions.py",
         "manabot/training/rollout/collection.py",
         "manabot/training/rollout/selection_data.py",
-        "manabot/training/state/admission.py",
         "manabot/training/state/incidents.py",
-        "manabot/training/state/learning_state.py",
-        "manabot/training/state/recovery.py",
         "manabot/training/updates/health.py",
         "manabot/verify/action_cases.py",
         "manabot/verify/checkpoint_scenarios.py",
@@ -465,7 +456,7 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
     # only (under TYPE_CHECKING); the runtime probe below holds it to that.
     assert violations == [
         "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
-        "manabot/backends/torch/learner.py: manabot.training.regime",
+        "manabot/backends/torch/learner.py: manabot.training.learning",
     ]
 
 

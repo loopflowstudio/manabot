@@ -19,7 +19,7 @@ from manabot.model.architecture import (
     validate_architecture_receipt,
 )
 from manabot.model.facts import FactEncoder, admit_facts
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import collect, open_collector
 
 
 @pytest.mark.parametrize("width,depth", [(64, 1), (64, 2), (128, 2)])
@@ -46,7 +46,7 @@ def test_capacity_export_and_real_legal_policy(
     assert receipt.parameters.trainable == receipt.parameters.total
     assert sum(p.total for p in receipt.components.values()) == receipt.parameters.total
     assert ("extra_attention" in receipt.components) == (depth == 2)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -54,7 +54,7 @@ def test_capacity_export_and_real_legal_policy(
         seed=102,
         batch_closure="exact-quota",
     )
-    batch = collector.collect(agent, 2)
+    batch = collect(collector, agent, 2)
     obs = admit_observation(
         agent,
         {

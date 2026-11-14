@@ -1,5 +1,9 @@
 """The unscored calibration run that sets the Elemental exact arm's quota (Task 07c490).
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 One seed of `experiments/elemental_closure.py`'s complete-games arm for 30 updates.
 Etude names a run's experiment after its launch file, so the calibration has its own
 file and no evaluation pass of the closure study sees it. Protocol:

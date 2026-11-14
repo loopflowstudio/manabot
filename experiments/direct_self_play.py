@@ -1,5 +1,9 @@
 """Direct PPO self-play: the default model on the selected Allies/Lessons match.
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 `uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot`
 trains it for 900 seconds; the ablation and compound studies derive their arms
 from it.
@@ -8,7 +12,8 @@ from it.
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, ppo_checkpoints
 from manabot.sim.matchup import selected_match
-from manabot.training.regime import Learning, TrainingRegime
+from manabot.training.learning import Learning
+from manabot.training.regime import TrainingRegime
 import managym
 
 

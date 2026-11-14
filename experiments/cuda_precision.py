@@ -1,5 +1,8 @@
 """MTG-317: CUDA training under TF32 and BF16 against float32 on one L4.
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Report and the acceptance rule fixed before any scored run:
 `experiments/cuda_precision.md`. One rented L4 runs `measure` (`etude.call`):
 
@@ -35,11 +38,9 @@ Report and the acceptance rule fixed before any scored run:
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
-import inspect
 import json
 import math
 import os
@@ -49,17 +50,18 @@ import tempfile
 import time
 from typing import Any, Literal, TypedDict
 
-from etude.launch.records import Job, Run
+from etude.spec import Job, RunRequest
 from pydantic import BaseModel, ConfigDict
 import torch
 
-from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
-from manabot.training.regime import DampedPolicyLearning, Precision
+from manabot.training.learning import DampedPolicyLearning, Precision
+from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 type ArmName = Literal["float32", "tf32", "bf16", "float32-order", "float32-repeat"]
-# Run order inside a group; the float32 repeat last shows host drift.
+# RunRequest order inside a group; the float32 repeat last shows host drift.
 ARMS: tuple[ArmName, ...] = (
     "float32",
     "tf32",
@@ -161,134 +163,9 @@ class _Captured(TypedDict):
     lr: float
 
 
-@contextmanager
-def _capturing(folder: Path, probe: Probe) -> Iterator[None]:
-    """Keep initial weights, collection observations and learner loss inputs."""
-    from manabot.backends.torch.policy import ActorCritic
-    from manabot.model.inference import PreparedObservation
-    from manabot.training.updates.health import OptimizerHealth
-
-    (folder / "collection").mkdir(parents=True, exist_ok=True)
-    (folder / "learner").mkdir(parents=True, exist_ok=True)
-    forward = ActorCritic.forward_distribution
-    check = OptimizerHealth.check
-    counts = {"collect": 0, "kept": 0, "learn": 0}
-
-    def hooked_forward(
-        self: ActorCritic, obs: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        if not (folder / "initial.pt").exists():
-            torch.save(
-                {k: v.detach().cpu().clone() for k, v in self.state_dict().items()},
-                folder / "initial.pt",
-            )
-        if not torch.is_grad_enabled() and isinstance(obs, PreparedObservation):
-            if (
-                counts["collect"] % probe.collect_every == 0
-                and counts["kept"] < probe.collect_keep
-            ):
-                torch.save(
-                    {k: v.detach().cpu().clone() for k, v in obs.items()},
-                    folder / "collection" / f"{counts['kept']:03d}.pt",
-                )
-                counts["kept"] += 1
-            counts["collect"] += 1
-        return forward(self, obs)
-
-    def hooked_check(self: OptimizerHealth, loss: torch.Tensor) -> None:
-        check(self, loss)
-        step = counts["learn"]
-        counts["learn"] += 1
-        if not probe.learn_from <= step < probe.learn_from + probe.learn_keep:
-            return
-        frame = inspect.currentframe()
-        assert frame is not None and frame.f_back is not None
-        local = frame.f_back.f_locals
-        if frame.f_back.f_code.co_name != "update_damped_iteration":
-            raise RuntimeError("the captured minibatch is not the damped learner's")
-        indexes, targets = local["indexes"], local["targets"]
-        payload: _Captured = {
-            "obs": {k: v.detach().cpu().clone() for k, v in local["obs"].items()},
-            "actions": local["actions"][indexes].detach().cpu().clone(),
-            "advantages": targets.advantages[indexes].detach().cpu().clone(),
-            "value_targets": targets.values[indexes].detach().cpu().clone(),
-            "behavior_logs": local["behavior_logs"].detach().cpu().clone(),
-            "actor_mask": local["actor_mask"].detach().cpu().clone(),
-            "learning": local["learning"].model_dump(mode="json"),
-            "tau": float(local["tau"]),
-            "lr": float(local["learner"].optimizer.param_groups[0]["lr"]),
-        }
-        del local, frame
-        torch.save(payload, folder / "learner" / f"{step:03d}.pt")
-
-    ActorCritic.forward_distribution = hooked_forward  # type: ignore[method-assign]
-    OptimizerHealth.check = hooked_check  # type: ignore[method-assign]
-    try:
-        yield
-    finally:
-        ActorCritic.forward_distribution = forward  # type: ignore[method-assign]
-        OptimizerHealth.check = check  # type: ignore[method-assign]
-
-
-@contextmanager
-def _untracked() -> Iterator[None]:
-    """The capture update is a local run, never this job's Etude run."""
-    saved = {k: v for k, v in os.environ.items() if k.startswith("ETUDE_")}
-    for key in saved:
-        del os.environ[key]
-    try:
-        yield
-    finally:
-        os.environ.update(saved)
-
-
-def capture(folder: Path, probe: Probe) -> dict[str, object]:
-    """One float32 update of the frozen w160l8 regime with the capture hooks."""
-    from experiments.tla_frontier import frozen
-    from manabot.training.execution import execute_regime
-    from manabot.training.regime import TrainingRegime
-    from manabot.verify.store import VerifyStore
-
-    regimes, protocol = frozen()
-    data = regimes["w160l8"].model_dump(mode="json")
-    stage = data["stages"][0]
-    stage["updates"] = 1
-    stage["execution"].update(wall_seconds=3600.0, device=probe.device)
-    if probe.streams is not None:
-        stage["streams"] = probe.streams
-        stage["execution"]["workers"] = 1
-    if probe.transitions is not None:
-        stage["transitions"] = probe.transitions
-    data["wall_seconds"] = 3600.0
-    regime = TrainingRegime.model_validate(data)
-    if regime.stages[0].execution.precision != "float32":
-        raise RuntimeError("the capture update must train in float32")
-    _write(folder / "regime.json", regime.model_dump(mode="json"))
-    started = time.perf_counter()
-    with (
-        _untracked(),
-        VerifyStore(folder / "runs.sqlite") as store,
-        _capturing(folder, probe),
-    ):
-        run = execute_regime(
-            regime,
-            protocol.training_seed,
-            folder / "run",
-            store,
-            training_exposure=False,
-        )
-    if run.status != "completed":
-        raise RuntimeError(f"capture update {run.status}: {run.error}")
-    record = run.stages[0]
-    return {
-        "regime": regime.id,
-        "seed": protocol.training_seed,
-        "process_seconds": time.perf_counter() - started,
-        "collection_seconds": record.collection_seconds,
-        "learning_seconds": record.learning_seconds,
-        "collection_kept": len(list((folder / "collection").glob("*.pt"))),
-        "learner_kept": len(list((folder / "learner").glob("*.pt"))),
-    }
+def capture(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 # --------------------------------------------------------------------------- arms
@@ -960,7 +837,7 @@ def measure(probe: Probe) -> None:
 
 def runs(
     revision: str, hours: float = 1.5, usd: float = 1.5, sizes: str = ""
-) -> list[Run]:
+) -> list[RunRequest]:
     """The one L4 job at `revision`; `sizes` (comma-separated `SIZES` keys)
     replaces the default pair, as MTG-324's w256l8 step run does."""
     chosen = tuple(s for s in sizes.split(",") if s) or Probe().sizes

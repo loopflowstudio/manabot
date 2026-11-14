@@ -1,26 +1,17 @@
 """Frozen policy → private whole-game dataset → sampler execution contracts."""
 
 import json
-from pathlib import Path
-from typing import Literal
 
 import pytest
 
-from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.belief.checkpoint import load_belief_sampler
-from manabot.belief.sampling_data import read_dataset
 from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.training.execution import execute_regime
+from manabot.training.learning import Learning
 from manabot.training.regime import (
     CollectBelief,
-    DampedPolicyLearning,
-    Execution,
-    Learning,
     TrainBelief,
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.verify.store import VerifyStore
 import managym
 
 
@@ -82,61 +73,6 @@ def test_belief_dependencies_reject_forward_and_wrong_artifacts() -> None:
         TrainingRegime.model_validate(recipe.model_dump())
 
 
-@pytest.mark.parametrize(
-    "gradient,weights",
-    [
-        ("ppo", "raw"),
-        ("damped_policy", "raw"),
-        ("damped_policy", "ema"),
-    ],
-)
-def test_frozen_belief_stages_run_and_reload(
-    tmp_path: Path,
-    gradient: Literal["ppo", "damped_policy"],
-    weights: Literal["raw", "ema"],
-) -> None:
-    recipe = belief_recipe()
-    policy_stage = recipe.stages[0]
-    collection_stage = recipe.stages[1]
-    assert isinstance(policy_stage, TrainSelfPlay)
-    assert isinstance(collection_stage, CollectBelief)
-    if gradient == "damped_policy":
-        recipe.agent.value_kind = "categorical_wdl"
-        policy_stage.learning = DampedPolicyLearning(
-            gradient="damped_policy", min_advantage=0, advantage_quantile=0
-        )
-    collection_stage.weights = weights
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(recipe, 421, tmp_path / "run", store)
-        assert run.status == "completed"
-        policy, collection, fit = run.stages
-        assert collection.games == 3
-        assert collection.inputs["policy/raw"] == policy.artifacts["raw"]
-        assert collection.inputs[f"policy/{weights}"] == policy.artifacts[weights]
-        loaded, _ = load_checkpoint(policy.artifacts[weights]["path"])
-        assert loaded.config.value_kind == recipe.agent.value_kind
-        assert fit.inputs["histories/dataset"] == collection.artifacts["dataset"]
-        dataset = read_dataset(Path(collection.artifacts["dataset"]["path"]))
-        assert {game.split for game in dataset.games} == {"train", "validation", "test"}
-        assert len({game.game_id for game in dataset.games}) == 3
-        assert dataset.policy_identity == policy.artifacts[weights]["sha256"]
-        model = load_belief_sampler(
-            Path(fit.artifacts["sampler"]["path"]),
-            expected_dataset_identity=dataset.identity,
-            expected_policy_identity=dataset.policy_identity,
-            expected_schema_identity=dataset.schema.identity,
-            expected_world_identity=dataset.world_identity,
-            expected_checkpoint_identity=fit.artifacts["sampler"]["sha256"],
-        )
-        assert model.schema == dataset.schema
-        assert fit.optimizer_exposures == 8
-        assert fit.learning_seconds > 0
-        assert collection.collection_seconds > 0
-        assert fit.cumulative_seconds > collection.cumulative_seconds
-        assert run.selected_artifact == policy.artifacts["raw"]
-        assert store.training_run(run.id).stages[-1].artifacts == fit.artifacts
-
-
 def test_removed_compound_policies_fail_validation_clearly() -> None:
     """Saved compound regimes never load as flat policies or unknown stages."""
     ordinary = belief_recipe().model_dump(mode="json")
@@ -157,18 +93,3 @@ def test_removed_compound_policies_fail_validation_clearly() -> None:
     with pytest.raises(ValueError, match="no longer executable"):
         ModelConfig.model_validate({"compound_decisions": True})
     assert ModelConfig.model_validate({"compound_decisions": False}) == ModelConfig()
-
-
-def test_failed_belief_collection_keeps_frozen_policy(tmp_path: Path) -> None:
-    recipe = belief_recipe()
-    collection = recipe.stages[1]
-    assert isinstance(collection, CollectBelief)
-    collection.execution = Execution(wall_seconds=1e-9)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(TimeoutError):
-            execute_regime(recipe, 421, tmp_path / "run", store)
-        payload = json.loads((tmp_path / "run/run.json").read_text())
-        assert payload["status"] == "interrupted"
-        assert payload["stages"][0]["artifacts"]["raw"]["sha256"]
-        assert payload["stages"][1]["status"] == "interrupted"
-        assert not payload["stages"][1]["artifacts"]

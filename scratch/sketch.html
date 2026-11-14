@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>After EXP-56: train docs, Jace and Manabot</title>
+<style>
+:root{
+  --bg:#f6f1e7; --panel:#fffaf0; --ink:#2b2520; --soft:#6b6055; --line:#d9cdb8;
+  --accent:#8a4b2a; --good:#3f6b4a; --warn:#9a6a14; --code:#efe7d6; --new:#dfeedd; --built:#e8e0cf;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#1b1815; --panel:#24201c; --ink:#ece4d6; --soft:#a89c8c; --line:#3d362e;
+    --accent:#d99a6c; --good:#8fc09a; --warn:#d8b25c; --code:#2c2722; --new:#263a2a; --built:#38322a; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 Georgia,"Iowan Old Style",serif}
+main{max-width:800px;margin:0 auto;padding:40px 16px 96px}
+h1{font-size:30px;line-height:1.2;margin:0 0 8px}
+h2{font-size:23px;margin:56px 0 10px;padding-top:20px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:28px 0 6px}
+h4{font-size:16px;margin:22px 0 4px}
+p{margin:10px 0}
+.meta{color:var(--soft);font-size:14px}
+.lead{font-size:19px}
+code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px}
+code{background:var(--code);padding:1px 4px;border-radius:3px}
+pre{background:var(--code);padding:14px;border-radius:6px;overflow-x:auto;line-height:1.5;margin:12px 0}
+pre code{background:none;padding:0}
+pre mark{background:var(--new);color:inherit;border-radius:2px}
+.q{color:var(--soft);font-style:italic;border-left:3px solid var(--line);padding-left:12px;margin:12px 0}
+.b,.p{font:12px ui-monospace,Menlo,monospace;border-radius:4px;padding:1px 6px;white-space:nowrap}
+.b{background:var(--built)} .p{background:var(--new)}
+.doc{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 22px 22px;margin:16px 0}
+.doc h3{margin-top:26px;padding-top:14px;border-top:1px solid var(--line)}
+.doc h3:first-child{border-top:none}
+.file{font:12.5px ui-monospace,Menlo,monospace;color:var(--accent);margin:22px 0 -6px}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:12px 0;min-width:560px}
+th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+th{color:var(--soft);font-size:13px}
+ol.qs>li{margin:14px 0}
+ol.qs ol{list-style:lower-alpha;margin:4px 0}
+.note{font-size:14.5px;color:var(--soft)}
+</style>
+</head>
+<body>
+<main>
+
+<p class="meta">MTG-329 / EXP-56 · sketch · 2026-11-13 · built from Etude PR #103 at <code>105abdd</code> (<code>src/etude/train/run.py</code>), Manabot <code>training/loops/self_play.py</code>, <code>loops/minimal.py</code>, <code>recipes/elemental.py</code>, <code>recipes/belief_sampler.py</code> on this branch, and <code>RyanSaxe/jace</code>. Companion to <code>scratch/explore.html</code>.</p>
+
+<h1>After EXP-56: what the train docs say, and what Manabot's loops look like</h1>
+
+<p class="lead">Two things to read and react to. Part 1 is Etude's training page as a user would meet it. Part 2 is the hard case, Jace: five models, past versions at the table, a schedule. Part 3 is Manabot written against the same calls. Part 4 is stages: training A, then B. Decide whether this is the client experience to release.</p>
+
+<p><span class="b">built</span> exists in PR #103 today. <span class="p">proposed</span> is new on this page: in code, new calls are <mark style="background:var(--new);color:inherit">highlighted</mark>. Nothing proposed has been written or run.</p>
+
+<p>The sketch takes your direction as given: E2 for the loop, state as the author's ordinary files described by a Pydantic model, and Jace's kind of loop must stay possible.</p>
+
+<h2>The test for every call</h2>
+<p class="q">"writing this kind of code is relatively cheap. individually we shouldnt expect that the way we manage checkpoints or even record metrics to be anything someone cant do with an agent effectively for free. where it starts to add value is just when its a shared and interplays with other parts of hte system" … "the API (and the positioning) should be designed with that in mind"</p>
+<p>Jace is the evidence: it has a complete tracker of its own, 14 KB, written cheaply. So no call below earns its place by saving the author code. A call belongs in the API when something else in Etude reads what it writes. If nothing does, it is a snippet in the docs to copy.</p>
+<div class="tw"><table>
+<tr><th>The loop writes</th><th>Who else reads it</th><th>Verdict</th></tr>
+<tr><td>Declared clocks</td><td>report x-axes; relative seats ("400 updates earlier"); <code>continue --until</code>; retries knowing where an attempt was cut</td><td>API</td></tr>
+<tr><td>Checkpoints</td><td>evaluation seats them; other runs start from them; the launcher carries them before their record; reports</td><td>API. This is the join between training and the league.</td></tr>
+<tr><td>Rows and tables</td><td>reports; queries across runs; the live view (EXP-57)</td><td>API</td></tr>
+<tr><td>The typed config</td><td>the launcher checks it before renting; it is part of a job's identity; reports compare runs by it</td><td>API</td></tr>
+<tr><td><code>run.steps</code> / <code>Stopped</code></td><td>the launcher decides retry or finish; budgets hold across attempts; attempts read back as one run</td><td>API</td></tr>
+<tr><td>The state folder</td><td>the launcher carries it to the next machine and to a continuation</td><td>API, but only the folder and when it was saved</td></tr>
+<tr><td>The <code>state.json</code> record's fields</td><td>nobody but the author's own <code>restore</code></td><td>weakest. A convention the docs show, not something Etude needs to model.</td></tr>
+<tr><td><code>run.save(..., every=)</code> deciding when to export</td><td>the launcher, only at a stop</td><td>keep "always before a stop"; <code>every=</code> is convenience and could be the author's <code>if</code></td></tr>
+<tr><td><code>run.checkpoints()</code></td><td>the same list evaluation and reports use</td><td>API, because it is the shared list and not a second index</td></tr>
+<tr><td>A <code>trained_against</code> table</td><td>nothing yet; a population rating or lineage view would (EXP-60)</td><td>a docs convention until something reads it</td></tr>
+</table></div>
+<p>For the front page this says the same thing as L1: do not sell logging or checkpoint saving. Sell that the checkpoint your loop publishes is, with no further work, a player in an evaluation, a starting point for another run, a point on everyone's report, and something a rented machine can be taken away from.</p>
+
+<h2>Part 1. Etude's "Training" page</h2>
+
+<div class="doc">
+
+<h3>Training</h3>
+<p>You write a file with a <code>train</code> function in it. Etude runs that function on a machine, and runs it again on another when the first is taken away. Everything it records is files in a directory or bucket you own.</p>
+<p>None of the calls below does anything you could not write yourself in an afternoon. They are worth using because the rest of Etude reads what they write: the launcher, evaluations, reports and other runs.</p>
+
+<h3>One function, one config</h3>
+<pre><code># train.py
+from pydantic import BaseModel
+
+class TrainConfig(BaseModel):     # yours: any fields you like; no seed, see below
+    lr: float = 3e-4
+    updates: int = 1000
+
+def train(config: TrainConfig) -&gt; None: ...</code></pre>
+<p>The config is your own class. Etude asks three things of it and of <code>train</code>: <span class="b">built</span></p>
+<ul>
+  <li>The config is a Pydantic model. There is no Etude base class and no required field.</li>
+  <li>It survives a trip through JSON, because that is how it reaches the machine. Numbers, strings, lists and nested models are fine; an open file or a function is not. Etude checks this when you launch and refuses there, not on the rented machine.</li>
+  <li><code>train</code> takes that one parameter, annotated with the config's type, and sits at the top level of a file your project can import.</li>
+</ul>
+<p>Calling <code>train</code> is one attempt at the whole job. Calling it again with the same config, on the same run, carries on from what the last attempt saved. It ends in one of three ways: <span class="b">built</span></p>
+<div class="tw"><table>
+<tr><th>It</th><th>Means</th><th>Etude then</th></tr>
+<tr><td>returns</td><td>the job is finished</td><td>marks the run finished</td></tr>
+<tr><td>raises <code>Stopped</code></td><td>it saved and left on purpose</td><td>calls it again, here or on another machine, inside the run's limits</td></tr>
+<tr><td>raises anything else</td><td>it failed</td><td>marks the run failed</td></tr>
+</table></div>
+
+<h3>Jobs and runs</h3>
+<p>Two words, used strictly. A <b>job</b> is what to run: your function and its config, with no seed. A <b>run</b> is a job with a seed: the thing that is launched, named, carried on and reported. <span class="b">built</span></p>
+<pre><code># job.py: you declare jobs
+def runs() -&gt; list[Run]:
+    job = training(train, config=TrainConfig(), max_hours=2, max_usd=Decimal(4))
+    return job.runs(0, 1, 2)          # three runs of one job</code></pre>
+<p>So the seed is not a config field. The config says what the experiment is; the seed says which repetition this is. Inside <code>train</code> you read it from the run: <span class="p">proposed</span> (today the launcher passes it as <code>ETUDE_SEED</code>, and Manabot keeps a seed in its config)</p>
+<pre><code>with track(clocks=[...], config=config) as run:
+    torch.manual_seed(<mark>run.seed</mark>)</code></pre>
+<p>Everything in the rest of this page is about a run. Carrying on means the same run: the same job and the same seed.</p>
+
+<h3>The run</h3>
+<pre><code>with track(clocks=[Step("updates", "optimizer updates")], config=config) as run:
+    ...</code></pre>
+<p><code>track</code> opens the run. A clock is an x-axis you declare once, with a line saying what it counts. Every row and every checkpoint is placed on every declared clock. Declare a second clock, such as <code>Time("training_seconds", ...)</code>, when one is not enough. <span class="b">built</span></p>
+
+<p class="note">Naming, open: <code>track</code> now also saves state, publishes checkpoints and answers "should I stop". Your words: "tracking doesnt clearly say like 'save logs, and checkpoints, ...'". See the last question.</p>
+
+<h3>Counting</h3>
+<pre><code>target = int(run.until("updates", default=config.updates))
+<mark>for update in run.steps("updates", start=state.update, until=target):</mark>
+    ...</code></pre>
+<p><code>run.until</code> is how far to go: your default, unless the launch asked for another target (<code>etude continue --until updates=6400</code>). <span class="b">built</span></p>
+<p><code>run.steps</code> yields <code>start + 1</code> up to <code>until</code>. Inside the loop, rows and checkpoints are placed on that clock for you. When the machine's time is nearly up or someone asks the run to stop, the current pass finishes and the next raises <code>Stopped</code>. Code after the loop runs only when the target was reached. <span class="p">proposed</span></p>
+
+<h3>Carrying on</h3>
+<p>Every run can be carried on. You tell Etude which objects hold what you have learned; it saves them, moves them to the next machine and loads them back. <span class="p">proposed</span></p>
+<pre><code>model, optimizer = build(config)
+<mark>at = run.resume(model=model, optimizer=optimizer)</mark>   # loads the last save into them; where each clock stood, or zeros
+for update in run.steps("updates", start=at["updates"], until=target):
+    ...
+    <mark>run.save()</mark>                                       # Etude decides when it is due; always before a stop</code></pre>
+<p>Anything with <code>state_dict()</code> and <code>load_state_dict()</code> works: PyTorch modules and optimizers as they are. A few numbers of your own ride along as a Pydantic model: <code>run.resume(..., extra=Counts())</code>.</p>
+<p>What is on disk is ordinary and needs no Etude to read:</p>
+<pre><code>out/state/
+  state.json       {"at": {"updates": 400}, "seed": 197, "commit": "8773d51", "extra": {...}}
+  model.pt         torch.save(model.state_dict())
+  optimizer.pt</code></pre>
+<p>Keeping your code compatible between attempts of one run is yours. Etude checks that the config and seed match; it does not check that your model, your file format or your environment are the same, and changing them mid-run is undefined.</p>
+<p>Carrying on means from the last save, with the same weights and optimizer. It does not restore random streams or games in flight unless you keep them in an object you pass.</p>
+<p>If your state is not shaped like this, write it yourself: <code>run.save(lambda folder: ...)</code> hands you an empty folder, and <code>run.resume()</code> hands the last one back. Or ignore all of it and use <code>run.out</code>, a directory that follows the run. <span class="b">built</span> (<code>run.out</code>)</p>
+
+<h3>Rows</h3>
+<pre><code>run.log({"loss": 0.42, "entropy": 1.3})
+run.log_table("games", rows)</code></pre>
+<p>A row is a dictionary of numbers. A table is many rows that belong to one point in training, such as the outcome of every game since the last update. Outside <code>run.steps</code>, or for a second clock, pass the clocks yourself: <code>run.log(row, updates=400, training_seconds=912.5)</code>. <span class="b">built</span>; filling the stepped clock in is <span class="p">proposed</span></p>
+
+<h3>Checkpoints</h3>
+<pre><code>run.checkpoint(path)</code></pre>
+<p>A checkpoint is a model someone else will use: an evaluation seats it as a player, another run starts from it. It is recorded with where every clock stood, and it never changes. Recording the same file at the same point twice is harmless. <span class="b">built</span></p>
+<p>State and checkpoints are different things. State is for you, is replaced each save, and holds optimizers and counters. A checkpoint is for others, is kept, and holds what plays.</p>
+
+<h3>Several models</h3>
+<p>Many loops train more than one model: a policy and a value model, a drafter and a deck builder and a player. A checkpoint is then a folder, written the same way state is: you get an empty folder, write your files, and return a record that names them. <span class="p">proposed</span></p>
+<pre><code>class Player(BaseModel):                 # becomes checkpoint.json
+    models: dict[str, str]               # "drafter" -&gt; "drafter.pt"
+
+def export_player(models: dict[str, nn.Module], folder: Path) -&gt; Player:
+    for name, module in models.items():
+        torch.save(module.state_dict(), folder / f"{name}.pt")
+    return Player(models={name: f"{name}.pt" for name in models})
+
+<mark>run.checkpoint(lambda folder: export_player(models, folder))</mark></code></pre>
+<pre><code>checkpoints/iterations-00000500/
+  checkpoint.json     {"models": {"drafter": "drafter.pt", "player": "player.pt", ...}}
+  drafter.pt
+  player.pt</code></pre>
+<p>The folder is one checkpoint and seats as one player. Which of its files a game needs is up to the code that plays: one seating can load only <code>player.pt</code>, another all of them.</p>
+<p>Metrics for several models are ordinary keys in one row: <code>{"player/loss": ..., "drafter/loss": ...}</code>. <span class="b">built</span></p>
+
+<h3>More than one count</h3>
+<p>If your models do not step together, declare a clock for each count you want as an x-axis, and say where each stands when you log. <code>run.steps</code> fills in the one it drives. <span class="b">built</span></p>
+<pre><code>clocks = [Step("iterations", "draft, build, play, learn rounds"), Step("player_updates", "gradient steps on the player")]
+...
+run.log(metrics, player_updates=player_updates)</code></pre>
+
+<h3>Earlier checkpoints</h3>
+<p>Self-play often trains against its own past. The run can list what it has published: <span class="p">proposed</span> (<code>run.latest_checkpoint()</code> is <span class="b">built</span>)</p>
+<pre><code><mark>past = run.checkpoints()</mark>                  # records, oldest first: .at, .folder, .record(Player)
+opponent = load(random.choice(past).folder)
+run.log_table("trained_against", [{"role": "opponent", "iterations": chosen.at["iterations"]}])</code></pre>
+<p>Writing down who a run trained against is a table like any other. Checkpoints from other runs are covered under Evaluation.</p>
+
+<h3>The whole thing</h3>
+<pre><code>def train(config: TrainConfig) -&gt; None:
+    with track(clocks=[Step("updates", "optimizer updates")], seed=config.seed) as run:
+        model, optimizer = build(config)
+        at = run.resume(model=model, optimizer=optimizer)
+        target = int(run.until("updates", default=config.updates))
+        for update in run.steps("updates", start=at["updates"], until=target):
+            metrics = one_update(model, optimizer)
+            run.log(metrics)
+            run.save()
+            if update % 100 == 0 or update == target:
+                run.checkpoint(save_policy(model, run.out / "policies"))</code></pre>
+
+<h3>Running it: a new run, or the one you had</h3>
+<p>Three different things, three different verbs. Which one you mean is never guessed from a directory that happens to exist.</p>
+<div class="tw"><table>
+<tr><th>You want</th><th>Command</th><th>What it is</th><th></th></tr>
+<tr><td>a new run</td><td><code>etude launch job.py --rent l4</code><br><code>etude run train.py</code> (here)</td><td>always a new run with a new id; prints the id</td><td>launch <span class="b">built</span>; run <span class="p">proposed</span></td></tr>
+<tr><td>the same run, carried on</td><td>nothing, when a machine is lost or the loop raises <code>Stopped</code>: the launcher calls it again<br><code>etude run train.py --resume RUN</code> or <code>etude launch job.py --resume RUN</code> when it ended and you want it back</td><td>another attempt of the same run: same id, same config, same target, same state</td><td>automatic <span class="b">built</span>; <code>--resume</code> <span class="p">proposed</span></td></tr>
+<tr><td>to go further, or change something</td><td><code>etude continue --run RUN --until updates=6400</code></td><td>a new run that starts from a copy of the first one's state and records it as its parent; the first is untouched</td><td><span class="b">built</span></td></tr>
+</table></div>
+<p>Name a run yourself: <code>Run(id="baseline-seed-7", job=job)</code> in the file <span class="b">built</span>, or <code>etude run train.py --name baseline --seed 7</code> here. A name must be new within its experiment; a taken name is refused, never resumed. Without one, Etude makes an id. <span class="p">proposed</span></p>
+<p><code>--resume</code> takes the file because it runs your current code, which is what you want after fixing a bug. It is for a run that ended without finishing: it failed and you fixed the bug, it ran out of hours, you cancelled it, or you pressed Ctrl-C here. It refuses a finished run, and it refuses if the config no longer matches.</p>
+<pre><code>etude smoke job.py                       # the smoke config, here, spending nothing        <span class="b">built</span></code></pre>
+<pre><code># job.py
+def runs() -&gt; Job:
+    return training(train, config=TrainConfig(), smoke=TrainConfig(updates=1), max_hours=2, max_usd=Decimal(4))</code></pre>
+<p>A run refuses to carry on under a different config or seed, and says which fields differ. <span class="p">proposed</span> (today each loop checks this itself)</p>
+
+<h3>Underneath</h3>
+<p>Loops that do not count in one clock can use the pieces <code>run.steps</code> is made of: <code>run.stopping()</code> is true when the attempt should save and leave, and raising <code>Stopped</code> after saving says it did. <span class="b">built</span></p>
+</div>
+
+<h2>Part 2. The hard case: Jace</h2>
+<p class="note">Parts 2 and 3 still show the earlier form (a <code>Saved</code> class with <code>export</code> and <code>restore</code>). Under "Carrying on" above, Jace would pass its five models and six optimizers to <code>run.resume</code>, and Manabot its learner, optimizer and EMA with <code>extra=Counts</code>.</p>
+
+<p>Jace (<code>RyanSaxe/jace</code>) learns to draft, build decks and play. One iteration drafts pods, builds a deck from every pool, plays the decks, and updates five models through six optimizers. Opponents and the other draft seats can be past versions. A schedule turns dials by iteration: the drafter is frozen for the first 2,000. It carries its own <code>tracking.py</code> to record all this.</p>
+<p>What is checked: in PR #103 a checkpoint is one file, and a different file recorded at the same point becomes an unnamed second version (<code>updates-400.ordinal-2</code>). So today Jace's six models at one iteration would be six versions that nothing tells apart. That is what "Several models" above is for.</p>
+
+<p class="file">jace/loops/run_limited.py <span class="p">proposed</span>; <code>limited_iteration</code>, <code>phased_schedule</code> and <code>model_drafter</code> are Jace's own, unchanged</p>
+<pre><code>class LimitedConfig(BaseModel):
+    seed: int = 0
+    iterations: int = 40_000
+    drafter_starts: int = 2_000
+    pull_ends: int = 10_000
+    past_seats: int = 2               # draft seats filled by earlier versions
+    checkpoint_every: int = 500
+
+
+class Saved(BaseModel):               # state.json
+    iteration: int
+    models: dict[str, str]
+    optimizers: dict[str, str]
+
+
+class Player(BaseModel):              # checkpoint.json
+    models: dict[str, str]
+
+
+def train(config: LimitedConfig) -&gt; None:
+    with track(clocks=[Step("iterations", "draft, build, play, learn rounds")], seed=config.seed, config=config) as run:
+        setup, learners = build(config)                         # fresh models and optimizers
+        found = run.load(Saved)
+        iteration = restore(found, learners) if found else 0    # loads weights and optimizers in place
+        schedule = phased_schedule(drafter_starts=config.drafter_starts, pull_ends=config.pull_ends)
+        target = int(run.until("iterations", default=config.iterations))
+
+        for iteration in run.steps("iterations", start=iteration, until=target):
+            rng = random.Random(f"{config.seed}-{iteration}")
+
+            # Who else is at the table: earlier versions of this run, when there are any.
+            past = run.checkpoints()
+            seats = rng.sample(past, k=min(config.past_seats, len(past)))
+            other_seats = [model_drafter(load_drafter(c.folder), generator=generator(rng)) for c in seats]
+            rival = rng.choice(past) if past else None
+            opponent = load_policy(rival.folder) if rival else learners.policy
+
+            metrics = limited_iteration(
+                setup, learners,
+                dials=schedule(iteration),
+                opponent=opponent, other_seats=other_seats,
+                start=start_games, rng=rng,
+            )
+
+            run.log(metrics)                                    # "player/loss", "drafter/loss", ...
+            run.log_table("trained_against", [
+                *({"role": "draft seat", "iterations": c.at["iterations"]} for c in seats),
+                *([{"role": "opponent", "iterations": rival.at["iterations"]}] if rival else []),
+            ])
+            run.save(lambda folder: export_state(learners, iteration, folder), every=25)
+            if iteration % config.checkpoint_every == 0 or iteration == target:
+                run.checkpoint(lambda folder: export_player(modules(learners), folder))</code></pre>
+
+<p>What the run leaves, all readable without Etude or Jace:</p>
+<pre><code>out/
+  state/
+    state.json                 {"iteration": 1525, "models": {...}, "optimizers": {...}}
+    player.pt  guess.pt  drafter.pt  deck_builder.pt  deck_score.pt  embedding.pt
+    player.opt.pt  ...                                  six optimizers
+  checkpoints/
+    iterations-00000500/       checkpoint.json + six model files
+    iterations-00001000/
+    iterations-00001500/</code></pre>
+
+<h3>How each thing Jace does is carried</h3>
+<div class="tw"><table>
+<tr><th>Jace does</th><th>In the sketch</th><th></th></tr>
+<tr><td>Four phases per iteration, in an order the author edits</td><td>inside <code>limited_iteration</code>; Etude never sees them</td><td><span class="b">built</span></td></tr>
+<tr><td>Five models, six optimizers</td><td>one <code>state.json</code> naming twelve files; one checkpoint folder naming six</td><td><span class="p">proposed</span></td></tr>
+<tr><td>Dials on a schedule; drafter frozen until 2,000</td><td><code>schedule(iteration)</code>; the iteration is absolute across attempts and continuations</td><td><span class="p">proposed</span> (<code>run.steps</code>)</td></tr>
+<tr><td>Past versions as opponents and draft seats</td><td><code>run.checkpoints()</code>, then ordinary code</td><td><span class="p">proposed</span></td></tr>
+<tr><td>Who it trained against</td><td>a <code>trained_against</code> table</td><td><span class="b">built</span></td></tr>
+<tr><td>A frozen human-trained drafter from another run</td><td>not shown; reading another run's checkpoint from inside training is EXP-60</td><td>open</td></tr>
+<tr><td>Games still running when a batch ends carry into the next</td><td>not saved; an attempt on a new machine starts its games fresh</td><td>a choice the author makes in <code>export_state</code></td></tr>
+<tr><td>Its own run folder, lock, states and JSON lines (14 KB)</td><td>deleted</td><td></td></tr>
+</table></div>
+
+<h3>A loop inside the loop</h3>
+<p>If the player took eight gradient passes per round of games while the drafter took one, the inner loop is plain Python and the second count is a second clock:</p>
+<pre><code>with track(clocks=[Step("iterations", "rounds"), Step("player_updates", "gradient steps on the player")], ...) as run:
+    for iteration in run.steps("iterations", start=iteration, until=target):
+        rollout = play(...)
+        for _ in range(8):
+            player_updates += 1
+            run.log(update_player(learners.policy, rollout, ...), player_updates=player_updates)
+        run.log(update_drafter(...), player_updates=player_updates)</code></pre>
+<p class="note">Etude drives one count, the one that decides when the run is done. Everything nested under it is the author's.</p>
+
+<h3>The same checkpoints in the league</h3>
+<p>This is where the folder pays off. One checkpoint, seated two ways by two pieces of playing code:</p>
+<pre><code>limited = Inference(source=["jace/play_limited.py"])          # loads all six: drafts, builds, plays
+constructed = Inference(source=["jace/play_constructed.py"])  # loads player.pt and guess.pt only
+
+progress = Benchmark(
+    name="progress",
+    environment=world,
+    seatings=(
+        Seating(name="limited vs 500 earlier", players=(limited, Earlier(clock="iterations", by=500, inference=limited)), conditions=pods, games=4),
+        Seating(name="constructed vs heuristic", players=(constructed, heuristic), conditions=decks, games=8),
+    ),
+)</code></pre>
+<p class="note">Names follow Etude main at v0.3.1. Not checked: how the playing code is handed a checkpoint that is a folder; today it is handed one file.</p>
+
+<h2>Part 3. Manabot against it</h2>
+
+
+<h3>The state</h3>
+<p>Today <code>load_state</code> and <code>save_state</code> pickle one dictionary into <code>state.pt</code>, write a temporary file and rename it, and compare settings field by field (lines 407–498). In the sketch the record is JSON, the tensors are two files, and the atomic write and the settings refusal are Etude's.</p>
+
+<p class="file">manabot/training/loops/self_play.py</p>
+<pre><code>class Saved(BaseModel):
+    """What `state.json` holds; the tensors are the files it names."""
+
+    format: Literal["manabot.self-play-state/v2"] = "manabot.self-play-state/v2"
+    world: str
+    seed: int
+    source_commit: str
+    update: int
+    counts: Counts
+    learner: str = "learner.pt"      # raw weights and Adam
+    ema: str | None = None
+
+
+def export(state: LoopState, folder: Path) -&gt; Saved:
+    """Write the learner's tensors into `folder` and return their record."""
+    torch.save(
+        {"raw": state.learner.agent.state_dict(), "optimizer": state.learner.optimizer.state_dict()},
+        folder / "learner.pt",
+    )
+    if state.ema is not None:
+        torch.save(state.ema.state_dict(), folder / "ema.pt")
+    return Saved(
+        world=state.settings.world,
+        seed=state.seed,
+        source_commit=checkpoint_source()["commit"],
+        update=state.update,
+        counts=state.counts,
+        ema=None if state.ema is None else "ema.pt",
+    )
+
+
+def restore(saved: Saved, folder: Path, settings: SelfPlay) -&gt; LoopState:
+    """The learner `export` wrote. Etude has already refused another config or seed."""
+    if saved.world != settings.world:
+        raise StateMismatch(f"state was written for world {saved.world!r}, not {settings.world!r}")
+    space = ObservationSpace(settings.observation)
+    learner = create_learner(settings, create_model(settings, space))
+    tensors = torch.load(folder / saved.learner, map_location="cpu")
+    learner.agent.load_state_dict(tensors["raw"])
+    learner.optimizer.load_state_dict(tensors["optimizer"])
+    ema = None
+    if saved.ema is not None:
+        ema = deepcopy(learner.agent)
+        ema.load_state_dict(torch.load(folder / saved.ema, map_location="cpu"))
+    return LoopState(settings, saved.seed, space, learner, ema, update=saved.update, counts=saved.counts)</code></pre>
+<p class="note"><code>Counts</code> would become a Pydantic model so it sits inside <code>Saved</code>. The world check stays in Manabot because a world is not a config field Etude can see.</p>
+
+<h3>The loop</h3>
+<p>Today's <code>self_play</code> is 86 lines (754–839). It takes an output path and an optional tracker, creates the directory, handles three resume cases by hand, checks <code>run.stopping()</code>, saves in three places and raises <code>Stopped</code>.</p>
+
+<pre><code>def self_play(settings: SelfPlay, <mark>run: Run</mark>, *, seed: int, updates: int) -&gt; Path:
+    """Train to the run's update target and return the final policy's path.
+
+    Call it again on the same run to carry on. Only the learner is durable:
+    each attempt starts fresh random streams.
+    """
+    with device_settings(settings):
+        <mark>found = run.load(Saved)</mark>
+        state = restore(*found, settings) if found else new_state(settings, seed)
+        target = int(run.until("updates", default=updates))
+        rng = np.random.default_rng(seed + MINIBATCH_SEED + state.update)
+        with self_play_games(settings, run.out, seed=seed, start=state.update) as collector:
+            seed_random(seed + state.update)
+            base = state.counts
+            if is_checkpoint(settings, state.update) or state.update &gt;= target:
+                policy = publish(run, state)         # update 0, or a milestone whose attempt was lost
+            <mark>for update in run.steps("updates", start=state.update, until=target):</mark>
+                state, row = step(state, collector, rng, base=base, out=run.out)
+                seconds = state.counts.training_seconds
+                run.log(row, training_seconds=seconds)
+                run.log_table(OUTCOME_TABLE, collector.stats.self_play.drain(), training_seconds=seconds)
+                milestone = is_checkpoint(settings, update) or update == target
+                <mark>run.save(lambda folder: export(state, folder), every=settings.save_every, now=milestone)</mark>
+                if milestone:
+                    policy = publish(run, state)     # state first, then the immutable policy
+    return policy
+
+
+def publish(run: Run, state: LoopState) -&gt; Path:
+    path = write_policy(run.out / "checkpoints", state)
+    run.checkpoint(path, updates=state.update, training_seconds=state.counts.training_seconds)
+    return path</code></pre>
+<p class="note"><code>self_play_games</code> is today's collector, game-error ledger and failure capture (lines 780–797) gathered into one context manager; that is a Manabot tidy-up, not Etude's. <code>step</code>, <code>learn</code> and <code>counted</code> are unchanged.</p>
+
+<h3>What leaves the file</h3>
+<div class="tw"><table>
+<tr><th>Today</th><th>Lines</th><th>After</th></tr>
+<tr><td><code>Tracker</code> protocol and <code>run: Tracker | None</code></td><td>288–302</td><td>gone; the loop takes Etude's <code>Run</code>, and an untracked call uses a local run</td></tr>
+<tr><td><code>setting_differences</code>, the settings half of <code>load_state</code></td><td>407–458</td><td>gone, if Etude refuses a changed config and names the fields</td></tr>
+<tr><td>temporary file and rename in <code>save_state</code></td><td>477–498</td><td>gone into <code>run.save</code></td></tr>
+<tr><td><code>resource_metrics</code> (RSS, load, GPU memory)</td><td>674–695</td><td>gone when EXP-58 records machine metrics; stays until then</td></tr>
+<tr><td>three resume cases, the stop check, three saves, <code>raise Stopped</code></td><td>754–839</td><td>the loop above</td></tr>
+<tr><td><code>Stopped</code> subclass, <code>cli.py</code>'s handling of it</td><td></td><td>gone; <code>etude run</code> is the local caller</td></tr>
+</table></div>
+<p class="note">I have not counted the result. The 169 lines of <code>SelfPlay</code> settings and the 112 of docstring and imports do not move; those are a Manabot question, not an Etude one.</p>
+
+<h3>The recipe</h3>
+<p class="file">manabot/recipes/elemental.py</p>
+<pre><code>CLOCKS = [
+    Step("updates", "collection/update iterations"),
+    Time("training_seconds", "active collection and learning seconds"),
+]
+
+
+def train(config: ElementalConfig) -&gt; None:
+    settings = elemental_self_play().model_copy(update={"device": config.device, "streams": config.streams})
+    with track(clocks=CLOCKS, seed=config.seed, config=config) as run:
+        if config.validate_numerics:
+            gate(run.out / "numerics")
+        self_play(settings, run, seed=config.seed, updates=config.updates)</code></pre>
+<p class="note">Close to today's. The differences: <code>until</code> moves into the loop, <code>run.out</code> is no longer passed beside <code>run</code>, and <code>config=config</code> takes the model instead of <code>config.model_dump(mode="json")</code> <span class="p">proposed</span>.</p>
+
+<h3>A recipe with phases</h3>
+<p>The belief recipe trains a policy, collects its histories, then fits a sampler. This is the case that decided how <code>run.steps</code> ends. If a stopped loop simply fell out of its <code>for</code>, the next phase would run on a half-trained policy. Because the next pass raises <code>Stopped</code>, the lines after <code>self_play</code> run only when the policy reached its target.</p>
+<p class="file">manabot/recipes/belief_sampler.py</p>
+<pre><code>def train(config: BeliefConfig) -&gt; None:
+    settings = gray_ogre_self_play(horizon=config.updates).model_copy(update={"device": config.device})
+    with track(clocks=CLOCKS, seed=config.seed, config=config) as run:
+        policy = self_play(settings, run, seed=config.seed, updates=config.updates)
+        at = run.latest_checkpoint().at
+        histories = collect_belief(policy, run.out / f"histories-{policy.stem}.json", ...)
+        sampler = train_belief(histories, run.out / f"belief-{policy.stem}.pt", config.sampler, seed=config.seed)
+        run.checkpoint(sampler, tags=("belief",), **at)</code></pre>
+<p class="note">Two things this does not fix. <code>collect_belief</code> and <code>train_belief</code> still skip work when their output file exists, which is the <code>if out.exists(): return out</code> you pointed at; naming the files by the policy they came from is what keeps that honest. And two loops in one run cannot both use <code>out/state</code>, so <code>run.load</code> and <code>run.save</code> would need a name (<code>run.save(..., name="policy")</code>) the moment a second phase has state of its own.</p>
+
+<h3>The small loop</h3>
+<p><code>loops/minimal.py</code> is 83 lines of PPO with no run, no saving and no stopping. This is the same loop made to survive a machine. The learning lines are untouched and elided.</p>
+<p class="file">manabot/training/loops/minimal.py</p>
+<pre><code>def train(config: MinimalConfig) -&gt; None:
+    with track(clocks=[Step("updates", "collect/update rounds")], seed=config.seed, config=config) as run:
+        found = run.load(Saved)
+        agent, averaged, optimizer, start = restore(*found) if found else new(config)
+        rng = np.random.default_rng(config.seed + start)
+        target = int(run.until("updates", default=config.updates))
+        with collecting(agent, streams=config.streams, seed=config.seed + start) as collector:
+            for update in run.steps("updates", start=start, until=target):
+                batch = collect(collector, agent, config.decisions)
+                advantages, returns = ...                      # GAE, as today
+                loss = ...                                     # two epochs of clipped PPO, as today
+                learner.update_ema(averaged, agent, rate=0.99)
+                run.log({"loss": float(loss)})
+                run.save(lambda folder: export(agent, averaged, optimizer, update, folder), every=10)
+            run.checkpoint(write_policy(averaged, run.out / "policy.pt"), updates=target)</code></pre>
+<p class="note">Seven lines are Etude's (<code>track</code>, <code>load</code>, <code>until</code>, <code>steps</code>, <code>log</code>, <code>save</code>, <code>checkpoint</code>), plus an <code>export</code> and <code>restore</code> of about ten lines each. This is roughly what the front page's training sample would be.</p>
+
+<h2>Part 4. Stages: train A, then train B</h2>
+<p class="q">"the end state may be allowing experiments to have like a full DAG of training stages, each of may have multiple runs, and each run having possibly multiple trained models, but the heavy heavy default should be 1 stage 1 model, and the API should accept that but generalize where needed"</p>
+
+<h3>What the well-known systems did</h3>
+<p class="note">From memory, not re-read today. Ataraxos is not in the table: this repository uses its update rule and schedules, and I did not establish how its training was staged.</p>
+<div class="tw"><table>
+<tr><th>Shape</th><th>Who</th><th>What it needs from a tool</th></tr>
+<tr><td><b>One long run, one model</b></td><td>AlphaZero, MuZero. KataGo: one run in which the network is replaced by larger ones trained on the same self-play data. OpenAI Five: one ten-month run, with "surgery" carrying weights into changed models and environments, and about a fifth of games against past versions.</td><td>a run that survives machines; continuing under a <em>changed</em> config on purpose; this run's past checkpoints</td></tr>
+<tr><td><b>Stages in sequence, different learners</b></td><td>AlphaGo: a policy imitating humans, then a self-play policy started from it, then a value network trained on that policy's games. AlphaStar: imitation from replays, then the league started from it. VPT: a labelling model, then imitation on what it labelled, then fine-tuning. Here: Manabot's belief recipe; Jace's human-trained drafter.</td><td>a run that starts from another run's checkpoint, with the link recorded; each stage with its own function, config, budget and machine</td></tr>
+<tr><td><b>Many learners at once</b></td><td>AlphaStar's league (main agents, exploiters of them, exploiters of the league). Population-based training. Jace does this inside one process.</td><td>runs reading each other's checkpoints while they train; that is EXP-60</td></tr>
+</table></div>
+<p>Real systems mix these: AlphaStar is the second feeding the third. So the tool should not have a "stage" setting to choose; the shapes should fall out of two things, a run and a checkpoint one run hands another.</p>
+
+<h3>The ladder</h3>
+<p>Each rung adds one thing and leaves the rungs below unchanged.</p>
+<div class="tw"><table>
+<tr><th></th><th>You have</th><th>You add</th><th></th></tr>
+<tr><td>1</td><td>one stage, one model</td><td>nothing. <code>runs()</code> returns one <code>training(train, config=...)</code>.</td><td><span class="b">built</span></td></tr>
+<tr><td>2</td><td>several models in one run (Jace)</td><td>a checkpoint that is a folder</td><td><span class="p">proposed</span></td></tr>
+<tr><td>3</td><td>phases inside one run (the belief recipe)</td><td>a name on each phase's state: <code>run.save(..., name="policy")</code></td><td><span class="p">proposed</span></td></tr>
+<tr><td>4</td><td>stages as separate runs (AlphaGo)</td><td><code>start=</code> on the later job; <code>run.input("start")</code> in its loop</td><td><span class="p">proposed</span>, over built parts</td></tr>
+<tr><td>5</td><td>runs training against each other (a league)</td><td>reading the population during training</td><td>EXP-60</td></tr>
+</table></div>
+
+<h3>Rung 4, sketched</h3>
+<p>The default stays exactly as it is:</p>
+<pre><code>def runs() -&gt; Job:
+    return training(train, config=TrainConfig())</code></pre>
+<p>Stages reuse the shape <code>eval(state)</code> already has: a function of what exists that returns what is wanted. <code>etude launch</code> starts whatever is wanted and not yet run, so running it again after the first stage finishes starts the second.</p>
+<pre><code><mark>def runs(state: ExperimentState) -&gt; list[Job]:</mark>
+    jobs = [training(imitate, config=ImitateConfig(), name="imitate", max_usd=Decimal(5))]
+    first = state.finished("imitate")
+    if first:
+        jobs += [
+            training(self_play, config=SelfPlayConfig(seed=seed), name=f"self-play-{seed}",
+                     <mark>start=first.final</mark>, max_usd=Decimal(20))
+            for seed in range(3)
+        ]
+    return jobs</code></pre>
+<pre><code>def self_play(config: SelfPlayConfig) -&gt; None:
+    with track(clocks=[Step("updates", "optimizer updates")], seed=config.seed, config=config) as run:
+        found = run.load(Saved)
+        <mark>start = run.input("start")</mark>                      # the imitation checkpoint's folder, or None
+        state = restore(found) if found else new(config, weights=start)
+        ...</code></pre>
+<p>That is a DAG with no new noun. The edges are the <code>start=</code> arguments; a stage with three seeds is three jobs; an experiment is still a label over its runs. What Etude adds, and what an agent-written tracker would not have for free:</p>
+<ul>
+  <li>the later job is given the exact bytes, checked by digest, on whatever machine it lands on;</li>
+  <li>the link is recorded, so a report or the league can say which imitation run a self-play checkpoint descends from;</li>
+  <li>each stage has its own budget and machine shape (imitation wants a GPU; self-play wants cores).</li>
+</ul>
+<p class="note">Built in PR #103 and reused here: a job's <code>Input</code> (a file from another run's folder, digest-checked, delivered before start), <code>continue_from</code> (a new run seeded from a parent, with the lineage recorded), and <code>ExperimentState</code> with <code>state.run(name)</code>. Proposed: <code>runs(state)</code>, <code>start=</code>, <code>state.finished</code>, <code>run.input</code>. OpenAI Five's surgery is the built <code>continue_from(..., config=changed)</code>; I have not checked what it refuses.</p>
+
+<h3>One run or two?</h3>
+<p>Phases stay inside one run (rung 3) when they are cheap, always run together and nobody evaluates the middle. They become separate runs (rung 4) when any of these holds: the stages want different machines or budgets; several later runs start from one earlier run; the earlier result is evaluated or reused on its own. Manabot's belief recipe is rung 3 today and would be rung 4 by the third test, since the policy it trains is evaluated on its own.</p>
+
+<h2>What Etude would have to add to PR #103</h2>
+<div class="tw"><table>
+<tr><th></th><th>Addition</th><th>Why</th></tr>
+<tr><td>1</td><td><code>run.steps(clock, start=, until=)</code>; raises <code>Stopped</code> on the pass after a stop is asked for; fills the clock into <code>log</code>, <code>log_table</code>, <code>checkpoint</code></td><td>removes the stop check and the final raise; makes phased recipes safe</td></tr>
+<tr><td>2</td><td><code>run.save(export, every=, now=)</code> and <code>run.load(Model)</code>, writing <code>out/state/</code> whole</td><td>atomic resume state without each project rewriting it; a readable layout</td></tr>
+<tr><td>3</td><td><code>track(config=model)</code> refusing a changed config or seed, naming fields</td><td>already on the "before release" list</td></tr>
+<tr><td>4</td><td><code>etude run file.py</code> as the local caller</td><td>already on the list; replaces <code>local_launch</code> in user code</td></tr>
+<tr><td>5</td><td><code>run.checkpoint(export)</code>: a checkpoint that is a folder with a <code>checkpoint.json</code>, digested as a whole</td><td>a player made of several models (Jace); state and checkpoints written the same way</td></tr>
+<tr><td>7</td><td><code>run.checkpoints()</code>: this run's published checkpoints, with their folders</td><td>training against earlier versions without the loop keeping its own index</td></tr>
+<tr><td>6</td><td>the finished-run-marked-failed fix</td><td>already steered onto EXP-56</td></tr>
+</table></div>
+<p class="note">1 and 2 are the client experience. 3, 4 and 6 were already wanted. 5 changes what a checkpoint record is (one file and one digest today), and evaluation has to be able to hand a folder to the playing code, so it is cheaper to decide before release than after. 7 is small.</p>
+
+<h2>Questions</h2>
+<ol class="qs">
+  <li>Does Part 1 read like the page you want to release against?
+    <ol><li>yes, build toward it</li><li>the shape is right; changes (say which)</li><li>no</li></ol></li>
+  <li><code>run.save</code> is called every pass and Etude decides when the export runs (<code>every=</code>, and always before a stop).
+    <ol><li>keep that</li><li>the author decides when; <code>run.save</code> always writes, and the author checks <code>run.stopping()</code></li></ol></li>
+  <li>The saved record:
+    <ol><li>any Pydantic model the author declares, as sketched</li><li>Etude supplies a base with standard fields (clocks, seed, commit) that authors extend</li></ol></li>
+  <li>A checkpoint of several models is one folder that seats as one player, as in Part 2:
+    <ol><li>yes, in EXP-56</li><li>yes, later with EXP-60</li><li>no; one checkpoint per model, and a player names a set of them</li></ol></li>
+  <li>How much of the table of six goes into EXP-56 before it releases?
+    <ol><li>all six</li><li>3, 4, 6 now; 1 and 2 as the next Task, released together with a rewritten README</li><li>1–4 and 6; 5 later</li></ol></li>
+  <li>The Manabot loop takes Etude's <code>Run</code> directly, with no <code>Tracker</code> protocol and no untracked path.
+    <ol><li>yes</li><li>keep a protocol so the loop does not import Etude</li></ol></li>
+  <li>Stages (Part 4):
+    <ol><li>the ladder is right; rung 4 is its own Task after EXP-56</li><li>the ladder is right; rung 4 belongs with EXP-60</li><li>stages need a noun of their own (a declared stage or pipeline), not just <code>start=</code></li><li>too early; keep the default and revisit</li></ol></li>
+  <li>Games in flight when a machine is taken away (Jace keeps unfinished games between batches):
+    <ol><li>fine to lose; each attempt starts its games fresh, as Manabot does</li><li>the docs should show how to save them in state</li></ol></li>
+  <li>The name of the call that opens a run (<code>with track(...) as run</code>):
+    <ol><li>keep <code>track</code>; it is built, short and what W&amp;B users expect a tracker to be called</li><li><code>record</code>: <code>with record(clocks=...) as run</code>; says rows and checkpoints are being written down, still does not say "stop" or "resume"</li><li><code>open_run</code> or <code>etude.run</code>: names the thing you get back and makes no claim about what it does</li><li>decide later; pre-1.0, a rename with a warning alias is cheap</li></ol></li>
+</ol>
+
+</main>
+</body>
+</html>

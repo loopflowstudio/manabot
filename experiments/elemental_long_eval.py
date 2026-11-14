@@ -68,7 +68,7 @@ import time
 from typing import TYPE_CHECKING, Literal
 
 from etude.eval.block import run_blocks
-from etude.eval.match import Row, Tables, environment, evaluate
+from etude.eval.match import environment, evaluate
 from etude.eval.records import (
     CheckpointKey,
     CheckpointRef,
@@ -79,8 +79,9 @@ from etude.eval.records import (
     Model,
     Player,
 )
-from etude.run.records import ArtifactRef
-from etude.run.storage import (
+from etude.eval.run import Row, Tables
+from etude.records import ArtifactRef
+from etude.storage import (
     DirectoryStorage,
     Storage,
     run_directory,

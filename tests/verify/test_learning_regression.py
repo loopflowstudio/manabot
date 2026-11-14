@@ -3,19 +3,8 @@
 from pathlib import Path
 
 import pytest
-import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match
-from manabot.env.observation import ObservationSpace
-from manabot.experiment.checkpoint_evaluation import checkpoint_manifest
-from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.infra.provenance import runtime_fingerprints
-from manabot.recipes.baseline import baseline_test
-from manabot.training.records import TrainingCoordinates, TrainingRun
-from manabot.verify.action_cases import decision_case
-from manabot.verify.choice_corpus import Case
+from manabot.recipes.baseline import BaselineConfig, settings, train
 from manabot.verify.learning_regression import (
     BaselineReport,
     ChoiceScore,
@@ -24,8 +13,8 @@ from manabot.verify.learning_regression import (
     PolicySnapshot,
     aggregate_reports,
     family_changes,
-    inspect_policy,
     learning_evidence,
+    report_recipe,
 )
 
 
@@ -98,71 +87,6 @@ def test_aggregate_rejects_missing_seeds(tmp_path: Path) -> None:
     assert evidence.verdict == "error"
 
 
-def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
-    tmp_path: Path,
-) -> None:
-    previous = torch.get_num_threads()
-    torch.set_num_threads(1)
-    try:
-        with torch.random.fork_rng():
-            plan = baseline_test(1)
-            agent = ActorCritic(ObservationSpace(), plan.regime.agent)
-            path = tmp_path / "initial.pt"
-            save_checkpoint(
-                agent,
-                ObservationSpace(),
-                path,
-                player_configs=Match(plan.regime.match).to_rust(),
-            )
-            run = TrainingRun(
-                id="test",
-                regime_digest=canonical_sha256(plan.regime.model_dump()),
-                regime=plan.regime,
-                seed=197,
-                seed_streams={},
-                identities=runtime_fingerprints(
-                    197,
-                    match_config=plan.regime.match,
-                    observation_space=ObservationSpace(),
-                ),
-            )
-            admitted = checkpoint_manifest(
-                run,
-                {
-                    "path": str(path),
-                    "sha256": file_sha256(path),
-                    "bytes": path.stat().st_size,
-                },
-                TrainingCoordinates(
-                    stage_id="self-play", updates=0, training_seconds=0
-                ),
-                plan.evaluation,
-            )
-            assert admitted.expected_games == 96
-            # An authored-setup case, so its card IDs are the policy's pack.
-            fixture = decision_case("target")
-            case = Case(
-                name="target",
-                seed=0,
-                swapped=False,
-                trace=[],
-                digest="test",
-                family=2,
-                groups=([fixture.candidates[0]], [fixture.candidates[1]]),
-                signatures=[],
-                raw_json="{}",
-                obs=fixture.observation,
-                successors=("a", "b"),
-            )
-            a = inspect_policy(path, [case], 0)
-            b = inspect_policy(path, [case], 0)
-            assert a == b
-            assert a.maximum_invariance_error < 1e-4
-            assert family_changes(a, b)[0].mean_absolute_log_odds_change == 0
-    finally:
-        torch.set_num_threads(previous)
-
-
 def test_complete_cohort_keeps_no_update_inconclusive(tmp_path: Path) -> None:
     paths = []
     for seed in (1, 2, 3):
@@ -189,3 +113,32 @@ def test_complete_cohort_keeps_no_update_inconclusive(tmp_path: Path) -> None:
         aggregate_reports(paths, tmp_path / "missing", expected_seeds=(1, 2, 3)).verdict
         == "error"
     )
+
+
+def test_recipe_report_preserves_paired_deals_and_policy_inspection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    config = BaselineConfig(updates=1, device="cpu")
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "baseline")
+    monkeypatch.setenv("ETUDE_RUN", "baseline-seed-197")
+    monkeypatch.setenv("ETUDE_SEED", "197")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    train(config)
+    report = report_recipe(
+        tmp_path,
+        settings(config),
+        seed=197,
+        updates=1,
+        deals=(1_915_100_000, 1_915_100_001),
+        seconds=90,
+    )
+    assert report.software == "passed", report.error
+    assert report.learning.verdict == "inconclusive"
+    assert len(report.paired) == 2
+    assert all(len(deal.legs) == 4 for deal in report.paired)
+    assert [policy.updates for policy in report.policies] == [0, 1]
+    assert sum(item.retained for item in report.exposure) > 0
+    assert (tmp_path / "learning.json").exists()

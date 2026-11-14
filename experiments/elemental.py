@@ -11,7 +11,8 @@ experiments/protocols/elemental-174.md and elemental-183.md.
 
 This file is the experiment `elemental` for Etude:
 
-- `runs()` trains fresh seeds of the frozen recipe (`etude launch`);
+- `runs()` trains fresh seeds with the current loop and `elemental_self_play()`
+  settings, without current-game recovery (`etude launch`);
 - `eval(state)` asks for the grid and pairs of each run's rated checkpoints,
   played by `experiments.elemental_long_eval.play` (`etude eval`);
 - `report()` draws them beside training (`etude report`).
@@ -31,8 +32,7 @@ from pathlib import Path
 
 from etude.eval.records import Benchmark, Inference, Player, Seating
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
-from etude.jobs import evaluation
-from etude.launch.records import Job, Run
+from etude.jobs import evaluation, training
 from etude.report import (
     Anchors,
     Crosstable,
@@ -43,6 +43,7 @@ from etude.report import (
     Report,
     Score,
 )
+from etude.spec import Job
 
 from experiments.elemental_grid import Game, groups, schedule
 from experiments.elemental_long import (
@@ -51,7 +52,6 @@ from experiments.elemental_long import (
     heuristic_games,
     pair_design,
     rated_updates,
-    recipe,
 )
 from experiments.elemental_long_eval import (
     INFERENCE_CODE,
@@ -63,7 +63,8 @@ from experiments.elemental_long_eval import (
     play,
     rows,
 )
-from manabot.experiment.job import TrainingJob
+from manabot.experiment.setup import machine_setup
+from manabot.recipes.elemental import ElementalConfig, train
 from manabot.training.panels import ML, PERF
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,21 +92,19 @@ def runs(
     hours: float,
     usd_per_run: float,
     seed: int = 18101,
-) -> list[Run]:
-    """One seed of the frozen recipe to `updates`, exporting every `CADENCE` updates."""
-    job = TrainingJob(
-        regime=recipe(updates, hours=hours),
-        experiment=EXPERIMENT,
-        milestones=tuple(range(CADENCE, updates, CADENCE)),
-        finalization_seconds=600,
-        validate_numerics=True,
-    ).job(
-        repo=ROOT,
+) -> Job:
+    """Launch current-world self-play; frozen regimes use their recorded revision."""
+    return training(
+        train,
+        config=ElementalConfig(updates=updates, device="cuda", validate_numerics=True),
+        smoke=ElementalConfig(updates=1, device="cpu", streams=2),
+        seeds=(seed,),
+        repo=str(ROOT),
         revision=revision,
+        setup=machine_setup(" --extra artifacts"),
         max_hours=hours,
         max_usd=Decimal(str(usd_per_run)),
     )
-    return job.runs(seed)
 
 
 # ---------------------------------------------------------------------------

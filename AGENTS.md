@@ -128,8 +128,9 @@ checkpoints or experiment evidence.
 - Keep docstrings concise, but include non-obvious contracts, side effects,
   and failure behavior. Do not repeat signatures in `Args:` / `Returns:`
   boilerplate or narrate obvious statements. Update comments with behavior.
-- Put imports at the top; use explicit imports and underscore-prefixed private
-  helpers. Keep one implementation and one owner for each fact; use git for
+- Put imports at the top; use explicit imports. Do not prefix a function with
+  an underscore merely because it is used only within its module.
+  Keep one implementation and one owner for each fact; use git for
   old versions rather than `_new`, `_old`, or `_backup` variants.
 - Import names from their defining modules (`manabot.env.observation`, not
   `manabot.env`); package `__init__` files re-export nothing, so evaluation
@@ -137,6 +138,64 @@ checkpoints or experiment evidence.
   (`tests/test_package_boundaries.py` enforces the child modules). Launch
   evaluation children with `manabot.sim.child.ChildProcess`, not
   `multiprocessing` spawn, which re-imports the parent's `__main__`.
+
+### Functions and objects (Python)
+
+Use a class where it offers something genuinely valuable, and avoid one where
+it does not. An object is a thing; a function is what happens. A class earns
+its place as a value, a resource or an interchangeable part, where the type
+guarantees something every user relies on. Functions do the work: anything
+with steps, a loop or an order of operations. A class whose methods sequence the
+work (an executor, trainer, manager, runner or collector) is the shape to
+avoid; write the loop as a function whose body shows each step
+(`manabot/training/loops/self_play.py`: `state, row = step(state, ...)`).
+
+Where classes are valuable here, with the examples to copy:
+
+- **Configurations and records** (`ObservationConfig`, `ModelConfig`,
+  `MatchConfig`, `Learning`, `GameErrorPolicy`, the `llm/schema.py`
+  records). A config is the model object: it refuses a bad value when it is
+  built, compares and hashes by content, serializes with stable keys into
+  checkpoints and frozen evidence, and is copied rather than edited
+  (`model_copy(update=...)`, `dataclasses.replace`). It may own validators
+  and pure derivations of its own fields (a digest, a derived size). It does
+  not open files, build runtime objects or run anything; a function that
+  takes the config does.
+- **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
+  construction and `forward` there; training logic is functions over the
+  module.
+- **A resource with a lifetime** (`VerifyStore`, `VLLMServer`,
+  `PolicyInference`, `ChildProcess`, native `managym` environments, Etude's
+  `Run`): something opened, used and closed. Make it a context manager, or a
+  `@contextmanager` function when there is no state to hold. Do not wrap
+  another library's handle in our own class to add methods.
+- **A guarded invariant** (`BudgetLedger`: spend never exceeds the cap across
+  restarts; `AdmittedRollout`: rows admitted once; `Profiler`: nested
+  timers). The methods exist so no caller can break the invariant; name it
+  in the docstring and keep orchestration out.
+- **Interchangeable parts behind one small interface** (the LLM runtimes,
+  the scenario trackers in `verify/scenarios.py`, the loop's `Tracker`
+  protocol). Declare the interface as a `Protocol`; pick an implementation
+  with a table or an argument, not an `isinstance` chain.
+- **Exceptions** callers catch by type or that carry a typed payload.
+
+These are examples, not a closed list. For a class of another kind, ask what
+it gives a caller that a dataclass and a few functions would not; if the
+answer is real, write the class.
+
+Everything else is functions:
+
+- Pass what a function needs and return what it produces: the next state,
+  not a mutated argument. A function that must change its argument in place
+  says so in its docstring; Torch modules and optimizers are the usual case.
+- No hidden state: no module globals that change, no environment reads below
+  the entry point, no callbacks that reach back into a caller's object.
+- No operator overloading to make data act like something else, and no
+  `try/except/finish` repeated in callers where a `with` would scope it.
+
+Apply this to new and changed code. Convert an existing class when the
+change already touches it; do not rewrite a module only for style. Rust in
+`managym/` follows its own README.
 
 ### Python typing
 
@@ -323,7 +382,7 @@ admission. Admission-rejection fixtures must mark the config as submitted
 - Artifact storage and Etude integration tests require the `artifacts` extra.
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
-  `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q`.
+  `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_recipe_etude.py -q`.
 - Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
   `bench_steps` in release for the change and for the reference commit of
   `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
@@ -553,6 +612,9 @@ with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
 the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
 the stack, as the source's frame before the output choice (CR 605.3b).
 
+CLI subcommands import their execution runtime at the command boundary when
+needed to keep migration/help available without the training SDK.
+
 ### Etude training records
 
 Training row tables belong under the metric run's `artifacts/`, named by their
@@ -561,6 +623,10 @@ and launcher courier carry these immutable author artifacts before metric
 references; they are never checkpoints. Resolve a reference through its selected
 metric block's Storage and run prefix, after attempt/update supersession, so
 relocated evidence and resumed runs keep the same meaning.
+
+Etude requires every declared clock on each row, table and checkpoint. A
+missing checkpoint clock warns and skips recording; verify the recorded
+checkpoint, including downstream recipe outputs, rather than file existence.
 
 ### Etude card evaluation
 
@@ -603,3 +669,8 @@ and native imports. Load the evaluation projection only for evaluation inputs;
 keep its simulation dependencies off the LLM-only path. Check this boundary in a
 fresh process with those imports blocked, and exercise mixed reports through the
 actual builder CLI in the existing headless Perf proof.
+
+Etude launched source is an extracted commit without `.git`. Read its revision
+through `etude.eval.source.source_commit`; direct `git rev-parse` in a training
+loop cannot identify it. Local `--seconds` passes an ISO-8601 `ETUDE_DEADLINE`;
+continuation targets use `ETUDE_UNTIL_CLOCK` and `ETUDE_UNTIL_VALUE`.

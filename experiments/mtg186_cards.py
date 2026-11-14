@@ -53,7 +53,7 @@ import tempfile
 import time
 from typing import TYPE_CHECKING
 
-from etude.eval.match import Result, Row, environment as eval_environment, evaluate
+from etude.eval.match import environment as eval_environment, evaluate
 from etude.eval.records import (
     CheckpointKey,
     CheckpointRef,
@@ -62,10 +62,11 @@ from etude.eval.records import (
     Match,
     Model,
 )
+from etude.eval.run import Result, Row
 from etude.launch.client import default, queue_cohort, quote, status
-from etude.launch.records import Job, Run
-from etude.run.declaration import declare
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
+from etude.run import declare
+from etude.spec import Job, RunRequest
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import (
@@ -92,7 +93,7 @@ from experiments.mtg186_eval import (
 )
 from manabot.eval.card_evaluation import trace_card_tables
 from manabot.eval.card_metrics import CARD_ROLLUPS
-from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.sim.matchup import AuthoredMatchup
@@ -480,7 +481,7 @@ def job(pairing: Pairing, *, revision: str) -> Job:
 def launch(revision: str) -> str:
     if SPENT_USD + CARDS_USD > CAP_USD:
         raise SystemExit(f"the card job would exceed the ${CAP_USD} cap")
-    runs = [Run(job=job(endpoint(), revision=revision))]
+    runs = [RunRequest(job=job(endpoint(), revision=revision))]
     priced = quote(runs, rent=RENT, cohort=COHORT, max_usd=CARDS_USD)
     print(priced.model_dump_json(), flush=True)
     [run] = queue_cohort(COHORT, runs, rent=RENT, max_usd=CARDS_USD)

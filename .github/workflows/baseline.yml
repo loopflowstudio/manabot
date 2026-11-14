@@ -38,7 +38,7 @@ jobs:
           uv sync --frozen --extra dev --extra play --no-default-groups --group play-runtime
           uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python
       - name: Recipe and evidence contracts
-        run: uv run --no-sync pytest tests/training/test_baseline_recipe.py tests/verify/test_learning_regression.py -q
+        run: uv run --no-sync pytest tests/training/test_recipe_etude.py tests/verify/test_learning_regression.py -q
       - name: Ordinary baseline training and frozen evaluation
         env:
           BASELINE_STEPS: ${{ inputs.steps || '' }}
@@ -47,19 +47,38 @@ jobs:
           timeout --signal=TERM 1800s uv run --no-sync python - <<'PY'
           import os
           from pathlib import Path
-          from manabot.recipes.baseline import BASELINE_STEPS, baseline_test
+          import subprocess
+          from manabot.recipes.baseline import BASELINE_STEPS, BaselineConfig, evaluate
 
-          plan = baseline_test(
-              steps=int(os.environ["BASELINE_STEPS"] or BASELINE_STEPS), seconds=1680
+          config = BaselineConfig(
+              updates=int(os.environ["BASELINE_STEPS"] or BASELINE_STEPS),
+              device="cpu",
           )
-          result = plan.run(seed=int(os.environ["BASELINE_SEED"]), out=Path(".runs/baseline"))
-          raise SystemExit(result.status != "completed")
+          seed = int(os.environ["BASELINE_SEED"])
+          os.environ["ETUDE_HOME"] = str(Path(".runs/baseline").resolve())
+          recipe = Path(".runs/baseline_recipe.py")
+          recipe.parent.mkdir(parents=True, exist_ok=True)
+          recipe.write_text(
+              "from etude.jobs import training\nfrom etude.spec import Job\n"
+              "from manabot.recipes.baseline import BaselineConfig, train\n\n"
+              "def runs() -> Job:\n"
+              "    return training(train, config=BaselineConfig.model_validate_json("
+              f"{config.model_dump_json()!r}), seeds=({seed},))\n"
+          )
+          subprocess.run([
+              "uv", "run", "--no-sync", "etude", "train", str(recipe),
+              "--experiment", "baseline", "--seconds", "1680",
+          ], check=True)
+          destination = Path(".runs/baseline/track/baseline/out")
+          result = evaluate(config, destination, seed=seed)
+          raise SystemExit(result.software != "passed")
           PY
       - name: Summary
         if: always()
         run: |
-          if [ -f .runs/baseline/report.md ]; then
-            cat .runs/baseline/report.md >> "$GITHUB_STEP_SUMMARY"
+          report=$(find .runs/baseline -name report.md -print -quit)
+          if [ -n "$report" ]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Baseline did not finish; retained partial evidence is not a learning pass.' >> "$GITHUB_STEP_SUMMARY"
           fi

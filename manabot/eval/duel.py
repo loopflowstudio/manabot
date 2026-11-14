@@ -9,7 +9,6 @@ import json
 import os
 from pathlib import Path
 
-from etude.eval.match import EvalRun, Tables
 from etude.eval.records import (
     Benchmark,
     CheckpointKey,
@@ -20,8 +19,9 @@ from etude.eval.records import (
     Model,
     Seating,
 )
+from etude.eval.run import EvalResult, Tables
 from etude.eval.tournament import hold
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import numpy as np
 from pydantic import BaseModel
 
@@ -57,7 +57,7 @@ class ScoreGroup(BaseModel):
 
 
 class DuelResult(BaseModel):
-    etude: EvalRun
+    etude: EvalResult
     groups: dict[str, ScoreGroup]
     updates: int
     two_seat: ArtifactReference

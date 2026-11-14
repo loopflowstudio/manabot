@@ -1,245 +1,76 @@
-"""The ordinary baseline recipe, above regimes and below experiment comparisons.
+"""Ordinary damped-policy self-play on the selected Academy matchup.
 
-`baseline(steps)` resolves the same learning rule for CLI and nightly callers.
-A recipe owns its horizon, checkpoints and independent evaluation; TrainingRegime
-still owns the learner. No diagnostic labels or action-specific rewards enter
-training. `run_baseline` uses the existing isolated experiment coordinator.
+`settings` builds the learning inputs; `train` declares an Etude run and calls
+the loop. Evaluation is a separate Etude pass over its immutable checkpoints.
 """
 
-from datetime import datetime, timezone
 from pathlib import Path
-import socket
 from typing import Literal
 
-from pydantic import Field
+from etude.train.tracking import track
+from pydantic import BaseModel, ConfigDict, Field
 
-from manabot.eval.monitor import MonitorProtocol
-from manabot.experiment.config import Baseline, Experiment
-from manabot.experiment.evaluation_queue import MonitoringBudget
-from manabot.experiment.execution import (
-    ExperimentRun,
-    ExperimentSchedule,
-    Hardware,
-    HardwareInventory,
-)
-from manabot.experiment.runner import run_experiment
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK
-from manabot.recipes.device import accelerator
 from manabot.sim.matchup import selected_match
-from manabot.training.mps import mps_torch_error
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    IterationSchedule,
-    Layout,
-    Strict,
-    TrainingRegime,
-    TrainSelfPlay,
-)
-from manabot.verify.learning_regression import report_baseline
-import managym
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+from manabot.verify.learning_regression import BaselineReport, report_recipe
 
 BASELINE_STEPS = 128
-# v3 combines the FiLM policy with learning from both seats by default.
-BASELINE_VERSION = "baseline-v3"
-# Separate from the existing scientific and monitoring cohorts. Repeated nightly
-# use makes these regression/development deals, not a scientific holdout forever.
 BASELINE_DEALS = tuple(range(1_915_100_000, 1_915_100_024))
 
 
-class TrainingRecipe(Strict):
-    """Resolved, serializable run intention; constructing one launches nothing."""
+class BaselineConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-    name: str
-    version: str
-    steps: int = Field(ge=1)
-    regime: TrainingRegime
-    checkpoint_updates: int = Field(ge=1)
-    evaluation: MonitorProtocol
-    wall_seconds: float = Field(gt=0)
-
-    def experiment(self, seed: int) -> Experiment:
-        return Experiment(
-            name=self.version,
-            baseline=Baseline.capture(self.version, self.regime),
-            schedule=ExperimentSchedule(
-                seeds=(seed,),
-                hardware="baseline-cpu",
-                wall_seconds=self.wall_seconds,
-                process_seconds=2 * self.wall_seconds,
-                checkpoint_updates=self.checkpoint_updates,
-                monitoring=MonitoringBudget(
-                    seconds=self.wall_seconds,
-                    attempt_seconds=self.wall_seconds / 2,
-                    include_initial=True,
-                    # Arena evaluation is expensive: initial and endpoint only.
-                    # Intermediate exports are reused by cheap frozen probes.
-                    updates=(0, self.steps),
-                    protocol=self.evaluation,
-                ),
-                disk_reserve_bytes=1024**3,
-            ),
-        )
-
-    def run(self, *, seed: int = 197, out: Path | None = None) -> ExperimentRun:
-        """Train, export and evaluate with one reserved CPU evaluator thread."""
-        destination = out or Path(".runs") / (
-            "baseline-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-        )
-        hardware = HardwareInventory(
-            resources=(
-                Hardware(
-                    name="baseline-cpu",
-                    host=socket.gethostname(),
-                    cpu_threads=2,
-                ),
-            )
-        )
-        try:
-            result = run_experiment(self.experiment(seed), hardware, destination)
-        except Exception:
-            if (destination / "experiment.json").exists():
-                report_baseline(destination)
-            raise
-        report = report_baseline(destination)
-        if report.software != "passed" and result.status == "completed":
-            raise RuntimeError(
-                f"baseline inspection failed: {report.error}; see {destination}"
-            )
-        return result
+    updates: int = Field(default=BASELINE_STEPS, ge=1)
+    device: Literal["cpu", "mps", "cuda"] = "cuda"
+    learning_seats: Literal["one", "both"] = "both"
+    padded_shapes: bool = False
 
 
-def baseline(
-    steps: int = BASELINE_STEPS,
-    *,
-    seconds: float | None = None,
-    learning_seats: Literal["one", "both"] = "both",
-    device: Literal["cpu", "mps", "cuda"] | None = None,
-    padded_shapes: bool = False,
-) -> TrainingRecipe:
-    """Resolve accelerated self-play; CPU smoke runs use the local recipe."""
-    selected = accelerator() if device is None else device
-    # Reject unadmitted MPS here: the experiment runner would only report it from
-    # the training child's log.
-    if selected == "mps" and (error := mps_torch_error()) is not None:
-        raise ValueError(error)
-    if selected is None or selected == "cpu":
-        raise ValueError(
-            "baseline requires CUDA or an explicit --device mps; "
-            "use --recipe local for CPU"
-        )
-    return _baseline(
-        steps,
-        seconds=seconds,
-        learning_seats=learning_seats,
-        device=selected,
-        padded_shapes=padded_shapes,
-    )
-
-
-def baseline_test(
-    steps: int = BASELINE_STEPS,
-    *,
-    seconds: float | None = None,
-    learning_seats: Literal["one", "both"] = "both",
-    padded_shapes: bool = False,
-) -> TrainingRecipe:
-    """The baseline on CPU for tests and diagnostics without accelerator hardware."""
-    return _baseline(
-        steps,
-        seconds=seconds,
-        learning_seats=learning_seats,
-        device="cpu",
-        padded_shapes=padded_shapes,
-    )
-
-
-def _baseline(
-    steps: int,
-    *,
-    seconds: float | None,
-    learning_seats: Literal["one", "both"],
-    device: Literal["cpu", "mps", "cuda"],
-    padded_shapes: bool,
-) -> TrainingRecipe:
-    """Resolve horizon-scaled Ataraxos self-play on the current authored world.
-
-    The scalar, width-64, depth-2 model follows the existing ordinary self-play
-    baseline, with the FiLM policy that new runs train. The explicit schedule
-    mapping is a new recipe choice: its first and last rates match iterations 1
-    and 10,000 of the historical rule. Short runs are compressed schedules, not
-    prefixes of a longer run. Reward remains the executor's terminal game
-    outcome. Wall time is only a failure bound. `padded_shapes` turns the
-    CUDA forward layout off for comparison; otherwise the regime resolves it.
-    """
-    layout: Layout = False if padded_shapes else "auto"
-    schedule = IterationSchedule(steps=steps)
-    allowance = seconds if seconds is not None else max(1680.0, steps * 8.0 + 600)
-    return TrainingRecipe(
-        name="baseline",
-        version=BASELINE_VERSION,
-        steps=steps,
-        checkpoint_updates=max(1, steps // 2),
-        evaluation=MonitorProtocol(deal_seeds=BASELINE_DEALS, opponent="random"),
-        wall_seconds=allowance,
-        regime=TrainingRegime(
-            id=BASELINE_VERSION,
-            world=managym.WORLD_VERSION,
-            match=selected_match(),
-            observation=ObservationConfig(),
-            agent=ModelConfig(
-                hidden_dim=64,
-                attention_layers=2,
-                num_attention_heads=4,
-                world=PACK,
-                value_kind="scalar",
-                value_aggregation="masked_mean",
-                policy_film=True,
-            ),
-            stages=[
-                TrainSelfPlay(
-                    id="self-play",
-                    operation="train_self_play",
-                    updates=steps,
-                    streams=4,
-                    transitions=64,
-                    behavior="current-self",
-                    learning_seats=learning_seats,
-                    learning=DampedPolicyLearning(
-                        gradient="damped_policy", iteration_schedule=schedule
-                    ),
-                    execution=Execution(
-                        wall_seconds=allowance * 0.85,
-                        threads=1,
-                        device=device,
-                        bucketed_shapes=layout,
-                        live_tokens=layout,
-                    ),
-                )
-            ],
-            wall_seconds=allowance * 0.85,
-            schedule_clock="iteration_fraction",
+def settings(config: BaselineConfig) -> SelfPlay:
+    """The recipe horizon fixes its rates; a later launch target runs past it at the final rates."""
+    return SelfPlay(
+        match=selected_match(),
+        model=ModelConfig(
+            hidden_dim=64,
+            attention_layers=2,
+            num_attention_heads=4,
+            world=PACK,
+            value_kind="scalar",
+            value_aggregation="masked_mean",
+            policy_film=True,
         ),
+        streams=4,
+        transitions=64,
+        learning_seats=config.learning_seats,
+        learning=DampedPolicyLearning(
+            gradient="damped_policy",
+            iteration_schedule=IterationSchedule(steps=config.updates),
+        ),
+        device=config.device,
+        bucketed_shapes=config.device == "cuda" and not config.padded_shapes,
+        live_tokens=config.device == "cuda" and not config.padded_shapes,
+        checkpoint_every=max(1, config.updates // 2),
     )
 
 
-def run_baseline(
-    *,
-    steps: int = BASELINE_STEPS,
-    seed: int = 197,
-    out: Path | None = None,
-    seconds: float | None = None,
-    learning_seats: Literal["one", "both"] = "both",
-    device: Literal["cpu", "mps", "cuda"] | None = None,
-    padded_shapes: bool = False,
-) -> ExperimentRun:
-    """Train, export and evaluate; retain every failure without automatic retry."""
-    plan = baseline(
-        steps,
+def train(config: BaselineConfig) -> None:
+    with track(clocks=CLOCKS, config=config) as run:
+        self_play(settings(config), run, updates=config.updates)
+
+
+def evaluate(
+    config: BaselineConfig, directory: Path, *, seed: int, seconds: float = 1680
+) -> BaselineReport:
+    """Evaluate the initial and endpoint policies on the nightly paired-deal cohort."""
+    return report_recipe(
+        directory,
+        settings(config),
+        seed=seed,
+        updates=config.updates,
+        deals=BASELINE_DEALS,
         seconds=seconds,
-        learning_seats=learning_seats,
-        device=device,
-        padded_shapes=padded_shapes,
     )
-    return plan.run(seed=seed, out=out)

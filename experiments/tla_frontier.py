@@ -48,7 +48,6 @@ from statistics import median
 from tempfile import TemporaryDirectory
 from typing import Any, Literal, TypedDict
 
-from etude.eval.match import Row, Tables
 from etude.eval.records import (
     Benchmark,
     Code,
@@ -58,12 +57,13 @@ from etude.eval.records import (
     Model,
     Seating,
 )
+from etude.eval.run import Row, Tables
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch import client
-from etude.launch.records import Job, Run
 from etude.report import Report, Score
-from etude.run.storage import Storage
+from etude.spec import Job, RunRequest
+from etude.storage import Storage
 from etude.train.read import RunData
 from pydantic import Field
 import torch
@@ -72,7 +72,7 @@ from experiments import tla_frontier
 from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
@@ -80,12 +80,12 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule
 from manabot.training.panels import ML, PERF
 from manabot.training.regime import (
-    DampedPolicyLearning,
-    IterationSchedule,
     TrainingRegime,
     TrainSelfPlay,
+    refuse_frozen_execution,
 )
 from manabot.training.report import (
     against_earlier_self,
@@ -330,32 +330,12 @@ def export_updates(regime: TrainingRegime, protocol: Protocol) -> tuple[int, ...
     return tuple(sorted({*cadence, *protocol.milestones}))
 
 
-def capped_runs(
-    regime: TrainingRegime,
-    *,
-    experiment: str,
-    revision: str,
-    seed: int,
-    max_hours: float,
-    max_usd: Decimal,
-    milestones: tuple[int, ...] = (),
-) -> list[Run]:
-    """One capped allocation; calibration measures the job the frontier launches."""
-    return (
-        TrainingJob(
-            regime=regime,
-            experiment=experiment,
-            milestones=milestones,
-            finalization_seconds=600,
-            stop_reserve_seconds=600,
-            validate_numerics=True,
-        )
-        .job(repo=ROOT, revision=revision, max_hours=max_hours, max_usd=max_usd)
-        .runs(seed)
-    )
+def capped_runs(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
-def runs(revision: str) -> list[Run]:
+def runs(revision: str) -> list[RunRequest]:
     """One capped GPU allocation per size; no automatic retry or budget expansion."""
     regimes, protocol = frozen()
     return [

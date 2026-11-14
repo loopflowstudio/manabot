@@ -1,62 +1,74 @@
 #!/usr/bin/env python3
-"""Where one training update's time goes, from the real stage on this machine.
+"""Measure a few self-play loop updates on this machine.
 
-Runs a recipe's self-play stage for a few updates through `execute_regime` and
-prints its receipt per environment decision. `--recipe` is a regime JSON file or
-a declaration `module:function` called as `function(regime_id, updates)`, such
-as `experiments.elemental_variants:elemental_recipe`. The default is the Elemental
-183 file re-pinned to the current world, so a checkout of any commit with that
-regime file gives a comparable row on the same machine; that re-pin has no
-capacity recovery, so one overflowing game ends the run. `--max-facts` narrows
-the fact axis for attribution only; it never names a recipe to train.
+`--recipe module:function` returns SelfPlay settings without arguments; the
+Elemental builder is the default. Regime JSON and TrainingRun receipts are no
+longer supported. `--json` writes per-update rows and a summary. Each reading
+is a fresh local Etude run in a temporary home, with its ordinary rows read
+before cleanup.
+CUDA counts cover the entire run and change timing. Compare matched workloads
+on the same machine; CPU timings do not establish CUDA throughput.
 
-`--json OUT` writes the whole `TrainingRun` receipt. `--out DIR` keeps the run's
-folder (its verify store, checkpoints and the Etude metrics run that holds each
-update's rows, which the receipt's `metrics_run` names); without it the folder is
-temporary and deleted. `--cuda-counts OUT` counts CUDA kernel launches
-(`torch.profiler`) and synchronizing calls (`torch.cuda.set_sync_debug_mode("warn")`)
-as one total over the run. Divided by the receipt's updates it is a per-update
-rate; divided by one phase's `calls` it is only an upper bound for that phase,
-because every phase's launches are in the sum. The instrumentation slows the run,
-so its timings are not comparable with uninstrumented rows.
-
-Compare phase and whole-update timings on the same machine with matched workloads.
-CPU model timings do not establish CUDA throughput. On a shared machine, alternate
-the checkouts being compared and retain the timing spread.
-
-    uv run python scripts/bench_training_update.py --streams 256 --updates 3
+    uv run python scripts/bench_training_update.py --streams 4 --updates 2
 """
 
 import argparse
 from collections.abc import Callable, Iterator
-from contextlib import AbstractContextManager, contextmanager, nullcontext
+from contextlib import contextmanager, nullcontext
 import importlib
 import json
+import os
 from pathlib import Path
-import tempfile
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
+from typing import TypedDict, cast
 import warnings
 
-from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.records import TrainingRun
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.verify.store import VerifyStore
-import managym
+from etude.train.read import read
+from etude.train.tracking import track
+from pydantic import BaseModel, Field
 
-RECIPE = Path(__file__).parents[1] / "experiments/regimes/elemental-long-183-v1.json"
-REGIME_ID = "bench-training-update"
-# Driver-side names of a kernel launch in the profiler's CPU events.
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+
+RECIPE = "manabot.recipes.builders:elemental_self_play"
 _LAUNCHES = frozenset({"cudaLaunchKernel", "cuLaunchKernel", "cudaLaunchKernelExC"})
 
 
-def load_recipe(spec: str, updates: int) -> TrainingRegime:
-    """A regime file, or a declaration `module:function(regime_id, updates)`."""
-    if ":" in spec and not Path(spec).exists():
-        module, name = spec.split(":", 1)
-        declare: Callable[[str, int], TrainingRegime] = getattr(
-            importlib.import_module(module), name
-        )
-        return declare(REGIME_ID, updates)
-    return TrainingRegime.model_validate_json(Path(spec).read_bytes())
+class Summary(TypedDict):
+    seconds_per_update: float
+    decisions_per_update: float
+    games_per_update: float
+    phase_microseconds_per_decision: dict[str, float]
+
+
+class Measurement(TypedDict):
+    recipe_settings: dict[str, object]
+    seed: int
+    rows: list[dict[str, object]]
+    summary: Summary
+
+
+def load_recipe(spec: str) -> SelfPlay:
+    """Load an ordinary zero-argument settings builder, validating its result."""
+    module, name = spec.split(":", 1)
+    declare = cast(
+        Callable[[], SelfPlay], getattr(importlib.import_module(module), name)
+    )
+    return SelfPlay.model_validate(declare())
+
+
+class BenchmarkConfig(BaseModel):
+    settings: SelfPlay
+    updates: int = Field(ge=1)
+    cuda_counts: Path | None = None
+
+
+def train(config: BenchmarkConfig) -> None:
+    """A real Etude run for one reading; profiles only the learning workload."""
+    with track(clocks=CLOCKS, config=config) as run:
+        with _cuda_counts(config.cuda_counts) if config.cuda_counts else nullcontext():
+            self_play(config.settings, run, updates=config.updates)
 
 
 @contextmanager
@@ -93,82 +105,102 @@ def _cuda_counts(out: Path) -> Iterator[None]:
     out.write_text(json.dumps({"kernel_launches": launches, "synchronizations": syncs}))
 
 
+def measure(
+    settings: SelfPlay, *, seed: int, updates: int, cuda_counts: Path | None = None
+) -> Measurement:
+    """Read rows from a fresh local Etude run before cleaning its temporary files."""
+    config = BenchmarkConfig(
+        settings=settings, updates=updates, cuda_counts=cuda_counts
+    )
+    with TemporaryDirectory(prefix="manabot-update-") as temporary:
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("ETUDE_")
+        }
+        env["ETUDE_HOME"] = temporary
+        recipe = Path(temporary) / "measurement.py"
+        recipe.write_text(
+            "from etude.jobs import training\nfrom etude.spec import Job\n"
+            "from scripts.bench_training_update import BenchmarkConfig, train\n\n"
+            "def runs() -> Job:\n"
+            "    return training(train, config=BenchmarkConfig.model_validate_json("
+            f"{config.model_dump_json()!r}), seeds=({seed},))\n"
+        )
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "etude",
+                "train",
+                str(recipe),
+            ],
+            env=env,
+            check=True,
+            timeout=240,
+            stdout=sys.stderr,
+        )
+        recorded = read(
+            Path(temporary) / "track",
+            "measurement",
+            "measurement",
+        )
+        rows: list[dict[str, object]] = [{} for _ in range(updates)]
+        for metric in recorded.metrics():
+            points = recorded.points(metric, "updates")
+            # Diagnostics may be sampled on only some updates. Join by clock,
+            # preserving absence rather than shifting values to another row.
+            for update, value in zip(points.x, points.y, strict=True):
+                rows[int(update) - 1][metric] = float(value)
+    for index, row in enumerate(rows, 1):
+        row["updates"] = index
+        row["training_seconds"] = row["coordinates/training_seconds"]
+    last = rows[-1]
+    decisions = int(cast(int, last["coordinates/environment_decisions"]))
+    phases = {
+        key: sum(float(cast(float, row.get(key, 0))) for row in rows)
+        for key in {key for row in rows for key in row if key.startswith("time/")}
+    }
+    return {
+        "recipe_settings": settings.model_dump(mode="json"),
+        "seed": seed,
+        "rows": rows,
+        "summary": {
+            "seconds_per_update": float(cast(float, last["training_seconds"]))
+            / updates,
+            "decisions_per_update": decisions / updates,
+            "games_per_update": int(cast(int, last["coordinates/games"])) / updates,
+            "phase_microseconds_per_decision": {
+                key: seconds * 1e6 / decisions
+                for key, seconds in sorted(phases.items())
+            },
+        },
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--recipe", default=str(RECIPE))
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--recipe", default=RECIPE)
+    parser.add_argument("--device", choices=("cpu", "mps", "cuda"), default="cpu")
     parser.add_argument("--streams", type=int, default=256)
     parser.add_argument("--updates", type=int, default=3)
     parser.add_argument("--seed", type=int, default=25201)
     parser.add_argument("--max-facts", type=int)
-    parser.add_argument("--json", type=Path, help="write the TrainingRun receipt")
-    parser.add_argument("--out", type=Path, help="keep the run folder here")
+    parser.add_argument("--json", type=Path, help="write update rows and summary")
     parser.add_argument("--cuda-counts", type=Path, help="write CUDA launch counts")
     args = parser.parse_args()
-
-    saved = load_recipe(args.recipe, args.updates)
-    regime = validate_regime(
-        saved.model_copy(update={"id": REGIME_ID, "world": managym.WORLD_VERSION})
-    )
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.updates = args.updates
-    stage.streams = args.streams
-    stage.execution.device = args.device
-    stage.execution.wall_seconds = regime.wall_seconds = 3600.0
+    settings = load_recipe(args.recipe)
+    values = settings.model_dump()
+    values.update(streams=args.streams, device=args.device)
     if args.max_facts is not None:
-        regime.observation = regime.observation.model_copy(
-            update={"max_facts": args.max_facts}
-        )
-
-    run = _execute(regime, args.seed, args.out, args.cuda_counts)
+        values["observation"]["max_facts"] = args.max_facts
+    settings = SelfPlay.model_validate(values)
+    result = measure(
+        settings, seed=args.seed, updates=args.updates, cuda_counts=args.cuda_counts
+    )
     if args.json is not None:
-        args.json.write_text(run.model_dump_json())
-    if run.status != "completed":
-        raise SystemExit(f"benchmark run {run.status}: {run.error}")
-
-    record = run.stages[0]
-    decisions = record.environment_decisions
-    print(
-        json.dumps(
-            {
-                "seconds_per_update": round(
-                    (record.collection_seconds + record.learning_seconds)
-                    / record.updates,
-                    2,
-                ),
-                "decisions_per_update": decisions // record.updates,
-                "games_per_update": record.games // record.updates,
-                "host": run.host.model_dump() if run.host else None,
-            }
-        )
-    )
-    for label, timings in (
-        ("collection", record.collection_timings or {}),
-        ("learning", record.learning_timings or {}),
-    ):
-        for path, timing in timings.items():
-            micros = timing.seconds * 1e6 / decisions
-            print(f"{label:10} {path:64} {micros:9.1f} us/decision")
-
-
-def _execute(
-    regime: TrainingRegime, seed: int, keep: Path | None, counts: Path | None
-) -> TrainingRun:
-    """Run the regime in `keep`, or in a temporary folder deleted afterwards."""
-    folder: AbstractContextManager[str | Path] = (
-        tempfile.TemporaryDirectory(prefix="bench-update-")
-        if keep is None
-        else nullcontext(keep)
-    )
-    with folder as name:
-        out = Path(name)
-        out.mkdir(parents=True, exist_ok=True)
-        counting: AbstractContextManager[None] = (
-            nullcontext() if counts is None else _cuda_counts(counts)
-        )
-        with VerifyStore(out / "runs.sqlite") as store, counting:
-            return execute_regime(regime, seed, out / "run", store)
+        args.json.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps(result["summary"], indent=2))
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from manabot.backends.torch import rollout as learner_module
 from manabot.backends.torch.learner import Learner, update_ema
 from manabot.backends.torch.rl import selected_rows, transition_gae
 from manabot.policy.prepare import reference_distribution
-from manabot.training.regime import Learning, Schedule
+from manabot.training.learning import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.updates.ppo import update_iteration

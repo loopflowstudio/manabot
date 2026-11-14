@@ -2,17 +2,14 @@
 
 from collections import Counter
 
-import numpy as np
 import pytest
-import torch
 
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match, Reward
+from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.sim.matchup import selected_match
-from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import stream_matches
 import managym
 
@@ -53,39 +50,6 @@ def test_mirror_admission_requires_exact_roster_and_explicit_option() -> None:
         validate_agent_setup(
             agent, Match(changed).to_rust(), allow_deck_repetition=True
         )
-
-
-def test_native_mixed_collector_replays_terminal_resets() -> None:
-    torch.set_num_threads(1)
-    match = Match(selected_match())
-    space = ObservationSpace()
-    agent = ActorCritic(
-        space,
-        ModelConfig(
-            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
-        ),
-    )
-
-    def collector() -> SeatRoutedCollector:
-        return SeatRoutedCollector(
-            space,
-            match,
-            Reward(RewardConfig()),
-            num_envs=12,
-            seed=1250,
-            opponent_mode="self",
-            recovery_max_microsteps=100000,
-            matchup_curriculum="mirrors-balanced",
-        )
-
-    first = collector()
-    first.collect(agent, 128)
-    assert first.stats.games > 0
-    restored = collector()
-    restored.restore(first.snapshot(), lambda: None)
-    left, right = first.collect(agent, 8), restored.collect(agent, 8)
-    np.testing.assert_array_equal(left.actions, right.actions)
-    assert first.stats.games == restored.stats.games
 
 
 def test_authored_mirrors_keep_complete_content_manifest() -> None:

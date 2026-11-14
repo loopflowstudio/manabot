@@ -5,8 +5,9 @@ its Perf and ML details draw manabot's own keys (`update_metrics.metric_row`)
 rather than Etude's reinforcement-learning defaults. Keys are unprefixed:
 `entropy`, `collection_kl`, `numerical/...`, and the run's coordinates under
 `coordinates/`. Phase seconds per update are under `time/`
-(`update_metrics.phase_seconds`), drawn by `Flame` and, for the costs that decide
-a training machine, by the "Update time" series. Rows from runs before a phase
+(`update_metrics.phase_seconds`, read from the live collector and learner
+profilers), drawn by `Flame` and, for the costs that decide a training machine,
+by the "Update time" series. Rows from runs before a phase
 was timed leave that series blank; retained rows and the Python vector carry only
 the environment step's parent key, so a new run compares to them on it. Series
 overlay, so the parent beside its children double counts nothing.

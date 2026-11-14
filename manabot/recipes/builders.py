@@ -1,11 +1,9 @@
-"""Reusable parts for composing training regimes without executing them.
+"""Reusable self-play settings and retained regime declarations.
 
-Experiment modules in `experiments/` assemble a `TrainingRegime` from
-these parts; anything more than one recipe file needs lives here. Builders
-return fresh values and carry no experiment identity: a recipe supplies the
-regime `id`. Variation helpers (`with_*`) revalidate the whole regime, including
-model/objective compatibility, and snapshot nested values so editing one arm
-cannot change its baseline. TrainingRegime remains the serialized owner.
+Current recipes use elemental_self_play, gray_ogre_self_play and sampled_self_play.
+Frozen experiment builders retain TrainingRegime values and their stable
+serialization. Variation helpers revalidate and copy those records so editing
+one comparison arm cannot change another. No builder executes training.
 """
 
 from collections.abc import Sequence
@@ -18,16 +16,11 @@ from manabot.infra.config import (
     ValueAggregation,
 )
 from manabot.training.decks import UniformDecks
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    IterationSchedule,
-    Learning,
-    Operation,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
+from manabot.training.loops.self_play import SelfPlay
+from manabot.training.regime import Execution, Operation, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
+import managym
 
 # Semantic pack of the selected Allies/Lessons matchup that current recipes train on.
 PACK = "ur-lessons-vs-gw-allies"
@@ -194,7 +187,6 @@ def ataraxos_baseline(
 
 def sampled_self_play(
     *,
-    id: str,
     world: str,
     agent: ModelConfig,
     observation: ObservationConfig,
@@ -204,26 +196,18 @@ def sampled_self_play(
     match: MatchConfig | None = None,
     elemental_uniform: bool = False,
     workers: Literal[1, 2, 4] = 4,
-) -> TrainingRegime:
-    """One wall-bounded, two-seat damped self-play stage over a sampled roster.
+) -> SelfPlay:
+    """Damped self-play over a sampled roster with a fixed, fitted rate horizon.
 
-    The default recipe for new frontier runs on a deck source (or the authored
-    Elemental roster with `elemental_uniform`). Its damping horizon spans the
-    updates the wall reaches at the measured `seconds_per_update`
-    (`fitted_horizon`), so a run far shorter than the reference still walks the
-    whole rate and τ curve. Producers default to four, since one native producer
-    is the critical path of an update. An engine error or capacity overflow
-    aborts one labelled game (`recover_capacity`); the rolling game-error stop
-    still ends the run. These are recipe choices: the Pydantic field defaults,
-    which saved regimes rely on, are unchanged. The update cap is the reference,
-    so the wall binds.
+    The launch owns the time allowance and update target. These settings retain
+    the horizon calculated before launch, including on a target-only continuation.
     """
-    stage = TrainSelfPlay(
-        id="self-play",
-        operation="train_self_play",
-        behavior="current-self",
-        learning_seats="both",
-        updates=REFERENCE_UPDATES,
+    return SelfPlay(
+        world=world,
+        deck_source=deck_source,
+        match=match,
+        observation=observation,
+        model=agent,
         streams=256,
         transitions=64,
         matchup_curriculum="elemental-uniform" if elemental_uniform else "fixed",
@@ -234,26 +218,11 @@ def sampled_self_play(
             )
         ),
         game_errors=GameErrorPolicy(threshold=0.25, recover_capacity=True),
-        execution=Execution(
-            device="cuda",
-            threads=1,
-            workers=workers,
-            wall_seconds=wall_seconds,
-            memory_bytes=40 * GIB,
-        ),
+        device="cuda",
+        workers=workers,
+        bucketed_shapes=True,
+        live_tokens=True,
     )
-    regime = TrainingRegime(
-        id=id,
-        world=world,
-        deck_source=deck_source,
-        match=match,
-        observation=observation,
-        agent=agent,
-        stages=[stage],
-        wall_seconds=wall_seconds,
-        schedule_clock="iteration_fraction",
-    )
-    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def with_agent(
@@ -349,3 +318,59 @@ def value_outputs(
             name = f"{regime.id}-{output.replace('_', '-')}"
             result[name] = with_value_output(regime, id=name, output=output)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Self-play loop settings
+
+
+def elemental_self_play() -> SelfPlay:
+    """The current Elemental settings: damped-policy self-play over the ten decks.
+
+    Both seats learn, each game draws its pair uniformly from the authored
+    Elemental roster, and an engine failure ends one game within a 10% rolling
+    limit. Model, observation, learning and streams are the frozen
+    `elemental-long-183-v1` recipe's; the world is the installed one.
+    Milestones fall every 50 updates. CPU unless the caller changes `device`.
+    """
+    pack = "elemental-world-v2"
+    first, second = managym.authored_deck_keys(pack)[:2]
+    return SelfPlay(
+        match=MatchConfig.authored(pack, first, second).model_copy(
+            update={"content_pack": pack}
+        ),
+        observation=ObservationConfig(
+            max_cards_per_player=60,
+            max_permanents_per_player=40,
+            max_actions=64,
+            max_focus_objects=2,
+            max_events=32,
+        ),
+        model=ModelConfig(
+            semantic_pack=pack,
+            hidden_dim=64,
+            attention_layers=2,
+            num_attention_heads=4,
+        ),
+        learning=move_learning(),
+        behavior="current-self",
+        streams=256,
+        transitions=64,
+        learning_seats="both",
+        matchup_curriculum="elemental-uniform",
+        game_errors=GameErrorPolicy(
+            threshold=0.1, window=100, warmup=100, max_game_actions=40000
+        ),
+        checkpoint_every=50,
+    )
+
+
+def gray_ogre_self_play(*, horizon: int) -> SelfPlay:
+    """A tiny PPO self-play policy on the Gray Ogre matchup, for belief pilots."""
+    return SelfPlay(
+        match=gray_ogre_match(),
+        model=ModelConfig(hidden_dim=16, num_attention_heads=2),
+        learning=Learning(horizon=horizon, epochs=1, minibatches=1),
+        streams=2,
+        transitions=16,
+    )

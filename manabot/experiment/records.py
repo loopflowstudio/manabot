@@ -1,22 +1,20 @@
-"""Experiment execution intent and receipts, separate from regime learning rules.
+"""Retained experiment declarations and receipts for offline reports.
 
-ExperimentSchedule declares seeds, placement and monitoring allocation. Hardware
-is explicitly configured, never provisioned. ExperimentRun records every actual
-process attempt; VerifyStore is its persistence owner.
+ExperimentSchedule, Hardware and ExperimentRun preserve serialized evidence
+from the retired scheduler. They do not select machines or dispatch evaluation.
+New recipes launch and track through Etude.
 """
 
 from decimal import Decimal
 import hashlib
 import math
 from pathlib import Path
-import socket
 from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from manabot.eval.monitor import MonitorProtocol
-from manabot.experiment.evaluation_queue import MonitoringBudget
-from manabot.sim.threads import effective_cpus
+from manabot.infra.identity import canonical_sha256
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -25,6 +23,55 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+
+
+class MonitoringBudget(Strict):
+    """Execution allocation, frozen before training; never a scientific protocol."""
+
+    seconds: float = Field(gt=0)
+    attempt_seconds: float = Field(default=600, gt=0)
+    protocol: MonitorProtocol = Field(default_factory=MonitorProtocol)
+    active_runtime: bool = Field(default=False, exclude_if=lambda value: not value)
+    include_initial: bool = Field(default=False, exclude_if=lambda value: not value)
+    include_monitoring: bool = Field(default=True, exclude_if=lambda value: value)
+    updates: tuple[int, ...] = Field(default=(), exclude_if=lambda value: not value)
+    require_initial_admission: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    additional_protocols: tuple[MonitorProtocol, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
+    terminal_protocols: tuple[MonitorProtocol, ...] = Field(
+        default=(), exclude_if=lambda value: not value
+    )
+
+    @model_validator(mode="after")
+    def separate_terminal_deals(self) -> "MonitoringBudget":
+        if self.require_initial_admission and not self.include_initial:
+            raise ValueError("initial admission requires initialization evaluation")
+        protocols = (self.protocol, *self.additional_protocols)
+        if len({canonical_sha256(p.model_dump()) for p in protocols}) != len(protocols):
+            raise ValueError("duplicate monitoring protocols")
+        used = {seed for p in protocols for seed in p.deal_seeds}
+        for protocol in self.terminal_protocols:
+            if used.intersection(protocol.deal_seeds):
+                raise ValueError(
+                    "terminal and monitoring deal cohorts must be disjoint"
+                )
+            used.update(protocol.deal_seeds)
+        return self
+
+
+class Attempt(Strict):
+    ordinal: int
+    identity: str
+    job_sha256: str
+    status: Literal["running", "completed", "failed", "interrupted"] = "running"
+    reserved_seconds: float
+    started_unix: float | None = None
+    finished_unix: float | None = None
+    charged_seconds: float = 0
+    error: str | None = None
 
 
 class StepCalibration(Strict):
@@ -109,14 +156,6 @@ class Hardware(Strict):
     # Dollars per occupied host hour, optional and explicitly supplied.
     dollars_per_hour: float | None = Field(default=None, ge=0)
 
-    def admit(self) -> None:
-        if self.cpu_threads > effective_cpus():
-            raise ValueError("configured CPU capacity exceeds this host")
-        if self.host != socket.gethostname():
-            raise ValueError(
-                "configured hardware is not this host; remote execution is unsupported"
-            )
-
 
 class HardwareInventory(Strict):
     resources: tuple[Hardware, ...]
@@ -126,13 +165,6 @@ class HardwareInventory(Strict):
         if len({r.name for r in self.resources}) != len(self.resources):
             raise ValueError("hardware names must be unique")
         return self
-
-    def select(self, name: str) -> Hardware:
-        for resource in self.resources:
-            if resource.name == name:
-                resource.admit()
-                return resource
-        raise ValueError(f"hardware is not configured: {name}")
 
 
 class ExperimentSchedule(CheckpointCadence):

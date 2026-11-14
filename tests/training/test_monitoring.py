@@ -5,21 +5,16 @@ from pathlib import Path
 
 from etude.train.read import read
 import pytest
-import torch
 
 from experiments.direct_self_play import direct_self_play
-from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.experiment.evaluation_queue import checkpoints
 from manabot.reports import training as monitoring
 from manabot.reports.training import (
     Dashboard,
     training_dashboard,
 )
-from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.training.update_metrics import read_updates, stage_rows
-from manabot.verify.store import VerifyStore
+from manabot.training.update_metrics import stage_rows
 import managym
 
 
@@ -65,40 +60,6 @@ def _history(directory: Path, run_id: str) -> list[dict[str, object]]:
         for index in range(table.rows)
         if "projection/row_sha256" in table.row(index).values
     ]
-
-
-def test_monitor_exports_do_not_change_learning_and_survive_reload(
-    tmp_path: Path,
-) -> None:
-    recipe = _recipe()
-    with VerifyStore(tmp_path / "runs.sqlite") as store:
-        baseline = execute_regime(recipe, 197, tmp_path / "plain", store)
-        monitored = execute_regime(
-            recipe, 197, tmp_path / "monitored", store, checkpoint_seconds=1e-9
-        )
-        assert store.training_run(monitored.id) == monitored
-    # The stage's raw export owns the endpoint; monitoring must not duplicate it.
-    assert [c.updates for c in monitored.monitoring_checkpoints] == [1]
-    evaluated = checkpoints(monitored)
-    assert [c.coordinates.updates for c in evaluated] == [1, 2]
-    assert evaluated[-1].artifact == monitored.selected_artifact
-    for checkpoint in monitored.monitoring_checkpoints:
-        assert checkpoint.error is None and checkpoint.artifact is not None
-        load_checkpoint(checkpoint.artifact["path"])
-    plain, _ = load_checkpoint(baseline.selected_artifact["path"])
-    tracked, _ = load_checkpoint(monitored.selected_artifact["path"])
-    for key, weights in plain.state_dict().items():
-        torch.testing.assert_close(weights, tracked.state_dict()[key], rtol=0, atol=0)
-    dashboard = training_dashboard(
-        monitored, stage_rows(monitored, read_updates(tmp_path, [monitored]))
-    )
-    assert dashboard.summary["history_incomplete"] is False
-    assert len(dashboard.rows) == 2
-    assert (
-        dashboard.rows[1]["progress/learner_transitions"]
-        > dashboard.rows[0]["progress/learner_transitions"]
-    )
-    assert dashboard.rows[0]["availability/rl/policy_loss"] is True
 
 
 def test_dashboard_offline_roundtrip() -> None:

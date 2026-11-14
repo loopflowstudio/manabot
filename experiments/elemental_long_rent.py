@@ -51,7 +51,7 @@ from typing import Any, Literal
 from etude.eval.match import evaluate
 from etude.eval.records import Match, Model
 from etude.launch.records import Input, Job, Run
-from etude.run.storage import run_directory
+from etude.storage import run_directory
 from pydantic import BaseModel, ConfigDict
 
 from experiments.elemental_grid import ENDPOINT, endpoint_environment
@@ -73,7 +73,7 @@ from experiments.elemental_long_eval import (
     window_checkpoints,
 )
 from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
-from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.sim.execution import EvalAllocation, EvalExecution

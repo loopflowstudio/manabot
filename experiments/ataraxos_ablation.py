@@ -1,5 +1,8 @@
 """Ataraxos treatment ablation arms (experiments/ataraxos-mtg-ablations.md).
 
+The command below records historical execution and refuses at this
+revision; retained reports and evaluation remain readable.
+
 Each arm is `direct_self_play`'s setup with only some Ataraxos treatments kept:
 separate policy/value estimators (value lambda 1), advantage filtering (half the
 samples retained) and coordinated learning-rate/regularization decay.
@@ -8,12 +11,16 @@ samples retained) and coordinated learning-rate/regularization decay.
 runs the five-arm study (smoke by default; see `--help`).
 """
 
-from manabot.experiment.study import main
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, ppo_checkpoints
 from manabot.sim.matchup import selected_match
-from manabot.training.regime import Learning, Schedule, TrainingRegime
+from manabot.training.learning import Learning, Schedule
+from manabot.training.regime import TrainingRegime, refuse_frozen_execution
 import managym
+
+
+def main(*args: object, **kwargs: object) -> None:
+    refuse_frozen_execution()
 
 
 def _arm(

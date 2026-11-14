@@ -2,16 +2,15 @@
 
 from typing import Literal
 
+from etude.train.tracking import track
+from pydantic import BaseModel, Field
+
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import GIB, PACK, move_learning
 from manabot.sim.matchup import selected_match
-from manabot.training.regime import (
-    BatchClosure,
-    Execution,
-    IterationSchedule,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import BatchClosure, IterationSchedule
+from manabot.training.loops.self_play import CLOCKS, SelfPlay, self_play
+from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 import managym
 
 # Rows per stream per update. Past the opening updates, a floor of 76 realized 106
@@ -150,3 +149,26 @@ def lambda_sweep(
     stage.learning.policy_lambda = policy_lambda
     stage.learning.value_lambda = value_lambda
     return TrainingRegime.model_validate(regime.authored_dump())
+
+
+class BatchedConfig(BaseModel):
+    updates: int = Field(default=128, ge=1)
+    device: Literal["cpu", "mps", "cuda"] = "cuda"
+
+
+def train(config: BatchedConfig) -> None:
+    """Current batched recipe; historical regime builders above remain data."""
+    inputs = SelfPlay(
+        match=selected_match(),
+        model=ModelConfig(
+            world=PACK, value_aggregation="masked_mean", attention_layers=2
+        ),
+        learning=move_learning(IterationSchedule(steps=128, reference_steps=2048)),
+        streams=64,
+        transitions=64,
+        matchup_curriculum="cross-balanced",
+        device=config.device,
+        checkpoint_every=64,
+    )
+    with track(clocks=CLOCKS, config=config) as run:
+        self_play(inputs, run, updates=config.updates)

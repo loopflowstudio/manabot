@@ -1,6 +1,7 @@
 """Capture real Torch policy calls and learner inputs for backend comparisons.
 
-`capture` runs a supplied one-update regime, retaining the initial checkpoint,
+`capture` runs one update of supplied self-play settings in an Etude run, retaining
+the initial checkpoint,
 full-capacity observation arrays, selected targets and per-minibatch settings.
 The instrumentation observes the production damped update at its checked-loss
 boundary. Hook frame access is confined here; readers use `backends.parity`.
@@ -16,27 +17,28 @@ import shutil
 import time
 from typing import Any
 
+from etude.train.tracking import Run
 import numpy as np
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.model.admission import AdmittedObservation
 from manabot.model.inference import PolicyInference, PreparedObservation
-from manabot.training.execution import execute_regime
-from manabot.training.regime import TrainingRegime
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.learning import DampedPolicyLearning
+from manabot.training.loops import self_play as execution
+from manabot.training.loops.self_play import SelfPlay
+from manabot.training.rollout.collection import Collector, RolloutBatch
 from manabot.training.updates.health import OptimizerHealth
-from manabot.verify.store import VerifyStore
 
 
-def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) -> None:
+def capture(out: Path, settings: SelfPlay, run: Run) -> None:
     """Record one real damped update; restore hooks even when execution fails."""
-    if len(regime.stages) != 1 or getattr(regime.stages[0], "updates", None) != 1:
-        raise ValueError("backend capture requires exactly one self-play update")
+    if not isinstance(settings.learning, DampedPolicyLearning):
+        raise ValueError("backend capture requires damped-policy learning")
     out.mkdir(parents=True, exist_ok=False)
     (out / "collection").mkdir()
     (out / "learner").mkdir()
-    (out / "regime.json").write_text(regime.model_dump_json(indent=2))
+    (out / "settings.json").write_text(settings.model_dump_json(indent=2))
 
     calls: list[dict[str, Any]] = []
     minibatches: list[dict[str, Any]] = []
@@ -46,7 +48,7 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
     in_collection = False
     original_prepare = PolicyInference.prepare
     original_forward = ActorCritic.forward
-    original_collect = SeatRoutedCollector.collect
+    original_collect = execution.collect
     original_check = OptimizerHealth.check
 
     def prepare(
@@ -82,7 +84,7 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
             calls[-1]["forward"] += time.perf_counter() - tick
         return result
 
-    def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> RolloutBatch:
+    def collect(self: Collector, *args: Any, **kwargs: Any) -> RolloutBatch:
         nonlocal in_collection, collection_seconds, learner_decisions
         in_collection = True
         tick = time.perf_counter()
@@ -133,7 +135,7 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
 
     PolicyInference.prepare = prepare  # type: ignore[method-assign]
     ActorCritic.forward = forward  # type: ignore[method-assign]
-    SeatRoutedCollector.collect = collect  # type: ignore[method-assign]
+    execution.collect = collect  # type: ignore[method-assign]
     OptimizerHealth.check = check  # type: ignore[method-assign]
     started = time.perf_counter()
     meta: dict[str, Any] = {
@@ -141,29 +143,19 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
         "torch": torch.__version__,
     }
     try:
-        with VerifyStore(out / "capture.sqlite") as store:
-            result = execute_regime(
-                regime,
-                seed,
-                out / "execution",
-                store,
-                experiment=experiment,
-                training_exposure=False,
-            )
+        execution.self_play(settings, run, updates=1)
     finally:
         PolicyInference.prepare = original_prepare  # type: ignore[method-assign]
         ActorCritic.forward = original_forward  # type: ignore[method-assign]
-        SeatRoutedCollector.collect = original_collect  # type: ignore[method-assign]
+        execution.collect = original_collect  # type: ignore[method-assign]
         OptimizerHealth.check = original_check  # type: ignore[method-assign]
-    initial = sorted((out / "execution").rglob("*-initial-raw.pt"))
-    if result.status != "completed" or not calls or not minibatches:
-        raise RuntimeError(f"capture did not complete one update: {result.status}")
-    if len(initial) != 1:
-        raise RuntimeError(f"expected one initial checkpoint, found {initial}")
-    shutil.copyfile(initial[0], out / "initial.pt")
+    initial = run.out / "policies" / "00000000-raw.pt"
+    if not calls or not minibatches:
+        raise RuntimeError("capture did not complete one update")
+    shutil.copyfile(initial, out / "initial.pt")
     policy = sum(c["prepare"] + c["forward"] for c in calls)
     meta.update(
-        status=str(result.status),
+        status="completed",
         wall=time.perf_counter() - started,
         collection_wall=collection_seconds,
         collection_policy=policy,

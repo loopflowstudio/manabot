@@ -18,11 +18,8 @@ from collections.abc import Mapping, Sequence
 
 from etude.report import Curve, Matches, Planned, PlannedPoint
 
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 
 # Configured values are sampled at this many updates per job, geometrically
 # spaced so the steep early schedule is drawn as finely as its long tail;

@@ -70,7 +70,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (stage / "experiments").exists()
     source = json.loads((stage / ".manabot-source.json").read_text())
     assert len(source["commit"]) == 40
-    assert "manabot/training/execution.py" in source["files"]
+    assert "manabot/training/loops/self_play.py" in source["files"]
     assert "managym/decision.py" in source["files"]
     assert "protocol/experience-v1.schema.json" in source["files"]
     for name, digest in source["files"].items():
@@ -134,7 +134,7 @@ def _artifacts(directory: Path) -> None:
                 "Requires-Dist: managym==0.2.0\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform == 'linux'\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform != 'linux'\n"
-                "Requires-Dist: etude-sdk>=0.3.2\n"
+                "Requires-Dist: etude-sdk>=0.4.0\n"
             )
             tags = ["py3-none-any"]
         for tag in tags:
@@ -206,7 +206,7 @@ def test_engine_wheel_ships_the_lockfile_training_provenance_hashes(
         (b"Name: manabot", b"Name: managym"),
         (b"Version: 0.2.0", b"Version: 9.9.9"),
         (b">=3.12, <3.14", b">=3.12, <3.13"),
-        (b"etude-sdk>=0.3.2", b"etude-sdk==0.3.2"),
+        (b"etude-sdk>=0.4.0", b"etude-sdk==0.4.0"),
     ],
 )
 def test_source_metadata_must_match_wheels(

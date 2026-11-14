@@ -1,5 +1,8 @@
 """MTG-301: where an L4 learner step and a collection forward spend their time.
 
+The launch commands below record historical execution and refuse at this
+revision; retained reports and evaluation remain readable.
+
 Exploratory. One rented L4 runs, in order:
 
 1. `insitu`: the frozen MTG-267 w160l8 regime (`experiments.tla_frontier.frozen()`)
@@ -37,10 +40,8 @@ import argparse
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from decimal import Decimal
 import gzip
-import inspect
 import json
 import os
 from pathlib import Path
@@ -56,6 +57,8 @@ import warnings
 
 import numpy as np
 import torch
+
+from manabot.training.regime import refuse_frozen_execution
 
 ROOT = Path(__file__).resolve().parents[1]
 PATCH = Path(__file__).with_name("l4_step_profile_option3.patch")
@@ -74,22 +77,6 @@ LAYOUTS: dict[str, dict[str, bool]] = {
 }
 
 
-@dataclass(frozen=True)
-class Windows:
-    """In-situ windows over collection inference calls and learner optimizer steps.
-    Profiles are (wait, warmup, active) schedules; captures are retained inputs."""
-
-    collect_profile: tuple[int, int, int] = (120, 2, 16)
-    collect_sync: range = range(200, 216)
-    collect_capture_every: int = 12
-    collect_captures: int = 48
-    learn_profile: tuple[int, int, int] = (30, 2, 8)
-    learn_sync: range = range(50, 60)
-    learn_capture: range = range(70, 90)
-
-
-# `--smoke`: a tiny CPU update that only exercises the hooks and analysis.
-SMOKE = Windows((2, 1, 3), range(6, 8), 3, 4, (1, 1, 2), range(4, 5), range(5, 7))
 # Replay repetitions.
 TIMED_PASSES = 2
 NUMERIC_LEARNER = 4
@@ -104,10 +91,6 @@ WAITS = {
 }
 SYNCS = {"cudaStreamSynchronize", "cudaDeviceSynchronize", "cudaEventSynchronize"}
 GPU_CATS = {"kernel", "gpu_memcpy", "gpu_memset"}
-
-
-class Captured(BaseException):
-    """Unwind the executor after the update's learning phase."""
 
 
 def _write(path: Path, value: object) -> None:
@@ -276,209 +259,8 @@ def _profiler(
 # Stage 1: in-situ update
 
 
-def insitu(out: Path, captures: Path, smoke: bool = False) -> None:
-    from experiments.tla_frontier import frozen
-    import manabot.model.inference as inference_module
-    import manabot.training.execution as execution_module
-    from manabot.training.regime import TrainingRegime
-    from manabot.training.rollout.collection import SeatRoutedCollector
-    from manabot.training.updates.health import OptimizerHealth
-    from manabot.verify.store import VerifyStore
-
-    out.mkdir(parents=True, exist_ok=True)
-    (captures / "inference").mkdir(parents=True, exist_ok=True)
-    (captures / "learner").mkdir(parents=True, exist_ok=True)
-    regimes, protocol = frozen()
-    data = regimes["w160l8"].model_dump()
-    stage = data["stages"][0]
-    stage["updates"] = 1
-    stage["execution"].update(wall_seconds=3600.0)
-    windows = SMOKE if smoke else Windows()
-    if smoke:
-        stage.update(streams=4, transitions=2)
-        stage["execution"].update(device="cpu", workers=1)
-    data["wall_seconds"] = 3600.0
-    regime = TrainingRegime.model_validate(data)
-    _write(captures / "regime.json", regime.model_dump(mode="json"))
-    receipt: dict[str, Any] = {
-        "host": _host(),
-        "seed": protocol.training_seed,
-        "regime": regime.id,
-        "execution": stage["execution"],
-    }
-    device = stage["execution"]["device"]
-    syncs = SyncCounter(device)
-    calls: list[dict[str, float | int]] = []
-    steps: list[dict[str, float | int]] = []
-    state: dict[str, Any] = {
-        "call": 0,
-        "step": 0,
-        "capture_obs": False,
-        "last_obs": None,
-        "collect_prof": None,
-        "learn_prof": None,
-        "last_step": None,
-    }
-    original_actor = execution_module.ActorCritic
-    original_prepare = inference_module.PolicyInference.prepare
-    original_sample = SeatRoutedCollector._sample_learning_rows
-    original_check = OptimizerHealth.check
-    original_step = OptimizerHealth.step
-    original_update = execution_module.update_iteration
-
-    def make_actor(space: Any, config: Any, **layout: bool) -> Any:
-        agent = original_actor(space, config, **layout)
-        if (captures / "initial.pt").exists():
-            raise RuntimeError("the update constructed a second policy")
-        torch.save(
-            {k: v.detach().cpu().clone() for k, v in agent.state_dict().items()},
-            captures / "initial.pt",
-        )
-        label_modules(agent)
-        return agent
-
-    def prepare(self: Any, obs: dict[str, torch.Tensor]) -> Any:
-        if state["capture_obs"]:
-            state["last_obs"] = {k: v.clone() for k, v in obs.items()}
-        return original_prepare(self, obs)
-
-    def sample(self: Any, agent: Any, rows: np.ndarray, *args: Any) -> Any:
-        index = state["call"]
-        if index == 0:
-            prof = _profiler(windows.collect_profile, out / "collection-trace.json")
-            prof.__enter__()
-            state["collect_prof"] = prof
-        state["capture_obs"] = (
-            index % windows.collect_capture_every == 0
-            and index // windows.collect_capture_every < windows.collect_captures
-        )
-        tick = time.perf_counter()
-        with (
-            syncs.window(f"collect/{index}")
-            if index in windows.collect_sync
-            else _nothing(),
-            torch.profiler.record_function("mtg301/sample_learning_rows"),
-        ):
-            result = original_sample(self, agent, rows, *args)
-        calls.append(
-            {"call": index, "rows": len(rows), "seconds": time.perf_counter() - tick}
-        )
-        if state["capture_obs"] and state["last_obs"] is not None:
-            torch.save(state["last_obs"], captures / "inference" / f"{index:05d}.pt")
-            state["last_obs"] = None
-        state["capture_obs"] = False
-        prof = state["collect_prof"]
-        if prof is not None:
-            prof.step()
-            if index + 1 >= sum(windows.collect_profile):
-                prof.__exit__(None, None, None)
-                state["collect_prof"] = None
-        state["call"] = index + 1
-        return result
-
-    def check(self: OptimizerHealth, loss: torch.Tensor) -> None:
-        original_check(self, loss)
-        if state["step"] not in windows.learn_capture:
-            return
-        frame = inspect.currentframe()
-        assert frame is not None and frame.f_back is not None
-        loc = frame.f_back.f_locals
-        assert frame.f_back.f_code.co_name == "update_damped_iteration"
-        indexes, targets = loc["indexes"], loc["targets"]
-        payload = {
-            "obs": {k: v.detach().cpu().clone() for k, v in loc["obs"].items()},
-            "selected": loc["selected"].detach().cpu().clone(),
-            "actions": loc["actions"][indexes].detach().cpu().clone(),
-            "advantages": targets.advantages[indexes].detach().cpu().clone(),
-            "value_targets": targets.values[indexes].detach().cpu().clone(),
-            "actor_mask": loc["actor_mask"].detach().cpu().clone(),
-            "behavior_logs": loc["behavior_logs"].detach().cpu().clone(),
-            "learning": loc["learning"].model_dump(mode="json"),
-            "tau": loc["tau"],
-            "loss": float(loss.detach()),
-        }
-        del loc, frame
-        torch.save(payload, captures / "learner" / f"{state['step']:03d}.pt")
-
-    def step(self: OptimizerHealth, *args: Any, **kwargs: Any) -> torch.Tensor:
-        index = state["step"]
-        label = f"learn/{index}"
-        with syncs.window(label) if index in windows.learn_sync else _nothing():
-            norm = original_step(self, *args, **kwargs)
-        now = time.perf_counter()
-        if state["last_step"] is not None:
-            steps.append({"step": index, "seconds": now - state["last_step"]})
-        state["last_step"] = now
-        prof = state["learn_prof"]
-        if prof is not None:
-            prof.step()
-            if index + 1 >= sum(windows.learn_profile):
-                prof.__exit__(None, None, None)
-                state["learn_prof"] = None
-        state["step"] = index + 1
-        return norm
-
-    def update(learner: Any, *args: Any, **kwargs: Any) -> Any:
-        prof = _profiler(windows.learn_profile, out / "learner-trace.json")
-        prof.__enter__()
-        state["learn_prof"] = prof
-        state["last_step"] = time.perf_counter()
-        tick = time.perf_counter()
-        _reset_memory(device)
-        diagnostics = original_update(learner, *args, **kwargs)
-        _sync(device)
-        receipt.update(
-            learning_seconds=time.perf_counter() - tick,
-            learner_phases=learner.profiler.get_stats(),
-            optimizer_steps=state["step"],
-            rows=diagnostics.get("rows"),
-            **_peaks(device),
-        )
-        if state["learn_prof"] is not None:
-            state["learn_prof"].__exit__(None, None, None)
-        raise Captured()
-
-    def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> Any:
-        tick = time.perf_counter()
-        batch = original_collect(self, *args, **kwargs)
-        receipt["collection_seconds"] = time.perf_counter() - tick
-        receipt["collection_rows"] = int(batch.actions.size)
-        receipt["collection_phases"] = self.profiler.get_stats()
-        receipt["idle_stream_steps"] = int(self.stats.idle_stream_steps)
-        return batch
-
-    original_collect = SeatRoutedCollector.collect
-    # Etude's unpacked bundle has no .git; the launch names the frozen commit.
-    if revision := os.environ.get("MTG301_REVISION"):
-        execution_module.source_commit = lambda: revision
-        receipt["source_commit"] = revision
-    execution_module.ActorCritic = make_actor
-    inference_module.PolicyInference.prepare = prepare  # type: ignore[method-assign]
-    SeatRoutedCollector._sample_learning_rows = sample  # type: ignore[method-assign]
-    SeatRoutedCollector.collect = collect  # type: ignore[method-assign]
-    OptimizerHealth.check = check  # type: ignore[method-assign]
-    OptimizerHealth.step = step  # type: ignore[method-assign]
-    execution_module.update_iteration = update
-    started = time.perf_counter()
-    try:
-        with VerifyStore(captures / "store.sqlite") as store:
-            result = execution_module.execute_regime(
-                regime,
-                protocol.training_seed,
-                captures / "execution",
-                store,
-                experiment="l4_step_profile",
-                training_exposure=False,
-            )
-        raise RuntimeError(f"update ended unexpectedly: {result.status}")
-    except Captured:
-        receipt["status"] = "captured"
-    finally:
-        receipt["wall_seconds"] = time.perf_counter() - started
-        receipt["inference_calls"] = calls
-        receipt["learner_steps"] = steps
-        _write(out / "receipt.json", receipt)
-        _write(out / "syncs.json", syncs.summary() | {"records": syncs.records})
+def insitu(*args: object, **kwargs: object) -> None:
+    refuse_frozen_execution()
 
 
 @contextmanager
@@ -584,7 +366,7 @@ def learn_once(
     from manabot.model.admission import admit_observation
     from manabot.model.inference import transfer_admitted
     from manabot.policy.prepare import reference_distribution
-    from manabot.training.regime import DampedPolicyLearning
+    from manabot.training.learning import DampedPolicyLearning
 
     device = learner.device
     learning = DampedPolicyLearning.model_validate(payload["learning"])
@@ -1341,9 +1123,9 @@ def runs(
     name: str = "mtg301-l4-step-profile",
 ) -> Any:
     """`candidate`: option3, bucketed or live (see `_arms`)."""
-    from etude.launch.records import Job, Variable
+    from etude.spec import Job, Variable
 
-    from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+    from manabot.experiment.setup import TOOLCHAIN_ENV, machine_setup
 
     return Job(
         name=f"{name}-{candidate}",

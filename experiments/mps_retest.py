@@ -892,84 +892,10 @@ def update(
 
 
 def capture(args: argparse.Namespace) -> None:
-    out, streams, laptop = args.out, args.streams, args.laptop
-    from experiments.tla_frontier import frozen
-    from manabot.backends.torch.capture import capture as record
-    from manabot.training.regime import TrainingRegime
+    """Frozen capture requires the original executor and world."""
+    from manabot.training.regime import refuse_frozen_execution
 
-    regimes, protocol = frozen()
-    data = regimes["w160l8"].model_dump()
-    data["id"] = "mps-retest"
-    data["agent"]["hidden_dim"] = 384
-    data["stages"][0]["updates"] = 1
-    data["stages"][0]["streams"] = streams
-    data["stages"][0]["execution"].update(
-        device="cpu",
-        workers=1,
-        threads=4,
-        bucketed_shapes=True,
-        memory_bytes=20 * 2**30,
-        wall_seconds=7200,
-    )
-    data["wall_seconds"] = 7200
-    regime = TrainingRegime.model_validate(data)
-    if out.exists():
-        raise FileExistsError(out)
-    attempts: list[tuple[Path, dict[str, Any]]] = []
-    for attempt in range(2):
-        before = os.getloadavg()[0]
-        path = out.with_name(f"{out.name}-attempt-{attempt}")
-        if path.exists():
-            raise FileExistsError(path)
-        provenance = {
-            **_host(),
-            "capture_id": str(uuid.uuid4()),
-            "capture_threads": 4,
-            "etude_run": os.environ.get("ETUDE_RUN"),
-            "laptop": laptop,
-            "load_before": before,
-            "started": time.time(),
-        }
-        try:
-            record(
-                path,
-                regime,
-                protocol.training_seed,
-                experiment="mps_retest",
-            )
-        finally:
-            provenance.update(load_after=os.getloadavg()[0], ended=time.time())
-            if path.exists():
-                (path / "provenance.json").write_text(json.dumps(provenance, indent=2))
-        attempts.append((path, provenance))
-        if not laptop or not _unstable(before, provenance["load_after"]) or attempt:
-            break
-    chosen = min(
-        range(len(attempts)),
-        key=lambda i: attempts[i][1]["load_before"] + attempts[i][1]["load_after"],
-    )
-    selected = {
-        **attempts[chosen][1],
-        "load_retry": len(attempts) == 2,
-        "load_retry_complete": len(attempts) == 2,
-        "selected_attempt": chosen,
-    }
-    (attempts[chosen][0] / "provenance.json").write_text(json.dumps(selected, indent=2))
-    attempts[chosen][0].rename(out)
-    (out / "selection.json").write_text(
-        json.dumps(
-            {
-                "selected_attempt": chosen,
-                "load_retry": len(attempts) == 2,
-                "selection": "lower mean endpoint load",
-                "attempts": [
-                    {"path": str(out if i == chosen else path), **receipt}
-                    for i, (path, receipt) in enumerate(attempts)
-                ],
-            },
-            indent=2,
-        )
-    )
+    refuse_frozen_execution()
 
 
 def _parity(args: argparse.Namespace, width: int, arm: Arm, size: int) -> None:

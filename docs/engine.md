@@ -1016,13 +1016,13 @@ A serialized match keeps each seat's admitted source privately as provenance
 and re-admits it on load, so a world that no longer admits the list rejects
 the record. `managym.check_decks(decks)` is the cheap check without a game.
 
-Training does not take deck files; it takes a **deck source** in the regime
-(`deck_source`, with `agent.world = "world"` and no `match`). `UniformDecks`
+Training does not take deck files; it takes a **deck source** in the
+self-play settings (`SelfPlay.deck_source`, with no `match`). `UniformDecks`
 (`uniform-distinct-v1`) draws two different decks per game uniformly over
-ordered pairs from its RNG domain, so exact resume reproduces decks, seats and
-seed; the TLA pilot's source is the frozen trophy corpus
-([training](training.md#regimes-and-stages)). Every deck a source lists is
-admitted when the regime validates, and again natively at each game root. A
+ordered pairs from that game's native seed, so a seed reproduces decks and
+seats; the TLA pilot's source is the frozen trophy corpus
+([training](training.md#self-play-settings)). Every deck a source lists is
+admitted when the settings validate, and again natively at each game root. A
 checkpoint from such a run binds the world and nothing about the decks, so it
 plays any deck the world admits, including ones it never saw. Checkpoints bound
 to an authored setup refuse imported decks even when shapes agree

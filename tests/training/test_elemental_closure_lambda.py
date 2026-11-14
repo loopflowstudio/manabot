@@ -11,8 +11,8 @@ from experiments.elemental_variants import (
 )
 from experiments.learning_signal import DEALS, ELEMENTAL_PAIRS
 from manabot.infra.identity import canonical_sha256
-from manabot.training.execution import validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.validation import validate_regime
 import managym
 
 # The protocol's pairings, fixed before scoring.

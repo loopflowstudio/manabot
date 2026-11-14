@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 from etude.train.records import CheckpointRecord
 import pytest
 

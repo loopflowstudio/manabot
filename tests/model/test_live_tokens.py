@@ -7,6 +7,7 @@ from manabot.backends.torch.live_tokens import LiveTokens
 from manabot.backends.torch.policy import OBJECT_VALIDITY_KEYS, ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
+from manabot.training.rollout.collection import collect
 from tests.model.test_inference import PolicyFixture, _policy
 
 
@@ -32,7 +33,7 @@ def _pair(
 
 def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
     """Decisions from played turns, so boards hold different object counts."""
-    batch = case.collector.collect(case.agent, 24)
+    batch = collect(case.collector, case.agent, 24)
     return {
         key: torch.from_numpy(value[-8:, 0]).float()
         for key, value in batch.observations().observation.items()

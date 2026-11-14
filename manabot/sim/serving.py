@@ -47,7 +47,7 @@ from manabot.sim.serving_protocol import (
     PolicyAdmission,
     PolicyKey,
 )
-from manabot.sim.threads import SERVING_BUDGET
+from manabot.sim.threads import SERVING_BUDGET, account_threads
 
 
 def _verify_checkpoint_bytes(path: Path, player: PlayerRegistration) -> None:
@@ -509,7 +509,7 @@ def serve(
                     replies = _infer(store, requests, batch)
                 # Pools start lazily (CUDA, profiler); count after each batch
                 # and fail its requests, never attribute them to a player.
-                SERVING_BUDGET.account(perf.counters)
+                account_threads(SERVING_BUDGET, perf.counters)
             except Exception as exc:
                 for item in chosen:
                     _reply(perf, item, (None, f"{type(exc).__name__}: {exc}"))

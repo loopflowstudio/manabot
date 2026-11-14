@@ -175,7 +175,7 @@ jobs:
         shell: bash
         run: |
           export PATH="$RUNNER_TEMP/no-rust:$PATH"
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0' 'etude-sdk==0.3.2'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0' 'etude-sdk==0.4.0'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cp scripts/release/academy_replay_smoke.py "$RUNNER_TEMP/academy_replay_smoke.py"
           cp scripts/release/smoke.py "$RUNNER_TEMP/smoke.py"
@@ -194,12 +194,12 @@ jobs:
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import managym.academy.server; import manabot.reports.experiment; import manabot.reports.time_sources; import nbclient; import transformers; import httpx'
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.eval.cards --help
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.sim.replay --help
-          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.experiment.monitor_worker --help
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" manabot --help
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
       - name: Exercise latest compatible Torch and Etude in the consumer environment
         shell: bash
         run: |
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3]>=0.3.2'
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --upgrade --torch-backend cpu 'torch>=2.15.0' 'etude-sdk[eval,s3]>=0.4.0'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cd "$RUNNER_TEMP"
           rm -rf release-smoke

@@ -20,7 +20,7 @@ from etude.eval.records import (
     Match,
     MatchRecord,
 )
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 import pytest
 
 from experiments import (

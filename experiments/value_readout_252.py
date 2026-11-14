@@ -11,7 +11,8 @@ the Etude launch of every arm under one shared seed list. The completed study
 extended the original 3 arms x 3 seeds x 150 updates to 300 updates and two
 depth-4 arms, under a USD55 total cap. Results are in
 `experiments/value-readout-252-results.md`. The commands below record the
-historical launch procedure; executed runs require their pinned revisions:
+historical launch procedure and refuse at this revision; executed runs require
+their pinned revisions, and reports and evaluation still read:
 
     doppler run -p etude -c prd -- doppler run -p manabot -c prd \\
         --preserve-env=RUNPOD_API_KEY -- \\
@@ -45,33 +46,32 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
-from decimal import Decimal
 from itertools import combinations, product
 import json
 from pathlib import Path
 
 from etude.eval.records import Code, Inference, Seating
 from etude.experiment import Checkpoint, ExperimentState
-from etude.launch.records import Job, Run as EtudeRun
-from etude.run.storage import storage_from_uri
+from etude.spec import Job
+from etude.storage import storage_from_uri
 import torch
 
 from experiments.elemental_long import stage_parent
 from experiments.learning_signal import (
     ELEMENTAL_PAIRS,
-    FINALIZATION_SECONDS,
-    SETUP_SECONDS,
     Conditions,
     benchmark_jobs,
-    training_runs,
 )
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
-from manabot.experiment.job import LearnerContinuation, TrainingJob
 from manabot.infra.config import ValueAggregation
 from manabot.recipes.builders import with_capacity, with_value_aggregation
-from manabot.training.execution import validate_regime
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    TrainingRegime,
+    TrainSelfPlay,
+    refuse_frozen_execution,
+)
+from manabot.training.validation import validate_regime
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -256,80 +256,9 @@ def grid(seeds: Sequence[int], updates: int | None = None) -> list[Run]:
     ]
 
 
-def runs(
-    revision: str,
-    seeds: str = SEEDS,
-    updates: int = UPDATES,
-    hours: float = HOURS,
-    usd_per_run: float = USD_PER_RUN,
-    continuations: str = "",
-    arms: str = ",".join(ARMS),
-    recover_capacity: str = "",
-    after: int = 1,
-    depth: int = 0,
-) -> list[EtudeRun]:
-    """Etude training runs: every arm under the same comma-separated seeds.
-
-    `continuations` names a file from `stage`; each run then continues its
-    parent's learner to `updates` instead of starting fresh; `after` names the
-    segment whose runs are the parents (`SEGMENT_PARENTS`). A non-zero `depth`
-    launches the `arms` at that depth instead, fresh or continuing
-    `DEPTH_SEGMENT_PARENTS[after]`, with `recover_capacity` alike. `arms` narrows a
-    continuation to some arms, and any non-empty `recover_capacity` makes a game
-    that overflows observation capacity end alone instead of stopping the run.
-    """
-    chosen = tuple(int(seed) for seed in seeds.split(","))
-    if not chosen or len(set(chosen)) != len(chosen):
-        raise ValueError("readout runs need distinct seeds shared by every arm")
-    if depth:
-        return _depth_runs(
-            revision,
-            chosen,
-            tuple(_aggregation(name) for name in arms.split(",")),
-            depth,
-            updates=updates,
-            hours=hours,
-            usd_per_run=usd_per_run,
-            continuations=continuations,
-            recover_capacity=bool(recover_capacity),
-            after=after,
-        )
-    planned = grid(chosen, updates)
-    if continuations:
-        staged = json.loads(Path(continuations).read_text())
-        return [
-            run
-            for planned_run in planned
-            if planned_run.aggregation in arms.split(",")
-            for run in segment(
-                planned_run,
-                LearnerContinuation.model_validate(
-                    staged[
-                        SEGMENT_PARENTS[after][
-                            planned_run.aggregation, planned_run.seed
-                        ]
-                    ]
-                ),
-                hours,
-                bool(recover_capacity),
-            )
-            .job(
-                repo=ROOT,
-                revision=revision,
-                max_hours=hours,
-                max_usd=Decimal(str(usd_per_run)),
-            )
-            .runs(planned_run.seed)
-        ]
-    return training_runs(
-        (arm(aggregation, updates) for aggregation in ARMS),
-        updates=updates,
-        revision=revision,
-        experiment=EXPERIMENT,
-        seeds=tuple(sorted({run.seed for run in planned})),
-        hours=hours,
-        usd_per_run=usd_per_run,
-    )
+def runs(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 def _aggregation(name: str) -> ValueAggregation:
@@ -337,64 +266,6 @@ def _aggregation(name: str) -> ValueAggregation:
         if aggregation == name:
             return aggregation
     raise ValueError(f"unknown arm {name!r}")
-
-
-def _depth_runs(
-    revision: str,
-    seeds: tuple[int, ...],
-    aggregations: tuple[ValueAggregation, ...],
-    depth: int,
-    *,
-    updates: int,
-    hours: float,
-    usd_per_run: float,
-    continuations: str,
-    recover_capacity: bool,
-    after: int,
-) -> list[EtudeRun]:
-    """Depth arms, fresh or continuing their parents, scored at every update
-    this study scores that falls inside the segment."""
-    staged = json.loads(Path(continuations).read_text()) if continuations else {}
-    found: list[EtudeRun] = []
-    for seed in seeds:
-        for aggregation in aggregations:
-            planned = Run(aggregation, seed, deeper(aggregation, depth, updates))
-            if continuations:
-                parent = DEPTH_SEGMENT_PARENTS[after][aggregation, seed]
-                job = segment(
-                    planned,
-                    LearnerContinuation.model_validate(staged[parent]),
-                    hours,
-                    recover_capacity,
-                )
-            else:
-                job = _fresh(planned.regime, hours, recover_capacity)
-            found += job.job(
-                repo=ROOT,
-                revision=revision,
-                max_hours=hours,
-                max_usd=Decimal(str(usd_per_run)),
-            ).runs(seed)
-    return found
-
-
-def _fresh(regime: TrainingRegime, hours: float, recover_capacity: bool) -> TrainingJob:
-    """A first segment exporting every scored update before its end."""
-    wall_seconds = hours * 3600 - SETUP_SECONDS - FINALIZATION_SECONDS
-    regime = regime.model_copy(deep=True)
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    regime.wall_seconds = wall_seconds
-    stage.execution.wall_seconds = wall_seconds
-    if recover_capacity:
-        assert stage.game_errors is not None
-        stage.game_errors.recover_capacity = True
-    return TrainingJob(
-        regime=TrainingRegime.model_validate(regime.model_dump(mode="json")),
-        experiment=EXPERIMENT,
-        milestones=tuple(u for u in _SCORED if u < stage.updates),
-        finalization_seconds=FINALIZATION_SECONDS,
-    )
 
 
 def eval(state: ExperimentState) -> list[Job]:
@@ -535,39 +406,9 @@ def _checkpoint(state: ExperimentState, run: str, updates: int) -> Checkpoint | 
     return None
 
 
-def segment(
-    run: Run,
-    continuation: LearnerContinuation,
-    hours: float,
-    recover_capacity: bool = False,
-) -> TrainingJob:
-    """One arm and seed continued from its parent's raw/EMA/Adam exports.
-
-    Only the watchdog differs from the parent's regime, and `recover_capacity`
-    when set: it acts only on a game that overflows capacity, which is discarded
-    and replaced, recorded as `resource_limit`. Game streams and RNGs
-    restart, so a continued run leaves the pairing sequence its first segment
-    followed; every arm under a seed restarts from its own boundary.
-    """
-    wall_seconds = hours * 3600 - SETUP_SECONDS - FINALIZATION_SECONDS
-    regime = run.regime.model_copy(deep=True)
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    regime.wall_seconds = wall_seconds
-    stage.execution.wall_seconds = wall_seconds
-    if recover_capacity:
-        assert stage.game_errors is not None
-        stage.game_errors.recover_capacity = True
-    return TrainingJob(
-        regime=TrainingRegime.model_validate(regime.model_dump(mode="json")),
-        experiment=EXPERIMENT,
-        # Scored updates inside this segment; its end is saved regardless.
-        milestones=tuple(
-            u for u in _SCORED if continuation.from_update < u < stage.updates
-        ),
-        finalization_seconds=FINALIZATION_SECONDS,
-        continuation=continuation,
-    )
+def segment(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> None:

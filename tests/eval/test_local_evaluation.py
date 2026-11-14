@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 import torch
 
-from manabot.eval.endpoint import CallbackEndpoint
+from manabot.eval.endpoint import serve_callbacks
 from manabot.eval.evaluation import (
     EvaluationRequest,
     EvaluationResult,
@@ -324,7 +324,7 @@ def test_local_and_managed_share_admission_seeds_and_incomplete_results(
     )
     local = evaluate_local(request, limits=limits, out_dir=tmp_path / "local")
     with InferenceRuntime(limits, tmp_path / "managed-allocation") as runtime:
-        with CallbackEndpoint(runtime) as endpoint:
+        with serve_callbacks(runtime) as endpoint:
             managed = evaluate(
                 request, out_dir=tmp_path / "managed", inference=endpoint
             )
@@ -544,7 +544,7 @@ def test_continuation_finishes_missing_sixty_without_replacing_evidence(
             runtime = stack.enter_context(
                 InferenceRuntime(limits, tmp_path / "runtime")
             )
-            endpoint = stack.enter_context(CallbackEndpoint(runtime))
+            endpoint = stack.enter_context(serve_callbacks(runtime))
         first = evaluate(request, out_dir=out, execution=limits, inference=endpoint)
         assert first.status == "incomplete" and first.error
         status = evaluation_status(out)

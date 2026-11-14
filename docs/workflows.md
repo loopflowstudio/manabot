@@ -46,13 +46,15 @@ own the measurement plan and its review. Once the standing size-ladder benchmark
 and retained baseline ship, measurement uses their documented command as its
 reference; the current per-recipe benchmark below remains usable today.
 
-Start with retained receipts and the **Update time** Perf series. Read collection's
-native stepping, encoding and policy inference beside learner time; retain
-inference calls and rows per call so batching changes remain interpretable.
+Start with the **Update time** Perf series (and, for historical runs, their
+retained receipts). Read collection's native stepping, encoding and policy
+inference beside learner time; when a change affects batching, measure inference
+calls and rows per call as well, since phase rows hold only seconds.
 Distinguish one seed's progress from aggregate throughput or cost: packing can
 improve the latter while slowing every seed. Compare overlapping post-warmup
 packed samples to matched solo ordinals, keeping both latency and throughput.
-`TrainingRun.host` supplies CPU and quota facts; keep GPU, source, world, input,
+Retained runs' `TrainingRun.host` supplies CPU and quota facts; record them for
+new runs, and keep GPU, source, world, input,
 precision, model size and workload identities with each comparison. Read
 evaluation's `performance.json` alongside training to show its share of the
 workload's time. Evaluation clocks can overlap and exclude preparation and billing;
@@ -64,35 +66,34 @@ For a bounded training reading on an available, authorized machine with the
 ```sh
 mkdir -p .runs/update-baseline
 uv run python scripts/bench_training_update.py --streams 256 --updates 3 \
-  --out .runs/update-baseline/run --json .runs/update-baseline/receipt.json
+  --json .runs/update-baseline/rows.json
 ```
 
-This prints seconds, decisions and games per update, host facts and phase timings
-in microseconds per decision. It retains checkpoints and per-update metrics under
-`--out`; without that option the run directory is temporary. Keep baseline and
-candidate in separate `--out` and `--json` paths, with matching input capacities
-and matching, explicit `--recipe`, `--seed` and `--device` settings. `--recipe` accepts a
-regime JSON or `module:function`; the device defaults to CPU (`--device cuda`
-selects CUDA). The benchmark pins its in-memory recipe to the current world, so
-it cannot reproduce frozen experiments. Capacity failure requires a compatible
-declared workload, not truncation or edits to a frozen recipe. The default CPU
-reading plays three full updates (about 160,000 decisions); on a laptop expect
-minutes per update and several GB of memory.
+This prints seconds, decisions and games per update and phase timings in
+microseconds per decision. `--json` retains the per-update rows, validated
+settings, seed and summary. Each reading trains a new local Etude run and
+prints its id; the learner state and policies are in that run's folder, and
+no `TrainingRun` receipt is written. Use separate `--json`
+paths for baseline and candidate, matching input capacities and explicit
+`--recipe`, `--seed` and `--device` settings. `--recipe` is a zero-argument
+`module:function` returning `SelfPlay`; its default is
+`manabot.recipes.builders:elemental_self_play`. Regime JSON is no longer
+accepted, and frozen experiments must run from their named revision. The
+benchmark validates the builder's world without rebinding it. Capacity failure
+requires a compatible declared workload, not truncation or edits to evidence.
+The default CPU reading plays three full updates; on a laptop expect minutes
+per update and several GB of memory. Use a declared smaller workload for a
+quick functional check.
 
-The printout omits batching. For the default recipe's both-seat self-play, read
-the receipt's stage: the `calls` of
-`collection_timings["Policy inference and action selection"]` are inference
-calls; inferred rows are its `environment_decisions` (streams × calls −
-`idle_stream_steps`), so rows per call is decisions / calls. Idle steps are
-complete-game streams waiting for the remaining games; they lower rows per call
-without indicating a serving limit.
-For other recipes, inspect learner and opponent inference separately before using
-environment decisions as inferred rows; scripted opponents make decisions without
-model inference, and one-seat self-play records opponent inference separately.
-
-After an interrupted run, read the retained per-update rows: receipt timers can
-cover only the last attempt while counts span attempts. Keep failed attempts and
-missing measurements visible.
+Rows retain cumulative environment decisions, learner transitions, games and
+idle stream steps. Idle steps are complete-game streams waiting for remaining
+games; they do not establish a serving limit. Phase timers measure seconds,
+not inference call counts or rows per call. Measure those separately when
+batch utilization is the question. For resumed recipe runs, read per-update
+rows rather than dividing cumulative counts by the last attempt's wall time.
+Keep failed attempts and missing measurements visible. The frozen
+`experiments/training_throughput.py` driver refuses execution before spawning
+children; its historical receipt reader is not a reader for this new output.
 
 Use `--cuda-counts PATH` in a separate diagnostic run for kernel launches and
 synchronizations. It requires real CUDA and changes timing; its whole-run counts

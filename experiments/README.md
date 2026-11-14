@@ -11,14 +11,20 @@ built from [`manabot.recipes.builders`](../manabot/recipes/builders.py), and
 anything only it needs to run and report. `manabot/` keeps the reusable
 instruments.
 
-| module | recipes (`--regime-name`) | runs and reports |
+A runnable recipe is a file that defines `train(config)`; run one with
+`uv run etude train FILE` ([training](../docs/training.md#run-training)). Retained
+`TrainingRegime` builders are records; execute them from the pre-cutover main
+revision `f4e1822faf46bbc9cdc43909293f8cbc8de4a300`. Exact reproductions use
+the experiment's recorded revision and lock ([saved regimes](../docs/training.md#saved-regimes)).
+
+| module | current role | execution |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/training.md#remote-training) |
-| [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
-| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | `manabot train` |
-| [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
-| [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
-| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
+| [batched_baseline](batched_baseline.py) | `train(config)`; retained `batched_baseline()` and `scale_ladder()` builders ([scale ladder](scale-ladder.md)) | `uv run etude train experiments/batched_baseline.py`; retained builders require pre-cutover source |
+| [value_model_baseline](value_model_baseline.py) | retained regime builder ([value models](value-models.md)) | pre-cutover source |
+| [ataraxos_move](ataraxos_move.py) | retained `ataraxos_move()` and `ataraxos_move_scalar()` builders ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | pre-cutover source |
+| [direct_self_play](direct_self_play.py) | retained regime builder | pre-cutover source |
+| [ataraxos_ablation](ataraxos_ablation.py) | retained RL control and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `uv run python -m experiments.ataraxos_ablation` refuses and names the pre-cutover revision |
+| [belief recipe](../manabot/recipes/belief_sampler.py) | two jobs: [belief_policy](../manabot/recipes/belief_policy.py) trains a policy; the sampler run starts from its final checkpoint, collects histories and fits the sampler ([guide](../docs/training.md#recipes-in-stages)) | `uv run etude launch manabot/recipes/belief_sampler.py` |
 
 The compound-decision study (`compound_decisions.py`) is no longer runnable;
 reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
@@ -28,19 +34,24 @@ reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 ```sh
 uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
+uv run etude launch experiments/elemental.py --revision COMMIT --updates 3200 \
+    --hours 11.9 --usd-per-run 9 --rent l4
 ```
 
 A file defining `report()` or `eval(state)` is an Etude experiment, named for
-its stem. Its training runs track under that stem (`TrainingJob.experiment`),
-so `etude eval` and `etude report` find them; Etude's launcher does not pass
-the name itself yet.
+its stem. Its functions are explicit: `train(config)` is what a run does (its
+own, or a maintained recipe's imported from `manabot.recipes`), `runs()`
+declares the jobs to launch with `etude.jobs.training(train, config=...)`,
+`eval(state)` returns the matches its checkpoints should play and `report()`
+draws them. Etude tells each run it launches from the file that stem, and the
+`track` inside `train` records the run under it, so `etude eval` and
+`etude report` find them.
 
 | file | `runs()` | `eval(state)` | `report()` |
 | --- | --- | --- | --- |
 | [elemental](elemental.py) (MTG-181/183) | fresh seeds of the ten-deck recipe | 10×10 heuristic grid and checkpoint pairs | grid score, deck matrix and rankings, crosstable of pairs |
-| [seat_comparison](seat_comparison.py) (MTG-165) | one- and two-seat arms × four seeds | — | score on learner transitions, one-seat dotted |
-| [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups |
+| [seat_comparison](seat_comparison.py) (MTG-165) | retired; requires pre-cutover source `f4e1822faf46bbc9cdc43909293f8cbc8de4a300` | — | score on learner transitions, one-seat dotted |
+| [two_seat](two_seat.py) (MTG-165 ladder) | — | — | score, matchups, head to head |
 
 Perf and ML details draw self-play's own keys ([`manabot.training.panels`](../manabot/training/panels.py)),
 including a flame graph of each update's `time/` seconds. The two-deck

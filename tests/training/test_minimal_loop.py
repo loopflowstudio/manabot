@@ -1,40 +1,42 @@
 """The example loop trains from the public pieces alone, end to end."""
 
 from pathlib import Path
+from urllib.parse import urlparse
 
+from etude.train.read import read
+import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
-from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.training.loops.minimal import train
+from manabot.training.loops.minimal import MinimalConfig, train
 
 
-def test_minimal_loop_returns_a_moved_finite_average(tmp_path: Path) -> None:
+def test_minimal_loop_publishes_moved_finite_weights(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     torch.set_num_threads(1)
     tiny = ModelConfig(attention_on=False, hidden_dim=8)
-    trained = train(2, streams=2, decisions=8, seed=3, model=tiny)
+    monkeypatch.setenv("ETUDE_OUT", str(tmp_path / "out"))
+    monkeypatch.setenv("ETUDE_EXPERIMENT", "minimal")
+    monkeypatch.setenv("ETUDE_RUN", "minimal-seed-3")
+    monkeypatch.setenv("ETUDE_SEED", "3")
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    train(MinimalConfig(updates=2, streams=2, decisions=8, model=tiny))
+    recorded = read(tmp_path / "track", "minimal", "minimal-seed-3")
+    assert len(recorded.checkpoints) == 1
+    checkpoint = recorded.checkpoints[0]
+    # The minimal example publishes ordinary framework weights in one folder.
+    folder = Path(urlparse(checkpoint.artifact.uri).path)
+    weights = torch.load(folder / "policy.pt", weights_only=True)
     torch.manual_seed(3)
-    initial = ActorCritic(trained.observation_space, tiny)
-    assert all(torch.isfinite(p).all() for p in trained.parameters())
+    initial = ActorCritic(ObservationSpace(), tiny)
+    assert all(torch.isfinite(value).all() for value in weights.values())
     assert any(
-        not torch.equal(after, before)
-        for after, before in zip(
-            trained.parameters(), initial.parameters(), strict=True
-        )
+        not torch.equal(value, initial.state_dict()[name])
+        for name, value in weights.items()
     )
-
-    # The guide's way to keep a run: bound to the decks it played.
-    path = tmp_path / "policy.pt"
-    save_checkpoint(
-        trained, trained.observation_space, path, player_configs=Match().to_rust()
-    )
-    loaded, _ = load_checkpoint(str(path))
-    for (name, kept), saved in zip(
-        loaded.state_dict().items(), trained.state_dict().values(), strict=True
-    ):
-        assert torch.equal(kept, saved), name
 
 
 def test_guide_shows_the_loop_as_written() -> None:

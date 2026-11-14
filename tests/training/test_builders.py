@@ -20,15 +20,10 @@ from manabot.recipes.builders import (
     with_capacity,
     with_value_aggregation,
 )
-from manabot.training.regime import (
-    DampedPolicyLearning,
-    Execution,
-    IterationSchedule,
-    Learning,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.learning import DampedPolicyLearning, IterationSchedule, Learning
+from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorPolicy
+import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -154,16 +149,14 @@ def test_sampled_self_play_fits_its_horizon_and_recovers_capacity() -> None:
     assert fitted_horizon(194_400, 150) == 1_296
     assert fitted_horizon(194_400, 10) == REFERENCE_UPDATES
     regime = sampled_self_play(
-        id="fresh-frontier",
-        world=frozen.world,
+        world=managym.WORLD_VERSION,
         agent=frozen.agent,
         observation=frozen.observation,
         wall_seconds=194_400,
         seconds_per_update=150,
         deck_source=frozen.deck_source,
     )
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
+    stage = regime
     assert isinstance(stage.learning, DampedPolicyLearning)
     assert stage.learning.iteration_schedule == IterationSchedule(
         steps=1_296, reference_steps=REFERENCE_UPDATES
@@ -172,9 +165,8 @@ def test_sampled_self_play_fits_its_horizon_and_recovers_capacity() -> None:
     assert stage.learning.rates(1_296) == stage.learning.model_copy(
         update={"iteration_schedule": None}
     ).rates(REFERENCE_UPDATES)
-    assert stage.updates == REFERENCE_UPDATES
-    dumped = regime.model_dump(mode="json")["stages"][0]
-    assert dumped["execution"]["workers"] == 4
+    dumped = regime.model_dump(mode="json")
+    assert dumped["workers"] == 4
     assert dumped["game_errors"]["recover_capacity"] is True
     assert dumped["learning"]["iteration_schedule"]["steps"] == 1_296
     # Field defaults are untouched: an omitted value still means one producer,
@@ -184,8 +176,7 @@ def test_sampled_self_play_fits_its_horizon_and_recovers_capacity() -> None:
     assert not GameErrorPolicy().recover_capacity
     with pytest.raises(ValueError, match="must be positive"):
         sampled_self_play(
-            id="bad",
-            world=frozen.world,
+            world=managym.WORLD_VERSION,
             agent=frozen.agent,
             observation=frozen.observation,
             wall_seconds=60,

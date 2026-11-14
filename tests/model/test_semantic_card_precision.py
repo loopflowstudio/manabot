@@ -24,7 +24,11 @@ from manabot.infra.config import RewardConfig
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.model.semantic_cards import SemanticCardEncoder
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout import collection
+from manabot.training.rollout.collection import (
+    close_collector,
+    open_collector,
+)
 
 
 def test_definition_join_preserves_float32_outputs_and_gradients() -> None:
@@ -90,17 +94,16 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         dtypes.add(str(result[1].dtype))
 
     hook = cards.encoder.register_forward_hook(record_dtype)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(regime.match),
         Reward(RewardConfig()),
         num_envs=2,
         seed=26400,
         opponent_mode="self",
-        recovery_max_microsteps=10000,
     )
     try:
-        host = collector._slice_obs_tensors(np.arange(2))
+        host = collection._slice_obs_tensors(collector, np.arange(2))
         obs = {key: value.cuda() for key, value in host.items()}
         with forward_precision(declared, torch.device("cuda")):
             full = cards.definitions()
@@ -166,4 +169,4 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         )
     finally:
         hook.remove()
-        collector.close()
+        close_collector(collector)

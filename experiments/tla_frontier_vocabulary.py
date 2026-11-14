@@ -42,7 +42,6 @@ from __future__ import annotations
 
 import argparse
 from decimal import Decimal
-import hashlib
 from pathlib import Path
 from statistics import median
 from typing import Literal
@@ -50,17 +49,14 @@ from typing import Literal
 from etude.eval.query import statsdb
 from etude.eval.records import Environment
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
-from etude.launch.records import Job, Run
-from etude.run.listing import as_storage
-from etude.run.storage import S3Storage, Storage, run_prefix, storage_from_uri
+from etude.run import as_storage
+from etude.spec import Job
+from etude.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
-    ROOT,
-    SMALL,
     Protocol,
     ScheduledComparison,
-    capped_runs,
     checkpoint_inference,
     environment,
     evaluation_jobs,
@@ -77,10 +73,8 @@ from experiments.tla_frontier_analysis import (
     learned,
     read_comparisons,
 )
-from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
 from manabot.infra.identity import StrictModel
-from manabot.training.records import TrainingRun as LearnerRun
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, refuse_frozen_execution
 
 EXPERIMENT = Path(__file__).stem
 type Vocabulary = Literal["catalog", "hashed"]
@@ -133,122 +127,14 @@ def vocabulary_regime(
     )
 
 
-def runs(revision: str, extend_from: str = "") -> list[Run]:
-    """One capped allocation per arm, at the frontier's training seed.
-
-    With `extend_from`, the Etude store holding the first segments, each arm
-    instead continues from its first segment's final exports to `UPDATES`.
-    """
-    regimes, protocol = frozen()
-    if not extend_from:
-        return [
-            run
-            for vocabulary in VOCABULARIES
-            for run in capped_runs(
-                vocabulary_regime(regimes[SMALL], vocabulary),
-                experiment=EXPERIMENT,
-                revision=revision,
-                seed=protocol.training_seed,
-                max_hours=MAX_HOURS,
-                max_usd=MAX_USD,
-                milestones=MILESTONES,
-            )
-        ]
-    storage = storage_from_uri(extend_from)
-    state = observe(storage, EXPERIMENT)
-    jobs: list[Run] = []
-    for vocabulary in VOCABULARIES:
-        first = one_run(state, _regime_id(vocabulary))
-        if first is None:
-            raise ValueError(f"{vocabulary} has no first segment to extend")
-        continuation = stored_continuation(storage, first.name)
-        jobs.extend(
-            TrainingJob(
-                regime=vocabulary_regime(regimes[SMALL], vocabulary, extension=True),
-                experiment=EXPERIMENT,
-                milestones=tuple(
-                    n for n in EXTENSION_MILESTONES if n > continuation.from_update
-                ),
-                finalization_seconds=600,
-                stop_reserve_seconds=600,
-                validate_numerics=True,
-                continuation=continuation,
-            )
-            .job(
-                repo=ROOT,
-                revision=revision,
-                max_hours=EXTENSION_MAX_HOURS,
-                max_usd=EXTENSION_MAX_USD,
-            )
-            .runs(protocol.training_seed)
-        )
-    return jobs
+def runs(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
-# A worker's final learner exports, beside its run record, under each attempt.
-_EXPORTS = {
-    "raw": "self-play-raw.pt",
-    "ema": "self-play-ema.pt",
-    "optimizer": "self-play-optimizer.pt",
-}
-
-
-def stored_continuation(storage: Storage, run: str) -> LearnerContinuation:
-    """Continue `run` from the raw/EMA/Adam exports its run record published.
-
-    The exports stay where its worker stored them; each is checked against the
-    record's digest. A run with more than one attempt holding a record is
-    refused, since which one is final would be a guess.
-    """
-    if not isinstance(storage, S3Storage):
-        raise ValueError("an extension reads its parents from the Etude bucket")
-    folder = run_prefix(run)
-    records = [
-        key
-        for key in storage.keys(folder)
-        if key.startswith(f"{folder}attempts/") and key.endswith("/training/run.json")
-    ]
-    if len(records) != 1:
-        raise ValueError(f"{run} has {len(records)} attempt records, not one")
-    record = records[0]
-    payload = storage.get(record)
-    learner = LearnerRun.model_validate_json(payload)
-    if learner.status not in {"completed", "paused"}:
-        raise ValueError(f"{run} did not end its segment: {learner.status}")
-    training = record.removesuffix("run.json")
-    published = learner.stages[0].artifacts
-    staged: dict[str, StagedExport] = {}
-    for role, name in _EXPORTS.items():
-        artifact = published.get(role)
-        if artifact is None or Path(artifact["path"]).name != name:
-            raise ValueError(f"{run} published no {role} export named {name}")
-        data = storage.get(training + name)
-        if (hashlib.sha256(data).hexdigest(), len(data)) != (
-            artifact["sha256"],
-            artifact["bytes"],
-        ):
-            raise ValueError(f"{run}'s stored {name} differs from its record")
-        staged[role] = StagedExport(
-            key=_bucket_key(storage, training + name),
-            sha256=artifact["sha256"],
-            bytes=artifact["bytes"],
-        )
-    return LearnerContinuation(
-        from_update=learner.updates_through(),
-        source_stage=learner.stages[0].id,
-        source_run=StagedExport(
-            key=_bucket_key(storage, record),
-            sha256=hashlib.sha256(payload).hexdigest(),
-            bytes=len(payload),
-        ),
-        **staged,
-    )
-
-
-def _bucket_key(storage: S3Storage, key: str) -> str:
-    """A storage key as an Etude input names it: relative to the bucket."""
-    prefix = storage.prefix.strip("/")
-    return f"{prefix}/{key}" if prefix else key
+def stored_continuation(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 # -- Evaluation ---------------------------------------------------------------

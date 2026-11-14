@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Etude SDK: the face and the train API</title>
+<style>
+:root{
+  --bg:#f6f1e7; --panel:#fffaf0; --ink:#2b2520; --soft:#6b6055; --line:#d9cdb8;
+  --accent:#8a4b2a; --good:#3f6b4a; --warn:#9a6a14; --code:#efe7d6; --new:#e9f0e4;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#1b1815; --panel:#24201c; --ink:#ece4d6; --soft:#a89c8c; --line:#3d362e;
+    --accent:#d99a6c; --good:#8fc09a; --warn:#d8b25c; --code:#2c2722; --new:#243026; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 Georgia,"Iowan Old Style",serif}
+main{max-width:780px;margin:0 auto;padding:40px 16px 96px}
+h1{font-size:30px;line-height:1.2;margin:0 0 8px}
+h2{font-size:23px;margin:56px 0 10px;padding-top:20px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:30px 0 6px}
+p{margin:10px 0}
+.meta{color:var(--soft);font-size:14px}
+.lead{font-size:19px}
+code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px}
+code{background:var(--code);padding:1px 4px;border-radius:3px}
+pre{background:var(--code);padding:14px;border-radius:6px;overflow-x:auto;line-height:1.5;margin:12px 0}
+pre code{background:none;padding:0}
+.q{color:var(--soft);font-style:italic;border-left:3px solid var(--line);padding-left:12px;margin:12px 0}
+.hero{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px 22px;margin:14px 0 8px}
+.hero .line{font-size:28px;line-height:1.2;font-weight:bold;margin:0 0 8px}
+.hero .sub{color:var(--soft);margin:0 0 16px}
+.hero svg{width:100%;height:auto;display:block}
+.cap{font-size:14px;color:var(--soft);margin:6px 0}
+.tag{font:12px ui-monospace,Menlo,monospace;color:var(--accent);letter-spacing:.04em;text-transform:uppercase}
+.prop{background:var(--new);border-radius:4px;padding:0 5px;font-size:13px}
+dl{margin:10px 0}
+dt{font-weight:bold;margin-top:8px}
+dd{margin:0;color:var(--ink)}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:12px 0;min-width:560px}
+th,td{border-bottom:1px solid var(--line);padding:8px 8px;text-align:left;vertical-align:top}
+th{font-weight:bold;color:var(--soft);font-size:13px}
+.y{color:var(--good);font-weight:bold}.m{color:var(--warn);font-weight:bold}.n{color:var(--soft)}
+ol.qs>li{margin:14px 0}
+ol.qs ol{list-style:lower-alpha;margin:4px 0}
+.stack{display:grid;gap:6px;margin:14px 0}
+.stack div{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--panel)}
+.stack .now{border-color:var(--accent);border-width:2px}
+.stack small{color:var(--soft);display:block}
+</style>
+</head>
+<body>
+<main>
+
+<p class="meta">MTG-329 / EXP-56 · explore · 2026-11-13 · built from <code>scratch/positioning.md</code>, <code>scratch/etude-readme-draft.md</code>, Etude PR #103 at <code>105abdd</code> (<code>src/etude/train/run.py</code>, <code>scratch/questions.md</code>) and Manabot's <code>training/loops/self_play.py</code>. Earlier rounds: <code>scratch/explore-rounds-1-5.html</code>.</p>
+
+<h1>Etude SDK: what it says on the front, and what the train API looks like</h1>
+
+<p class="lead">Two things to choose, and they constrain each other. First, the one line and one picture a stranger sees. Second, the shape of the calls a training loop makes in EXP-56. The front page shows a code sample, so the API decides whether that sample is believable in eight lines.</p>
+
+<p>Where the three earlier directions landed, in your words today:</p>
+<p class="q">"League is, I think, closer to the face of [the Etude SDK] but what we're trying to build now is mostly focused on the train API, which is the building block for the League API" … "Lab That Remembers is etude cloude"</p>
+
+<div class="stack">
+  <div><b>Etude Cloud</b>: the lab that remembers<small>questions, findings, agents assigned to experiments. Parked.</small></div>
+  <div><b>Etude SDK, the face</b>: the league<small>checkpoints are players; an evaluation is matches between them. Part 1 of this page.</small></div>
+  <div class="now"><b>Etude SDK, being built now</b>: the train API<small>what a loop needs to run unattended and produce checkpoints the league can seat. Part 2 of this page.</small></div>
+</div>
+
+<h2>Part 1. Above the fold</h2>
+
+<p>Four candidate fronts. Each has a line, a sentence under it, the picture or clip, and who it is talking to. All are <span class="prop">proposed</span>; none exists. Numbers in the pictures are invented.</p>
+
+<h3><span class="tag">L1 · the league</span></h3>
+<div class="hero">
+  <p class="line">Which checkpoint is better?</p>
+  <p class="sub">Etude plays your checkpoints against each other, and against opponents you choose, on machines you own or rent.</p>
+  <svg viewBox="0 0 640 230" role="img" aria-label="A curve of win rate against an earlier self beside a crosstable of checkpoints">
+    <g fill="none" stroke="currentColor" stroke-width="1" opacity=".35">
+      <line x1="30" y1="180" x2="330" y2="180"/><line x1="30" y1="20" x2="30" y2="180"/>
+      <line x1="30" y1="100" x2="330" y2="100" stroke-dasharray="4 4"/>
+    </g>
+    <polyline fill="none" stroke="var(--accent)" stroke-width="3" points="30,100 80,70 130,62 180,74 230,58 280,66 330,60"/>
+    <polyline fill="none" stroke="var(--good)" stroke-width="3" points="30,170 80,140 130,104 180,80 230,56 280,44 330,36"/>
+    <g font-size="12" fill="currentColor" font-family="ui-monospace,Menlo,monospace">
+      <text x="36" y="116" opacity=".6">0.5</text>
+      <text x="236" y="30" fill="var(--good)">vs heuristic</text>
+      <text x="136" y="152" fill="var(--accent)">vs itself, 400 updates ago</text>
+      <text x="150" y="200" opacity=".6">updates</text>
+      <text x="400" y="30" opacity=".6">every checkpoint against</text>
+      <text x="400" y="222" opacity=".6">every other</text>
+    </g>
+    <g id="ct"></g>
+  </svg>
+  <p class="cap">The clip: fifteen seconds. Training runs in a terminal on the left; on the right the page fills in as each checkpoint lands. The curve against the heuristic climbs and flattens. The curve against its earlier self keeps saying whether it is still improving. Then the crosstable fills, one row per checkpoint.</p>
+</div>
+<dl>
+  <dt>Who</dt><dd>Anyone training agents that are measured against other agents: self-play, populations, games, multi-agent teams. They have a reward curve and do not trust it.</dd>
+  <dt>What we would like about it</dt><dd>It is the differentiator you named ("comparing different checkpoints with each other in certain environments"). No tracker asks this question on its front page. The picture cannot be mistaken for W&amp;B.</dd>
+  <dt>Cost</dt><dd>The smallest audience of the four. A single-agent RL or supervised reader sees nothing for them. The clip needs a public example game that is not Magic.</dd>
+</dl>
+
+<h3><span class="tag">L2 · the unsatisfied</span></h3>
+<div class="hero">
+  <p class="line">For people a little unsatisfied with W&amp;B and SkyPilot.</p>
+  <p class="sub">One library that launches your training on rented machines, tracks it in your own bucket, and evaluates what it produced. No server. No account.</p>
+<pre><code>$ etude smoke ppo.py             # one tiny update and one tiny match, here, free
+$ etude launch ppo.py --rent l4  # train, capped in hours and dollars
+$ etude eval ppo.py              # play the matches nobody has played yet
+$ etude report ppo.py --open     # the page, the same for everyone who opens it</code></pre>
+  <p class="cap">The picture is the four commands and, beneath them, a three-column table: what you do today in W&amp;B, in SkyPilot, in Etude. Rows are your own complaints: slow pages, one step axis, history in someone else's service, dashboards that move.</p>
+</div>
+<dl>
+  <dt>Who</dt><dd>The person you described: used both tools at a job, now at a small lab or alone, scraping compute together.</dd>
+  <dt>What we would like about it</dt><dd>Widest audience. The reader already knows what they would be replacing, so no concept needs teaching. It is your own sentence.</dd>
+  <dt>Cost</dt><dd>It defines Etude by two other products and invites a feature-by-feature comparison Etude loses today (no live view until EXP-57, no machine charts until EXP-58). It hides the league below the fold.</dd>
+</dl>
+
+<h3><span class="tag">L3 · the run that survives</span></h3>
+<div class="hero">
+  <p class="line">Your training loop, on machines that disappear.</p>
+  <p class="sub">Write the loop. Etude rents the machine, and when it is taken away, rents another and carries on. It reads back as one run, inside one budget.</p>
+  <svg viewBox="0 0 640 170" role="img" aria-label="One continuous training curve across three rented machines">
+    <g font-size="12" font-family="ui-monospace,Menlo,monospace" fill="currentColor">
+      <rect x="30" y="118" width="170" height="26" rx="4" fill="var(--code)"/><text x="38" y="135">4090 · $0.41/h</text>
+      <rect x="226" y="118" width="150" height="26" rx="4" fill="var(--code)"/><text x="234" y="135">L4 · $0.39/h</text>
+      <rect x="402" y="118" width="208" height="26" rx="4" fill="var(--code)"/><text x="410" y="135">4090 · $0.44/h</text>
+      <text x="196" y="112" fill="var(--warn)">taken</text><text x="372" y="112" fill="var(--warn)">taken</text>
+      <text x="30" y="162" opacity=".6">one run · 3 attempts · $3.12 of $4.00</text>
+    </g>
+    <polyline fill="none" stroke="var(--good)" stroke-width="3" points="30,96 90,74 150,58 200,50 226,50 290,40 340,34 376,31 402,31 480,24 560,19 610,16"/>
+    <g stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="3 3"><line x1="213" y1="14" x2="213" y2="100"/><line x1="389" y1="14" x2="389" y2="100"/></g>
+  </svg>
+  <p class="cap">The clip: a curve drawing; the machine under it vanishes; a different one appears; the curve continues without a seam. The dollar counter never passes the cap.</p>
+</div>
+<dl>
+  <dt>Who</dt><dd>Anyone training on spot or marketplace GPUs, in any field. Not specific to multi-agent work.</dd>
+  <dt>What we would like about it</dt><dd>It is exactly what EXP-56 delivers, so the front page would be true the day it ships. The pain is felt and expensive (MTG-249 lost a rented GPU's work).</dd>
+  <dt>Cost</dt><dd>This is SkyPilot's managed-jobs claim, from memory and unchecked. You said training runs are "a fundamental unit" but "not what defines the product"; this front says they are.</dd>
+</dl>
+
+<h3><span class="tag">L4 · the agent's lab bench</span></h3>
+<div class="hero">
+  <p class="line">Experiments your coding agent can run without you watching.</p>
+  <p class="sub">An experiment is one Python file. Every command answers in JSON, spends under a cap you set, and can be run again safely.</p>
+<pre><code>agent&gt; etude launch ppo.py --rent l4 --max-usd 4 --json
+{"run":"r_81c","state":"queued","cap_usd":"4.00"}
+agent&gt; etude eval ppo.py --json
+{"played":96,"skipped_already_played":288}
+agent&gt; etude report ppo.py --json | jq '.evals[0].latest'
+{"seating":"vs earlier self","score":0.58,"ci":[0.53,0.63]}</code></pre>
+  <p class="cap">The clip: an agent session. It edits one line of the file, launches, evaluates, reads the score, writes two sentences of conclusion. No person touches the keyboard.</p>
+</div>
+<dl>
+  <dt>Who</dt><dd>People who already work through coding agents and want them to do ML work. You, today.</dd>
+  <dt>What we would like about it</dt><dd>You said "100% this" to being written for agents as much as for people. It is where the field is moving, and the caps are the part others gloss over.</dd>
+  <dt>Cost</dt><dd>Depends on EXP-59 (JSON everywhere), which is unstarted; the transcript above is invented. Read alone it sounds like SF Compute's Autoresearch, and it leans toward Cloud.</dd>
+</dl>
+
+<h3>What I would do</h3>
+<p>L1 as the line and the clip, because it is the face you named and the only one nobody else can say. L3 as the second band directly beneath it ("…and it trains on machines that disappear"), because it is what ships first. L2 as a comparison page linked from the front, not the front. L4 as a section titled for agents once EXP-59 is real. This is a recommendation, not a record of a choice.</p>
+
+<h2>Part 2. The train API in EXP-56</h2>
+
+<p>Every design has to give a loop the same five things: where to keep files that survive the machine, how far to go, whether to stop now, a way to say "I stopped on purpose, call me again", and a way to publish a checkpoint with its clocks. The designs differ in who writes the loop's skeleton and how many of those five the author has to remember.</p>
+
+<h3><span class="tag">E1 · the handle</span> as built in PR #103</h3>
+<pre><code>def train(config: TrainConfig) -&gt; None:
+    with track(clocks=[Step("updates", "optimizer updates")]) as run:
+        state = load(run.out) or new(config)
+        target = run.until("updates", default=config.updates)
+        while state.update &lt; target and not run.stopping():
+            state, metrics = one_update(state)
+            run.log(metrics, updates=state.update)
+            save(run.out, state)
+            if state.update % 100 == 0:
+                run.checkpoint(save_policy(state), updates=state.update)
+        if state.update &lt; target:
+            raise Stopped("saved; call again to continue")</code></pre>
+<p>The loop is the author's, top to bottom; Etude answers questions. Five names to learn (<code>out</code>, <code>until</code>, <code>stopping</code>, <code>Stopped</code>, <code>checkpoint</code>) and three ways to get it wrong: forgetting <code>stopping()</code>, forgetting the final <code>raise</code>, and saving non-atomically. <code>load</code> and <code>save</code> are the author's; in Manabot they are 245 of <code>self_play.py</code>'s 845 lines.</p>
+
+<h3><span class="tag">E2 · the run drives the count</span> <span class="prop">proposed</span></h3>
+<pre><code>def train(config: TrainConfig) -&gt; None:
+    with track(clocks=[Step("updates", "optimizer updates")]) as run:
+        state = run.load() or new(config)                 # the last saved state, or None
+        for update in run.steps("updates", start=state.update, default=config.updates):
+            state, metrics = one_update(state)
+            run.log(metrics)                              # clock filled in from the step
+            run.save(state)                               # atomic; this is the resume point
+            if update % 100 == 0:
+                run.checkpoint(save_policy(state))</code></pre>
+<p><code>run.steps</code> yields until the target or until the run should stop; if it ends short of the target, leaving the <code>with</code> block raises <code>Stopped</code> itself. <code>until</code>, <code>stopping</code> and <code>Stopped</code> collapse into one line that cannot be half-written. The loop body is still the author's and still reads like CleanRL. E1's calls stay underneath for loops that do not count in one clock (two-phase recipes, the belief sampler). Cost: a second way to do the same thing; <code>run.save</code> needs a rule for what a state is (see S2 below).</p>
+
+<h3><span class="tag">E3 · Etude owns the loop</span> <span class="prop">proposed</span></h3>
+<pre><code>def train(config: TrainConfig) -&gt; None:
+    loop(
+        clocks=[Step("updates", "optimizer updates")],
+        new=lambda: new(config),
+        step=one_update,                    # state -&gt; (state, metrics)
+        until=("updates", config.updates),
+        checkpoint=every(100, save_policy),
+    )</code></pre>
+<p>The Tinker end: "just write the inner loop and we'll manage the rest", as a library call. Nothing can be forgotten, and resume is guaranteed by construction. But the author no longer has a loop to read, a recipe with two phases or an evaluation between updates has to fit callbacks, and it is the Trainer you said Etude does not sell ("I don't want to do that… not in [Etude]"). Shown so the boundary is visible, not because I think it is a candidate.</p>
+
+<h3><span class="tag">E4 · module-level, W&amp;B-shaped</span> <span class="prop">proposed</span></h3>
+<pre><code>import etude
+
+def train(config: TrainConfig) -&gt; None:
+    etude.init(config=config)
+    for update in range(start, config.updates):
+        ...
+        etude.log(metrics, step=update)
+        if etude.stopping(): break
+    etude.finish()</code></pre>
+<p>A W&amp;B user changes one import. That is the whole appeal, and it serves the L2 front. It gives up declared clocks for a single <code>step</code> (your complaint about W&amp;B), relies on hidden module state, and has no honest place for "stopped on purpose" versus "finished". Could exist later as a thin compatibility module over E1 without being the API.</p>
+
+<h3>A separate axis: who owns the saved state</h3>
+<p>This matters more for loop length than the choice above. Three positions, usable with E1 or E2:</p>
+<div class="tw"><table>
+<tr><th></th><th>What the loop writes</th><th>What it buys</th><th>What it costs</th></tr>
+<tr><td><b>S1</b> a directory (built)</td><td><code>save(run.out, state)</code>, its own files, its own atomic rename</td><td>No opinion about state. Any framework.</td><td>Every project rewrites resume. Etude cannot tell a resume point from any other file.</td></tr>
+<tr><td><b>S2</b> one named state <span class="prop">proposed</span></td><td><code>run.save(state)</code> / <code>run.load()</code>, bytes or a path</td><td>Atomic write, "resume from here" and the clock it was saved at are Etude's. Would remove part of Manabot's 245 lines; how much is not measured.</td><td>One new rule: a state is whatever the author serializes; Etude never looks inside.</td></tr>
+<tr><td><b>S3</b> the checkpoint is the resume point <span class="prop">proposed</span></td><td>only <code>run.checkpoint(...)</code>; resume from <code>run.latest_checkpoint()</code></td><td>One concept instead of two. The league and resume read the same file.</td><td>Resume needs optimizer and RNG state; a player needs only weights. Either checkpoints get heavy or resume loses exactness.</td></tr>
+</table></div>
+
+<h3>What I would do</h3>
+<p>Ship E1 as built with the three fixes already listed (config refusal at <code>track()</code>, the finished-run-marked-failed bug now on EXP-56, a local caller). Add E2's <code>run.steps</code> and S2's <code>run.save</code>/<code>run.load</code> on top, in the same release if they fit, since they are sugar over E1 and they are what the front page would show. Not E3. E4 only as a later compatibility shim, if L2 becomes a page. Unverified: none of E2, E3, E4, S2 or S3 has been written or run.</p>
+
+<h2>How the two choices meet</h2>
+
+<p>The front page carries a code sample. Each front wants something different from it.</p>
+
+<div class="tw"><table>
+<tr><th></th><th>E1 handle</th><th>E2 run drives the count</th><th>E3 Etude owns the loop</th><th>E4 W&amp;B-shaped</th></tr>
+<tr><td><b>L1</b> the league</td><td class="m">works; the train sample is long, so it goes below the fold</td><td class="y">best: train fits in eight lines beside the Benchmark, and every checkpoint is guaranteed its clock</td><td class="n">shortest, but the reader asks "where is my loop?"</td><td class="n">a single step axis breaks "400 updates earlier"</td></tr>
+<tr><td><b>L2</b> the unsatisfied</td><td class="m">honest but unfamiliar</td><td class="m">unfamiliar; shorter</td><td class="n">reads as a framework, which this reader left</td><td class="y">best: one import changed</td></tr>
+<tr><td><b>L3</b> the run that survives</td><td class="m">the sample shows the machinery; three lines exist only for stopping</td><td class="y">best: "survives" is visibly one line</td><td class="y">strongest guarantee</td><td class="n">cannot express a planned stop</td></tr>
+<tr><td><b>L4</b> the agent's bench</td><td class="m">an agent can forget the final raise, as a person can</td><td class="y">fewest ways to be wrong while still editable line by line</td><td class="m">safest, but an agent changing the algorithm fights callbacks</td><td class="n">hidden state; hard to check</td></tr>
+</table></div>
+
+<p>Three things fall out of the table.</p>
+<ul>
+  <li>E2 is the only column with no grey cell. It is best or acceptable under every front, which matters while the front is undecided.</li>
+  <li>L1 puts one requirement on the train API that the others do not: a checkpoint must always carry its clocks and be immutable, because a seat like <code>Earlier(clock="updates", by=400)</code> resolves against them. E1 already enforces this. Any state design that weakens it (S3 with rewritten checkpoints) breaks the face.</li>
+  <li>L2 and E4 pull together and pull away from everything else. Choosing L2 as the front is also choosing to carry a compatibility surface.</li>
+</ul>
+
+<h2>Round two: Jace as the test, and who owns the state</h2>
+
+<p class="q">"In terms of E1 through E4 I definitely like E2 the best. I am somewhat intrigued by E3 but I am unsure about how flexible that would be… I don't want to go so far as to rule out innovative learning patterns like that"</p>
+
+<h3>What Jace's loop needs (read from <code>RyanSaxe/jace</code> on 2026-11-13)</h3>
+<p>One iteration of <code>limited_iteration</code> drafts pods, builds a deck from every pool, plays the decks, then updates five models (player, guess, deck score, deck builder, drafter) through six optimizers, one of them a shared embedding that steps with whichever model is updating. The opponent and the other draft seats can be past versions. Its docs say "This is an example loop, not a framework". It has its own 14 KB <code>tracking.py</code> that writes a run folder of JSON lines and checkpoints named <code>&lt;model&gt;-&lt;update&gt;.pt</code>, with an <code>inputs</code> list naming the checkpoints of other runs it started from.</p>
+
+<div class="tw"><table>
+<tr><th>Jace needs</th><th>E2</th><th>E3</th></tr>
+<tr><td>Four phases in an order the author can change</td><td class="y">the body of the <code>for</code>; untouched</td><td class="m">all four go inside <code>step</code>, so Etude sees one opaque call</td></tr>
+<tr><td>Five models, each with its own update count</td><td class="m"><code>run.log</code> and <code>run.checkpoint</code> must take a model name, or a clock per model</td><td class="n"><code>checkpoint=every(100, save_policy)</code> assumes one model</td></tr>
+<tr><td>Past versions as opponents and draft seats, chosen each iteration</td><td class="y">ordinary code between iterations (documented reading of the population is EXP-60)</td><td class="n">needs a callback or hidden state</td></tr>
+<tr><td>Skip an update on a condition (<code>if dials.drafter_rate &gt; 0</code>)</td><td class="y">an <code>if</code></td><td class="y">an <code>if</code> inside <code>step</code></td></tr>
+</table></div>
+
+<p>E3 can run Jace only by putting the whole iteration inside <code>step</code>, at which point it is E2 with the <code>for</code> line hidden and the checkpoint rule too narrow. So E3 does not add flexibility problems so much as stop adding value once a loop is interesting. If it is still wanted for the simplest case, it can be ten lines written over E2 and shown in the docs as something to copy, not an API.</p>
+
+<p>Jace also surfaces a question neither design answered: in the league a checkpoint is a player, and a Jace player is a drafter, a builder and a player model together. I have not checked whether <code>run.checkpoint</code> in PR #103 can record several named models at one point in a run.</p>
+
+<h3>State: yours, in ordinary files, described by a model</h3>
+<p class="q">"we write code, you run it on your machine, it's saved to your machine, it's in normal-ass formats that you can read, and you own it… having a state [Pydantic] variable that makes it really clear what you get, what things we're saving, and how they relate to each other, that's all good… fundamentally, we're going to be publishing directories, checkpoints, and JSON files"</p>
+
+<p>That reads as S2 with two rules added: the layout on disk is a published contract, and Etude never invents a format. A sketch, <span class="prop">proposed</span>:</p>
+<pre><code>class State(BaseModel):
+    update: int = 0
+    seed: int
+    models: dict[str, Path] = {}      # "player" -&gt; player.pt, written by your torch.save
+    optimizers: dict[str, Path] = {}
+
+def train(config: TrainConfig) -&gt; None:
+    with track(clocks=[Step("updates", "optimizer updates")]) as run:
+        state = run.load(State) or new(config)
+        for update in run.steps("updates", start=state.update, default=config.updates):
+            state, metrics = one_update(state)
+            run.log(metrics)
+            run.save(state)</code></pre>
+<pre><code>out/state/
+  state.json        the model, as JSON: every field, every file by relative name
+  player.pt         your bytes, in your framework's format
+  player.opt.pt</code></pre>
+<p>Etude's part is the boring part: write the directory whole or not at all, record which clock it was saved at, carry it to the next machine. Reading it back needs <code>json</code> and your framework, not Etude. A checkpoint would be the same shape with fewer fields, which is the "exports look the same" you described. Unverified: how tensors get from memory to the file fields without an extra copy is not designed.</p>
+
+<h2>Questions</h2>
+<p class="meta">1 was spoken to: L1 "definitely beats the other ones… the place to aim for right now". 3 and 4 were spoken to above: E2 liked best; state is the author's files, described by a model. 2, 5 and 6 are still open. New:</p>
+<ol class="qs" start="7">
+  <li>E3:
+    <ol><li>drop it</li><li>a short function over E2 in the docs, to copy</li><li>keep exploring it as API</li></ol></li>
+  <li>A checkpoint when a player is several models (Jace):
+    <ol><li>one checkpoint is a directory holding every model, and seats as one player</li><li>one checkpoint per model; a player names a set of them</li><li>both</li></ol></li>
+  <li>Several models with their own update counts:
+    <ol><li>one run clock (iterations); per-model counts are ordinary logged values</li><li>a declared clock per model</li><li>rows and checkpoints carry a model name beside the clocks</li></ol></li>
+  <li>The state model:
+    <ol><li>the author declares any Pydantic model; files are <code>Path</code> fields</li><li>Etude supplies a base <code>State</code> with standard fields (clocks, seed, models, optimizers) that authors extend</li><li>no model; a documented directory layout only</li></ol></li>
+  <li>Does E2 with the state model go into EXP-56, or ship after it?
+    <ol><li>into EXP-56 before release</li><li>EXP-56 releases E1; this is the next Task</li></ol></li>
+</ol>
+<details><summary>Round one questions 1–6</summary>
+<ol class="qs">
+  <li>The front line:
+    <ol><li>L1, "Which checkpoint is better?"</li><li>L2, the W&amp;B and SkyPilot line</li><li>L3, machines that disappear</li><li>L4, the agent's bench</li><li>a combination; say which leads and which is the second band</li></ol></li>
+  <li>The clip for the front needs a public example that is not Magic. Which?
+    <ol><li>a tiny game shipped with Etude</li><li>an existing open environment (PettingZoo, MettaGrid)</li><li>Manabot itself, and accept the domain</li></ol></li>
+  <li>The loop shape in EXP-56:
+    <ol><li>E1 only, as built</li><li>E1 plus E2's <code>run.steps</code> in the same release</li><li>E1 now, E2 as a follow-up Task</li><li>something else from the page</li></ol></li>
+  <li>Saved state:
+    <ol><li>S1, a directory, as built</li><li>S2, <code>run.save</code>/<code>run.load</code> added</li><li>S3, checkpoints are the resume point</li></ol></li>
+  <li>A W&amp;B-shaped module (E4):
+    <ol><li>never</li><li>later, as a shim, if L2 becomes a page</li><li>now</li></ol></li>
+  <li>Is "league" a word that appears on the page, or only the idea (checkpoints as players, matches between them)?
+    <ol><li>the word</li><li>only the idea</li></ol></li>
+</ol>
+</details>
+
+</main>
+<script>
+// Crosstable cells for the L1 picture: later checkpoints beat earlier ones.
+const g=document.getElementById('ct'),ns='http://www.w3.org/2000/svg',n=6,s=28,x0=400,y0=40;
+for(let r=0;r<n;r++)for(let c=0;c<n;c++){
+  const e=document.createElementNS(ns,'rect');
+  e.setAttribute('x',x0+c*s);e.setAttribute('y',y0+r*s);e.setAttribute('width',s-3);e.setAttribute('height',s-3);e.setAttribute('rx',3);
+  if(r===c){e.setAttribute('fill','var(--code)');}
+  else{e.setAttribute('fill',r>c?'var(--good)':'var(--accent)');e.setAttribute('opacity',(0.25+0.13*Math.abs(r-c)).toFixed(2));}
+  g.appendChild(e);
+}
+</script>
+</body>
+</html>

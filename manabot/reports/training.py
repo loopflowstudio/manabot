@@ -8,23 +8,23 @@ retry. In-progress evaluation stays in the summary until settled.
 """
 
 import argparse
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+import fcntl
 import json
 import math
 from pathlib import Path
 from typing import Literal
 
-from etude.run.storage import storage_from_uri
-from etude.train.read import read
-from etude.train.records import Step
-from etude.train.run import seal_runs, track
+from etude.storage import storage_from_uri
+from etude.train.read import RunData, read
+from etude.train.tracking import seal_runs, track
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from manabot.eval.monitor import MonitorResult
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.reports.records import ReportRun
-from manabot.training.state.recovery import attempt_lock
 from manabot.training.update_metrics import MetricRow
 
 Scalar = int | float | str | bool
@@ -180,10 +180,10 @@ def training_dashboard(
     )
 
 
-def _recorded_rows(directory: Path, experiment: str, run_id: str) -> dict[int, str]:
+def _recorded_rows(data: RunData) -> dict[int, str]:
     """Read acknowledged row identities from Etude, including sealed crash tails."""
     recorded: dict[int, str] = {}
-    for table in read(directory, experiment, run_id).columns:
+    for table in data.columns:
         for index in range(table.rows):
             row = table.row(index)
             values, clocks = row.values, row.clocks
@@ -219,9 +219,10 @@ def publish_dashboard(
     """
     directory = out / "etude"
     # Separate per-projection locks also cover callers without a publisher lease.
-    with attempt_lock(out / "etude-projection.lock"):
+    with dashboard_lock(out / "etude-projection.lock"):
         seal_runs(directory)
-        recorded = _recorded_rows(directory, experiment, dashboard.run_id)
+        prior = read(directory, experiment, dashboard.run_id)
+        recorded = _recorded_rows(prior)
         rows = dashboard.rows
         for index, row in enumerate(rows):
             if row.get("monitor/status") == "running":
@@ -236,11 +237,12 @@ def publish_dashboard(
             experiment=experiment,
             run=dashboard.run_id,
             kind="retained-monitoring",
-            clocks=[Step("observation", "retained epoch/update ordinal")],
+            clocks=["observation"],
             config=dashboard.config,
             directory=directory,
             storages=[storage_from_uri(destination)] if destination else (),
             strict=True,
+            resume=prior.file is not None,
         )
         try:
             for index in range(len(recorded), len(rows)):
@@ -257,7 +259,8 @@ def publish_dashboard(
                         dashboard.summary, sort_keys=True
                     )
                 },
-                observation=max(0, len(rows) - 1),
+                # Summary-only retries must not supersede the last settled row.
+                observation=len(rows),
             )
         except Exception:
             tracked.finish("failed")
@@ -267,7 +270,9 @@ def publish_dashboard(
             raise RuntimeError(
                 "Etude delivery incomplete; retained files can be retried"
             )
-        if len(_recorded_rows(directory, experiment, dashboard.run_id)) != len(rows):
+        if len(_recorded_rows(read(directory, experiment, dashboard.run_id))) != len(
+            rows
+        ):
             raise RuntimeError("Etude did not retain every projection row")
         return tracked.files.root.resolve().as_uri()
 
@@ -360,7 +365,7 @@ def main() -> None:
     parser.add_argument("--destination", help="Etude directory or s3://bucket/prefix")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
-    with attempt_lock(args.out / "publisher.lock"):
+    with dashboard_lock(args.out / "publisher.lock"):
         dashboard = evaluation_dashboard(
             [MonitorResult.model_validate_json(p.read_text()) for p in args.evaluations]
         )
@@ -386,6 +391,23 @@ def main() -> None:
             {"status": "delivered" if args.destination else "recorded", "url": url},
         )
         print(json.dumps({"run": dashboard.run_id, "rows": len(dashboard.rows)}))
+
+
+@contextmanager
+def dashboard_lock(path: Path) -> Iterator[None]:
+    """Hold a local POSIX publisher lease; process death releases it.
+
+    Never unlink a lock file: replacing its inode could admit two writers.
+    """
+    with path.open("a+b") as stream:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError("dashboard still has a live publisher") from error
+        try:
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """Exercise installed release artifacts from a directory outside the checkout."""
 
 from importlib.metadata import version
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -14,28 +15,12 @@ from manabot.eval.admission import register_anchor
 from manabot.eval.evaluate import EvaluationError, validate_registration_source
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.recipes.local import local_smoke
 from manabot.semantic.policy_catalog import bind_policy_catalog
 from manabot.sim import anchors
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 from managym.academy.extensions import bot_extension
-
-
-def _training_regime() -> TrainingRegime:
-    """Check installed learning with bounded native targets, not game duration."""
-    regime = local_smoke(steps=1, device="cpu")
-    regime.id = "release-smoke-v1"
-    regime.agent = regime.agent.model_copy(
-        update={"hidden_dim": 16, "attention_layers": 1, "num_attention_heads": 2}
-    )
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    stage.root = "lethal-target-v1"
-    stage.transitions = 4
-    return TrainingRegime.model_validate(regime.model_dump())
 
 
 def check_heuristic_registration() -> str:
@@ -93,23 +78,35 @@ def main() -> None:
     assert value.grad is not None and value.grad.item() == 2.0
     command = ["uv", "run", "--no-project", "--python", sys.executable, "manabot"]
     subprocess.run([*command, "--help"], check=True)
-    subprocess.run([*command, "train", "--help"], check=True)
     output = Path.cwd() / "release-smoke"
-    regime_path = Path.cwd() / "release-smoke-regime.json"
-    regime_path.write_text(_training_regime().model_dump_json(indent=2))
+    output.mkdir()
+    # The installed package is a library; Etude executes an author's recipe file.
+    recipe = output / "local.py"
+    recipe.write_text(
+        "from manabot.recipes.local import LocalConfig, train as train_local\n\n"
+        "def train(config: LocalConfig) -> None:\n"
+        "    train_local(config)\n"
+    )
     subprocess.run(
         [
-            *command,
+            "uv",
+            "run",
+            "--no-project",
+            "--python",
+            sys.executable,
+            "etude",
             "train",
-            "--regime",
-            str(regime_path),
-            "--out",
-            str(output),
+            str(recipe),
+            "--experiment",
+            "smoke",
         ],
+        env={**os.environ, "ETUDE_HOME": str(output / "etude")},
         check=True,
         timeout=180,
     )
-    policy, _ = load_checkpoint(str(output / "self-play-raw.pt"))
+    policy, _ = load_checkpoint(
+        str(output / "etude/track/smoke/out/policies/00000002-raw.pt")
+    )
     assert not policy.training
     extension = bot_extension()
     assert extension is not None and extension.name == "manabot", (
@@ -117,7 +114,7 @@ def main() -> None:
     )
     assert extension.watch_players == ("greedy", "heuristic")
     checkpoints, missing = extension.discover(
-        [output / "self-play-raw.pt"], runs_dir=output / "no-other-runs"
+        [output / "etude/track/smoke/out/policies/00000002-raw.pt"], runs_dir=output / "no-other-runs"
     )
     assert not missing, missing
     assert len(checkpoints) == 1 and checkpoints[0].compatible, checkpoints

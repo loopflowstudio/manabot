@@ -7,48 +7,26 @@ protocol is experiments/protocols/elemental-183.md; the recipe is MTG-181's
 (experiments/regimes/elemental-long-183-v1.json differs only in its ID).
 
 Windows w1 and w2 ran under the retired RunPod cohort controller (frozen
-commit 8e7df92e4). The seed continues as Etude segments (Jack Heart,
-2026-10-24): each binds its parent's final raw/EMA/Adam exports through
-`manabot.experiment.job.LearnerContinuation` and trains to an absolute update
-target. This module freezes those segments, the export cadence and the
-evaluation design:
-
-- `recipe` — the frozen recipe to an update target and watchdog;
-- `stage_parent` / `segment_job` — a parent's exports as Etude inputs, and the
-  segment that continues them;
-- `stage_monitoring` — the declared raw-only alternative for a parent that was
-  interrupted before its final exports (w3, amendment 2026-10-25): one of its
-  monitoring exports, with EMA := raw and a fresh Adam;
-- `rated_updates` — the checkpoints that are evaluated and rated;
-- `heuristic_games` — the 10×10 heuristic grid (full or declared subset) for one;
-- `h2h_schedule` / `pair_design` — the cross-checkpoint games and pairing graph.
-
-    uv run python -m experiments.elemental_long stage --parent DIR \
-        --storage r2://BUCKET --prefix mtg183/w2 --out continuation.json \
-        [--monitoring-update N]
-    uv run python -m experiments.elemental_long segment \
-        --continuation continuation.json --updates N --hours H --max-usd D \
-        --revision COMMIT --out job.json
+commit 8e7df92e4); later Etude segments continued raw/EMA/Adam exports.
+Staging and launch entry points now refuse with the last runnable revision.
+The frozen recipe, rated checkpoint cadence, heuristic grid and cross-checkpoint
+pairing graph remain readable here; no historical run is translated or resumed.
 """
 
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
-from decimal import Decimal
-import hashlib
 from pathlib import Path
 import random
 from typing import Literal
 
-from etude.launch.records import Job
-from etude.run.storage import Storage, storage_from_uri
-
 from experiments.elemental_grid import DECKS, Game, schedule
-from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
-from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.training.records import TrainingRun
-from manabot.training.regime import ArtifactReference, TrainingRegime, TrainSelfPlay
+from manabot.infra.identity import canonical_sha256
+from manabot.training.regime import (
+    TrainingRegime,
+    TrainSelfPlay,
+    refuse_frozen_execution,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REGIME = ROOT / "experiments/regimes/elemental-long-183-v1.json"
@@ -66,102 +44,15 @@ CADENCE = 50
 # ---------------------------------------------------------------------------
 # Etude segments
 
-# A parent export directory holds the stage's files under these names.
-_PARENT_FILES = {
-    "source_run": "run.json",
-    "raw": f"{STAGE}-raw.pt",
-    "ema": f"{STAGE}-ema.pt",
-    "optimizer": f"{STAGE}-optimizer.pt",
-}
+
+def stage_parent(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
-def stage_parent(
-    parent: Path, storage: Storage, prefix: str, seed: int = SEED
-) -> LearnerContinuation:
-    """Upload a parent's final exports as Etude inputs, checked against its record.
-
-    The raw/EMA/Adam files must be the bytes the parent's run record published;
-    the continuation starts at the record's absolute update. An object already
-    under its key is kept only when its digest matches. `seed` is the seed the
-    parent must carry; other studies pass their own.
-    """
-    run = _parent_run(parent, seed)
-    if run.status not in {"completed", "paused"}:
-        raise ValueError(f"parent did not finish its window: {run.status}")
-    folder = f"{prefix.strip('/')}/"
-    existing = set(storage.keys(folder))
-    staged = {}
-    for role, name in _PARENT_FILES.items():
-        path = parent / name
-        if role != "source_run":
-            _check_published(path, run.stages[0].artifacts.get(role), role)
-        staged[role] = _stage_file(storage, existing, folder + name, path)
-    return LearnerContinuation(
-        from_update=run.updates_through(), source_stage=STAGE, **staged
-    )
-
-
-def stage_monitoring(
-    parent: Path, storage: Storage, prefix: str, update: int
-) -> LearnerContinuation:
-    """Upload an interrupted parent's run record and raw export at `update`.
-
-    `parent` holds the interrupted attempt's `run.json` and the monitoring
-    export its receipt at `update` names (by file name); the bytes must match
-    that receipt. The continuation declares the raw-only discontinuity.
-    """
-    run = _parent_run(parent)
-    if run.status != "interrupted":
-        raise ValueError(
-            f"a finished parent continues from its final exports: {run.status}"
-        )
-    receipts = [c for c in run.monitoring_checkpoints if c.updates == update]
-    if len(receipts) != 1 or receipts[0].artifact is None:
-        raise ValueError(f"parent has no monitoring export at update {update}")
-    published = receipts[0].artifact
-    path = parent / Path(published["path"]).name
-    _check_published(path, published, "monitoring raw")
-    folder = f"{prefix.strip('/')}/"
-    existing = set(storage.keys(folder))
-    return LearnerContinuation(
-        from_update=update,
-        source_stage=STAGE,
-        source_run=_stage_file(
-            storage, existing, folder + "run.json", parent / "run.json"
-        ),
-        raw=_stage_file(storage, existing, folder + path.name, path),
-        from_monitoring=True,
-    )
-
-
-def _parent_run(parent: Path, seed: int = SEED) -> TrainingRun:
-    run = TrainingRun.model_validate_json((parent / "run.json").read_bytes())
-    if run.seed != seed or [s.id for s in run.stages] != [STAGE]:
-        raise ValueError(f"parent is not a seed {seed} self-play window")
-    return run
-
-
-def _check_published(
-    path: Path, published: ArtifactReference | None, role: str
-) -> None:
-    if published is None or (published["sha256"], published["bytes"]) != (
-        file_sha256(path),
-        path.stat().st_size,
-    ):
-        raise ValueError(f"{path.name} differs from the parent's published {role}")
-
-
-def _stage_file(
-    storage: Storage, existing: set[str], key: str, path: Path
-) -> StagedExport:
-    """Upload `path` under `key`; an existing object is kept only if identical."""
-    sha256 = file_sha256(path)
-    if key in existing:
-        if hashlib.sha256(storage.get(key)).hexdigest() != sha256:
-            raise ValueError(f"{key} already holds other bytes")
-    else:
-        storage.put_file(key, path)
-    return StagedExport(key=key, sha256=sha256, bytes=path.stat().st_size)
+def stage_monitoring(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 def recipe(
@@ -187,33 +78,9 @@ def recipe(
     return TrainingRegime.model_validate(regime.model_dump(mode="json"))
 
 
-def segment_job(
-    continuation: LearnerContinuation,
-    updates: int,
-    *,
-    hours: float,
-    finalization_seconds: float = 600,
-    setup_seconds: float = 1800,
-) -> TrainingJob:
-    """The parent's recipe, streams and seed continued to an absolute `updates` target.
-
-    Segments track under `STAGE`, as w3 did, so the evaluation follower finds
-    each one's checkpoints.
-    """
-    first = (continuation.from_update // CADENCE + 1) * CADENCE
-    return TrainingJob(
-        regime=recipe(
-            updates,
-            hours=hours,
-            finalization_seconds=finalization_seconds,
-            setup_seconds=setup_seconds,
-        ),
-        experiment=STAGE,
-        milestones=tuple(range(first, updates, CADENCE)),
-        finalization_seconds=finalization_seconds,
-        validate_numerics=True,
-        continuation=continuation,
-    )
+def segment_job(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 # ---------------------------------------------------------------------------
@@ -331,51 +198,9 @@ def pair_design(rated: tuple[int, ...], endpoint: int | None) -> list[Pair]:
 # CLI
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
-    stage = sub.add_parser("stage", help="upload a parent's exports as Etude inputs")
-    stage.add_argument("--parent", type=Path, required=True)
-    stage.add_argument("--storage", required=True)
-    stage.add_argument("--prefix", required=True)
-    stage.add_argument("--out", type=Path, required=True)
-    stage.add_argument(
-        "--monitoring-update",
-        type=int,
-        help="continue an interrupted parent from its raw export at this update",
-    )
-    segment = sub.add_parser("segment", help="write a continuation's Etude job")
-    segment.add_argument("--continuation", type=Path, required=True)
-    segment.add_argument("--updates", type=int, required=True)
-    segment.add_argument("--hours", type=float, required=True)
-    segment.add_argument("--max-usd", type=Decimal, required=True)
-    segment.add_argument("--revision", required=True)
-    segment.add_argument("--out", type=Path, required=True)
-    args = parser.parse_args()
-    if args.command == "stage":
-        storage = storage_from_uri(args.storage)
-        continuation = (
-            stage_parent(args.parent, storage, args.prefix)
-            if args.monitoring_update is None
-            else stage_monitoring(
-                args.parent, storage, args.prefix, args.monitoring_update
-            )
-        )
-        args.out.write_text(continuation.model_dump_json(indent=2) + "\n")
-        print(f"continues from update {continuation.from_update}")
-        return
-    spec = segment_job(
-        LearnerContinuation.model_validate_json(args.continuation.read_bytes()),
-        args.updates,
-        hours=args.hours,
-    )
-    job: Job = spec.job(
-        repo=ROOT,
-        revision=args.revision,
-        max_hours=args.hours,
-        max_usd=args.max_usd,
-    )
-    args.out.write_text(job.model_dump_json(indent=2) + "\n")
+def main(*args: object, **kwargs: object) -> None:
+    """Retired frozen execution entry point; retained data and evaluation still read."""
+    refuse_frozen_execution()
 
 
 if __name__ == "__main__":

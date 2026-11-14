@@ -20,22 +20,30 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import authored_matchup_sha256, runtime_fingerprints
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.inference import PolicyInference
-from manabot.model.world import checkpoint_world, validate_agent_setup
+from manabot.model.world import (
+    checkpoint_world,
+    validate_agent_decks,
+    validate_agent_setup,
+)
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.execution import _runtime_identities, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.training.state.admission import _admit_setups
+from manabot.training.rollout import collection
+from manabot.training.rollout.collection import (
+    Collector,
+    close_collector,
+    collect,
+    open_collector,
+)
 from manabot.training.state.game_errors import (
     GameAttempt,
-    GameErrorLedger,
     GameErrorPolicy,
+    append_attempt,
+    open_ledger,
     replay_attempt,
 )
-from manabot.training.state.recovery import admit_recovery_identities
+from manabot.training.validation import validate_regime
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 
@@ -66,10 +74,8 @@ def _agent() -> ActorCritic:
     )
 
 
-def _collector(
-    decks: UniformDecks, recovery: Literal["exact", "current"] = "current"
-) -> SeatRoutedCollector:
-    return SeatRoutedCollector(
+def _collector(decks: UniformDecks) -> Collector:
+    return open_collector(
         ObservationSpace(),
         Match(decks.match_config()),
         Reward(RewardConfig()),
@@ -78,8 +84,6 @@ def _collector(
         opponent_mode="self",
         games_per_stream=2,
         deck_source=decks,
-        recovery_max_microsteps=1000 if recovery == "exact" else None,
-        recovery_max_game_microsteps=1000 if recovery == "current" else None,
     )
 
 
@@ -180,19 +184,16 @@ def test_regime_records_its_source_and_rejects_bad_decks_before_training(
 
 
 @pytest.mark.parametrize("sampling", ["uniform-distinct-v1", "uniform-independent-v1"])
-@pytest.mark.parametrize("recovery", ["exact", "current"])
-def test_collector_resets_recovers_seats_seeds_and_exposure(
+def test_collector_resets_seats_seeds_and_exposure(
     decks: UniformDecks,
-    recovery: Literal["exact", "current"],
     sampling: Literal["uniform-distinct-v1", "uniform-independent-v1"],
 ) -> None:
     decks = decks.model_copy(update={"sampling": sampling})
     agent = _agent()
-    first = _collector(decks, recovery)
-    restored = _collector(decks, recovery)
+    first = _collector(decks)
     try:
         initial = first._env.current_game_seeds()
-        batch = first.collect(agent, 1)
+        batch = collect(first, agent, 1)
         assert first.stats.games == 4
         assert first._env.current_game_seeds() != initial
         exposure = first.stats.exposure
@@ -206,24 +207,8 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
         assert (
             any(mirrors) if sampling == "uniform-independent-v1" else not any(mirrors)
         )
-        restored.restore(first.snapshot(), lambda: None)
-        left, right = first.collect(agent, 1), restored.collect(agent, 1)
-        expected, actual = left.ordered_obs(), right.ordered_obs()
-        for key in expected:
-            np.testing.assert_array_equal(expected[key], actual[key])
-        np.testing.assert_array_equal(left.actions, right.actions)
-        assert first._self_play_decks == restored._self_play_decks
-        assert first._env.current_game_seeds() == restored._env.current_game_seeds()
-        assert first.stats.exposure == restored.stats.exposure
-        snapshot = first.snapshot()
-        changed = _uniform("Plains", "Mountain", "Island", "Forest")
-        fresh = _collector(changed, recovery)
-        with pytest.raises(ValueError, match="deck source identity mismatch"):
-            fresh.restore(snapshot, lambda: None)
-        fresh.close()
     finally:
-        first.close()
-        restored.close()
+        close_collector(first)
 
 
 @pytest.mark.parametrize("workers", [2, 4])
@@ -232,7 +217,7 @@ def test_sampled_decks_agree_across_producer_counts(
 ) -> None:
     agent = _agent()
     collectors = [
-        SeatRoutedCollector(
+        open_collector(
             ObservationSpace(),
             Match(decks.match_config()),
             Reward(RewardConfig()),
@@ -247,7 +232,7 @@ def test_sampled_decks_agree_across_producer_counts(
     ]
     one, many = collectors
     try:
-        left, right = one.collect(agent, 1), many.collect(agent, 1)
+        left, right = collect(one, agent, 1), collect(many, agent, 1)
         expected, actual = left.ordered_obs(), right.ordered_obs()
         for key in expected:
             np.testing.assert_array_equal(expected[key], actual[key])
@@ -275,8 +260,8 @@ def test_sampled_decks_agree_across_producer_counts(
             for pair in many._env.current_player_configs()
         ] == [[player.decklist for player in pair] for pair in before]
     finally:
-        one.close()
-        many.close()
+        close_collector(one)
+        close_collector(many)
 
 
 def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
@@ -329,10 +314,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
             load_checkpoint(str(path))
 
     # Producer admission for a deck run checks the world, not one pair.
-    regime = _regime(decks)
-    _admit_setups(policy, regime)
-    with pytest.raises(ValueError, match="bound to a world"):
-        _admit_setups(_agent(), regime)
+    validate_agent_decks(policy, decks.players())
     # A setup-bound checkpoint plays only its roster, under the shared rule.
     authored = deepcopy(policy)
     authored.world_binding = checkpoint_world(
@@ -343,17 +325,17 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         ObservationSpace(),
     )
     with pytest.raises(ValueError, match="outside checkpoint's exact setup roster"):
-        _admit_setups(authored, regime)
+        validate_agent_decks(authored, decks.players())
 
     # The same model collects from a later supply it never trained on.
     later = _uniform("Swamp", "Forest")
     collector = _collector(later)
     try:
-        collector.collect(policy, 1)
+        collect(collector, policy, 1)
         played = {deck for pair in collector._self_play_decks for deck in pair}
         assert played <= {deck.identity for deck in later.decks}
     finally:
-        collector.close()
+        close_collector(collector)
 
 
 def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
@@ -385,15 +367,15 @@ def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
                 player.name for player in replacement
             }
     finally:
-        collector.close()
+        close_collector(collector)
 
 
 def test_failure_records_actual_sampled_decks(
     decks: UniformDecks, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     policy = GameErrorPolicy()
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
-    collector = SeatRoutedCollector(
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
+    collector = open_collector(
         ObservationSpace(),
         Match(decks.match_config()),
         Reward(RewardConfig()),
@@ -403,27 +385,28 @@ def test_failure_records_actual_sampled_decks(
         games_per_stream=1,
         deck_source=decks,
         game_errors=policy,
-        record_attempt=lambda row: ledger.record(row, {}),
+        record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
     )
-    original = collector._sample_learning_rows
+    original = collection._sample_learning_rows
     calls = 0
 
     def sample(
+        collector: Collector,
         agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
         inference: PolicyInference,
     ) -> np.ndarray:
         nonlocal calls
-        actions = original(agent, rows, acting, inference)
+        actions = original(collector, agent, rows, acting, inference)
         calls += 1
         if calls == 2:
             actions[0] = -1
         return actions
 
-    monkeypatch.setattr(collector, "_sample_learning_rows", sample)
+    monkeypatch.setattr(collection, "_sample_learning_rows", sample)
     try:
-        collector.collect(_agent(), 1)
+        collect(collector, _agent(), 1)
         attempts = [
             GameAttempt.model_validate(json.loads(line)["attempt"])
             for line in ledger.path.read_text().splitlines()
@@ -448,45 +431,7 @@ def test_failure_records_actual_sampled_decks(
                 player.name for player in players
             ]
     finally:
-        collector.close()
-
-
-def test_deck_run_identities_name_the_source_not_a_pair(
-    decks: UniformDecks,
-) -> None:
-    space = ObservationSpace()
-    regime = _regime(decks)
-    identities = _runtime_identities(7, regime, space)
-    assert "matchup" not in identities and "matchup_sha256" not in identities
-    assert identities["deck_source_sha256"] == decks.digest
-    assert "content_pool" not in identities
-    opened = runtime_fingerprints(
-        7, match_config=regime.root_match, observation_space=space
-    )
-    for name in ("content_manifest_sha256", "observation_abi_sha256"):
-        assert identities[name] == opened[name]
-    with pytest.raises(ValueError, match="monitoring requires an authored matchup"):
-        authored_matchup_sha256(identities, "monitoring")
-
-    changed = _regime(_uniform("Plains", "Swamp"))
-    with pytest.raises(ValueError, match="recovery runtime/source identity mismatch"):
-        admit_recovery_identities(
-            identities, _runtime_identities(7, changed, space), None
-        )
-
-    authored = TrainingRegime.model_validate(
-        {
-            **regime.model_dump(mode="json", exclude={"deck_source"}),
-            "match": decks.match_config().model_dump(),
-        }
-    )
-    recorded = _runtime_identities(7, authored, space)
-    fingerprints = runtime_fingerprints(
-        7, match_config=authored.match, observation_space=space
-    )
-    assert {k: recorded[k] for k in fingerprints} == fingerprints
-    assert "deck_source_sha256" not in recorded
-    assert authored_matchup_sha256(recorded, "monitoring") == recorded["matchup_sha256"]
+        close_collector(collector)
 
 
 def test_independent_population_retains_event_ids_and_mirrors() -> None:
@@ -500,7 +445,7 @@ def test_independent_population_retains_event_ids_and_mirrors() -> None:
     source.check()
     collector = _collector(source)
     try:
-        batch = collector.collect(_agent(), 1)
+        batch = collect(collector, _agent(), 1)
         assert batch is not None and collector.stats.games == 4
         for pair in collector._env.current_player_configs():
             assert all(player.name in source.entry_ids for player in pair)
@@ -509,7 +454,7 @@ def test_independent_population_retains_event_ids_and_mirrors() -> None:
         assert identity["sampling_policy"] == "uniform-independent-v1"
         assert identity["deck_ids"] == ["event-a", "event-b"]
     finally:
-        collector.close()
+        close_collector(collector)
     with pytest.raises(ValueError, match="entry IDs"):
         UniformDecks(
             decks=(deck,), sampling="uniform-independent-v1", entry_ids=("same", "same")

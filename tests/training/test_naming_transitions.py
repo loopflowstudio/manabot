@@ -19,8 +19,12 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.training.regime import Learning
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.learning import Learning
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    collect,
+    open_collector,
+)
 from manabot.training.updates.ppo import update_iteration
 
 SOZIN = {"Swamp": 17, "The Rise of Sozin": 23}
@@ -41,7 +45,7 @@ def _naming_rows(batch: RolloutBatch) -> tuple[np.ndarray, np.ndarray]:
 def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     torch.manual_seed(243)
     space = ObservationSpace(ObservationConfig(policy_input_version=9))
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(
             MatchConfig(
@@ -57,7 +61,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, attention_on=False))
     batch = None
     for _ in range(20):
-        batch = collector.collect(agent, num_steps=64)
+        batch = collect(collector, agent, num_steps=64)
         groups, names = _naming_rows(batch)
         if len(groups) and len(names):
             break

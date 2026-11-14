@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from html import escape
 import math
 
-from manabot.experiment.execution import ExperimentRun
+from manabot.experiment.records import ExperimentRun
 from manabot.reports.records import ReportRun
 from manabot.training.records import PhaseTiming
 

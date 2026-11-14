@@ -8,7 +8,7 @@ from typing import Literal
 
 from etude.eval.match import Tables
 from etude.eval.records import Match
-from etude.run.records import ArtifactRef
+from etude.records import ArtifactRef
 from etude.train.records import CheckpointRecord
 import pytest
 

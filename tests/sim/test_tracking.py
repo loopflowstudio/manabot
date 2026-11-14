@@ -3,10 +3,10 @@
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-from etude.run.storage import DirectoryStorage
+from etude.checkpoints import CheckpointRecord
+from etude.storage import DirectoryStorage
 from etude.train.read import read, read_all
-from etude.train.records import CheckpointRecord, Step
-from etude.train.run import track
+from etude.train.tracking import track
 import pytest
 import torch
 
@@ -33,12 +33,15 @@ def test_simulation_admits_exact_etude_checkpoint(
     with track(
         experiment="fixture",
         run="producer",
-        clocks=[Step("updates", "updates")],
+        clocks=["updates"],
         directory=directory,
         strict=True,
     ) as producer:
         reference = producer.checkpoint(policy, updates=1)
-    record = next((directory / "producer/checkpoints").glob("*.json"))
+    record = tmp_path / "checkpoint.json"
+    record.write_text(
+        read(directory, "fixture", "producer").checkpoints[0].model_dump_json()
+    )
     retained = Path(unquote(urlsplit(reference.uri).path))
     if remote:
         storage = DirectoryStorage(tmp_path / "bucket")
@@ -65,9 +68,8 @@ def test_simulation_admits_exact_etude_checkpoint(
 def test_simulation_records_game_results_in_etude(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    stats = sim.GameStats()
-    stats.record_game(sim.GameOutcome.HERO_WIN, steps=3, duration=0.25)
-    monkeypatch.setattr(sim, "simulate_models", lambda *args: stats)
+    games = [sim.GameRecord(sim.GameOutcome.HERO_WIN, steps=3, duration=0.25)]
+    monkeypatch.setattr(sim, "simulate_models", lambda *args: games)
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "launched"))
     monkeypatch.setenv("ETUDE_RUN", "launched-evaluation")
     sim.run_simulation(
@@ -81,7 +83,7 @@ def test_simulation_records_game_results_in_etude(
     assert not (tmp_path / "simulation/etude").exists()
     assert list(runs[0].points("game/steps", "games").y) == [3]
     assert list(runs[0].points("evaluation/hero_win_rate", "games").y) == [1]
-    assert runs[0].state is not None and runs[0].state.state == "finished"
+    assert runs[0].outcome is not None and runs[0].outcome.state == "finished"
 
 
 def test_dashboard_delivery_failure_retries_without_duplicate_rows(

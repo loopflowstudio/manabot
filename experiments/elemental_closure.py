@@ -1,5 +1,9 @@
 """One-seat exact quota versus one-seat complete games on the ten-deck Elemental recipe (Task 07c490).
 
+The launch commands below record historical execution and refuse at this
+revision; the frozen executor is at
+`f4e1822faf46bbc9cdc43909293f8cbc8de4a300` (`FROZEN_EXECUTION_REVISION`).
+
 MTG-251 asked this on Allies/Lessons (`experiments/batch_closure.py`). Jack Heart
 placed the current recipe at the ten-deck Elemental setup, so this repeats it there,
 with the model scored on random deck pairs against the heuristic. Protocol:
@@ -13,8 +17,8 @@ experiments/protocols/closure-lambda-elemental-v1.md. Recipe:
 """
 
 from etude.experiment import ExperimentState
-from etude.launch.records import Job, Run
 from etude.report import Report
+from etude.spec import Job, RunRequest
 
 from experiments.elemental_variants import closure_comparison
 from experiments.learning_signal import (
@@ -23,7 +27,7 @@ from experiments.learning_signal import (
     learning_report,
     training_runs,
 )
-from manabot.training.regime import BatchClosure
+from manabot.training.learning import BatchClosure
 
 EXPERIMENT = "elemental_closure"
 SEEDS = "70101,70102,70103"
@@ -42,7 +46,7 @@ def runs(
     usd_per_run: float = USD_PER_RUN,
     seeds: str = SEEDS,
     arms: str = ",".join(ARMS),
-) -> list[Run]:
+) -> list[RunRequest]:
     """`arms` and `seeds` are comma-separated, so one arm launches all-or-nothing."""
     chosen = tuple(arm for arm in ARMS if arm in arms.split(","))
     return training_runs(

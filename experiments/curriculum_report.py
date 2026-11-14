@@ -17,7 +17,7 @@ from typing import Literal
 
 from etude.eval.query import statsdb
 from etude.eval.records import Code, Environment, Model
-from etude.run.storage import Storage
+from etude.storage import Storage
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 

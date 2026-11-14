@@ -23,9 +23,14 @@ from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.recipes.baseline import baseline_test
-from manabot.training.regime import DampedPolicyLearning
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.recipes.baseline import BaselineConfig, settings
+from manabot.training.learning import DampedPolicyLearning
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    close_collector,
+    collect,
+    open_collector,
+)
 from manabot.training.updates.damped_policy import _targets, update_damped_iteration
 
 STREAMS = 2
@@ -87,15 +92,15 @@ def main() -> None:
     args = _arguments()
     torch.manual_seed(args.seed)
     torch.set_num_threads(1)
-    regime = baseline_test(steps=2).regime
+    regime = settings(BaselineConfig(updates=2, device="cpu"))
     space = ObservationSpace(regime.observation)
-    agent = ActorCritic(space, regime.agent)
+    agent = ActorCritic(space, regime.model)
     learning = DampedPolicyLearning(
         gradient="damped_policy",
         policy_lambda=args.policy_lambda,
         value_lambda=args.value_lambda,
     )
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(regime.match),
         Reward(RewardConfig()),
@@ -106,11 +111,11 @@ def main() -> None:
     learner = Learner(agent, "cpu", minibatch_rows=STREAMS)
     try:
         for iteration in range(1, args.updates + 1):
-            batch = collector.collect(agent, 64)
+            batch = collect(collector, agent, 64)
             update_damped_iteration(torch_backend, learner, batch, learning, iteration)
-        _report(collector.collect(agent, 64), learner, learning, args.rows)
+        _report(collect(collector, agent, 64), learner, learning, args.rows)
     finally:
-        collector.close()
+        close_collector(collector)
 
 
 if __name__ == "__main__":

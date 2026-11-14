@@ -1,25 +1,30 @@
 """Scalar game simulation and evaluation statistics recorded through Etude.
 
 load_player admits local policies or exact Etude checkpoint records; simulate_models
-admits each model against the actual match setup before play. run_simulation
-owns the evaluation tracking lifetime; game statistics never fit a model.
+admits each model against the actual match setup before play and returns one
+`GameRecord` per game, which `simulation_summary` and `detailed_analysis` read.
+run_simulation owns the evaluation tracking lifetime; game statistics never fit
+a model.
 """
 
 import argparse
 from collections import Counter, defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from enum import Enum
 import logging
 import os
 from pathlib import Path
 import threading
 import time
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any
 
 from etude.train.records import Step
-from etude.train.run import track
+from etude.train.tracking import track
 import numpy as np
 
 from manabot.backends.torch.checkpoint import load_checkpoint, load_etude_checkpoint
+from manabot.backends.torch.random import seed_random
 
 # Local imports
 from manabot.env.env import Env
@@ -27,7 +32,6 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
-from manabot.infra.runtime import seed_random
 from manabot.model.world import validate_agent_setup
 from manabot.sim.player import (
     DefaultPlayer,
@@ -49,321 +53,180 @@ class GameOutcome(Enum):
     TIMEOUT = "timeout"
 
 
-class GameStats:
-    """Game statistics tracking with enhanced analysis capabilities."""
+@dataclass(frozen=True)
+class GameRecord:
+    """One completed game with the environment's last profiler and behavior info.
 
-    def __init__(self):
-        self.games = []
-        self.hero_wins = 0
-        self.villain_wins = 0
-        self.timeouts = 0
-        self.total_steps = 0
-        self.total_duration = 0
-        self.lock = threading.Lock()
+    `profiler` maps a timer to its `"total=<s>s, count=<n>"` text; `behavior`
+    maps `"hero"`/`"villain"` to that seat's metrics.
+    """
 
-        # Enhanced tracking
-        self.steps_to_win = []  # Track steps taken in winning games
-        self.phase_distributions = defaultdict(int)  # Track game phases
-        self.game_records = []  # Detailed game records
+    outcome: GameOutcome
+    steps: int
+    duration: float
+    thread_id: int | None = None
+    profiler: Mapping[str, str] = field(default_factory=dict)
+    behavior: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
-        # Profiler and behavior tracking
-        self.profiler_data = defaultdict(list)  # Store profiler data from each thread
-        self.hero_behavior = defaultdict(list)  # Store hero behavior metrics
-        self.villain_behavior = defaultdict(list)  # Store villain behavior metrics
 
-    def record_game(
-        self,
-        outcome: GameOutcome,
-        steps: int,
-        duration: float,
-        metadata: Optional[Dict[str, Any]] = None,
-        profiler_info: Optional[Dict[str, Any]] = None,
-        behavior_info: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> None:
-        """
-        Record a completed game with optional metadata, profiler and behavior data.
+def simulation_summary(games: Sequence[GameRecord]) -> dict[str, Any]:
+    """Win, timeout and length rates over every recorded game."""
+    total_games = len(games)
+    if total_games == 0:
+        return {"total_games": 0}
+    hero_wins = sum(g.outcome == GameOutcome.HERO_WIN for g in games)
+    villain_wins = sum(g.outcome == GameOutcome.VILLAIN_WIN for g in games)
+    steps_to_win = [g.steps for g in games if g.outcome == GameOutcome.HERO_WIN]
+    return {
+        "total_games": total_games,
+        "hero_wins": hero_wins,
+        "villain_wins": villain_wins,
+        "timeouts": total_games - hero_wins - villain_wins,
+        "hero_win_rate": hero_wins / total_games,
+        "villain_win_rate": villain_wins / total_games,
+        "avg_steps": sum(g.steps for g in games) / total_games,
+        "avg_duration": sum(g.duration for g in games) / total_games,
+        "avg_steps_to_win": np.mean(steps_to_win) if steps_to_win else 0,
+    }
 
-        Args:
-            outcome: Game outcome (hero win, villain win, timeout)
-            steps: Number of steps in the game
-            duration: Time taken for the game in seconds
-            metadata: Optional additional game data for analysis
-            profiler_info: Profiler metrics from the environment
-            behavior_info: Behavior tracking metrics for hero and villain
-        """
-        game_record = {"outcome": outcome, "steps": steps, "duration": duration}
 
-        if metadata:
-            game_record.update(metadata)
+def detailed_analysis(games: Sequence[GameRecord]) -> dict[str, Any]:
+    """Game-length distributions, win rate by length, profiler and behavior."""
+    if not games:
+        return {}
+    turn_counts = [g.steps for g in games]
+    hero_win_steps = [g.steps for g in games if g.outcome == GameOutcome.HERO_WIN]
+    villain_win_steps = [g.steps for g in games if g.outcome == GameOutcome.VILLAIN_WIN]
+    analysis: dict[str, Any] = {
+        "turn_distribution": {
+            "min": min(turn_counts),
+            "max": max(turn_counts),
+            "p25": np.percentile(turn_counts, 25),
+            "p50": np.percentile(turn_counts, 50),
+            "p75": np.percentile(turn_counts, 75),
+        },
+        "hero_win_turn_distribution": _percentiles(hero_win_steps),
+        "villain_win_turn_distribution": _percentiles(villain_win_steps),
+        "early_game_win_rate": _win_rate_by_turn_range(games, 0, 10),
+        "mid_game_win_rate": _win_rate_by_turn_range(games, 11, 25),
+        "late_game_win_rate": _win_rate_by_turn_range(games, 26, float("inf")),
+    }
+    if _profiler_entries(games):
+        analysis["profiler"] = profiler_summary(games)
+    if _behavior_values(games, "hero") or _behavior_values(games, "villain"):
+        analysis["behavior"] = behavior_summary(games)
+    return analysis
 
-        with self.lock:
-            self.games.append(game_record)
-            self.game_records.append(game_record)
 
-            if outcome == GameOutcome.HERO_WIN:
-                self.hero_wins += 1
-                self.steps_to_win.append(steps)
-            elif outcome == GameOutcome.VILLAIN_WIN:
-                self.villain_wins += 1
-            else:
-                self.timeouts += 1
+def _percentiles(values: list[int]) -> dict[str, Any]:
+    if not values:
+        return {"count": 0}
+    fvalues = [float(v) for v in values]
+    return {
+        "count": len(fvalues),
+        "min": min(fvalues),
+        "max": max(fvalues),
+        "p25": np.percentile(fvalues, 25),
+        "p50": np.percentile(fvalues, 50),
+        "p75": np.percentile(fvalues, 75),
+    }
 
-            self.total_steps += steps
-            self.total_duration += duration
 
-            # Record profiler and behavior data if available
-            if profiler_info:
-                self._record_profiler_data(profiler_info)
+def _win_rate_by_turn_range(
+    games: Sequence[GameRecord], min_turn: float, max_turn: float
+) -> float:
+    """Hero win rate among games that ended within an inclusive step range."""
+    in_range = [g for g in games if min_turn <= g.steps <= max_turn]
+    if not in_range:
+        return 0.0
+    return sum(g.outcome == GameOutcome.HERO_WIN for g in in_range) / len(in_range)
 
-            if behavior_info:
-                if "hero" in behavior_info:
-                    self._record_behavior_data(
-                        behavior_info["hero"], self.hero_behavior
-                    )
-                if "villain" in behavior_info:
-                    self._record_behavior_data(
-                        behavior_info["villain"], self.villain_behavior
-                    )
 
-    def _record_profiler_data(self, profiler_info: Dict[str, str]) -> None:
-        """
-        Record profiler data from the environment.
-
-        Args:
-            profiler_info: Dictionary of profiler metrics
-        """
-        for key, value in profiler_info.items():
-            # Extract total time and count from the string format
+def _profiler_entries(
+    games: Sequence[GameRecord],
+) -> dict[str, list[tuple[float, int]]]:
+    """Each timer's parsed (total seconds, count) per game; unparsable text is skipped."""
+    entries: dict[str, list[tuple[float, int]]] = defaultdict(list)
+    for game in games:
+        for key, value in game.profiler.items():
             if "total=" in value and "count=" in value:
                 parts = value.split(", ")
                 total_part = parts[0].replace("total=", "").replace("s", "")
                 count_part = parts[1].replace("count=", "")
-
                 try:
-                    total = float(total_part)
-                    count = int(count_part)
-
-                    # Store both total and count for proper averaging later
-                    self.profiler_data[key].append({"total": total, "count": count})
+                    entry = (float(total_part), int(count_part))
                 except (ValueError, TypeError):
-                    # Skip if parsing fails
                     continue
+                entries[key].append(entry)
+    return entries
 
-    def _record_behavior_data(
-        self, behavior_info: Dict[str, str], target_dict: Dict[str, list]
-    ) -> None:
-        """
-        Record behavior tracking data.
 
-        Args:
-            behavior_info: Dictionary of behavior metrics
-            target_dict: Target dictionary to store the data
-        """
-        for key, value in behavior_info.items():
+def _behavior_values(
+    games: Sequence[GameRecord], seat: str
+) -> dict[str, list[float | Any]]:
+    """Each metric's per-game values for one seat, as floats where convertible."""
+    values: dict[str, list[float | Any]] = defaultdict(list)
+    for game in games:
+        for key, value in game.behavior.get(seat, {}).items():
             try:
-                # Try to convert to float for numerical metrics
-                val = float(value)
-                target_dict[key].append(val)
+                values[key].append(float(value))
             except (ValueError, TypeError):
-                # Keep as string if not convertible
-                target_dict[key].append(value)
+                values[key].append(value)
+    return values
 
-    def get_summary(self) -> Dict[str, Any]:
-        """Get summary statistics."""
-        total_games = len(self.games)
-        if total_games == 0:
-            return {"total_games": 0}
 
-        return {
-            "total_games": total_games,
-            "hero_wins": self.hero_wins,
-            "villain_wins": self.villain_wins,
-            "timeouts": self.timeouts,
-            "hero_win_rate": self.hero_wins / total_games,
-            "villain_win_rate": self.villain_wins / total_games,
-            "avg_steps": self.total_steps / total_games,
-            "avg_duration": self.total_duration / total_games,
-            "avg_steps_to_win": np.mean(self.steps_to_win) if self.steps_to_win else 0,
+def profiler_summary(games: Sequence[GameRecord]) -> dict[str, dict[str, float]]:
+    """Per-game average total time and call count of each profiled timer."""
+    summary: dict[str, dict[str, float]] = {}
+    for key, entries in _profiler_entries(games).items():
+        total_sum = sum(total for total, _ in entries)
+        count_sum = sum(count for _, count in entries)
+        summary[key] = {
+            "avg_total_time": total_sum / len(entries),
+            "avg_call_count": count_sum / len(entries),
+            "avg_time_per_call": total_sum / count_sum if count_sum > 0 else 0,
         }
+    return summary
 
-    def get_detailed_analysis(self) -> Dict[str, Any]:
-        """Get detailed analysis of game patterns."""
-        if not self.games:
-            return {}
 
-        # Analyze turn distribution
-        turn_counts = [g["steps"] for g in self.games]
-        hero_win_steps = [
-            g["steps"] for g in self.games if g["outcome"] == GameOutcome.HERO_WIN
-        ]
-        villain_win_steps = [
-            g["steps"] for g in self.games if g["outcome"] == GameOutcome.VILLAIN_WIN
-        ]
-
-        analysis = {
-            "turn_distribution": {
-                "min": min(turn_counts),
-                "max": max(turn_counts),
-                "p25": np.percentile(turn_counts, 25),
-                "p50": np.percentile(turn_counts, 50),
-                "p75": np.percentile(turn_counts, 75),
-            },
-            "hero_win_turn_distribution": self._get_percentiles(hero_win_steps),
-            "villain_win_turn_distribution": self._get_percentiles(villain_win_steps),
-            "early_game_win_rate": self._calculate_win_rate_by_turn_range(0, 10),
-            "mid_game_win_rate": self._calculate_win_rate_by_turn_range(11, 25),
-            "late_game_win_rate": self._calculate_win_rate_by_turn_range(
-                26, float("inf")
-            ),
-        }
-
-        # Add profiler and behavior data
-        if self.profiler_data:
-            analysis["profiler"] = self.get_profiler_summary()
-
-        if self.hero_behavior or self.villain_behavior:
-            analysis["behavior"] = self.get_behavior_summary()
-
-        return analysis
-
-    def _get_percentiles(self, values: List[int]) -> Dict[str, Any]:
-        """Calculate percentiles for a list of values."""
-        if not values:
-            return {"count": 0}
-
-        fvalues = [float(v) for v in values]
-
-        return {
-            "count": len(fvalues),
-            "min": min(fvalues),
-            "max": max(fvalues),
-            "p25": np.percentile(fvalues, 25),
-            "p50": np.percentile(fvalues, 50),
-            "p75": np.percentile(fvalues, 75),
-        }
-
-    def _calculate_win_rate_by_turn_range(self, min_turn: int, max_turn: int) -> float:
-        """Calculate win rate for games that ended within a turn range."""
-        games_in_range = [g for g in self.games if min_turn <= g["steps"] <= max_turn]
-
-        if not games_in_range:
-            return 0.0
-
-        hero_wins = sum(
-            1 for g in games_in_range if g["outcome"] == GameOutcome.HERO_WIN
-        )
-        return hero_wins / len(games_in_range)
-
-    def get_profiler_summary(self) -> Dict[str, Any]:
-        """
-        Get summary of profiler data.
-
-        Returns:
-            Dictionary with averaged profiler metrics
-        """
-        summary = {}
-
-        for key, entries in self.profiler_data.items():
-            if not entries:
-                continue
-
-            # Calculate summed totals and counts
-            total_sum = sum(entry["total"] for entry in entries)
-            count_sum = sum(entry["count"] for entry in entries)
-
-            # Calculate averages
-            avg_time = total_sum / len(entries)
-            avg_count = count_sum / len(entries)
-
-            summary[key] = {
-                "avg_total_time": avg_time,
-                "avg_call_count": avg_count,
-                "avg_time_per_call": total_sum / count_sum if count_sum > 0 else 0,
-            }
-
-        return summary
-
-    def get_behavior_summary(self) -> Dict[str, Dict[str, float]]:
-        """
-        Get summary of behavior data.
-
-        Returns:
-            Dictionary with averaged behavior metrics for hero and villain
-        """
-        hero_summary = {}
-        villain_summary = {}
-
-        # Process hero behavior
-        for key, values in self.hero_behavior.items():
-            if not values:
-                continue
-
-            # Calculate average
+def behavior_summary(games: Sequence[GameRecord]) -> dict[str, dict[str, Any]]:
+    """Each seat's mean numeric metric, or most common value for other metrics."""
+    summary: dict[str, dict[str, Any]] = {}
+    for seat in ("hero", "villain"):
+        seat_summary: dict[str, Any] = {}
+        for key, values in _behavior_values(games, seat).items():
             if all(isinstance(v, (int, float)) for v in values):
-                hero_summary[key] = sum(values) / len(values)
+                seat_summary[key] = sum(values) / len(values)
             else:
-                # For non-numeric values, just take the most common
-                hero_summary[key] = Counter(values).most_common(1)[0][0]
+                seat_summary[key] = Counter(values).most_common(1)[0][0]
+        summary[seat] = seat_summary
+    return summary
 
-        # Process villain behavior
-        for key, values in self.villain_behavior.items():
-            if not values:
-                continue
 
-            # Calculate average
-            if all(isinstance(v, (int, float)) for v in values):
-                villain_summary[key] = sum(values) / len(values)
-            else:
-                # For non-numeric values, just take the most common
-                villain_summary[key] = Counter(values).most_common(1)[0][0]
-
-        return {"hero": hero_summary, "villain": villain_summary}
-
-    def log_profiler_and_behavior_summary(self, logger) -> None:
-        """
-        Log profiler and behavior summary statistics.
-
-        Args:
-            logger: Logger to use for output
-        """
-        # Log profiler summary
-        profiler_summary = self.get_profiler_summary()
-        if profiler_summary:
-            logger.info("Profiler Summary (Top 10 by total time):")
-
-            # Sort by average total time
-            sorted_metrics = sorted(
-                profiler_summary.items(),
-                key=lambda x: x[1]["avg_total_time"],
-                reverse=True,
-            )[:10]
-
-            for key, stats in sorted_metrics:
-                logger.info(f"  {key}:")
-                logger.info(f"    Avg total time: {stats['avg_total_time']:.6f}s")
-                logger.info(f"    Avg call count: {stats['avg_call_count']:.1f}")
-                logger.info(f"    Avg time per call: {stats['avg_time_per_call']:.8f}s")
-
-        # Log behavior summary
-        behavior_summary = self.get_behavior_summary()
-        if behavior_summary:
-            # Hero behavior
-            if behavior_summary["hero"]:
-                logger.info("Hero Behavior Metrics:")
-                for key, value in sorted(behavior_summary["hero"].items()):
-                    if isinstance(value, float):
-                        logger.info(f"  {key}: {value:.2f}")
-                    else:
-                        logger.info(f"  {key}: {value}")
-
-            # Villain behavior
-            if behavior_summary["villain"]:
-                logger.info("Villain Behavior Metrics:")
-                for key, value in sorted(behavior_summary["villain"].items()):
-                    if isinstance(value, float):
-                        logger.info(f"  {key}: {value:.2f}")
-                    else:
-                        logger.info(f"  {key}: {value}")
+def _log_profiler_and_behavior(
+    games: Sequence[GameRecord], logger: logging.Logger
+) -> None:
+    profiled = profiler_summary(games)
+    if profiled:
+        logger.info("Profiler Summary (Top 10 by total time):")
+        top = sorted(
+            profiled.items(), key=lambda x: x[1]["avg_total_time"], reverse=True
+        )[:10]
+        for key, stats in top:
+            logger.info(f"  {key}:")
+            logger.info(f"    Avg total time: {stats['avg_total_time']:.6f}s")
+            logger.info(f"    Avg call count: {stats['avg_call_count']:.1f}")
+            logger.info(f"    Avg time per call: {stats['avg_time_per_call']:.8f}s")
+    behaviors = behavior_summary(games)
+    for seat, title in (("hero", "Hero"), ("villain", "Villain")):
+        metrics = behaviors[seat]
+        if metrics:
+            logger.info(f"{title} Behavior Metrics:")
+            for key, value in sorted(metrics.items()):
+                if isinstance(value, float):
+                    logger.info(f"  {key}: {value:.2f}")
+                else:
+                    logger.info(f"  {key}: {value}")
 
 
 # -----------------------------------------------------------------------------
@@ -414,9 +277,12 @@ def determine_outcome(
 def simulate_models(
     hero_player: Player,
     villain_player: Player,
-    sim_config: Optional[SimulationConfig] = None,
-) -> GameStats:
-    """Run games in parallel threads after admitting each model to the match setup."""
+    sim_config: SimulationConfig | None = None,
+) -> list[GameRecord]:
+    """Run games in parallel threads after admitting each model to the match setup.
+
+    Games are returned in completion order.
+    """
     logger = getLogger("manabot.sim.sim").getChild("simulate_parallel")
 
     # Set up hyperparameters
@@ -434,8 +300,8 @@ def simulate_models(
     )
     logger.info(f"Using {num_threads} parallel threads")
 
-    # Create shared stats object and counter
-    stats = GameStats()
+    games: list[GameRecord] = []
+    games_lock = threading.Lock()
     completed_games = 0
     completed_lock = threading.Lock()
 
@@ -443,7 +309,7 @@ def simulate_models(
     start_time = time.time()
 
     # Worker function that runs games until target count is reached
-    def worker_thread(thread_id):
+    def worker_thread(thread_id: int) -> None:
         # Create environment for this thread
         match = Match(sim_config.match)
         observation_space = ObservationSpace()
@@ -471,19 +337,11 @@ def simulate_models(
                 env, hero_player, villain_player, sim_config.max_steps
             )
 
-            # Record game with minimal metadata
-            metadata = {
-                "thread_id": thread_id,
-            }
-
-            stats.record_game(
-                outcome=outcome,
-                steps=steps,
-                duration=duration,
-                metadata=metadata,
-                profiler_info=profiler_data,
-                behavior_info=behavior_data,
+            record = GameRecord(
+                outcome, steps, duration, thread_id, profiler_data, behavior_data
             )
+            with games_lock:
+                games.append(record)
 
             # Update thread counter
             thread_games += 1
@@ -539,7 +397,7 @@ def simulate_models(
     total_time = time.time() - start_time
 
     # Log results
-    summary = stats.get_summary()
+    summary = simulation_summary(games)
     logger.info(
         f"Simulation complete: {summary['total_games']} games in {total_time:.2f} seconds"
     )
@@ -555,21 +413,20 @@ def simulate_models(
     )
     logger.info(f"Average steps per game: {summary['avg_steps']:.1f}")
 
-    detailed = stats.get_detailed_analysis()
+    detailed = detailed_analysis(games)
     logger.info("Detailed Analysis:")
     logger.info(f"Early game win rate: {detailed['early_game_win_rate']:.2f}")
     logger.info(f"Mid game win rate: {detailed['mid_game_win_rate']:.2f}")
     logger.info(f"Late game win rate: {detailed['late_game_win_rate']:.2f}")
 
-    # Log profiler and behavior summary
-    stats.log_profiler_and_behavior_summary(logger)
+    _log_profiler_and_behavior(games, logger)
 
-    return stats
+    return games
 
 
 def _simulate_game(
     env: Env, hero_player: Player, villain_player: Player, max_steps: int
-) -> Tuple[GameOutcome, int, float, Dict[str, Any], Dict[str, Dict[str, Any]]]:
+) -> tuple[GameOutcome, int, float, dict[str, str], dict[str, dict[str, Any]]]:
     """
     Simulate a single game between two players.
 
@@ -690,17 +547,17 @@ def run_simulation(sim_config: SimulationConfig, runtime_config: RuntimeConfig) 
         hero_player = load_player(sim_config.hero)
         villain_player = load_player(sim_config.villain)
 
-        stats = simulate_models(hero_player, villain_player, sim_config)
-        for index, game in enumerate(stats.games, start=1):
+        games = simulate_models(hero_player, villain_player, sim_config)
+        for index, game in enumerate(games, start=1):
             tracked.log(
                 {
-                    "game/outcome": game["outcome"].value,
-                    "game/steps": game["steps"],
-                    "game/duration": game["duration"],
+                    "game/outcome": game.outcome.value,
+                    "game/steps": game.steps,
+                    "game/duration": game.duration,
                 },
                 games=index,
             )
-        tracked.log({"evaluation": stats.get_summary()}, games=len(stats.games))
+        tracked.log({"evaluation": simulation_summary(games)}, games=len(games))
 
 
 def main(argv: Sequence[str] | None = None) -> None:

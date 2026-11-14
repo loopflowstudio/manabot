@@ -2,37 +2,20 @@
 
 import json
 from pathlib import Path
-import subprocess
-import sys
-import textwrap
 
 import numpy as np
 import pytest
 import torch
-import typer
 
 from experiments.direct_self_play import direct_self_play
-import manabot.backends.torch as torch_backend
-from manabot.backends.torch.learner import Learner
-from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import selected_rows
-from manabot.cli import named_regime, regime_names
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.policy.prepare import reference_distribution
-from manabot.training.execution import execute_regime, validate_regime
+from manabot.training.learning import DampedPolicyLearning
 from manabot.training.records import StageRecord, TrainingRun
-from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
-from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
-from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
-from manabot.training.update_metrics import read_updates, stage_rows
-from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.ppo import update_iteration
+from manabot.training.regime import TrainingRegime
+from manabot.training.validation import validate_regime
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
-from tests.training.test_monitoring import _recipe
-from tests.training.test_recovery import tracked_updates
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,28 +25,6 @@ def recipe() -> TrainingRegime:
     value.world = WORLD_VERSION
     value.agent.world = "ur-lessons-vs-gw-allies"
     return value
-
-
-def test_all_recipes_validate_and_reject_future_references():
-    for name in regime_names():
-        frozen = named_regime(name)
-        if frozen.world == WORLD_VERSION:
-            validate_regime(frozen)
-        else:
-            with pytest.raises(ValueError, match="world"):
-                validate_regime(frozen)
-    raw = recipe().model_dump()
-    raw["stages"][0]["initial"] = "policy-1"
-    with pytest.raises(ValueError, match="earlier"):
-        TrainingRegime.model_validate(raw)
-    raw = recipe().model_dump()
-    raw["stages"][0]["operation"] = "belief"
-    with pytest.raises(ValueError):
-        TrainingRegime.model_validate(raw)
-    raw = recipe()
-    raw.world = "invalid"
-    with pytest.raises(ValueError, match="world"):
-        validate_regime(raw)
 
 
 def test_reference_has_full_support_and_is_permutation_invariant():
@@ -110,321 +71,11 @@ def test_store_exports_committed_run_and_preserves_old_schema(tmp_path):
         assert store.con.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_deadline_retains_failed_attempt(tmp_path):
-    value = recipe()
-    value.wall_seconds = 1e-9
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(TimeoutError):
-            execute_regime(value, 197, tmp_path / "run", store)
-        result = json.loads((tmp_path / "run/run.json").read_text())
-        assert result["status"] == "interrupted"
-        assert result["stages"][0]["status"] == "interrupted"
-        assert result["stages"][0]["cumulative_seconds"] is None
-        assert result["seconds"] > 0
-
-
-def test_named_treatments_execute_real_optimizer_batches() -> None:
-    torch.set_num_threads(1)
-    space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
-    obs = space.encoder.allocate(2)
-    obs["actions_valid"][:, :2] = 1
-    obs["agent_player_valid"][:] = 1
-    obs["opponent_player_valid"][:] = 1
-    obs["actions"][:, 0, 0] = 1
-    obs["actions"][:, 1, 1] = 1
-    with torch.no_grad():
-        logits, values = agent(
-            admit_observation(agent, {k: torch.as_tensor(v) for k, v in obs.items()})
-        )
-        probs = logits.softmax(-1).numpy()
-    batch = RolloutBatch(
-        recorded=RecordedObservations(
-            {k: v for k, v in obs.items() if k not in ACTION_FIELDS}, np.arange(2)
-        ),
-        actions=np.zeros((2, 1), dtype=np.int64),
-        logprobs=np.log(probs[:, 0, None]),
-        rewards=np.array([[0.0], [1.0]], dtype=np.float32),
-        dones=np.array([[False], [True]]),
-        values=values.numpy().reshape(2, 1),
-        next_obs={k: v[:1] for k, v in obs.items()},
-        next_done=np.ones(1, dtype=bool),
-        action_data=PackedActions.pack(
-            obs,
-            logits.masked_fill(torch.as_tensor(obs["actions_valid"]) == 0, -torch.inf)
-            .log_softmax(-1)
-            .numpy(),
-        ),
-    )
-
-    trainer = Learner(agent, "cpu", minibatch_rows=1)
-
-    for name in regime_names():
-        stage = named_regime(name).stages[0]
-        if stage.operation != "train_self_play":
-            continue
-        result = (
-            update_damped_iteration(torch_backend, trainer, batch, stage.learning, 1)
-            if isinstance(stage.learning, DampedPolicyLearning)
-            else update_iteration(
-                torch_backend,
-                trainer,
-                batch,
-                stage.learning,
-                0.5,
-                np.random.default_rng(7),
-            )
-        )
-        assert result["optimizer_exposures"] > 0
-        assert np.isfinite(result["loss"])
-
-
-def test_runtime_failure_is_a_retained_run(tmp_path, monkeypatch):
-    from manabot.training import execution
-
-    def unavailable(*args, **kwargs):
-        raise RuntimeError("runtime fingerprint unavailable")
-
-    monkeypatch.setattr(execution, "runtime_fingerprints", unavailable)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(RuntimeError, match="fingerprint"):
-            execute_regime(recipe(), 197, tmp_path / "run", store)
-        saved = json.loads((tmp_path / "run/run.json").read_text())
-        assert saved["status"] == "failed"
-        assert "fingerprint unavailable" in saved["error"]
-        assert saved["stages"] == []
-        assert store.training_run(saved["id"]).status == "failed"
-
-
-def test_manifest_export_failure_is_retained_in_canonical_store(tmp_path, monkeypatch):
-    from manabot.training import execution
-
-    def no_space(*args, **kwargs):
-        raise OSError("disk full")
-
-    monkeypatch.setattr(execution, "export_training_run", no_space)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(OSError, match="disk full"):
-            execute_regime(recipe(), 197, tmp_path / "run", store)
-        row = store.con.execute("SELECT id FROM training_runs").fetchone()
-        saved = store.training_run(row[0])
-        assert saved.status == "failed"
-        assert "disk full" in saved.error
-
-
 def test_modified_models_are_revalidated_before_execution():
     value = recipe()
     value.stages[0].transitions = 0
     with pytest.raises(ValueError):
         validate_regime(value)
-
-
-def test_cli_rejects_retired_training_overrides() -> None:
-    from typer.testing import CliRunner
-
-    from manabot import cli
-
-    runner = CliRunner()
-    for flags in (["--preset", "local"], ["--set", "train.num_steps=2"]):
-        result = runner.invoke(
-            cli.app, ["train", "--regime", "unused.json", "--out", "unused", *flags]
-        )
-        assert result.exit_code != 0
-        assert "retired" in result.output
-
-
-def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch):
-    from manabot.training import execution
-
-    closed = []
-    close = execution.RunContext.close
-
-    def track_close(experiment, state="finished"):
-        closed.append(experiment)
-        close(experiment, state)
-
-    monkeypatch.setattr(execution.RunContext, "close", track_close)
-    value = recipe()
-    value.agent.hidden_dim = 8
-    value.agent.num_attention_heads = 2
-    value.stages = value.stages[:1]
-    value.stages[0].transitions = 4
-    value.stages[0].updates = 1
-    value.stages[0].learning.epochs = 1
-
-    load = execution.load_checkpoint
-
-    def reject_checkpoint(path: str) -> object:
-        if Path(path).name == "policy-0-raw.pt":
-            raise ValueError("checkpoint admission failed")
-        return load(path)
-
-    monkeypatch.setattr(execution, "load_checkpoint", reject_checkpoint)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(ValueError, match="admission"):
-            execute_regime(value, 197, tmp_path / "run", store)
-        saved = json.loads((tmp_path / "run/run.json").read_text())
-        assert saved["stages"][0]["status"] == "failed"
-        assert saved["stages"][0]["seconds"] > 0
-        assert saved["regime"]["agent"]["hidden_dim"] == 8
-        assert (tmp_path / "run/policy-0-raw.pt").exists()
-        # Rejected bytes remain on disk, never advertised as an admitted artifact.
-        assert "raw" not in saved["stages"][0]["artifacts"]
-        assert saved["stages"][0]["rejected_artifacts"]["raw"]["sha256"]
-        assert len(closed) == 1
-
-
-def test_continuation_rejects_mutated_artifact_bytes(tmp_path, monkeypatch):
-    from manabot.training import execution
-
-    value = recipe()
-    value.agent.hidden_dim = 8
-    value.agent.num_attention_heads = 2
-    for stage in value.stages:
-        stage.transitions = 4
-        stage.updates = 1
-        stage.learning.epochs = 1
-    export = execution.export_training_run
-
-    def corrupt_completed_input(run_id, store, out):
-        run = export(run_id, store, out)
-        if len(run.stages) == 1 and run.stages[0].status == "completed":
-            artifact = Path(run.stages[0].artifacts["raw"]["path"])
-            artifact.write_bytes(b"changed bytes")
-        return run
-
-    monkeypatch.setattr(execution, "export_training_run", corrupt_completed_input)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        with pytest.raises(ValueError, match="input artifact changed"):
-            execute_regime(value, 197, tmp_path / "run", store)
-        saved = json.loads((tmp_path / "run/run.json").read_text())
-        assert saved["stages"][0]["status"] == "completed"
-        assert saved["stages"][1]["status"] == "failed"
-        assert saved["selected_artifact"] is None
-
-
-def test_self_play_continuation_keeps_adam_and_exports_each_stage(
-    tmp_path, monkeypatch
-):
-    from manabot.training import execution
-
-    clock = execution.time.perf_counter
-    offset = 0.0
-    admitted = []
-    export = execution.export_training_run
-
-    def delayed_export(run_id, store, out):
-        nonlocal offset
-        run = export(run_id, store, out)
-        completed = [stage for stage in run.stages if stage.status == "completed"]
-        if len(completed) > len(admitted):
-            admitted.append(completed[-1].cumulative_seconds)
-            # Model slow persistence after admission without sleeping or training more.
-            offset += 5.0
-        return run
-
-    monkeypatch.setattr(execution.time, "perf_counter", lambda: clock() + offset)
-    monkeypatch.setattr(execution, "export_training_run", delayed_export)
-    value = recipe()
-    value.agent.hidden_dim = 8
-    value.agent.num_attention_heads = 2
-    for stage in value.stages:
-        stage.transitions = 4
-        stage.updates = 1
-        stage.learning.epochs = 1
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(value, 197, tmp_path / "run", store)
-        assert run.status == "completed"
-        assert run.selected_artifact == run.stages[-1].artifacts["raw"]
-        steps = []
-        rows = stage_rows(run, read_updates(tmp_path, [run]))
-        for stage in run.stages:
-            state = torch.load(stage.artifacts["optimizer"]["path"], weights_only=True)
-            steps.append(max(int(item["step"]) for item in state["state"].values()))
-            assert stage.learner_transitions == sum(d["rows"] for d in rows[stage.id])
-            assert stage.learner_transitions >= 16
-        assert steps[0] > 0
-        assert steps[1] - steps[0] == sum(
-            d["numerical/optimizer_steps"] for d in rows[run.stages[1].id]
-        )
-        assert [stage.cumulative_seconds for stage in run.stages] == admitted
-        assert admitted[0] >= run.setup_seconds + run.stages[0].seconds
-        assert admitted[1] >= admitted[0] + 5.0 + run.stages[1].seconds
-        assert run.seconds >= admitted[1] + 5.0
-        saved = store.training_run(run.id)
-        assert [stage.cumulative_seconds for stage in saved.stages] == admitted
-
-
-def test_run_record_does_not_grow_with_updates(tmp_path: Path) -> None:
-    """Update rows are Etude metrics; run.json and the store keep counters."""
-    sizes = []
-    for updates in (2, 6):
-        value = _recipe()
-        stage = value.stages[0]
-        assert isinstance(stage, TrainSelfPlay)
-        stage.updates = updates
-        out = tmp_path / f"updates-{updates}"
-        with VerifyStore(tmp_path / f"{updates}.sqlite") as store:
-            run = execute_regime(value, 197, out, store)
-            stored = store.con.execute(
-                "SELECT SUM(LENGTH(payload)) FROM training_stages WHERE run_id=?",
-                (run.id,),
-            ).fetchone()[0]
-        assert run.status == "completed" and run.stages[0].updates == updates
-        assert len(tracked_updates(run, out)) == updates
-        sizes.append(((out / "run.json").stat().st_size, stored))
-    # Counters gain digits; nothing is appended per update.
-    (export_2, stored_2), (export_6, stored_6) = sizes
-    assert abs(export_6 - export_2) < 64
-    assert abs(stored_6 - stored_2) < 64
-
-
-def test_editing_one_stage_of_a_named_regime_changes_nothing_else() -> None:
-    for name in regime_names():
-        edited = named_regime(name)
-        before = [stage.model_dump() for stage in edited.stages]
-        first = edited.stages[0]
-        first.execution.wall_seconds = 1
-        learning = getattr(first, "learning", None)
-        if learning is not None:
-            learning.max_grad_norm = 0.123
-        assert [s.model_dump() for s in edited.stages[1:]] == before[1:]
-        assert named_regime(name).stages[0].model_dump() == before[0]
-
-
-def test_regime_discovery_without_evaluation_dependencies() -> None:
-    # A fresh process prevents installed extras or prior tests from hiding
-    # report dependencies imported by experiment modules during discovery.
-    probe = textwrap.dedent("""
-        import sys
-
-        sys.modules["duckdb"] = None
-        from manabot.cli import named_regime, regime_names
-
-        assert "batched_baseline" in regime_names()
-        assert named_regime("batched_baseline:scale_ladder").id == "scale-ladder-allies-lessons-v1"
-    """)
-    result = subprocess.run(
-        [sys.executable, "-c", probe],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_regime_names_say_file_and_recipe() -> None:
-    names = regime_names()
-    assert {"batched_baseline", "batched_baseline:scale_ladder"} <= set(names)
-    assert "ataraxos_ablation:rl_control" in names
-    # A file without a recipe named like it has no bare name.
-    assert "ataraxos_ablation" not in names
-    assert len({named_regime(name).id for name in names}) == len(names)
-    scale = named_regime("batched_baseline:scale_ladder")
-    assert scale.id == "scale-ladder-allies-lessons-v1"
-    with pytest.raises(typer.BadParameter, match="batched_baseline:scale_ladder"):
-        named_regime("scale-ladder")
 
 
 def test_legacy_learning_discriminator_is_rejected() -> None:

@@ -302,7 +302,7 @@ regime = local_smoke(steps=1).model_copy(
 space = ObservationSpace(regime.observation)
 ```
 
-Use that `space` for `SeatRoutedCollector` and `ActorCritic(space, regime.agent)`;
+Use that `space` for `open_collector` and `ActorCritic(space, regime.agent)`;
 the serialized `TrainingRegime` keeps the selection. V10 is v9 plus this state,
 in the same native scalar, vector and Python encoders, the LLM text observation
 and the learning tokens.

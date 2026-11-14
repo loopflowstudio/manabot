@@ -28,14 +28,21 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim import match as simulation
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
-from manabot.training.regime import BatchClosure, Learning
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.learning import BatchClosure, Learning
+from manabot.training.rollout.collection import (
+    Collector,
+    close_collector,
+    collect,
+    open_collector,
+)
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorLimit,
     GameErrorPolicy,
     GameErrorState,
+    append_attempt,
+    open_ledger,
     replay_attempt,
 )
 from manabot.training.updates.ppo import update_iteration
@@ -223,8 +230,8 @@ def _tolerant_collector(
     *,
     seats: Literal["one", "both"] = "both",
     closure: BatchClosure = "complete-games",
-) -> SeatRoutedCollector:
-    return SeatRoutedCollector(
+) -> Collector:
+    return open_collector(
         model.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -233,7 +240,7 @@ def _tolerant_collector(
         learning_seats=seats,
         batch_closure=closure,
         game_errors=ledger.policy,
-        record_attempt=lambda row: ledger.record(row, {}),
+        record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
     )
 
 
@@ -241,38 +248,36 @@ def _tolerant_collector(
 def test_strict_threshold_window_and_restart(tmp_path: Path, threshold: float) -> None:
     policy = GameErrorPolicy(threshold=threshold)
     failures = round(threshold * 100)
-    ledger = GameErrorLedger(tmp_path / "first.jsonl", policy)
+    ledger, state = open_ledger(tmp_path / "first.jsonl", policy)
     for index in range(99):
-        ledger.record(attempt(index < failures, index), {})
-    assert ledger.state.stop_reason is None
-    assert ledger.state.error_rate > threshold  # warmup has not settled
-    assert (
-        ledger.state.replacement_samples
-        == ledger.state.discarded_samples
-        == failures * 3
-    )
-    assert ledger.state.replacement_debt == 0
-    restored = GameErrorLedger(
+        state = append_attempt(ledger, state, attempt(index < failures, index), {})
+    assert state.stop_reason is None
+    assert state.error_rate > threshold  # warmup has not settled
+    assert state.replacement_samples == state.discarded_samples == failures * 3
+    assert state.replacement_debt == 0
+    restored, restored_state = open_ledger(
         tmp_path / "second.jsonl", policy, parents=[str(ledger.path)]
     )
-    restored.record(attempt(False), {})
-    assert restored.state.error_rate == threshold
-    assert restored.state.stop_reason is None
-    restored.record(attempt(True), {})  # oldest failure falls out
-    assert restored.state.error_rate == threshold
+    restored_state = append_attempt(restored, restored_state, attempt(False), {})
+    assert restored_state.error_rate == threshold
+    assert restored_state.stop_reason is None
+    restored_state = append_attempt(
+        restored, restored_state, attempt(True), {}
+    )  # oldest failure falls out
+    assert restored_state.error_rate == threshold
     for _ in range(failures - 1):
-        restored.record(attempt(True), {})
-    assert restored.state.stop_reason is None
-    restored.record(attempt(True), {})
-    assert restored.state.error_rate == (failures + 1) / 100
-    assert restored.state.stop_reason == "game_error_rate_exceeded"
-    final = GameErrorLedger(
+        restored_state = append_attempt(restored, restored_state, attempt(True), {})
+    assert restored_state.stop_reason is None
+    restored_state = append_attempt(restored, restored_state, attempt(True), {})
+    assert restored_state.error_rate == (failures + 1) / 100
+    assert restored_state.stop_reason == "game_error_rate_exceeded"
+    _, final_state = open_ledger(
         tmp_path / "third.jsonl", policy, parents=[str(ledger.path), str(restored.path)]
     )
-    assert final.state == restored.state
-    assert final.state.replacement_debt == (failures + 1) * 3
+    assert final_state == restored_state
+    assert final_state.replacement_debt == (failures + 1) * 3
     assert (
-        GameErrorState.model_validate_json(final.state.model_dump_json()) == final.state
+        GameErrorState.model_validate_json(final_state.model_dump_json()) == final_state
     )
     with pytest.raises(ValueError, match="warmup"):
         GameErrorPolicy(window=10)
@@ -285,15 +290,18 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
 ) -> None:
     model = agent()
     policy = GameErrorPolicy(threshold=0.25, recover_capacity=resource_limit)
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger, seats=seats)
     scripted = ScriptedFailures(collector._buffers, resource_limit=resource_limit)
     collector._env = scripted
-    batch = collector.collect(model, 1)
+    batch = collect(collector, model, 1)
     markers = batch.ordered_obs()["agent_player"][:, 0, 0, 0]
     assert not any(10 <= marker < 100 for marker in markers)
     assert scripted.steps == [5, 9]
-    assert ledger.state.completed == 2 and ledger.state.crashed == 1
+    assert (
+        collector.game_error_state.completed == 2
+        and collector.game_error_state.crashed == 1
+    )
     attempts = [
         GameAttempt.model_validate(json.loads(line)["attempt"])
         for line in ledger.path.read_text().splitlines()
@@ -302,7 +310,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     assert failure.outcome == ("resource_limit" if resource_limit else "engine_error")
     if resource_limit:
         assert failure.observation == model.observation_space.encoder.config
-    assert ledger.state.discarded_samples == (4 if seats == "both" else 2)
+    assert collector.game_error_state.discarded_samples == (4 if seats == "both" else 2)
     assert collector.stats.learner_transitions == batch.actions.size
     assert int(batch.dones.sum()) == (4 if seats == "both" else 2)
     _, returns = transition_gae(
@@ -334,19 +342,19 @@ def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
 ) -> None:
     model = agent()
     policy = GameErrorPolicy(threshold=0.25, recover_capacity=True)
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger, seats="one", closure="exact-quota")
     scripted = ScriptedFailures(collector._buffers, resource_limit=True)
     collector._env = scripted
 
     # Stream 1 learns from seat 1: its game pauses at its second decision.
-    first = collector.collect(model, 1)
+    first = collect(collector, model, 1)
     assert first.observations().observation["agent_player"][0, 1, 0, 0] == 11
-    assert not first.next_done[1] and ledger.state.crashed == 0
+    assert not first.next_done[1] and collector.game_error_state.crashed == 0
 
     # That decision overflows. The learned row stays learned, the pending one goes
     # and the replacement game fills the quota.
-    second = collector.collect(model, 1)
+    second = collect(collector, model, 1)
     assert second.actions.shape == (1, 2)
     assert second.observations().observation["agent_player"][0, 1, 0, 0] == 111
     assert not second.dones[0, 1]
@@ -355,13 +363,16 @@ def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
     )
     assert failure.outcome == "resource_limit"
     assert (failure.learned_samples, failure.discarded_samples) == (1, 1)
-    assert (ledger.state.learned_samples, ledger.state.discarded_samples) == (1, 1)
+    assert (
+        collector.game_error_state.learned_samples,
+        collector.game_error_state.discarded_samples,
+    ) == (1, 1)
     assert collector.stats.learner_transitions == 4
     assert not any(collector._pending) and not any(collector._streams)
     assert len(collector._game_actions[1]) == 3
 
     # The replacement game finishes across the boundary with all of its rows valid.
-    collector.collect(model, 1)
+    collect(collector, model, 1)
     attempts = [
         GameAttempt.model_validate(json.loads(line)["attempt"])
         for line in ledger.path.read_text().splitlines()
@@ -375,14 +386,16 @@ def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
 def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> None:
     model = agent()
     policy = GameErrorPolicy(window=4, warmup=4)
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
     scripted = ScriptedFailures(collector._buffers, always=True)
     collector._env = scripted
     with pytest.raises(GameErrorLimit):
-        collector.collect(model, 1)
-    assert ledger.state.attempted == ledger.state.crashed == 4
-    assert ledger.state.completed == collector.stats.games == 0
+        collect(collector, model, 1)
+    assert (
+        collector.game_error_state.attempted == collector.game_error_state.crashed == 4
+    )
+    assert collector.game_error_state.completed == collector.stats.games == 0
     assert scripted.steps == [8, 8]
     assert not any(collector._pending) and not any(collector._streams)
     assert collector.stats.learner_transitions == 0
@@ -391,7 +404,7 @@ def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> 
 @pytest.mark.parametrize("workers", [1, 2])
 def test_native_partial_vector_and_replay(workers: int) -> None:
     model = agent()
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         model.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -402,10 +415,10 @@ def test_native_partial_vector_and_replay(workers: int) -> None:
     try:
         _assert_native_failure_replay(collector)
     finally:
-        collector.close()
+        close_collector(collector)
 
 
-def _assert_native_failure_replay(collector: SeatRoutedCollector) -> None:
+def _assert_native_failure_replay(collector: Collector) -> None:
     before = {k: v.copy() for k, v in collector._buffers.items()}
     collector._env.step_isolated_into_buffers([0, -1, 0], [True] * 3)
     infos = collector._env.get_last_info()
@@ -461,7 +474,7 @@ def test_original_failure_is_immutable_and_cli_replays(
     tmp_path: Path, variant: str
 ) -> None:
     policy = GameErrorPolicy()
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, state = open_ledger(tmp_path / "attempts.jsonl", policy)
     row = attempt(True)
     row.actions = [-1]
     env = managym.Env(seed=row.seed, skip_trivial=True)
@@ -483,7 +496,9 @@ def test_original_failure_is_immutable_and_cli_replays(
         row.frame_json = row.error_class = row.error = None
     elif variant == "prefix":
         row.actions.append(0)
-    ledger.record(
+    state = append_attempt(
+        ledger,
+        state,
         row,
         {
             "identities": {
@@ -493,7 +508,7 @@ def test_original_failure_is_immutable_and_cli_replays(
         },
     )
     original = ledger.path.read_bytes()
-    allowance = ledger.state.model_dump()
+    allowance = state.model_dump()
     result = subprocess.run(
         [
             sys.executable,
@@ -525,11 +540,11 @@ def test_original_failure_is_immutable_and_cli_replays(
         else variant not in {"different_error", "different_class"}
     )
     assert ledger.path.read_bytes() == original
-    assert ledger.state.model_dump() == allowance
-    inherited = GameErrorLedger(
+    assert state.model_dump() == allowance
+    _, inherited_state = open_ledger(
         tmp_path / "child.jsonl", policy, parents=[str(ledger.path)]
     )
-    assert inherited.state.model_dump() == allowance
+    assert inherited_state.model_dump() == allowance
 
 
 @pytest.mark.parametrize("resource_limit", [False, True])
@@ -537,20 +552,20 @@ def test_later_crash_preserves_previous_complete_games(
     tmp_path: Path, resource_limit: bool
 ) -> None:
     model = agent()
-    ledger = GameErrorLedger(
+    ledger, _ = open_ledger(
         tmp_path / "attempts.jsonl", GameErrorPolicy(recover_capacity=resource_limit)
     )
     collector = _tolerant_collector(model, ledger)
     collector._env = ScriptedFailures(
         collector._buffers, failure_generation=1, resource_limit=resource_limit
     )
-    batch = collector.collect(model, 7)
+    batch = collect(collector, model, 7)
     markers = set(batch.ordered_obs()["agent_player"][:, 0, 0, 0])
     assert markers == set(range(5)) | set(range(10, 15)) | set(range(100, 105)) | set(
         range(210, 215)
     )
-    assert ledger.state.completed == 4
-    assert ledger.state.crashed == 1
+    assert collector.game_error_state.completed == 4
+    assert collector.game_error_state.crashed == 1
     assert batch.actions.size == collector.stats.learner_transitions == 20
     assert int(batch.dones.sum()) == 8
 
@@ -559,7 +574,7 @@ def test_deadline_retains_incomplete_games_without_regather(tmp_path: Path) -> N
     """MTG-181 seed 18102: the deadline cut off every stream mid-game."""
     model = agent()
     policy = GameErrorPolicy(window=2, warmup=2)
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
     scripted = ScriptedFailures(collector._buffers)
     collector._env = scripted
@@ -572,25 +587,37 @@ def test_deadline_retains_incomplete_games_without_regather(tmp_path: Path) -> N
             raise TimeoutError("original allocation deadline")
 
     with pytest.raises(TimeoutError, match="original allocation"):
-        collector.collect(model, 1, check=deadline)
-    assert ledger.state.completed == ledger.state.crashed == 0
-    assert ledger.state.attempted == ledger.state.abandoned == 2
-    assert ledger.state.abandoned_samples == 4 and ledger.state.discarded_samples == 0
-    assert ledger.state.window == [] and ledger.state.stop_reason is None
+        collect(collector, model, 1, check=deadline)
+    assert (
+        collector.game_error_state.completed == collector.game_error_state.crashed == 0
+    )
+    assert (
+        collector.game_error_state.attempted
+        == collector.game_error_state.abandoned
+        == 2
+    )
+    assert (
+        collector.game_error_state.abandoned_samples == 4
+        and collector.game_error_state.discarded_samples == 0
+    )
+    assert (
+        collector.game_error_state.window == []
+        and collector.game_error_state.stop_reason is None
+    )
     assert scripted.steps == [2, 2] and scripted.generation == [0, 0]
     receipts = [json.loads(line) for line in ledger.path.read_text().splitlines()]
     assert all(row["attempt"]["outcome"] == "deadline" for row in receipts)
     assert not any(collector._pending) and not any(collector._streams)
-    restored = GameErrorLedger(
+    _, restored_state = open_ledger(
         tmp_path / "resumed.jsonl", policy, parents=[str(ledger.path)]
     )
-    assert restored.state == ledger.state
+    assert restored_state == collector.game_error_state
 
 
 def test_deadline_after_real_crashes_counts_only_the_crashes(tmp_path: Path) -> None:
     model = agent()
     policy = GameErrorPolicy(window=4, warmup=4)
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
     scripted = ScriptedFailures(collector._buffers, always=True)
     collector._env = scripted
@@ -605,25 +632,29 @@ def test_deadline_after_real_crashes_counts_only_the_crashes(tmp_path: Path) -> 
     # Each stream crashes at its fourth step; the deadline lands two steps
     # into both replacement games, before the window reaches its warmup.
     with pytest.raises(TimeoutError):
-        collector.collect(model, 1, check=deadline)
+        collect(collector, model, 1, check=deadline)
     assert scripted.steps == [6, 6]
-    assert ledger.state.crashed == 2 and ledger.state.abandoned == 2
-    assert ledger.state.window == [True, True]
-    assert ledger.state.stop_reason is None
+    assert (
+        collector.game_error_state.crashed == 2
+        and collector.game_error_state.abandoned == 2
+    )
+    assert collector.game_error_state.window == [True, True]
+    assert collector.game_error_state.stop_reason is None
     outcomes = [
         json.loads(line)["attempt"]["outcome"]
         for line in ledger.path.read_text().splitlines()
     ]
     assert outcomes == ["engine_error", "engine_error", "deadline", "deadline"]
     # Two further real crashes complete warmup and exceed the threshold.
-    ledger.record(attempt(True), {})
-    ledger.record(attempt(True), {})
-    assert ledger.state.stop_reason == "game_error_rate_exceeded"
+    state = collector.game_error_state
+    state = append_attempt(ledger, state, attempt(True), {})
+    state = append_attempt(ledger, state, attempt(True), {})
+    assert state.stop_reason == "game_error_rate_exceeded"
 
 
 def test_cancellation_settles_games_as_abandoned(tmp_path: Path) -> None:
     model = agent()
-    ledger = GameErrorLedger(
+    ledger, _ = open_ledger(
         tmp_path / "attempts.jsonl", GameErrorPolicy(window=2, warmup=2)
     )
     collector = _tolerant_collector(model, ledger)
@@ -637,9 +668,12 @@ def test_cancellation_settles_games_as_abandoned(tmp_path: Path) -> None:
             raise RuntimeError("training cancelled by launcher")
 
     with pytest.raises(RuntimeError, match="cancelled"):
-        collector.collect(model, 1, check=cancel)
-    assert ledger.state.abandoned == 2 and ledger.state.crashed == 0
-    assert ledger.state.stop_reason is None
+        collect(collector, model, 1, check=cancel)
+    assert (
+        collector.game_error_state.abandoned == 2
+        and collector.game_error_state.crashed == 0
+    )
+    assert collector.game_error_state.stop_reason is None
     assert all(
         json.loads(line)["attempt"]["outcome"] == "abandoned"
         for line in ledger.path.read_text().splitlines()
@@ -649,12 +683,15 @@ def test_cancellation_settles_games_as_abandoned(tmp_path: Path) -> None:
 def test_action_limit_is_a_failed_attempt_and_bounded(tmp_path: Path) -> None:
     model = agent()
     policy = GameErrorPolicy(window=2, warmup=2, max_game_actions=2)
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger)
     collector._env = ScriptedFailures(collector._buffers)
     with pytest.raises(GameErrorLimit):
-        collector.collect(model, 1)
-    assert ledger.state.completed == 0 and ledger.state.crashed == 2
+        collect(collector, model, 1)
+    assert (
+        collector.game_error_state.completed == 0
+        and collector.game_error_state.crashed == 2
+    )
     assert all(
         json.loads(line)["attempt"]["outcome"] == "action_limit"
         for line in ledger.path.read_text().splitlines()
@@ -674,13 +711,13 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
                 self.replace_failed_into_buffers([False, True])
 
     model = agent()
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", GameErrorPolicy())
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", GameErrorPolicy())
     collector = _tolerant_collector(model, ledger)
     scripted = TruncatedGames(collector._buffers)
     collector._env = scripted
-    batch = collector.collect(model, 1)
-    assert ledger.state.completed == collector.stats.games == 2
-    assert ledger.state.crashed == collector.stats.truncations == 1
+    batch = collect(collector, model, 1)
+    assert collector.game_error_state.completed == collector.stats.games == 2
+    assert collector.game_error_state.crashed == collector.stats.truncations == 1
     assert scripted.generation == [1, 2]
     assert batch.actions.size == 10 and int(batch.dones.sum()) == 4
 
