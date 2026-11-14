@@ -14,7 +14,8 @@ review questions. Do not rerun the pilot or rewrite its evidence. Earlier plan
 text, launch notes and per-slice checks are in git `78397f2042` and before
 (`ce074e9d37` for the first concept review).
 
-Remaining: gate/review and the caller's delivery steps. No PR created here.
+Remaining: the report-scope slice below (concept review at `59c82bc2be`),
+then gate/review and the caller's delivery steps. No PR created here.
 
 ## Demo and done when
 
@@ -27,7 +28,9 @@ run logistics sit in a collapsed appendix. Headless:
 
 Done when the report recommends that single decision with D's costs, names no
 entry step as part of the design, and every number it quotes is one already in
-its tables. The report-text slice (base `caa15caca4`) changes nothing outside
+its tables. Also done when (next slice): the design says which payments it
+covers and prices the ones that are not casts, and the Forest illustration says
+which review question its two-offer menu depends on. The report-text slice (base `caa15caca4`) changes nothing outside
 the report and `scratch/`.
 
 ## What people said
@@ -114,6 +117,49 @@ them.
    priority option's offer cost is unmeasured.
 4. The over-tap figure is 6–15% of ordinary payments (400/2717, 538/4430,
    213/2588, 288/4742); earlier text said 8–15%.
+
+## Next implement direction (concept review at `59c82bc2be`; report and `scratch/` only unless noted)
+
+The report matches the earlier review's direction. Two gaps remain between the
+design it recommends and what it shows:
+
+5. **The design is one decision per mana payment, and the report prices only
+   casts.** The recommendation says "per cast" and "replaces today's per-pip
+   prompts for cast payments"; C–E "retain noncast payment behavior". A player
+   would then learn two payment interactions (outcome menu for spells,
+   automatic tapping plus per-unit prompts for ability costs) with the source
+   choice still hidden in the second. Nothing anyone said restricts the Task to
+   casts ("letting users decide how to spend mana"). State the design as
+   covering every mana payment, and report the non-cast price beside the cast
+   one, from the published rows. Read at this review from
+   `current/non-redundant-shapes/shapes.jsonl` (`cast: false`): 5,686 of
+   14,775 payments are not casts (Elemental 2,496, TLA 3,190, Heartbeat 0);
+   3,774 have a mana cost (1,544 / 2,230), 134 of those capped (68 / 66). Of
+   the completely enumerated ones, 933 / 1,220 have two or more non-redundant
+   capability outcomes (1,017 / 1,452 by exact identity); exact maxima 28 / 22
+   capability, 252 / 252 identity. Only 9 / 2 drew a per-unit prompt today.
+   So the hidden choice is about as common there as on casts, and the
+   headline "+2.5–7.0% decisions per game" is a cast-only figure. Recompute
+   these through the experiment's own summary path, give decisions per game
+   for all payments next to the cast-only columns, and correct the summary,
+   question 3 and Limits wording to say which population each figure covers.
+   Published `shapes.jsonl` / `summary.json` bytes stay unchanged: a new
+   derived table needs a new output name, not a rewritten summary. If that
+   needs a code change in `experiments/mana_spending.py`, it is a read-only
+   aggregation over published rows; no games rerun.
+6. **The illustration silently answers question 2.** Its menu shows two offers
+   for Forest, Forest, Mountain, which treats the two Forests as one choice,
+   while the text below says the recommendation "preserves exact identity
+   until an equivalence rule is reviewed" (three offers). Say so next to the
+   table, as it already does for the redundant tap and question 1.
+
+Assumption (also in `scratch/questions.md`): covering every mana payment is
+what "one payment decision" already means, so it is written as direction, not
+asked as a fourth question. If the all-payments price changes the
+recommendation, say that in the report rather than narrowing the design.
+
+`scratch/concept-review.html` is the page of the first review (`1530995a9e`)
+and predates these two points.
 
 ## Open product choices (nobody has answered; they do not block this Task)
 

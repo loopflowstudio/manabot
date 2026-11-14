@@ -82,3 +82,10 @@ evidence directory: installed etude-sdk 0.2.16 lacks `Seating`, while the merged
 lock/source require 0.3.2. Sync the checkout's environment from its current lock
 without rebuilding the native package. This does not rerun or migrate the
 frozen pilot or its launcher database.
+
+## Concept review (2026-11-13, at `59c82bc2be`)
+
+- The recommended payment decision is taken to cover every mana payment, not
+  only casts: nobody restricted the Task to spells, and a cast-only chooser
+  leaves a second payment interaction for ability costs. The report prices the
+  non-cast payments from published rows instead of asking a fourth question.
