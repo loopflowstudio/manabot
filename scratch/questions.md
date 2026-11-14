@@ -538,6 +538,10 @@ heuristic identity files and guide behavior are unchanged; no Rust rebuild.
 Compress reduced both fallbacks to `player_policies or ...`;
 `uv run --no-sync pytest tests/env/test_captured_vector_bookkeeping.py tests/env/test_opponents.py -q`
 — 36 passed (retained replay, passive rejection, alias capture, tuple precedence).
-Deprecation warnings are errors for retained replay tests. Focused Ruff
+Deprecation warnings are errors for retained replay tests. Realign reran the
+three retained `tla-pilot-*` receipt replays in `tests/training/test_game_errors.py`
+with `-W error::DeprecationWarning`: no warning; all three still end in
+`binding_mismatch` (expected `failed`), the upstream failure reported on base
+`402dfd5b2`, not caused by this Task and not a gate waiver. Focused Ruff
 lint/format and `git diff --check` passed. Full suites, release training smoke,
 consumer matrix and normal Engine Budget remain for gate.
