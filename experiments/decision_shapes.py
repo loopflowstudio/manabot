@@ -246,7 +246,11 @@ def recipe(arm: Arm, updates: int = 500, hours: float = 16.0) -> TrainingRegime:
                 "stages": [_stage(base).model_copy(update={"learning": learning})],
             }
         ),
-        id=_regime_id(arm),
+        id=(
+            _regime_id(arm)
+            if updates >= EXPORT_EVERY
+            else f"{_regime_id(arm)}-calibration"
+        ),
         updates=updates,
         wall_seconds=hours * 3600 - SETUP_SECONDS - FINALIZATION_SECONDS,
     )
@@ -277,10 +281,9 @@ def runs(
                 run.model_copy(update={"job": in_arm(run.job, arm)})
                 for run in capped_runs(
                     regime,
-                    # Short calibration runs stay out of the study's evaluation.
-                    experiment=EXPERIMENT
-                    if updates >= EXPORT_EVERY
-                    else f"{EXPERIMENT}_calibration",
+                    # The launcher binds tracking to this file's name. Distinct
+                    # regime ids keep calibration out of the study's evaluation.
+                    experiment=EXPERIMENT,
                     revision=revision,
                     seed=int(seed),
                     max_hours=hours,

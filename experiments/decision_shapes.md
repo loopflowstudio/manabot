@@ -58,3 +58,13 @@ two jobs per A5000 and up to three machines. A 48-hour maximum allows slower
 packed jobs to reach 500 updates; jobs stop at that target. The machine price
 ceiling is USD0.30/hour. Calibration and evaluation stay within the USD55
 total; these ceilings are not measured bills or evidence of completion.
+
+The repaired Ada attempt (`728d1b881b40`, `b095dc8808e1`, source
+`e3e15828cc48`) passed CUDA numerical admission, including sparse attention
+backward and optimizer checks. Training then refused tracking because the
+launcher bound the experiment to `decision_shapes`, while the job declared
+`decision_shapes_calibration`. Keep that shared experiment name; mark short
+calibration regimes with a `-calibration` suffix instead, which also keeps
+their checkpoint tags out of scored evaluation. No study updates ran in
+either attempt. The Ada rental remains held under its USD0.80 ceiling while
+preparation continues.
