@@ -221,3 +221,50 @@ def test_shared_options_go_before_or_after_the_verb(
             assert "launch=" in ready["open"]
     finally:
         server.trace_store.TRACES_DIR = previous
+
+
+def test_policy_cli_uses_spec_alias_and_reports_missing_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
+    monkeypatch.setattr(Academy, "wait", lambda self: None)
+    specification = tmp_path / "challenger.json"
+    specification.write_text(
+        json.dumps({"provider": "manabot", "config": {"kind": "heuristic"}})
+    )
+    previous = server.trace_store.TRACES_DIR
+    try:
+        assert (
+            academy(
+                [
+                    "watch",
+                    "--policy",
+                    str(specification),
+                    "--player",
+                    "challenger",
+                    "--player",
+                    "random",
+                    "--port",
+                    "0",
+                    "--no-open",
+                ]
+            )
+            == 0
+        )
+        ready = json.loads(
+            capsys.readouterr().out.splitlines()[0].removeprefix("ACADEMY_PLAY_READY ")
+        )
+        assert "seat1=policy%3A" in ready["open"]
+        assert "seat2=random" in ready["open"]
+        specification.write_text(json.dumps({"provider": "absent-provider"}))
+        assert (
+            academy(["--policy", str(specification), "--port", "0", "--no-open"]) == 2
+        )
+        error = json.loads(capsys.readouterr().err.removeprefix("ACADEMY_PLAY_ERROR "))
+        assert error["code"] == "policy.unavailable"
+        assert "absent-provider" in error["message"]
+    finally:
+        server.trace_store.TRACES_DIR = previous

@@ -6,6 +6,7 @@
   import type { PresentationPlayer } from '$lib/presentation.svelte';
 
   import HoverPreview from './HoverPreview.svelte';
+  import { playerIdentity, type PlayerIdentity } from '$lib/player-identity';
   import PlayerArea from './PlayerArea.svelte';
   import Schedule from './Schedule.svelte';
   import { PRESENTATION_CONTEXT, presentationSubjects } from '$lib/presentation';
@@ -21,8 +22,8 @@
     onHoverTarget?: (objectId: number | null) => void;
     winner?: number | null;
     deckNames?: { hero: string; villain: string } | null;
-    heroLabel?: string;
-    villainLabel?: string;
+    heroIdentity?: PlayerIdentity;
+    villainIdentity?: PlayerIdentity;
     overlayActionLabel?: string | null;
     onOverlayAction?: () => void;
     presentationPlayer?: PresentationPlayer;
@@ -47,8 +48,8 @@
     onHoverTarget = undefined,
     winner = undefined,
     deckNames = null,
-    heroLabel = 'Hero',
-    villainLabel = 'Opponent',
+    heroIdentity = playerIdentity({ name: 'Hero' }),
+    villainIdentity = playerIdentity({ name: 'Opponent' }),
     overlayActionLabel = null,
     onOverlayAction = undefined,
     presentationPlayer = undefined,
@@ -127,7 +128,7 @@
     const phase = titleWords(observation.turn.phase);
     const step = titleWords(observation.turn.step.replace(/_STEP$/, ''));
     const stage = step === phase ? phase : `${phase} · ${step}`;
-    const owner = observation.turn.active_player_id === observation.agent.id ? heroLabel : villainLabel;
+    const owner = observation.turn.active_player_id === observation.agent.id ? heroIdentity.text : villainIdentity.text;
     const ownership = owner === 'You' ? 'Your turn' : `${owner}'s turn`;
     return `Turn ${observation.turn.turn_number} · ${ownership} · ${stage}`;
   });
@@ -143,7 +144,7 @@
       {#if selectedId !== null && selectedId !== observation.agent.id && selectedId !== observation.opponent.id}<button class="btn btn-ghost btn-sm" onclick={() => inspectTarget(selectedId!)}>Inspect card</button>{/if}
     </div>
     <div class="flex flex-wrap gap-2" role="group" aria-label="Player targets">
-      {#each [{ player: observation.agent, label: heroLabel }, { player: observation.opponent, label: villainLabel }] as seat}
+      {#each [{ player: observation.agent, label: heroIdentity.text }, { player: observation.opponent, label: villainIdentity.text }] as seat}
         {#if clickableTargets?.has(seat.player.id)}<button class="btn btn-secondary btn-sm" onclick={() => selectTarget(seat.player.id)}>Target {seat.label}</button>{/if}
       {/each}
     </div>
@@ -163,12 +164,12 @@
 
   <details class="schedule-details type-caption"><summary>Turn and combat schedule</summary>
   <Schedule schedule={observation.schedule} heroSeat={observation.agent.player_index}
-    {heroLabel} {villainLabel} />
+    heroLabel={heroIdentity.text} villainLabel={villainIdentity.text} />
   </details>
 
   <PlayerArea
         definitionNames={observation.definition_names ?? {}}
-    label={villainLabel}
+    identity={villainIdentity}
     player={observation.opponent}
     {tablePermanents}
     deckName={deckNames?.villain ?? null}
@@ -241,7 +242,7 @@
   <div class="hero-area border-t border-line">
     <PlayerArea
         definitionNames={observation.definition_names ?? {}}
-      label={heroLabel}
+      identity={heroIdentity}
       player={observation.agent}
       {tablePermanents}
       deckName={deckNames?.hero ?? null}

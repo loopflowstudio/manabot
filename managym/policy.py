@@ -100,7 +100,7 @@ class PolicyView:
 class ValueEstimate:
     value: float
     seat: int
-    semantic: str = "signed_expected_outcome"
+    semantic: str = "signed_outcome"
 
 
 @dataclass(frozen=True)

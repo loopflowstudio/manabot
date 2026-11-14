@@ -48,7 +48,8 @@ checkpoint fields and frozen evidence keep their spelling.
 
 Code dependencies flow `managym.academy` → `managym` and `manabot` → `managym`.
 Academy never imports manabot or Torch; optional bot capabilities are discovered
-through the `managym.academy.bots` entry point. manabot never imports Academy.
+through the `managym.bots` provider entry points; optional historical replay/advice
+capabilities use `managym.academy.bots`. manabot never imports Academy.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
 to stage self-contained source archives; direct engine sdists from the workspace

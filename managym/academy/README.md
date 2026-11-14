@@ -214,7 +214,7 @@ PyO3's `PanicException` (a direct `BaseException`, with no importable Python
 class); contain that failure only at disposable-environment construction, while
 letting process interrupts escape. Do not broaden gameplay error suppression.
 
-Tests: `uv run --extra dev pytest tests/academy`. The end-to-end browser
+Focused runtime checks: `uv run --extra dev pytest tests/academy/test_policy_runtime.py tests/academy/test_checkpoint_catalog.py tests/academy/test_watch.py -q`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
 [academy/ui/e2e/](../../academy/ui/e2e/) and documented in
 [docs/development.md#clean-machine-play-proof](../../docs/development.md#clean-machine-play-proof) and

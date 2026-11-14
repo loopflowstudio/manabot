@@ -14,6 +14,8 @@
     PlayerTurnHistory,
     RestrictedMana
   } from '$lib/types';
+  import type { PlayerIdentity } from '$lib/player-identity';
+  import PlayerName from './PlayerName.svelte';
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
   import Battlefield from './Battlefield.svelte';
@@ -21,7 +23,7 @@
   // Player identity and the hero hand remain outside the scrolling zones.
   // Secondary zones expose only cards already permitted by the viewer projection.
   interface Props {
-    label: string;
+    identity: PlayerIdentity;
     player: PlayerState;
     /** Every visible permanent at the table, for attachments across seats. */
     tablePermanents: PermanentState[];
@@ -36,7 +38,7 @@
   }
 
   let {
-    label,
+    identity,
     player,
     tablePermanents,
     deckName = null,
@@ -48,6 +50,9 @@
     onHoverTarget = undefined,
     onPreviewCard = undefined,
   }: Props = $props();
+
+  const label = $derived(identity.text);
+  const runtime = $derived(identity.runtime ?? identity.provenance?.policy);
 
   const narratedEvent = getContext<(() => PresentationEvent | null) | undefined>(PRESENTATION_CONTEXT);
   const narrated = $derived.by(() => {
@@ -149,6 +154,22 @@
 
 <section class="player-area" class:empty-battlefield={opponent && player.battlefield.length === 0} aria-label={`${label}${deckName ? ` — ${deckName}` : ''}`}>
   <details class="player-status type-caption"><summary>{label} status and mana</summary>
+  {#if identity.digest || identity.producer || identity.full !== identity.compact}
+  <div class="identity-details" data-testid="player-identity">
+    <p>{identity.full}</p>
+    {#if identity.digest}<p>SHA-256: {identity.digest}</p>{/if}
+    {#if identity.producer}<p>Producer: {identity.producer}</p>{/if}
+    {#if runtime}
+      <p>Runner: {runtime.runner}</p>
+      {#each Object.entries(runtime.artifacts) as [role, digest]}<p>{role}: {digest}</p>{/each}
+      <p>Config: {JSON.stringify(runtime.config)}</p>
+    {/if}
+    {#each ['source', 'world', 'model', 'step'] as const as key}
+      {@const value = identity.provenance?.[key]}
+      {#if value != null}<p>{key}: {value}</p>{/if}
+    {/each}
+  </div>
+  {/if}
   {#if player.mana}
     <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
       {#if player.restricted_mana?.length}
@@ -199,13 +220,13 @@
     class={`rounded-sm px-4 py-2 ${pieColors.length > 0 ? 'border border-black/30' : 'border border-line bg-field/70'}`}
     style:background={barBackground || undefined}
   >
-    <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-      <div class="min-w-0">
-        <h2 class={`type-display inline ${pieColors.length > 0 ? 'text-[#f8f1e0] [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]' : 'text-display'}`}>
-          {label}{#if deckName}<span class={`type-annotation ${pieColors.length > 0 ? 'text-[#f8f1e0]/80' : 'text-ink-2'}`}> — {deckName}</span>{/if}
+    <div class="player-bar-row flex items-baseline justify-between gap-x-6">
+      <div class="min-w-0 flex-1">
+        <h2 class={`type-display flex min-w-0 items-baseline ${pieColors.length > 0 ? 'text-[#f8f1e0] [text-shadow:0_1px_2px_rgb(0_0_0/0.35)]' : 'text-display'}`}>
+          <PlayerName {identity} />{#if deckName}<span class={`type-annotation shrink-0 ${pieColors.length > 0 ? 'text-[#f8f1e0]/80' : 'text-ink-2'}`}> — {deckName}</span>{/if}
         </h2>
       </div>
-      <div class={`flex items-baseline gap-4 ${pieColors.length > 0 ? 'text-[#f8f1e0]' : ''}`}>
+      <div class={`flex shrink-0 items-baseline gap-4 ${pieColors.length > 0 ? 'text-[#f8f1e0]' : ''}`}>
         <span class={`type-caption ${pieColors.length > 0 ? 'text-[#f8f1e0]/75' : 'text-ink-2'}`}>Library {player.library_count}</span>
         <div
           class={`flex items-baseline gap-1.5 ${focusedIds.has(player.id) ? `rounded outline-2 outline-offset-4 ${pieColors.length > 0 ? 'outline-[#f8f1e0]' : 'outline-action'}` : ''}`}
@@ -360,6 +381,7 @@
 
 <style>
   [data-narrated-seq] { outline: 2px solid var(--info); outline-offset: 2px; }
+  .identity-details { overflow-wrap: anywhere; user-select: text; }
   .player-area { min-width: 0; padding: .25rem 0; }
   .hand-cards { display: flex; align-items: end; gap: .5rem; overflow-x: auto; overscroll-behavior: contain; padding: .25rem; }
   .hand-cards > :global(*) { flex-shrink: 0; }
@@ -375,6 +397,8 @@
     .staves > :global(:not(.staff)) { flex-shrink: 0; }
   }
   @media (max-width: 640px) {
+    .player-bar-row { flex-wrap: wrap; row-gap: .25rem; }
+    .player-bar-row > :first-child { flex-basis: 100%; }
     .staff > :first-child { padding-top: 6px; }
   }
 </style>

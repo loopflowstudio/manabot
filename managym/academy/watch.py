@@ -76,7 +76,10 @@ def resolve_player(
         policy = build_villain_policy(config)
     recorded = asdict(config)
     player = bot_player(recorded)
-    if config.opponent_checkpoint is not None:
+    if (
+        config.opponent_checkpoint is not None
+        and config.opponent_checkpoint.get("schema") != "managym-policy-1"
+    ):
         player = replace(
             player, inference={**(player.inference or {}), **config.opponent_checkpoint}
         )

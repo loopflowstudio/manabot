@@ -585,6 +585,15 @@ export interface GameLogEntry {
   text: string;
 }
 
+export interface PolicyRuntimeIdentity {
+  id: string;
+  provider: string;
+  runner: string;
+  artifacts: Record<string, string>;
+  config: Record<string, unknown>;
+  supports_search: boolean;
+}
+
 export interface RecordedPlayer {
   seat: number;
   player_id: string;
@@ -592,7 +601,7 @@ export interface RecordedPlayer {
   name: string;
   deck: string;
   version: string | null;
-  inference: Record<string, unknown> | null;
+  inference: (Record<string, unknown> & { runtime?: PolicyRuntimeIdentity }) | null;
 }
 
 export interface GameSummary extends TraceSummary {
@@ -615,18 +624,26 @@ export interface TraceSummary {
   num_events: number;
 }
 
-export type VillainType = 'passive' | 'random' | 'search' | 'checkpoint';
+export type VillainType = 'passive' | 'random' | 'search' | 'policy';
 
 // One entry of GET /api/opponents: a checkpoint the server found. `reason` names why an unavailable entry cannot play.
 export interface TrainedOpponent {
+  supports_search?: boolean;
+  policy?: PolicyRuntimeIdentity;
   sha256: string;
   name: string;
   producer: string;
-  source: 'path' | 'runs' | 'tournament';
+  source: string;
   world: string | null;
   model: string | null;
   parameters: number | null;
   step: number | null;
+  run?: string | null;
+  run_id?: string | null;
+  stage?: string | null;
+  weights?: string | null;
+  updates?: number | null;
+  transitions?: number | null;
   // Display names of the decks the checkpoint was bound to (either seat).
   decks: string[];
   available: boolean;
@@ -647,7 +664,17 @@ export interface OpponentConfig {
   opponent_sha256?: string;
 }
 
+export interface CheckpointProvenance {
+  policy?: PolicyRuntimeIdentity;
+  source?: string | null;
+  world?: string | null;
+  model?: string | null;
+  step?: number | null;
+}
+
 export interface TraceConfig {
+  opponent?: { name: string; sha256: string; producer?: string } | null;
+  opponent_checkpoint?: CheckpointProvenance | null;
   watch_players?: string[] | null;
   hero_deck: Record<string, number>;
   villain_deck: Record<string, number>;

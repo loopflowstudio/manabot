@@ -61,8 +61,10 @@ The first opens the table already in that game; the second opens game 3 of an
 evaluation's command trace at its first decision. See
 [Start in a chosen game](#start-in-a-chosen-game),
 [Open a replay directly](#open-a-replay-directly) and
-[Launch from Python](#launch-from-python). To look at a game your own training
-loop played, see
+[Launch from Python](#launch-from-python). To play against a model you
+trained, or watch it play, see
+[Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint).
+To look at a game your own training loop played, see
 [Watch a game from your training loop](#watch-a-game-from-your-training-loop).
 
 ### Install
@@ -94,6 +96,7 @@ uv run --no-project managym academy --port 8001 --no-open --traces-dir ~/academy
 | `--host` | `127.0.0.1` | Address to listen on |
 | `--traces-dir` | `./academy/traces` | Where games are saved (also `ACADEMY_TRACES_DIR`) |
 | `--no-open` | off | Do not open a browser window |
+| `--policy` | none | Saved policy specification JSON; repeat for several. Its file stem is its launch alias. |
 
 When the server is accepting connections it prints one `ACADEMY_PLAY_READY`
 line, a JSON record with the server's `url`, the `traces_dir` in use and
@@ -102,8 +105,9 @@ your default browser. `open` equals `url` for a plain launch and points into
 the game or replay for `play` and `replay`. On a machine without a desktop
 (SSH, a container) pass `--no-open` and reach the port yourself.
 
-These four options go after `academy`, `academy play` or `academy replay`
-alike.
+These options go after `academy`, `academy play`, `academy watch` or
+`academy replay` alike. Policy specifications name installed providers
+([registering policies](#play-and-watch-a-trained-checkpoint)).
 
 The default address is reachable only from your own machine. Academy has no
 accounts: a browser's stored credential is its player identity. Listen on
@@ -137,7 +141,7 @@ setup screen is shown, and nothing is chosen for you beyond what you named.
 |---|---|---|
 | `--deck` | `ur_lessons` | Your deck: a bundled deck name or the path of a decklist file |
 | `--opponent-deck` | `gw_allies` | The opponent's deck, named the same way |
-| `--opponent` | `search` | `search`, `random`, `passive`, or the 64-character digest of a catalog checkpoint |
+| `--opponent` | `search` | `search`, `random`, `passive`, a registered policy alias, or `policy:<id>` |
 | `--sims` | `64` | Simulated playouts per decision for `search` |
 | `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
 | `--decklists` | `open` | `open` or `closed`: whether each player knows the other's list |
@@ -155,9 +159,9 @@ pack is attached.
 The setup is checked before the browser opens. An unknown deck name, a
 rejected decklist or an unusable combination prints one `ACADEMY_PLAY_ERROR`
 line with the reason and exits with status 2.
-The same restrictions apply as at the table: a checkpoint opponent needs
-manabot installed and does not accept decklist files, and `search` needs open
-decklists.
+Search needs open decklists. Every registered policy admits the selected decks
+before loading; a baseline bound to specific decks refuses another matchup.
+Missing or changed policy artifacts are refused with the provider's reason.
 
 Reloading the page returns to the same game and its pending decision; it does
 not deal again. **New Game** returns to ordinary setup with the launched
@@ -260,14 +264,25 @@ with serve(port=0) as academy:
   given as `str` is a bundled deck name; a `pathlib.Path` is a decklist file.
   With `seed`, each opening of its address deals the same game; without it,
   each opening deals afresh. Reloading in the same tab resumes its game either way.
+  `opponent` also takes a policy specification JSON as a `pathlib.Path`.
+- `academy.watch(players=("challenger", "random"))` opens Watch setup with
+  exact seats selected and leaves **Start** to you. A string is a registered
+  alias, `policy:<id>` or a built-in player; a `Path` names a saved specification.
+- `serve(..., policies={"challenger": factory})` registers an already constructed
+  policy factory directly. It needs no manifest or installed entry point.
+  Each factory must create a fresh mutable session per game and seat.
+- `serve(..., policies={"challenger": PolicySpec(...)})` loads an installed provider.
+  `sources=[PolicySource("manabot", {"runs_dir": "runs/elemental-a"})]` lets
+  that provider discover a run root. Sources belong to this server; no environment
+  variables are rewritten.
 - `academy.replay(source, game=None)` takes a trace `Path` with the same
   `game` selection as the command line, or a recording id as `str`. An integer
   `game` selects only a position; strings can also select a digest prefix.
 - `launch.read_games(path)` lists a trace file's games as `RecordedGame`
   values (`index`, `deal_seed`, `leg`, `players`, `decks`,
   `game_trace_sha256`), for choosing one in code.
-- `new_game` and `replay` return a `Launched` whose `url` opens that game or
-  replay, subject to the recording access rules above. `academy.open(url)`
+- `new_game`, `watch` and `replay` return a `Launched` whose `url` opens that
+  game, setup or replay, subject to the recording access rules above. `academy.open(url)`
   opens it in the default browser; `academy.open()` opens the bare table.
 
 Leaving the `with` block, or calling `academy.close()`, stops the server and
@@ -382,6 +397,9 @@ The table opens with UR Lessons (you) against GW Allies. Before starting:
 - **Opponent** chooses who you face: **Search 16**, **Search 64** or
   **Search 256** (the engine's built-in search, with that many simulated
   playouts per decision), **Random**, or **Passive**, which always passes.
+  With manabot installed it also offers **Registered policy**, which adds a
+  **Run** and a **Checkpoint** menu
+  ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
 - **Choose decks** assigns a deck to each seat from the bundled packs.
 - **New Game** starts the selected matchup. During a game it ends the current
   attempt and starts another.
@@ -636,8 +654,9 @@ Every game you start is recorded as you play.
   copy and **Return to recorded decision** goes back; the recording is never
   changed.
 - **Watch** (`/replay?watch=1`) plays two bots against each other, one decision
-  per step, and saves the result to the same list. A managym-only install
-  offers the Random and Search players.
+  per step, and saves the result to the same list. Each seat has the same
+  player menu as Play's **Opponent**. A managym-only install offers the Random
+  and Search players; manabot adds Greedy, Heuristic and trained checkpoints.
 
 A finished bot recording shows **Replay**, its actual players and decision
 controls first. A game still being played keeps the **Watch two bots** heading,
@@ -701,20 +720,104 @@ manabot brings Torch with it; see
 finds manabot through its installed entry point, with no setting to change.
 It adds:
 
-- **Trained opponents** in the Opponent menu: every policy checkpoint under
-  `MANABOT_RUNS_DIR` (default `./.runs`) and each `.pt` file, run directory or
-  Tournament file named in `ACADEMY_PLAY_CHECKPOINTS` (`:`-separated). A
-  checkpoint trained in another world or on other decks stays listed,
-  disabled, with the reason.
-- **Greedy** and **Heuristic** players in Watch.
+- **Registered policy** in Play's Opponent menu and in both Watch seats
+  ([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
+- **Greedy** and **Heuristic** registered policies.
 - **Open a game file**: exported training games and evaluation traces open as
   verified replays.
 
-Without manabot the Opponent menu and Watch show a line saying trained bots
-need it, and a saved game that was played against a checkpoint still replays;
-only continuing it needs the checkpoint. The decision-advice panel reads
+Independent Python policies work without manabot. A saved game that was played
+against a checkpoint still replays without its provider; continuing it needs
+the original admitted policy. The decision-advice panel reads
 fixtures from a checkout of this repository and is absent from an installed
 package.
+
+### Play and watch a trained checkpoint
+
+Register a baseline checkpoint using a saved specification, `challenger.json`:
+
+```json
+{"provider": "manabot", "artifact": "/models/self-play-raw.pt", "config": {}}
+```
+
+```bash
+uv run --no-project managym academy --policy challenger.json watch \
+    --player challenger --player random
+```
+
+Watch opens at setup with both seats selected. Choose decks and press **Start**.
+Either seat can use a registered policy. **Registered policy**, **Provider / run**
+and **Policy** are the same native selects in Play and Watch. They preserve an
+unavailable selection rather than substituting a newer model. Keyboard navigation
+uses the browser's select controls.
+
+With manabot installed, its provider discovers `.pt` and portable `.safetensors`
+checkpoints under `MANABOT_RUNS_DIR` (default `./.runs`) and explicit
+`ACADEMY_PLAY_CHECKPOINTS` sources. Python can supply provider-owned discovery
+without changing the environment:
+
+```python
+from managym.academy.launch import serve
+from managym.policy import PolicySource, PolicySpec
+
+with serve(
+    port=0,
+    policies={"challenger": PolicySpec("manabot", "/models/self-play-raw.pt")},
+    sources=[PolicySource("manabot", {"runs_dir": "runs/elemental-a"})],
+) as academy:
+    print(academy.watch(players=("challenger", "random")).url)
+    academy.wait()
+```
+
+Run, stage, raw/EMA, updates and transitions come from the run's `run.json`,
+joined to the exact artifact digest. Missing counts say **not recorded**;
+filenames never supply training counts. World/setup mismatches remain disabled
+with the precise reason. Imported decks work when the provider admits them.
+
+For a local fine-tuned Qwen saved with its tokenizer and safetensors weights:
+
+```json
+{"provider": "qwen", "artifact": "/models/qwen-finetuned", "config": {"device": "cpu", "precision": "float32", "max_new_tokens": 32, "seconds": 30}}
+```
+
+The Qwen provider needs manabot's optional LLM dependencies (`uv pip install
+'manabot[llm]'`). It reads local files only, pins model and tokenizer bytes,
+and uses the complete native text decision. It returns a single legal action;
+probabilities and a critic stay absent. Invalid or late output leaves the
+pending decision intact. Qwen does not support Mirror search. A provider's
+`supports_search` defaults false; a true flag alone is no search admission.
+Generic Mirror composition is the separate MTG-363 change.
+
+#### Independent Python policies
+
+Implement the framework-free contracts in `managym.policy`. A factory exposes
+`describe() -> PolicyDescriptor`, `admit(setup)` and
+`load(*, seat, seed) -> PolicySession`. Pass it directly as
+`serve(policies={"my-bot": factory})`. Installed providers may also register
+in the `managym.bots` entry-point group and implement `policy(spec)` plus
+optional `discover(config)` returning factories. Multiple providers coexist.
+Academy does not import a training framework or know their artifact layouts.
+
+A session implements `observe(view)`, `choose(view)` and `close()`. The shared
+runner sends each seat its viewer-safe native observations after setup and
+transitions, preserving live decision focus. `PolicyView` carries the observation,
+seat, complete ordered `choices`, one-use `binding` and optional native text
+capture. It contains no live environment. Return
+`PolicyDecision(choice=view.choices[index], binding=view.binding)`.
+Optional probabilities must cover that entire ordered set and sum to one;
+optional `ValueEstimate` declares units and viewer seat. Action-only choices
+never become synthetic model probabilities. The shared runner validates them
+before creating the existing bound Command; stale or illegal outputs commit nothing.
+Sessions close on replacement, completion, failed setup and server shutdown.
+
+The descriptor identity pins provider, adapter contract, runner/source, artifacts
+and semantic/runtime configuration. Display metadata may be absent. The browser
+selects that opaque identity and never submits an import path or model path.
+Recordings retain the complete descriptor and genuine outputs once. Finished
+replays need no policy reload, original checkpoint or installed provider.
+Live objects survive browser reload with their server; a backend restart needs
+the factory or saved specification again. Arbitrary Python objects are never
+pickled into recordings. Historical checkpoint recordings remain readable.
 
 ### Troubleshooting
 
@@ -731,8 +834,8 @@ and a message, and exits with status 2. From Python the same `code` and
 | `deck.unknown` | The value is not a bundled deck. The message lists bundled names; in Python, pass a `pathlib.Path` for a decklist file. |
 | `deck.unreadable` | The decklist file cannot be read as UTF-8 text. |
 | `deck.rejected` | Native admission refused a decklist. The message gives each seat's issues by line; fix them as you would after **Check decklists**. |
-| `setup.invalid` | The combination is not allowed, for example `--opponent search` with `--decklists closed`, or a checkpoint opponent with a decklist file. The message says which. |
-| `opponent.unavailable` | The checkpoint digest is not in the catalog, or manabot is not installed. See [Trained opponents and other bots](#trained-opponents-and-other-bots). |
+| `setup.invalid` | The combination is not allowed, for example `--opponent search` with `--decklists closed`, or a policy bound to different deck setups. The message says which. |
+| `policy.unavailable`, `opponent.unavailable`, `player.unavailable` | The policy or provider is missing, its specification is invalid, or its artifacts cannot run in this engine. The message says which. See [Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint). |
 | `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path (use `pathlib.Path` for files in Python), or pass the `--traces-dir` the game was recorded in. |
 | `participant_credential_required` in the browser after READY | The recording is private or unfinished and this browser at this address has no participant credential. Use the same browser and address (including port) where **Games** lists it, or open a shared, finished recording. |
 | `replay.unreadable` | The file is not a game file: not JSON, JSONL or gzip of either, or it holds no game records. Use an evaluation's `traces/<cell-id>.commands.jsonl.gz` (not its metrics or summary file) or an exported training game. |
@@ -745,8 +848,12 @@ and a message, and exits with status 2. From Python the same `code` and
 | `server.startup` / `server.shutdown` | The server could not start or finish stopping. The message names the failure. |
 | Cards show drawn plates instead of art | The server could not reach Scryfall, or `ACADEMY_CARD_ART=off` is set. Check the connection; a failed card is tried again after ten minutes. See [Card art](#card-art). |
 | No browser window opens | Open the printed `open` address yourself. On a remote machine, forward the port (`ssh -L 8000:127.0.0.1:8000 host`) and use `--no-open`. |
-| Trained opponents are not listed | manabot is not installed in the environment that runs Academy; the Opponent menu says so. Install it there and restart. If the menu reports a catalog error instead, manabot is present but Torch failed to import. |
-| A checkpoint is listed but disabled | It was trained in another world or for other decks; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
+| No policies are listed | Register a Python factory or a saved policy specification; check any provider discovery error shown below the picker. |
+| `No trained checkpoints found.` | Register a saved specification with `--policy <spec.json>` or supply provider-owned discovery sources through Python. |
+| A checkpoint is listed but disabled | It was trained in another world or on other card content; the row states the mismatch (for example `trained in w5, engine is w6`). Run it from the revision that wrote it. |
+| A checkpoint shows **not recorded** for its update | No `run.json` in the listed directories records those bytes. List the run directory rather than the file alone. A run that recorded no counts for its checkpoints stays **not recorded**. |
+| `The selected opponent checkpoint is unavailable.` | The file was moved or deleted after it was listed. Restore it or choose another; Academy does not pick a replacement. |
+| `The selected opponent checkpoint changed; restore the pinned artifact.` | The file at that path no longer has the listed SHA-256. Restore the original bytes, or restart Academy to list the new file as its own entry. |
 | Earlier games are missing from **Games** | Academy was launched from another directory. Launch from the original one or pass its `--traces-dir`. |
 | `No matching distribution found for managym` | No wheel exists for this Python or platform. See [supported platforms](engine-python.md). |
 
@@ -918,18 +1025,14 @@ forced-step automation cut deliberate inputs from 289 to 73.
 
 ### Other checkpoints
 
-Any trained checkpoint is selectable from the Opponent menu (`GET
-/api/opponents`): everything under `MANABOT_RUNS_DIR` (default `./.runs`) plus
-`.pt` files, run directories and Tournament JSON in `ACADEMY_PLAY_CHECKPOINTS`
-(`:`-separated). manabot supplies the catalog
-([trained opponents and other bots](#trained-opponents-and-other-bots)) and
-reads them with Torch's weights-only
-loader. A checkpoint bound to another world, content or deck setup stays listed,
-disabled, with the mismatch, and the server refuses it with the same sentence.
-The browser sends only a digest; the server re-hashes the bytes before play,
-fails clearly if they were replaced, and records the identity as the trace's
-`opponent_checkpoint`. An install without manabot lists no trained opponents
-and says why.
+Any trained checkpoint is selectable in Play and in either Watch seat
+([Play and watch a trained checkpoint](#play-and-watch-a-trained-checkpoint)).
+manabot supplies the catalog (`GET /api/opponents`) and reads checkpoints with
+its provider-owned loader. The browser sends only an opaque runtime identity: `policy:<id>`
+as Play's opponent or in `POST /api/watch` `players`. The server re-hashes the
+bytes before play, refuses an incompatible or replaced file with the sentence
+the menu shows, and records the identity as the trace's `opponent_checkpoint`
+in Play and in each seat's recorded player in Watch.
 
 To serve the same SPA/ASGI entrypoint as the hosted app:
 
