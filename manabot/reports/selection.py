@@ -12,10 +12,9 @@ from typing import Literal
 
 import numpy as np
 from pydantic import Field
-import torch
 
-from manabot.backends.torch.rl import selection_mask, transition_gae
 from manabot.infra.identity import canonical_sha256
+from manabot.policy.returns import selection_mask, transition_gae
 from manabot.training.regime import CollectSelection, DampedPolicyLearning, Strict
 from manabot.training.rollout.selection_data import FrozenRecord, SelectionDataset
 from manabot.training.updates.selection import SelectionGroup, selection_diagnostics
@@ -103,7 +102,6 @@ def _summary(rows: list[AnalyzedDecision]) -> GroupSummary:
     )
 
 
-@torch.no_grad()
 def analyze_selection(
     dataset: SelectionDataset,
     stage: CollectSelection,
@@ -133,19 +131,29 @@ def analyze_selection(
             decisions = [r for r in game.rows if r.actor == actor]
             if not decisions:
                 continue
-            values = torch.tensor([r.value for r in decisions])[:, None]
-            rewards = torch.zeros_like(values)
+            values = np.array([r.value for r in decisions], np.float32)[:, None]
+            rewards = np.zeros_like(values)
             outcome = (
                 0.0 if game.winner is None else 1.0 if game.winner == actor else -1.0
             )
             rewards[-1] = outcome
-            ends = torch.zeros_like(values, dtype=torch.bool)
+            ends = np.zeros_like(values, dtype=bool)
             ends[-1] = True
             advantage, _ = transition_gae(
-                rewards, values, ends, torch.zeros(1), gamma, learning.policy_lambda
+                rewards,
+                values,
+                ends,
+                np.zeros(1, np.float32),
+                gamma,
+                learning.policy_lambda,
             )
             residual, _ = transition_gae(
-                rewards, values, ends, torch.zeros(1), gamma, learning.value_lambda
+                rewards,
+                values,
+                ends,
+                np.zeros(1, np.float32),
+                gamma,
+                learning.value_lambda,
             )
             for index, decision in enumerate(decisions):
                 distance = len(decisions) - 1 - index
@@ -170,7 +178,7 @@ def analyze_selection(
     groups: list[PartitionSelectionGroup] = []
     for split in ("development", "held_out"):
         indices = [i for i, row in enumerate(rows) if row.split == split]
-        advantages = torch.tensor([rows[i].advantage for i in indices])[:, None]
+        advantages = np.array([rows[i].advantage for i in indices], np.float32)[:, None]
         selected = selection_mask(
             advantages, learning.filter_kind, fraction, learning.min_advantage
         )
@@ -178,10 +186,10 @@ def analyze_selection(
             rows[i] = rows[i].model_copy(update={"retained": keep})
         for group in selection_diagnostics(
             advantages,
-            torch.tensor([rows[i].lambda_residual for i in indices])[:, None],
+            np.array([rows[i].lambda_residual for i in indices], np.float32)[:, None],
             selected,
-            torch.tensor([rows[i].terminal_distance == 0 for i in indices])[:, None],
-            torch.tensor([rows[i].action_type for i in indices])[:, None],
+            np.array([rows[i].terminal_distance == 0 for i in indices])[:, None],
+            np.array([rows[i].action_type for i in indices])[:, None],
         ):
             groups.append(PartitionSelectionGroup(split=split, **group))
     rng = np.random.default_rng(stage.bootstrap_seed)

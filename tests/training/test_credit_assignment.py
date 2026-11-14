@@ -20,6 +20,7 @@ from manabot.backends.torch.rollout import AdmittedRollout
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.policy.prepare import Prepared
 from manabot.training.regime import BatchClosure, DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
@@ -88,11 +89,11 @@ class TableAgent(ActorCritic):
         logits[:, :2] = torch.tensor([0.25, 0.75]).log()
         self.offers = torch.nn.Parameter(logits)
 
-    def forward_distribution(self, obs: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
-        index = obs["agent_player"][:, 0, 0].long()
-        return self.offers[index].masked_fill(
-            obs["actions_valid"] == 0, -torch.inf
-        ), self.predictions[index]
+    def forward_distribution(self, obs: Prepared[Tensor]) -> tuple[Tensor, Tensor]:
+        index = obs.agent_player[:, 0, 0].long()
+        return self.offers[index].masked_fill(~obs.legal, -torch.inf), self.predictions[
+            index
+        ]
 
 
 class CreditGames:

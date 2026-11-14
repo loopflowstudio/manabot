@@ -8,17 +8,18 @@ from naming_reference import packed_definitions
 import pytest
 import torch
 
+from manabot.backends.torch._semantic_cards import SemanticCardEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.model.world import checkpoint_world
 from manabot.semantic.learning import ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
 from manabot.sim.matchup import AuthoredMatchup
 import managym
+from tests.model.prepared_routes import program_input
 
 
 @pytest.mark.parametrize("selection", ["full", "reordered", "empty"])
@@ -40,7 +41,9 @@ def test_program_execution_preserves_values_and_parameter_gradients(
         rows = torch.argsort(encoder.lengths, descending=True)[::5] + 1
     elif selection == "empty":
         rows = rows[:0]
-    actual = encoder.definitions(None if selection == "full" else rows)
+    actual = encoder.definitions(
+        program_input(encoder, None if selection == "full" else rows)
+    )
     expected = packed_definitions(reference, None if selection == "full" else rows)
     torch.testing.assert_close(actual, expected, atol=1e-12, rtol=1e-10)
     if not len(rows):
@@ -71,10 +74,12 @@ def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
     assert shape.expanded_tokens == int(encoder.lengths.sum())
     assert shape.padded_tokens == encoder.tokens.numel()
     assert encoder.token_embedding.num_embeddings == shape.unique_tokens + 1
-    definitions = encoder.definitions()
+    definitions = encoder.definitions(program_input(encoder))
     assert definitions.shape == (shape.definitions + 1, 8)
     for definition, row in pack.definition_row_by_card_def_id.items():
-        assert int(encoder._rows(torch.tensor([definition + 1.0]))[0]) == row + 1
+        assert (
+            int(encoder.definition_rows[torch.tensor([definition + 1])][0]) == row + 1
+        )
     definitions[1:].square().sum().backward()
     assert encoder.token_embedding.weight.grad is not None
     assert encoder.encoder.weight_ih_l0.grad is not None

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     # Annotations only: the update step and EMA serve any model, so importing
     # them loads neither the player's network nor the training configuration.
     from manabot.backends.torch.policy import ActorCritic
+    from manabot.policy.checkpoint import ParameterArrays
     from manabot.training.regime import Precision
 
 # -- Update step ---------------------------------------------------------------
@@ -273,7 +274,7 @@ class Learner:
             loss, self.agent, self.optimizer, max_grad_norm, recorder=recorder
         )
 
-    def gradients(self, loss: Tensor) -> dict[str, np.ndarray]:
+    def gradients(self, loss: Tensor) -> "ParameterArrays":
         """Unclipped gradients of `loss` by parameter name, without stepping
         (zero where none flowed)."""
         self.optimizer.zero_grad(set_to_none=True)
@@ -289,7 +290,7 @@ class Learner:
         self.optimizer.zero_grad(set_to_none=True)
         return gradients
 
-    def parameters(self) -> dict[str, np.ndarray]:
+    def parameters(self) -> "ParameterArrays":
         """A host copy of every parameter by name."""
         return {
             name: parameter.detach().cpu().numpy().copy()

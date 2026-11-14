@@ -13,11 +13,11 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.admission import admit_observation
 from manabot.model.world import checkpoint_world
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.training.rollout.collection import SeatRoutedCollector
 import managym
+from tests.model.prepared_routes import device_input
 
 
 def _agent(
@@ -94,8 +94,8 @@ def test_value_interface_and_collection_likelihoods(
         key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
         for key, value in batch.observations().observation.items()
     }
-    policy, raw_value = agent.forward_distribution(admit_observation(agent, obs))
-    ordinary_policy, value = agent(admit_observation(agent, obs))
+    policy, raw_value = agent.forward_distribution(device_input(agent, obs))
+    ordinary_policy, value = agent(device_input(agent, obs))
     assert torch.equal(policy, ordinary_policy)
     if kind == "categorical_wdl":
         assert raw_value.shape == (8, 3)
@@ -119,7 +119,7 @@ def test_value_interface_and_collection_likelihoods(
         batch.logprobs.ravel(),
         atol=1e-6,
     )
-    torch.testing.assert_close(agent.get_value(admit_observation(agent, obs)), value)
+    torch.testing.assert_close(agent.get_value(device_input(agent, obs)), value)
 
     path = tmp_path / "critic.pt"
     saved_config = agent.config.model_dump()
@@ -131,9 +131,7 @@ def test_value_interface_and_collection_likelihoods(
     assert loaded.config.value_kind == kind
     assert loaded.config.value_aggregation == aggregation
     assert loaded.config.attention_layers == depth
-    loaded_policy, loaded_value = loaded.forward_distribution(
-        admit_observation(loaded, obs)
-    )
+    loaded_policy, loaded_value = loaded.forward_distribution(device_input(loaded, obs))
     torch.testing.assert_close(loaded_policy, policy, rtol=0, atol=0)
     torch.testing.assert_close(loaded_value, raw_value, rtol=0, atol=0)
 
@@ -204,7 +202,7 @@ def test_distributional_supervision_reaches_shared_encoder() -> None:
         key: torch.from_numpy(value[0])
         for key, value in batch.observations().observation.items()
     }
-    _, logits = agent.forward_distribution(admit_observation(agent, obs))
+    _, logits = agent.forward_distribution(device_input(agent, obs))
     F.cross_entropy(logits, torch.tensor([0, 2])).backward()
     assert any(
         parameter.grad is not None and bool(parameter.grad.abs().sum() > 0)
@@ -235,7 +233,7 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
         key: torch.from_numpy(value).unsqueeze(0)
         for key, value in space.encode(engine.observation_for_player(actor)).items()
     }
-    expected = agent.forward_distribution(admit_observation(agent, original))
+    expected = agent.forward_distribution(device_input(agent, original))
     for seed in (17, 91):
         hidden = engine.clone_env()
         hidden.determinize(seed, perspective=actor)
@@ -245,6 +243,6 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
         }
         for key in original:
             torch.testing.assert_close(original[key], observation[key], rtol=0, atol=0)
-        actual = agent.forward_distribution(admit_observation(agent, observation))
+        actual = agent.forward_distribution(device_input(agent, observation))
         for left, right in zip(expected, actual, strict=True):
             torch.testing.assert_close(left, right, rtol=0, atol=0)
