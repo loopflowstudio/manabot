@@ -27,6 +27,7 @@ import numpy as np
 import psutil
 import torch
 
+from manabot.backends import resolve
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
@@ -336,8 +337,6 @@ def serve(
     One selector watches all of them, so each wake-up costs only its ready
     connections, and `service_receive` measures that per-request work.
     """
-    from manabot.backends import resolve
-
     backend = resolve("torch")
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)

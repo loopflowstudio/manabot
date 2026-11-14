@@ -21,6 +21,7 @@ from etude.train.run import track
 import numpy as np
 
 # Local imports
+from manabot.backends import resolve
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -734,8 +735,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     sim_config, runtime_config = load_sim_config(
         preset=args.preset, set_overrides=args.set_values
     )
-    from manabot.backends import resolve
-
     run_simulation(sim_config, runtime_config, backend=resolve("torch"))
 
 

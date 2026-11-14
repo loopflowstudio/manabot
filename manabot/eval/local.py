@@ -14,6 +14,7 @@ import time
 
 import torch
 
+from manabot.backends import resolve
 from manabot.eval.admission import (
     OPPONENT_NAMES,
     AnchorKind,
@@ -113,8 +114,6 @@ def _prepare(
     max_commands: int,
 ) -> None:
     try:
-        from manabot.backends import resolve
-
         torch.set_num_threads(1)
         request = checkpoint_request(
             checkpoint,

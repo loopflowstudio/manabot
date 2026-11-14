@@ -603,6 +603,19 @@ def test_only_composition_roots_choose_a_backend() -> None:
     assert sorted(_BACKEND_NOT_YET_INJECTED - importing) == []
 
 
+def test_importing_the_resolver_loads_no_framework() -> None:
+    """Roots import `resolve` at module top; only calling it loads a framework."""
+    probe = textwrap.dedent(
+        f"""
+        import sys
+        from manabot.backends import resolve
+        loaded = sorted(m for m in sys.modules if m.split(".")[0] in {_FRAMEWORKS!r})
+        assert not loaded, loaded
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], check=True, cwd=REPO_ROOT)
+
+
 def test_engine_has_no_training_imports() -> None:
     violations: list[str] = []
     for path in (REPO_ROOT / "managym").rglob("*.py"):

@@ -18,6 +18,7 @@ import sys
 import time
 from typing import Any
 
+from manabot.backends import resolve
 from manabot.env.observation import ObservationSpace
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey, MatchRow
@@ -244,8 +245,6 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     checkpoint_paths = {}
     space = None
     if candidate is not None:
-        from manabot.backends import resolve
-
         checkpoint_paths, space = validate_registered_player(
             candidate,
             args.candidate_checkpoint.resolve() if args.candidate_checkpoint else None,

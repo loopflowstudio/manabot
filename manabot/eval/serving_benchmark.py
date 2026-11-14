@@ -25,6 +25,7 @@ from pydantic import Field, model_validator
 import torch
 
 from manabot._process import bounded_call
+from manabot.backends import resolve
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.execution import bind_execution
 from manabot.infra.config import MatchConfig
@@ -145,8 +146,6 @@ def _numerical_worker(
     connection: Connection, plan: BenchmarkPlan, panel: Panel, trace: Path
 ) -> None:
     """Compare retained identical inputs, masks, seeds and outputs across modes."""
-    from manabot.backends import resolve
-
     backend = resolve("torch")
     torch.set_num_threads(1)
     stores: list[PolicyStore] = []

@@ -16,6 +16,7 @@ import time
 
 from etude.run.storage import default_root
 
+from manabot.backends import resolve
 from manabot.eval.arena_log import CardMapping, export_arena_log
 from manabot.eval.card_evaluation import (
     CardEvaluationSpec,
@@ -135,8 +136,6 @@ def main() -> None:
     verification.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "evaluate":
-        from manabot.backends import resolve
-
         result = evaluate_cards(
             CardEvaluationSpec.model_validate_json(args.spec.read_bytes()),
             args.out,

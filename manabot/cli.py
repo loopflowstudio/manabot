@@ -8,6 +8,7 @@ from typing import Literal, Optional, Sequence
 
 import typer
 
+from manabot.backends import resolve
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
@@ -254,8 +255,6 @@ def sim_command(
             )
     except (ValueError, OSError) as error:
         raise typer.BadParameter(str(error)) from error
-    from manabot.backends import resolve
-
     run_simulation(sim_config, runtime_config, backend=resolve("torch"))
 
 

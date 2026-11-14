@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
+from manabot.backends import resolve
 import managym
 from managym.bots import (
     BeliefSummary,
@@ -28,8 +29,6 @@ if TYPE_CHECKING:
 
 def checkpoint_backend() -> Backend:
     """Select the training provider's runtime for checkpoint operations."""
-    from manabot.backends import resolve
-
     return resolve("torch")
 
 

@@ -26,6 +26,7 @@ import traceback
 from typing import Any
 from uuid import uuid4
 
+from manabot.backends import resolve
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
@@ -396,8 +397,6 @@ def game_worker(
     def backend_factory() -> Backend:
         # Child composition root: code/served games never invoke this loader.
         import torch
-
-        from manabot.backends import resolve
 
         torch.set_num_threads(1)
         return resolve("torch")
