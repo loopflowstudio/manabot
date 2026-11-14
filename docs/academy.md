@@ -47,7 +47,7 @@ network requests while you play.
 To skip the setup screens, name the game or the replay on the command line:
 
 ```bash
-uv run --no-project managym academy play --hero ur_lessons --villain ./my-deck.txt --seed 7
+uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt --seed 7
 uv run --no-project managym academy replay out/traces/<cell-id>.commands.jsonl.gz --game 3
 ```
 
@@ -112,7 +112,7 @@ the same traces directory.
 ### Start in a chosen game
 
 ```bash
-uv run --no-project managym academy play --hero ur_lessons --villain ./my-deck.txt \
+uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt \
     --opponent search --sims 64 --seed 7
 ```
 
@@ -127,8 +127,8 @@ setup screen is shown, and nothing is chosen for you beyond what you named.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--hero` | `ur_lessons` | Your deck: a bundled deck name or the path of a decklist file |
-| `--villain` | `gw_allies` | The opponent's deck, named the same way |
+| `--deck` | `ur_lessons` | Your deck: a bundled deck name or the path of a decklist file |
+| `--opponent-deck` | `gw_allies` | The opponent's deck, named the same way |
 | `--opponent` | `search` | `search`, `random`, `passive`, or the 64-character digest of a catalog checkpoint |
 | `--sims` | `64` | Simulated playouts per decision for `search` |
 | `--seed` | random | Deal seed, an unsigned 64-bit integer; the same seed and decks give the same deal |
@@ -136,6 +136,8 @@ setup screen is shown, and nothing is chosen for you beyond what you named.
 
 A decklist file is the UTF-8 `.txt` or `.dek` format the table imports: one
 `count card name` per line, with optional `Main` and `Sideboard` headings.
+A bundled name always selects that deck, even if a file or directory has the
+same name. Use an explicit path such as `./ur_lessons` to select that file.
 Decks go through the same native admission as an imported deck in the browser
 (the development format and supported cards, not tournament legality). When
 either seat is a file, the game is recorded as an imported matchup: a bundled
@@ -168,6 +170,14 @@ uv run --no-project managym academy replay <recording-id>
 The first command opens one game of an evaluation's command trace; the second
 reopens a game already in **Games**, by the id shown there. Both land in
 **Replay** on decision 1, ready to step.
+
+A recording id keeps the recording's existing access rules: open it in the
+same browser and at the same address (including port) where **Games** lists
+it, or open a shared, finished recording. Another browser or address cannot
+open a private or unfinished game without its participant credential. The
+launcher checks that the id exists; access is checked when the browser opens
+it. Imported evaluation games are shared, finished recordings and can open in
+any browser that can reach the server.
 
 An evaluation trace needs manabot installed beside Academy, at the same
 release version
@@ -206,10 +216,10 @@ from pathlib import Path
 
 from managym.academy.launch import serve
 
-with serve(port=0, open_browser=False) as academy:
+with serve(port=0) as academy:
     game = academy.new_game(
-        hero="ur_lessons",
-        villain=Path("my-deck.txt"),
+        deck="ur_lessons",
+        opponent_deck=Path("my-deck.txt"),
         opponent="search",
         sims=64,
         seed=7,
@@ -221,11 +231,10 @@ with serve(port=0, open_browser=False) as academy:
     academy.wait()       # block until Ctrl-C
 ```
 
-- `serve(host="127.0.0.1", port=8000, traces_dir=None, open_browser=True)`
+- `serve(host="127.0.0.1", port=8000, traces_dir=None)`
   starts the server on a background thread and returns once it accepts
   connections. `port=0` takes a free port; `academy.url` and
-  `academy.traces_dir` report what is in use. With `open_browser=True` the
-  table opens as it does for `managym academy`.
+  `academy.traces_dir` report what is in use. It opens no browser.
 - `academy.new_game(...)` takes the options of `managym academy play`. A deck
   given as `str` is a bundled deck name; a `pathlib.Path` is a decklist file.
 - `academy.replay(source, game=None)` takes a trace `Path` with the same
@@ -234,8 +243,8 @@ with serve(port=0, open_browser=False) as academy:
   values (`index`, `deal_seed`, `leg`, `players`, `decks`,
   `game_trace_sha256`), for choosing one in code.
 - `new_game` and `replay` return a `Launched` whose `url` opens that game or
-  replay in any browser that can reach the server. `academy.open(url)` opens
-  it in the default browser.
+  replay, subject to the recording access rules above. `academy.open(url)`
+  opens it in the default browser; `academy.open()` opens the bare table.
 
 Leaving the `with` block, or calling `academy.close()`, stops the server and
 frees the port; unfinished games are kept as interrupted, as with Ctrl-C.
@@ -384,6 +393,7 @@ and a message, and exits with status 2. From Python the same `code` and
 | `setup.invalid` | The combination is not allowed, for example `--opponent search` with `--decklists closed`, or a checkpoint opponent with a decklist file. The message says which. |
 | `opponent.unavailable` | The checkpoint digest is not in the catalog, or manabot is not installed. See [Trained opponents and other bots](#trained-opponents-and-other-bots). |
 | `replay.missing` | No such trace file, and no recording with that id in this traces directory. Check the path, or pass the `--traces-dir` the game was recorded in. |
+| `participant_credential_required` in the browser after READY | The recording is private or unfinished and this browser at this address has no participant credential. Use the same browser and address (including port) where **Games** lists it, or open a shared, finished recording. |
 | `replay.unreadable` | The file is not a command trace: not JSON, JSONL or gzip of either, or it holds no game records. Use `traces/<cell-id>.commands.jsonl.gz`, not the metrics or summary file. |
 | `replay.ambiguous` | The trace holds several games and none was selected. Choose one of the listed games with `--game`. |
 | `replay.game_unknown` | `--game` is past the end of the file, or matches no digest or more than one. |

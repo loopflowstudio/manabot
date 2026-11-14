@@ -103,7 +103,7 @@ def main() -> None:
         root = Path(directory)
         source = root / "game.commands.jsonl.gz"
         write_example_trace(source)
-        with serve(port=0, traces_dir=root / "python", open_browser=False) as academy:
+        with serve(port=0, traces_dir=root / "python") as academy:
             assert "launch=" in academy.new_game(opponent="passive", seed=7).url
             replay = academy.replay(source)
             _check_replay(replay.url)

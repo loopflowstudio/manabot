@@ -25,8 +25,13 @@ def academy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Academy
     site.mkdir()
     (site / "index.html").write_text("Academy")
     monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
+
+    def unexpected_browser(url: str) -> bool:
+        raise AssertionError(f"Unexpected browser open: {url}")
+
+    monkeypatch.setattr("managym.academy.launch.webbrowser.open", unexpected_browser)
     previous = server.trace_store.TRACES_DIR
-    with serve(port=0, traces_dir=tmp_path / "traces", open_browser=False) as running:
+    with serve(port=0, traces_dir=tmp_path / "traces") as running:
         yield running
     server.trace_store.TRACES_DIR = previous
 
@@ -39,7 +44,7 @@ def test_game_launch_preserves_config_pending_decision_and_identity(
     academy: Academy,
 ) -> None:
     launched = academy.new_game(
-        hero="gw_allies", villain="ur_lessons", opponent="passive", seed=7
+        deck="gw_allies", opponent_deck="ur_lessons", opponent="passive", seed=7
     )
     launch_id = _launch_id(launched.url)
     with connect(academy.url.replace("http:", "ws:") + "/ws/play") as ws:
@@ -67,7 +72,7 @@ def test_mixed_file_and_bundled_decks_admit_sideboards(
 ) -> None:
     deck = tmp_path / "deck.txt"
     deck.write_text("20 Mountain\n20 Gray Ogre\nSideboard\n2 Lightning Bolt\n")
-    launched = academy.new_game(hero=deck, opponent="random", seed=11)
+    launched = academy.new_game(deck=deck, opponent="random", seed=11)
     config = server._parse_game_config(server.LAUNCH_CONFIGS[_launch_id(launched.url)])
     assert config.hero_deck_name == config.villain_deck_name == "imported"
     assert config.hero_sideboard == {"Lightning Bolt": 2}
@@ -78,8 +83,8 @@ def test_mixed_file_and_bundled_decks_admit_sideboards(
 @pytest.mark.parametrize(
     ("kwargs", "code"),
     [
-        ({"hero": "absent"}, "deck.unknown"),
-        ({"hero": Path("/absent/deck.txt")}, "deck.unreadable"),
+        ({"deck": "absent"}, "deck.unknown"),
+        ({"deck": Path("/absent/deck.txt")}, "deck.unreadable"),
         ({"seed": -1}, "setup.invalid"),
         ({"sims": 0}, "setup.invalid"),
         ({"decklists": "closed"}, "setup.invalid"),
@@ -94,13 +99,46 @@ def test_setup_errors_before_open(
     assert error.value.code == code
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "label"),
+    [
+        ({"deck": "absent"}, "your deck"),
+        ({"opponent_deck": "absent"}, "opponent deck"),
+        ({"deck": Path("/absent/deck.txt")}, "your deck"),
+        ({"opponent_deck": Path("/absent/deck.txt")}, "opponent deck"),
+    ],
+)
+def test_launch_deck_errors_name_the_seat(
+    academy: Academy, kwargs: dict[str, Any], label: str
+) -> None:
+    with pytest.raises(AcademyLaunchError, match=label):
+        academy.new_game(**kwargs)
+
+
+def test_open_explicitly_selects_game_or_bare_table(
+    academy: Academy, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[str] = []
+
+    def open_browser(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    monkeypatch.setattr("managym.academy.launch.webbrowser.open", open_browser)
+    game = academy.new_game(opponent="passive")
+    assert opened == []
+    academy.open(game.url)
+    academy.open()
+    assert opened == [game.url, academy.url]
+
+
 def test_native_deck_diagnostics_and_unknown_launch(
     academy: Academy, tmp_path: Path
 ) -> None:
     deck = tmp_path / "bad.txt"
     deck.write_text("20 Mountain\n2 Not A Card\n")
     with pytest.raises(AcademyLaunchError) as error:
-        academy.new_game(hero=deck)
+        academy.new_game(deck=deck)
     assert error.value.code == "deck.rejected"
     assert "hero" in error.value.message
     assert "2" in error.value.message
@@ -111,7 +149,7 @@ def test_native_deck_diagnostics_and_unknown_launch(
 
 def test_lifecycle_exclusive_and_releases_port(academy: Academy) -> None:
     with pytest.raises(AcademyLaunchError, match="already running") as error:
-        serve(port=0, open_browser=False)
+        serve(port=0)
     assert error.value.code == "server.running"
     port = urlparse(academy.url).port
     academy.close()
@@ -119,7 +157,7 @@ def test_lifecycle_exclusive_and_releases_port(academy: Academy) -> None:
     with socket.socket() as listener:
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         listener.bind(("127.0.0.1", port))
-    with serve(port=0, traces_dir=academy.traces_dir, open_browser=False):
+    with serve(port=0, traces_dir=academy.traces_dir):
         pass
 
 

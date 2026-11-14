@@ -30,7 +30,7 @@ covers playing, replays, trained bots and launch troubleshooting.
 ### Start a game with your chosen decks
 
 ```bash
-uv run --no-project managym academy play --hero ur_lessons --villain ./my-deck.txt \
+uv run --no-project managym academy play --deck ur_lessons --opponent-deck ./my-deck.txt \
     --opponent search --sims 64 --seed 7
 ```
 
@@ -39,6 +39,8 @@ The browser opens already in that game: UR Lessons against the decklist in
 deck name or a decklist file; `--opponent` is `search`, `random`, `passive`
 or a checkpoint digest. A rejected decklist or unknown deck stops the command
 with the reason before anything opens.
+Bundled names take precedence over same-named files; use `./ur_lessons` to
+select a file named `ur_lessons`.
 
 The same choices are in the browser. Open **Choose decks**. Browse a bundled deck and
 select **Use for me** or **Use for opponent** to assign each seat, choose an
@@ -74,7 +76,8 @@ The browser opens in **Replay** on that game's first decision; use **Step
 decision**, **Previous decision** or **Play**. `--game` is the game's
 position in the file, counted from 0, or the start of its trace digest; run
 the command without it to list the file's games. `managym academy replay
-<recording-id>` reopens a game from **Games**, with or without manabot. In
+<recording-id>` reopens a game from **Games**, with or without manabot, in the
+same browser and address (including port), or when it is shared and finished. In
 the browser, the same import is **Open arena / Tournament game** under
 **Watch** (`/replay?watch=1`). Import verifies the
 recorded actions and state digests without running the original players or
@@ -89,15 +92,16 @@ from pathlib import Path
 
 from managym.academy.launch import serve
 
-with serve(port=0, open_browser=False) as academy:
-    game = academy.new_game(hero="ur_lessons", villain=Path("my-deck.txt"), seed=7)
+with serve(port=0) as academy:
+    game = academy.new_game(deck="ur_lessons", opponent_deck=Path("my-deck.txt"), seed=7)
     replay = academy.replay(Path("out/traces/c41.commands.jsonl.gz"), game=3)
     academy.open(game.url)
     academy.wait()  # until Ctrl-C; leaving the block stops the server
 ```
 
-`game.url` and `replay.url` open that game or replay in any browser that can
-reach the server, so a test can drive them. Failures raise
+`serve` opens no browser; call `academy.open()` to open the bare table.
+`game.url` and imported evaluation replay URLs open in any browser that can
+reach the server; recording ids retain the access rules above. Failures raise
 `AcademyLaunchError` with a `code`. See
 [Launch from Python](https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#launch-from-python).
 

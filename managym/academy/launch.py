@@ -228,8 +228,8 @@ class Academy:
     def new_game(
         self,
         *,
-        hero: str | Path = "ur_lessons",
-        villain: str | Path = "gw_allies",
+        deck: str | Path = "ur_lessons",
+        opponent_deck: str | Path = "gw_allies",
         opponent: str = "search",
         sims: int = 64,
         seed: int | None = None,
@@ -239,14 +239,18 @@ class Academy:
         import managym
         from managym.academy import server
 
-        for deck in (hero, villain):
-            if isinstance(deck, str) and deck not in server.NAMED_DECKS:
+        seats = (
+            ("hero", deck, "your deck"),
+            ("villain", opponent_deck, "opponent deck"),
+        )
+        for _, selected, label in seats:
+            if isinstance(selected, str) and selected not in server.NAMED_DECKS:
                 raise AcademyLaunchError(
                     "deck.unknown",
-                    f"Unknown deck {deck!r}; bundled names: {', '.join(sorted(server.NAMED_DECKS))}",
+                    f"Unknown {label} {selected!r}; bundled names: {', '.join(sorted(server.NAMED_DECKS))}",
                 )
         checkpoint = _is_sha256(opponent)
-        imported = isinstance(hero, Path) or isinstance(villain, Path)
+        imported = isinstance(deck, Path) or isinstance(opponent_deck, Path)
         config: dict[str, Any] = {
             "villain_type": "checkpoint" if checkpoint else opponent,
             "villain_sims": sims,
@@ -262,11 +266,10 @@ class Academy:
                 )
         if imported:
             config["deck_import"] = {
-                seat: _deck_file(deck, seat)
-                for seat, deck in (("hero", hero), ("villain", villain))
+                seat: _deck_file(selected, label) for seat, selected, label in seats
             }
         else:
-            config.update(hero_deck=hero, villain_deck=villain)
+            config.update(hero_deck=deck, villain_deck=opponent_deck)
         try:
             server._parse_game_config(config)
         except managym.DeckImportError as exc:
@@ -346,9 +349,8 @@ def serve(
     host: str = "127.0.0.1",
     port: int = 8000,
     traces_dir: Path | None = None,
-    open_browser: bool = True,
 ) -> Academy:
-    """Bind and start the packaged site; the caller must close the returned server."""
+    """Start the site without opening a browser; the caller must close the server."""
     if not 0 <= port <= 65535:
         raise AcademyLaunchError("setup.invalid", "port must be between 0 and 65535.")
     if not _ACTIVE_LOCK.acquire(blocking=False):
@@ -430,8 +432,6 @@ def serve(
                     "server.startup", "Academy did not start within 15 seconds."
                 )
             time.sleep(0.01)
-        if open_browser:
-            academy.open()
         return academy
     except BaseException as exc:
         if academy is not None:

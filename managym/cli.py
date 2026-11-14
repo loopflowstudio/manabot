@@ -1,6 +1,7 @@
 """Engine command line: prepare and launch the packaged Academy browser UI."""
 
 import argparse
+from collections.abc import Collection
 import json
 from pathlib import Path
 import sys
@@ -9,8 +10,12 @@ DEFAULT_URL = "http://127.0.0.1:8000"
 GUIDE_URL = "https://github.com/loopflowstudio/manabot/blob/main/docs/academy.md#running-academy"
 
 
-def _path_or_name(value: str, suffixes: set[str]) -> str | Path:
-    """A file argument is an existing or path-shaped value; anything else is a name."""
+def _path_or_name(
+    value: str, suffixes: set[str], names: Collection[str] = ()
+) -> str | Path:
+    """A known name is never a file; otherwise an existing or path-shaped value is one."""
+    if value in names:
+        return value
     path = Path(value).expanduser()
     return path if path.exists() or "/" in value or path.suffix in suffixes else value
 
@@ -31,8 +36,8 @@ def academy(argv: list[str] | None = None) -> int:
     )
     commands = parser.add_subparsers(dest="command")
     play = commands.add_parser("play", parents=[common], help="Start in a chosen game")
-    play.add_argument("--hero", default="ur_lessons")
-    play.add_argument("--villain", default="gw_allies")
+    play.add_argument("--deck", default="ur_lessons")
+    play.add_argument("--opponent-deck", default="gw_allies")
     play.add_argument("--opponent", default="search")
     play.add_argument("--sims", type=int, default=64)
     play.add_argument("--seed", type=int)
@@ -48,13 +53,17 @@ def academy(argv: list[str] | None = None) -> int:
             host=getattr(args, "host", "127.0.0.1"),
             port=getattr(args, "port", 8000),
             traces_dir=getattr(args, "traces_dir", None),
-            open_browser=False,
         ) as running:
             target = running.url
             if args.command == "play":
+                from managym.academy import server
+
+                decklist = {".txt", ".dek"}
                 target = running.new_game(
-                    hero=_path_or_name(args.hero, {".txt", ".dek"}),
-                    villain=_path_or_name(args.villain, {".txt", ".dek"}),
+                    deck=_path_or_name(args.deck, decklist, server.NAMED_DECKS),
+                    opponent_deck=_path_or_name(
+                        args.opponent_deck, decklist, server.NAMED_DECKS
+                    ),
                     opponent=args.opponent,
                     sims=args.sims,
                     seed=args.seed,

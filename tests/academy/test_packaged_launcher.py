@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from managym.academy import extensions, opponent, server
+from managym.academy.launch import Academy
 from managym.academy.watch import WatchRequest, create_watch, import_arena
 from managym.bots import BotPolicy, passive_policy
 from managym.cli import academy
@@ -37,6 +38,79 @@ def test_missing_site_names_checkout_launcher(
     record = json.loads(capsys.readouterr().err.removeprefix("ACADEMY_PLAY_ERROR "))
     assert record["code"] == "site.missing"
     assert "./scripts/play" in record["message"]
+
+
+@pytest.mark.parametrize("collision", ["file", "directory"])
+def test_cli_bundled_decks_win_over_paths(
+    collision: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "index.html").write_text("Academy")
+    monkeypatch.setenv("ACADEMY_FRONTEND_BUILD", str(site))
+    monkeypatch.chdir(tmp_path)
+    for name in ("ur_lessons", "gw_allies"):
+        path = tmp_path / name
+        if collision == "directory":
+            path.mkdir()
+        else:
+            path.write_text("not a decklist")
+    configs: list[server.GameConfig] = []
+
+    def inspect_launch(running: Academy) -> None:
+        configs.extend(
+            server._parse_game_config(c) for c in server.LAUNCH_CONFIGS.values()
+        )
+
+    monkeypatch.setattr(Academy, "wait", inspect_launch)
+    previous = server.trace_store.TRACES_DIR
+    try:
+        assert (
+            academy(
+                [
+                    "play",
+                    "--deck",
+                    "ur_lessons",
+                    "--opponent-deck",
+                    "gw_allies",
+                    "--port",
+                    "0",
+                    "--no-open",
+                ]
+            )
+            == 0
+        )
+        assert configs[0].hero_deck_name == "ur_lessons"
+        assert configs[0].villain_deck_name == "gw_allies"
+        assert "ACADEMY_PLAY_READY" in capsys.readouterr().out
+        # Explicit paths still select files (or report an unreadable directory).
+        assert (
+            academy(
+                [
+                    "play",
+                    "--deck",
+                    "./ur_lessons",
+                    "--port",
+                    "0",
+                    "--no-open",
+                ]
+            )
+            == 2
+        )
+        error_line = next(
+            line
+            for line in capsys.readouterr().err.splitlines()
+            if line.startswith("ACADEMY_PLAY_ERROR ")
+        )
+        error = json.loads(error_line.removeprefix("ACADEMY_PLAY_ERROR "))
+        assert error["code"] == (
+            "deck.unreadable" if collision == "directory" else "deck.rejected"
+        )
+    finally:
+        server.trace_store.TRACES_DIR = previous
 
 
 @pytest.mark.parametrize("held", ["127.0.0.1", "0.0.0.0"])

@@ -16,10 +16,12 @@ def main() -> None:
     with serve(
         port=int(os.environ["ACADEMY_LAUNCH_PORT"]),
         traces_dir=output.parent / "traces",
-        open_browser=False,
     ) as academy:
         game = academy.new_game(
-            hero="gw_allies_jeong", villain="ur_lessons", opponent="passive", seed=7
+            deck="gw_allies_jeong",
+            opponent_deck="ur_lessons",
+            opponent="passive",
+            seed=7,
         )
         replay = academy.replay(source)
         output.write_text(json.dumps({"game": game.url, "replay": replay.url}))
