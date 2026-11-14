@@ -22,6 +22,7 @@ uv run etude train manabot/recipes/elemental.py --resume   # carry that run on
 uv run etude train experiments/batched_baseline.py  # batched GPU baseline
 uv run etude train manabot/recipes/local.py --experiment local-one-seat --config '{"learning_seats": "one"}'  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
+uv run manabot export-game runs/jace/games --game 0 --out jace.game.jsonl.gz  # one recorded training game, for Academy
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
@@ -414,6 +415,37 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
+### Watch a game the loop played
+
+```python
+from pathlib import Path
+
+from manabot.sim.recording import record_games
+from manabot.training.loops.minimal import train
+
+with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
+    train(8)
+path = games.sample(seed=0).export(Path("jace.game.jsonl.gz"))
+```
+
+```bash
+uv run --no-project managym academy replay jace.game.jsonl.gz
+```
+
+`record_games` keeps a receipt of every game the collectors inside the block
+play (seed, decks, chosen actions) without changing the loop. `sample` picks
+one complete game; `export` replays its actions through the engine, checks
+each decision's option count against the receipt and writes one Command game
+bound to the current world, labelled a training game with the player names you
+gave. Academy steps through it with no policy or checkpoint. `uv run manabot
+export-game <directory> --out <path>` lists a recorded directory's games and exports one,
+including a `training/exposure` directory downloaded from a run. Games cut off
+when the loop stopped are counted and not exported. A fresh game between
+current policies is an evaluation game, not a training game; evaluation writes
+those. The
+[Academy guide](../docs/academy.md#watch-a-game-from-your-training-loop) covers
+selection, naming the seats and failures.
+
 The reference league's TrainingJob enables private exposure capture through the
 ordinary native vector collector. Digest-bound game receipts preserve actual
 sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
@@ -429,16 +461,16 @@ in Git history. Their archived inputs and receipts are indexed in
 [repository archive](../docs/development.md#retained-evidence-and-archived-corpora). Shared target inspection
 now belongs to `sim/action/targeting.py`.
 
-`heuristic` (`manabot/sim/heuristic.py`) is a
-separately versioned candidate anchor of rules of thumb: highest-mana-value casts,
-removal held for a kill, counters held for an opponent's spell, effect polarity
-derived from the semantic card source, attacks unless a blocker kills and
-survives, and value blocks. Prompts without a rule match `scripted_greedy`, which
-stays frozen with its registered source identity. Select it for checkpoint monitoring
-with `MonitorProtocol(opponent="heuristic")`. One exploratory check (MTG-152,
-GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
-0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower in every
-cell; it is not yet a frozen anchor comparison.
+Select `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring, or
+`VectorEnv(..., player_policies=("agent", "heuristic"))` for a native batched opponent.
+The scalar `HeuristicPlayer` adapter and arena anchor call the same engine
+implementation. `heuristic` is a separately versioned anchor with rules of thumb
+for mana, timing, targets, card choices and combat; see
+[selection, rules and information limits](../docs/engine.md#built-in-heuristic).
+Historical results keep the heuristic version they evaluated. One exploratory
+check (MTG-152, GPU seed 12261 at 25k, 200 paired games per anchor) scored the
+checkpoint 0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower
+in every cell; it is not yet a frozen anchor comparison.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
 see [checkpoint scenario scoring](../docs/evaluation.md#checkpoint-scenarios). Each retained

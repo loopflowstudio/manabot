@@ -58,8 +58,11 @@ def selected(
         ("experiments/protocols/recipe.md", {"integration"}),
         ("docs/experiment-metrics.md", {"integration"}),
         ("manabot/semantic/learning.py", {"integration"}),
-        ("academy/server.py", {"academy_integration", "protocol_v1", "frontend"}),
-        ("academy/study_runtime.py", {"academy_integration", "protocol_v1"}),
+        (
+            "managym/academy/server.py",
+            {"academy_integration", "protocol_v1", "frontend"},
+        ),
+        ("managym/academy/study_runtime.py", {"academy_integration", "protocol_v1"}),
         ("scripts/play.py", {"python_unit", "protocol_v1", "clean_machine_play"}),
         ("scripts/play-elemental", {"academy_integration", "clean_machine_play"}),
         ("scripts/play_elemental.py", {"academy_integration", "clean_machine_play"}),
@@ -88,6 +91,22 @@ def selected(
 )
 def test_dependency_selection(path: str, expected: set[str]) -> None:
     assert selected([path]) == expected
+
+
+def test_packaged_academy_selection() -> None:
+    assert selected(["managym/academy/extensions.py"]) == {
+        "academy_integration",
+        "protocol_v1",
+    }
+    assert selected(["manabot/sim/table_bots.py"]) == {
+        "integration",
+        "academy_integration",
+        "protocol_v1",
+        "frontend",
+    }
+    assert "clean_machine_play" in selected(
+        ["managym/academy/packs/elemental-world/v2/manifest.json"]
+    )
 
 
 def test_renames_and_mixed_changes_select_both_consumers() -> None:

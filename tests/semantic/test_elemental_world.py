@@ -11,8 +11,6 @@ import numpy as np
 import pytest
 import torch
 
-from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
-from academy.server import GameSession, _parse_game_config
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
@@ -33,6 +31,8 @@ from manabot.model.world import (
 )
 from manabot.semantic.learning import BoundSemanticPack
 import managym
+from managym.academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
+from managym.academy.server import GameSession, _parse_game_config
 from managym.experience import LegacyPermanentView
 from managym.experience_projection import describe_actions, serialize_observation
 

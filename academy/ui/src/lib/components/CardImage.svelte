@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { artUrl, loadArt } from '$lib/card-art';
 
   import { resolveTreatment, treatmentBackground } from '$lib/curated-pack';
 
@@ -32,21 +33,24 @@
 
   const treatment = $derived(resolveTreatment(name));
 
-  // Real art layers over the procedural treatment. The cache is known to
-  // the bundler (import.meta.glob), so a missing file is a lookup miss —
-  // never a 404 request. See scripts/fetch-card-art.mjs.
-  const ART_URLS = import.meta.glob('/src/lib/card-art/*.jpg', {
-    eager: true,
-    query: '?url',
-    import: 'default',
-  }) as Record<string, string>;
-  function artSlug(value: string): string {
-    return value
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-  }
-  const art = $derived(ART_URLS[`/src/lib/card-art/${artSlug(name)}.jpg`]);
+  let plate = $state<HTMLDivElement>();
+  let loadedUrl = $state<string | null>(null);
+  const requestedUrl = $derived(artUrl(name));
+  const art = $derived(loadedUrl === requestedUrl ? loadedUrl : null);
+  $effect(() => {
+    const url = requestedUrl;
+    const cardName = name;
+    let active = true;
+    const element = plate;
+    if (!element) return;
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      void loadArt(url, cardName).then(loaded => { if (active) loadedUrl = loaded ? url : null; });
+    });
+    observer.observe(element);
+    return () => { active = false; observer.disconnect(); };
+  });
   const background = $derived.by(() => {
     const treatmentLayer = treatmentBackground(treatment);
     return art ? `url('${art}') center / cover no-repeat, ${treatmentLayer}` : treatmentLayer;
@@ -55,6 +59,7 @@
 
 {#if name}
   <div
+    bind:this={plate}
     role="img"
     aria-label={alt ?? name}
     data-testid="card-treatment"

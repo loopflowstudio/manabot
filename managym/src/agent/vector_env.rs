@@ -9,13 +9,11 @@ use crate::{
         env::{Env, HandSnapshot},
         observation::Observation,
         observation_encoder::ObservationEncodeError,
-        opponent::OpponentPolicy,
+        player_policy::PlayerPolicy,
     },
     infra::profiler::{InfoDict, InfoValue},
     state::player::PlayerConfig,
 };
-
-const HERO_PLAYER_INDEX: i32 = 0;
 
 /// Preserve encoder capacity errors across the buffer boundary. Pointer/shape
 /// faults and malformed observation payloads are never disposable game outcomes.
@@ -85,7 +83,7 @@ impl RootRoster {
 pub struct VectorEnv {
     envs: Vec<Env>,
     player_configs: Vec<Vec<PlayerConfig>>,
-    opponent_policy: OpponentPolicy,
+    player_policies: [PlayerPolicy; 2],
     next_seeds: Vec<u64>,
     seed_stride: u64,
     uniform_roster: RootRoster,
@@ -102,7 +100,7 @@ impl VectorEnv {
         self.envs = (0..self.len())
             .map(|_| root.fork())
             .collect::<Result<_, _>>()?;
-        self.opponent_policy = OpponentPolicy::None;
+        self.player_policies = [PlayerPolicy::Agent; 2];
         Ok(())
     }
 
@@ -127,10 +125,13 @@ impl VectorEnv {
         num_envs: usize,
         seed: u64,
         skip_trivial: bool,
-        opponent_policy: OpponentPolicy,
+        player_policies: [PlayerPolicy; 2],
     ) -> Self {
         let envs = (0..num_envs)
-            .map(|idx| Env::new(seed.saturating_add(idx as u64), skip_trivial, false, false))
+            .map(|idx| {
+                Env::new(seed.saturating_add(idx as u64), skip_trivial, false, false)
+                    .with_player_policies(player_policies)
+            })
             .collect();
         let next_seeds = (0..num_envs)
             .map(|idx| seed.saturating_add(idx as u64))
@@ -139,7 +140,7 @@ impl VectorEnv {
         Self {
             envs,
             player_configs: Vec::new(),
-            opponent_policy,
+            player_policies,
             next_seeds,
             seed_stride: num_envs.max(1) as u64,
             uniform_roster: RootRoster::default(),
@@ -367,7 +368,7 @@ impl VectorEnv {
     }
 
     /// Per-env index of the player holding the current decision (-1 if no
-    /// decision is pending). With `opponent_policy = none` both seats
+    /// decision is pending). With two `agent` policies both seats
     /// surface, so callers routing decisions to per-seat policies need this.
     pub fn current_agent_indices(&self) -> Vec<i64> {
         self.envs
@@ -388,7 +389,6 @@ impl VectorEnv {
         self.fresh_roots.fill(true);
         self.player_configs = vec![player_configs; self.envs.len()];
         let player_configs = &self.player_configs;
-        let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
         let roster = &self.uniform_roster;
 
@@ -399,13 +399,12 @@ impl VectorEnv {
             .zip(self.next_seeds.iter_mut())
             .enumerate()
         {
-            let (obs, info) = Self::reset_to_hero_turn_on_env(
+            let (obs, info) = Self::reset_env_on_env(
                 roster,
                 env,
                 next_seed,
-                &player_configs[index],
-                opponent_policy,
                 seed_stride,
+                &player_configs[index],
             )?;
             results.push((obs, info));
         }
@@ -417,7 +416,6 @@ impl VectorEnv {
         self.validate_ready_for_step()?;
 
         let player_configs = &self.player_configs;
-        let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
         let roster = &self.uniform_roster;
 
@@ -436,7 +434,6 @@ impl VectorEnv {
                 next_seed,
                 *action,
                 &player_configs[index],
-                opponent_policy,
                 seed_stride,
             )?;
             self.fresh_roots[index] = out.terminated || out.truncated;
@@ -472,18 +469,10 @@ impl VectorEnv {
         }
         self.player_configs = player_configs;
 
-        let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
 
         self.for_each_env(|env_index, env, next_seed, configs, roster, fresh| {
-            let (obs, info) = Self::reset_to_hero_turn_on_env(
-                roster,
-                env,
-                next_seed,
-                configs,
-                opponent_policy,
-                seed_stride,
-            )?;
+            let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, seed_stride, configs)?;
             *fresh = true;
             write(env_index, &obs, 0.0, false, false)?;
             Ok(info)
@@ -506,7 +495,7 @@ impl VectorEnv {
     {
         self.validate_actions_len(configs.len())?;
         self.validate_ready_for_step()?;
-        if !self.uniform_roster.is_empty() || self.opponent_policy != OpponentPolicy::None {
+        if !self.uniform_roster.is_empty() || self.player_policies != [PlayerPolicy::Agent; 2] {
             return Err(AgentError(
                 "root reassignment requires externally routed fixed setups".into(),
             ));
@@ -566,7 +555,6 @@ impl VectorEnv {
         self.validate_actions_len(actions.len())?;
         self.validate_ready_for_step()?;
 
-        let opponent_policy = self.opponent_policy;
         let seed_stride = self.seed_stride;
 
         if let Some(mask) = active {
@@ -584,7 +572,6 @@ impl VectorEnv {
                 next_seed,
                 action,
                 configs,
-                opponent_policy,
                 seed_stride,
             )?;
             *fresh = result.terminated || result.truncated;
@@ -616,7 +603,6 @@ impl VectorEnv {
         self.validate_actions_len(actions.len())?;
         self.validate_actions_len(active.len())?;
         self.validate_ready_for_step()?;
-        let policy = self.opponent_policy;
         let stride = self.seed_stride;
         self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
             if !active[index] {
@@ -628,7 +614,7 @@ impl VectorEnv {
             // A Rust unwind is contained only around gameplay of a disposable
             // stream. Buffer errors and invalid setup must never be tolerated.
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                Self::step_one_on_env(env, actions[index], policy)
+                Self::step_one_on_env(env, actions[index])
             }));
             let mut out = match result {
                 Ok(Ok(out)) => out,
@@ -661,9 +647,7 @@ impl VectorEnv {
             *fresh = false;
             if out.terminated || out.truncated {
                 *fresh = true;
-                let (obs, _) = Self::reset_to_hero_turn_on_env(
-                    roster, env, next_seed, configs, policy, stride,
-                )?;
+                let (obs, _) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
                 out.obs = obs;
             }
             if let Err(error) = write(index, &out.obs, out.reward, out.terminated, out.truncated) {
@@ -703,17 +687,16 @@ impl VectorEnv {
     {
         self.validate_actions_len(failed.len())?;
         self.validate_ready_for_step()?;
-        let policy = self.opponent_policy;
+        let policy = self.player_policies;
         let stride = self.seed_stride;
         let skip_trivial = self.skip_trivial;
         self.for_each_env(|index, env, next_seed, configs, roster, fresh| {
             if !failed[index] {
                 return Ok(InfoDict::new());
             }
-            *env = Env::new(*next_seed, skip_trivial, false, false);
+            *env = Env::new(*next_seed, skip_trivial, false, false).with_player_policies(policy);
             *fresh = true;
-            let (obs, info) =
-                Self::reset_to_hero_turn_on_env(roster, env, next_seed, configs, policy, stride)?;
+            let (obs, info) = Self::reset_env_on_env(roster, env, next_seed, stride, configs)?;
             write(index, &obs, 0.0, false, false)?;
             Ok(info)
         })
@@ -787,10 +770,9 @@ impl VectorEnv {
         next_seed: &mut u64,
         action: i64,
         player_configs: &[PlayerConfig],
-        opponent_policy: OpponentPolicy,
         seed_stride: u64,
     ) -> Result<StepResult, AgentError> {
-        let mut out = Self::step_one_on_env(env, action, opponent_policy)?;
+        let mut out = Self::step_one_on_env(env, action)?;
 
         if out.terminated || out.truncated {
             let terminal_reward = out.reward;
@@ -798,14 +780,8 @@ impl VectorEnv {
             let terminal_truncated = out.truncated;
             let terminal_info = out.info;
 
-            let (reset_obs, _) = Self::reset_to_hero_turn_on_env(
-                roster,
-                env,
-                next_seed,
-                player_configs,
-                opponent_policy,
-                seed_stride,
-            )?;
+            let (reset_obs, _) =
+                Self::reset_env_on_env(roster, env, next_seed, seed_stride, player_configs)?;
 
             out = StepResult {
                 obs: reset_obs,
@@ -819,52 +795,14 @@ impl VectorEnv {
         Ok(out)
     }
 
-    fn step_one_on_env(
-        env: &mut Env,
-        action: i64,
-        opponent_policy: OpponentPolicy,
-    ) -> Result<StepResult, AgentError> {
-        let (mut obs, mut reward, mut terminated, mut truncated, mut info) =
-            env.step(action).map_err(|error| {
-                AgentError(format!(
-                    "{}; native_failure={}",
-                    error.0,
-                    env.vector_failure_context(action)
-                ))
-            })?;
-
-        if terminated || truncated || opponent_policy == OpponentPolicy::None {
-            return Ok(StepResult {
-                obs,
-                reward,
-                terminated,
-                truncated,
-                info,
-            });
-        }
-
-        while Self::is_opponent_turn(&obs) {
-            let opponent_action = opponent_policy.select_action(env)?;
-            let (next_obs, opponent_reward, opp_terminated, opp_truncated, opp_info) =
-                env.step(opponent_action).map_err(|error| {
-                    AgentError(format!(
-                        "{}; native_failure={}",
-                        error.0,
-                        env.vector_failure_context(opponent_action)
-                    ))
-                })?;
-            obs = next_obs;
-            info = opp_info;
-            terminated = opp_terminated;
-            truncated = opp_truncated;
-
-            if terminated || truncated {
-                // Zero-sum: hero reward = negated opponent terminal reward.
-                reward = -opponent_reward;
-                break;
-            }
-        }
-
+    fn step_one_on_env(env: &mut Env, action: i64) -> Result<StepResult, AgentError> {
+        let (obs, reward, terminated, truncated, info) = env.step(action).map_err(|error| {
+            AgentError(format!(
+                "{}; native_failure={}",
+                error.0,
+                env.vector_failure_context(action)
+            ))
+        })?;
         Ok(StepResult {
             obs,
             reward,
@@ -872,44 +810,6 @@ impl VectorEnv {
             truncated,
             info,
         })
-    }
-
-    fn skip_opponent_turns_until_hero_on_env(
-        roster: &RootRoster,
-        env: &mut Env,
-        mut obs: Observation,
-        next_seed: &mut u64,
-        player_configs: &[PlayerConfig],
-        opponent_policy: OpponentPolicy,
-        seed_stride: u64,
-    ) -> Result<Observation, AgentError> {
-        const MAX_OPPONENT_STEPS: usize = 10_000;
-        let mut steps = 0;
-        while Self::is_opponent_turn(&obs) {
-            steps += 1;
-            if steps > MAX_OPPONENT_STEPS {
-                return Err(AgentError(
-                    "exceeded max opponent steps without reaching hero turn".to_string(),
-                ));
-            }
-            let opponent_action = opponent_policy.select_action(env)?;
-            let (next_obs, _, terminated, truncated, _) =
-                env.step(opponent_action).map_err(|error| {
-                    AgentError(format!(
-                        "{}; native_failure={}",
-                        error.0,
-                        env.vector_failure_context(opponent_action)
-                    ))
-                })?;
-            obs = next_obs;
-            if terminated || truncated {
-                let (reset_obs, _) =
-                    Self::reset_env_on_env(roster, env, next_seed, seed_stride, player_configs)?;
-                obs = reset_obs;
-                steps = 0;
-            }
-        }
-        Ok(obs)
     }
 
     fn reset_env_on_env(
@@ -930,34 +830,6 @@ impl VectorEnv {
         };
         env.reset(configs)
     }
-
-    fn reset_to_hero_turn_on_env(
-        roster: &RootRoster,
-        env: &mut Env,
-        next_seed: &mut u64,
-        player_configs: &[PlayerConfig],
-        opponent_policy: OpponentPolicy,
-        seed_stride: u64,
-    ) -> Result<(Observation, InfoDict), AgentError> {
-        let (mut obs, info) =
-            Self::reset_env_on_env(roster, env, next_seed, seed_stride, player_configs)?;
-        if opponent_policy != OpponentPolicy::None {
-            obs = Self::skip_opponent_turns_until_hero_on_env(
-                roster,
-                env,
-                obs,
-                next_seed,
-                player_configs,
-                opponent_policy,
-                seed_stride,
-            )?;
-        }
-        Ok((obs, info))
-    }
-
-    fn is_opponent_turn(obs: &Observation) -> bool {
-        obs.agent.player_index != HERO_PLAYER_INDEX
-    }
 }
 
 /// Separate domain from shuffling and policy RNG; rejection sampling avoids modulo bias.
@@ -974,7 +846,7 @@ mod tests {
     use crate::{
         agent::{
             action::AgentError, env::Env, observation_encoder::ObservationEncodeError,
-            opponent::OpponentPolicy, vector_env::VectorEnv,
+            player_policy::PlayerPolicy, vector_env::VectorEnv,
         },
         infra::profiler::InfoValue,
         state::player::PlayerConfig,
@@ -982,7 +854,7 @@ mod tests {
 
     #[test]
     fn hand_snapshots_keep_native_seats_when_another_player_chooses() {
-        let mut vector = VectorEnv::new(1, 42, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(1, 42, true, [PlayerPolicy::Agent; 2]);
         vector
             .reset_all(vec![
                 PlayerConfig::new("a", BTreeMap::from([("Mountain".into(), 20)])),
@@ -1009,7 +881,7 @@ mod tests {
             .into_iter()
             .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
             .collect();
-        let mut vector = VectorEnv::new(2, 42, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         assert!(vector.hand_snapshots(&[0, 1]).is_err());
         vector.reset_all(players).unwrap();
         assert!(vector.hand_snapshots(&[0]).is_err());
@@ -1044,7 +916,7 @@ mod tests {
 
     #[test]
     fn hand_snapshots_distinguish_same_seed_resets_reassignment_and_replacement() {
-        let mut vector = VectorEnv::new(2, 42, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(2, 42, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(sample_player_configs()).unwrap();
         let original = vector.hand_snapshots(&[0, 1]).unwrap();
         vector
@@ -1081,7 +953,7 @@ mod tests {
             .into_iter()
             .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 20)])))
             .collect();
-        let mut vector = VectorEnv::new(1, 245, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(1, 245, true, [PlayerPolicy::Agent; 2]);
         vector.enable_exposure_capture().unwrap();
         vector.reset_all(players.clone()).unwrap();
         vector.step(&[0]).unwrap();
@@ -1109,7 +981,7 @@ mod tests {
             .into_iter()
             .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
             .collect();
-        let mut vector = VectorEnv::new(1, 213, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(1, 213, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(players).unwrap();
         vector.envs[0].scenario_clear_hand(0).unwrap();
         for _ in 0..70 {
@@ -1155,7 +1027,7 @@ mod tests {
             PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)])).submit_to_world()
         };
         let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
-        let mut vector = VectorEnv::new(2, 17402, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(2, 17402, true, [PlayerPolicy::Agent; 2]);
         assert!(vector
             .set_training_decks(vec![decks[0].clone(); 2], true)
             .is_err());
@@ -1216,7 +1088,7 @@ mod tests {
         let mut second = first.clone();
         second.name = "event-b".into();
         let decks = vec![first.clone(), second];
-        let mut vector = VectorEnv::new(2, 21301, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(2, 21301, true, [PlayerPolicy::Agent; 2]);
         vector.set_training_decks(decks.clone(), false).unwrap();
         vector.reset_all(vec![first.clone(); 2]).unwrap();
         let seeds = vector.current_game_seeds();
@@ -1280,7 +1152,7 @@ mod tests {
         use std::collections::BTreeSet;
         let roster = elemental_roster();
         let mut reached = [BTreeSet::new(), BTreeSet::new()];
-        let mut vector = VectorEnv::new(2, 174, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(2, 174, true, [PlayerPolicy::Agent; 2]);
         let mut bad = roster.clone();
         bad[0].deck.sideboard.clear();
         assert!(vector.set_uniform_roster(bad).is_err());
@@ -1349,7 +1221,7 @@ mod tests {
 
     #[test]
     fn reassignment_preserves_live_games_seeds_and_atomic_validation() {
-        let mut vector = VectorEnv::new(3, 23, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(3, 23, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(sample_player_configs()).unwrap();
         vector
             .step_into(&[0, 0, 0], Some(&[true, false, false]), |_, _, _, _, _| {
@@ -1433,7 +1305,7 @@ mod tests {
 
     #[test]
     fn reset_all_and_step_batch() {
-        let mut env = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+        let mut env = VectorEnv::new(3, 7, true, [PlayerPolicy::Agent; 2]);
         let reset = env
             .reset_all(sample_player_configs())
             .expect("reset_all should succeed");
@@ -1447,9 +1319,9 @@ mod tests {
     fn isolated_encoding_recovers_only_opted_in_capacity_errors() {
         for recover in [false, true] {
             for kind in 0..3 {
-                let mut vector = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+                let mut vector = VectorEnv::new(3, 7, true, [PlayerPolicy::Agent; 2]);
                 vector.reset_all(sample_player_configs()).unwrap();
-                let mut control = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+                let mut control = VectorEnv::new(3, 7, true, [PlayerPolicy::Agent; 2]);
                 control.reset_all(sample_player_configs()).unwrap();
                 let result =
                     vector.step_isolated_into(&[0; 3], &[true; 3], recover, |index, _, _, _, _| {
@@ -1495,9 +1367,9 @@ mod tests {
 
     #[test]
     fn isolated_failure_preserves_successful_streams_and_seed_stride() {
-        let mut vector = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(3, 7, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(sample_player_configs()).unwrap();
-        let mut control = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+        let mut control = VectorEnv::new(3, 7, true, [PlayerPolicy::Agent; 2]);
         control.reset_all(sample_player_configs()).unwrap();
         let rows = RefCell::new(Vec::new());
         let outcomes = vector
@@ -1535,7 +1407,7 @@ mod tests {
 
     #[test]
     fn reset_skips_to_hero_turn_with_random_policy() {
-        let mut env = VectorEnv::new(1, 11, true, OpponentPolicy::Random);
+        let mut env = VectorEnv::new(1, 11, true, [PlayerPolicy::Agent, PlayerPolicy::Random]);
         let reset = env
             .reset_all(sample_player_configs())
             .expect("reset_all should succeed");
@@ -1544,7 +1416,7 @@ mod tests {
 
     #[test]
     fn terminal_step_returns_post_reset_observation() {
-        let mut env = VectorEnv::new(1, 23, true, OpponentPolicy::Random);
+        let mut env = VectorEnv::new(1, 23, true, [PlayerPolicy::Agent, PlayerPolicy::Random]);
         env.reset_all(sample_player_configs())
             .expect("reset_all should succeed");
 
@@ -1565,7 +1437,7 @@ mod tests {
 
     #[test]
     fn step_into_and_reset_all_into() {
-        let mut env = VectorEnv::new(3, 31, true, OpponentPolicy::Random);
+        let mut env = VectorEnv::new(3, 31, true, [PlayerPolicy::Agent, PlayerPolicy::Random]);
 
         let reset_infos = env
             .reset_all_into(
@@ -1589,8 +1461,8 @@ mod tests {
 
     #[test]
     fn masked_step_preserves_paused_stream_and_ignores_its_action() {
-        let mut paused = VectorEnv::new(2, 99, true, OpponentPolicy::None);
-        let mut control = VectorEnv::new(2, 99, true, OpponentPolicy::None);
+        let mut paused = VectorEnv::new(2, 99, true, [PlayerPolicy::Agent; 2]);
+        let mut control = VectorEnv::new(2, 99, true, [PlayerPolicy::Agent; 2]);
         paused.reset_all(sample_player_configs()).unwrap();
         control.reset_all(sample_player_configs()).unwrap();
         paused
@@ -1612,7 +1484,7 @@ mod tests {
 
     #[test]
     fn restored_game_seeds_preserve_future_autoreset_stride() {
-        let mut vector = VectorEnv::new(2, 1, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(2, 1, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(sample_player_configs()).unwrap();
         let mut seeds = [33_u64, 71_u64];
         vector
@@ -1643,7 +1515,7 @@ mod tests {
     #[test]
     fn vector_error_retains_exact_scalar_replay_inputs() {
         let configs = sample_player_configs();
-        let mut vector = VectorEnv::new(1, 174, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(1, 174, true, [PlayerPolicy::Agent; 2]);
         vector.reset_all(configs.clone()).unwrap();
         vector.step(&[0]).unwrap();
         let error = vector.step(&[999_999]).unwrap_err();
@@ -1671,7 +1543,7 @@ mod tests {
 
     #[test]
     fn step_into_errors_are_returned_in_index_order() {
-        let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::None);
+        let mut env = VectorEnv::new(3, 99, true, [PlayerPolicy::Agent; 2]);
         env.reset_all_into(sample_player_configs(), |_, _, _, _, _| Ok(()))
             .expect("reset_all_into should succeed");
 
@@ -1705,7 +1577,7 @@ mod tests {
         for (env, setup) in scalar.iter_mut().zip(&configs) {
             env.reset(setup.clone()).unwrap();
         }
-        let mut vector = VectorEnv::new(3, 33, true, OpponentPolicy::None);
+        let mut vector = VectorEnv::new(3, 33, true, [PlayerPolicy::Agent; 2]);
         vector
             .reset_each_into(configs.clone(), |_, _, _, _, _| Ok(()))
             .unwrap();
@@ -1757,11 +1629,11 @@ mod tests {
 
     #[test]
     fn shards_preserve_global_seeds_through_autoreset_and_restore() {
-        let mut whole = VectorEnv::new(3, 19, true, OpponentPolicy::None);
-        let mut left = VectorEnv::new(2, 19, true, OpponentPolicy::None)
+        let mut whole = VectorEnv::new(3, 19, true, [PlayerPolicy::Agent; 2]);
+        let mut left = VectorEnv::new(2, 19, true, [PlayerPolicy::Agent; 2])
             .with_seed_stride(3)
             .unwrap();
-        let mut right = VectorEnv::new(1, 21, true, OpponentPolicy::None)
+        let mut right = VectorEnv::new(1, 21, true, [PlayerPolicy::Agent; 2])
             .with_seed_stride(3)
             .unwrap();
         for vector in [&mut whole, &mut left, &mut right] {
@@ -1795,7 +1667,7 @@ mod tests {
             assert_eq!(whole.current_game_seeds(), seeds);
         }
         assert!(terminals > 0);
-        assert!(VectorEnv::new(2, 0, true, OpponentPolicy::None)
+        assert!(VectorEnv::new(2, 0, true, [PlayerPolicy::Agent; 2])
             .with_seed_stride(1)
             .is_err());
         assert!(left.with_seed_stride(3).is_err());

@@ -90,6 +90,15 @@ publish, land or choose the next Graph step from here.
   (buttons are disabled while a Command is in flight, and `Pass Turn (F6)` in
   the panel is not an offer). Tapped lands show only in a `fullPage`
   screenshot, not in the board's text.
+- Configured launch (`managym academy play|replay`, `managym.academy.launch.serve`):
+  from a checkout set `ACADEMY_FRONTEND_BUILD=$PWD/academy/ui/build` (otherwise
+  `site.missing`) and pass `--no-open --port <unused> --traces-dir /tmp/<dir>`;
+  port 8000 is often taken. Open READY's `open` address in Playwright. For a
+  multi-game evaluation trace, call `manabot.eval.match.play_cell` with
+  `tests.eval.arena_fixture.arena_fixture()` anchors, several `deal_seeds` and
+  `legs=(0, 1)` (six games took about 80 s under load). To test Ctrl-C, start the
+  CLI with `start_new_session=True` and SIGINT restored, as below; with `nohup … &`
+  SIGINT is ignored and the server looks hung.
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
@@ -104,7 +113,7 @@ publish, land or choose the next Graph step from here.
   fixed 30-second deadline whatever `--ready-timeout` says, so the launch
   fails with `ready.timeout`. Then start the two servers as it does: from the
   root, `uv run --python 3.13 --locked --only-group play-runtime uvicorn
-  academy.server:app --host 127.0.0.1 --port <api>`; from `academy/ui`,
+  managym.academy.server:app --host 127.0.0.1 --port <api>`; from `academy/ui`,
   `ACADEMY_API_PORT=<api> npm run dev -- --host 127.0.0.1 --port <ui>
   --strictPort`; poll `/` and `/api/traces` until both return 200. Demos:
   open `/?demo=learn|precision|precision-mana`, wait a second after the
@@ -198,6 +207,21 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Installed Academy (`managym[academy]` wheel): build as above, then in a fresh
+  `/tmp` directory `uv venv --python 3.13 --seed` (without `--seed` there is
+  no `pip`) and `pip install '<wheel>[academy]'`, with `node`/`npm`/`cargo`
+  shadowed by failing stubs on PATH. Re-running that on an already installed
+  identical wheel file exits 0 silently and skips the extra; install by name
+  with `--find-links <dist>` instead. When the candidate's version is already
+  on PyPI, `pip install --find-links <dist> manabot` takes PyPI's copy (no
+  `managym.academy.bots` entry point); `--force-reinstall --no-deps` the local
+  wheel. Never patch files inside the installed `managym`: manabot's training
+  refuses a changed source bundle. Supervise `managym academy` from a Python
+  `Popen(start_new_session=True)` that writes `p.wait()`, delete the old log
+  before relaunching, and wait for its `ACADEMY_PLAY_READY`. `manabot train
+  --recipe local --device cpu --out .runs/<x>` in that directory gives trained
+  opponents within a minute. Another project's server may hold `*:8000`; use
+  your own port.
 - Engine rules changes (zones, tokens, copies, SBAs): play many games through
   `managym.Env` with `PlayerConfig(name, {card: count}, world=managym.WORLD_SETUP)`
   decks built around the cards involved, and a scripted policy over

@@ -30,6 +30,15 @@ def _metadata(data: bytes) -> _Metadata:
     )
 
 
+def _academy_files(files: list[str]) -> None:
+    required = {
+        "managym/academy/site/index.html",
+        "managym/academy/packs/elemental-world/v2/manifest.json",
+    }
+    if not required.issubset(files):
+        raise ValueError("engine artifact is missing Academy site or packs")
+
+
 def validate(directory: Path, complete: bool) -> None:
     wheels = sorted(directory.glob("*.whl"))
     archives = list(directory.glob("*.tar.gz"))
@@ -49,6 +58,10 @@ def validate(directory: Path, complete: bool) -> None:
             if metadata.name in expected:
                 raise ValueError("duplicate source archive")
             expected[metadata.name] = metadata
+            if metadata.name == "managym":
+                _academy_files(
+                    [name.removeprefix(root + "/") for name in archive.getnames()]
+                )
             if (
                 f"{root}/content/semantic/current/learning_schema.json"
                 not in archive.getnames()
@@ -62,9 +75,18 @@ def validate(directory: Path, complete: bool) -> None:
     for metadata in expected.values():
         if set(metadata.python.split(",")) != {">=3.12", "<3.14"}:
             raise ValueError("expected CPython 3.12 and 3.13 support")
-    if engine.requirements != frozenset({"numpy>=1.24.0", "pydantic>=2.12.0"}):
+    engine_requirements = {
+        r.replace(" ", "").replace('"', "'") for r in engine.requirements
+    }
+    if engine_requirements != {
+        "numpy>=1.24.0",
+        "pydantic>=2.12.0",
+        "fastapi>=0.116.0;extra=='academy'",
+        "typer>=0.12.5;extra=='academy'",
+        "uvicorn[standard]>=0.34.0;extra=='academy'",
+    }:
         raise ValueError(
-            "managym must declare only its lightweight runtime dependencies"
+            "managym must declare only its lightweight runtime dependencies and Academy extra"
         )
     requirements = {r.replace(" ", "").replace('"', "'") for r in bot.requirements}
     if not {
@@ -89,11 +111,18 @@ def validate(directory: Path, complete: bool) -> None:
             if metadata.name == "managym":
                 if len(native) != 1 or not native[0].startswith("managym/_managym."):
                     raise ValueError("managym wheel must own its native extension")
-                if any(p.startswith(("manabot/", "academy/")) for p in files):
-                    raise ValueError("engine wheel contains training or Academy")
+                if any(
+                    p.startswith("manabot/")
+                    or (p.startswith("academy/") and p != "academy/__init__.py")
+                    for p in files
+                ):
+                    raise ValueError(
+                        "engine wheel contains training or legacy Academy modules"
+                    )
+                _academy_files(files)
                 if "managym/Cargo.lock" not in files:
                     raise ValueError("managym wheel is missing its provenance lockfile")
-            elif native or any(p.startswith("managym/") for p in files):
+            elif native or any(p.startswith(("managym/", "academy/")) for p in files):
                 raise ValueError(
                     "manabot wheel must be pure Python without a second engine"
                 )

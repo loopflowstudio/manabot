@@ -634,6 +634,9 @@ export interface TrainedOpponent {
 }
 
 export interface OpponentCatalog {
+  advice_available?: boolean;
+  extension?: string | null;
+  watch_players?: string[];
   opponents: TrainedOpponent[];
   catalog_error: string | null;
 }
@@ -779,7 +782,19 @@ export type ServerMessage = (
   session_id?: string;
   resume_token?: string;
   participant_id?: string;
+  launch?: string;
+  launch_setup?: LaunchSetup;
 };
+
+export interface LaunchSetup {
+  hero_deck?: string;
+  villain_deck?: string;
+  villain_type: string;
+  villain_sims?: number;
+  opponent_sha256?: string;
+  decklists: Decklists;
+  deck_import?: { hero: { source: string; filename: string }; villain: { source: string; filename: string } };
+}
 
 export type ClientMessage = import('./shared-table-protocol').SharedTableRequest;
 

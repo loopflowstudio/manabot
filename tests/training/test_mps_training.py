@@ -38,7 +38,7 @@ from manabot.model.semantic_cards import (
     SemanticCardEncoder,
 )
 from manabot.model.shared_effects import SharedEffectEncoder
-from manabot.training.learning import DampedPolicyLearning, Learning, Precision
+from manabot.training.learning import DampedPolicyLearning, Learning
 from manabot.training.regime import Execution, TrainSelfPlay
 from manabot.training.rollout.collection import (
     close_collector,
@@ -49,10 +49,10 @@ from manabot.training.updates import damped_policy, ppo
 import managym
 
 
-@pytest.mark.parametrize("precision", ["tf32", "bf16"])
-def test_mps_rejects_reduced_precision(precision: Precision) -> None:
-    with pytest.raises(ValueError, match="requires CUDA"):
-        Execution(device="mps", precision=precision)
+def test_mps_admits_bf16_and_rejects_tf32() -> None:
+    assert Execution(device="mps", precision="bf16").precision == "bf16"
+    with pytest.raises(ValueError, match="precision tf32 requires CUDA"):
+        Execution(device="mps", precision="tf32")
 
 
 def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:

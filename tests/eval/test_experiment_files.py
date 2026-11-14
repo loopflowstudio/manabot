@@ -54,6 +54,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
     assert found == {
         "batch_closure",
+        "bf16_behavior_logs",
         "elemental",
         "elemental_closure",
         "elemental_lambda",

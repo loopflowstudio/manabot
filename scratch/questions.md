@@ -19,3 +19,14 @@ Compression budget conflict: protected notes remain untouched. The final
 scratch overage is recorded by `lf context`; the byte limit is met. Further
 cuts would shorten protected context or discard live contrary findings.
 Limits are unchanged.
+
+2026-11-14 sync: retain Etude execution and removal of collector snapshots;
+combine main's log-only packed actions, native player policies, GPU BF16
+admission and Academy packaging checks with the new loop. Retired-executor
+tests stay retired. Release smoke keeps the Etude recipe path.
+
+Sync validation: focused collector log retention, Etude save/resume and
+precision-width checks: 9 passed, 3 failed (3.55s). Every failure is the
+installed pre-sync native VectorEnv rejecting main's `player_policies`
+argument before collection. Gate needs a native rebuild; no second test run,
+build or push was performed by conflict resolution.

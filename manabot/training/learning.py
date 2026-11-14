@@ -125,5 +125,6 @@ class DampedPolicyLearning(Strict):
 
 
 # float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
-# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.backends.torch.learner).
+# tensor cores; bf16 autocasts policy forwards to bfloat16 on CUDA or MPS
+# (manabot.backends.torch.learner).
 Precision = Literal["float32", "tf32", "bf16"]

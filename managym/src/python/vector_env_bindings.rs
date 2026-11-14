@@ -21,7 +21,6 @@ use crate::{
         observation_encoder::{
             encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
-        opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
         vector_env::{ObservationWriteError, VectorEnv},
     },
@@ -129,16 +128,17 @@ impl PyVectorEnv {
     }
 
     #[new]
-    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy="none", seed_stride=None))]
+    #[pyo3(signature = (num_envs, seed=0, skip_trivial=true, opponent_policy=None, seed_stride=None, *, player_policies=None))]
     fn new(
         num_envs: usize,
         seed: u64,
         skip_trivial: bool,
-        opponent_policy: &str,
+        opponent_policy: Option<&str>,
         seed_stride: Option<u64>,
+        player_policies: Option<Vec<String>>,
     ) -> PyResult<Self> {
-        let policy = parse_opponent_policy(opponent_policy)?;
-        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policy);
+        let policies = parse_player_policies(player_policies, opponent_policy)?;
+        let mut inner = VectorEnv::new(num_envs, seed, skip_trivial, policies);
         if let Some(stride) = seed_stride {
             inner = inner.with_seed_stride(stride).map_err(map_agent_err)?;
         }
@@ -1021,14 +1021,47 @@ fn encode_observations_into(
 }
 
 #[cfg(feature = "python")]
-fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
-    match value {
-        "none" => Ok(OpponentPolicy::None),
-        "random" => Ok(OpponentPolicy::Random),
-        _ => Err(PyValueError::new_err(format!(
-            "unsupported opponent_policy: {value}"
-        ))),
+pub(crate) fn parse_player_policies(
+    values: Option<Vec<String>>,
+    legacy: Option<&str>,
+) -> PyResult<[crate::agent::player_policy::PlayerPolicy; 2]> {
+    use crate::agent::player_policy::PlayerPolicy;
+    if values.is_some() && legacy.is_some() {
+        return Err(PyValueError::new_err(
+            "use player_policies or opponent_policy, not both",
+        ));
     }
+    let values = if let Some(legacy) = legacy {
+        if !["none", "random", "heuristic"].contains(&legacy) {
+            return Err(PyValueError::new_err(format!(
+                "unsupported opponent_policy: {legacy}"
+            )));
+        }
+        Python::with_gil(|py| -> PyResult<()> {
+            py.import_bound("warnings")?.call_method1("warn", ("opponent_policy is deprecated; use player_policies=('agent', '<policy>'); removal in 0.3.0", py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(), 2))?;
+            Ok(())
+        })?;
+        vec![
+            "agent".into(),
+            if legacy == "none" { "agent" } else { legacy }.into(),
+        ]
+    } else {
+        values.unwrap_or_else(|| vec!["agent".into(); 2])
+    };
+    if values.len() != 2 {
+        return Err(PyValueError::new_err(
+            "player_policies requires exactly two seats",
+        ));
+    }
+    let parse = |value: &str| match value {
+        "agent" => Ok(PlayerPolicy::Agent),
+        "random" => Ok(PlayerPolicy::Random),
+        "heuristic" => Ok(PlayerPolicy::Heuristic),
+        _ => Err(PyValueError::new_err(format!(
+            "unsupported player policy: {value}"
+        ))),
+    };
+    Ok([parse(&values[0])?, parse(&values[1])?])
 }
 
 #[cfg(feature = "python")]

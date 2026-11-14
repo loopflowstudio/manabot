@@ -64,21 +64,19 @@ def fixture() -> tuple[Learner, RolloutBatch]:
     }
     with torch.no_grad():
         logits, values = agent({k: torch.as_tensor(v) for k, v in obs.items()})
-        probabilities = logits.softmax(-1).numpy()
+        logs = logits.log_softmax(-1).numpy()
     actions = np.array([[0], [1], [2], [0]])
     batch = RolloutBatch(
         # This fixture has only action fields; the critic is a scalar.
         recorded=RecordedObservations({}, np.arange(4)),
         actions=actions,
-        logprobs=np.log(probabilities[np.arange(4), actions[:, 0]])[:, None],
+        logprobs=logs[np.arange(4), actions[:, 0]][:, None],
         rewards=np.array([[0], [1], [0], [-1]], dtype=np.float32),
         dones=np.array([[False], [True], [False], [True]]),
         values=values.detach().numpy().copy(),
         next_obs={k: v[:1] for k, v in obs.items()},
         next_done=np.array([True]),
-        action_data=PackedActions.pack(
-            obs, probabilities, logits.log_softmax(-1).numpy()
-        ),
+        action_data=PackedActions.pack(obs, logs),
     )
     trainer = Learner(agent, "cpu", minibatch_rows=1)
 
@@ -187,9 +185,9 @@ def test_empty_filter_preserves_parameters_and_optimizer_state():
         torch.testing.assert_close(value, before[name], rtol=0, atol=0)
 
 
-def test_collection_kl_uses_stored_full_distribution():
+def test_collection_kl_uses_stored_full_distribution() -> None:
     trainer, batch = fixture()
-    original = batch.observations().probabilities.copy()
+    original = batch.observations().log_probabilities.copy()
     same = run(trainer, batch, control(learning_rate=Schedule(initial=0)))
     assert same["collection_kl"] == pytest.approx(0, abs=1e-7)
     with torch.no_grad():
@@ -198,9 +196,9 @@ def test_collection_kl_uses_stored_full_distribution():
         trainer, batch, control(learning_rate=Schedule(initial=0), collection_kl=0.1)
     )
     current = trainer.agent.logits[:3].softmax(-1).detach().numpy()
-    expected = (current * np.log(current / original[0, 0, :3])).sum()
+    expected = (current * (np.log(current) - original[0, 0, :3])).sum()
     assert moved["collection_kl"] == pytest.approx(expected, abs=1e-7)
-    np.testing.assert_array_equal(batch.observations().probabilities, original)
+    np.testing.assert_array_equal(batch.observations().log_probabilities, original)
 
 
 def test_ema_is_iteration_clocked_and_never_overwrites_learner():

@@ -73,7 +73,7 @@ def save_incident(
         # Packed rows remain compact in incident artifacts. Offsets and slots
         # are required to reconstruct original Commands and full distributions.
         packed = batch.action_data
-        for name in ("offsets", "slots", "probabilities", "log_probabilities"):
+        for name in ("offsets", "slots", "log_probabilities"):
             batch_tensors[f"packed_actions/{name}"] = torch.as_tensor(
                 getattr(packed, name)
             )

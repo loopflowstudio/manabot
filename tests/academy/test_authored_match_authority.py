@@ -2,7 +2,7 @@
 
 import json
 
-from academy.authored_match_receipt import (
+from conformance.authored_match_receipt import (
     DEFAULT_RECEIPT_PATH,
     _program_index,
     generate_authored_match_receipt,
@@ -63,7 +63,7 @@ def test_release_stack_authored_match_receipt_is_terminal_and_authoritative():
 
 
 def test_compatibility_action_is_counted_as_legacy_fallback(tmp_path):
-    from academy.server import GameSession
+    from managym.academy.server import GameSession
 
     session = GameSession(
         tmp_path,

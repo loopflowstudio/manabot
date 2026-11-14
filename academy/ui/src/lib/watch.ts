@@ -15,6 +15,7 @@ export interface BotDecision {
 export interface WatchDecision {
   id: string;
   players: string[];
+  source_kind?: string;
   identities: RecordedPlayer[];
   decision: AddressedReplayDecision;
   observation: Observation;

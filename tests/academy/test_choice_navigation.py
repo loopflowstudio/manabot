@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 import pytest
 
-from academy import server, trace as trace_store
-from academy.server import GameSession
+from managym.academy import server, trace as trace_store
+from managym.academy.server import GameSession
 from managym.experience import ExperienceFrame
 
 
@@ -29,7 +29,7 @@ class NavigationFixture(BaseModel):
 
 FIXTURE = (
     Path(__file__).parents[2]
-    / "academy/fixtures/choice-navigation-w17-token-cards.json"
+    / "managym/academy/fixtures/choice-navigation-w17-token-cards.json"
 )
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 

@@ -183,7 +183,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
     assert scope.paths[0].read_bytes() == original
 
 
-@pytest.mark.parametrize("policy", ["none", "random"])
+@pytest.mark.parametrize("policy", ["agent", "random"])
 def test_ordinary_vector_replays_current_game_after_autoreset(
     tmp_path: Path,
     policy: str,
@@ -197,7 +197,7 @@ def test_ordinary_vector_replays_current_game_after_autoreset(
             Reward(RewardConfig()),
             "cpu",
             seed=24,
-            opponent_policy=policy,
+            player_policies=("agent", policy),
         )
         env.reset()
         for _ in range(2000):

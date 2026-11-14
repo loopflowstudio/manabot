@@ -5,15 +5,15 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from managym.decision import SemanticContractError
 import pytest
 
-from academy import server, trace as trace_store
-from academy.trace import GameConfig, prepare_trace_payload
 from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
+from managym.academy import server, trace as trace_store
+from managym.academy.trace import GameConfig, prepare_trace_payload
+from managym.decision import SemanticContractError
 
 
 def _request() -> dict[str, object]:

@@ -153,11 +153,11 @@ def test_paused_buffer_rows_are_unchanged_and_clear_step_flags():
             np.testing.assert_array_equal(collector._buffers[key][0], before[key])
 
 
-def test_collection_probabilities_and_bootstrap_survive_weight_change() -> None:
+def test_collection_logs_and_bootstrap_survive_weight_change() -> None:
     collector = _make_collector("self")
     agent = _make_agent()
     first = collect(collector, agent, 7)
-    first_probabilities = first.observations().probabilities
+    first_logs = first.observations().log_probabilities
     with torch.no_grad():
         agent.policy_head[-1].weight.mul_(-5)
         agent.value_head[-1].bias.add_(3.0)
@@ -180,18 +180,20 @@ def test_collection_probabilities_and_bootstrap_survive_weight_change() -> None:
         second.values.flatten(), values.numpy().flatten(), atol=1e-5
     )
     np.testing.assert_allclose(
-        rows.probabilities.reshape(logits.shape),
-        logits.softmax(-1).numpy(),
+        rows.log_probabilities.reshape(logits.shape),
+        logits.masked_fill(flat["actions_valid"] == 0, -torch.inf)
+        .log_softmax(-1)
+        .numpy(),
         atol=1e-6,
     )
     selected = np.take_along_axis(
-        rows.probabilities, second.actions[..., None], axis=-1
+        rows.log_probabilities, second.actions[..., None], axis=-1
     )[..., 0]
-    np.testing.assert_allclose(second.logprobs, np.log(selected), atol=1e-6)
-    assert np.all(rows.probabilities[rows.observation["actions_valid"] == 0] == 0)
-    np.testing.assert_array_equal(
-        first.observations().probabilities, first_probabilities
+    np.testing.assert_allclose(second.logprobs, selected, atol=1e-6)
+    assert np.all(
+        np.isneginf(rows.log_probabilities[rows.observation["actions_valid"] == 0])
     )
+    np.testing.assert_array_equal(first.observations().log_probabilities, first_logs)
     assert collector.stats.learner_transitions == 56
 
 

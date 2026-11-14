@@ -7,7 +7,7 @@ following the kata/loopflow deployment pattern:
   Serves `manabot.gg` (canonical); `etude.gg`, `etudefantasia.com`,
   `etudefantasia.gg`, and all `www.` variants 301 onto it.
 - **academy-play** — hosted play at `play.manabot.gg` and `academy.manabot.gg`:
-  the experience server (`academy/server.py` + the managym engine) serving the built Svelte
+  the experience server (`managym/academy/server.py` + the managym engine) serving the built Svelte
   frontend as a same-origin SPA (`deploy/play/`). One machine, because
   game state lives in process memory.
 

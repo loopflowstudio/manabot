@@ -8,6 +8,7 @@ on:
       - 'academy/**'
       - 'content/**'
       - 'scripts/release/**'
+      - 'scripts/verify-installed-academy'
       - 'tests/infra/test_release.py'
       - 'release/**'
       - 'pyproject.toml'
@@ -24,6 +25,9 @@ permissions:
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ACADEMY_CARD_ART: "off"
 
 jobs:
   preflight:
@@ -46,9 +50,16 @@ jobs:
           else
             uv run --no-project python scripts/release/check.py
           fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Academy once for all engine artifacts
+        run: |
+          npm --prefix academy/ui ci --ignore-scripts
+          ACADEMY_STATIC_BUILD=1 npm --prefix academy/ui run build
       - name: Build both source distributions and the pure-Python wheel
         run: |
-          uv run --no-project python scripts/release/prepare.py staging
+          uv run --no-project python scripts/release/prepare.py staging --site academy/ui/build
           uv build --no-sources --sdist staging/managym --out-dir dist
           uv build --no-sources --sdist staging --out-dir dist
           mkdir bot-source
@@ -138,17 +149,41 @@ jobs:
           cd "$RUNNER_TEMP"
           unset PYTHONPATH
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" engine_smoke.py
+      - name: Install Academy and play and inspect a replay without build tools
+        shell: bash
+        run: |
+          wheel=$(echo "$GITHUB_WORKSPACE"/dist/managym-*.whl)
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: "${wheel}[academy]"
+          for command in node npm; do
+            cp "$RUNNER_TEMP/no-rust/cargo" "$RUNNER_TEMP/no-rust/$command"
+          done
+          cp scripts/release/academy_smoke.py "$RUNNER_TEMP/academy_smoke.py"
+          cd "$RUNNER_TEMP"
+          unset PYTHONPATH
+          PATH="$RUNNER_TEMP/no-rust:$PATH" uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" academy_smoke.py
+      - uses: actions/setup-node@v4
+        if: matrix.python == '3.13' && matrix.platform.target == 'x86_64'
+        with:
+          node-version: '22'
+      - name: Inspect the installed Academy in Chromium
+        if: matrix.python == '3.13' && matrix.platform.target == 'x86_64'
+        run: |
+          npm --prefix academy/ui ci --ignore-scripts
+          npm --prefix academy/ui exec -- playwright install --with-deps chromium
+          ACADEMY_WHEEL_NO_TOOLS="$RUNNER_TEMP/no-rust" ACADEMY_WHEEL_COMMAND="$RUNNER_TEMP/release-venv/bin/managym academy" ACADEMY_WHEEL_CWD="$RUNNER_TEMP" npm --prefix academy/ui run test:e2e -- --config playwright.wheel.config.ts
       - name: Install wheel and exercise CPU training outside the checkout
         shell: bash
         run: |
           export PATH="$RUNNER_TEMP/no-rust:$PATH"
           uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.15.0' 'etude-sdk==0.4.0'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
+          cp scripts/release/academy_replay_smoke.py "$RUNNER_TEMP/academy_replay_smoke.py"
           cp scripts/release/smoke.py "$RUNNER_TEMP/smoke.py"
           cd "$RUNNER_TEMP"
           export PATH="$RUNNER_TEMP/release-venv/bin:$PATH"
           unset PYTHONPATH
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" smoke.py
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" academy_replay_smoke.py
       - name: Verify optional API and report dependencies
         shell: bash
         run: |
@@ -156,7 +191,7 @@ jobs:
           uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --torch-backend cpu "${wheel}[academy,reports,artifacts,evaluation,notebook,llm,openrouter]"
           cd "$RUNNER_TEMP"
           unset PYTHONPATH
-          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import academy.server; import manabot.reports.experiment; import manabot.reports.time_sources; import nbclient; import transformers; import httpx'
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -c 'import managym.academy.server; import manabot.reports.experiment; import manabot.reports.time_sources; import nbclient; import transformers; import httpx'
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.eval.cards --help
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" python -m manabot.sim.replay --help
           uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" manabot --help

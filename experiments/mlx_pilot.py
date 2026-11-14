@@ -188,7 +188,9 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
             torch.manual_seed(21501)
             agent = ActorCritic(space, config)
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    policy, _ = build(agent.config, space.encoder.config, state)
+    # The pilot measured float32 at every width; pin it against the backend's
+    # width default.
+    policy, _ = build(agent.config, space.encoder.config, state, precision="float32")
     return agent, policy
 
 

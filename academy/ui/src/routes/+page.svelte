@@ -40,16 +40,22 @@
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
   let showSetup = $state(false);
+  let launchedSetup = $state(false);
 
   let trainedOpponents = $state<TrainedOpponent[]>([]);
+  // undefined until the catalog answers, so absence is never claimed early.
+  let botExtension = $state<string | null | undefined>(undefined);
   let catalogError = $state<string | null>(null);
   async function loadOpponents(): Promise<void> {
     try {
       const response = await fetch('/api/opponents');
       if (!response.ok) throw new Error('Trained opponents could not be loaded.');
       const data: OpponentCatalog = await response.json();
+      botExtension = data.extension ?? null;
       trainedOpponents = data.opponents;
       catalogError = data.catalog_error;
+      if (data.advice_available) void loadAdviceMeta();
+      else adviceStatus = 'unavailable';
     } catch {
       catalogError = 'Trained opponents could not be loaded.';
     }
@@ -71,8 +77,9 @@
     }
     learnDemo = demoName === 'learn';
     if (demoName) gameStore.setOpponentChoice(learnDemo ? 'random' : 'passive');
-    connect();
-    void loadAdviceMeta();
+    launchedSetup = params.has('launch');
+    connect(params.get('launch'));
+
     void loadOpponents();
     return () => {
       disconnect();
@@ -158,6 +165,12 @@
       sendNewGame({ demo: demoName });
       return;
     }
+    if (launchedSetup && gameStore.observation && !showSetup) {
+      launchedSetup = false;
+      showSetup = true;
+      return;
+    }
+    launchedSetup = false;
     sendNewGame(gameStore.newGameConfig());
     showSetup = false;
   }
@@ -319,6 +332,7 @@
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
           {catalogError}
+          extension={botExtension}
           decklists={gameStore.decklists}
           onChange={(value) => gameStore.setOpponentChoice(value)}
         />
@@ -370,6 +384,7 @@
     {#if gameStore.observation && !gameStore.gameOver}
       <p class="type-caption mt-4 text-ink-2">Choose your next matchup. New Game ends this attempt and starts the selected decks; Return to game keeps playing.</p>
     {/if}
+    {#if !gameStore.deckImport}
     <DeckSelector
       hero={gameStore.decks.hero}
       villain={gameStore.decks.villain}
@@ -377,6 +392,7 @@
       onHeroChange={(value) => gameStore.setHeroDeck(value)}
       onVillainChange={(value) => gameStore.setVillainDeck(value)}
     />
+    {/if}
     <DecklistsSelector
       value={gameStore.decklists}
       opponent={gameStore.opponentChoice}
@@ -438,6 +454,7 @@
 
         <PresentationHistory player={presentationPlayer} />
 
+        {#if adviceMetaState}
         <details bind:this={advicePanel} bind:open={adviceOpen} class="border-t border-line pt-4"><summary class="type-rubric cursor-pointer">Advice</summary>
           <DecisionAdvice
             mode="live"
@@ -454,6 +471,7 @@
             onSelectScenario={(id) => void loadAdvice(id)}
           />
         </details>
+        {/if}
 
         <div class="border-t border-line pt-4">
           <fieldset disabled={!gameStore.hasCapability('configure_match')}>

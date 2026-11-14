@@ -40,10 +40,7 @@ reports = [
 artifacts = [
     "boto3>=1.35.0",
 ]
-academy = [
-    "fastapi>=0.116.0",
-    "uvicorn[standard]>=0.34.0",
-]
+academy = ["managym[academy]==0.2.3"]
 evaluation = [
     "etude-sdk[eval]>=0.4.0",
     "matplotlib>=3.9",
@@ -123,6 +120,9 @@ torch = [
     { index = "pytorch-training", group = "training-runtime", marker = "sys_platform != 'linux'" },
 ]
 
+[project.entry-points."managym.academy.bots"]
+manabot = "manabot.sim.table_bots:extension"
+
 [project.urls]
 Homepage = "https://manabot.gg"
 Repository = "https://github.com/loopflowstudio/manabot"
@@ -131,18 +131,12 @@ Repository = "https://github.com/loopflowstudio/manabot"
 exclude = ["**/__pycache__", "**/*.pyc", "**/*.so", "**/*.dylib"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/manabot", "/academy", "/content/semantic", "/docs/experiment-metrics.md", "/protocol/experience-v1.schema.json", "/.manabot-source.json", "/README.md", "/pyproject.toml"]
-exclude = ["/academy/ui"]
-
-[tool.hatch.build.targets.sdist.force-include]
-"academy/ui/src/lib/packs" = "academy/ui/src/lib/packs"
+include = ["/manabot", "/content/semantic", "/docs/experiment-metrics.md", "/protocol/experience-v1.schema.json", "/.manabot-source.json", "/README.md", "/pyproject.toml"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["manabot", "academy"]
-exclude = ["/academy/ui"]
+packages = ["manabot"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"academy/ui/src/lib/packs" = "academy/ui/src/lib/packs"
 "content/semantic" = "content/semantic"
 "docs/experiment-metrics.md" = "docs/experiment-metrics.md"
 "protocol/experience-v1.schema.json" = "protocol/experience-v1.schema.json"
@@ -169,5 +163,5 @@ ignore = ["E501"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
-known-first-party = ["academy", "experiments", "manabot"]
+known-first-party = ["managym", "conformance", "experiments", "manabot"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]

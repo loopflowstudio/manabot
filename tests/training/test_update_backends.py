@@ -206,10 +206,10 @@ def test_float32_parity_requires_every_tensor_gradient_to_agree() -> None:
     assert report.failures() == []
 
 
-@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
 def test_half_damped_update_after_cached_inference(
-    precision: Precision, captured: tuple[PolicyCheckpoint, RolloutBatch]
+    captured: tuple[PolicyCheckpoint, RolloutBatch],
 ) -> None:
+    precision: Precision = "bfloat16"
     if "mlx" not in installed_backends():
         pytest.skip("MLX is not installed")
     module = backend_module("mlx")
@@ -246,8 +246,8 @@ def test_half_damped_update_after_cached_inference(
         np.testing.assert_array_equal(actual, expected)
 
 
-@pytest.mark.parametrize("precision", ["bfloat16", "float16"])
-def test_half_parity_uses_measured_dtype_tolerances(precision: Precision) -> None:
+def test_half_parity_uses_measured_dtype_tolerances() -> None:
+    precision: Precision = "bfloat16"
     tolerance = TOLERANCES[precision]
     report = Report(
         precision=precision,

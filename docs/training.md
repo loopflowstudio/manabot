@@ -164,8 +164,7 @@ float32 self-play and requires Torch 2.15 or newer: on an Apple M2, Torch
 2.10–2.13 compute wrong MPS linear-layer weight gradients, which gradient
 clipping then applies (see `manabot/training/mps.py`). The repository lock
 installs 2.15; with an older Torch, an MPS run stops before training with a
-message naming both versions. An unavailable device fails explicitly. Reduced
-precision remains CUDA-only. Belief inputs and frozen opponents are unsupported
+message naming both versions. An unavailable device fails explicitly. BF16 forwards are available on CUDA and MPS; TF32 is CUDA-only. Belief inputs and frozen opponents are unsupported
 on MPS. Evaluation and search stay on CPU. A separate
 [MLX backend](../manabot/backends/mlx.md) of the policy and the damped update
 reads the same checkpoints, converted to the shared container, for measurement
@@ -837,24 +836,37 @@ experiment report has a Numerical health section.
 
 For each legal offer, `log_softmax` gives normalized log probabilities after
 masking padding to negative infinity; legal logs must be finite. Collection
-samples with `torch.multinomial` on their exponentials and stores the weights,
-full logs and chosen-action log likelihood. Learners validate masks, nonempty
-support, zero illegal mass, normalization, agreement between weights and logs,
-legal sampled actions and the saved chosen log. Float32 `exp(-104)` can round
-to zero: a finite legal log with zero weight is accepted only when its own
-exponential rounds to zero. There is no epsilon, floor, mixture,
-renormalization repair or skipped corrupt batch; nonfinite values fail with a
-named invariant. A rounded-zero action cannot be sampled; underflow counts
-expose that limit. Reverse KL uses saved logs with padding removed, and ratios
-exponentiate in float64. The PPO-style learner uses the same contract (no
-`1e-12` KL clamp).
+samples with `torch.multinomial` on their exponentials and stores the full
+logs and the chosen-action log likelihood. The logs are the only stored
+behavior distribution; the sampling weights are not kept. Learners validate
+masks, nonempty support, negative-infinity padding, normalization of the logs,
+legal sampled actions and the saved chosen log. There is no epsilon, floor,
+mixture, renormalization repair or skipped corrupt batch; nonfinite values fail
+with a named invariant.
+
+A legal action may be arbitrarily unlikely. A row whose legal logs are
+
+```text
+max − {0, 6, 15, 93, 94.75}
+```
+
+is admitted: the last two probabilities are float32 subnormals (logs below
+−87.34), and a log below about −103.97 has a float32 probability of zero. An
+action whose weight rounds to zero on the collecting device cannot be sampled;
+the underflow count exposes that limit. No check compares an exponential
+computed on one device with one computed on another: two correct `exp`
+implementations can return neighbouring floats, and one float spacing of a
+subnormal is a relative difference no tolerance should absorb.
+
+Reverse KL uses saved logs with padding removed, and ratios exponentiate in
+float64. The PPO-style learner uses the same contract (no `1e-12` KL clamp).
 
 ### Metrics
 
 | Metric | Population and meaning |
 | --- | --- |
-| `legal_logit_gap_max`, `legal_probability_min` | All collected learner rows before filtering; minimum includes rounded zeros. |
-| `legal_underflow_count` | Legal entries with zero sampling weight and finite logs. A count, not proof of harmless exploration loss. |
+| `legal_logit_gap_max`, `legal_probability_min` | All collected learner rows before filtering. The minimum is the float32 exponential of the stored logs, computed on the host, and includes rounded zeros. |
+| `legal_underflow_count` | Legal entries whose finite log rounds to probability zero in float32. A count, not proof of harmless exploration loss. |
 | `nonfinite_count` | Zero in admitted batches; failures name their invariant. |
 | `actor_rows`, `critic_rows` | Unique selected rows before epoch reuse. Actor-only filtering can leave zero actor rows. |
 | `forced_rows`, `zero_advantage_rows`, `empty_actor_batch` | Forced decisions have zero policy gradient but critic/shared updates can still move parameters. |
@@ -892,8 +904,8 @@ settings = settings.model_copy(update={"device": "cuda", "precision": "tf32", "b
 ```
 
 Retained regime builders resolve `Execution.precision="auto"` alongside
-`bucketed_shapes` and `live_tokens`. It selects float32 everywhere after the
-BF16 learning gate failed. Explicit choices and saved precision are preserved;
+`bucketed_shapes` and `live_tokens`. It selects BF16 for models at least
+256 wide on CUDA and MPS, and float32 otherwise. Explicit choices and saved precision are preserved;
 a saved stage predating the field reads as float32. Current `SelfPlay` settings
 use explicit precision, defaulting to float32.
 
@@ -901,26 +913,31 @@ use explicit precision, defaulting to float32.
 | --- | --- |
 | `float32` (default) | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the loop, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
-| `bf16` | `torch.autocast(cuda, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
+| `bf16` | `torch.autocast(device, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
 
-Checkpoint evaluation and search run on CPU in float32. A reduced precision off CUDA fails
-validation (`precision tf32 requires CUDA`). The field is serialized in every
+Checkpoint evaluation and search run on CPU in float32. TF32 requires CUDA;
+BF16 requires CUDA or MPS. The field is serialized in every
 `SelfPlay`, so a run's recorded config names the precision it trained under,
 and a reduced-precision run is a declared recipe variant, never an edit of a
 float32 recipe. Precision changes no `ModelConfig` field, checkpoint or world
 binding: a checkpoint trained in any precision loads and runs in any other.
 
-The measured speed crossover is width 256 (`BF16_MIN_HIDDEN_DIM` in
-`manabot.training.regime`). On an L4 with bucketed shapes, BF16 is slower than
-float32 at w160l8, 1.66× faster per learner step at w256l8, and 2–2.7× faster
-at w384l8 ([measurement](../experiments/cuda_precision.md)). But in the
-[learning A/B](../experiments/precision_ladder.md), BF16 seed 32401 stopped
-after 140 completed updates with `behavior_log_probability_mismatch`.
-That terminal numerical failure rejects BF16 under the pre-registered rule;
-the speed crossover therefore remains inactive. Playing strength was not
-scored, and the failure does not establish a strength difference. The A/B
+The measured speed crossover is width 256. On an L4 with bucketed shapes,
+BF16 is slower than float32 at w160l8, 1.66× faster per learner step at w256l8,
+and 2–2.7× faster at w384l8 ([measurement](../experiments/cuda_precision.md)).
+On an M4 Max at w384l8 with 256 streams, a whole update took 261 s in bfloat16
+against 277 s in float32 on MPS, and 208 s against 263 s on MLX ([measurement](../experiments/mps_retest.md)).
+
+In the earlier [learning A/B](../experiments/precision_ladder.md), BF16 seed
+32401 stopped after 140 completed updates with
+`behavior_log_probability_mismatch`, which kept `auto` at float32. Playing
+strength was not scored, and the failure does not establish a strength
+difference. Its cause was independent of precision: a check then compared
+collection's device `exp` of a subnormal legal probability with the host's,
+which the [sampling contract](#sampling-contract) no longer stores or compares
+([cause and proof](../experiments/bf16_behavior_logs.md)). The A/B
 used bucketed shapes without live-token attention; their combination with
-BF16 has no learning admission from this run. TF32 remains explicit too.
+BF16 has no learning admission from this run. TF32 remains explicit.
 
 Before training a reduced precision on another GPU, run the
 [CUDA numerics validation](#validation), which checks float32, and the bf16

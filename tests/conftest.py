@@ -58,6 +58,7 @@ def _etude_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    os.environ.setdefault("ACADEMY_CARD_ART", "off")
     config.addinivalue_line(
         "markers",
         "experiment_data(*paths): fetch retained experiment data before the test",

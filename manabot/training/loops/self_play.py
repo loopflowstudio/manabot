@@ -155,8 +155,10 @@ class SelfPlay(BaseModel):
             raise ValueError("categorical outcome training requires damped_policy")
         if self.model.belief_count_buckets:
             raise ValueError("self-play does not produce belief inputs")
-        if self.precision != "float32" and self.device != "cuda":
-            raise ValueError(f"precision {self.precision} requires CUDA")
+        if self.precision == "tf32" and self.device != "cuda":
+            raise ValueError("precision tf32 requires CUDA")
+        if self.precision == "bf16" and self.device == "cpu":
+            raise ValueError("precision bf16 requires CUDA or MPS")
         if self.live_tokens and self.device != "cuda":
             raise ValueError("live tokens require CUDA")
         if self.device == "mps" and (error := mps_torch_error()) is not None:

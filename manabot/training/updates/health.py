@@ -84,7 +84,8 @@ def batch_health(
 ) -> NumericalHealth:
     """Measurements over every collected row; `advantages` and `selected` are
     host rows of any one shape."""
-    logs, probabilities = action_data.log_probabilities, action_data.probabilities
+    logs = action_data.log_probabilities
+    probabilities = np.exp(logs)
     starts = action_data.offsets[:-1]
     gaps = np.maximum.reduceat(logs, starts) - np.minimum.reduceat(logs, starts)
     return NumericalHealth(

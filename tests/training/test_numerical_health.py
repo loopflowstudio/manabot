@@ -20,6 +20,7 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import (
     NumericalError,
     check_behavior,
+    check_logs,
     check_probabilities,
     damped_policy_loss,
     legal_mask,
@@ -36,7 +37,11 @@ from manabot.training.rollout.collection import (
     open_collector,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.health import NumericalHealth, OptimizerHealth
+from manabot.training.updates.health import (
+    NumericalHealth,
+    OptimizerHealth,
+    batch_health,
+)
 from manabot.training.updates.selection import value_scale
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
@@ -70,9 +75,7 @@ def test_extreme_logs_loss_and_gradients_match_double(gap: float) -> None:
     valid = torch.tensor([[True, True, False]], device=DEVICE)
     behavior_logs = policy_logs(_tensor([[0.0, -gap, 900.0]]), valid)
     actions = torch.tensor([0], device=DEVICE)
-    check_behavior(
-        behavior_logs, behavior_logs.exp(), actions, behavior_logs[:, 0], valid
-    )
+    check_behavior(behavior_logs, actions, behavior_logs[:, 0], valid)
     # Moving away from concentrated behavior exercises reverse KL on the
     # underflowed alternative, which cannot be recovered from behavior.exp().
     logits = _tensor([[-0.3, 0.4, 900.0]], grad=True)
@@ -179,16 +182,34 @@ def test_forced_action_is_finite_with_exact_zero_gradient() -> None:
     assert torch.isfinite(loss).all()
 
 
-def test_behavior_mismatch_rejected_without_epsilon() -> None:
-    valid = torch.tensor([[True, True]], device=DEVICE)
-    logs = policy_logs(_tensor([[0.0, -104.0]]), valid)
+@pytest.mark.parametrize("gap", [87.5, 92.0, 94.75, 103.9, 104.0, 124.0])
+def test_behavior_logs_admit_subnormal_and_underflowed_alternatives(gap: float) -> None:
+    # Incident 2be568a65518: the unsampled -94.75 alternative's device/host
+    # exponentials differed by one subnormal spacing (5046 vs 5047).
+    logits = torch.tensor([[0.0, -6.0, -15.0, -93.0, -gap]])
+    logs = policy_logs(logits, torch.ones_like(logits, dtype=torch.bool)).numpy()
+    packed = PackedActions.pack({"actions_valid": np.ones_like(logs)}, logs)
+    packed.check(np.array([0]), logs[:, 0])
+    health = batch_health(packed, np.ones(1), np.ones(1, dtype=bool), actor_only=False)
+    weights = np.exp(logs)
+    assert health["legal_probability_min"] == float(weights.min())
+    assert health["legal_underflow_count"] == int((weights == 0).sum())
+    if gap < 104:
+        assert 0 < health["legal_probability_min"] < np.finfo(np.float32).tiny
+    else:
+        assert health["legal_underflow_count"] == 1
+
+
+def test_behavior_rejects_corrupt_logs_and_actions() -> None:
+    valid = torch.tensor([[True, True, False]], device=DEVICE)
+    logs = policy_logs(_tensor([[0.0, -104.0, 0.0]]), valid)
     action = torch.tensor([0], device=DEVICE)
-    with pytest.raises(NumericalError, match="behavior_log_probability_mismatch"):
-        check_behavior(logs, _tensor([[1.0, 1e-30]]), action, logs[:, 0], valid)
     with pytest.raises(NumericalError, match="selected_log_mismatch"):
-        check_behavior(logs, logs.exp(), action, logs[:, 0] - 1, valid)
-    with pytest.raises(NumericalError, match="zero_sampled_probability"):
-        check_behavior(logs, logs.exp(), action + 1, logs[:, 1], valid)
+        check_behavior(logs, action, logs[:, 0] - 1, valid)
+    with pytest.raises(NumericalError, match="illegal_sampled_action"):
+        check_behavior(logs, action + 2, logs[:, 0], valid)
+    with pytest.raises(NumericalError, match="log_normalization"):
+        check_behavior(logs - 1, action, logs[:, 0] - 1, valid)
 
 
 def _health() -> NumericalHealth:

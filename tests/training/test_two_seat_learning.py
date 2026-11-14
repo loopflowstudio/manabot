@@ -124,8 +124,10 @@ def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
         logits, values = agent(obs)
     np.testing.assert_allclose(batch.values.ravel(), values.numpy().ravel(), atol=1e-6)
     np.testing.assert_allclose(
-        rows.probabilities.reshape(logits.shape),
-        logits.softmax(-1).numpy(),
+        rows.log_probabilities.reshape(logits.shape),
+        logits.masked_fill(obs["actions_valid"] == 0, -torch.inf)
+        .log_softmax(-1)
+        .numpy(),
         atol=1e-6,
     )
     selected = np.take_along_axis(rows.log_probabilities, batch.actions[..., None], -1)
