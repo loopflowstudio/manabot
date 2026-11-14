@@ -175,12 +175,12 @@ launch option completes independently of training so output delivery does not
 require cancelling a long training job. Its job cap is USD 1.32, the remaining
 authorized budget after the two costs above, including startup allowance.
 
-Execution is blocked here: the installed Etude SDK uses `launcher-17.db`, whose
-on-demand registry is empty (`etude ondemands` returned no rows). The prior
-`mtg324-l4-ab` rental is recorded in the older `launcher.db`. No launcher
-configuration was migrated or changed, and no additional rental was launched.
-The missing input is a configured rental/provider/storage in the current
-launcher. CUDA distributions and fixed-weight comparisons, including live-token
+Execution is blocked here: etude-sdk 0.3.2 uses `launcher-17.db`, which has no
+providers, storages or on-demands; the `mtg324-l4-ab` on-demand, `runpod`
+provider and `r2` storage exist only in the 0.2.x `launcher.db`. As
+[the launcher transition](../docs/experiments.md) says, they must be added
+again before launching. No launcher configuration was changed, and no
+additional rental was launched. CUDA distributions and fixed-weight comparisons, including live-token
 layouts, remain unavailable. The retained incident and 200-update run support
 considering another learning A/B, but the requested CUDA checks must still
 finish before deciding to rerun it. The full A/B was not launched.
