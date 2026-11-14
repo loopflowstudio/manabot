@@ -131,8 +131,9 @@ them.
 
 Gate, for the report-text slice:
 
-- `git diff --stat caa15caca4 -- . ':!experiments/mana_spending.md' ':!scratch'`:
-  empty (no code, manifest or evidence change).
+- `git log --first-parent --name-only caa15caca4..HEAD`: branch commits touch
+  only the report and `scratch/` (no code, manifest or evidence change). A
+  plain diff from `caa15caca4` now includes main's #520 via merge `67e03ef138`.
 - `grep -c 'C followed by D' experiments/mana_spending.md`: 0.
 - `uv run --extra dev pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q`: pass.
 - Each figure quoted in the recommendation and questions appears in a table of
