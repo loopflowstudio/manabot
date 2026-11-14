@@ -232,7 +232,9 @@ import sys
 
 class Deny(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.startswith(("manabot.training", "manabot.experiment", "manabot.eval.endpoint", "etude.eval", "etude.launch", "boto3", "botocore")):
+        # etude.eval.source only reads the checkout's revision; every module that
+        # declares, plays or stores an Etude evaluation stays forbidden.
+        if fullname.startswith(("manabot.training", "manabot.experiment", "manabot.eval.endpoint", "etude.eval.", "etude.launch", "boto3", "botocore")) and fullname != "etude.eval.source":
             raise AssertionError("forbidden managed import: " + fullname)
 sys.meta_path.insert(0, Deny())
 

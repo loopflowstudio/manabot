@@ -279,8 +279,8 @@ def _calibration(data: RunData, pod: PodReading, wall_seconds: float) -> Calibra
     rows = data.points("rows", "updates")
     return Calibration(
         run=data.name,
-        job=data.file.declaration.job_name if data.file else None,
-        state=data.state.state if data.state else "running",
+        job=data.file.job_name if data.file else None,
+        state=data.outcome.state if data.outcome else "running",
         updates=int(rows.x[-1]) if len(rows) else 0,
         seconds_per_update=cost,
         expected_updates=fitted_horizon(wall_seconds, cost) if cost else None,
@@ -303,7 +303,7 @@ def read_calibration(source: Storage | Path | str) -> list[Calibration]:
         _calibration(data, pod_reading(data, storage), wall_seconds)
         for data in read_all(storage)
         if data.experiment == EXPERIMENT
-        and (data.file is None or data.file.declaration.kind != "evaluation")
+        and (data.file is None or data.file.kind != "evaluation")
     ]
 
 

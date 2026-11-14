@@ -15,7 +15,7 @@ from manabot.env.failures import GameInputs, TrainingExposureReceipt
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.recording import TrainingGames, record_actions, record_games
 from manabot.sim.replay import read_trace, replay_games
-from manabot.training.loops.minimal import train
+from manabot.training.loops.minimal import MinimalConfig, train
 from managym.academy.launch import read_games
 
 
@@ -24,10 +24,19 @@ def captured(tmp_path_factory: pytest.TempPathFactory) -> Path:
     directory = tmp_path_factory.mktemp("recorded-games")
     previous = torch.get_num_threads()
     torch.set_num_threads(1)
+    # The identity `etude train` hands a local run, set here for an in-process call.
+    environment = pytest.MonkeyPatch()
+    track = tmp_path_factory.mktemp("recorded-run")
+    environment.setenv("ETUDE_OUT", str(track / "out"))
+    environment.setenv("ETUDE_EXPERIMENT", "recorded-games")
+    environment.setenv("ETUDE_RUN", "recorded-games-seed-3")
+    environment.setenv("ETUDE_SEED", "3")
+    environment.setenv("ETUDE_TRACK_DIR", str(track / "track"))
     try:
         with record_games(directory, players=("learner", "learner")):
-            train(1, streams=2, decisions=16, seed=3)
+            train(MinimalConfig(updates=1, streams=2, decisions=16))
     finally:
+        environment.undo()
         torch.set_num_threads(previous)
     return directory
 

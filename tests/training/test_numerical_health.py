@@ -20,7 +20,6 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import (
     NumericalError,
     check_behavior,
-    check_logs,
     check_probabilities,
     damped_policy_loss,
     legal_mask,
@@ -32,6 +31,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.inference import admit_on_device
 from manabot.training.learning import DampedPolicyLearning
+from manabot.training.rollout.actions import PackedActions
 from manabot.training.rollout.collection import (
     collect,
     open_collector,

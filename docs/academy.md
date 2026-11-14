@@ -278,18 +278,34 @@ when one is raised.
 
 ### Watch a game from your training loop
 
-Wrap the loop in `record_games`, pick one of the games it played, export it and
-open it:
+Wrap the loop in `record_games` in a file that defines `train(config)`:
+
+```python
+# watch.py
+from pathlib import Path
+
+from manabot.sim.recording import record_games
+from manabot.training.loops import minimal
+
+
+def train(config: minimal.MinimalConfig) -> None:
+    with record_games(Path("runs/jace/games"), players=("jace", "jace")):
+        minimal.train(config)                 # the loop's own self-play games
+```
+
+```bash
+uv run etude train watch.py --config '{"updates": 8}'
+```
+
+Then pick one of the games it played, export it and open it:
 
 ```python
 from pathlib import Path
 
-from manabot.sim.recording import record_games
-from manabot.training.loops.minimal import train
+from manabot.sim.recording import TrainingGames
 from managym.academy.launch import serve
 
-with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
-    train(8)                                  # the loop's own self-play games
+games = TrainingGames(Path("runs/jace/games"))
 game = games.sample(seed=0)                   # one complete game it played
 path = game.export(Path("jace.game.jsonl.gz"))
 

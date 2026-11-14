@@ -98,10 +98,28 @@ def _clock_endpoint(run: "RunData", writer: str, clock: str) -> float | None:
     return previous
 
 
+def _clock_before(
+    run: "RunData", writers: list[str], clock: str, value: float
+) -> float | None:
+    """Latest finite clock value below `value` that any of `writers` logged."""
+    latest: float | None = None
+    for block in run.blocks:
+        if block.header.writer not in writers:
+            continue
+        column = next((c for c in block.header.clocks if c.name == clock), None)
+        if column is None:
+            continue
+        for number in block.array(column.data, "<f8"):
+            logged = float(number)
+            if math.isfinite(logged) and logged < value:
+                latest = logged if latest is None else max(latest, logged)
+    return latest
+
+
 def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | None]:
     if run.file is None:
         raise ValueError("Etude declaration unavailable")
-    declared = run.file.declaration
+    declared = run.file
     identifier = "etude:" + declared.source_key.key()
     parent = "etude:" + declared.continues.parent.key() if declared.continues else None
     warnings = [
@@ -109,16 +127,16 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
     ]
     names = {c.name: c.kind for c in run.clocks}
     writers = sorted(
-        {a.writer for a in run.attempts} | {b.header.writer for b in run.blocks},
+        {a.writer for a in run.writers} | {b.header.writer for b in run.blocks},
         key=lambda w: next(
-            (a.started_ms for a in run.attempts if a.writer == w),
+            (a.started_ms for a in run.writers if a.writer == w),
             min(
                 (b.header.wall_first for b in run.blocks if b.header.writer == w),
                 default=0,
             ),
         ),
     )
-    attempts = {a.writer: a for a in run.attempts}
+    attempts = {a.writer: a for a in run.writers}
     active: float | None = (
         0.0 if names.get(training_clock) == "time" and writers else None
     )
@@ -129,6 +147,16 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
             _clock_endpoint(run, writer, training_clock) if active is not None else None
         )
         baseline = attempt.resumed_at.get(training_clock) if attempt else None
+        if attempt is not None and attempt.first_row and baseline is not None:
+            # Etude 0.4 records an attempt's first logged row, not the position
+            # it resumed from. A loop logs then saves each pass, so the position
+            # restored is the latest earlier row below that first row; the
+            # first attempt of a run with no parent starts its clock at zero.
+            baseline = (
+                _clock_before(run, writers[:index], training_clock, baseline)
+                if index
+                else None
+            )
         if (
             baseline is None
             and index == 0
@@ -172,9 +200,9 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
         )
     if not intervals:
         warnings.append("Timeline unavailable: no retained metric observation windows.")
-    if run.state is not None and run.state.counters.dropped:
+    if run.outcome is not None and run.outcome.counters.dropped:
         warnings.append(
-            f"Etude reports {run.state.counters.dropped} dropped metric rows."
+            f"Etude reports {run.outcome.counters.dropped} dropped metric rows."
         )
     if run.incomplete:
         warnings.append(f"Etude reports {run.incomplete} rows with incomplete clocks.")
@@ -198,7 +226,7 @@ def _etude_run(run: "RunData", training_clock: str) -> tuple[CohortRun, str | No
             else None
         )
 
-    status = run.state.state if run.state else "running or unfinished"
+    status = run.outcome.state if run.outcome else "running or unfinished"
     profile = TrainingProfile(
         identifier,
         run.experiment,
@@ -331,7 +359,10 @@ def load_time_sources(
                             native[run.id] = run
                     elif key.endswith("experiment.json"):
                         executions.append(RetainedExecution.model_validate_json(body))
-                    elif not isinstance(data, dict) or "declaration" not in data:
+                    # Etude's run.json: nested before 0.4, flat with an experiment since.
+                    elif not isinstance(data, dict) or not (
+                        "declaration" in data or "experiment" in data
+                    ):
                         warnings.append(f"Unrecognized run record: {snapshot.uri(key)}")
                 except (ValueError, OSError) as error:
                     warnings.append(

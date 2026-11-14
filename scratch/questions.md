@@ -15,10 +15,10 @@ Context exception: the Task steer says "Keep the scratch notes
 explore.html, etude-readme-draft.md); do not delete or shorten them."
 Preserve those notes even if they exceed the compress target; do not raise limits.
 
-Compression budget conflict: protected notes remain untouched. The final
-scratch overage is recorded by `lf context`; the byte limit is met. Further
-cuts would shorten protected context or discard live contrary findings.
-Limits are unchanged.
+Compression budget conflict: protected notes remain untouched. After realign,
+`lf context` reports about 2,900 tokens over the 12,000-token target; the
+98,304-byte limit is met. Further cuts would shorten protected context or
+discard live contrary findings. Limits are unchanged.
 
 2026-11-14 sync: retain Etude execution and removal of collector snapshots;
 combine main's log-only packed actions, native player policies, GPU BF16
@@ -29,4 +29,5 @@ Sync validation: focused collector log retention, Etude save/resume and
 precision-width checks: 9 passed, 3 failed (3.55s). Every failure is the
 installed pre-sync native VectorEnv rejecting main's `player_policies`
 argument before collection. Gate needs a native rebuild; no second test run,
-build or push was performed by conflict resolution.
+build or push was performed by conflict resolution. Gate's rebuild and the
+remaining acceptance are ordered in plan.md; no tests were rerun by realign.

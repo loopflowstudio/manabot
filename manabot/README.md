@@ -418,13 +418,28 @@ the reusable instruments. The experiment discipline and ledger are in
 ### Watch a game the loop played
 
 ```python
+# watch.py
 from pathlib import Path
 
 from manabot.sim.recording import record_games
-from manabot.training.loops.minimal import train
+from manabot.training.loops import minimal
 
-with record_games(Path("runs/jace/games"), players=("jace", "jace")) as games:
-    train(8)
+
+def train(config: minimal.MinimalConfig) -> None:
+    with record_games(Path("runs/jace/games"), players=("jace", "jace")):
+        minimal.train(config)
+```
+
+```bash
+uv run etude train watch.py --config '{"updates": 8}'
+```
+
+```python
+from pathlib import Path
+
+from manabot.sim.recording import TrainingGames
+
+games = TrainingGames(Path("runs/jace/games"))
 path = games.sample(seed=0).export(Path("jace.game.jsonl.gz"))
 ```
 

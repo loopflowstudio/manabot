@@ -1,6 +1,11 @@
-"""Allocation-owned local transport for spawned evaluation callbacks."""
+"""Allocation-owned local transport for spawned evaluation callbacks.
 
-from collections.abc import Iterator
+`callback_allocation` opens the allocation and yields its `InferenceEndpoint`;
+`EndpointPlay` binds that endpoint to a module's match function as the
+one-Match callback Etude plays.
+"""
+
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from multiprocessing.managers import BaseManager
@@ -41,6 +46,23 @@ class InferenceEndpoint:
         manager = ClientManager(address=self.address, authkey=self.authkey)
         manager.connect()
         return manager.supervisor().play_cell(kwargs)
+
+
+@dataclass(frozen=True, eq=False)
+class EndpointPlay[M, T]:
+    """`play(match, endpoint)` as Etude's play callback.
+
+    Etude requires a callback of exactly one Match parameter and pickles it
+    into spawned workers, so the endpoint travels as a field of a module-level
+    type, not as a bound keyword or a closure. Identity equality keeps it
+    hashable for Etude's per-callback signature cache.
+    """
+
+    play: Callable[[M, InferenceEndpoint], T]
+    endpoint: InferenceEndpoint
+
+    def __call__(self, match: M) -> T:
+        return self.play(match, self.endpoint)
 
 
 class _CallbackSupervisor:

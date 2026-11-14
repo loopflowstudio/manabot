@@ -9,7 +9,6 @@ repeatedly inspected deals are development monitoring, not a held-out study.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from functools import partial
 import os
 from pathlib import Path
 
@@ -28,7 +27,11 @@ from etude.eval.tournament import hold
 from etude.records import ArtifactRef
 from pydantic import BaseModel
 
-from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
+from manabot.eval.endpoint import (
+    EndpointPlay,
+    InferenceEndpoint,
+    callback_allocation,
+)
 from manabot.eval.evaluation import (
     EvaluationRequest,
     continue_evaluation,
@@ -120,7 +123,7 @@ def benchmark(manifest: MonitorResult) -> Benchmark:
     )
 
 
-def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
+def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
     """Play a complete deal; failed integrity leaves arena evidence and fails Etude."""
     if len(match.players) != 2 or match.games != 8:
         raise ValueError("expected one eight-leg checkpoint/heuristic deal")
@@ -157,6 +160,11 @@ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     if result.error:
         raise ValueError(result.error)
     return evaluation_tables(result.rows)
+
+
+def play(match: Match) -> Tables:
+    """Etude's play callback when the calling process runs inference itself."""
+    return play_match(match, None)
 
 
 def evaluation_tables(
@@ -243,7 +251,7 @@ def evaluate(
         result = hold(
             benchmark(manifest),
             experiment=BENCHMARK,
-            play=partial(play, inference=inference) if inference else play,
+            play=EndpointPlay(play_match, inference) if inference else play,
             # The training run's export, wherever its bytes are read from.
             checkpoint=CheckpointRef(
                 key=CheckpointKey(run=manifest.run_id, name=path.name),

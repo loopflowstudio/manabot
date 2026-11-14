@@ -4,7 +4,6 @@ Each match contains all eight deck/seat legs of one deal."""
 
 from __future__ import annotations
 
-from functools import partial
 import json
 import os
 from pathlib import Path
@@ -26,7 +25,11 @@ import numpy as np
 from pydantic import BaseModel
 
 from manabot.eval.benchmark import Conditions, evaluation_tables
-from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
+from manabot.eval.endpoint import (
+    EndpointPlay,
+    InferenceEndpoint,
+    callback_allocation,
+)
 from manabot.eval.evaluation import (
     EvaluationRequest,
     continue_evaluation,
@@ -117,7 +120,7 @@ def registrations(duel: Duel) -> tuple[PlayerRegistration, PlayerRegistration]:
     )
 
 
-def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
+def play_match(match: Match, inference: InferenceEndpoint | None) -> Tables:
     duel = Duel.model_validate_json(Path(os.environ["MANABOT_DUEL"]).read_bytes())
     candidate, opponent = registrations(duel)
     seated = match.players[0]
@@ -150,6 +153,11 @@ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     if result.error:
         raise ValueError(result.error)
     return evaluation_tables(result.rows)
+
+
+def play(match: Match) -> Tables:
+    """Etude's play callback when the calling process runs inference itself."""
+    return play_match(match, None)
 
 
 def summarize(directory: Path) -> dict[str, ScoreGroup]:
@@ -295,7 +303,7 @@ def evaluate(path: Path, *, execution: EvalExecution | None = None) -> None:
         result = hold(
             benchmark,
             experiment=EXPERIMENT,
-            play=partial(play, inference=inference) if inference else play,
+            play=EndpointPlay(play_match, inference) if inference else play,
             checkpoint=_checkpoint(duel.two_seat),
             directory=directory.parent.parent / "track",
             workers=execution.max_active_games if execution else 1,

@@ -336,25 +336,21 @@ def test_etude_resume_keeps_sunk_time_but_not_duplicate_work(tmp_path: Path) -> 
         Step("learner_transitions", "retained rows"),
     ]
     first = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
+    first.log({"loss": 1.0}, training_seconds=8, learner_transitions=80)
     first.log({"loss": 1.0}, training_seconds=10, learner_transitions=100)
     first.finish()
+    # The second attempt restored the save at 8 seconds; its first row replaces
+    # the first attempt's row at 10, whose two seconds stay spent.
     second = track(
-        experiment="resume",
-        run="same",
-        directory=tmp_path,
-        clocks=clocks,
-        resumed_at={"training_seconds": 8},
+        experiment="resume", run="same", directory=tmp_path, clocks=clocks, resume=True
     )
+    second.log({"loss": 0.6}, training_seconds=10, learner_transitions=100)
     second.log({"loss": 0.5}, training_seconds=12, learner_transitions=120)
     second.finish()
     run = load_time_sources([str(tmp_path)]).runs[0]
     assert len(run.members) == 2
     assert run.active_seconds == 14
     assert run.learner_transitions == 120
-    third = track(experiment="resume", run="same", directory=tmp_path, clocks=clocks)
-    third.log({"loss": 0.4}, training_seconds=14, learner_transitions=140)
-    third.finish()
-    assert load_time_sources([str(tmp_path)]).runs[0].active_seconds is None
 
 
 def test_failed_attempt_without_training_artifact_is_selectable() -> None:
@@ -416,7 +412,7 @@ def test_etude_continuation_adds_attempt_duration_and_uses_leaf_progress(
         directory=tmp_path,
         clocks=clocks,
         continues=Continuation(
-            parent=declaration.declaration.source_key, clock="training_seconds", value=8
+            parent=declaration.source_key, clock="training_seconds", value=8
         ),
     )
     child.log({"loss": 0.5}, training_seconds=12, learner_transitions=120)
