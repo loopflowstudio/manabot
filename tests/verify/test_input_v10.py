@@ -101,7 +101,7 @@ def v10_observation() -> Iterator[tuple[ObservationSpace, dict[str, torch.Tensor
         observation_space=space,
         reward=Reward(RewardConfig(trivial=True)),
         device="cpu",
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
     obs, _ = env.reset()
     yield space, obs

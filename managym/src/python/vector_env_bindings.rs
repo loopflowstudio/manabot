@@ -1024,8 +1024,8 @@ fn encode_observations_into(
 pub(crate) fn parse_player_policies(
     values: Option<Vec<String>>,
     legacy: Option<&str>,
-) -> PyResult<[crate::agent::opponent::PlayerPolicy; 2]> {
-    use crate::agent::opponent::PlayerPolicy;
+) -> PyResult<[crate::agent::player_policy::PlayerPolicy; 2]> {
+    use crate::agent::player_policy::PlayerPolicy;
     if values.is_some() && legacy.is_some() {
         return Err(PyValueError::new_err(
             "use player_policies or opponent_policy, not both",

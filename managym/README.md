@@ -9,7 +9,7 @@ stay in this directory. Start with the
 [Python installation example](../docs/engine-python.md). Both `Env` and
 `VectorEnv` accept `player_policies=("agent", "heuristic")`: each native seat
 can use an external agent, random play or the built-in heuristic, without
-installing `manabot`. See [built-in play](../docs/engine.md#built-in-heuristic-opponent).
+installing `manabot`. See [built-in play](../docs/engine.md#per-seat-players).
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
 `CardPool` holds the cards available, `format.Limited` holds the rules, and a

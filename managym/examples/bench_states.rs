@@ -8,7 +8,7 @@ use managym::{
         env::Env,
         observation::Observation,
         observation_encoder::{encode, encode_into, ObservationEncoderConfig},
-        opponent::PlayerPolicy,
+        player_policy::PlayerPolicy,
         vector_env::VectorEnv,
     },
     benchmark_allocations, benchmark_layers, benchmark_payments,

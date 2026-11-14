@@ -9,7 +9,7 @@ use crate::{
         env::{Env, HandSnapshot},
         observation::Observation,
         observation_encoder::ObservationEncodeError,
-        opponent::PlayerPolicy,
+        player_policy::PlayerPolicy,
     },
     infra::profiler::{InfoDict, InfoValue},
     state::player::PlayerConfig,
@@ -846,7 +846,7 @@ mod tests {
     use crate::{
         agent::{
             action::AgentError, env::Env, observation_encoder::ObservationEncodeError,
-            opponent::PlayerPolicy, vector_env::VectorEnv,
+            player_policy::PlayerPolicy, vector_env::VectorEnv,
         },
         infra::profiler::InfoValue,
         state::player::PlayerConfig,

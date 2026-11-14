@@ -419,7 +419,7 @@ Select `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring, or
 The scalar `HeuristicPlayer` adapter and arena anchor call the same engine
 implementation. `heuristic` is a separately versioned anchor with rules of thumb
 for mana, timing, targets, card choices and combat; see
-[selection, rules and information limits](../docs/engine.md#built-in-heuristic-opponent).
+[selection, rules and information limits](../docs/engine.md#built-in-heuristic).
 Historical results keep the heuristic version they evaluated. One exploratory
 check (MTG-152, GPU seed 12261 at 25k, 200 paired games per anchor) scored the
 checkpoint 0.57 against `heuristic` and 0.795 against `scripted_greedy`, lower

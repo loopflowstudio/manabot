@@ -84,7 +84,7 @@ def real_observation(
         observation_space=observation_space,
         reward=reward,
         device="cpu",
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
     obs, _ = vec_env.reset()
     yield admit_observation(agent, obs)

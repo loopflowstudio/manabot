@@ -113,8 +113,10 @@ class FailureEvidence(BaseModel):
     operation: Literal["reset", "step"]
     games: list[GameInputs]
     skip_trivial: bool = True
-    # Retain historical names verbatim; native construction admits replay policies.
-    opponent_policy: str = "none"
+    # Only retained receipts use this field; new vector captures name both seats.
+    opponent_policy: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     player_policies: tuple[str, str] | None = None
     seed_stride: int = 1
     identities: dict[str, object]
@@ -585,7 +587,6 @@ class CapturedVector(_Capture):
         self.stride = seed_stride or num_envs
         self.skip_trivial = skip_trivial
         self.player_policies = resolve_player_policies(opponent_policy, player_policies)
-        self.opponent_policy = opponent_policy or "none"
         self.native = managym.VectorEnv(
             num_envs=num_envs,
             seed=seed,
@@ -692,7 +693,6 @@ class CapturedVector(_Capture):
             operation=operation,
             games=games,
             skip_trivial=self.skip_trivial,
-            opponent_policy=self.opponent_policy,
             player_policies=self.player_policies,
             seed_stride=self.stride,
         )

@@ -100,7 +100,7 @@ Working anchors are the rule-based `heuristic` player and frozen checkpoints.
 Select `--opponent heuristic` for local evaluation or
 `MonitorProtocol(opponent="heuristic")` for checkpoint monitoring. The scalar
 adapter and batched opponent share the
-[native heuristic rules](engine.md#built-in-heuristic-opponent).
+[native heuristic rules](engine.md#built-in-heuristic).
 New arena registrations use `version="native-v2"` and bind the native rule
 sources and adapter as their source identity. The `managym` wheel includes engine
 sources at their original package paths, so installed registration and validation hash

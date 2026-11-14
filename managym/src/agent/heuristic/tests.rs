@@ -355,7 +355,7 @@ fn heuristic_prefix_and_empty_errors() {
 
 #[test]
 fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
-    use crate::agent::opponent::PlayerPolicy;
+    use crate::agent::player_policy::PlayerPolicy;
 
     let players = ["a", "b"]
         .map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])))
@@ -396,7 +396,7 @@ fn heuristic_env_forks_copy_history_and_same_seed_reset_clears_it() {
 
 #[test]
 fn heuristic_per_seat_memory_is_independent_and_forked() {
-    use crate::agent::opponent::PlayerPolicy;
+    use crate::agent::player_policy::PlayerPolicy;
     let players = ["a", "b"]
         .map(|name| PlayerConfig::new(name, BTreeMap::from([("Forest".into(), 20)])))
         .to_vec();
@@ -430,7 +430,7 @@ fn heuristic_per_seat_memory_is_independent_and_forked() {
 
 #[test]
 fn heuristic_per_seat_scalar_vector_parity_and_terminal_rewards() {
-    use crate::agent::{opponent::PlayerPolicy, vector_env::VectorEnv};
+    use crate::agent::{player_policy::PlayerPolicy, vector_env::VectorEnv};
     let players = ["a", "b"]
         .map(|name| {
             PlayerConfig::new(
@@ -488,7 +488,7 @@ fn heuristic_per_seat_scalar_vector_parity_and_terminal_rewards() {
 
 #[test]
 fn heuristic_builtin_steps_retain_live_event_parity() {
-    use crate::agent::opponent::PlayerPolicy;
+    use crate::agent::player_policy::PlayerPolicy;
     let setup = crate::cards::setups::authored_setup("elemental-world-v2").unwrap();
     let players = ["elemental_ur", "elemental_gw"]
         .map(|key| setup.player_config(key, key).unwrap())

@@ -52,7 +52,7 @@ external human, model or tool, while `random` and `heuristic` choose natively.
 The same tuple works with `managym.VectorEnv`. Either seat may be external.
 For two built-ins, reset constructs the game and each `game.step()` advances
 one decision; a vector uses `games.step([-1, ...])`. See
-[per-seat controllers](engine.md#built-in-heuristic-opponent) for rewards,
+[per-seat players](engine.md#per-seat-players) for rewards,
 terminal reset and Command stepping.
 Forced single-action decisions are skipped by default. See the
 [engine guide](engine.md#choosing-a-python-api) for complete games, batches,

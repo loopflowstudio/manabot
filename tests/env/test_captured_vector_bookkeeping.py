@@ -5,9 +5,10 @@ import pytest
 import torch
 
 from manabot import managym
-from manabot.env.failures import CapturedVector
+from manabot.env.failures import CapturedVector, FailureEvidence
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.env.replay import replay_failure_inputs
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
 
@@ -20,14 +21,15 @@ def _players() -> list[managym.PlayerConfig]:
 
 def _captured(
     seed: int,
-    opponent_policy: str | None = None,
     player_policies: tuple[str, str] | None = None,
+    *,
+    opponent_policy: str | None = None,
 ) -> tuple[CapturedVector, dict[str, np.ndarray]]:
     vector = CapturedVector(
         num_envs=1,
         seed=seed,
-        opponent_policy=opponent_policy,
         player_policies=player_policies,
+        opponent_policy=opponent_policy,
     )
     buffers = ObservationSpace().encoder.allocate(1)
     buffers.update(
@@ -76,11 +78,35 @@ def test_native_reads_are_delegated() -> None:
         vector.close()
 
 
-@pytest.mark.parametrize("opponent_policy", ["none", "random", "heuristic"])
-def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix(
-    opponent_policy: str,
+@pytest.mark.parametrize("policy", ["none", "random", "heuristic"])
+def test_legacy_capture_argument_warns_and_records_only_per_seat_players(
+    policy: str,
 ) -> None:
-    vector, buffers = _captured(_MAX_SEED, opponent_policy)
+    with pytest.warns(DeprecationWarning, match="0.3.0"):
+        vector, _ = _captured(42, opponent_policy=policy)
+    try:
+        vector.reset_all_into_buffers(_players())
+        vector.step_into_buffers([0])
+        evidence = vector._evidence_for(vector.games, "step")
+        restored = FailureEvidence.model_validate_json(
+            evidence.model_dump_json(by_alias=True)
+        )
+        assert restored.player_policies == (
+            "agent",
+            "agent" if policy == "none" else policy,
+        )
+        assert restored.opponent_policy is None
+        assert "opponent_policy" not in evidence.model_dump(mode="json", by_alias=True)
+        assert replay_failure_inputs(restored)[0]["matches_binding"] is True
+    finally:
+        vector.close()
+
+
+@pytest.mark.parametrize("policy", ["agent", "random", "heuristic"])
+def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix(
+    policy: str,
+) -> None:
+    vector, buffers = _captured(_MAX_SEED, player_policies=("agent", policy))
     try:
         vector.reset_all_into_buffers(_players())
         generation = vector.current_game_generations()[0]
@@ -98,9 +124,9 @@ def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix(
         vector.close()
 
 
-@pytest.mark.parametrize("opponent_policy", ["none", "random", "heuristic"])
-def test_same_seed_reset_starts_a_new_prefix(opponent_policy: str) -> None:
-    vector, _ = _captured(42, opponent_policy)
+@pytest.mark.parametrize("policy", ["agent", "random", "heuristic"])
+def test_same_seed_reset_starts_a_new_prefix(policy: str) -> None:
+    vector, _ = _captured(42, player_policies=("agent", policy))
     try:
         vector.reset_all_into_buffers(_players())
         vector.step_into_buffers([0])
@@ -113,9 +139,9 @@ def test_same_seed_reset_starts_a_new_prefix(opponent_policy: str) -> None:
         vector.close()
 
 
-@pytest.mark.parametrize("opponent_policy", ["none", "random", "heuristic"])
+@pytest.mark.parametrize("policy", ["agent", "random", "heuristic"])
 def test_torch_reset_with_a_seed_restarts_and_without_continues(
-    opponent_policy: str,
+    policy: str,
 ) -> None:
     match = Match(MatchConfig(hero_deck={"Mountain": 12}, villain_deck={"Island": 12}))
     vector = TorchVectorEnv(
@@ -125,7 +151,7 @@ def test_torch_reset_with_a_seed_restarts_and_without_continues(
         Reward(RewardConfig()),
         "cpu",
         seed=42,
-        opponent_policy=opponent_policy,
+        player_policies=("agent", policy),
     )
     try:
         first, _ = vector.reset(seed=42)
@@ -159,6 +185,8 @@ def test_captured_per_seat_configuration_and_terminal_rewards(
         vector.reset_all_into_buffers(players)
         evidence = vector._evidence_for(vector.games, "step")
         assert evidence.player_policies == policies
+        assert evidence.opponent_policy is None
+        assert "opponent_policy" not in evidence.model_dump(mode="json", by_alias=True)
         for _ in range(1024):
             chooser = scalar.current_agent_index()
             assert chooser is not None

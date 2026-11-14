@@ -10,7 +10,7 @@ use crate::{
             encode, encode_into, EncodedObservation, EncodedObservationMut, ObservationEncodeError,
             ObservationEncoderConfig,
         },
-        opponent::PlayerPolicy,
+        player_policy::PlayerPolicy,
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
     cards::{

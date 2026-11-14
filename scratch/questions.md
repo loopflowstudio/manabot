@@ -28,16 +28,14 @@ tests and retained decision parity cover the surviving owner. Do not restore
 the Python policy allowlist or Passive. Rust `OpponentPolicy` is replaced by
 per-seat `PlayerPolicy` (see Required per-seat API below).
 
-## Current state (realign, 2026-11-13)
+## Current state (fourth-review implementation, 2026-11-13)
 
-Branch is level with origin/main; draft PR #518 is open and its CI (including
-Rust debug suite, package matrix 3.12/3.13, integrations and Engine Budget) was
-in progress at `99320eaecb`. Code, stub and docs (`docs/engine.md`,
-`docs/engine-python.md`, both READMEs) agree on `player_policies` and the
-`opponent_policy` deprecation. Remaining, unchanged by realign: CI green
-(full debug Rust, clippy, affected Python suites, consumer interpreter matrix),
-normal same-runner Engine Budget for unused-policy cost, full release training
-smoke, then delivery per steer a0c2b822 with scratch deleted pre-land.
+Draft PR #518 remains the delivery. The four findings from the fourth concept
+review are implemented (details and focused checks below). New captures record
+only per-seat player policies; retained receipts remain unchanged. Remaining:
+gate checks (full debug Rust, clippy, affected Python suites, consumer interpreter
+matrix), normal same-runner Engine Budget for unused-policy cost, full release
+training smoke, then delivery per steer a0c2b822 with scratch deleted pre-land.
 
 Fresh registrations use native-v2 / heuristic-cpu-v2 and hash the adapter plus
 three Rust files. Main now distributes managym separately; its wheel must ship
@@ -441,3 +439,28 @@ wrappers need the resolved tuple for the training-exposure guard and the
 receipt); `manabot.env.env.Env` staying two-external-seat (scalar capture
 therefore has no policy to record); `manabot/env/opponents.py` (pre-existing,
 `manabot.verify` only).
+
+
+## Fourth-review implementation (2026-11-13)
+
+The four directions above are implemented. Delete — do not maintain additionally:
+new-capture legacy policy state, internal deprecated-argument calls (alias tests
+and retained-receipt replay remain), duplicate guide contract paragraphs and
+`agent/opponent.rs`. The single native type now lives in `agent/player_policy.rs`.
+The receipt's legacy field defaults to None and is omitted when absent; reading
+an existing string preserves it. No retained fixture or heuristic identity-file
+bytes change. Gate includes the migrated tests listed in the fourth review.
+
+The new alias/capture test initially lacked buffers, then lacked a decision frame
+for replay agreement; corrected both fixture gaps. The focused new-receipt,
+per-seat reward and unsupported/retained-policy checks pass (11 checks plus
+3 alias/serialized-replay cases). Full suites and release proofs stay at gate.
+
+- Required release wheel build passed; matching cp313 extension replaced
+  atomically. All 96 packaged Rust sources equal the checkout; the old module
+  path is absent. The four heuristic identity files and retained fixtures are
+  unchanged from this step's base `c78cc4c0cb`.
+- `uv run --no-sync pytest tests/env/test_native_player_policies.py::test_scalar_vector_players_finish_with_same_rewards tests/training/test_automatic_game_capture.py::test_ordinary_vector_replays_current_game_after_autoreset -q` — 11 passed after rebuilding, covering all nine seat pairs and both captured-game replay cases; no deprecation warnings.
+- Focused Ruff lint/format, workspace Rust fmt, the guide example and
+  `git diff --check` passed. No background work remains. Full suites, release
+  training smoke, consumer matrix and normal Engine Budget remain for gate.
