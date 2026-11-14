@@ -129,6 +129,11 @@ class FailureEvidence(BaseModel):
         "failed", "execution_outcome_unknown", "last_command_succeeded"
     ] = "execution_outcome_unknown"
 
+    @property
+    def resolved_player_policies(self) -> tuple[str, str]:
+        """Read either receipt spelling without deprecating retained evidence."""
+        return self.player_policies or _retained_player_policies(self.opponent_policy)
+
 
 class NativeTrainingTrace(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -540,6 +545,14 @@ _VECTOR_READS = frozenset(
 )
 
 
+def _retained_player_policies(opponent_policy: str | None) -> tuple[str, str]:
+    """Translate retained names; native construction validates the resulting seats."""
+    return (
+        "agent",
+        "agent" if opponent_policy in (None, "none") else opponent_policy,
+    )
+
+
 def resolve_player_policies(
     opponent_policy: str | None, player_policies: tuple[str, str] | None
 ) -> tuple[str, str]:
@@ -550,7 +563,7 @@ def resolve_player_policies(
     rejects unknown per-seat names.
     """
     if opponent_policy is None:
-        return ("agent", "agent") if player_policies is None else player_policies
+        return player_policies or ("agent", "agent")
     if opponent_policy not in ("none", "random", "heuristic"):
         raise ValueError(f"unsupported opponent_policy: {opponent_policy}")
     if player_policies is not None:
@@ -560,7 +573,7 @@ def resolve_player_policies(
         DeprecationWarning,
         stacklevel=3,
     )
-    return ("agent", "agent" if opponent_policy == "none" else opponent_policy)
+    return _retained_player_policies(opponent_policy)
 
 
 class CapturedVector(_Capture):

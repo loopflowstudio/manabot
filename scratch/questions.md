@@ -30,10 +30,9 @@ per-seat `PlayerPolicy` (see Required per-seat API below).
 
 ## Current state (fourth-review implementation, 2026-11-13)
 
-Draft PR #518 remains the delivery. The four findings from the fourth concept
-review are implemented (details and focused checks below). Next implement
-direction: replay reads retained receipt policies without the deprecated
-argument (Fifth concept review, at the end). New captures record
+Draft PR #518 remains the delivery. The fourth and fifth concept-review
+findings are implemented (details and focused checks below). Replay reads
+retained receipt policies without the deprecated argument. New captures record
 only per-seat player policies; retained receipts remain unchanged. Remaining:
 gate checks (full debug Rust, clippy, affected Python suites, consumer interpreter
 matrix), normal same-runner Engine Budget for unused-policy cost, full release
@@ -526,3 +525,19 @@ Kept: the deprecated argument accepts `heuristic` though main never published
 that value (the Task brief names `VectorEnv(opponent_policy="heuristic")`; it
 costs one literal and leaves with the alias). Two warning sites (native parser,
 Python resolver) never both fire: the wrappers pass native the resolved tuple.
+
+## Fifth-review implementation (2026-11-13)
+
+`FailureEvidence.resolved_player_policies` reads the recorded tuple first,
+otherwise translates the retained name through the mapping shared with the
+public alias resolver. Replay passes only `player_policies`. Delete — do not
+maintain: replay's deprecated-argument dispatch. Retained names are preserved,
+including `passive`, which native per-seat validation rejects. Receipt bytes,
+heuristic identity files and guide behavior are unchanged; no Rust rebuild.
+
+Compress reduced both fallbacks to `player_policies or ...`;
+`uv run --no-sync pytest tests/env/test_captured_vector_bookkeeping.py tests/env/test_opponents.py -q`
+— 36 passed (retained replay, passive rejection, alias capture, tuple precedence).
+Deprecation warnings are errors for retained replay tests. Focused Ruff
+lint/format and `git diff --check` passed. Full suites, release training smoke,
+consumer matrix and normal Engine Budget remain for gate.

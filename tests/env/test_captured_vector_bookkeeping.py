@@ -102,6 +102,45 @@ def test_legacy_capture_argument_warns_and_records_only_per_seat_players(
         vector.close()
 
 
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+@pytest.mark.parametrize(
+    ("policy", "player_policies"),
+    [
+        (None, None),
+        ("none", None),
+        ("random", None),
+        ("heuristic", None),
+        pytest.param("passive", ("agent", "random"), id="per-seat-takes-precedence"),
+    ],
+)
+def test_retained_policy_replay_has_no_deprecation_warning(
+    policy: str | None, player_policies: tuple[str, str] | None
+) -> None:
+    policies = player_policies or (
+        "agent",
+        "agent" if policy in (None, "none") else policy,
+    )
+    vector, _ = _captured(42, player_policies=policies)
+    try:
+        vector.reset_all_into_buffers(_players())
+        vector.step_into_buffers([0])
+        payload = vector._evidence_for(vector.games, "step").model_dump(
+            mode="json", by_alias=True
+        )
+        if player_policies is None:
+            del payload["player_policies"]
+        if policy is not None:
+            payload["opponent_policy"] = policy
+        evidence = FailureEvidence.model_validate(payload)
+        retained = evidence.model_dump_json(by_alias=True)
+        result = replay_failure_inputs(evidence)[0]
+        assert result["status"] == "advanced"
+        assert result["matches_binding"] is True
+        assert evidence.model_dump_json(by_alias=True) == retained
+    finally:
+        vector.close()
+
+
 @pytest.mark.parametrize("policy", ["agent", "random", "heuristic"])
 def test_terminal_replacement_at_saturated_seed_starts_a_new_prefix(
     policy: str,
