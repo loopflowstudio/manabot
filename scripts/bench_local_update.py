@@ -454,7 +454,7 @@ def compare_arms(
     with TemporaryDirectory(prefix="local-update-arms-") as temporary:
         if checkpoint is None:
             checkpoint = _initialized_checkpoint(
-                Path(temporary) / "initialized.pt", match
+                Path(temporary) / "initialized.safetensors", match
             )
         digest = file_sha256(checkpoint)
         arms = [_DEFAULT_ARM] + [
@@ -625,14 +625,16 @@ def main() -> None:
     reference_model = reference_module(
         args.reference, "manabot/backends/torch/policy.py"
     )
-    reference_facts = reference_module(args.reference, "manabot/model/facts.py")
+    reference_facts = reference_module(
+        args.reference, "manabot/backends/torch/_facts.py"
+    )
     reference_model.FactEncoder = reference_facts.FactEncoder
     match = _bench_match()
     with TemporaryDirectory(prefix="local-update-bench-") as temporary:
         checkpoint = args.checkpoint
         if checkpoint is None:
             checkpoint = _initialized_checkpoint(
-                Path(temporary) / "initialized.pt", match
+                Path(temporary) / "initialized.safetensors", match
             )
         digest = file_sha256(checkpoint)
         # References predating the evidence mode only know full evidence.

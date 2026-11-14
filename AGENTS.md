@@ -134,6 +134,20 @@ checkpoints or experiment evidence.
   (`tests/test_package_boundaries.py` enforces the child modules). Launch
   evaluation children with `manabot.sim.child.ChildProcess`, not
   `multiprocessing` spawn, which re-imports the parent's `__main__`.
+- Library code receives a framework backend (the module for an update, a
+  `BackendPolicy` for simulation and evaluation) and never imports
+  `manabot.backends.*`. Only composition roots choose one: `experiments/`,
+  `scripts/`, recipe entry points, the CLI and child-process entry points, `manabot/sim/table_bots.py` and the
+  backends' tests, by import or `manabot.backends.resolve("torch")`.
+  `tests/test_package_boundaries.py` lists the remaining exceptions by name;
+  that list only shrinks ([who chooses a backend](manabot/backends/README.md#who-chooses-a-backend)).
+- Generic backend learning helpers (`rl`, `learner`, `arrays`) keep role-specific
+  types under `TYPE_CHECKING`; importing their annotations at runtime must not
+  pull in checkpoint, player, observation or training-configuration modules.
+- `manabot.policy.prepare.Prepared` is the only policy input in every backend.
+  Integer lookups, masks and admission run once on the host in `prepare`; do
+  not add a forward that reads an observation dictionary or a second
+  preparation for one framework.
 
 ### Python typing
 

@@ -399,7 +399,8 @@ def test_a_packed_seed_digests_as_it_does_solo(
     different = packing.digest_differences(digest, packing.training_digest(neighbor))
     assert "self-play-optimizer.pt" in different
     assert any(
-        path.startswith("self-play-raw.pt/model_state_dict") for path in different
+        path.startswith("self-play-raw.safetensors/model_state_dict")
+        for path in different
     )
     assert any(path.startswith("game-attempts.jsonl") for path in different)
 

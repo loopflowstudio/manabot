@@ -135,8 +135,12 @@ def main() -> None:
     verification.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "evaluate":
+        from manabot.backends import resolve
+
         result = evaluate_cards(
-            CardEvaluationSpec.model_validate_json(args.spec.read_bytes()), args.out
+            CardEvaluationSpec.model_validate_json(args.spec.read_bytes()),
+            args.out,
+            backend=resolve("torch"),
         )
         print(result.model_dump_json(indent=2))
     elif args.command == "data":

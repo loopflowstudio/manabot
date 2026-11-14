@@ -1,8 +1,8 @@
 """Portable ActorCritic checkpoints: exact weights, world and input admission.
 
 save_checkpoint records the model architecture, observation configuration and
-explicit native matchup in a PyTorch `.pt` file. load_checkpoint reads either
-that file or the shared container (`manabot.policy.checkpoint`), choosing by
+explicit native matchup in the shared safetensors container. load_checkpoint
+reads that container or a legacy PyTorch `.pt` file, choosing by
 the file's bytes, verifies bindings before loading weights and returns an
 eval-mode model. Optimizer/collector recovery belongs to training. Historical
 serialized keys remain unchanged; these are not training snapshots.
@@ -12,10 +12,11 @@ beside the native torch API (see the protocol section below).
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field, fields
+import importlib
 import json
 from pathlib import Path
 import tempfile
+from types import ModuleType
 from typing import Any, Literal, overload
 
 from etude.train.records import CheckpointRecord
@@ -36,7 +37,6 @@ from manabot.infra.artifacts import (
     materialize_artifact,
 )
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.architecture import validate_architecture_receipt
 from manabot.model.world import (
     checkpoint_source,
@@ -47,12 +47,16 @@ from manabot.model.world import (
 )
 from manabot.policy.checkpoint import (
     NotAContainer,
+    ParameterArrays,
     PolicyCheckpoint,
     canonical_name,
+    checkpoint_metadata,
+    from_torch_state,
     read_container,
+    read_metadata,
     torch_name,
+    write_container,
 )
-from manabot.policy.prepare import Prepared, prepare
 import managym
 
 
@@ -113,7 +117,7 @@ def load_checkpoint(
         path = str(materialize_artifact(path))
     if not _is_torch_file(Path(path)):
         try:
-            agent, obs_space = _load_container(
+            agent, obs_space, binding = _load_container(
                 Path(path), bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
             )
         except NotAContainer as error:
@@ -123,7 +127,7 @@ def load_checkpoint(
                 "kind of file"
             ) from error
         if include_belief_binding:
-            return agent, obs_space, None
+            return agent, obs_space, binding
         return agent, obs_space
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
@@ -140,6 +144,39 @@ def load_checkpoint(
         bucketed_shapes=bucketed_shapes,
         live_tokens=live_tokens,
     )
+    binding = _restore_metadata(agent, checkpoint, world_binding)
+    agent.load_state_dict(checkpoint["model_state_dict"])
+    agent.eval()
+    if include_belief_binding:
+        return agent, obs_space, binding
+    return agent, obs_space
+
+
+def load_metadata(path: str | Path) -> dict[str, Any]:
+    """Metadata from either policy format; containers read only their header."""
+    path = Path(path)
+    if not _is_torch_file(path):
+        return read_metadata(path)
+    record = torch.load(path, map_location="cpu", weights_only=True)
+    if not isinstance(record, dict):
+        raise ValueError("policy checkpoint requires a mapping")
+    state = record.pop("model_state_dict", None)
+    if not isinstance(state, Mapping):
+        raise ValueError("checkpoint holds no policy")
+    record["parameter_count"] = sum(
+        value.numel() for value in state.values() if isinstance(value, torch.Tensor)
+    )
+    # Old files have no explicit parameter order. Keep the stored state order
+    # for the learning-state importer to filter against actual parameter names.
+    record["parameter_names"] = list(state)
+    return record
+
+
+def _restore_metadata(
+    agent: ActorCritic,
+    checkpoint: Mapping[str, Any],
+    world_binding: dict[str, Any],
+) -> BeliefCheckpointBinding | None:
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:
         if value_semantic not in ("signed_outcome", "win_logit"):
@@ -152,15 +189,12 @@ def load_checkpoint(
     binding = None
     if agent.belief_count_buckets > 0:
         binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
-    if "architecture" in checkpoint:
+    agent.belief_binding = binding
+    if checkpoint.get("architecture") is not None:
         validate_architecture_receipt(
             agent.architecture_receipt(), checkpoint["architecture"]
         )
-    agent.load_state_dict(checkpoint["model_state_dict"])
-    agent.eval()
-    if include_belief_binding:
-        return agent, obs_space, binding
-    return agent, obs_space
+    return binding
 
 
 def _is_torch_file(path: Path) -> bool:
@@ -172,27 +206,21 @@ def _is_torch_file(path: Path) -> bool:
 
 def _load_container(
     path: Path, *, bucketed_shapes: bool, live_tokens: bool
-) -> tuple[ActorCritic, ObservationSpace]:
-    """An eval-mode policy from a container. `read_container` has validated
-    the world binding and refused unsupported configurations, so no belief
-    binding or `bc` value semantic applies."""
+) -> tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]:
+    """Restore policy metadata with the same admission as a legacy checkpoint."""
     container = read_container(path)
     record = {
-        key: json.loads(container.metadata[key])
-        for key in ("world_binding", "source", "architecture")
+        key: json.loads(value)
+        for key, value in container.metadata.items()
+        if key != "converted_from"
     }
     agent = assemble(
         container, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
     )
     world_binding = validate_checkpoint_world(record, container.space)
-    validate_policy_input(agent, world_binding)
-    agent.world_binding = world_binding
-    if record["architecture"] is not None:
-        validate_architecture_receipt(
-            agent.architecture_receipt(), record["architecture"]
-        )
+    binding = _restore_metadata(agent, record, world_binding)
     agent.eval()
-    return agent, container.space
+    return agent, container.space, binding
 
 
 def assemble(
@@ -248,7 +276,6 @@ def save_checkpoint(
         ),
         "source": checkpoint_source(),
         "architecture": agent.architecture_receipt().model_dump(mode="json"),
-        "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
             "agent_hypers": agent.config.checkpoint_payload(),
@@ -265,80 +292,65 @@ def save_checkpoint(
             card_vocab_size=agent.config.belief_card_vocab_size,
         )
     )
-    torch.save(checkpoint, path)
-
-
-# -- the NumPy backend protocol ------------------------------------------------------
-# Until `ActorCritic` reads `Prepared` indices itself, `prepare` builds the shared
-# `Prepared` and retains the admitted torch observation on it (`Retained`), which
-# the forward runs; parity against the reference torch path then exercises the
-# harness with torch alone.
-
-
-@dataclass(frozen=True)
-class Retained(Prepared):
-    """A `Prepared` batch that keeps the admitted torch observation the torch
-    forward still reads. Removed when `ActorCritic` reads `Prepared` itself."""
-
-    admitted: AdmittedObservation = field(kw_only=True)
-
-
-class TorchPolicy:
-    """`BackendPolicy` over an `ActorCritic`."""
-
-    def __init__(self, agent: ActorCritic, checkpoint: PolicyCheckpoint) -> None:
-        self.agent = agent
-        self._tables = checkpoint.tables()
-
-    def prepare(
-        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
-    ) -> Retained:
-        shared = prepare(obs, self._tables, inference=inference)
-        admitted = admit_observation(
-            self.agent, {key: torch.from_numpy(value) for key, value in obs.items()}
-        )
-        return Retained(
-            **{item.name: getattr(shared, item.name) for item in fields(shared)},
-            admitted=admitted,
-        )
-
-    def evaluate(self, batch: Prepared) -> tuple[np.ndarray, np.ndarray]:
-        """The eval-mode forward, as collection runs it."""
-        self.agent.eval()
-        with torch.no_grad():
-            logits, values = self.agent(_admitted(batch))
-        return logits.numpy(), values.numpy()
-
-    def forward_distribution(
-        self, batch: Prepared
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """The training-mode forward, as the learner runs it."""
-        self.agent.train()
-        return self.agent.forward_distribution(_admitted(batch))
-
-    def cache_programs(self) -> None:
-        """The torch forward encodes its programs per call; nothing to cache."""
-
-    def clear_cache(self) -> None:
-        pass
-
-
-def _admitted(batch: Prepared) -> AdmittedObservation:
-    if not isinstance(batch, Retained):
-        raise TypeError("the torch backend evaluates batches its own prepare built")
-    return batch.admitted
+    # Check before NumPy conversion, which refuses some floating types outright.
+    for name, parameter in agent.named_parameters():
+        if parameter.dtype != torch.float32:
+            raise TypeError(
+                f"parameter {name}: expected float32, got {parameter.dtype}"
+            )
+    container = from_torch_state(
+        agent.config,
+        obs_space.encoder.config,
+        {
+            name: tensor.detach().cpu().numpy()
+            for name, tensor in agent.state_dict().items()
+        },
+        checkpoint_metadata(checkpoint),
+        parameter_names=dict(agent.named_parameters()),
+    )
+    write_container(path, container)
 
 
 class _Torch:
     name = "torch"
 
-    def load(self, checkpoint: PolicyCheckpoint) -> tuple[TorchPolicy, Learner]:
-        agent = assemble(checkpoint)
-        return TorchPolicy(agent, checkpoint), Learner(agent, "cpu", minibatch_rows=1)
+    @property
+    def rl(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.rl")
 
-    def parameter_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    @property
+    def arrays(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.arrays")
+
+    @property
+    def learner(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.learner")
+
+    @property
+    def rollout(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.torch.rollout")
+
+    @staticmethod
+    def load_policy(
+        path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+    ) -> tuple[ActorCritic, ObservationSpace]:
+        return load_checkpoint(
+            path, bucketed_shapes=bucketed_shapes, live_tokens=live_tokens
+        )
+
+    @staticmethod
+    def metadata(path: str) -> dict[str, Any]:
+        return load_metadata(path)
+
+    @staticmethod
+    def seed(seed: int) -> None:
+        torch.manual_seed(seed)
+
+    def load(self, checkpoint: PolicyCheckpoint) -> tuple[ActorCritic, Learner]:
+        agent = assemble(checkpoint)
+        return agent, Learner(agent, "cpu", minibatch_rows=1)
+
+    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         """Torch tensors have the canonical shapes under torch's own names."""
         return {
             torch_name(name): np.asarray(value) for name, value in canonical.items()

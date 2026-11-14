@@ -41,20 +41,19 @@ numerical gates does not establish equivalent optimization or playing strength.
 import argparse
 from collections.abc import Iterator, Mapping
 from dataclasses import asdict, dataclass, field
-import importlib
 import importlib.util
 import json
 from pathlib import Path
 import sys
-from types import ModuleType
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import numpy as np
 import torch
 
+from manabot.backends import resolve
 import manabot.backends.torch as torch_backend
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.model.admission import admit_observation
 from manabot.policy.checkpoint import (
     canonical_parameters,
     from_torch_state,
@@ -68,7 +67,7 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
-from manabot.training.updates.backend import Backend as UpdateBackend
+from manabot.training.updates.backend import UpdateBackend
 from manabot.training.updates.damped_policy import minibatch_objective
 
 LOGIT_TOLERANCE = 1e-4
@@ -105,8 +104,7 @@ TOLERANCES: dict[Precision, Tolerances] = {
 }
 
 
-# Backend name -> the framework it needs; each provides
-# `manabot.backends.<name>.checkpoint.BACKEND`.
+# Backend name -> the framework it needs.
 BACKENDS = {"torch": "torch", "mlx": "mlx"}
 
 
@@ -116,24 +114,6 @@ def installed_backends() -> list[str]:
         for name, framework in BACKENDS.items()
         if importlib.util.find_spec(framework) is not None
     ]
-
-
-def backend_module(name: str) -> ModuleType:
-    """`manabot.backends.<name>`, the module an update takes as its backend."""
-    return importlib.import_module(f"manabot.backends.{name}")
-
-
-def backend(name: str, *, precision: Precision = "float32") -> Backend:
-    """Select explicit MLX compute precision; Torch remains the float32 reference.
-
-    Parity always names its precision, so MLX's width default never selects
-    the tolerances a report is held to."""
-    module = backend_module(name)
-    if name == "mlx":
-        return cast(Backend, module.checkpoint.MLXBackend(precision=precision))
-    if precision != "float32":
-        raise ValueError("half-precision parity is supported only for the MLX backend")
-    return cast(Backend, module.checkpoint.BACKEND)
 
 
 def minibatch_loss(
@@ -162,8 +142,14 @@ def minibatch_loss(
         "actor_mask": to_device(targets.actor_mask.astype(bool), device),
     }
 
+    if isinstance(policy, torch_backend.policy.ActorCritic):
+        policy.train()
+        device_batch = torch_backend.arrays.on_device(batch, device)
+    else:
+        device_batch = batch
+
     def objective() -> tuple[Any, ...]:
-        logits, values = policy.forward_distribution(batch)
+        logits, values = policy.forward_distribution(device_batch)
         return minibatch_objective(
             rl,
             logits,
@@ -378,12 +364,16 @@ def check(
     torch.set_num_threads(8)
     agent, space = load_checkpoint(str(checkpoint))
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    weights = from_torch_state(agent.config, space.encoder.config, state)
-    module = backend_module(backend_name)
-    port = backend(backend_name, precision=precision)
+    weights = from_torch_state(
+        agent.config,
+        space.encoder.config,
+        state,
+        parameter_names=dict(agent.named_parameters()),
+    )
+    port = resolve(backend_name, precision=precision)
     policy, learner = port.load(weights)
     # The reference: the same loss over the torch backend, on the loaded agent.
-    reference_policy = torch_backend.checkpoint.TorchPolicy(agent, weights)
+    reference_policy = agent
     reference_learner = torch_backend.learner.Learner(agent, "cpu", minibatch_rows=1)
     report = Report(precision=precision)
     for index, (obs, targets, settings, meta) in enumerate(
@@ -392,7 +382,9 @@ def check(
         reference_batch = reference_policy.prepare(obs)
         valid = reference_batch.legal
         with torch.no_grad():
-            logits, values = reference_policy.forward_distribution(reference_batch)
+            logits, values = reference_policy.forward_distribution(
+                torch_backend.arrays.on_device(reference_batch, "cpu")
+            )
         loss = minibatch_loss(
             torch_backend,
             reference_policy,
@@ -408,8 +400,8 @@ def check(
 
         batch = policy.prepare(obs)
         port_logits, port_values = policy.evaluate(batch)
-        port_loss = minibatch_loss(module, policy, learner, batch, targets, settings)
-        loss_value = float(module.arrays.to_numpy(port_loss))
+        port_loss = minibatch_loss(port, policy, learner, batch, targets, settings)
+        loss_value = float(port.arrays.to_numpy(port_loss))
         grads = learner.gradients(port_loss)
         absolute, relative = _legal_difference(port_logits, logits.numpy(), valid)
         value_difference = float(np.abs(port_values - values.numpy().reshape(-1)).max())
@@ -455,7 +447,7 @@ def check(
                 reference_loss_again,
                 port,
                 learner,
-                minibatch_loss(module, policy, learner, batch, targets, settings),
+                minibatch_loss(port, policy, learner, batch, targets, settings),
                 settings,
                 report,
             )
@@ -533,8 +525,9 @@ def _collection(
         obs = read_npz(path)
         with torch.no_grad():
             logits, values = agent(
-                admit_observation(
-                    agent, {k: torch.from_numpy(v) for k, v in obs.items()}
+                on_device(
+                    agent.prepare(obs, inference=True),
+                    device_of(agent),
                 )
             )
         port_logits, port_values = policy.evaluate(policy.prepare(obs, inference=True))

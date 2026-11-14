@@ -11,6 +11,8 @@ import sys
 import textwrap
 from types import ModuleType
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -21,6 +23,10 @@ def _imported_modules(tree: ast.Module) -> list[tuple[int, str]]:
             found.extend((node.lineno, alias.name) for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             found.append((node.lineno, node.module))
+            if node.module == "manabot" and any(
+                alias.name == "backends" for alias in node.names
+            ):
+                found.append((node.lineno, "manabot.backends"))
     return found
 
 
@@ -192,6 +198,7 @@ def test_simulation_imports_and_plays_without_training() -> None:
         from manabot.env.observation import ObservationSpace
         from manabot.infra.config import ModelConfig, RewardConfig
         from manabot.backends.torch.policy import ActorCritic
+        from manabot.backends import resolve
         from manabot.backends.torch.checkpoint import save_checkpoint
         from manabot.sim.search.flat_mc import make_player
         match, space = Match(), ObservationSpace()
@@ -199,7 +206,7 @@ def test_simulation_imports_and_plays_without_training() -> None:
         with tempfile.TemporaryDirectory() as directory:
             checkpoint = Path(directory) / 'policy.pt'
             save_checkpoint(model, space, checkpoint, player_configs=match.to_rust())
-            player, _ = make_player({'kind': 'checkpoint', 'path': str(checkpoint)}, 17)
+            player, _ = make_player({'kind': 'checkpoint', 'path': str(checkpoint)}, 17, backend=resolve("torch"))
             env = Env(match, space, Reward(RewardConfig()), seed=17)
             observation, _ = env.reset(seed=17)
             action = player.act(env, observation)
@@ -349,7 +356,6 @@ def test_only_the_mlx_backend_imports_mlx() -> None:
 _TORCH_NOT_YET_MOVED = frozenset(
     (
         # The converter and parity check read the PyTorch reference.
-        "manabot/backends/convert.py",
         "manabot/backends/parity.py",
         "manabot/belief/agent.py",
         "manabot/belief/checkpoint.py",
@@ -373,28 +379,10 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/infra/runtime.py",
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
-        "manabot/model/admission.py",
-        "manabot/model/catalog.py",
-        "manabot/model/continuation.py",
-        "manabot/model/facts.py",
-        "manabot/model/inference.py",
-        "manabot/model/name_candidates.py",
-        "manabot/model/numerics.py",
-        "manabot/model/recent_events.py",
-        "manabot/model/records.py",
-        "manabot/model/semantic_cards.py",
-        "manabot/model/shared_effects.py",
         "manabot/recipes/device.py",
         "manabot/reports/belief.py",
-        "manabot/reports/selection.py",
-        "manabot/sim/guidance.py",
         "manabot/sim/native_game.py",
-        "manabot/sim/player.py",
-        "manabot/sim/rollout.py",
-        "manabot/sim/search/local_update.py",
-        "manabot/sim/search/puct.py",
         "manabot/sim/search/sampling.py",
-        "manabot/sim/search/value.py",
         "manabot/sim/serving.py",
         "manabot/sim/table_bots.py",
         "manabot/training/execution.py",
@@ -459,11 +447,13 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
         if module.split(".")[0] in {"managym", "academy", "etude"}
         or (module.startswith("manabot") and module not in _GENERIC_ALLOWED)
     ]
-    # The learner names the player's network and its precision in annotations
-    # only (under TYPE_CHECKING); the runtime probe below holds it to that.
+    # Role-specific types appear only in annotations (under TYPE_CHECKING);
+    # the runtime probe below holds both the learner and array transfer to that.
     assert violations == [
         "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
+        "manabot/backends/torch/learner.py: manabot.policy.checkpoint",
         "manabot/backends/torch/learner.py: manabot.training.regime",
+        "manabot/backends/torch/arrays.py: manabot.policy.prepare",
     ]
 
 
@@ -526,6 +516,91 @@ def test_updates_take_the_backend_as_an_argument() -> None:
         if module.split(".")[0] in _FRAMEWORKS or module.startswith("manabot.backends")
     ]
     assert violations == []
+
+
+def test_backend_resolver_selects_configured_backends_and_names_missing_extras(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manabot.backends import resolve
+
+    assert resolve("torch").name == "torch"
+    assert resolve("torch", precision="float32").name == "torch"
+    with pytest.raises(ValueError, match="only for the MLX backend"):
+        resolve("torch", precision="bfloat16")
+    with pytest.raises(ValueError, match="available backends: torch, mlx"):
+        resolve("unknown")
+    original = importlib.import_module
+
+    def without_framework(name: str, package: str | None = None) -> ModuleType:
+        if name == "mlx.core":
+            raise ImportError("fixture: unavailable framework")
+        return original(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", without_framework)
+    with pytest.raises(ImportError, match="'mlx' extra"):
+        resolve("mlx")
+
+
+# CLI and child-process entry points choose the policy before passing it to
+# library code. Remaining coupled training, belief and verification modules
+# are explicit migration debt; removing an import must remove its entry.
+_BACKEND_ROOTS = frozenset(
+    (
+        "manabot/sim/table_bots.py",
+        "manabot/cli.py",
+        "manabot/eval/cards.py",
+        "manabot/eval/evaluate.py",
+        "manabot/eval/local.py",
+        "manabot/eval/serving_benchmark.py",
+        "manabot/sim/native_game.py",
+        "manabot/sim/serving.py",
+        "manabot/sim/sim.py",
+    )
+)
+_BACKEND_NOT_YET_INJECTED = frozenset(
+    (
+        "manabot/belief/agent.py",
+        "manabot/belief/demo.py",
+        "manabot/belief/likelihood.py",
+        "manabot/belief/runtime.py",
+        "manabot/belief/sampling_data.py",
+        "manabot/experiment/attack_execution.py",
+        "manabot/experiment/evaluation_queue.py",
+        "manabot/experiment/monitor_worker.py",
+        "manabot/experiment/study.py",
+        "manabot/training/execution.py",
+        "manabot/training/loops/minimal.py",
+        "manabot/training/rollout/actions.py",
+        "manabot/training/rollout/collection.py",
+        "manabot/training/rollout/selection_data.py",
+        "manabot/training/state/admission.py",
+        "manabot/training/state/incidents.py",
+        "manabot/training/state/learning_state.py",
+        "manabot/training/state/recovery.py",
+        "manabot/training/updates/health.py",
+        "manabot/verify/checkpoint_scenarios.py",
+        "manabot/verify/competency.py",
+        "manabot/verify/decision_profile.py",
+        "manabot/verify/learning_regression.py",
+        "manabot/verify/llm_game.py",
+        "manabot/verify/llm_opponent.py",
+        "manabot/verify/record_coverage.py",
+        "manabot/verify/util.py",
+    )
+)
+
+
+def test_only_composition_roots_choose_a_backend() -> None:
+    importing = {
+        str(path.relative_to(REPO_ROOT))
+        for package in ("manabot", "academy")
+        for path in (REPO_ROOT / package).rglob("*.py")
+        if _BACKENDS not in path.parents
+        for _, module in _imported_modules(ast.parse(path.read_text(), str(path)))
+        if module == "manabot.backends" or module.startswith("manabot.backends.")
+    }
+    assert sorted(importing - _BACKEND_ROOTS - _BACKEND_NOT_YET_INJECTED) == []
+    assert sorted(_BACKEND_NOT_YET_INJECTED - importing) == []
 
 
 def test_engine_has_no_training_imports() -> None:

@@ -9,9 +9,10 @@ import numpy as np
 from pydantic import Field
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.config.load import deep_merge
 from manabot.env.env import Env
-from manabot.env.observation import ActionEnum
+from manabot.env.observation import ActionEnum, ObservationBuffers
 from manabot.infra.config import (
     BaseConfig,
     MatchConfig,
@@ -19,8 +20,7 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.admission import AdmittedObservation
-from manabot.model.inference import admit_on_device
+from manabot.policy.prepare import Prepared
 
 if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
@@ -47,20 +47,23 @@ def build_verification_config(**overrides: object) -> VerificationConfig:
 
 
 def _tensor_observation(
-    agent: ActorCritic, obs: dict[str, np.ndarray]
-) -> AdmittedObservation:
+    agent: ActorCritic, obs: ObservationBuffers
+) -> Prepared[torch.Tensor]:
     """One encoded decision, admitted for `agent` on its device."""
-    return admit_on_device(
-        agent,
-        {
-            key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-            for key, value in obs.items()
-        },
+    return on_device(
+        agent.prepare(
+            {
+                key: np.asarray(value, dtype=np.float32)[None]
+                for key, value in obs.items()
+            },
+            inference=not torch.is_grad_enabled(),
+        ),
+        device_of(agent),
     )
 
 
 def _select_agent_action(
-    agent: ActorCritic, obs: dict[str, np.ndarray], deterministic: bool
+    agent: ActorCritic, obs: ObservationBuffers, deterministic: bool
 ) -> int:
     action, _, _, _ = agent.get_action_and_value(
         _tensor_observation(agent, obs),

@@ -3,12 +3,11 @@
 from dataclasses import replace
 from pathlib import Path
 
-from managym._managym import AgentError
 import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import collect_frozen_policy
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
@@ -36,6 +35,7 @@ from manabot.sim.search.local_update import (
     regularized_update,
 )
 import managym
+from managym._managym import AgentError
 from managym.decision import Observation
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
@@ -91,7 +91,7 @@ def make_teacher(
 @pytest.mark.parametrize(
     "owner",
     [
-        "manabot/model/facts.py",
+        "manabot/backends/torch/_facts.py",
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
     ],
@@ -278,6 +278,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
             {candidate.player_id: str(teacher.likelihood.checkpoint)},
             1000,
             messages.append,
+            backend_factory=lambda: TORCH_BACKEND,
         )
         assert game.get("terminated"), game.get("failure")
         assert any("local_update_receipt" in decision for decision in game["decisions"])

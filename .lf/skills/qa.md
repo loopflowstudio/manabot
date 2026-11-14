@@ -157,11 +157,16 @@ publish, land or choose the next Graph step from here.
   encoder arm must pick identical Commands for a whole game (two 93-decision
   games per arm at 4 worlds × depth 20 took about 90 s).
 - Model or training-path changes: `uv run manabot train --recipe local --device
-  cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
-  seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
-  checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
-  <f> --set sim.hero=<ckpt.pt> --set sim.villain=<ckpt.pt> --set
-  sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
+  cpu --out .runs/<name>` writes `run.json` with per-phase
+  seconds (`learning_seconds`, collection and forward splits) for an A/B. The
+  complete-game default is bounded by its deadline, not a fixed duration. For
+  installed-wheel QA use `scripts/release/smoke.py`: it trains one tiny policy
+  on the native lethal-target root, reloads `self-play-raw.safetensors`, and
+  discovers that exact path through `managym.academy.bots`. Run from outside
+  the checkout with `uv run --no-project --python <venv>/bin/python <script>`.
+  Play checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
+  <f> --set sim.hero=<checkpoint.safetensors>
+  --set sim.villain=<checkpoint.safetensors> --set sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
   checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
@@ -177,11 +182,10 @@ publish, land or choose the next Graph step from here.
   (about 2 minutes on CPU; `hidden_dim=64` takes 20 s). Convert its
   `initial.pt` with `uv run python -m manabot.backends.convert` (`local` recipe
   checkpoints use FiLM and are refused), load it with
-  `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
-  admitting each batch with `admit_observation` and comparing against torch
-  `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
-  `policy.evaluate`; untrained-policy argmax
-  differences are exact ties). `uv run python -m manabot.backends.parity <initial.pt>
+  `resolve("mlx").load_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
+  preparing each batch with `policy.prepare(obs, inference=True)` and evaluating
+  with `policy.evaluate` (logits `[B,A]`, values `[B]`); untrained-policy argmax
+  differences are exact ties. `uv run python -m manabot.backends.parity <initial.pt>
   --capture <capture dir> --backend mlx --precision <dtype> --minibatches 4`
   takes seconds; `--json` keeps per-minibatch `loss_torch`/`loss_backend`, which
   show when a relative-loss failure comes from a near-zero loss.
@@ -195,16 +199,21 @@ publish, land or choose the next Graph step from here.
   Torch/Etude pins and run a copy of `scripts/release/smoke.py` (CPU training,
   about 20 s). Also `uv init` a project and `uv add` both `file://` wheels for
   latest resolution. Returning users: install PyPI `manabot==0.2.0` in a
-  `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
+  `--seed` venv and upgrade with
+  `uv run --no-project --python <venv>/bin/python -m pip`
+  (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
 - Installed Academy (`managym[academy]` wheel): build as above, then in a fresh
   `/tmp` directory `uv venv --python 3.13 --seed` (without `--seed` there is
-  no `pip`) and `pip install '<wheel>[academy]'`, with `node`/`npm`/`cargo`
+  no `pip`) and
+  `uv run --no-project --python <venv>/bin/python -m pip install '<wheel>[academy]'`,
+  with `node`/`npm`/`cargo`
   shadowed by failing stubs on PATH. Re-running that on an already installed
   identical wheel file exits 0 silently and skips the extra; install by name
   with `--find-links <dist>` instead. When the candidate's version is already
-  on PyPI, `pip install --find-links <dist> manabot` takes PyPI's copy (no
+  on PyPI, `uv run --no-project --python <venv>/bin/python -m pip install
+  --find-links <dist> manabot` takes PyPI's copy (no
   `managym.academy.bots` entry point); `--force-reinstall --no-deps` the local
   wheel. Never patch files inside the installed `managym`: manabot's training
   refuses a changed source bundle. Supervise `managym academy` from a Python
@@ -213,6 +222,14 @@ publish, land or choose the next Graph step from here.
   --recipe local --device cpu --out .runs/<x>` in that directory gives trained
   opponents within a minute. Another project's server may hold `*:8000`; use
   your own port.
+  With a current installed policy, set `ACADEMY_PLAY_CHECKPOINTS=<absolute path>`
+  before launch. Read `/api/opponents` for its digest, then open
+  `/?hero=ur_lessons&villain=gw_allies&opponent=<digest>` for the local recipe's
+  bound decks (Elemental UR/GW are different lists and correctly refuse it).
+  Click New Game, then the legal Play Island offer and Pass Turn. Wait until
+  an action offer is enabled and automation has settled before recording
+  `main[data-frame-revision]`; reload must restore that revision. A merely
+  visible offer can still belong to an automated pending transition.
 - Engine rules changes (zones, tokens, copies, SBAs): play many games through
   `managym.Env` with `PlayerConfig(name, {card: count}, world=managym.WORLD_SETUP)`
   decks built around the cards involved, and a scripted policy over

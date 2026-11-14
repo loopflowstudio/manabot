@@ -3,65 +3,58 @@ Shared viewer-observation encoder, legal-action policy and scalar or WDL critic.
 
 ActorCritic.forward preserves the serving policy/value interface. Training uses
 forward_distribution when it needs loss/draw/win logits rather than their mean.
-Both read only observations admitted by `manabot.model.admission`, which owns
-every input check; the forward does no validation host reads.
+Both consume device Prepared rows produced by host preparation and admission;
+the forward does no validation host reads.
 
 Object attention runs over the fixed object tables. With `bucketed_shapes=True`
-(`manabot.policy.buckets`), each forward trims its variable axes to power-of-two
-buckets and returns logits at full capacity.
+(`manabot.policy.buckets`), host preparation trims the variable axes to
+power-of-two buckets; the forward returns logits at full capacity.
 With `live_tokens=True` (`manabot.backends.torch.live_tokens`), table attention runs
 over the batch's valid objects packed into one sequence; either setting
 composes with the other and neither changes the model.
 """
 
-from dataclasses import dataclass
-from typing import Dict, Literal, Optional, Tuple
+from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
+from dataclasses import dataclass, replace
+from types import TracebackType
+from typing import TYPE_CHECKING, Literal, Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 
+from manabot.backends.torch._continuation import ContinuationEncoder
+from manabot.backends.torch._facts import FactEncoder, RecordVocabulary
+from manabot.backends.torch._name_candidates import NameCandidateEncoder
+from manabot.backends.torch._numerics import buffer_on
+from manabot.backends.torch._recent_events import RecentEventEncoder
+from manabot.backends.torch._semantic_cards import (
+    SemanticCardEncoder,
+)
+from manabot.backends.torch._shared_effects import SharedEffectEncoder
+
 # Local imports
+from manabot.backends.torch.arrays import array_fields, device_of, on_device, to_numpy
 from manabot.backends.torch.live_tokens import LiveTokens
+from manabot.backends.torch.rl import NumericalError
 from manabot.env.observation import (
-    FACT_SOURCE_INDEX,
-    FACT_VALID_INDEX,
-    PERMANENT_DEFINITION_INDEX,
-    PERMANENT_LINK_INDEXES,
-    RELATION_VALID_INDEX,
     TURN_STATE_DIM,
+    ObservationBuffers,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
-from manabot.model.admission import (
-    AdmittedObservation,
-    admission_binding,
-    measure_buckets,
-)
 from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
-from manabot.model.continuation import ContinuationEncoder
-from manabot.model.facts import FactEncoder, RecordVocabulary
-from manabot.model.inference import PreparedObservation, trim_admitted
-from manabot.model.name_candidates import NameCandidateEncoder
-from manabot.model.recent_events import RecentEventEncoder
-from manabot.model.semantic_cards import (
-    RecordEmbeddings,
-    SemanticCardEncoder,
-    definition_rows,
-)
-from manabot.model.shared_effects import SharedEffectEncoder
-from manabot.policy.buckets import BucketSizes, object_columns
+from manabot.policy import admission
+from manabot.policy.buckets import row_needs, sizes_of, trim_observation
+from manabot.policy.checkpoint import layout
+from manabot.policy.prepare import BeliefRows, Prepared, Tables, prepare
+from manabot.policy.protocol import InferenceResult
 import managym
 
-# Validity of the visible object table, in its concatenation order.
-OBJECT_VALIDITY_KEYS = (
-    "agent_player_valid",
-    "opponent_player_valid",
-    "agent_cards_valid",
-    "opponent_cards_valid",
-    "agent_permanents_valid",
-    "opponent_permanents_valid",
-)
+if TYPE_CHECKING:
+    from manabot.belief.encoding import BeliefCheckpointBinding
 
 
 @dataclass
@@ -75,6 +68,37 @@ class EmbeddedObservation:
     frame_context: torch.Tensor
     # Raw executable programs; object inputs separately add public name identity.
     programs: torch.Tensor | None
+
+
+def sample_rows(
+    logits: np.ndarray, masks: np.ndarray, seeds: list[int], deterministic: bool
+) -> list[int]:
+    """Preserve scalar Categorical draws independently of arrival/batch order."""
+    values, valid = torch.from_numpy(logits), torch.from_numpy(masks) != 0
+    if valid.shape != values.shape:
+        raise ValueError("sampling requires matching CPU logits and masks")
+    if not valid.any(1).all() or not torch.isfinite(values[valid]).all():
+        raise ValueError("invalid legal logits or empty action support")
+    actions: list[int] = []
+    for row, seed in enumerate(seeds):
+        with torch.random.fork_rng(devices=[]):
+            torch.random.default_generator.manual_seed(seed)
+            logits_row = values[row : row + 1]
+            action = (
+                logits_row.argmax(-1)
+                if deterministic
+                else torch.distributions.Categorical(logits=logits_row).sample()
+            )
+            selected = int(action.item())
+        if not valid[row, selected]:
+            raise ValueError("policy selected a masked offer")
+        actions.append(selected)
+    return actions
+
+
+def _catalog_order(lengths: np.ndarray) -> np.ndarray:
+    """Keep Torch's packed-GRU tie order, sorting only admitted host lengths."""
+    return torch.from_numpy(lengths).sort(descending=True).indices.numpy()
 
 
 class ActorCritic(nn.Module):
@@ -98,6 +122,7 @@ class ActorCritic(nn.Module):
         live_tokens: bool = False,
     ) -> None:
         super().__init__()
+        self.belief_binding: BeliefCheckpointBinding | None = None
         self.observation_space = observation_space
         self.config = config
         # Scalar heads need the checkpoint's training-target declaration. WDL
@@ -121,18 +146,13 @@ class ActorCritic(nn.Module):
         card_dim = enc.card_dim
         # Input v10 appends each seat's turn-state row to its player row and
         # each card row's turn-state value to that card row.
-        self.turn_state = enc.config.policy_input_version == 10
-        if self.turn_state:
+        if enc.config.policy_input_version == 10:
             player_dim += TURN_STATE_DIM
             card_dim += 1
         # Definition IDs and permanent links are categorical joins, never
         # numeric permanent features.
-        self._link_columns = PERMANENT_LINK_INDEXES
-        join_columns = (PERMANENT_DEFINITION_INDEX, *self._link_columns)
-        self._numeric_permanent_columns = [
-            column for column in range(enc.permanent_dim) if column not in join_columns
-        ]
-        perm_dim = len(self._numeric_permanent_columns)
+        columns = layout(observation_space)
+        perm_dim = len(columns.numeric_permanent_columns)
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
@@ -290,7 +310,7 @@ class ActorCritic(nn.Module):
         # weights start additive; skip_init draws no RNG.
         self.link_from_target = nn.ModuleList()
         self.link_to_target = nn.ModuleList()
-        for _ in self._link_columns:
+        for _ in columns.link_columns:
             for layers in (self.link_from_target, self.link_to_target):
                 layer = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
                 nn.init.zeros_(layer.weight)
@@ -303,9 +323,7 @@ class ActorCritic(nn.Module):
         record_vocabulary: RecordVocabulary = (
             "catalog" if config.catalog_records() else "hashed"
         )
-        self.facts = FactEncoder(
-            embed_dim, enc.config.max_facts, vocabulary=record_vocabulary
-        )
+        self.facts = FactEncoder(embed_dim, vocabulary=record_vocabulary)
         self.shared_effects = SharedEffectEncoder(
             embed_dim, vocabulary=record_vocabulary
         )
@@ -321,7 +339,6 @@ class ActorCritic(nn.Module):
         # parameter, buffer or configuration field records it.
         self.bucketed_shapes = bucketed_shapes
         self.live_tokens = live_tokens
-        self.facts.bucketed = self.bucketed_shapes
         self.name_candidates.bucketed = self.bucketed_shapes
 
         # Built last: every other parameter keeps the masked-mean arm's draws
@@ -337,8 +354,209 @@ class ActorCritic(nn.Module):
         # detach/cpu copy is measurable in the inference hot path.
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
+        self._spec_cache: tuple[object, admission.Spec] | None = None
+        self._program_cache: torch.Tensor | None = None
+        self._cache_versions: tuple[tuple[int, int], ...] = ()
 
-    def forward(self, obs: AdmittedObservation) -> tuple[torch.Tensor, torch.Tensor]:
+    def _binding(self) -> str:
+        return admission.binding(self.config, self.observation_space)
+
+    def _admission_spec(self) -> admission.Spec:
+        key = (
+            self._binding(),
+            tuple(
+                (name, id(value), value._version)
+                for name, value in self.named_buffers()
+            ),
+        )
+        if self._spec_cache is not None and self._spec_cache[0] == key:
+            return self._spec_cache[1]
+        buffers: dict[str, np.ndarray] = {}
+        for name, _ in self.named_buffers():
+            parent, _, field = name.rpartition(".")
+            module = self.get_submodule(parent) if parent else self
+            buffers[name] = to_numpy(buffer_on(module, field, torch.device("cpu")))
+        spec = admission.Spec(
+            self.config,
+            self.observation_space,
+            replace(
+                Tables.from_buffers(buffers, layout(self.observation_space)),
+                order_lengths=_catalog_order,
+            ),
+            self.card_definitions.num_embeddings
+            if self.card_definitions is not None
+            else 0,
+        )
+        self._spec_cache = (key, spec)
+        return spec
+
+    def prepare(
+        self, obs: ObservationBuffers, *, inference: bool = False
+    ) -> Prepared[np.ndarray]:
+        """Validate host buffers and build the shared policy input exactly once."""
+        self.check_observation(obs)
+        return self.prepare_admitted(obs, inference=inference)
+
+    def check_observation(self, obs: ObservationBuffers) -> None:
+        mask = np.asarray(obs["actions_valid"])
+        try:
+            legal = admission.legal_mask(mask)
+        except ValueError as error:
+            # Allocate framework evidence only for a rejected host input.
+            failed = ~(np.isfinite(mask) & ((mask == 0) | (mask == 1)))
+            raise NumericalError(
+                "invalid_action_mask",
+                {"mask": torch.from_numpy(mask), "failed": torch.from_numpy(failed)},
+            ) from error
+        admission.check(obs, self._admission_spec(), legal)
+
+    def prepare_admitted(
+        self,
+        obs: ObservationBuffers,
+        *,
+        inference: bool = False,
+        needs: np.ndarray | None = None,
+    ) -> Prepared[np.ndarray]:
+        """Prepare unchanged admitted rows for learning or inference.
+
+        `inference` selects compaction and catalog coverage independently of
+        autograd mode; bucketed batches always use the full catalog schedule.
+        """
+        spec = self._admission_spec()
+        capacity = obs["actions_valid"].shape[1]
+        if self.bucketed_shapes:
+            if needs is None:
+                needs = row_needs(obs, self.observation_space.encoder)
+            if needs is not None:
+                obs = trim_observation(
+                    obs,
+                    sizes_of(
+                        needs,
+                        self.observation_space.encoder,
+                        objects=self.object_trimming(),
+                    ),
+                )
+        batch = prepare(
+            obs,
+            spec.tables,
+            inference=inference and device_of(self).type == "cpu",
+            bucketed=self.bucketed_shapes,
+            live_tokens=self.live_tokens and self.config.attention_on,
+            value_token=self.value_token is not None,
+            binding=spec.binding,
+            action_capacity=capacity,
+            select_programs=not inference and not self.bucketed_shapes,
+        )
+
+        return replace(
+            batch,
+            bucket_needs=None
+            if needs is None
+            else tuple(tuple(map(int, row)) for row in needs),
+        )
+
+    @torch.no_grad()
+    def evaluate(self, batch: Prepared[np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+        """Run an admitted host batch without gradients and return NumPy outputs."""
+        self.eval()
+        logits, values = self(on_device(batch, device_of(self)))
+        return to_numpy(logits), to_numpy(values)
+
+    @property
+    def device_type(self) -> str:
+        return device_of(self).type
+
+    @property
+    def parameter_count(self) -> int:
+        return sum(parameter.numel() for parameter in self.parameters())
+
+    @property
+    def resident_bytes(self) -> int:
+        size = sum(
+            value.numel() * value.element_size()
+            for value in (*self.parameters(), *self.buffers())
+        )
+        if self.semantic_cards is not None:
+            size += (
+                self.semantic_cards.definition_rows.numel() * self.config.hidden_dim * 4
+            )
+        return size
+
+    @property
+    def has_programs(self) -> bool:
+        return self.semantic_cards is not None
+
+    def inference_scope(self, *, cache_catalog: bool = True) -> "PolicyInference":
+        return PolicyInference(self, cache_catalog=cache_catalog)
+
+    sample_rows = staticmethod(sample_rows)
+
+    @staticmethod
+    def normalize_logits(logits: np.ndarray, *, double: bool = False) -> np.ndarray:
+        tensor = torch.from_numpy(logits)
+        if double:
+            tensor = tensor.double()
+        return to_numpy(torch.softmax(tensor, dim=-1))
+
+    @staticmethod
+    def probability_from_logit(value: float) -> float:
+        return float(torch.sigmoid(torch.tensor(value, dtype=torch.float64)))
+
+    @torch.no_grad()
+    def sample(
+        self,
+        batch: Prepared[np.ndarray],
+        *,
+        deterministic: bool = False,
+        temperature: float = 1.0,
+        sampling: Literal["categorical", "multinomial"] = "categorical",
+    ) -> np.ndarray:
+        """Retain Torch RNG and categorical/multinomial rounding at the boundary."""
+        prepared = on_device(batch, device_of(self))
+        if sampling == "categorical" and temperature == 1.0:
+            actions, _, _, _ = self.get_action_and_value(
+                prepared, deterministic=deterministic
+            )
+        else:
+            logits, _ = self(prepared)
+            if deterministic:
+                actions = logits.argmax(-1)
+            else:
+                if temperature != 1.0:
+                    logits = logits / temperature
+                actions = torch.multinomial(torch.softmax(logits, dim=-1), 1).squeeze(
+                    -1
+                )
+        return to_numpy(actions).astype(np.int64)
+
+    @torch.no_grad()
+    def win_probabilities(self, batch: Prepared[np.ndarray]) -> np.ndarray:
+        _, values = self(on_device(batch, device_of(self)))
+        return to_numpy(torch.sigmoid(values).float())
+
+    def _parameter_versions(self) -> tuple[tuple[int, int], ...]:
+        return tuple(
+            (id(value), value._version)
+            for value in (*self.parameters(), *self.buffers())
+        )
+
+    @torch.no_grad()
+    def cache_programs(self) -> None:
+        """Cache the full catalog for an unchanged inference policy."""
+        self._program_cache = (
+            self.semantic_cards.definitions(
+                on_device(self._admission_spec().tables.full_programs, device_of(self))
+            )
+            if self.semantic_cards is not None
+            else None
+        )
+        self._cache_versions = self._parameter_versions()
+
+    def clear_cache(self) -> None:
+        self._program_cache = None
+        self._cache_versions = ()
+
+    def forward(self, obs: Prepared[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits [B,A] and acting-viewer critic [B].
 
         WDL expectations are signed; scalar units follow value_semantic.
@@ -352,7 +570,7 @@ class ActorCritic(nn.Module):
         return logits, value
 
     def forward_distribution(
-        self, obs: AdmittedObservation
+        self, obs: Prepared[torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits and raw critic output from one shared encoding.
 
@@ -362,22 +580,41 @@ class ActorCritic(nn.Module):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
-        capacity = obs["actions_valid"].shape
-        # Trimming keeps every valid object, so the count holds for buckets too.
-        live = obs.live_token_count if isinstance(obs, PreparedObservation) else None
-        buckets = None
-        if self.bucketed_shapes:
-            obs, buckets = self._bucketed(obs)
-        state = self._gather_object_embeddings(obs, buckets)
-        batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
-
+        if not isinstance(obs, Prepared) or not isinstance(obs.legal, torch.Tensor):
+            raise TypeError(
+                "policy forward requires device Prepared rows from prepare/on_device"
+            )
+        if obs.guard is not None:
+            obs.guard(self)
+        if obs.binding != self._binding():
+            raise ValueError(
+                "observation was admitted for a different policy configuration"
+            )
+        programs = None
+        if not torch.is_grad_enabled() and self._program_cache is not None:
+            if self._cache_versions != self._parameter_versions():
+                raise RuntimeError(
+                    "cached inference policy changed; clear_cache before reuse"
+                )
+            programs = self._program_cache
+        capacity = obs.legal.shape
+        state = self._gather_object_embeddings(obs, programs)
+        batches, slots = obs.legal_batches, obs.legal_slots
+        live = None
+        if obs.live_index is not None and obs.live_offsets is not None:
+            live = LiveTokens(
+                obs.live_index,
+                obs.live_offsets,
+                obs.batch,
+                state.objects.shape[1] + int(self.value_token is not None),
+            )
         encoded = self._attend_objects(
-            state.objects, state.is_agent, state.validity, live
+            state.objects, state.is_agent, state.validity, obs.attention_columns, live
         )
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
         informed_actions = self._gather_informed_actions(
-            obs, post_attention_objects, state, batches, slots
+            obs, post_attention_objects, state
         )
         if self.policy_film is not None:
             valid = state.validity.unsqueeze(-1)
@@ -409,23 +646,6 @@ class ActorCritic(nn.Module):
             },
         )
 
-    def live_token_count(self, obs: Dict[str, torch.Tensor]) -> int | None:
-        """Host count of the tokens live-token attention packs for CPU `obs`.
-
-        Valid table objects, belief rows and their global row, and one value
-        token per observation; None unless this policy packs live tokens.
-        """
-        if not self.live_tokens or not self.config.attention_on:
-            return None
-        batch = obs["actions_valid"].shape[0]
-        count = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
-        if self.belief_count_buckets > 0:
-            # Belief rows plus one global belief row per observation.
-            count += int(obs["belief_validity"].count_nonzero()) + batch
-        if self.value_token is not None:
-            count += batch
-        return count
-
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
         return (
@@ -433,67 +653,25 @@ class ActorCritic(nn.Module):
             and self.belief_count_buckets == 0
         )
 
-    def _bucketed(
-        self, obs: AdmittedObservation
-    ) -> tuple[AdmittedObservation, BucketSizes | None]:
-        """Trim `obs` to the buckets admission measured on the host.
-
-        Without buckets (a layout admission did not judge), `obs` is returned
-        unchanged. Input admitted by a policy without bucketed shapes is
-        measured here, from a host copy.
-        """
-        self._require_admitted(obs)
-        assert isinstance(obs, AdmittedObservation)
-        buckets = obs.buckets
-        if buckets is None:
-            buckets = measure_buckets(self, obs)
-        if buckets is None:
-            return obs, None
-        return trim_admitted(obs, buckets), buckets
-
-    def _require_admitted(self, obs: Dict[str, torch.Tensor]) -> None:
-        if not isinstance(obs, AdmittedObservation):
-            raise TypeError(
-                "policy forward requires an observation from "
-                "manabot.model.admission.admit_observation"
-            )
-        if obs.binding != admission_binding(self):
-            raise ValueError(
-                "observation was admitted for a different policy configuration"
-            )
-
     def _attend_objects(
         self,
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         validity: torch.Tensor,
-        live: int | None = None,
+        columns: torch.Tensor | None = None,
+        live: LiveTokens | None = None,
     ) -> torch.Tensor:
-        """Encode real objects and, when configured, a trailing neutral value token.
-
-        `live` is the host-measured token count for live-token attention.
-        """
+        """Attend using host-prepared columns or live-token coordinates."""
         if self.live_tokens and self.config.attention_on:
-            return self._attend_live(objects, is_agent, validity, live)
+            assert live is not None
+            return self._attend_live(objects, is_agent, live)
         original_slots = objects.shape[1]
-        columns = None
-        if (
-            self.config.attention_on
-            and objects.device.type == "cpu"
-            and not torch.is_grad_enabled()
-        ):
-            # Padding is never an attention key and every layer zeros its query
-            # output. Omit columns unused by the entire inference batch, then
-            # restore the original coordinates for focus joins and historical
-            # mean pooling (whose denominator includes padding). Learning keeps
-            # fixed shapes and its existing autograd path; device inference
-            # avoids a host synchronization to discover the compact shape.
-            used = (validity != 0).any(0).nonzero().flatten()
-            if 0 < used.numel() < original_slots:
-                columns = used
-                objects = objects.index_select(1, columns)
-                is_agent = is_agent.index_select(1, columns)
-                validity = validity.index_select(1, columns)
+        if not self.config.attention_on:
+            columns = None
+        if columns is not None:
+            objects = objects.index_select(1, columns)
+            is_agent = is_agent.index_select(1, columns)
+            validity = validity.index_select(1, columns)
         key_padding_mask = validity == 0
         if self.value_token is not None:
             objects = torch.cat(
@@ -523,8 +701,7 @@ class ActorCritic(nn.Module):
         self,
         objects: torch.Tensor,
         is_agent: torch.Tensor,
-        validity: torch.Tensor,
-        live: int | None,
+        tokens: LiveTokens,
     ) -> torch.Tensor:
         """`_attend_objects` over valid objects only, returned at [B,N(+1),D].
 
@@ -535,15 +712,12 @@ class ActorCritic(nn.Module):
         """
         batch = objects.shape[0]
         owner = torch.where(is_agent, 1.0, -1.0).to(objects.dtype)
-        present = validity != 0
         if self.value_token is not None:
             objects = torch.cat(
                 (objects, self.value_token.expand(batch, -1, -1).to(objects.dtype)),
                 dim=1,
             )
             owner = torch.cat((owner, owner.new_zeros((batch, 1))), dim=1)
-            present = torch.cat((present, present.new_ones((batch, 1))), dim=1)
-        tokens = LiveTokens.pack(present, live)
         packed = tokens.gather(objects)
         owners = tokens.gather(owner)
         packed = self.attention.forward_live(packed, owners, tokens)
@@ -580,109 +754,65 @@ class ActorCritic(nn.Module):
 
     def _gather_informed_actions(
         self,
-        obs: dict[str, torch.Tensor],
+        obs: Prepared[torch.Tensor],
         post_attention_objects: torch.Tensor,
         state: EmbeddedObservation,
-        batches: torch.Tensor,
-        slots: torch.Tensor,
     ) -> torch.Tensor:
         """Embed selected legal rows [K,D], preserving their original joins.
 
         Coordinates select actions, continuation frames and focus objects from
         the same observation row.
         """
-        action_rows = obs["actions"][batches, slots]
-        actions = self.action_embedding(action_rows[..., :-2])
-        indexes = action_rows[..., -2]
-        linked = state.frame_context[batches, (indexes.long() - 1).clamp_min(0)]
-        actions = actions + linked.masked_fill((indexes == 0).unsqueeze(-1), 0)
-        candidates = obs["name_candidates"][batches, slots]
-        actions = actions + self.name_candidates(candidates)
+        actions = self.action_embedding(obs.action_features)
+        linked = state.frame_context.flatten(0, 1)[obs.action_frames]
+        actions = actions + linked.masked_fill(
+            (obs.action_frame_mask == 0).unsqueeze(-1), 0
+        )
+        actions = actions + self.name_candidates(obs)
         if self.semantic_cards is not None and state.programs is not None:
-            actions = actions + self.semantic_cards.embed_definitions(
-                candidates[..., 1], state.programs
-            )
-        actions = actions + state.shared_context[batches]
-        focus = obs["action_focus"][batches, slots]
-        focused = post_attention_objects[batches[:, None], focus.clamp_min(0).long()]
-        focused = focused * (focus != -1).unsqueeze(-1)
+            actions = actions + state.programs[obs.candidate_rows]
+        actions = actions + state.shared_context[obs.legal_batches]
+        focused = post_attention_objects.flatten(0, 1)[obs.focus]
+        focused = focused * obs.focus_mask.unsqueeze(-1)
         return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
 
     def _gather_object_embeddings(
-        self, obs: Dict[str, torch.Tensor], buckets: BucketSizes | None = None
+        self, obs: Prepared[torch.Tensor], programs: torch.Tensor | None = None
     ) -> EmbeddedObservation:
-        self._require_admitted(obs)
-        assert isinstance(obs, AdmittedObservation)
-        if isinstance(obs, PreparedObservation):
-            obs.scope.check(self)
-            if torch.is_grad_enabled():
-                raise RuntimeError(
-                    "prepared inference observations cannot enter autograd"
-                )
-        agent_player, opp_player = obs["agent_player"], obs["opponent_player"]
-        agent_cards, opp_cards = obs["agent_cards"], obs["opponent_cards"]
-        if self.turn_state:
-            # [B, 2, TURN_STATE_DIM] and [B, 2, cards]: agent seat first.
-            players, cards = obs["player_turn_state"], obs["card_turn_state"]
-            agent_player = torch.cat((agent_player, players[:, 0:1]), dim=-1)
-            opp_player = torch.cat((opp_player, players[:, 1:2]), dim=-1)
-            agent_cards = torch.cat((agent_cards, cards[:, 0, :, None]), dim=-1)
-            opp_cards = torch.cat((opp_cards, cards[:, 1, :, None]), dim=-1)
-        enc_agent_player = self.player_embedding(agent_player)
-        enc_opp_player = self.player_embedding(opp_player)
-        enc_agent_cards = self.card_embedding(agent_cards)
-        enc_opp_cards = self.card_embedding(opp_cards)
+        enc_agent_player = self.player_embedding(obs.agent_player)
+        enc_opp_player = self.player_embedding(obs.opponent_player)
+        enc_agent_cards = self.card_embedding(obs.agent_cards)
+        enc_opp_cards = self.card_embedding(obs.opponent_cards)
         definitions = None
-        programs = None
-        references = obs.references
-        permanent_ids = torch.stack(
-            [
-                obs[key][..., PERMANENT_DEFINITION_INDEX]
-                for key in ("agent_permanents", "opponent_permanents")
-            ],
-            dim=1,
-        )
         if self.semantic_cards is not None:
-            # Learning encodes only referenced definitions (same values within
-            # float rounding, identical gradient support); without autograd the
-            # full table keeps unprepared inference bitwise equal to serving.
-            # Bucketed shapes encode the complete catalog in learning too: a
-            # fixed recurrent layout instead of a per-batch referenced subset.
-            if isinstance(obs, PreparedObservation):
-                programs = obs.scope.catalog()
-            elif torch.is_grad_enabled() and not self.bucketed_shapes:
-                programs = self.semantic_cards.definitions(
-                    self._referenced_definitions(obs, permanent_ids)
-                )
-            else:
-                programs = self.semantic_cards.definitions()
-            assert programs is not None
+            if programs is None:
+                assert obs.programs is not None
+                programs = self.semantic_cards.definitions(obs.programs)
             definitions = self.name_candidates.public_definitions(programs)
-            cards, known = self.semantic_cards(obs, definitions, references)
+            cards, known = self.semantic_cards(obs, definitions)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
             permanent_definitions = self.semantic_cards.lookup(
-                definitions, references.permanents
+                definitions, obs.permanent_rows
             )
         else:
             assert self.card_definitions is not None
-            cards = self.card_definitions(references.cards)
+            cards = self.card_definitions(obs.card_rows)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
-            permanent_definitions = self.card_definitions(references.permanents)
-        permanent_features = [
-            obs[key][..., self._numeric_permanent_columns]
-            for key in ("agent_permanents", "opponent_permanents")
-        ]
+            permanent_definitions = self.card_definitions(obs.permanent_rows)
+        # Keep the per-seat contiguous projection layout after biases train.
         enc_agent_perms = (
-            self.perm_embedding(permanent_features[0]) + permanent_definitions[:, 0]
+            self.perm_embedding(obs.permanents[:, 0].contiguous())
+            + permanent_definitions[:, 0]
         )
         enc_opp_perms = (
-            self.perm_embedding(permanent_features[1]) + permanent_definitions[:, 1]
+            self.perm_embedding(obs.permanents[:, 1].contiguous())
+            + permanent_definitions[:, 1]
         )
-        object_parts = [
+        parts = [
             enc_agent_player,
             enc_opp_player,
             enc_agent_cards,
@@ -690,173 +820,78 @@ class ActorCritic(nn.Module):
             enc_agent_perms,
             enc_opp_perms,
         ]
-        validity_parts = [obs[key] for key in OBJECT_VALIDITY_KEYS]
-
-        belief_is_agent = None
-        if self.belief_count_buckets > 0:
-            belief_rows, belief_validity, belief_is_agent, belief_global = (
-                self._belief_rows(obs)
-            )
-            object_parts.extend((belief_rows, belief_global))
-            validity_parts.extend(
-                (
-                    belief_validity,
-                    torch.ones(
-                        (belief_global.shape[0], 1),
-                        device=belief_global.device,
-                    ),
-                )
-            )
-
-        objects = self._join_permanent_links(obs, torch.cat(object_parts, dim=1))
-        # Catalog fact and effect ids read the card encoder's rows.
-        catalog = None
-        if self.semantic_cards is not None and self.semantic_cards.records:
-            assert definitions is not None
-            catalog = RecordEmbeddings(self.semantic_cards, definitions)
-        objects = self.facts(obs["facts"], objects, catalog)
-        objects = self.shared_effects(
-            obs["effects"],
-            obs["effect_details"],
-            obs["effect_members"],
-            objects,
-            catalog,
+        if obs.belief is not None:
+            rows, global_row = self._belief_rows(obs.belief)
+            parts.extend((rows, global_row))
+        objects = self._join_permanent_links(obs, torch.cat(parts, dim=1))
+        token_embedding = (
+            self.semantic_cards.token_embedding
+            if self.semantic_cards is not None and self.semantic_cards.records
+            else None
         )
-        # History and current continuation both inform objects and focus-free actions.
-        rows = obs["relations"]
-        ids = rows[..., [5, 23]]
+        objects = self.facts(obs.facts, objects, token_embedding, definitions)
+        objects = self.shared_effects(
+            obs.effects, objects, token_embedding, definitions
+        )
         relation_definitions = (
-            self.semantic_cards.embed_definitions(ids, definitions)
-            if self.semantic_cards is not None and definitions is not None
-            else self._generic_definitions(ids)
+            SemanticCardEncoder.lookup(definitions, obs.relation_rows)
+            if definitions is not None
+            else self.card_definitions(obs.relation_rows)
         )
         encoded_relations = self.continuation.encode_rows(
-            rows, objects, relation_definitions
+            obs, objects, relation_definitions
         )
-        shared_context = encoded_relations.sum(1) / rows[..., RELATION_VALID_INDEX].sum(
+        shared_context = encoded_relations.sum(1) / obs.relation_valid.sum(
             1, keepdim=True
         ).clamp_min(1)
-        frame_context = self.continuation.frame_context(rows, encoded_relations)
+        frame_context = self.continuation.frame_context(obs, encoded_relations)
         if self.recent_events is not None:
-            assert self.semantic_cards is not None and definitions is not None
+            assert definitions is not None and obs.events is not None
             shared_context = (
-                self.recent_events(
-                    obs, objects, definitions, self.semantic_cards.definition_rows
-                )
-                + shared_context
+                self.recent_events(obs.events, objects, definitions) + shared_context
             )
         objects = objects + shared_context.unsqueeze(1)
-
-        # The visible object layout is static, so its ownership mask is a
-        # registered buffer. Explicit belief rows extend it below.
-        batch = objects.shape[0]
-        is_agent = self._ownership(buckets).expand(batch, -1)
-        if belief_is_agent is not None:
-            is_agent = torch.cat(
-                (
-                    is_agent,
-                    belief_is_agent,
-                    torch.zeros((batch, 1), dtype=torch.bool, device=objects.device),
-                ),
-                dim=1,
-            )
-
-        validity = torch.cat(validity_parts, dim=1)
         return EmbeddedObservation(
-            objects,
-            is_agent,
-            validity,
-            shared_context,
-            frame_context,
-            programs,
+            objects, obs.is_agent, obs.validity, shared_context, frame_context, programs
         )
 
-    def _ownership(self, buckets: BucketSizes | None) -> torch.Tensor:
-        """The static ownership mask [1,N] at this batch's object coordinates."""
-        template = self._is_agent_template
-        if buckets is None or not buckets.trims_objects:
-            return template
-        return torch.cat([template[:, part] for part in object_columns(buckets)], 1)
-
     def _join_permanent_links(
-        self, obs: Dict[str, torch.Tensor], objects: torch.Tensor
+        self, obs: Prepared[torch.Tensor], objects: torch.Tensor
     ) -> torch.Tensor:
-        """Add each link target's embedding to its linked permanents and theirs to it.
-
-        Links are object index + 1 (zero: none) into `objects` [B,N,D].
-        """
-        start = 2 + 2 * obs["agent_cards"].shape[1]
+        """Exchange embeddings across the host-prepared permanent links."""
+        start = 2 + 2 * obs.agent_cards.shape[1]
+        count = 2 * obs.permanents.shape[2]
         delta = torch.zeros_like(objects)
-        for column, from_target, to_target in zip(
-            self._link_columns, self.link_from_target, self.link_to_target
+        for targets, mask, from_target, to_target in zip(
+            obs.link_targets,
+            obs.link_masks,
+            self.link_from_target,
+            self.link_to_target,
+            strict=True,
         ):
-            links = torch.cat(
-                [
-                    obs[key][..., column]
-                    for key in ("agent_permanents", "opponent_permanents")
-                ],
-                dim=1,
+            permanents = objects[:, start : start + count]
+            linked = mask.bool().unsqueeze(-1)
+            # Preserve per-batch scatter order; host routes are flat coordinates.
+            local = (
+                targets.view(objects.shape[0], count)
+                - torch.arange(objects.shape[0], device=objects.device)[:, None]
+                * objects.shape[1]
             )
-            permanents = objects[:, start : start + links.shape[1]]
-            linked = (links > 0).unsqueeze(-1)
-            targets = (
-                (links.long() - 1).clamp_min(0).unsqueeze(-1).expand_as(permanents)
-            )
-            # Autocast leaves scatter's operands in their own dtypes; float32
-            # runs convert nothing.
+            indexes = local.unsqueeze(-1).expand_as(permanents)
             delta = delta.scatter_add(
                 1,
-                targets,
+                indexes,
                 to_target(permanents).masked_fill(~linked, 0).to(delta.dtype),
             )
-            delta[:, start : start + links.shape[1]] += from_target(
-                objects.gather(1, targets)
+            delta[:, start : start + count] += from_target(
+                objects.flatten(0, 1)[targets].view_as(permanents)
             ).masked_fill(~linked, 0)
         return objects + delta
 
-    def _referenced_definitions(
-        self, obs: Dict[str, torch.Tensor], permanent_ids: torch.Tensor
-    ) -> torch.Tensor:
-        """Unique catalog rows + 1 this batch can index: visible cards,
-        permanents, known hands, decklists, public history, relations and names.
-
-        A source added to the forward pass must be added here, or its rows
-        read zero embeddings.
-        """
-        assert self.semantic_cards is not None
-        ids = [obs["semantic_cards"], permanent_ids, obs["known_hand"][..., 0]]
-        if self.semantic_cards.decklist_projection is not None:
-            ids.append(obs["decklists"][..., 0])
-        if self.recent_events is not None:
-            events, valid = obs["events"], obs["events_valid"]
-            ids.extend(events[..., column][valid == 1] for column in (2, 7))
-        ids.append(obs["relations"][..., [5, 23]])
-        if self.semantic_cards.records:
-            # Catalog fact and effect sources read their definitions' rows.
-            facts = obs["facts"]
-            ids.append(facts[..., FACT_SOURCE_INDEX][facts[..., FACT_VALID_INDEX] == 1])
-            effects = obs["effects"]
-            ids.append(effects[..., 11][effects[..., 17] == 1])
-        # Names share the same program table as objects. Only legal naming
-        # rows widen the learner's support to the complete naming catalog.
-        ids.append(obs["name_candidates"][..., 1][obs["actions_valid"].bool()])
-        return self.semantic_cards.referenced_rows(ids)
-
-    def _generic_definitions(self, ids: torch.Tensor) -> torch.Tensor:
-        """Embed admitted card definition IDs of a world without a catalog."""
-        assert self.card_definitions is not None
-        return self.card_definitions(definition_rows(ids))
-
     def _belief_rows(
-        self, obs: Dict[str, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        self, obs: BeliefRows[torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Build explicit semantic belief rows and one global diagnostic row."""
-        card_ids = obs["belief_card_def_ids"].long()
-        owner_ids = obs["belief_owner_role_ids"].long()
-        zone_ids = obs["belief_hidden_zone_ids"].long()
-        probabilities = obs["belief_count_probabilities"].float()
-        validity = obs["belief_validity"].float()
-        globals_ = obs["belief_globals"].float()
         assert (
             self.belief_card_embedding is not None
             and self.belief_owner_embedding is not None
@@ -865,33 +900,127 @@ class ActorCritic(nn.Module):
             and self.belief_global_embedding is not None
         )
         rows = (
-            self.belief_card_embedding(card_ids)
-            + self.belief_owner_embedding(owner_ids)
-            + self.belief_zone_embedding(zone_ids)
-            + self.belief_count_embedding(probabilities)
+            self.belief_card_embedding(obs.cards)
+            + self.belief_owner_embedding(obs.owners)
+            + self.belief_zone_embedding(obs.zones)
+            + self.belief_count_embedding(obs.probabilities)
         )
-        rows = rows * validity.unsqueeze(-1)
-        global_row = self.belief_global_embedding(globals_).unsqueeze(1)
-        return rows, validity, owner_ids == 0, global_row
+        rows = rows * obs.validity.unsqueeze(-1)
+        global_row = self.belief_global_embedding(obs.globals).unsqueeze(1)
+        return rows, global_row
 
     def get_action_and_value(
         self,
-        obs: AdmittedObservation,
+        obs: Prepared[torch.Tensor],
         action: Optional[torch.Tensor] = None,
         deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         logits, value = self.forward(obs)
-        if not obs.legal:
+        if not obs.legal_support:
             raise ValueError("No valid actions available")
         dist = torch.distributions.Categorical(logits=logits)
         if action is None:
             action = logits.argmax(dim=-1) if deterministic else dist.sample()
         return action, dist.log_prob(action), dist.entropy(), value
 
-    def get_value(self, obs: AdmittedObservation) -> torch.Tensor:
+    def get_value(self, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         with torch.no_grad():
             _, value = self.forward(obs)
             return value
+
+
+class PolicyInference:
+    """One unchanged behavior policy; batches expire with the scope.
+
+    Preparation consumes owned NumPy buffers. A guard on the resulting Prepared
+    batch rejects closed scopes, weight/configuration changes and autograd use.
+    The policy owns its lazy catalog cache; neither cache nor guard is serialized.
+    """
+
+    def __init__(self, agent: ActorCritic, *, cache_catalog: bool = True) -> None:
+        self.agent = agent
+        self.cache_catalog = cache_catalog
+        self.device = device_of(agent)
+        self._closed = False
+        self._versions = agent._parameter_versions()
+        self._modes = tuple(module.training for module in agent.modules())
+        self._binding = agent._binding()
+        self.transfers = 0
+        self.transfer_bytes = 0
+        agent.clear_cache()
+
+    def check(self, agent: object) -> None:
+        if self._closed:
+            raise RuntimeError("inference scope is closed")
+        if (
+            agent is not self.agent
+            or self._versions != self.agent._parameter_versions()
+        ):
+            raise RuntimeError("inference policy changed within its scope")
+        if (
+            self._modes != tuple(module.training for module in self.agent.modules())
+            or self._binding != self.agent._binding()
+        ):
+            raise RuntimeError("inference policy mode/configuration changed")
+
+    def _forward_check(self, agent: object) -> None:
+        self.check(agent)
+        if torch.is_grad_enabled():
+            raise RuntimeError("prepared inference observations cannot enter autograd")
+        self.cache_programs()
+
+    def cache_programs(self) -> None:
+        """Prepare the fixed policy catalog, checking the serving lifetime first."""
+        self.check(self.agent)
+        if self.cache_catalog and not self.agent._cache_versions:
+            self.agent.cache_programs()
+
+    def __enter__(self) -> "PolicyInference":
+        self.check(self.agent)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self._closed = True
+        self.agent.clear_cache()
+
+    @torch.no_grad()
+    def infer(
+        self,
+        obs: ObservationBuffers,
+        *,
+        span: Callable[[str], AbstractContextManager[object]] | None = None,
+    ) -> InferenceResult:
+        measure = span or (lambda name: nullcontext())
+        with measure("input_admission_and_transfer_host"):
+            prepared = self.prepare(obs)
+        with measure("forward_host"):
+            logits, _ = self.agent(prepared)
+        with measure("output_transfer_host"):
+            return InferenceResult(
+                to_numpy(logits), self.transfer_bytes, self.transfers
+            )
+
+    @torch.no_grad()
+    def prepare(self, obs: ObservationBuffers) -> Prepared[torch.Tensor]:
+        self.check(self.agent)
+        if any(not isinstance(value, np.ndarray) for value in obs.values()):
+            raise TypeError("inference preparation requires NumPy observation buffers")
+        batch = self.agent.prepare(obs, inference=True)
+        if self.cache_catalog:
+            batch = replace(batch, programs=None)
+        arrays = (
+            []
+            if self.device.type == "cpu"
+            else array_fields(batch, np.ndarray).values()
+        )
+        self.transfer_bytes = sum(array.nbytes for array in arrays)
+        self.transfers = len({array.dtype for array in arrays})
+        return replace(on_device(batch, self.device), guard=self._forward_check)
 
 
 # -----------------------------------------------------------------------------

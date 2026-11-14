@@ -13,7 +13,11 @@ import torch
 from typer.testing import CliRunner
 
 from manabot import cli
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -24,6 +28,7 @@ from manabot.infra.config import (
     SimulationConfig,
 )
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import Backend
 from manabot.sim.player import ModelPlayer
 from manabot.sim.sim import load_player, simulate_models
 import managym
@@ -103,7 +108,10 @@ def test_sim_cli_preserves_overrides_with_optional_deck_files(
 ) -> None:
     configs: list[SimulationConfig] = []
 
-    def capture(config: SimulationConfig, runtime: RuntimeConfig) -> None:
+    def capture(
+        config: SimulationConfig, runtime: RuntimeConfig, *, backend: Backend
+    ) -> None:
+        assert backend.name == "torch"
         configs.append(config)
 
     monkeypatch.setattr(cli, "run_simulation", capture)
@@ -163,7 +171,7 @@ class _RecordingModel(ModelPlayer):
     """Fail the proof on a model error the simulator would replace randomly."""
 
     def __init__(self, path: Path) -> None:
-        player = load_player(str(path))
+        player = load_player(str(path), backend=TORCH_BACKEND)
         assert isinstance(player, ModelPlayer)
         super().__init__(player.name, player.agent)
         self.actions = 0
@@ -190,7 +198,7 @@ def test_decklist_world_checkpoint_simulates_imported_files(tmp_path: Path) -> N
     config = SimulationConfig(
         hero=str(world), num_games=1, num_threads=1, max_steps=40, match=match
     )
-    stats = simulate_models(model, load_player("random"), config)
+    stats = simulate_models(model, load_player("random", backend=TORCH_BACKEND), config)
     assert len(stats.games) == 1
     assert model.actions > 0 and not model.errors
 
@@ -219,7 +227,11 @@ def test_decklist_setup_bound_checkpoint_rejects_imported_files(
         validate_agent_setup(agent, players)
     config = SimulationConfig(hero=str(path), num_games=1, match=match)
     with pytest.raises(ValueError, match=rejected):
-        simulate_models(load_player(str(path)), load_player("random"), config)
+        simulate_models(
+            load_player(str(path), backend=TORCH_BACKEND),
+            load_player("random", backend=TORCH_BACKEND),
+            config,
+        )
 
 
 @pytest.mark.parametrize("sideboard", [False, True])

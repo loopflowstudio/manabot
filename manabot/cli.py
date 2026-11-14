@@ -254,7 +254,9 @@ def sim_command(
             )
     except (ValueError, OSError) as error:
         raise typer.BadParameter(str(error)) from error
-    run_simulation(sim_config, runtime_config)
+    from manabot.backends import resolve
+
+    run_simulation(sim_config, runtime_config, backend=resolve("torch"))
 
 
 @app.command("training-report")

@@ -25,19 +25,17 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     RewardConfig,
 )
+from manabot.policy.protocol import Backend, BackendPolicy
 from manabot.sim.anchors import RandomMatchupPlayer
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
-from manabot.verify.util import _select_agent_action
 from managym.decision import Command, DecisionFrame
 
 DEFAULT_ROLLOUTS_PER_WORLD = 4
@@ -85,7 +83,7 @@ def wilson_interval(wins: int, total: int, z: float = 1.96) -> tuple[float, floa
 class MatchupPlayer(Protocol):
     """A player usable by play_games: picks an action index each decision."""
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int: ...
+    def act(self, env: Env, obs: ObservationBuffers) -> int: ...
 
 
 class FlatMCPlayer:
@@ -117,7 +115,7 @@ class FlatMCPlayer:
         #: (win-probability estimates in [0, 1], engine action order).
         self.last_scores: np.ndarray | None = None
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         del obs  # search reads the raw engine state, not the encoding
         self._calls += 1
         call_seed = (self._seed * 1_000_003 + self._calls) & 0xFFFFFFFFFFFFFFFF
@@ -143,7 +141,7 @@ class AgentMatchupPlayer:
 
     def __init__(
         self,
-        agent: ActorCritic,
+        agent: BackendPolicy,
         deterministic: bool = False,
         *,
         allow_deck_repetition: bool = False,
@@ -153,7 +151,7 @@ class AgentMatchupPlayer:
         self.deterministic = deterministic
         agent.eval()
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         from manabot.model.world import validate_agent_setup
 
         validate_agent_setup(
@@ -161,7 +159,14 @@ class AgentMatchupPlayer:
             env.match.to_rust(),
             allow_deck_repetition=self.allow_deck_repetition,
         )
-        return _select_agent_action(self.agent, obs, deterministic=self.deterministic)
+        batch = self.agent.prepare(
+            {
+                key: np.asarray(value, dtype=np.float32)[None]
+                for key, value in obs.items()
+            },
+            inference=True,
+        )
+        return int(self.agent.sample(batch, deterministic=self.deterministic)[0])
 
 
 # -----------------------------------------------------------------------------
@@ -170,7 +175,7 @@ class AgentMatchupPlayer:
 
 
 def make_player(
-    spec: dict[str, Any], seed: int
+    spec: dict[str, Any], seed: int, *, backend: Backend | None = None
 ) -> tuple[MatchupPlayer, ObservationSpace | None]:
     """Build a player from a picklable spec.
 
@@ -197,6 +202,19 @@ def make_player(
     """
 
     kind = spec["kind"]
+    if (
+        kind
+        in {
+            "checkpoint",
+            "policy_prior_puct",
+            "agent_puct",
+            "policy_search",
+            "value_greedy",
+            "value_search",
+        }
+        and backend is None
+    ):
+        raise ValueError("a checkpoint player requires an injected backend")
     if kind == "local_update":
         from pathlib import Path
 
@@ -252,7 +270,7 @@ def make_player(
 
         if str(spec.get("device", "cpu")) != "cpu":
             raise ValueError("agent_puct inference is CPU-only")
-        agent, obs_space = load_checkpoint(spec["checkpoint"])
+        agent, obs_space = backend.load_policy(spec["checkpoint"])
         return (
             DeterminizedPuctPlayer(
                 int(spec["sims"]),
@@ -273,7 +291,7 @@ def make_player(
     if kind == "policy_search":
         from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
 
-        agent, obs_space = load_checkpoint(spec["checkpoint"])
+        agent, obs_space = backend.load_policy(spec["checkpoint"])
         sampler = BatchedSampler(
             agent,
             epsilon=float(spec.get("epsilon", 0.1)),
@@ -297,7 +315,7 @@ def make_player(
         from manabot.sim.search.value import VGreedyPlayer, load_value_scorer
 
         scorer = load_value_scorer(
-            spec["checkpoint"], device=str(spec.get("device", "cpu"))
+            spec["checkpoint"], backend=backend, device=str(spec.get("device", "cpu"))
         )
         return (
             VGreedyPlayer(
@@ -311,7 +329,7 @@ def make_player(
         from manabot.sim.search.value import ValueSearchPlayer, load_value_scorer
 
         scorer = load_value_scorer(
-            spec["checkpoint"], device=str(spec.get("device", "cpu"))
+            spec["checkpoint"], backend=backend, device=str(spec.get("device", "cpu"))
         )
         return (
             ValueSearchPlayer(
@@ -358,9 +376,8 @@ def make_player(
     if kind == "checkpoint":
         from manabot.belief.runtime import ManabotPlayer
 
-        agent, obs_space, binding = load_checkpoint(
-            spec["path"], include_belief_binding=True
-        )
+        agent, obs_space = backend.load_policy(spec["path"])
+        binding = getattr(agent, "belief_binding", None)
         if agent.belief_count_buckets > 0:
             if spec.get("allow_deck_repetition"):
                 raise ValueError(
@@ -447,6 +464,7 @@ def play_games(
     game_offset: int = 0,
     hero_deck: dict[str, int] | None = None,
     villain_deck: dict[str, int] | None = None,
+    backend: Backend | None = None,
 ) -> MatchupResult:
     """Play seat-balanced games between two player specs.
 
@@ -455,8 +473,12 @@ def play_games(
     game.
     """
 
-    hero_player, hero_obs_space = make_player(hero_spec, seed=seed * 2 + 1)
-    villain_player, villain_obs_space = make_player(villain_spec, seed=seed * 2 + 2)
+    hero_player, hero_obs_space = make_player(
+        hero_spec, seed=seed * 2 + 1, backend=backend
+    )
+    villain_player, villain_obs_space = make_player(
+        villain_spec, seed=seed * 2 + 2, backend=backend
+    )
     obs_space = hero_obs_space or villain_obs_space or ObservationSpace()
 
     match = Match(

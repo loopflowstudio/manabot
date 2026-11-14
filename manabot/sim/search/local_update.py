@@ -24,11 +24,9 @@ from pathlib import Path
 import time
 from typing import Callable, Literal, Mapping, Sequence
 
-import managym._managym as native
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
-import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
@@ -45,7 +43,6 @@ from manabot.belief.state import (
 from manabot.env.env import Env
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
-from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
 from manabot.sim.search.rollout import Rollout
@@ -59,6 +56,7 @@ from manabot.sim.search.sampling import (
     validate_hand,
 )
 import managym
+import managym._managym as native
 from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
 from managym.possible_worlds import WorldQuery
 
@@ -481,7 +479,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
         "manabot/backends/torch/policy.py",
-        "manabot/model/facts.py",
+        "manabot/backends/torch/_facts.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
@@ -506,15 +504,13 @@ class LocalUpdateTeacher:
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
-        metadata = torch.load(checkpoint, map_location="cpu", weights_only=False)
         if (
             self.agent.config.value_kind != "categorical_wdl"
-            and metadata.get("bc", {}).get("value_semantic") != "signed_outcome"
+            and self.agent.value_semantic != "signed_outcome"
         ):
             raise ValueError(
                 "scalar local-search checkpoint must declare signed_outcome values"
             )
-        self.agent.requires_grad_(False)
         self.space = self.likelihood.obs_space
         # Native frontier encoding reuses these teacher-owned buffers across
         # forwards, so one teacher serves one search at a time.
@@ -575,16 +571,16 @@ class LocalUpdateTeacher:
             encodings, counts = self._encode_native(engines)
         else:
             encodings, counts = self._encode_rows(engines)
-        tensors = admit_observation(
-            self.agent,
-            {key: torch.as_tensor(value) for key, value in encodings.items()},
+        logits, values = self.agent.evaluate(
+            self.agent.prepare(encodings, inference=True)
         )
-        with torch.inference_mode():
-            logits, values = self.agent(tensors)
-            predictions = [
-                (logits[i, :count].double().softmax(-1).numpy(), float(values[i]))
-                for i, count in enumerate(counts)
-            ]
+        predictions = [
+            (
+                self.agent.normalize_logits(logits[i, :count], double=True),
+                float(values[i]),
+            )
+            for i, count in enumerate(counts)
+        ]
         if any(not np.isfinite(value) for _, value in predictions):
             raise ValueError("nonfinite leaf value")
         # Scalar PPO heads are unconstrained; retain their actual signed estimate.

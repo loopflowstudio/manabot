@@ -19,9 +19,9 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.backends.torch.policy import ActorCritic
-from manabot.model.admission import AdmittedObservation
-from manabot.model.inference import PolicyInference, PreparedObservation
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.env.observation import ObservationBuffers
+from manabot.policy.prepare import Prepared
 from manabot.training.execution import execute_regime
 from manabot.training.regime import TrainingRegime
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
@@ -50,8 +50,8 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
     original_check = OptimizerHealth.check
 
     def prepare(
-        self: PolicyInference, obs: dict[str, torch.Tensor]
-    ) -> PreparedObservation:
+        self: PolicyInference, obs: ObservationBuffers
+    ) -> Prepared[torch.Tensor]:
         nonlocal recording_seconds
         if not in_collection:
             return original_prepare(self, obs)
@@ -68,13 +68,13 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
         recording_start = time.perf_counter()
         np.savez(
             out / "collection" / f"{len(calls) - 1:05d}.npz",
-            **{key: value.numpy() for key, value in obs.items()},
+            **obs,
         )
         recording_seconds += time.perf_counter() - recording_start
         return prepared
 
     def forward(
-        self: ActorCritic, obs: AdmittedObservation
+        self: ActorCritic, obs: Prepared[torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
         tick = time.perf_counter()
         result = original_forward(self, obs)
@@ -102,10 +102,7 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
         assert frame.f_back.f_code.co_name == "update_damped_iteration"
         indexes = local["indexes"]
         learning = local["learning"]
-        arrays = {
-            f"obs/{k}": v.detach().cpu().numpy()
-            for k, v in local["admitted"].evidence(local["obs"]).items()
-        }
+        arrays = {f"obs/{k}": v for k, v in local["rows"].observation.items()}
         arrays.update(
             actions=local["minibatch_actions"].detach().cpu().numpy(),
             advantages=local["advantages"][indexes].detach().cpu().numpy(),
@@ -155,7 +152,7 @@ def capture(out: Path, regime: TrainingRegime, seed: int, *, experiment: str) ->
         ActorCritic.forward = original_forward  # type: ignore[method-assign]
         SeatRoutedCollector.collect = original_collect  # type: ignore[method-assign]
         OptimizerHealth.check = original_check  # type: ignore[method-assign]
-    initial = sorted((out / "execution").rglob("*-initial-raw.pt"))
+    initial = sorted((out / "execution").rglob("*-initial-raw.safetensors"))
     if result.status != "completed" or not calls or not minibatches:
         raise RuntimeError(f"capture did not complete one update: {result.status}")
     if len(initial) != 1:

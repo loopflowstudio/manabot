@@ -6,10 +6,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.observation import FACT_OBJECT_INDEX
-from manabot.model.admission import admit_observation
-from manabot.model.inference import PolicyInference
 from manabot.policy.buckets import (
     ONE_BASED_REFERENCES,
     ZERO_BASED_REFERENCES,
@@ -19,6 +17,7 @@ from manabot.policy.buckets import (
     sizes_of,
 )
 import managym
+from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
 
@@ -98,7 +97,7 @@ def test_outputs_and_gradients_match_default(
     assert buckets is not None and buckets.trims_objects
     outputs = []
     for model in (case.agent, agent):
-        logits, values = model.forward_distribution(admit_observation(model, obs))
+        logits, values = model.forward_distribution(device_input(model, obs))
         outputs.append((logits, values))
         legal = obs["actions_valid"].bool()
         (logits[legal].square().mean() + values.square().mean()).backward()
@@ -116,9 +115,17 @@ def test_outputs_and_gradients_match_default(
             assert b.grad is not None, name
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
     with torch.no_grad(), PolicyInference(agent) as scope:
-        prepared = scope.prepare(obs)
-        assert prepared.buckets == buckets
-        assert prepared["facts"].shape == obs["facts"].shape
+        prepared = scope.prepare(host_inputs(obs))
+        assert prepared.bucket_needs is not None
+        assert (
+            sizes_of(
+                np.asarray(prepared.bucket_needs),
+                agent.observation_space.encoder,
+                objects=True,
+            )
+            == buckets
+        )
+        assert prepared.facts.kinds.shape == (len(obs["facts"]), buckets.sizes["facts"])
         served, _ = agent.forward_distribution(prepared)
     torch.testing.assert_close(served, expected_logits, atol=1e-5, rtol=1e-5)
 
@@ -165,7 +172,7 @@ def test_rejections_match_default(
     errors = []
     for model in (case.agent, agent):
         with pytest.raises(ValueError, match=message) as error:
-            model.forward_distribution(admit_observation(model, obs))
+            model.forward_distribution(device_input(model, obs))
         errors.append(str(error.value))
     assert errors[0] == errors[1]
 
@@ -181,10 +188,8 @@ def test_reference_to_padding_object_is_kept() -> None:
     assert buckets is not None
     assert buckets.sizes["permanents"] == buckets.capacities["permanents"]
     with torch.no_grad():
-        expected, _ = case.agent.forward_distribution(
-            admit_observation(case.agent, obs)
-        )
-        actual, _ = agent.forward_distribution(admit_observation(agent, obs))
+        expected, _ = case.agent.forward_distribution(device_input(case.agent, obs))
+        actual, _ = agent.forward_distribution(device_input(agent, obs))
     torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-5)
 
 

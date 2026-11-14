@@ -9,18 +9,16 @@ import pytest
 import torch
 
 import manabot.backends.torch as torch_backend
-from manabot.backends.torch import rollout as learner_module
 from manabot.backends.torch.learner import Learner
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.model.admission import AdmittedObservation, admit_observation
-from manabot.model.inference import PolicyInference
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
 from manabot.training.updates.ppo import update_iteration
+from tests.model.prepared_routes import device_input, host_inputs
 from tests.training.test_recovery import recipe
 
 
@@ -59,11 +57,11 @@ def _observation(batch: RolloutBatch) -> dict[str, torch.Tensor]:
 def test_forward_rejects_unadmitted_and_foreign_observations() -> None:
     agent, batch = _policy()
     obs = _observation(batch)
-    with pytest.raises(TypeError, match="admit_observation"):
+    with pytest.raises(TypeError, match="Prepared"):
         agent(obs)
-    with pytest.raises(TypeError, match="admit_observation"):
+    with pytest.raises(TypeError, match="Prepared"):
         agent.get_action_and_value(obs)
-    admitted = admit_observation(agent, obs)
+    admitted = device_input(agent, obs)
     # A copy with the same configuration (a restored or bootstrap model) reads it.
     agent(admitted)
     deepcopy(agent)(admitted)
@@ -108,12 +106,12 @@ def test_admitted_forward_performs_no_validation_reads(grad: bool) -> None:
     obs = _observation(batch)
     if grad:
         agent.train()
-        admitted = admit_observation(agent, obs)
+        admitted = device_input(agent, obs)
         with _validation_reads() as reads:
             agent.forward_distribution(admitted)
     else:
         with PolicyInference(agent) as scope, torch.no_grad():
-            prepared = scope.prepare(obs)
+            prepared = scope.prepare(host_inputs(obs))
             agent(prepared)  # The first forward encodes the cached catalog.
             with _validation_reads() as reads:
                 agent(prepared)
@@ -124,25 +122,18 @@ def test_admitted_forward_performs_no_validation_reads(grad: bool) -> None:
 def test_learning_admits_each_trained_row_once(
     monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
-    admit = learner_module.admit_observation
-    check = learner_module.check_observation
+    check = ActorCritic.check_observation
 
     def admitted_rows(epochs: int) -> list[int]:
+        monkeypatch.setattr(ActorCritic, "check_observation", check)
         agent, batch = _policy(history=False)
         rows: list[int] = []
 
-        def counting(
-            model: ActorCritic, obs: dict[str, torch.Tensor]
-        ) -> AdmittedObservation:
-            rows.append(len(obs["actions_valid"]))
-            return admit(model, obs)
-
-        def counting_checks(model: ActorCritic, obs: dict[str, torch.Tensor]) -> None:
+        def counting_checks(model: ActorCritic, obs: dict[str, np.ndarray]) -> None:
             rows.append(len(obs["actions_valid"]))
             check(model, obs)
 
-        monkeypatch.setattr(learner_module, "admit_observation", counting)
-        monkeypatch.setattr(learner_module, "check_observation", counting_checks)
+        monkeypatch.setattr(ActorCritic, "check_observation", counting_checks)
         learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(

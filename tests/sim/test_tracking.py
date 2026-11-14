@@ -10,7 +10,11 @@ from etude.train.run import track
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_etude_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_etude_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
@@ -51,7 +55,7 @@ def test_simulation_admits_exact_etude_checkpoint(
         monkeypatch.setattr(artifacts, "storage_from_uri", lambda _: storage)
         retained = tmp_path / "bucket/policy.pt"
     policy.unlink()  # The SDK retained its own bytes.
-    player = sim.load_player(str(record))
+    player = sim.load_player(str(record), backend=TORCH_BACKEND)
     assert isinstance(player, ModelPlayer)
     assert not player.agent.training
     for name, value in original.state_dict().items():
@@ -73,6 +77,7 @@ def test_simulation_records_game_results_in_etude(
     sim.run_simulation(
         SimulationConfig(hero="random", villain="default", num_games=1),
         RuntimeConfig(name="simulation", runs_dir=tmp_path),
+        backend=TORCH_BACKEND,
     )
 
     runs = read_all(tmp_path / "launched")

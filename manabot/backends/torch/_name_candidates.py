@@ -18,9 +18,7 @@ from collections.abc import Sequence
 import torch
 from torch import nn
 
-from manabot.backends.torch.arrays import to_numpy
-from manabot.model.numerics import buffer_on
-from manabot.policy import admission
+from manabot.policy.prepare import Prepared
 import managym
 
 
@@ -59,33 +57,26 @@ class NameCandidateEncoder(nn.Module):
             definition_rows[self.definitions] if definition_rows is not None else None,
         )
 
-    def admit(self, candidates: torch.Tensor) -> None:
-        """Reject candidate rows whose names, definitions or spans disagree
-        with the vocabulary (observation admission)."""
-        admission.names(
-            to_numpy(candidates),
-            to_numpy(buffer_on(self, "definitions", torch.device("cpu"))),
+        # Static catalog routes are prepared once on the host; neither the
+        # route nor the derived mask is checkpoint state or a learned identity.
+        named = self.definitions != 0
+        self.register_buffer("_public_mask", named, persistent=False)
+        self.register_buffer(
+            "_public_names", named.nonzero().flatten(), persistent=False
         )
 
-    def forward(self, candidates: torch.Tensor) -> torch.Tensor:
-        """Embed admitted one-based `[..., 4]` candidate rows; a `[..., 2]`
-        prefix has no group span."""
-        embedded = self.embedding(candidates[..., 0].long())
-        if candidates.shape[-1] == 4:
-            embedded = embedded + self._groups(candidates[..., 2], candidates[..., 3])
-        return embedded
-
-    def _groups(self, first: torch.Tensor, last: torch.Tensor) -> torch.Tensor:
-        """Mean member vector of each one-based inclusive span; zero for none."""
-        first, last = first.long(), last.long()
-        present = first > 0
-        # prefix[k] sums name rows 1..k; padding row 0 never enters the sum,
-        # so it receives no gradient.
+    def forward(self, batch: Prepared[torch.Tensor]) -> torch.Tensor:
+        """Embed legal names and the mean member vector of each naming group."""
+        embedded = self.embedding(batch.name_rows)
         names = self.embedding.weight[1:]
         prefix = torch.cat([names.new_zeros((1, names.shape[1])), names.cumsum(0)])
-        totals = prefix[last] - prefix[(first - 1).clamp(min=0)]
-        counts = (last - first + 1).clamp(min=1).unsqueeze(-1)
-        return torch.where(present.unsqueeze(-1), totals / counts, 0.0)
+        totals = prefix[batch.group_last] - prefix[batch.group_first]
+        groups = torch.where(
+            batch.group_mask.bool().unsqueeze(-1),
+            totals / batch.group_counts.unsqueeze(-1),
+            0.0,
+        )
+        return embedded + groups
 
     def public_definitions(self, programs: torch.Tensor) -> torch.Tensor:
         """Join names to public programs before visible-object/knowledge pooling.
@@ -97,16 +88,18 @@ class NameCandidateEncoder(nn.Module):
         The raw program table remains the candidate scorer's semantic input.
         """
         assert self.program_rows is not None
-        named = self.definitions != 0
+        named = self._public_mask
         if self.bucketed:
             # Definition-free names add zero to padding row 0.
             return programs.index_add(
                 0,
-                torch.where(named, self.program_rows, 0),
+                self.program_rows,
                 torch.where(named[:, None], self.embedding.weight, 0).to(
                     programs.dtype
                 ),
             )
         return programs.index_add(
-            0, self.program_rows[named], self.embedding.weight[named].to(programs.dtype)
+            0,
+            self.program_rows[self._public_names],
+            self.embedding.weight[self._public_names].to(programs.dtype),
         )

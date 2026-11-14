@@ -27,16 +27,13 @@ import numpy as np
 import psutil
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
-from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.admission import admit_observation
-from manabot.model.inference import PolicyInference, transfer_admitted
 from manabot.model.world import validate_agent_setup
+from manabot.policy.protocol import Backend, BackendPolicy, InferenceScope
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
@@ -67,9 +64,9 @@ class _PendingRequest:
 
 @dataclass
 class ResidentPolicy:
-    agent: ActorCritic
+    agent: BackendPolicy
     space: ObservationSpace
-    scope: PolicyInference
+    scope: InferenceScope
     bytes: int
 
     def close(self) -> None:
@@ -79,7 +76,10 @@ class ResidentPolicy:
 class PolicyStore:
     """Serial service owner: eviction occurs only between completed batches."""
 
-    def __init__(self, execution: EvalExecution, perf: EvalPerformance) -> None:
+    def __init__(
+        self, execution: EvalExecution, perf: EvalPerformance, *, backend: Backend
+    ) -> None:
+        self.backend = backend
         self.execution = execution
         self.perf = perf
         self.admissions: dict[PolicyKey, PolicyAdmission] = {}
@@ -99,10 +99,7 @@ class PolicyStore:
         # bytes. Loading needs only the first admission's checkpoint path.
         self.admissions.setdefault(key, admission)
         resident = self.get(key)
-        if (
-            sum(p.numel() for p in resident.agent.parameters())
-            != player.parameter_count
-        ):
+        if resident.agent.parameter_count != player.parameter_count:
             raise ValueError("checkpoint parameter count drift")
         runtime = runtime_fingerprints(
             match_config=admission.setups[0], observation_space=resident.space
@@ -133,7 +130,7 @@ class PolicyStore:
         with self.perf.span("checkpoint_verification"):
             _verify_checkpoint_bytes(path, player)
         with self.perf.span("model_load"):
-            agent, space = load_checkpoint(
+            agent, space = self.backend.load_policy(
                 str(path),
                 bucketed_shapes=self.execution.bucketed_shapes,
                 live_tokens=self.execution.live_tokens,
@@ -149,16 +146,7 @@ class PolicyStore:
                 raise ValueError("checkpoint observation ABI drift")
             # Reserve the cached semantic catalog too; temporary activations are
             # separately measured, not claimed to fit this resident-weights cap.
-            size = sum(
-                t.numel() * t.element_size()
-                for t in (*agent.parameters(), *agent.buffers())
-            )
-            if agent.semantic_cards is not None:
-                size += (
-                    agent.semantic_cards.definition_rows.numel()
-                    * agent.config.hidden_dim
-                    * 4
-                )
+            size = agent.resident_bytes
             if size > self.execution.resident_model_bytes:
                 raise ValueError("policy exceeds resident-model byte limit")
             while (
@@ -170,15 +158,20 @@ class PolicyStore:
                 old.close()
                 self.perf.count("evictions")
             agent.to(self.execution.device)
-            resident = ResidentPolicy(agent, space, PolicyInference(agent), size)
+            resident = ResidentPolicy(
+                agent,
+                space,
+                agent.inference_scope(cache_catalog=self.execution.cache_catalog),
+                size,
+            )
             self.policies[key] = resident
             self.perf.count("model_loads")
             self.perf.counters["resident_bytes"] = sum(
                 p.bytes for p in self.policies.values()
             )
-        if self.execution.cache_catalog and agent.semantic_cards is not None:
+        if self.execution.cache_catalog and agent.has_programs:
             with self.perf.span("catalog_preparation"):
-                resident.scope.catalog()
+                resident.scope.cache_programs()
             self.perf.count("catalog_builds")
         return resident
 
@@ -188,38 +181,12 @@ class PolicyStore:
         self.policies.clear()
 
 
-def sample_rows(
-    logits: torch.Tensor, masks: torch.Tensor, seeds: list[int], deterministic: bool
-) -> list[int]:
-    """Preserve scalar Categorical sampling, independent of arrival/batch order."""
-    if logits.device.type != "cpu" or masks.shape != logits.shape:
-        raise ValueError("sampling requires matching CPU logits and masks")
-    valid = masks != 0
-    if not valid.any(1).all() or not torch.isfinite(logits[valid]).all():
-        raise ValueError("invalid legal logits or empty action support")
-    actions = []
-    for row, seed in enumerate(seeds):
-        with torch.random.fork_rng(devices=[]):
-            torch.random.default_generator.manual_seed(seed)
-            values = logits[row : row + 1]
-            action = (
-                values.argmax(-1)
-                if deterministic
-                else torch.distributions.Categorical(logits=values).sample()
-            )
-            selected = int(action.item())
-        if not valid[row, selected]:
-            raise ValueError("policy selected a masked offer")
-        actions.append(selected)
-    return actions
-
-
 def _infer(
     store: PolicyStore,
     requests: list[DecisionRequest],
     batch: str,
     *,
-    witness: Callable[[torch.Tensor, torch.Tensor, list[int]], None] | None = None,
+    witness: Callable[[np.ndarray, np.ndarray, list[int]], None] | None = None,
 ) -> list[DecisionReply]:
     perf = store.perf
     for request in requests:
@@ -227,53 +194,38 @@ def _infer(
             raise InferenceFailure("request deadline exhausted")
     policy = store.get(requests[0].policy)
     with perf.span("input_assembly", batch=batch):
-        tensors = {
-            key: torch.from_numpy(
-                np.stack([r.observation[key] for r in requests])
-            ).float()
+        buffers = {
+            key: np.stack([r.observation[key] for r in requests]).astype(np.float32)
             for key in requests[0].observation
         }
         if any(set(r.observation) != set(policy.space.shapes) for r in requests):
             raise ValueError("request observation fields differ from admitted ABI")
         if any(
             tuple(t.shape[1:]) != tuple(policy.space.shapes[k])
-            for k, t in tensors.items()
+            for k, t in buffers.items()
         ):
             raise ValueError("request observation shape differs from admitted ABI")
-        size = sum(t.numel() * t.element_size() for t in tensors.values())
+        size = sum(t.size * t.dtype.itemsize for t in buffers.values())
         perf.count("input_bytes", size)
-    with torch.no_grad():
-        with perf.span("input_admission_and_transfer_host", batch=batch):
-            if store.execution.cache_catalog:
-                prepared = policy.scope.prepare(tensors)
-                transfers = prepared.transfers
-            else:
-                prepared, transfers = transfer_admitted(
-                    admit_observation(policy.agent, tensors),
-                    torch.device(store.execution.device),
-                )
-        if store.execution.device == "cuda":
-            perf.count("host_to_device_bytes", size)
-            perf.count("host_to_device_calls", transfers)
-        with perf.span("forward_host", batch=batch):
-            logits, _ = policy.agent(prepared)
-        with perf.span("output_transfer_host", batch=batch):
-            logits = logits.cpu()
-        perf.count("output_bytes", logits.numel() * logits.element_size())
-        if store.execution.device == "cuda":
-            perf.count("device_to_host_calls")
-            perf.count("required_output_waits")
-        with perf.span("sampling", batch=batch):
-            actions = sample_rows(
-                logits,
-                tensors["actions_valid"],
-                [r.seed for r in requests],
-                requests[0].policy.deterministic,
-            )
+    result = policy.scope.infer(buffers, span=lambda name: perf.span(name, batch=batch))
+    logits = result.logits
+    if store.execution.device == "cuda":
+        perf.count("host_to_device_bytes", result.transfer_bytes)
+        perf.count("host_to_device_calls", result.transfers)
+        perf.count("device_to_host_calls")
+        perf.count("required_output_waits")
+    perf.count("output_bytes", logits.nbytes)
+    with perf.span("sampling", batch=batch):
+        actions = policy.agent.sample_rows(
+            logits,
+            buffers["actions_valid"],
+            [r.seed for r in requests],
+            requests[0].policy.deterministic,
+        )
     perf.count("forward_calls")
     perf.count(f"batch_rows/{len(requests)}")
     perf.count("decisions", len(requests))
-    if not store.execution.cache_catalog and policy.agent.semantic_cards is not None:
+    if not store.execution.cache_catalog and policy.agent.has_programs:
         perf.count("catalog_builds")
     replies = [
         DecisionReply(r.request_id, action, batch)
@@ -281,7 +233,7 @@ def _infer(
     ]
     if witness is not None:
         with perf.span("output_witness_write", batch=batch):
-            witness(logits, tensors["actions_valid"], actions)
+            witness(logits, buffers["actions_valid"], actions)
     if not store.execution.resident:
         store.close()
     return replies
@@ -384,6 +336,9 @@ def serve(
     One selector watches all of them, so each wake-up costs only its ready
     connections, and `service_receive` measures that per-request work.
     """
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
     perf = EvalPerformance(
@@ -391,7 +346,7 @@ def serve(
         execution.instrumentation,
         latency_boundary="client submission to service reply send; excludes return transport and caller validation",
     )
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=backend)
     pending: deque[_PendingRequest] = deque()
     selector = selectors.DefaultSelector()
     handoff_socket = socket.socket(fileno=handoff)

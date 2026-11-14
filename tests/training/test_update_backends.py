@@ -15,12 +15,12 @@ backend whose framework is absent is skipped.
 
 from collections.abc import Mapping
 from dataclasses import replace
-from types import ModuleType
 
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends import resolve
 from manabot.backends.parity import (
     BACKENDS,
     LOGIT_TOLERANCE,
@@ -28,7 +28,6 @@ from manabot.backends.parity import (
     STEP_PARAMETER_TOLERANCE,
     TOLERANCES,
     Report,
-    backend_module,
     installed_backends,
 )
 from manabot.backends.torch.policy import ActorCritic
@@ -40,7 +39,7 @@ from manabot.policy.checkpoint import (
     canonical_parameters,
     from_torch_state,
 )
-from manabot.policy.protocol import Precision
+from manabot.policy.protocol import Backend, Precision
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
@@ -91,18 +90,23 @@ def captured() -> tuple[PolicyCheckpoint, RolloutBatch]:
         device="cpu",
     )
     batch = collector.collect(agent, 6)
-    return from_torch_state(agent.config, space.encoder.config, state), batch
+    return from_torch_state(
+        agent.config,
+        space.encoder.config,
+        state,
+        parameter_names=dict(agent.named_parameters()),
+    ), batch
 
 
 def _update(
-    module: ModuleType,
+    module: Backend,
     weights: PolicyCheckpoint,
     batch: RolloutBatch,
     minibatch_rows: int,
 ) -> tuple[UpdateDiagnostics, Mapping[str, np.ndarray], Mapping[str, np.ndarray]]:
     """Diagnostics of one update from `weights`, with parameters before and after."""
     learner = module.learner.Learner(
-        module.checkpoint.assemble(weights), "cpu", minibatch_rows=minibatch_rows
+        module.load(weights)[0], "cpu", minibatch_rows=minibatch_rows
     )
     before = learner.parameters()
     diagnostics = update_damped_iteration(module, learner, batch, LEARNING, 1)
@@ -133,7 +137,7 @@ def test_damped_update_agrees_with_the_torch_backend(
     if name not in installed_backends():
         pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    reference, module = backend_module("torch"), backend_module(name)
+    reference, module = resolve("torch"), resolve(name)
     rows = batch.actions.size
     expected, _, reference_after = _update(reference, weights, batch, rows)
     actual, before, after = _update(module, weights, batch, rows)
@@ -155,9 +159,7 @@ def test_damped_update_agrees_with_the_torch_backend(
 
     # Every weight after one clipped Adam step agrees, including both GRU
     # biases and tensors whose gradients are only rounding noise.
-    layout = module.checkpoint.BACKEND.parameter_layout(
-        canonical_parameters(reference_after)
-    )
+    layout = module.parameter_layout(canonical_parameters(reference_after))
     assert after.keys() == layout.keys()
     assert any(not np.array_equal(after[key], before[key]) for key in after)
     for key, value in after.items():
@@ -208,11 +210,9 @@ def test_half_damped_update_after_cached_inference(
     precision: Precision = "bfloat16"
     if "mlx" not in installed_backends():
         pytest.skip("MLX is not installed")
-    module = backend_module("mlx")
+    module = resolve("mlx", precision=precision)
     weights, batch = captured
-    agents = [
-        module.checkpoint.assemble(weights, precision=precision) for _ in range(2)
-    ]
+    agents = [module.load(weights)[0] for _ in range(2)]
     learners = [module.learner.Learner(agent, minibatch_rows=2) for agent in agents]
     before = learners[0].parameters()
     # A fixed-weight collection cache must not sever catalog gradients in training.
@@ -275,8 +275,8 @@ def test_backends_refuse_malformed_rows_before_preparing_them(
     if name not in installed_backends():
         pytest.skip(f"the {BACKENDS[name]} framework is not installed")
     weights, batch = captured
-    module = backend_module(name)
-    agent = module.checkpoint.assemble(weights)
+    module = resolve(name)
+    agent = module.load(weights)[0]
     original = RolloutBatch.observations
     # Each corruption is otherwise a real batch. Check the raw action mask
     # before boolean conversion and semantic joins before any indexing.

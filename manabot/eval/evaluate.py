@@ -28,6 +28,7 @@ from manabot.infra.provenance import (
     runtime_fingerprints,
     source_bundle_sha256,
 )
+from manabot.policy.protocol import Backend
 from manabot.sim.guidance import build_registered_player
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
@@ -115,6 +116,7 @@ def validate_registered_player(
     registration: PlayerRegistration,
     checkpoint_path: Path | None,
     *,
+    backend: Backend | None = None,
     validate_checkpoint_load: bool = True,
 ) -> tuple[dict[str, str], ObservationSpace | None]:
     """Validate bytes and inference once, retaining the loaded observation bounds."""
@@ -134,7 +136,10 @@ def validate_registered_player(
         checkpoint_paths[registration.player_id] = str(checkpoint_path)
         if validate_checkpoint_load:
             player, observation_space = build_registered_player(
-                registration, seed=0, checkpoint_path=str(checkpoint_path)
+                registration,
+                seed=0,
+                checkpoint_path=str(checkpoint_path),
+                backend=backend,
             )
             if observation_space is None:
                 raise EvaluationError("checkpoint candidate has no observation space")
@@ -239,9 +244,12 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
     checkpoint_paths = {}
     space = None
     if candidate is not None:
+        from manabot.backends import resolve
+
         checkpoint_paths, space = validate_registered_player(
             candidate,
             args.candidate_checkpoint.resolve() if args.candidate_checkpoint else None,
+            backend=resolve("torch"),
         )
     space = space or ObservationSpace()
     match = selected_match()

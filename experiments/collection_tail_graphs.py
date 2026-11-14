@@ -39,17 +39,15 @@ ETUDE_OUTPUT_DIR. `job --smoke` runs them on CPU at toy scale.
 from __future__ import annotations
 
 import argparse
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
-import gc
 import gzip
 import json
 import os
 from pathlib import Path
 import re
-import resource
 import shutil
 import subprocess
 import sys
@@ -73,6 +71,7 @@ from experiments.l4_step_profile import (
     _write,
     trace_windows,
 )
+from manabot.backends.torch.policy import PolicyInference
 
 ROOT = Path(__file__).resolve().parents[1]
 UPDATES = 3
@@ -113,216 +112,9 @@ class _Clock:
 
 
 def insitu(out: Path, captures: Path, smoke: bool = False) -> None:
-    from experiments.tla_frontier import frozen
-    import manabot.model.inference as inference_module
-    import manabot.training.execution as execution_module
-    from manabot.training.regime import TrainingRegime
-    import manabot.training.rollout.collection as collection_module
-    from manabot.training.rollout.collection import SeatRoutedCollector
-    from manabot.verify.store import VerifyStore
-
-    out.mkdir(parents=True, exist_ok=True)
-    (captures / "inference").mkdir(parents=True, exist_ok=True)
-    regimes, protocol = frozen()
-    data = regimes["w160l8"].model_dump()
-    stage = data["stages"][0]
-    stage["updates"] = 2 if smoke else UPDATES
-    stage["execution"].update(wall_seconds=7200.0, bucketed_shapes=True)
-    if smoke:
-        stage.update(streams=4, transitions=2)
-        stage["execution"].update(device="cpu", workers=1)
-    data["wall_seconds"] = 7200.0
-    regime = TrainingRegime.model_validate(data)
-    _write(captures / "regime.json", regime.model_dump(mode="json"))
-    receipt: dict[str, Any] = {
-        "host": _host(),
-        "seed": protocol.training_seed,
-        "regime": regime.id,
-        "execution": stage["execution"],
-        "updates": [],
-    }
-    clock = _Clock()
-    gc_pauses: dict[str, float] = defaultdict(float)
-    gc_counts: Counter[str] = Counter()
-
-    def on_gc(phase: str, info: dict[str, int]) -> None:
-        if phase == "start":
-            clock.started = time.perf_counter()
-            return
-        name = f"{clock.phase}/gen{info['generation']}"
-        gc_pauses[name] += time.perf_counter() - clock.started
-        gc_counts[name] += 1
-
-    calls: list[dict[str, Any]] = []
-    kept: Counter[str] = Counter()
-    seen: Counter[str] = Counter()
-    current: dict[str, Any] = {}
-    state: dict[str, Any] = {"update": 0, "steps": 0}
-
-    original_actor = execution_module.ActorCritic
-    original_prepare = inference_module.PolicyInference.prepare
-    original_sample = SeatRoutedCollector._sample_learning_rows
-    original_slice = SeatRoutedCollector._slice_obs_tensors
-    original_append = collection_module._ObservationRows.append
-    original_pack = collection_module.PackedActions.pack
-    original_collect = SeatRoutedCollector.collect
-    original_step = SeatRoutedCollector._settle_step
-
-    def make_actor(space: Any, config: Any, **kwargs: Any) -> Any:
-        agent = original_actor(space, config, **kwargs)
-        if not (captures / "initial.pt").exists():
-            torch.save(
-                {k: v.detach().cpu().clone() for k, v in agent.state_dict().items()},
-                captures / "initial.pt",
-            )
-        return agent
-
-    def prepare(self: Any, obs: dict[str, torch.Tensor]) -> Any:
-        prepared = original_prepare(self, obs)
-        if current:
-            buckets = prepared.buckets
-            current["buckets"] = None if buckets is None else dict(buckets.sizes)
-            if current.pop("keep", False):
-                name = f"{len(calls):05d}"
-                torch.save(
-                    {k: v.clone() for k, v in obs.items()},
-                    captures / "inference" / f"{name}.pt",
-                )
-                current["kept"] = name
-        return prepared
-
-    def slice_obs(self: Any, rows: np.ndarray, inference: Any) -> Any:
-        tick = time.perf_counter()
-        clock.phase = "preparation"
-        result = original_slice(self, rows, inference)
-        current["preparation_s"] = time.perf_counter() - tick
-        clock.phase = "inference"
-        current["inference_started"] = time.perf_counter()
-        return result
-
-    def append(self: Any, rows: np.ndarray) -> int:
-        if "inference_started" in current:
-            current.setdefault(
-                "inference_s", time.perf_counter() - current["inference_started"]
-            )
-        clock.phase = "recording"
-        capacity = self.capacity
-        faults = resource.getrusage(resource.RUSAGE_SELF).ru_minflt
-        tick = time.perf_counter()
-        first = original_append(self, rows)
-        current["append_s"] = time.perf_counter() - tick
-        current["append_faults"] = (
-            resource.getrusage(resource.RUSAGE_SELF).ru_minflt - faults
-        )
-        current["append_bytes"] = int(
-            sum(a[0].nbytes for a in self._arrays.values()) * len(rows)
-        )
-        if self.capacity != capacity:
-            current["grew"] = [capacity, self.capacity]
-        return first
-
-    def pack(cls: Any, *args: Any) -> Any:
-        tick = time.perf_counter()
-        result = original_pack.__func__(cls, *args)
-        if current:
-            current["pack_s"] = time.perf_counter() - tick
-        return result
-
-    def sample(self: Any, agent: Any, rows: np.ndarray, *args: Any) -> Any:
-        count = len(rows)
-        name = band(count)
-        current.clear()
-        current.update(
-            update=state["update"],
-            rows=count,
-            gc_before=sum(gc_pauses.values()),
-        )
-        if state["update"] == 0:
-            seen[name] += 1
-            quota, stride = next((k, s) for b, _, k, s in BANDS if b == name)
-            stride = 1 if smoke else stride
-            if kept[name] < quota and (seen[name] - 1) % stride == 0:
-                kept[name] += 1
-                current["keep"] = True
-        tick = time.perf_counter()
-        result = original_sample(self, agent, rows, *args)
-        current["seconds"] = time.perf_counter() - tick
-        current["recording_s"] = (
-            current["seconds"]
-            - current.get("preparation_s", 0.0)
-            - current.get("inference_s", 0.0)
-        )
-        current["gc_s"] = sum(gc_pauses.values()) - current.pop("gc_before")
-        current.pop("inference_started", None)
-        current.pop("keep", None)
-        calls.append(dict(current))
-        current.clear()
-        clock.phase = "other"
-        return result
-
-    def settle(self: Any, *args: Any, **kwargs: Any) -> Any:
-        state["steps"] += 1
-        return original_step(self, *args, **kwargs)
-
-    def collect(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> Any:
-        first_call = len(calls)
-        steps = state["steps"]
-        gc_before = dict(gc_pauses)
-        faults = resource.getrusage(resource.RUSAGE_SELF).ru_minflt
-        tick = time.perf_counter()
-        batch = original_collect(self, *args, **kwargs)
-        seconds = time.perf_counter() - tick
-        receipt["updates"].append(
-            {
-                "update": state["update"],
-                "collection_seconds": seconds,
-                "rows": int(batch.actions.size),
-                "calls": len(calls) - first_call,
-                "steps": state["steps"] - steps,
-                "minor_faults": resource.getrusage(resource.RUSAGE_SELF).ru_minflt
-                - faults,
-                "max_rss_kb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
-                "phases": self.profiler.get_stats(),
-                "gc_s": {k: v - gc_before.get(k, 0.0) for k, v in gc_pauses.items()},
-                "idle_stream_steps": int(self.stats.idle_stream_steps),
-            }
-        )
-        state["update"] += 1
-        return batch
-
-    # Etude's unpacked bundle has no .git; the launch names the frozen commit.
-    if revision := os.environ.get("MTG318_REVISION"):
-        execution_module.source_commit = lambda: revision
-        receipt["source_commit"] = revision
-    execution_module.ActorCritic = make_actor
-    inference_module.PolicyInference.prepare = prepare  # type: ignore[method-assign]
-    SeatRoutedCollector._sample_learning_rows = sample  # type: ignore[method-assign]
-    SeatRoutedCollector._slice_obs_tensors = slice_obs  # type: ignore[method-assign]
-    SeatRoutedCollector._settle_step = settle  # type: ignore[method-assign]
-    SeatRoutedCollector.collect = collect  # type: ignore[method-assign]
-    collection_module._ObservationRows.append = append  # type: ignore[method-assign]
-    collection_module.PackedActions.pack = classmethod(pack)  # type: ignore[assignment]
-    gc.callbacks.append(on_gc)
-    started = time.perf_counter()
-    try:
-        with VerifyStore(captures / "store.sqlite") as store:
-            result = execution_module.execute_regime(
-                regime,
-                protocol.training_seed,
-                captures / "execution",
-                store,
-                experiment="collection_tail_graphs",
-                training_exposure=False,
-            )
-        receipt["status"] = str(result.status)
-    finally:
-        gc.callbacks.remove(on_gc)
-        receipt["wall_seconds"] = time.perf_counter() - started
-        receipt["calls"] = calls
-        receipt["kept"] = dict(kept)
-        receipt["gc_s"] = dict(gc_pauses)
-        receipt["gc_counts"] = dict(gc_counts)
-        _write(out / "receipt.json", receipt)
+    raise RuntimeError(
+        "This frozen profiling path patches retired Torch dictionary inputs; run it from revision ef28f3a58."
+    )
 
 
 # --------------------------------------------------------------------------
@@ -365,7 +157,9 @@ def call(
     policy's own `forward_distribution`."""
     from manabot.backends.torch.rl import legal_mask, policy_logs, require
 
-    obs_t = inference.prepare(obs)
+    obs_t = inference.prepare(
+        {key: value.detach().cpu().numpy() for key, value in (obs).items()}
+    )
     with torch.no_grad():
         logits, raw = forward(obs_t)
         logits, raw = logits.float(), raw.float()
@@ -511,8 +305,6 @@ def probe(captures: Path, out: Path, device: str) -> None:
     """Remaining host reads, compile graph breaks and a whole-forward capture."""
     import torch._dynamo
 
-    from manabot.model.inference import PolicyInference
-
     out.mkdir(parents=True, exist_ok=True)
     inputs = sorted(_inputs(captures), key=lambda item: len(item[1]["actions_valid"]))
     name, obs = inputs[0]
@@ -523,7 +315,9 @@ def probe(captures: Path, out: Path, device: str) -> None:
         generator = torch.Generator(device=device).manual_seed(SEED)
         call(agent, agent.forward_distribution, inference, obs, generator)
         with syncs.window("prepare"):
-            prepared = inference.prepare(obs)
+            prepared = inference.prepare(
+                {key: value.detach().cpu().numpy() for key, value in (obs).items()}
+            )
         with syncs.window("forward"), torch.no_grad():
             agent.forward_distribution(prepared)
         receipt["syncs"] = syncs.summary() | {"records": syncs.records}
@@ -592,7 +386,6 @@ def _short(path: str) -> str:
 def replay(
     captures: Path, out: Path, arm: str, size: str, device: str, repeats: int
 ) -> None:
-    from manabot.model.inference import PolicyInference
 
     out.mkdir(parents=True, exist_ok=True)
     torch.set_num_threads(1)
@@ -608,9 +401,16 @@ def replay(
         with PolicyInference(agent) as inference:
             generator = torch.Generator(device=device).manual_seed(SEED)
             # The catalog is encoded once per scope, as in collection.
-            inference.catalog()
+            inference.cache_programs()
             for name, obs in inputs:
-                signature = _signature(inference.prepare(obs))
+                signature = _signature(
+                    inference.prepare(
+                        {
+                            key: value.detach().cpu().numpy()
+                            for key, value in (obs).items()
+                        }
+                    )
+                )
                 _sync(device)
                 tick = time.perf_counter()
                 first = call(agent, forward, inference, obs, generator)

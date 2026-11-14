@@ -40,6 +40,7 @@ from typing import Any
 
 import numpy as np
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -150,7 +151,9 @@ def _scenario_worker(args: dict[str, Any]) -> list[dict[str, Any]]:
     results = []
     for run_index in range(args["num_runs"]):
         seed = args["base_seed"] + args["run_offset"] + run_index
-        player, obs_space = make_player(args["spec"], seed=seed * 2 + 1)
+        player, obs_space = make_player(
+            args["spec"], seed=seed * 2 + 1, backend=TORCH_BACKEND
+        )
         results.append(run_scenario_once(scenario, player, obs_space, seed=seed))
     return results
 
@@ -429,8 +432,12 @@ def play_probed_games(
 
     from manabot.verify.games import winner_from_info_or_obs
 
-    hero_player, hero_obs_space = make_player(hero_spec, seed=seed * 2 + 1)
-    villain_player, villain_obs_space = make_player(villain_spec, seed=seed * 2 + 2)
+    hero_player, hero_obs_space = make_player(
+        hero_spec, seed=seed * 2 + 1, backend=TORCH_BACKEND
+    )
+    villain_player, villain_obs_space = make_player(
+        villain_spec, seed=seed * 2 + 2, backend=TORCH_BACKEND
+    )
     obs_space = hero_obs_space or villain_obs_space or ObservationSpace()
 
     match = Match(

@@ -17,12 +17,9 @@ CPU it falls back to per-observation math attention, which is correct but slow
 and only meant for tests. The setting changes no parameter, buffer,
 configuration field, checkpoint or policy input.
 
-Host reads: sizing the packed sequence needs the batch's total number of live
-tokens. Collection measures it on the host while preparing a batch
-(`PreparedObservation.live_token_count`), so its forward reads nothing back;
-learning reads it once per forward through `nonzero`. Offsets stay on the
-device, and the jagged tensors carry host bounds on sequence length so the
-attention dispatch reads nothing either.
+Host preparation supplies the live coordinates and cumulative offsets. The
+forward only gathers, attends and scatters; jagged attention receives static
+sequence bounds so kernel selection reads no device scalars.
 """
 
 from dataclasses import dataclass
@@ -45,23 +42,6 @@ class LiveTokens:
     offsets: torch.Tensor
     batch: int
     slots: int
-
-    @classmethod
-    def pack(cls, present: torch.Tensor, total: int | None) -> "LiveTokens":
-        """Pack `present` [B,S] (bool); `total` is its host-measured count.
-
-        Without `total`, `nonzero` reads the count back once. A wrong `total`
-        would mis-pack silently, so only preparation, which counts the same
-        CPU tensors, supplies it.
-        """
-        batch, slots = present.shape
-        flat = present.reshape(-1)
-        if total is None:
-            index = flat.nonzero().squeeze(1)
-        else:
-            index = torch.nonzero_static(flat, size=total).squeeze(1)
-        offsets = F.pad(present.sum(1).cumsum(0), (1, 0))
-        return cls(index, offsets, batch, slots)
 
     def gather(self, values: torch.Tensor) -> torch.Tensor:
         """Packed rows [L,...] of `values` [B,S,...]."""

@@ -4,13 +4,6 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Callable, Sequence, cast
 
-from managym.decision import (
-    PUBLIC_COMMITMENT_KINDS,
-    Command,
-    DecisionFrame,
-    Observation,
-)
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
 import torch
@@ -21,7 +14,7 @@ from manabot.belief.state import ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
-from manabot.model.admission import admit_observation
+from manabot.policy.prepare import Prepared
 from manabot.sim.search.branch import BranchSession
 from manabot.sim.search.local_update import (
     FloatArray,
@@ -40,6 +33,14 @@ from manabot.sim.search.sampling import (
     PreparedHands,
 )
 import managym
+from managym.decision import (
+    PUBLIC_COMMITMENT_KINDS,
+    Command,
+    DecisionFrame,
+    Observation,
+)
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
+from tests.model.prepared_routes import device_input
 from tests.sim import test_local_update as fixtures
 from tests.sim.test_local_update import make_teacher
 
@@ -295,9 +296,9 @@ def test_batched_rollouts_match_sequential_evidence(
     batch_sizes: list[int] = []
 
     def observe_forward(module: torch.nn.Module, args: tuple[object, ...]) -> None:
-        tensors = args[0]
-        assert isinstance(tensors, dict)
-        batch_sizes.append(len(tensors["actions_valid"]))
+        prepared = args[0]
+        assert isinstance(prepared, Prepared)
+        batch_sizes.append(prepared.batch)
 
     handle = teacher.agent.register_forward_pre_hook(observe_forward)
     try:
@@ -476,7 +477,7 @@ def test_batch_rejects_incomplete_and_nonfinite_rows(
 
 @pytest.mark.parametrize("history", [0, 1])
 def test_batch_inputs_match_python_at_selected_capacities(
-    tmp_path: Path, history: int
+    tmp_path: Path, history: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Every selected key and row reaches inference, with no shared buffer state."""
     teacher, env = make_teacher(
@@ -506,22 +507,21 @@ def test_batch_inputs_match_python_at_selected_capacities(
         for key in teacher.space.keys()
     }
 
-    def check_inputs(module: torch.nn.Module, args: tuple[object, ...]) -> None:
-        actual = args[0]
-        assert isinstance(actual, dict)
+    prepare = teacher.agent.prepare
+
+    def check_inputs(
+        actual: dict[str, np.ndarray], *, inference: bool = False
+    ) -> Prepared[np.ndarray]:
         assert actual.keys() == tensors.keys()
         for key, tensor in tensors.items():
-            np.testing.assert_array_equal(
-                actual[key].numpy(), tensor.numpy(), err_msg=key
-            )
+            np.testing.assert_array_equal(actual[key], tensor.numpy(), err_msg=key)
+        return prepare(actual, inference=inference)
 
-    handle = teacher.agent.register_forward_pre_hook(check_inputs)
-    try:
+    with monkeypatch.context() as patch:
+        patch.setattr(teacher.agent, "prepare", check_inputs)
         predictions = teacher.predict_batch(engines)
-    finally:
-        handle.remove()
     with torch.inference_mode():
-        logits, values = teacher.agent(admit_observation(teacher.agent, tensors))
+        logits, values = teacher.agent(device_input(teacher.agent, tensors))
     for i, (probabilities, value) in enumerate(predictions):
         count = int(expected[i]["actions_valid"].sum())
         np.testing.assert_array_equal(

@@ -1,8 +1,8 @@
 """Load the shared checkpoint container into the MLX policy.
 
-`mlx_parameters` is the one name and layout mapping from canonical parameters
-(`manabot.policy.checkpoint`) to MLX's, and `mlx_gradients` the matching map
-for gradients. Three layouts differ:
+`mlx_parameters` maps canonical parameters and their gradients
+(`manabot.policy.checkpoint`) to MLX names and layouts. The map is linear
+and preserves norms. Three layouts differ:
 
 - Attention: the canonical packed in-projection `qkv_weight` [3D,D] /
   `qkv_bias` [3D] splits, in that order, into `query_proj`, `key_proj` and
@@ -15,9 +15,11 @@ for gradients. Three layouts differ:
 Every canonical parameter maps to MLX arrays or loading fails, naming the key.
 """
 
-from collections.abc import Mapping
-from pathlib import Path
+import importlib
+import json
 import re
+from types import ModuleType
+from typing import Any
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
@@ -30,11 +32,40 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.policy.checkpoint import (
     GRUS,
+    ParameterArrays,
     PolicyCheckpoint,
-    from_torch_state,
+    UnsupportedPolicy,
     read_container,
+    read_metadata,
 )
 from manabot.policy.protocol import Precision
+
+
+def require_supported(model: ModelConfig, observation: ObservationConfig) -> None:
+    """Refuse configurations the host preparation and backends do not
+    implement, naming every one, rather than running them partially."""
+    reasons = []
+    if model.world is None or not model.catalog_records():
+        reasons.append("a catalog world with record_vocabulary='catalog' is required")
+    if observation.policy_input_version != 9:
+        reasons.append(f"policy_input_version={observation.policy_input_version}")
+    if model.belief_count_buckets:
+        reasons.append("belief inputs")
+    if model.recent_events:
+        reasons.append("policy history input (recent_events)")
+    if model.value_aggregation != "masked_mean":
+        reasons.append(f"value_aggregation={model.value_aggregation!r}")
+    if model.value_kind != "scalar":
+        reasons.append(f"value_kind={model.value_kind!r}")
+    if model.policy_film:
+        reasons.append("policy_film")
+    if not model.attention_on:
+        reasons.append("attention_on=False")
+    if reasons:
+        raise UnsupportedPolicy(
+            "the framework backends do not support " + "; ".join(reasons)
+        )
+
 
 _SEQUENTIAL = re.compile(r"(^|\.)(projection|policy_head|value_head|mlp)\.(\d+)\.")
 _GRU = {
@@ -45,7 +76,7 @@ _GRU = {
 }
 
 
-def mlx_parameters(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
+def mlx_parameters(canonical: ParameterArrays) -> dict[str, np.ndarray]:
     """Canonical arrays in MLX names; only renames and splits, preserving norms."""
     out: dict[str, np.ndarray] = {}
 
@@ -77,17 +108,13 @@ def mlx_parameters(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]
     return out
 
 
-def mlx_gradients(canonical: Mapping[str, np.ndarray]) -> dict[str, np.ndarray]:
-    """Gradients of canonical parameters as gradients of MLX's."""
-    return mlx_parameters(canonical)
-
-
 def assemble(
     checkpoint: PolicyCheckpoint, *, precision: Precision | None = None
 ) -> MLXActorCritic:
     """An MLX policy holding the checkpoint's weights; names and shapes must
     match the MLX model exactly. An omitted precision follows the model's
     width (`manabot.backends.mlx.arrays.default_precision`)."""
+    require_supported(checkpoint.model, checkpoint.space.encoder.config)
     parameters = mlx_parameters(checkpoint.parameters)
     policy = MLXActorCritic(
         checkpoint.dimensions(),
@@ -110,26 +137,6 @@ def assemble(
     return policy
 
 
-def build(
-    model: ModelConfig,
-    observation: ObservationConfig,
-    state: Mapping[str, np.ndarray],
-    *,
-    precision: Precision | None = None,
-) -> tuple[MLXActorCritic, ObservationSpace]:
-    """An MLX policy holding `state` (a PyTorch state dict as NumPy arrays)."""
-    checkpoint = from_torch_state(model, observation, state)
-    return assemble(checkpoint, precision=precision), checkpoint.space
-
-
-def load_mlx_policy(
-    path: str | Path, *, precision: Precision | None = None
-) -> tuple[MLXActorCritic, ObservationSpace]:
-    """Load a checkpoint container, validating its world binding."""
-    checkpoint = read_container(path)
-    return assemble(checkpoint, precision=precision), checkpoint.space
-
-
 class MLXBackend:
     """`manabot.policy.protocol.Backend` for MLX.
 
@@ -139,24 +146,61 @@ class MLXBackend:
 
     name = "mlx"
 
+    @property
+    def rl(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.rl")
+
+    @property
+    def arrays(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.arrays")
+
+    @property
+    def learner(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.learner")
+
+    @property
+    def rollout(self) -> ModuleType:
+        return importlib.import_module("manabot.backends.mlx.rollout")
+
     def __init__(self, precision: Precision | None = None) -> None:
         if precision is not None:
             precision_dtype(precision)
         self.precision = precision
 
+    def load_policy(
+        self, path: str, *, bucketed_shapes: bool = False, live_tokens: bool = False
+    ) -> tuple[MLXActorCritic, ObservationSpace]:
+        if bucketed_shapes or live_tokens:
+            raise ValueError("MLX does not support bucketed or live-token inference")
+        checkpoint = read_container(path)
+        policy = assemble(checkpoint, precision=self.precision)
+        # read_container has already validated the world. Keep it on the loaded
+        # policy so simulation's common deck admission cannot silently bypass it.
+        policy.world_binding = json.loads(checkpoint.metadata["world_binding"])
+        record = json.loads(checkpoint.metadata.get("bc", "{}"))
+        semantic = record.get("value_semantic")
+        if semantic not in (None, "signed_outcome", "win_logit"):
+            raise ValueError("unsupported checkpoint value semantic")
+        policy.value_semantic = semantic
+        return policy, checkpoint.space
+
+    @staticmethod
+    def metadata(path: str) -> dict[str, Any]:
+        return read_metadata(path)
+
+    @staticmethod
+    def seed(seed: int) -> None:
+        mx.random.seed(seed)
+
     def load(self, checkpoint: PolicyCheckpoint) -> tuple[MLXActorCritic, Learner]:
         policy = assemble(checkpoint, precision=self.precision)
         return policy, Learner(policy, minibatch_rows=1)
 
-    def parameter_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
+    def parameter_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
         return mlx_parameters(canonical)
 
-    def gradient_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
-        return mlx_gradients(canonical)
+    def gradient_layout(self, canonical: ParameterArrays) -> dict[str, np.ndarray]:
+        return mlx_parameters(canonical)
 
 
 BACKEND = MLXBackend()

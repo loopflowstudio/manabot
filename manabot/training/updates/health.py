@@ -20,7 +20,7 @@ import manabot.backends.torch as torch_backend
 from manabot.backends.torch.rl import float64_operand
 from manabot.infra.profiler import Profiler
 from manabot.training.rollout.actions import PackedActions
-from manabot.training.updates.backend import Backend
+from manabot.training.updates.backend import UpdateBackend
 
 HEALTH_INTERVAL = 25
 # ActorCritic parameter prefixes that only the critic output reads, in every
@@ -131,7 +131,7 @@ class OptimizerHealth:
         iteration: int,
         profiler: Profiler | None = None,
         *,
-        backend: Backend = torch_backend,
+        backend: UpdateBackend = torch_backend,
     ) -> None:
         self.health = health
         self._check_objective: Callable[[Any], None] = backend.learner.check_objective

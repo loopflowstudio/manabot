@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.match import derive_seed, play_cell
 from manabot.eval.models import MatchRow
 from manabot.sim.replay import read_trace, replay_games
@@ -327,7 +328,9 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
             "action_abi_sha256": runtime["action_abi_sha256"],
         }
     )
-    paths, loaded_space = validate_registered_player(candidate, path)
+    paths, loaded_space = validate_registered_player(
+        candidate, path, backend=TORCH_BACKEND
+    )
     assert loaded_space.shapes == space.shapes
     rows, trace, receipt = play_cell(
         key=key,
@@ -347,4 +350,4 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     import pytest
 
     with pytest.raises(RuntimeError, match="SHA-256"):
-        validate_registered_player(candidate, path)
+        validate_registered_player(candidate, path, backend=TORCH_BACKEND)

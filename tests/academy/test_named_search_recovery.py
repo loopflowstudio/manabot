@@ -17,11 +17,11 @@ import torch
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
 import managym
 from managym.academy import server, trace as trace_store
 from managym.experience import ExperienceFrame, InteractionOffer
 from managym.experience_projection import decision_surface_view
+from tests.model.prepared_routes import device_input
 
 
 def _command(
@@ -168,12 +168,12 @@ def test_sozin_search_reconnect_retains_selection_visibility_and_stale_rejection
                 optimizer = torch.optim.SGD(model.parameters(), lr=0.5)
                 model.zero_grad()
                 torch.nn.functional.cross_entropy(
-                    model(admit_observation(model, obs))[0], torch.tensor([wanted])
+                    model(device_input(model, obs))[0], torch.tensor([wanted])
                 ).backward()
                 optimizer.step()
                 selected = int(
                     model.get_action_and_value(
-                        admit_observation(model, obs), deterministic=True
+                        device_input(model, obs), deterministic=True
                     )[0]
                 )
                 if selected == wanted:

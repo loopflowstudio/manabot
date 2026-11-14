@@ -6,8 +6,10 @@ the batched sampler (valid-action guarantees), the K-stream vector driver
 """
 
 import numpy as np
+import pytest
 import torch
 
+from manabot.backends.torch.arrays import on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -124,6 +126,43 @@ class TestBatchedSampler:
             assert actions.shape == (8,)
             chosen_valid = buffers["actions_valid"][rows, actions]
             assert (chosen_valid > 0).all(), f"invalid action for {kwargs}"
+
+    @pytest.mark.parametrize(
+        "temperature,deterministic", [(1.0, False), (0.3, False), (1.0, True)]
+    )
+    def test_backend_sampling_preserves_actions_and_rng(
+        self, temperature: float, deterministic: bool
+    ) -> None:
+        torch.set_num_threads(1)
+        torch.manual_seed(17)
+        agent = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=8))
+        sampler = BatchedSampler(
+            agent, temperature=temperature, deterministic=deterministic
+        )
+        buffers = self._obs_batch(3)
+        rows = np.arange(3)
+        prepared = on_device(
+            agent.prepare(
+                {key: buffers[key] for key in agent.observation_space.shapes},
+                inference=True,
+            ),
+            "cpu",
+        )
+        state = torch.random.get_rng_state()
+        with torch.inference_mode():
+            logits, _ = agent(prepared)
+            expected = (
+                logits.argmax(-1)
+                if deterministic
+                else torch.multinomial(
+                    torch.softmax(logits / temperature, dim=-1), 1
+                ).squeeze(-1)
+            )
+        expected_state = torch.random.get_rng_state()
+        torch.random.set_rng_state(state)
+        actual = sampler.select(buffers, rows)
+        np.testing.assert_array_equal(actual, expected.numpy())
+        assert torch.equal(torch.random.get_rng_state(), expected_state)
 
     def test_random_controller_valid(self):
         buffers = self._obs_batch()

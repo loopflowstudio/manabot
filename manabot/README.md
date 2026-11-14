@@ -133,7 +133,7 @@ from pathlib import Path
 from manabot.infra.identity import file_sha256
 from manabot.sim.search.flat_mc import make_player
 
-checkpoint = Path(".runs/policy.pt")  # Your existing compatible checkpoint.
+checkpoint = Path(".runs/policy.safetensors")  # Your existing compatible checkpoint.
 player, observation_space = make_player(
     {
         "kind": "local_update",
@@ -336,7 +336,8 @@ challenger workflow records the native world identity and current rules,
 content, Lesson-pool and tensor identities with each run. Historical Learn
 certification limits remain in the [Learn record](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md).
 
-`manabot sim` accepts `random`, `default`, a local policy `.pt` path, or an
+`manabot sim` accepts `random`, `default`, a local policy file (`.safetensors`,
+or a `.pt` saved by an earlier revision), or an
 Etude checkpoint-record `.json` path for each player. Checkpoint records resolve
 exact digest-bound local/S3 artifacts before normal world and architecture
 admission. Simulation results are recorded locally through Etude.
@@ -633,8 +634,9 @@ training, experiment scheduling or reports, even when loading a frozen model.
 The package-boundary tests import every simulation module and play a checkpoint
 with those packages blocked.
 
-- `policy/`: the framework-free policy contract: host preparation, bucket
-  selection, the safetensors checkpoint container and the backend Protocols.
+- `policy/`: the framework-free policy contract: observation admission, bucket
+  trimming, host preparation of the `Prepared` batch every backend's forward
+  reads, the safetensors checkpoint container and the backend Protocols.
   It imports no array framework ([policy contract](policy/README.md)).
 - `backends/<framework>/`: one folder per array framework with the same files
   (`policy.py`, `rl.py`, `learner.py`, `rollout.py`, `arrays.py`,
@@ -642,11 +644,13 @@ with those packages blocked.
   `backends/torch/` is the reference and `backends/parity.py` checks the others
   against it ([backends](backends/README.md)).
   `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
-  files: `save_checkpoint` writes a `.pt` file, whose serialized historical
-  keys remain unchanged, and `load_checkpoint` reads either that or the shared
-  container.
-- `model/`: the torch model's components, observation admission and
-  inference preparation, architecture receipts and world binding.
+  files: `save_checkpoint` writes the shared container (`.safetensors`), and
+  `load_checkpoint` reads that or a `.pt` file saved by an earlier revision,
+  whose serialized keys keep their meaning.
+  Library code receives a backend and never imports one; experiments,
+  scripts, recipe entry points and the CLI choose it
+  ([who chooses a backend](backends/README.md#who-chooses-a-backend)).
+- `model/`: architecture receipts, the checkpoint catalog and world binding.
 - `sim/`: registered players, bounded game execution, replay, native card evidence,
   search and batched games.
 - `training/`: regime execution, seat-routed collection, learning rules,
@@ -658,8 +662,8 @@ with those packages blocked.
 - `training/updates/`: an update learns from one collected batch. The damped
   policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
   and their host-side pieces: numerical health and selection diagnostics.
-  Each takes a backend module as its first argument and does its array math
-  through it; recipes pass `manabot.backends.torch`
+  Each takes a backend object or module as its first argument and does its array math
+  through it; recipe entry points pass `manabot.backends.torch`
   ([training loops](../docs/training-loop.md#the-updates-we-maintain)).
 - `training/loops/`: a loop keeps playing and updating until it is done; a
   one-page example (`minimal.py`).
@@ -710,7 +714,7 @@ coordinates. See [shared evaluation inference](../docs/evaluation.md) for
 admission, real Perf receipts and the predeclared local calibration command.
 
 A quick local checkpoint comparison needs no TrainingRun or cloud setup:
-`uv run python -m manabot.eval.local --checkpoint policy.pt --opponent heuristic --deal-seed 101 --out .runs/local-check --seconds 300`.
+`uv run python -m manabot.eval.local --checkpoint policy.safetensors --opponent heuristic --deal-seed 101 --out .runs/local-check --seconds 300`.
 The [local evaluation API and CLI](../docs/evaluation.md)
 share arena admission, bounded inference, Commands, replay and Perf receipts with
 monitoring and managed comparisons. Pass another local checkpoint as `--opponent`

@@ -15,7 +15,6 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import (
     Family,
     decision_case,
@@ -24,6 +23,7 @@ from manabot.verify.action_cases import (
     initial,
     reorder_offers,
 )
+from tests.model.prepared_routes import device_input
 
 
 @pytest.fixture(autouse=True)
@@ -62,12 +62,12 @@ def test_policy_choice_can_learn_either_preference(
         ),
     )
     # Erasing precisely the repaired information reproduces the forced tie.
-    logits, _ = agent(admit_observation(agent, identity_removed(case)))
+    logits, _ = agent(device_input(agent, identity_removed(case)))
     torch.testing.assert_close(
         logits[0, candidates[0]], logits[0, candidates[1]], rtol=0, atol=0
     )
     optimizer = torch.optim.Adam(agent.parameters(), lr=0.02)
-    admitted = admit_observation(agent, obs)
+    admitted = device_input(agent, obs)
     preferred = candidates[preference]
     for _ in range(60):
         logits, _ = agent(admitted)
@@ -79,7 +79,7 @@ def test_policy_choice_can_learn_either_preference(
         assert float(logits.softmax(-1)[0, preferred]) > 0.95
         count = int(obs["actions_valid"].sum())
         order = torch.arange(count - 1, -1, -1)
-        actual, _ = agent(admit_observation(agent, reorder_offers(obs, order)))
+        actual, _ = agent(device_input(agent, reorder_offers(obs, order)))
         torch.testing.assert_close(actual[:, :count], logits[:, order])
 
 
@@ -95,20 +95,19 @@ def test_generic_definition_rejects_unadmitted_ids(bad: float, key: str) -> None
         ObservationSpace(), ModelConfig(hidden_dim=8, num_attention_heads=2)
     )
     with pytest.raises(ValueError, match="unadmitted card definition"):
-        admit_observation(agent, obs)
+        device_input(agent, obs)
 
 
 def test_generic_identity_padding_and_state_roundtrip(tmp_path: Path) -> None:
     obs = decision_case("land").observation
     spec = ModelConfig(hidden_dim=8, num_attention_heads=2)
     agent = ActorCritic(ObservationSpace(), spec)
-    assert not agent._generic_definitions(torch.zeros(2, 3)).any()
     path = tmp_path / "weights.pt"
     torch.save(agent.state_dict(), path)
     restored = ActorCritic(ObservationSpace(), spec)
     restored.load_state_dict(torch.load(path, weights_only=True))
     with torch.no_grad():
-        admitted = admit_observation(agent, obs)
+        admitted = device_input(agent, obs)
         for expected, actual in zip(agent(admitted), restored(admitted), strict=True):
             torch.testing.assert_close(actual, expected, rtol=0, atol=0)
 

@@ -7,12 +7,12 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch._shared_effects import SharedEffectEncoder
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
-from manabot.model.shared_effects import SharedEffectEncoder, admit_shared_effects
+from manabot.policy import admission
 from manabot.recipes.local import local_smoke
 from manabot.sim.rollout import BatchedSampler
 from manabot.sim.search.value import ValueScorer
@@ -22,6 +22,7 @@ from manabot.verify.action_cases import reorder_objects
 from manabot.verify.representation import shared_effect_root
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.prepared_routes import device_input, effect_rows, record_vocabulary
 
 
 def _batch(values: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
@@ -41,7 +42,7 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     )
     assert headers[0, 0, 16] == 10
     headers[0, 0, 16] = 1
-    one = encoder(headers, details, members, objects) - objects
+    one = encoder(effect_rows(headers, details, members, objects), objects) - objects
     one.sum().backward()
     gradients = {
         name: parameter.grad.clone()
@@ -54,7 +55,7 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     encoder.zero_grad(set_to_none=True)
     headers[0, 0, 16] = 2
     members[0, 1, 0] = members[0, 0, 0]
-    two = encoder(headers, details, members, objects) - objects
+    two = encoder(effect_rows(headers, details, members, objects), objects) - objects
     torch.testing.assert_close(two, 2 * one)
     two.sum().backward()
     for name, parameter in encoder.named_parameters():
@@ -65,11 +66,17 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     details[:, 2:] = float("nan")
     members[:, 2:] = float("nan")
     torch.testing.assert_close(
-        encoder(headers, details, members, objects) - objects, two
+        encoder(effect_rows(headers, details, members, objects), objects) - objects, two
     )
     headers[0, 0, 16] = 2049
     with pytest.raises(ValueError, match="CSR"):
-        admit_shared_effects(headers, details, members, objects.shape[1], None)
+        admission.shared_effects(
+            (headers).detach().cpu().numpy(),
+            (details).detach().cpu().numpy(),
+            (members).detach().cpu().numpy(),
+            objects.shape[1],
+            record_vocabulary(None),
+        )
 
 
 def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
@@ -86,10 +93,10 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
         ),
     )
     values = _batch(space.encode(obs))
-    logits, value = model(admit_observation(model, values))
+    logits, value = model(device_input(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     reordered_logits, reordered_value = model(
-        admit_observation(model, reorder_objects(values))
+        device_input(model, reorder_objects(values))
     )
     torch.testing.assert_close(reordered_logits, logits)
     torch.testing.assert_close(reordered_value, value)
@@ -108,8 +115,8 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
     model.eval()
     with torch.no_grad():
         for expected, actual in zip(
-            model(admit_observation(model, values)),
-            restored(admit_observation(restored, values)),
+            model(device_input(model, values)),
+            restored(device_input(restored, values)),
             strict=True,
         ):
             torch.testing.assert_close(expected, actual)
@@ -140,7 +147,13 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
     encoder = SharedEffectEncoder(8)
     objects = torch.randn(1, 202, 8, requires_grad=True)
     expected = encoder(
-        values["effects"], values["effect_details"], values["effect_members"], objects
+        effect_rows(
+            values["effects"],
+            values["effect_details"],
+            values["effect_members"],
+            objects,
+        ),
+        objects,
     )
     headers, members = values["effects"].clone(), values["effect_members"].clone()
     for column in (10, 12):
@@ -148,7 +161,10 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
         headers[..., column][live] = 203 - headers[..., column][live]
     live = members[..., 0] > 0
     members[..., 0][live] = 203 - members[..., 0][live]
-    actual = encoder(headers, values["effect_details"], members, objects.flip(1))
+    actual = encoder(
+        effect_rows(headers, values["effect_details"], members, objects.flip(1)),
+        objects.flip(1),
+    )
     torch.testing.assert_close(actual, expected.flip(1))
     expected.square().sum().backward()
     assert objects.grad is not None and torch.isfinite(objects.grad).all()
@@ -188,17 +204,19 @@ def test_batched_effect_routing_matches_independent_gradients(device: str) -> No
     members[2, 1, 0] = members[2, 0, 0]
     objects = torch.randn(3, 202, 8, device=device, requires_grad=True)
     independent_objects = objects.detach().clone().requires_grad_()
-    headers.requires_grad_()
-    independent_headers = headers.detach().clone().requires_grad_()
+    independent_headers = headers.detach().clone()
     encoder = SharedEffectEncoder(8).to(device)
     independent = deepcopy(encoder)
-    actual = encoder(headers, details, members, objects)
+    actual = encoder(effect_rows(headers, details, members, objects), objects)
     expected = torch.cat(
         [
             independent(
-                independent_headers[i : i + 1],
-                details[i : i + 1],
-                members[i : i + 1],
+                effect_rows(
+                    independent_headers[i : i + 1],
+                    details[i : i + 1],
+                    members[i : i + 1],
+                    independent_objects[i : i + 1],
+                ),
                 independent_objects[i : i + 1],
             )
             for i in range(3)
@@ -208,7 +226,6 @@ def test_batched_effect_routing_matches_independent_gradients(device: str) -> No
     actual.square().sum().backward()
     expected.square().sum().backward()
     torch.testing.assert_close(objects.grad, independent_objects.grad)
-    torch.testing.assert_close(headers.grad, independent_headers.grad)
     for parameter, reference in zip(
         encoder.parameters(), independent.parameters(), strict=True
     ):
@@ -220,14 +237,17 @@ def test_batched_effect_routing_matches_independent_gradients(device: str) -> No
     oracle = deepcopy(encoder).cpu().double()
     oracle.zero_grad(set_to_none=True)
     oracle_objects = objects.detach().cpu().double().requires_grad_()
-    oracle_headers = headers.detach().cpu().double().requires_grad_()
+    oracle_headers = headers.detach().cpu().double()
     oracle_details, oracle_members = details.cpu().double(), members.cpu().double()
     precise = torch.cat(
         [
             oracle(
-                oracle_headers[i : i + 1],
-                oracle_details[i : i + 1],
-                oracle_members[i : i + 1],
+                effect_rows(
+                    oracle_headers[i : i + 1],
+                    oracle_details[i : i + 1],
+                    oracle_members[i : i + 1],
+                    oracle_objects[i : i + 1],
+                ),
                 oracle_objects[i : i + 1],
             )
             for i in range(3)
@@ -240,15 +260,13 @@ def test_batched_effect_routing_matches_independent_gradients(device: str) -> No
             value.detach().cpu().double(), reference, rtol=2e-5, atol=2e-5
         )
 
-    for output, source_objects, source_headers, model in (
-        (actual, objects, headers, encoder),
-        (expected, independent_objects, independent_headers, independent),
+    for output, source_objects, model in (
+        (actual, objects, encoder),
+        (expected, independent_objects, independent),
     ):
         compare_precise(output, precise)
         assert source_objects.grad is not None and oracle_objects.grad is not None
-        assert source_headers.grad is not None and oracle_headers.grad is not None
         compare_precise(source_objects.grad, oracle_objects.grad)
-        compare_precise(source_headers.grad, oracle_headers.grad)
         for parameter, reference in zip(
             model.parameters(), oracle.parameters(), strict=True
         ):

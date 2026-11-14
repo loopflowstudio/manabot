@@ -33,10 +33,14 @@ it. Its learning record selects the update; both live in
 - **PPO self-play** (`Learning`, `update_iteration` in
   `manabot.training.updates.ppo`): the control. Shuffled minibatches, advantage
   normalization and filtering, scalar value targets and optional reference
-  and collection KL penalties. Use it as the baseline a new method must beat.
+  and collection KL penalties. Torch prepares one host minibatch ahead while
+  the current minibatch trains, with device work on the calling thread; the
+  epoch joins its preparation worker even if an update fails. Use PPO as the
+  baseline a new method must beat.
 
-Both are written once and take the backend as their first argument: the
-module `manabot.backends.torch`, not an object to configure. Then come a
+Both are written once and take the backend as their first argument: a
+configured backend from `manabot.backends.resolve` or the module
+`manabot.backends.torch`. Then come a
 `Learner` (`manabot.backends.torch.learner`), which holds the model, its Adam
 optimizer, the precision and a profiler, and a learning record
 (`manabot.training.regime`). Call them directly to reproduce a recipe's
@@ -76,8 +80,8 @@ of rows and `A` for padded legal offers.
 | Piece | What it does |
 | --- | --- |
 | `SeatRoutedCollector` (`manabot.training.rollout.collection`) | Owns native game streams. `collect(agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close()` stops the streams. |
-| `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (an end belongs to that row), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping an unfinished tail, and `outcome_probabilities` `[T,E,3]` for a categorical critic. `observations(indexes)` materializes flat rows as an observation dict and the full behavior distribution. |
-| `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` and an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
+| `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (an end belongs to that row), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping an unfinished tail, and `outcome_probabilities` `[T,E,3]` for a categorical critic. `observations(indexes)` materializes flat rows as NumPy observation buffers and the full behavior distribution. |
+| `AdmittedRollout(agent, batch)` (`manabot.backends.torch.rollout`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` prepares learner rows on the host, independently of autograd mode, and returns the `Prepared` batch on `device` with an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `legal(prepared)` is those rows' legal-action input `[B,A]`. `minibatches(order, size, device)` returns the same learner preparation with one host batch prefetched. `next_observation(device)` returns inference-prepared bootstrap rows, one per column, independently of autograd mode. The batch must not change afterwards. |
 
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
@@ -92,16 +96,25 @@ collector is given a `GameErrorPolicy`
 
 ### The policy and its terms
 
-`ActorCritic.forward(obs)` returns logits and a signed expected value `[B]`;
-`forward_distribution(obs)` returns the raw critic output instead: `[B,3]`
-logits for `value_kind="categorical_wdl"`, `[B,1]` for scalar.
+The policy reads a `Prepared` batch (`manabot.policy.prepare`): NumPy
+observation buffers that the policy's `prepare` has checked and indexed on
+the host, moved to the model's device. `AdmittedRollout.rows` returns one for
+learner rows; elsewhere build it with `on_device(agent.prepare(obs), device)`
+(`manabot.backends.torch.arrays`). `ActorCritic.forward(prepared)` returns
+logits and a signed expected value `[B]`; `forward_distribution(prepared)`
+returns the raw critic output instead: `[B,3]` logits for
+`value_kind="categorical_wdl"`, `[B,1]` for scalar. An observation dictionary
+passed to either raises `TypeError`. For NumPy in and out without gradients,
+`agent.evaluate(agent.prepare(obs, inference=True))` returns logits and values
+in the layout simulation uses
+([backends](../manabot/backends/README.md#the-torch-backend)).
 
 | Piece | Module | What it does |
 | --- | --- | --- |
-| `legal_mask(obs["actions_valid"])` | `backend.rl` | The legal offers `[B,A]`, refusing a corrupt mask. |
+| `legal_mask(admitted.legal(prepared))` | `backend.rl` | The legal offers `[B,A]`, refusing a corrupt mask. |
 | `policy_logs(logits, valid)` | `backend.rl` | Log likelihoods `[B,A]`, `-inf` off the legal mask; every policy term reads these. |
 | `action_logs(logs, actions)` | `backend.rl` | Each row's entry at its sampled action `[B]`. |
-| `reference_distribution(obs, kind)` | `manabot.policy.prepare` | The magnet a reverse KL pulls toward, in NumPy `[B,A]` float32 from `actions_valid` and `actions`: `"uniform"` over legal offers or `"action_type_uniform"`. `reference_logs(reference, valid)` (`backend.rl`) is its log, zero off the legal mask. |
+| `reference_distribution(obs, kind)` | `manabot.policy.prepare` | The magnet a reverse KL pulls toward, in NumPy `[B,A]` float32 from the `actions_valid` and `actions` buffers of the NumPy observation rows: `"uniform"` over legal offers or `"action_type_uniform"`. `reference_logs(reference, valid)` (`backend.rl`) is its log, zero off the legal mask. |
 | `damped_policy_loss(logits, actions, advantages, behavior_logs, reference, valid, *, clip, collection_kl, tau)` | `backend.rl` | The damped policy objective per row: the clipped surrogate plus both reverse KL penalties. |
 
 `backend.rl` is `manabot.backends.torch.rl` for the PyTorch model.
@@ -262,7 +275,7 @@ def train(
                 order = torch.as_tensor(rng.permutation(len(actions)))
                 for rows in order.split(256):
                     obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
-                    valid = rl.legal_mask(obs["actions_valid"])
+                    valid = admitted.legal(obs)
                     logits, value = agent(obs)
                     logs = rl.policy_logs(logits, valid)
                     chosen = rl.action_logs(logs, actions[rows])
@@ -286,14 +299,15 @@ uv run python -c "from manabot.training.loops.minimal import train; train(3)"
 
 Three iterations take a few seconds on a laptop CPU and return a policy;
 they teach it almost nothing. Keep a run with `save_checkpoint(policy,
-policy.observation_space, "policy.pt", player_configs=Match().to_rust())`
+policy.observation_space, "policy.safetensors",
+player_configs=Match().to_rust())`
 from `manabot.backends.torch.checkpoint`, which binds it to the decks it
 played, as a recipe's checkpoints are bound to their setups;
-`load_checkpoint("policy.pt")` returns the policy and its observation
-space. `load_checkpoint` also reads the
-[shared container](../manabot/backends/README.md#convert-a-pytorch-checkpoint) that
-other backends load; `uv run python -m manabot.backends.convert` writes one from a
-`.pt` file. `tests/training/test_minimal_loop.py`
+`load_checkpoint("policy.safetensors")` returns the policy and its
+observation space. The file is the
+[shared container](../manabot/backends/README.md#policy-checkpoints) every
+backend loads; `load_checkpoint` also reads `.pt` policies saved by earlier
+revisions. `tests/training/test_minimal_loop.py`
 runs the loop on two streams and a tiny model through the `model` argument,
 then saves and reloads its checkpoint.
 

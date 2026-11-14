@@ -12,13 +12,14 @@ from __future__ import annotations
 import numpy as np
 
 from manabot.env.env import Env
+from manabot.env.observation import ObservationBuffers
 import managym
 
 
 class ScriptedGreedyPlayer:
     """Deterministic viewer-safe baseline over the current offered actions."""
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         del obs
         raw = env.last_raw_obs
         actions = list(raw.action_space.actions)
@@ -57,7 +58,7 @@ class RandomMatchupPlayer:
     def __init__(self, seed: int = 0) -> None:
         self._rng = np.random.default_rng(seed)
 
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
+    def act(self, env: Env, obs: ObservationBuffers) -> int:
         del env
         valid = np.flatnonzero(obs["actions_valid"] > 0)
         if len(valid) == 0:

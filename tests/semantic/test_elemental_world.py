@@ -11,7 +11,11 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    BACKEND as TORCH_BACKEND,
+    load_checkpoint,
+    save_checkpoint,
+)
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
@@ -22,7 +26,6 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.admission import admit_observation
 from manabot.model.catalog import inspect_checkpoint
 from manabot.model.world import (
     checkpoint_world,
@@ -38,6 +41,7 @@ from managym.academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_
 from managym.academy.server import GameSession, _parse_game_config
 from managym.experience import LegacyPermanentView
 from managym.experience_projection import describe_actions, serialize_observation
+from tests.model.prepared_routes import device_input
 
 PACK = "elemental-world-v2"
 
@@ -142,7 +146,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
     }
-    policy, value = agent(admit_observation(agent, tensors))
+    policy, value = agent(device_input(agent, tensors))
     legal = tensors["actions_valid"].bool()
     assert torch.isfinite(policy[legal]).all()
     assert torch.isfinite(value).all()
@@ -157,11 +161,11 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     assert not info["action_space_truncated"]
     path = tmp_path / "elemental.pt"
     save_checkpoint(agent, space, path, player_configs=env.match.to_rust())
-    summary = inspect_checkpoint(path)
+    summary = inspect_checkpoint(path, backend=TORCH_BACKEND)
     assert summary.compatible
     assert len(summary.setups) == 10
     restored, _ = load_checkpoint(str(path))
-    restored_policy, restored_value = restored(admit_observation(restored, tensors))
+    restored_policy, restored_value = restored(device_input(restored, tensors))
     torch.testing.assert_close(restored_policy, policy)
     torch.testing.assert_close(restored_value, value)
 

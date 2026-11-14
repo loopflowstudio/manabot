@@ -22,6 +22,7 @@ from typing import Callable, Literal
 from pydantic import Field, model_validator
 import torch
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.eval.monitor import MonitorProtocol, MonitorResult
 from manabot.experiment.checkpoint_evaluation import (
     Checkpoint,
@@ -511,6 +512,7 @@ def main() -> None:
         args.job.parent / "evaluation",
         protocol=job.protocol,
         concurrent_activity="campaign learner may overlap; one evaluator CPU thread; no contention correction",
+        backend=TORCH_BACKEND,
     )
     if result.status != "completed":
         raise SystemExit(1)

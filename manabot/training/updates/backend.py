@@ -1,13 +1,13 @@
 """What an update calls on its backend, as Protocols.
 
-The updates are written once over a backend module (`manabot.backends.torch`,
-`manabot.backends.mlx`) passed as an argument. `Backend` is that module's
+The updates are written once over a configured backend or a directly imported
+backend module passed as an argument. `UpdateBackend` is that module's
 surface: its `rl`, `arrays`, `learner` and `rollout` files, each a Protocol a
 module satisfies with plain functions. `Learner` and `Policy` are the objects
-an update steps and runs forward. `manabot.policy.protocol` is the narrower
-NumPy surface parity compares; `Learner` extends its `BackendLearner`.
+an update steps and runs forward. `manabot.policy.protocol.Backend` also
+provides loading and NumPy parity; `Learner` extends its `BackendLearner`.
 
-Both backends satisfy `Backend`. The PPO update needs `PPOBackend`, which adds
+Both backends satisfy `UpdateBackend`. The PPO update needs `PPOBackend`, which adds
 standardization, top-count selection and a policy `__call__`/`get_value`; only
 torch provides it. A categorical critic needs `CategoricalRL` (torch only);
 `categorical_rl` narrows to it and refuses a backend without one.
@@ -21,14 +21,16 @@ indexing and reductions on it and reads it through `arrays.to_numpy` or
 only handed back to it.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager
 from typing import Any, Literal, Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
 
+from manabot.env.observation import ObservationBuffers
 from manabot.infra.profiler import Profiler
+from manabot.policy.prepare import Prepared
 from manabot.policy.protocol import BackendLearner
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
@@ -38,7 +40,7 @@ from manabot.training.rollout.collection import RolloutBatch
 # backend that produced a device or observation batch reads it.
 type Array = Any
 type Device = Any
-type Observations = Any
+type Observations = Prepared[Array]
 
 type FilterKind = Literal["top_count", "quantile"]
 
@@ -209,6 +211,21 @@ class RolloutFile(Protocol):
     def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], AdmittedRollout]: ...
 
 
+class PPOAdmittedRollout(AdmittedRollout, Protocol):
+    def minibatches(
+        self, order: NDArray[np.int64], size: int, device: Device
+    ) -> AbstractContextManager[
+        Iterator[tuple[NDArray[np.int64], Observations, ActionRows]]
+    ]:
+        """Ordered minibatches; exit releases any preparation worker."""
+        ...
+
+
+class PPORolloutFile(RolloutFile, Protocol):
+    @property
+    def AdmittedRollout(self) -> Callable[[Any, RolloutBatch], PPOAdmittedRollout]: ...
+
+
 # -- policy and learner --------------------------------------------------------
 
 
@@ -223,6 +240,10 @@ class Policy(Protocol):
 
     @property
     def config(self) -> PolicyConfig: ...
+
+    def prepare(
+        self, obs: ObservationBuffers, *, inference: bool = False
+    ) -> Prepared[np.ndarray]: ...
 
     def forward_distribution(self, obs: Observations, /) -> tuple[Array, Array]: ...
 
@@ -269,7 +290,7 @@ class PPOLearner(Learner, Protocol):
 # -- the backend module --------------------------------------------------------
 
 
-class Backend(Protocol):
+class UpdateBackend(Protocol):
     """A backend module as the damped update takes it."""
 
     @property
@@ -285,6 +306,9 @@ class Backend(Protocol):
     def rollout(self) -> RolloutFile: ...
 
 
-class PPOBackend(Backend, Protocol):
+class PPOBackend(UpdateBackend, Protocol):
     @property
     def rl(self) -> PPORL: ...
+
+    @property
+    def rollout(self) -> PPORolloutFile: ...

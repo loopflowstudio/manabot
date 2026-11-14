@@ -17,7 +17,7 @@ from pydantic import JsonValue
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.card_capture import CapturedCards
 from manabot.env.match import Match as EnvMatch
@@ -266,7 +266,7 @@ def test_audit_preserves_card_position_before_game_seat_column(
         return result
 
     monkeypatch.setattr(evaluation, "play_card_match", play)
-    evaluate_cards(spec, tmp_path)
+    evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
     with card_db(spec.experiment, tmp_path) as db:
         result = audit(db, tmp_path)
     assert result.games == 8
@@ -421,7 +421,7 @@ def test_execution_rejects_invalid_participant_schedule(
 def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
     spec = verification_spec(8)
     source = tmp_path / "source"
-    result = evaluate_cards(spec, source)
+    result = evaluate_cards(spec, source, backend=TORCH_BACKEND)
     assert result.played == 1
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
@@ -441,7 +441,7 @@ def test_native_evaluation_resumes_delivers_and_audits(tmp_path: Path) -> None:
         # Capture leaves every command, frame, state and outcome unchanged.
         game = load_game(db, source, run, game_id)
         assert capture_verified_game(game.trace) == game
-    resumed = evaluate_cards(spec, source)
+    resumed = evaluate_cards(spec, source, backend=TORCH_BACKEND)
     assert (resumed.played, resumed.skipped) == (0, 1)
     # Ordinary Etude delivery carries the evidence with the tables.
     delivered = tmp_path / "delivered"
@@ -468,7 +468,7 @@ def test_all_excluded_games_have_no_card_rates(
         "play_card_match",
         _fixture_play(runtime, {leg: {"outcome": outcome} for leg in range(8)}),
     )
-    evaluate_cards(spec, tmp_path)
+    evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
@@ -530,7 +530,7 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
 
     monkeypatch.setattr(evaluation, "play_card_match", play)
     with pytest.raises(Exception, match="match_failed"):
-        evaluate_cards(spec, tmp_path)
+        evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
     selection = CardSelection(
         experiment=spec.experiment, subjects=(spec.players[0].player_id,)
     )
@@ -539,7 +539,7 @@ def test_failed_games_are_exclusions_and_failed_matches_are_counted(
     # The crash and timeout leave six eligible games of their deal, not zero.
     assert data.games == 6 and data.excluded == {"crash": 1, "timeout": 1}
     assert data.failed_matches == 1
-    retried = evaluate_cards(spec, tmp_path)
+    retried = evaluate_cards(spec, tmp_path, backend=TORCH_BACKEND)
     assert (retried.played, retried.skipped) == (1, 1)
     with card_db(spec.experiment, tmp_path) as db:
         data = card_data(db, selection)
@@ -571,6 +571,7 @@ def test_runs_pool_into_their_experiment_and_filters_narrow_them(
                 update={"run": run, "deals": deals, "experiment": experiment}
             ),
             tmp_path,
+            backend=TORCH_BACKEND,
         )
     subject = spec.players[0].player_id
     with card_db(spec.experiment, tmp_path) as db:
@@ -767,7 +768,7 @@ def test_tiny_checkpoint_match_captures_verified_native_facts(tmp_path: Path) ->
             "checkpoints": {candidate.player_id: path},
         }
     )
-    evaluate_cards(spec, tmp_path / "evaluation")
+    evaluate_cards(spec, tmp_path / "evaluation", backend=TORCH_BACKEND)
     with card_db(spec.experiment, tmp_path / "evaluation") as db:
         # The checkpoint digest selects the subject, as an artifact would.
         data = card_data(

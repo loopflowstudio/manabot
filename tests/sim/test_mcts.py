@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
@@ -182,6 +182,7 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
             "device": "cpu",
         },
         seed=43,
+        backend=TORCH_BACKEND,
     )
 
     assert isinstance(player, DeterminizedPuctPlayer)
@@ -197,6 +198,7 @@ def test_agent_puct_player_spec_loads_a_frozen_cpu_checkpoint(
                 "device": "mps",
             },
             seed=43,
+            backend=TORCH_BACKEND,
         )
 
 

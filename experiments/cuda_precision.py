@@ -39,7 +39,6 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
-import inspect
 import json
 import math
 import os
@@ -53,6 +52,8 @@ from etude.launch.records import Job, Run
 from pydantic import BaseModel, ConfigDict
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device, to_numpy
+from manabot.backends.torch.policy import PolicyInference
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.training.regime import DampedPolicyLearning, Precision
@@ -163,71 +164,9 @@ class _Captured(TypedDict):
 
 @contextmanager
 def _capturing(folder: Path, probe: Probe) -> Iterator[None]:
-    """Keep initial weights, collection observations and learner loss inputs."""
-    from manabot.backends.torch.policy import ActorCritic
-    from manabot.model.inference import PreparedObservation
-    from manabot.training.updates.health import OptimizerHealth
-
-    (folder / "collection").mkdir(parents=True, exist_ok=True)
-    (folder / "learner").mkdir(parents=True, exist_ok=True)
-    forward = ActorCritic.forward_distribution
-    check = OptimizerHealth.check
-    counts = {"collect": 0, "kept": 0, "learn": 0}
-
-    def hooked_forward(
-        self: ActorCritic, obs: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        if not (folder / "initial.pt").exists():
-            torch.save(
-                {k: v.detach().cpu().clone() for k, v in self.state_dict().items()},
-                folder / "initial.pt",
-            )
-        if not torch.is_grad_enabled() and isinstance(obs, PreparedObservation):
-            if (
-                counts["collect"] % probe.collect_every == 0
-                and counts["kept"] < probe.collect_keep
-            ):
-                torch.save(
-                    {k: v.detach().cpu().clone() for k, v in obs.items()},
-                    folder / "collection" / f"{counts['kept']:03d}.pt",
-                )
-                counts["kept"] += 1
-            counts["collect"] += 1
-        return forward(self, obs)
-
-    def hooked_check(self: OptimizerHealth, loss: torch.Tensor) -> None:
-        check(self, loss)
-        step = counts["learn"]
-        counts["learn"] += 1
-        if not probe.learn_from <= step < probe.learn_from + probe.learn_keep:
-            return
-        frame = inspect.currentframe()
-        assert frame is not None and frame.f_back is not None
-        local = frame.f_back.f_locals
-        if frame.f_back.f_code.co_name != "update_damped_iteration":
-            raise RuntimeError("the captured minibatch is not the damped learner's")
-        indexes, targets = local["indexes"], local["targets"]
-        payload: _Captured = {
-            "obs": {k: v.detach().cpu().clone() for k, v in local["obs"].items()},
-            "actions": local["actions"][indexes].detach().cpu().clone(),
-            "advantages": targets.advantages[indexes].detach().cpu().clone(),
-            "value_targets": targets.values[indexes].detach().cpu().clone(),
-            "behavior_logs": local["behavior_logs"].detach().cpu().clone(),
-            "actor_mask": local["actor_mask"].detach().cpu().clone(),
-            "learning": local["learning"].model_dump(mode="json"),
-            "tau": float(local["tau"]),
-            "lr": float(local["learner"].optimizer.param_groups[0]["lr"]),
-        }
-        del local, frame
-        torch.save(payload, folder / "learner" / f"{step:03d}.pt")
-
-    ActorCritic.forward_distribution = hooked_forward  # type: ignore[method-assign]
-    OptimizerHealth.check = hooked_check  # type: ignore[method-assign]
-    try:
-        yield
-    finally:
-        ActorCritic.forward_distribution = forward  # type: ignore[method-assign]
-        OptimizerHealth.check = check  # type: ignore[method-assign]
+    raise RuntimeError(
+        "This frozen profiling path patches retired Torch dictionary inputs; run it from revision ef28f3a58."
+    )
 
 
 @contextmanager
@@ -373,14 +312,22 @@ def _agent(
 
 
 def _minibatches(folder: Path, agent: Any) -> list[Minibatch]:
-    from manabot.model.admission import admit_observation
 
     found = []
     for path in sorted((folder / "learner").glob("*.pt")):
         payload: _Captured = torch.load(path, weights_only=False)
         found.append(
             Minibatch(
-                obs=admit_observation(agent, payload["obs"]),
+                obs=on_device(
+                    agent.prepare(
+                        {
+                            key: to_numpy(value)
+                            for key, value in (payload["obs"]).items()
+                        },
+                        inference=not torch.is_grad_enabled(),
+                    ),
+                    device_of(agent),
+                ),
                 actions=payload["actions"],
                 advantages=payload["advantages"],
                 value_targets=payload["value_targets"],
@@ -406,7 +353,9 @@ def _infer(
     from manabot.backends.torch.learner import forward_precision
     from manabot.backends.torch.rl import legal_mask, policy_logs, require
 
-    prepared = scope.prepare(obs)
+    prepared = scope.prepare(
+        {key: value.detach().cpu().numpy() for key, value in (obs).items()}
+    )
     with torch.no_grad():
         with forward_precision(precision, scope.device):
             logits, value = agent.forward_distribution(prepared)
@@ -445,56 +394,8 @@ class _Loss:
 
 
 def _loss(learner: Any, batch: Minibatch) -> _Loss:
-    """`update_damped_iteration`'s forward and loss on one kept minibatch."""
-    from manabot.backends.torch.rl import (
-        damped_policy_loss,
-        float64_operand,
-        legal_mask,
-        selected_mean,
-    )
-    from manabot.model.inference import transfer_admitted
-    from manabot.policy.prepare import reference_distribution
-
-    device = learner.device
-    obs = transfer_admitted(batch.obs, device)[0]
-    valid = legal_mask(obs["actions_valid"])
-    behavior_logs = batch.behavior_logs.to(device)
-    actions = batch.actions.to(device)
-    advantages = batch.advantages.to(device)
-    value_targets = batch.value_targets.to(device)
-    actor_mask = batch.actor_mask.to(device)
-    with learner.forward_precision():
-        logits, value_logits = learner.agent.forward_distribution(obs)
-    logits, value_logits = logits.float(), value_logits.float()
-    reference = reference_distribution(obs, batch.learning.reference)
-    policy_loss = damped_policy_loss(
-        logits,
-        actions,
-        advantages,
-        behavior_logs,
-        reference,
-        valid,
-        clip=batch.learning.clip,
-        collection_kl=batch.learning.collection_kl,
-        tau=batch.tau,
-    )
-    policy_loss = selected_mean(policy_loss, actor_mask)
-    if learner.agent.config.value_kind == "categorical_wdl":
-        value_loss = -(value_targets * value_logits.log_softmax(-1)).sum(-1).mean()
-    else:
-        value_loss = (value_logits.squeeze(-1) - value_targets).square().mean()
-    loss = policy_loss + float64_operand(value_loss)
-    return _Loss(
-        loss,
-        policy_loss,
-        value_loss,
-        logits,
-        value_logits,
-        valid,
-        reference,
-        behavior_logs,
-        actions,
-        actor_mask,
+    raise RuntimeError(
+        "This frozen profiling path patches retired Torch dictionary inputs; run it from revision ef28f3a58."
     )
 
 
@@ -625,7 +526,6 @@ def run_arm(
     """One arm of one group; returns its receipt and fixed-weight outputs."""
     from manabot.backends.torch.learner import Learner, apply_matmul_precision
     from manabot.backends.torch.rl import NumericalError, policy_logs
-    from manabot.model.inference import PolicyInference
     from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 
     device = torch.device(probe.device)

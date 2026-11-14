@@ -288,18 +288,14 @@ class TorchRunner:
         import torch
 
         from manabot.backends.torch import rl
-        from manabot.model.admission import bind_admitted
-        from manabot.model.inference import transfer_admitted
+        from manabot.backends.torch.arrays import on_device
         from manabot.training.updates.damped_policy import minibatch_objective
 
         targets, settings = batch.targets, batch.settings
         assert targets is not None and settings is not None
         # These are already-admitted rollout rows retained by capture, just
         # as the production learner rebinds its selected minibatches.
-        admitted = bind_admitted(
-            self.agent, {k: torch.from_numpy(v) for k, v in batch.observations.items()}
-        )
-        obs, _ = transfer_admitted(admitted, self.device)
+        obs = on_device(self.agent.prepare_admitted(batch.observations), self.device)
         with self.precision():
             logits, values = self.agent.forward_distribution(obs)
         logits, values = logits.float(), values.float()
@@ -311,7 +307,7 @@ class TorchRunner:
             rl,
             logits,
             values,
-            obs["actions_valid"].bool(),
+            obs.legal,
             actions=tensor(targets.actions),
             advantages=tensor(targets.advantages),
             value_targets=tensor(targets.value_targets),
@@ -384,23 +380,18 @@ class TorchRunner:
     def collection(self) -> Iterator[Collect]:
         import torch
 
-        from manabot.model.inference import PolicyInference
+        from manabot.backends.torch.policy import PolicyInference
 
         self.agent.eval()
         try:
             with PolicyInference(self.agent) as inference:
                 with torch.no_grad(), self.precision():
-                    inference.catalog()
+                    inference.cache_programs()
                 self.sync()
 
                 def collect(batch: Batch) -> np.ndarray:
                     with torch.no_grad(), self.precision():
-                        obs = inference.prepare(
-                            {
-                                k: torch.from_numpy(v)
-                                for k, v in batch.observations.items()
-                            }
-                        )
+                        obs = inference.prepare(batch.observations)
                         logits, _ = self.agent(obs)
                         result = logits.float().cpu().numpy()
                     self.sync()
@@ -427,7 +418,8 @@ class MLXRunner:
     def __init__(self, agent: ActorCritic, arm: Arm = "mlx-f32") -> None:
         import mlx.core as mx
 
-        from manabot.backends.mlx.checkpoint import build
+        from manabot.backends.mlx.checkpoint import assemble
+        from manabot.policy.checkpoint import from_torch_state
         from manabot.policy.protocol import Precision
 
         # The backend no longer offers float16: that arm is refused as an
@@ -437,10 +429,13 @@ class MLXRunner:
             {"mlx-f32": "float32", "mlx-bf16": "bfloat16", "mlx-f16": "float16"}[arm],
         )
         self.encoder = agent.observation_space.encoder
-        self.policy, _ = build(
-            agent.config,
-            self.encoder.config,
-            {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()},
+        self.policy = assemble(
+            from_torch_state(
+                agent.config,
+                self.encoder.config,
+                {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()},
+                parameter_names=dict(agent.named_parameters()),
+            ),
             precision=precision,
         )
         self.initial = self.policy.parameters()
@@ -466,17 +461,13 @@ class MLXRunner:
         mx.synchronize()
 
     def _trim(self, batch: Batch) -> Batch:
-        import torch
-
-        from manabot.model.inference import trim_observation
-        from manabot.policy.buckets import bucket_sizes
+        from manabot.policy.buckets import bucket_sizes, trim_observation
 
         self.policy.check_observation(batch.observations)
-        obs = {k: torch.from_numpy(v) for k, v in batch.observations.items()}
         sizes = bucket_sizes(batch.observations, self.encoder, objects=True)
         if sizes is None:
             raise ValueError("capture does not match the checkpoint observation layout")
-        trimmed = {k: v.numpy() for k, v in trim_observation(obs, sizes).items()}
+        trimmed = trim_observation(batch.observations, sizes)
         targets = batch.targets
         if targets is not None:
             actions = sizes.sizes["actions"]
@@ -579,9 +570,9 @@ def _compare(
 
     expected = reference.gradients
     if arm.startswith("mlx-"):
-        from manabot.backends.mlx.checkpoint import mlx_gradients
+        from manabot.backends import resolve
 
-        expected = mlx_gradients(expected)
+        expected = resolve("mlx").gradient_layout(expected)
     agreement = gradient_agreement(actual.gradients, expected)
     return {
         "logits_max_abs": float(

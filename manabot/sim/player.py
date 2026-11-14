@@ -1,15 +1,11 @@
-"""Inference players for scalar simulation; model admission lives in backends.torch.checkpoint."""
+"""Scalar simulation players; model players receive an admitted backend policy."""
 
 from enum import Enum
-from typing import Dict
 
 import numpy as np
-import torch
 
-from manabot.backends.torch.policy import ActorCritic
-
-# Local imports
-from manabot.model.inference import admit_on_device
+from manabot.env.observation import ObservationBuffers
+from manabot.policy.protocol import BackendPolicy
 
 # -----------------------------------------------------------------------------
 # Player Classes
@@ -27,12 +23,12 @@ class PlayerType(Enum):
 class Player:
     """Base player class for evaluation."""
 
-    def __init__(self, name: str, player_type: PlayerType):
+    def __init__(self, name: str, player_type: PlayerType) -> None:
         self.name = name
         self.player_type = player_type
         self.device = "cpu"
 
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
+    def get_action(self, obs: ObservationBuffers) -> int:
         """Get action from observation."""
         raise NotImplementedError
 
@@ -48,31 +44,24 @@ class ModelPlayer(Player):
     def __init__(
         self,
         name: str,
-        agent: ActorCritic,
+        agent: BackendPolicy,
         deterministic: bool = False,
-    ):
+    ) -> None:
         super().__init__(name, PlayerType.MODEL)
         self.agent = agent
+        self.device = agent.device_type
         self.deterministic = deterministic
-        self.device = next(agent.parameters()).device
 
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
+    def get_action(self, obs: ObservationBuffers) -> int:
         """Get action from model."""
-        # Convert numpy arrays to tensors with batch dimension
-        tensor_obs = admit_on_device(
-            self.agent,
+        batch = self.agent.prepare(
             {
-                k: torch.tensor(v, dtype=torch.float32).unsqueeze(0)
-                for k, v in obs.items()
+                key: np.asarray(value, dtype=np.float32)[None]
+                for key, value in obs.items()
             },
+            inference=True,
         )
-
-        # Get action from model
-        with torch.no_grad():
-            action, _, _, _ = self.agent.get_action_and_value(
-                tensor_obs, deterministic=self.deterministic
-            )
-            return action.item()
+        return int(self.agent.sample(batch, deterministic=self.deterministic)[0])
 
     def to(self, device: str) -> "ModelPlayer":
         """Move player and model to device."""
@@ -84,10 +73,10 @@ class ModelPlayer(Player):
 class RandomPlayer(Player):
     """Player that selects random valid actions."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         super().__init__(name, PlayerType.RANDOM)
 
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
+    def get_action(self, obs: ObservationBuffers) -> int:
         """Get random valid action."""
         valid_actions = np.where(obs["actions_valid"] > 0)[0]
         if len(valid_actions) == 0:
@@ -99,8 +88,8 @@ class RandomPlayer(Player):
 class DefaultPlayer(Player):
     """Player that always plays 0."""
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         super().__init__(name, PlayerType.DEFAULT)
 
-    def get_action(self, obs: Dict[str, np.ndarray]) -> int:
+    def get_action(self, obs: ObservationBuffers) -> int:
         return 0

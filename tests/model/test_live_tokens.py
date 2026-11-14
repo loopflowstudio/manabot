@@ -3,10 +3,9 @@
 import pytest
 import torch
 
-from manabot.backends.torch.live_tokens import LiveTokens
-from manabot.backends.torch.policy import OBJECT_VALIDITY_KEYS, ActorCritic
-from manabot.model.admission import admit_observation
-from manabot.model.inference import PolicyInference
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.policy.prepare import OBJECT_VALIDITY_KEYS
+from tests.model.prepared_routes import device_input, host_inputs
 from tests.model.test_inference import PolicyFixture, _policy
 
 
@@ -44,7 +43,7 @@ def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
     [("masked_mean", False), ("value_token", False), ("masked_mean", True)],
 )
 def test_outputs_and_gradients_match_padded(
-    value_aggregation: str, bucketed: bool, monkeypatch: pytest.MonkeyPatch
+    value_aggregation: str, bucketed: bool
 ) -> None:
     torch.manual_seed(319)
     case = _policy()
@@ -56,7 +55,7 @@ def test_outputs_and_gradients_match_padded(
     padded, live = _pair(case, value_aggregation, bucketed)
     outputs = []
     for model in (padded, live):
-        logits, values = model.forward_distribution(admit_observation(model, obs))
+        logits, values = model.forward_distribution(device_input(model, obs))
         outputs.append((logits, values))
         legal = obs["actions_valid"].bool()
         (logits[legal].square().mean() + values.square().mean()).backward()
@@ -70,21 +69,16 @@ def test_outputs_and_gradients_match_padded(
             assert b.grad is not None, name
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
     with torch.no_grad(), PolicyInference(live) as scope:
-        prepared = scope.prepare(obs)
+        prepared = scope.prepare(host_inputs(obs))
         present = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
         tokens = len(obs["actions_valid"]) if value_aggregation == "value_token" else 0
-        assert prepared.live_token_count == present + tokens
-        totals: list[int | None] = []
-        pack = LiveTokens.pack
-
-        def record(present: torch.Tensor, total: int | None) -> LiveTokens:
-            totals.append(total)
-            return pack(present, total)
-
-        monkeypatch.setattr(LiveTokens, "pack", record)
+        assert prepared is not None
+        coordinates = prepared
+        assert coordinates.live_index is not None
+        assert coordinates.live_offsets is not None
+        assert coordinates.live_index.numel() == present + tokens
+        assert coordinates.live_offsets[-1].item() == present + tokens
         served, served_values = live.forward_distribution(prepared)
-    # Collection packs with the host count; it never reads one back.
-    assert totals == [prepared.live_token_count]
     torch.testing.assert_close(served, expected_logits, atol=1e-5, rtol=1e-5)
     torch.testing.assert_close(served_values, expected_values, atol=1e-5, rtol=1e-5)
 
@@ -92,4 +86,5 @@ def test_outputs_and_gradients_match_padded(
 def test_padded_policy_measures_no_live_count() -> None:
     case = _policy()
     with torch.no_grad(), PolicyInference(case.agent) as scope:
-        assert scope.prepare(case.obs).live_token_count is None
+        batch = scope.prepare(host_inputs(case.obs))
+        assert batch is not None and batch.live_index is None

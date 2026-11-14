@@ -35,17 +35,18 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationSpace
+from manabot.env.observation import ObservationBuffers, ObservationSpace
 from manabot.env.opponents import RandomPolicy, build_opponent_policy
-from manabot.model.admission import admit_observation
 from manabot.verify.games import (
     INTERACTIVE_DECK,
     STANDARD_DECK,
     winner_from_info_or_obs,
 )
 from manabot.verify.util import (
+    _tensor_observation,
     build_verification_config,
     step_with_fallback,
     suppress_truncation_logs,
@@ -92,23 +93,15 @@ class GameProfile:
 
 
 def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
-    from manabot.backends.torch.policy import ActorCritic
-
     torch.manual_seed(seed)
     agent = ActorCritic(observation_space, config.agent)
     agent.eval()
     return agent
 
 
-def _agent_policy(agent) -> Callable[[dict[str, np.ndarray]], int]:
-    def policy(obs: dict[str, np.ndarray]) -> int:
-        tensor_obs = admit_observation(
-            agent,
-            {
-                key: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-                for key, value in obs.items()
-            },
-        )
+def _agent_policy(agent: ActorCritic) -> Callable[[ObservationBuffers], int]:
+    def policy(obs: ObservationBuffers) -> int:
+        tensor_obs = _tensor_observation(agent, obs)
         with torch.no_grad():
             action, _, _, _ = agent.get_action_and_value(
                 tensor_obs, deterministic=False

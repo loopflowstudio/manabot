@@ -30,11 +30,10 @@ from manabot.eval.execution import bind_execution
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
-from manabot.model.inference import admit_on_device
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
-from manabot.sim.serving import PolicyStore, _infer, sample_rows
+from manabot.sim.serving import PolicyStore, _infer
 from manabot.sim.serving_protocol import DecisionRequest, PolicyAdmission, PolicyKey
 
 Variant = Literal["cold_scalar", "resident_only", "resident_catalog", "batched"]
@@ -146,6 +145,9 @@ def _numerical_worker(
     connection: Connection, plan: BenchmarkPlan, panel: Panel, trace: Path
 ) -> None:
     """Compare retained identical inputs, masks, seeds and outputs across modes."""
+    from manabot.backends import resolve
+
+    backend = resolve("torch")
     torch.set_num_threads(1)
     stores: list[PolicyStore] = []
     try:
@@ -172,16 +174,16 @@ def _numerical_worker(
                 seeds.append(root.game["decisions"][root.revision]["policy_rng_seed"])
                 env.close()
             tensor = {
-                k: torch.from_numpy(np.stack([o[k] for o in observations])).float()
+                k: np.stack([o[k] for o in observations]).astype(np.float32)
                 for k in observations[0]
             }
-            reference: torch.Tensor | None = None
+            reference: np.ndarray | None = None
             reference_actions: list[int] = []
             for name in VARIANTS:
                 execution = plan.configurations[name]
                 _, (bound,) = bind_execution(request.key, (player,), execution)
                 perf = EvalPerformance(name)
-                store = PolicyStore(execution, perf)
+                store = PolicyStore(execution, perf, backend=backend)
                 stores.append(store)
                 store.admit(
                     PolicyAdmission(
@@ -194,20 +196,14 @@ def _numerical_worker(
                 )
                 resident = store.get(PolicyKey.from_registration(bound, execution))
                 output = []
-                with torch.no_grad():
-                    for start in range(0, len(chosen), execution.max_batch_rows):
-                        chunk = {
-                            k: v[start : start + execution.max_batch_rows]
-                            for k, v in tensor.items()
-                        }
-                        prepared = (
-                            resident.scope.prepare(chunk)
-                            if execution.cache_catalog
-                            else admit_on_device(resident.agent, chunk)
-                        )
-                        output.append(resident.agent(prepared)[0].cpu())
-                logits = torch.cat(output)
-                actions = sample_rows(
+                for start in range(0, len(chosen), execution.max_batch_rows):
+                    chunk = {
+                        key: value[start : start + execution.max_batch_rows]
+                        for key, value in tensor.items()
+                    }
+                    output.append(resident.scope.infer(chunk).logits)
+                logits = np.concatenate(output)
+                actions = resident.agent.sample_rows(
                     logits,
                     tensor["actions_valid"],
                     seeds,
@@ -216,7 +212,7 @@ def _numerical_worker(
                 if reference is None:
                     reference, reference_actions = logits, actions
                 mask = tensor["actions_valid"] != 0
-                close = torch.isclose(
+                close = np.isclose(
                     logits[mask],
                     reference[mask],
                     atol=plan.absolute_tolerance,
@@ -280,7 +276,7 @@ def _numerical_worker(
                         "instrumentation_actions_match": overhead_actions_match,
                         "legal_logits_close": bool(close.all()),
                         "maximum_absolute_error": float(
-                            (logits[mask] - reference[mask]).abs().max()
+                            np.abs(logits[mask] - reference[mask]).max()
                         ),
                         "action_agreement": agreement,
                         "passed": bool(close.all())

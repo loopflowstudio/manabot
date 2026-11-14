@@ -381,11 +381,11 @@ forced-step automation cut deliberate inputs from 289 to 73.
 
 Any trained checkpoint is selectable from the Opponent menu (`GET
 /api/opponents`): everything under `MANABOT_RUNS_DIR` (default `./.runs`) plus
-`.pt` files, run directories and Tournament JSON in `ACADEMY_PLAY_CHECKPOINTS`
-(`:`-separated). manabot supplies the catalog
-([trained opponents and other bots](#trained-opponents-and-other-bots)) and
-reads them with Torch's weights-only
-loader. A checkpoint bound to another world, content or deck setup stays listed,
+policy files (`.safetensors`, or `.pt` from earlier revisions), run directories
+and Tournament JSON in `ACADEMY_PLAY_CHECKPOINTS` (`:`-separated). manabot
+supplies the catalog ([trained opponents and other bots](#trained-opponents-and-other-bots))
+and reads each file's metadata header, using Torch's weights-only loader for a
+`.pt`. A checkpoint bound to another world, content or deck setup stays listed,
 disabled, with the mismatch, and the server refuses it with the same sentence.
 The browser sends only a digest; the server re-hashes the bytes before play,
 fails clearly if they were replaced, and records the identity as the trace's

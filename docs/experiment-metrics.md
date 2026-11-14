@@ -163,7 +163,13 @@ both beneath their parent and keeps each level's residual visible as Unattribute
 Seconds and call counts are attempt-local; reused collectors and learners start
 fresh counters at each stage.
 
-Every phase ends at a point where the code already waits for the device (a
+PPO's `Minibatches/Preparation wait and transfer` measures the caller's wait
+for the next host minibatch and its device upload. Host preparation overlaps the
+preceding minibatch's training; its worker time is not added to the phase tree.
+Earlier PPO timings included preparation inside `Forward and loss`, so compare
+total learning time across that boundary. Uploads may complete during the forward.
+
+Compute phases end at points where the code already waits for the device (a
 `.cpu()` copy, a `float()` read, or a finite check), so a phase includes the
 device work it queued and timing adds no CUDA synchronization. They are host
 intervals, not GPU kernel timings or utilization, and PyTorch tracing stays off.

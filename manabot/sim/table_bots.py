@@ -22,11 +22,19 @@ from managym.bots import (
 
 if TYPE_CHECKING:
     from manabot.model.catalog import CheckpointSummary, UnavailableEntry
+    from manabot.policy.protocol import Backend
     from manabot.sim.search.runtime import RetainedCheckpointRegistration
 
 
+def checkpoint_backend() -> Backend:
+    """Select the training provider's runtime for checkpoint operations."""
+    from manabot.backends import resolve
+
+    return resolve("torch")
+
+
 class CheckpointVillain:
-    """A trained ActorCritic loaded from a training checkpoint (.pt).
+    """A trained ActorCritic loaded from a policy container or legacy .pt.
 
     Torch and the model stack are imported lazily so that search/random games
     never pay the import cost.
@@ -100,7 +108,9 @@ class TrainingBots:
     ) -> tuple[list[CheckpointSummary], list[UnavailableEntry]]:
         from manabot.model.catalog import discover_checkpoints
 
-        return discover_checkpoints(paths, runs_dir=runs_dir)
+        return discover_checkpoints(
+            paths, backend=checkpoint_backend(), runs_dir=runs_dir
+        )
 
     def checkpoint_policy(
         self,

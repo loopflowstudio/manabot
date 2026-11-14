@@ -33,7 +33,6 @@ from manabot.backends.torch.rl import (
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.inference import admit_on_device
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
@@ -48,6 +47,7 @@ from manabot.training.updates.health import (
 from manabot.training.updates.selection import value_scale
 from manabot.verify.store import VerifyStore
 import managym
+from tests.model.prepared_routes import device_input
 
 DEVICE = os.environ.get("MANABOT_NUMERICS_DEVICE", "cpu")
 ROOT = Path(__file__).resolve().parents[2]
@@ -330,7 +330,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         device=DEVICE,
     )
     batch = collector.collect(agent, 1)
-    obs = admit_on_device(
+    obs = device_input(
         agent,
         {
             key: torch.from_numpy(value)
@@ -341,7 +341,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
 
     def measure(loss: Literal["policy", "value"]) -> NumericalHealth:
         logits, values = agent.forward_distribution(obs)
-        valid = obs["actions_valid"] > 0
+        valid = obs.legal > 0
         objective = (
             -policy_logs(logits, valid)[valid].mean()
             if loss == "policy"

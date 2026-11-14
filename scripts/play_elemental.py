@@ -17,7 +17,7 @@ from etude.run.storage import storage_from_uri
 from etude.train.read import read
 from etude.train.records import CheckpointRecord
 
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, load_checkpoint
 from manabot.infra.artifacts import fetch_etude_checkpoint, verify_file
 from manabot.model.catalog import inspect_checkpoint
 
@@ -61,7 +61,7 @@ def prepare_checkpoint(directory: Path, source: str, run: str, offline: bool) ->
         )
     else:
         fetch_etude_checkpoint(record.artifact, checkpoint)
-    summary = inspect_checkpoint(checkpoint)
+    summary = inspect_checkpoint(checkpoint, backend=TORCH_BACKEND)
     if not summary.compatible:
         raise ValueError(
             f"MTG-183 cannot play in this runtime: {summary.incompatibility}"
@@ -108,7 +108,7 @@ def main() -> None:
             cwd=ROOT,
             check=True,
         )
-    digest = inspect_checkpoint(checkpoint).sha256
+    digest = inspect_checkpoint(checkpoint, backend=TORCH_BACKEND).sha256
     query = urlencode(
         {"hero": "elemental_ur", "villain": "elemental_gw", "opponent": digest}
     )

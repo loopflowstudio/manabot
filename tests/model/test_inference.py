@@ -8,13 +8,17 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
 from manabot.env.match import Match, Reward
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
+from manabot.env.observation import (
+    PERMANENT_DEFINITION_INDEX,
+    ObservationBuffers,
+    ObservationSpace,
+)
 from manabot.infra.config import RewardConfig
-from manabot.model.admission import AdmittedObservation, admit_observation
-from manabot.model.inference import PolicyInference
+from manabot.policy.prepare import CatalogPrograms, Prepared
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from tests.model.prepared_routes import device_input, program_input
 from tests.training.test_recovery import recipe
 
 
@@ -45,7 +49,7 @@ def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
 class PolicyFixture:
     agent: ActorCritic
     collector: SeatRoutedCollector
-    obs: dict[str, torch.Tensor]
+    obs: ObservationBuffers
 
 
 def _policy(*, semantic: bool = True, history: bool = False) -> PolicyFixture:
@@ -69,7 +73,7 @@ def _policy(*, semantic: bool = True, history: bool = False) -> PolicyFixture:
         opponent_mode="self",
         recovery_max_microsteps=10000,
     )
-    return PolicyFixture(agent, collector, collector._slice_obs_tensors(np.arange(2)))
+    return PolicyFixture(agent, collector, collector._slice_obs_rows(np.arange(2)))
 
 
 def test_half_precision_head_keeps_finite_public_logits() -> None:
@@ -85,8 +89,8 @@ def test_half_precision_head_keeps_finite_public_logits() -> None:
     # running unrelated encoder operators in CPU half precision.
     handle = case.agent.policy_head.register_forward_hook(half_scores)
     try:
-        logits, _ = case.agent(admit_observation(case.agent, case.obs))
-        legal = case.obs["actions_valid"].bool()
+        logits, _ = case.agent(device_input(case.agent, case.obs))
+        legal = torch.from_numpy(case.obs["actions_valid"]).bool()
         assert logits.dtype == torch.float32
         assert torch.isfinite(logits).all()
         assert (logits[~legal] == -1e8).all()
@@ -105,16 +109,14 @@ def test_preparation_preserves_forward_and_training_gradients(semantic: bool) ->
         for _ in range(2):
             prepared = scope.prepare(case.obs)
             actual = case.agent.forward_distribution(prepared)
-            expected = reference.forward_distribution(
-                admit_observation(reference, case.obs)
-            )
+            expected = reference.forward_distribution(device_input(reference, case.obs))
             for a, b in zip(actual, expected, strict=True):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
     # Serving must not detach or reuse a catalog during a subsequent update.
     for agent in (case.agent, reference):
-        logits, values = agent.forward_distribution(admit_observation(agent, case.obs))
+        logits, values = agent.forward_distribution(device_input(agent, case.obs))
         loss = (
-            logits[case.obs["actions_valid"].bool()].square().mean()
+            logits[torch.from_numpy(case.obs["actions_valid"]).bool()].square().mean()
             + values.square().mean()
         )
         loss.backward()
@@ -133,9 +135,9 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
         # Later decisions carry public history.
         batch = case.collector.collect(case.agent, 16)
         case.obs = {
-            key: torch.from_numpy(value[-8:, 0]).float()
+            key: value[-8:, 0].astype(np.float32)
             if key == "action_focus"
-            else torch.from_numpy(value[-8:, 0])
+            else value[-8:, 0]
             for key, value in batch.observations().observation.items()
         }
     semantic = case.agent.semantic_cards
@@ -145,11 +147,11 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
     encode = semantic.definitions
     referenced: list[int] = []
 
-    def poisoned(rows: torch.Tensor | None = None) -> torch.Tensor:
+    def poisoned(programs: CatalogPrograms[torch.Tensor]) -> torch.Tensor:
         """Unreferenced rows read NaN, so any missed reference source fails."""
-        assert rows is not None
+        rows = programs.rows
         referenced.append(int(rows.unique().numel()))
-        table = encode(rows)
+        table = encode(programs)
         unreferenced = torch.ones(len(table), dtype=torch.bool)
         unreferenced[0] = False
         unreferenced[rows] = False
@@ -157,13 +159,17 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
 
     semantic.definitions = poisoned  # type: ignore[method-assign]
     # The reference encodes the complete catalog.
-    full._referenced_definitions = lambda obs, ids: None  # type: ignore[method-assign,assignment,return-value]
+    assert full.semantic_cards is not None
+    full_encode = full.semantic_cards.definitions
+    full.semantic_cards.definitions = lambda programs: full_encode(
+        program_input(full.semantic_cards)
+    )  # type: ignore[method-assign]
     outputs = []
     for agent in (case.agent, full):
-        logits, values = agent.forward_distribution(admit_observation(agent, case.obs))
+        logits, values = agent.forward_distribution(device_input(agent, case.obs))
         outputs.append((logits, values))
         (
-            logits[case.obs["actions_valid"].bool()].square().mean()
+            logits[torch.from_numpy(case.obs["actions_valid"]).bool()].square().mean()
             + values.square().mean()
         ).backward()
     assert 0 < referenced[0] < semantic.catalog_shape.definitions
@@ -176,11 +182,13 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
 
 
 def _plant_unseen_definitions(
-    obs: dict[str, torch.Tensor], lookup: torch.Tensor, history: bool
+    obs: ObservationBuffers, lookup: torch.Tensor, history: bool
 ) -> None:
     """Give every reference source a definition no other source names, so
     the encoded subset must draw on each source separately."""
-    named = set(lookup[obs["semantic_cards"].long()].flatten().tolist())
+    named = set(
+        lookup[torch.from_numpy(obs["semantic_cards"]).long()].flatten().tolist()
+    )
     unseen = iter(
         transport
         for transport in range(1, len(lookup))
@@ -191,7 +199,7 @@ def _plant_unseen_definitions(
     obs["decklists"][0, 0, 0, 0] = next(unseen)
     obs["relations"][0, 0, 5] = next(unseen)
     if history:
-        batch, event = obs["events_valid"].nonzero()[0].tolist()
+        batch, event = np.argwhere(obs["events_valid"])[0].tolist()
         obs["events"][batch, event, 2] = next(unseen)
 
 
@@ -219,12 +227,12 @@ def test_preparation_preserves_object_validity_and_mode_checks() -> None:
         "agent_permanents_valid",
         "opponent_permanents_valid",
     ):
-        case.obs[key].zero_()
+        case.obs[key].fill(0)
     with PolicyInference(case.agent) as scope:
         with pytest.raises(ValueError, match="valid object"):
             scope.prepare(case.obs)
     with pytest.raises(ValueError, match="valid object"):
-        admit_observation(case.agent, case.obs)
+        device_input(case.agent, case.obs)
 
 
 def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
@@ -241,7 +249,7 @@ def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
     with torch.no_grad(), pytest.raises(RuntimeError, match="closed"):
         case.agent(prepared)
     with PolicyInference(case.agent) as fresh, torch.no_grad():
-        expected = case.agent(admit_observation(case.agent, case.obs))
+        expected = case.agent(device_input(case.agent, case.obs))
         actual = case.agent(fresh.prepare(case.obs))
         for a, b in zip(actual, expected, strict=True):
             torch.testing.assert_close(a, b, atol=0, rtol=0)
@@ -250,11 +258,12 @@ def test_scope_rejects_autograd_closed_and_changed_policy() -> None:
 def test_prepared_collection_and_restored_continuation_match_reference() -> None:
     optimized, reference = _policy(), _policy()
 
+    @torch.no_grad()
     def plain_inputs(
-        scope: PolicyInference, obs: dict[str, torch.Tensor]
-    ) -> AdmittedObservation:
+        scope: PolicyInference, obs: ObservationBuffers
+    ) -> Prepared[torch.Tensor]:
         """Admitted outside the scope: no cached catalog or scope checks."""
-        return admit_observation(scope.agent, obs)
+        return device_input(scope.agent, obs)
 
     actual = optimized.collector.collect(optimized.agent, 8)
     with patch.object(PolicyInference, "prepare", plain_inputs):

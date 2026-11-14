@@ -23,10 +23,10 @@ from typing import Literal
 import numpy as np
 import torch
 
+from manabot.backends.torch.arrays import device_of, on_device
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.admission import admit_observation
 import managym
 
 _BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
@@ -173,10 +173,15 @@ def _embed(
     first: list[str],
     second: list[str],
 ) -> None:
-    batch = {key: torch.from_numpy(np.stack([r[key] for r in rows])) for key in rows[0]}
+    batch = {key: np.stack([r[key] for r in rows]) for key in rows[0]}
     try:
         with torch.no_grad():
-            model(admit_observation(model, batch))
+            model(
+                on_device(
+                    model.prepare(batch, inference=True),
+                    device_of(model),
+                )
+            )
     except ValueError as error:
         raise ValueError(
             f"game {game} (decks {first} / {second}) emitted an id outside the "

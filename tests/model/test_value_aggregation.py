@@ -10,8 +10,8 @@ from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.admission import admit_observation
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.model.prepared_routes import device_input
 
 Aggregation = Literal[
     "historical_mean", "masked_mean", "value_token", "attention_readout"
@@ -46,7 +46,9 @@ def test_inference_attention_preserves_padded_coordinates_and_values(
         dense = agent._attend_objects(objects, owners, validity)
         expected = agent._value_from_objects(dense, validity)
     with torch.inference_mode():
-        compact = agent._attend_objects(objects, owners, validity)
+        compact = agent._attend_objects(
+            objects, owners, validity, (validity != 0).any(0).nonzero().flatten()
+        )
         actual = agent._value_from_objects(compact, validity)
     torch.testing.assert_close(compact, dense, atol=1e-6, rtol=1e-5)
     torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
@@ -130,7 +132,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         key: torch.from_numpy(value[0])
         for key, value in batch.observations().observation.items()
     }
-    state = agent._gather_object_embeddings(admit_observation(agent, obs))
+    state = agent._gather_object_embeddings(device_input(agent, obs))
     objects, owners, valid = state.objects, state.is_agent, state.validity
     encoded = agent._attend_objects(objects, owners, valid)
     assert encoded.shape[1] == objects.shape[1] + 1
@@ -148,7 +150,7 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
             agent.action_layer(torch.cat((action_rows, focus_rows.flatten(2)), dim=-1))
         ).squeeze(-1)
         expected = expected.masked_fill(obs["actions_valid"] == 0, -1e8)
-        actual, _ = agent.forward_distribution(admit_observation(agent, obs))
+        actual, _ = agent.forward_distribution(device_input(agent, obs))
         # Dense and legal-row matrix multiplies round differently in float32;
         # near-zero logits need an absolute floor below float32 epsilon.
         torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-8)
@@ -204,7 +206,7 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
         key: torch.from_numpy(value[0])
         for key, value in batch.observations().observation.items()
     }
-    expected = agent.forward_distribution(admit_observation(agent, obs))
+    expected = agent.forward_distribution(device_input(agent, obs))
     changed = {key: value.clone() for key, value in obs.items()}
     for key in (
         "agent_cards",
@@ -218,17 +220,17 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
             # Categorical IDs must remain admitted even in unused slots. Vary a
             # valid identity alongside arbitrary numeric padding features.
             changed[key][..., PERMANENT_DEFINITION_INDEX][padding] = 1
-    actual = agent.forward_distribution(admit_observation(agent, changed))
+    actual = agent.forward_distribution(device_input(agent, changed))
     for left, right in zip(expected, actual, strict=True):
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     if aggregation == "historical_mean":
-        state = agent._gather_object_embeddings(admit_observation(agent, obs))
+        state = agent._gather_object_embeddings(device_input(agent, obs))
         objects, owners, valid = state.objects, state.is_agent, state.validity
         post = agent.attention(objects, owners, valid == 0)
         value = agent.value_head(post)
         batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
         scores = agent.policy_head(
-            agent._gather_informed_actions(obs, post, state, batches, slots)
+            agent._gather_informed_actions(device_input(agent, obs), post, state)
         ).squeeze(-1)
         logits = scores.new_full(obs["actions_valid"].shape, -1e8)
         logits[batches, slots] = scores
@@ -239,7 +241,7 @@ def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) 
             if key.endswith("_valid") and key != "actions_valid":
                 changed[key].zero_()
         with pytest.raises(ValueError, match="valid object"):
-            agent(admit_observation(agent, changed))
+            agent(device_input(agent, changed))
 
 
 # -----------------------------------------------------------------------------
@@ -400,7 +402,7 @@ def test_attention_readout_shares_initialization_and_actor_path() -> None:
         for key, value in batch.observations(np.array([0])).observation.items()
     }
     with torch.no_grad():
-        masked_logits, masked_value = masked(admit_observation(masked, obs))
-        readout_logits, readout_value = readout(admit_observation(readout, obs))
+        masked_logits, masked_value = masked(device_input(masked, obs))
+        readout_logits, readout_value = readout(device_input(readout, obs))
     torch.testing.assert_close(readout_logits, masked_logits, rtol=0, atol=0)
     assert not torch.allclose(readout_value, masked_value)
