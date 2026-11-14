@@ -6,6 +6,7 @@ from decimal import Decimal
 import hashlib
 import json
 from pathlib import Path
+import shutil
 from threading import Event
 from typing import Literal
 
@@ -39,6 +40,7 @@ from manabot.belief.sampling_evidence import (
     FitWork,
     JobAllocation,
     JobSettlement,
+    WorkerSnapshot,
 )
 from manabot.belief.sampling_fit import SavedFitConfig
 from manabot.belief.sampling_runtime import EnvCaptureRuntime
@@ -669,7 +671,20 @@ def test_collection_closure_requires_no_writer_and_freezes_sources(
         _settled,
         lambda job: None,
     )
-    _collected_root(tmp_path)
+    job = root.allocations()[0]
+    worker = root.stage_worker(job, tmp_path / "worker")
+    execute_work(worker, job, runtime=_CaptureFixture())
+    outputs = {
+        str(path.relative_to(worker.directory)): hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        for path in (worker.directory / "main").glob("game-*.json")
+    }
+    ended = _settled((job.run,))[0].model_copy(update={"outputs": outputs})
+
+    def delivered(refs: tuple[str, ...]) -> tuple[JobSettlement, ...]:
+        return (ended,)
+
     with pytest.raises(FileNotFoundError):
         root.freeze_dataset()
 
@@ -687,7 +702,10 @@ def test_collection_closure_requires_no_writer_and_freezes_sources(
     with pytest.raises(ValueError, match="writers"):
         root.close_collection("main", reason="finished", read=live)
     assert not (tmp_path / "main/closure.json").exists()
-    root.close_collection("main", reason="finished", read=_settled)
+    with pytest.raises(ValueError, match="not been admitted"):
+        root.close_collection("main", reason="finished", read=delivered)
+    root.admit_outputs(job, worker.directory, delivered)
+    root.close_collection("main", reason="finished", read=delivered)
     dataset = root.freeze_dataset()
     assert root.dataset() == dataset
     assert root.freeze_dataset() == dataset
@@ -700,7 +718,7 @@ def test_collection_closure_requires_no_writer_and_freezes_sources(
                 max_usd=Decimal(1),
                 work=CaptureWork(schedule_identity=identity, slots=(0,)),
             ),
-            _settled,
+            delivered,
             lambda job: None,
         )
     (tmp_path / "main/game-000003.started.json").write_text("{}")
@@ -980,16 +998,232 @@ def test_worker_executes_only_reserved_slots_and_verifies_shards(
         work=CaptureWork(schedule_identity=identity, slots=(1,)),
     )
     root.dispatch(job, _settled, lambda allocation: None)
-    execute_work(root, job, runtime=_CaptureFixture())
-    assert not (tmp_path / "main/game-000000.started.json").exists()
-    assert not (tmp_path / "main/game-000002.started.json").exists()
-    result = json.loads((tmp_path / "main/game-000001.result.json").read_text())
+    worker = root.stage_worker(job, tmp_path / "worker")
+    with pytest.raises(ValueError, match="retained dispatch intent"):
+        execute_work(root, job, runtime=_CaptureFixture())  # type: ignore[arg-type]
+    execute_work(worker, job, runtime=_CaptureFixture())
+    assert not (worker.directory / "main/game-000000.started.json").exists()
+    assert not (worker.directory / "main/game-000002.started.json").exists()
+    result = json.loads((worker.directory / "main/game-000001.result.json").read_text())
     assert result["status"] == "completed"
     outputs = {
-        str(path.relative_to(tmp_path)): hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in (tmp_path / "main").glob("game-*.json")
+        str(path.relative_to(worker.directory)): hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        for path in (worker.directory / "main").glob("game-*.json")
     }
     ended = _settled((job.run,))[0].model_copy(update={"outputs": outputs})
-    assert root.delivery(job, ended) == "delivered"
+    assert root.delivery(job, ended) == "unavailable"
+    assert (
+        root.admit_outputs(job, worker.directory, lambda refs: (ended,)) == "delivered"
+    )
+    root.close_collection(
+        "main", reason="allocated prefix ended", read=lambda refs: (ended,)
+    )
+    assert json.loads((tmp_path / "main/closure.json").read_text())["statuses"] == [
+        "unattempted",
+        "completed",
+        "unattempted",
+    ]
     del outputs["main/game-000001.game.json"]
     assert root.delivery(job, ended) == "unavailable"
+
+
+def test_copied_roots_and_worker_snapshots_cannot_control(tmp_path: Path) -> None:
+    root, identity = _scheduled_root(tmp_path / "controller")
+    job = JobAllocation(
+        run="one",
+        phase="collection",
+        max_usd=Decimal(1),
+        work=CaptureWork(schedule_identity=identity, slots=(0,)),
+    )
+    snapshots: list[WorkerSnapshot] = []
+    # Staging is safe inside the dispatch handoff lock before submission.
+    root.dispatch(
+        job,
+        _settled,
+        lambda allocation: snapshots.append(
+            root.stage_worker(allocation, tmp_path / "worker")
+        ),
+    )
+    for name in ("copy-a", "copy-b"):
+        shutil.copytree(root.directory, tmp_path / name)
+    for directory in (tmp_path / "copy-a", tmp_path / "copy-b", snapshots[0].directory):
+        copied = EvidenceRoot(directory)
+        with pytest.raises(ValueError, match="controller authority"):
+            copied.dispatch(
+                job.model_copy(update={"run": "duplicate"}),
+                _settled,
+                lambda allocation: None,
+            )
+        with pytest.raises(ValueError, match="controller authority"):
+            copied.observe(_settled)
+        with pytest.raises(ValueError, match="controller authority"):
+            copied.restore_capture("main", reason="repair", read=_settled)
+        with pytest.raises(ValueError, match="controller authority"):
+            copied.close_collection("main", reason="stop", read=_settled)
+        with pytest.raises(ValueError, match="controller authority"):
+            copied.freeze_dataset()
+    assert root.allocations() == (job,)
+    assert not (snapshots[0].directory / "jobs").exists()
+
+
+def test_returned_capture_requires_verified_assigned_bytes(tmp_path: Path) -> None:
+    root, identity = _scheduled_root(tmp_path / "controller")
+    job = JobAllocation(
+        run="one",
+        phase="collection",
+        max_usd=Decimal(1),
+        work=CaptureWork(schedule_identity=identity, slots=(0,)),
+    )
+    root.dispatch(job, _settled, lambda allocation: None)
+    worker = root.stage_worker(job, tmp_path / "worker")
+    execute_work(worker, job, runtime=_CaptureFixture())
+    outputs = {
+        str(p.relative_to(worker.directory)): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in (worker.directory / "main").glob("game-*.json")
+    }
+    ended = _settled((job.run,))[0].model_copy(update={"outputs": outputs})
+    with pytest.raises(ValueError, match="live/unknown"):
+        root.admit_outputs(
+            job,
+            worker.directory,
+            lambda refs: (ended.model_copy(update={"writers_closed": False}),),
+        )
+    for forbidden in (
+        "jobs/fake.json",
+        "main/closure.json",
+        "dataset-binding.json",
+        "main/game-000001.started.json",
+        "../escape",
+    ):
+        bad = ended.model_copy(update={"outputs": outputs | {forbidden: "digest"}})
+        with pytest.raises(ValueError, match="unassigned"):
+            root.admit_outputs(job, worker.directory, lambda refs: (bad,))
+    shard = worker.directory / "main/game-000000.game.json"
+    original = shard.read_bytes()
+    shard.write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="byte identity"):
+        root.admit_outputs(job, worker.directory, lambda refs: (ended,))
+    assert not tuple((root.directory / "main").glob("game-*.json"))
+    shard.write_bytes(original)
+    # Valid byte inventory cannot authorize a mismatched semantic receipt.
+    result = worker.directory / "main/game-000000.result.json"
+    original_result = result.read_bytes()
+    result.write_text(json.dumps({"schedule_identity": "other"}))
+    bad_outputs = outputs | {
+        "main/game-000000.result.json": hashlib.sha256(result.read_bytes()).hexdigest()
+    }
+    with pytest.raises(ValueError, match="binding"):
+        root.admit_outputs(
+            job,
+            worker.directory,
+            lambda refs: (ended.model_copy(update={"outputs": bad_outputs}),),
+        )
+    assert not tuple((root.directory / "main").glob("game-*.json"))
+    result.write_bytes(original_result)
+    assert (
+        root.admit_outputs(job, worker.directory, lambda refs: (ended,)) == "delivered"
+    )
+    assert (
+        root.admit_outputs(job, worker.directory, lambda refs: (ended,)) == "delivered"
+    )
+
+
+def test_returned_orphan_and_fatal_evidence_survive_without_completion(
+    tmp_path: Path,
+) -> None:
+    root, identity = _scheduled_root(tmp_path / "controller")
+    job = JobAllocation(
+        run="one",
+        phase="collection",
+        max_usd=Decimal(1),
+        work=CaptureWork(schedule_identity=identity, slots=(0,)),
+    )
+    root.dispatch(job, _settled, lambda allocation: None)
+    worker = root.stage_worker(job, tmp_path / "worker")
+    execute_work(worker, job, runtime=_CaptureFixture())
+    (worker.directory / "main/game-000000.result.json").unlink()
+    (worker.directory / "main/game-000000.stop.json").write_text(
+        json.dumps(
+            {
+                "schedule_identity": identity,
+                "error_type": "OSError",
+                "error": "lost worker",
+            }
+        )
+    )
+    outputs = {
+        str(p.relative_to(worker.directory)): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in (worker.directory / "main").glob("game-*.json")
+    }
+    ended = _settled((job.run,))[0].model_copy(update={"outputs": outputs})
+    assert (
+        root.admit_outputs(job, worker.directory, lambda refs: (ended,))
+        == "unavailable"
+    )
+    assert root.continuation(lambda refs: (ended,)).blocked
+    root.restore_capture(
+        "main", reason="transport restored", read=lambda refs: (ended,)
+    )
+    root.close_collection("main", reason="wall stop", read=lambda refs: (ended,))
+    closure = json.loads((root.directory / "main/closure.json").read_text())
+    assert closure["statuses"] == ["interrupted", "unattempted", "unattempted"]
+    assert "game-000000.stop.json" in closure["sources"]
+
+
+def test_fit_snapshot_and_returned_candidate_bind_frozen_inputs(tmp_path: Path) -> None:
+    root = _collected_root(tmp_path / "controller")
+    root.close_collection("main", reason="finished", read=_settled)
+    dataset = root.freeze_dataset()
+    config = asdict(SavedFitConfig())
+    job = JobAllocation(
+        run="fit",
+        phase="fit",
+        max_usd=Decimal(1),
+        work=FitWork(
+            dataset_identity=dataset.identity,
+            configuration_identity=_digest(config),
+            seed=357,
+        ),
+    )
+    root.dispatch(job, _settled, lambda allocation: None)
+    worker = root.stage_worker(job, tmp_path / "worker")
+    assert worker.dataset() == dataset
+    assert not (worker.directory / "main").exists()
+    with pytest.raises(ValueError, match="fit binding"):
+        execute_work(worker, job, config=SavedFitConfig(steps=1))
+    fit = worker.directory / "fits/357"
+    fit.mkdir(parents=True)
+    binding = {"dataset_identity": dataset.identity, "seed": 357, "config": config}
+    (fit / "started.json").write_text(json.dumps(binding))
+    (fit / "sampler.pt").write_bytes(b"delivery fixture, not model admission")
+    digest = hashlib.sha256((fit / "sampler.pt").read_bytes()).hexdigest()
+    (fit / "complete.json").write_text(
+        json.dumps({"binding": binding, "checkpoint_identity": digest})
+    )
+    outputs = {
+        name: hashlib.sha256((worker.directory / name).read_bytes()).hexdigest()
+        for name in job.outputs
+    }
+    ended = _settled((job.run,))[0].model_copy(update={"outputs": outputs})
+    with pytest.raises(ValueError, match="not been admitted"):
+        root.dispatch(
+            job.model_copy(
+                update={
+                    "run": "second",
+                    "work": job.work.model_copy(update={"seed": 358}),
+                }
+            ),
+            lambda refs: (ended,),
+            lambda allocation: None,
+        )
+    assert (
+        root.admit_outputs(job, worker.directory, lambda refs: (ended,)) == "delivered"
+    )
+    assert (root.directory / "fits/357/sampler.pt").read_bytes() == (
+        fit / "sampler.pt"
+    ).read_bytes()
+    (worker.directory / "dataset.json").write_bytes(b"changed")
+    with pytest.raises(ValueError, match="dataset bytes"):
+        worker.dataset()

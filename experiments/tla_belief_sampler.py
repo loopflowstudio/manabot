@@ -33,6 +33,7 @@ from manabot.belief.sampling_evidence import (
     CaptureWork,
     EvidenceRoot,
     JobAllocation,
+    WorkerSnapshot,
 )
 from manabot.belief.sampling_fit import SavedFitConfig, fit_saved_sampler
 from manabot.belief.sampling_types import SamplerSchema, _digest
@@ -42,7 +43,7 @@ from managym.decision import PUBLIC_COMMITMENT_KINDS
 
 
 def execute_work(
-    root: EvidenceRoot,
+    root: WorkerSnapshot,
     job: JobAllocation,
     *,
     runtime: CaptureRuntime | None = None,
@@ -53,7 +54,7 @@ def execute_work(
     A compatible launcher must admit/stage this worker. This is not a local
     admission command or a replacement for launcher inventory and placement.
     """
-    if job not in root.allocations():
+    if not isinstance(root, WorkerSnapshot) or job != root.allocation:
         raise ValueError("worker has no retained dispatch intent")
     if isinstance(job.work, CaptureWork):
         if runtime is None or config is not None:

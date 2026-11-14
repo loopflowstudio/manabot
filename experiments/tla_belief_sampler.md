@@ -53,17 +53,19 @@ before reuse. The sampler optimizer and frozen policy loader are reused;
 requires fresh settlement for every declared run, including no remaining writer
 and a known launcher amount. It applies the USD25 cumulative ceiling and USD2
 admission subcap without counting a receipt twice. Setup belongs to the phase
-it prepares. A process lock serializes allocation and closure mutations.
+it prepares. One root lock covers reservation through submission and closure
+mutations.
 
 Collection closure retains every scheduled status, private source hashes and
 launcher receipt references. Orphan shards remain interrupted; completed games
 with no representable rows remain completed. Only closed sources produce the
 single immutable main dataset. Source additions, changes and lost bytes reject
 later fits/reports. Admission stays separate. These guarantees currently have
-injected-fixture validation, not a connected launcher adapter. Allocations
-currently bind only run, phase and cap; exact slot/fit work bindings and a
-serialized reservation-to-submit handoff remain missing. The process lock on
-individual mutations does not establish exclusive dispatch across controllers.
+injected-fixture validation, not a connected launcher adapter. Allocations bind
+exact schedule slots or the frozen dataset/configuration/fit seed. A lost
+submission response leaves that work consumed. Continuation uses fresh launcher
+observations to distinguish live/unknown work from ended unavailable delivery;
+local output absence cannot authorize another attempt.
 
 The runtime classifies native panics and the known `no legal targets` failure
 at active steps; unknown native, contract, reset and capacity failures remain
@@ -76,7 +78,8 @@ and foretell reasons (overlapping reasons are not disjoint row totals).
 interrupted seed, including an orphan candidate. Verified complete candidates
 reload without optimization. Cohort reports resample declared game groups,
 retain available legs/viewers together, and expose missing-leg counts separately
-from fit-seed uncertainty. TLA same-field/reserved panel wiring remains open.
+from fit-seed uncertainty. TLA same-field/reserved panels derive membership and
+deal groups from the closed schedule, including zero-row and unattempted games.
 The offline `demo` verifies seed357 and frozen sources, retains digest-bound
 16/64-sample reports and a public JSON/Markdown prediction example. It performs
 no collection or optimization. Its history display is the saved normalized
@@ -109,12 +112,15 @@ USD2. Freeze cohort size and fit allocation from its ordinary pace before main
 collection. The proposed 1,024-slot schedule and three fit seeds remain planning
 choices, not an executed freeze or permission to ignore missing attempts.
 
-The next implementation must bind each dispatch to its exact scheduled slots
-or dataset/configuration/fit seed before submission, reconcile lost acknowledgements
-through compatible Etude evidence, and distinguish live work from interrupted
-work before reusing or refusing outputs. Existing local receipts alone cannot
-establish these controller guarantees. No additional experiment was launched
-during realignment.
+The next implementation connects the existing exact-work owner and worker
+adapter to compatible Etude inventory, pre-submit lookup and artifact delivery.
+`EvidenceRoot` coordinates invocations on one authoritative filesystem directory;
+its lock cannot coordinate copied remote roots. Worker staging must execute only
+its retained intent, reject controller operations and return verified private
+outputs without merging its ledger or closure as authority. These transport and
+authority checks remain unimplemented. A connected lookup/delivery reconciliation
+proof is required before original-runtime admission; no additional experiment was
+launched during realignment.
 
 ## Lifecycle implementation checks, 2026-11-14
 
@@ -184,3 +190,32 @@ controller. The database was preserved, no alternate controller or job was
 created, and capacity/cost remain unknown. Connected admission still requires
 a compatible inventory and verified pre-submit lookup path. No new experiment
 cost receipt or result exists.
+
+### Controller snapshots and returned evidence (2026-11-14)
+
+The local authority boundary is implemented. The authoritative directory binds
+host, path and filesystem identity; copied roots cannot mutate controller state.
+Private worker snapshots export one retained job and immutable inputs, without
+a ledger or closure authority. Returned output admission uses fresh launcher
+observations, excludes live/queued/retry writers, verifies allowed paths and
+bytes plus schedule/dataset/configuration receipts, and retains partial/fatal
+evidence without manufacturing completion. Controller restoration, closure and
+new dispatch require admission of known worker output.
+
+Controlled validation: the nine selected authority, worker, delivery, dispatch
+and fit-input checks in `tests/belief/test_sampling_data.py` passed in 0.56s
+(18 deselected). The subsequent closure/restoration regression selection passed
+4 checks (23 deselected, 0.49s), including freeze after admitted worker delivery.
+Ruff, compilation and whitespace checks passed. The capture
+runtime is an injected fixture and the fit checkpoint is synthetic delivery
+bytes; no game collection, optimization or candidate loader admission occurred.
+
+A fresh read-only `etude machines` on the mini again returned the same database
+version refusal. Inspecting its installed SDK found `Scheduler.prepare_launch`
+retaining `Launch` requests before source publication, `submit_launch` claiming
+that intent, and store `launch_evidence`/`launches(run)` lookup. The remote
+`controller.prepare` calls this path. This is a candidate integration point,
+not a verified lost-response contract against the existing controller; a lost
+prepare acknowledgement also needs reconciliation. Compatible inventory and a
+connected lookup/delivery transcript remain missing. The shared database and
+controller were preserved; no experiment job or new cost receipt was created.

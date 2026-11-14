@@ -32,16 +32,23 @@ preserve their dependence. MTG-357 now has injected-fixture checks for explicit
 closure/source freezing, fatal-prefix retention/restoration, narrow native
 failure classification, omission reasons, fit reuse/refusal and grouped analysis.
 Those checks establish owner behavior, not connected launcher admission or a
-TLA result; schedule-to-panel wiring remains unfinished.
+TLA result. Exact `CaptureWork`/`FitWork` allocations now bind schedule slots or
+the frozen dataset/configuration/seed; one root lock covers reservation through
+submission. Injected checks retain lost acknowledgements as consumed work,
+reject overlapping dispatch, distinguish live/unknown work from ended unavailable
+delivery, and keep queued/retry writers from authorizing closure. Schedule-derived
+same-field/reserved panels now preserve zero-row and unattempted games. Retained
+35-check capture/report validation and six final dispatch/worker checks establish
+these local guarantees; they supply no original-runtime admission or trained result.
 
-An allocation is not a work reservation: a run reference, phase and cap do not
-bind the slots or fit seed it may execute. MTG-357's current ledger serializes
-individual mutations but does not yet protect the complete dispatch handoff or
-prevent different run IDs authorizing the same work. A compatible controller
-must reconcile lost submission acknowledgements and live/queued/retry writers
-before continuation, closure or treating a started fit as unavailable. A
-controller exit alone does not establish worker interruption. Keep these live
-execution guarantees distinct from the existing local evidence checks.
+A controller exit alone does not establish worker interruption. A compatible
+launcher must provide fresh shared inventory, durable pre-submit lookup, writer
+closure, cost and delivered-byte evidence. A filesystem lock coordinates only
+invocations using the same authoritative root. Copied worker roots cannot become
+independent dispatch authorities or return their ledger/closure as controller
+truth. Remote staging, rejection of dispatch from worker snapshots and admission
+of returned evidence remain adapter requirements, not implemented guarantees.
+Keep launcher execution, artifact delivery and scientific completion distinct.
 
 ## Self-play metric indexing (MTG-273, 2026-11-11)
 

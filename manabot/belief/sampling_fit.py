@@ -32,7 +32,7 @@ from manabot.belief.sampling import (
 )
 from manabot.belief.sampling_collection import _write_private
 from manabot.belief.sampling_data import SamplerDataset, SamplerExample
-from manabot.belief.sampling_evidence import EvidenceRoot
+from manabot.belief.sampling_evidence import EvidenceRoot, WorkerSnapshot
 from manabot.infra.torch import deterministic_cpu
 
 
@@ -404,7 +404,7 @@ class SavedFitConfig:
 
 
 def fit_saved_sampler(
-    root: EvidenceRoot,
+    root: EvidenceRoot | WorkerSnapshot,
     config: SavedFitConfig,
     *,
     seed: int,

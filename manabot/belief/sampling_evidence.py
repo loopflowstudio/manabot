@@ -17,6 +17,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
+import socket
+import tempfile
 from typing import Annotated, Concatenate, Literal, ParamSpec, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -140,11 +143,13 @@ def _serial(
 
     @wraps(method)
     def locked(self: EvidenceRoot, *args: P.args, **kwargs: P.kwargs) -> R:
+        self._require_controller()
         descriptor = os.open(
             self.directory / ".controller.lock", os.O_CREAT | os.O_RDWR, 0o600
         )
         with os.fdopen(descriptor, "a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
+            self._require_controller()
             return method(self, *args, **kwargs)
 
     return locked
@@ -161,8 +166,33 @@ class EvidenceRoot:
     def __init__(self, directory: Path) -> None:
         self.directory = directory
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        authority = directory / "controller.json"
+        if not authority.exists() and not (directory / "worker.json").exists():
+            try:
+                _write_private(authority, self._controller_identity())
+            except FileExistsError:
+                pass  # Another invocation established this same directory.
         self.jobs = directory / "jobs"
-        self.jobs.mkdir(exist_ok=True, mode=0o700)
+
+    def _controller_identity(self) -> dict[str, str | int]:
+        stat = self.directory.stat()
+        return {
+            "host": socket.gethostname(),
+            "path": str(self.directory.resolve()),
+            "device": stat.st_dev,
+            "inode": stat.st_ino,
+        }
+
+    def _require_controller(self) -> None:
+        authority = self.directory / "controller.json"
+        if (
+            (self.directory / "worker.json").exists()
+            or not authority.exists()
+            or json.loads(authority.read_text()) != self._controller_identity()
+        ):
+            raise ValueError(
+                "copied root or worker snapshot has no controller authority"
+            )
 
     def allocations(self) -> tuple[JobAllocation, ...]:
         return tuple(
@@ -240,6 +270,7 @@ class EvidenceRoot:
                 "job already allocated; reconcile it instead of dispatching"
             )
         settlements = self._require_closed(self._observe(read))
+        self._verify_admitted(settlements)
         declared = {j.run: j for j in self.allocations()}
         # All prior jobs are settled, so only their launcher amounts count.
         # The new reservation covers its whole startup/run/finalization window.
@@ -287,7 +318,201 @@ class EvidenceRoot:
                 ):
                     raise ValueError("declared fit dataset/configuration changed")
         self._validate_work(job)
+        self.jobs.mkdir(exist_ok=True, mode=0o700)
         _write_private(path, job.model_dump(mode="json"))
+
+    def stage_worker(self, job: JobAllocation, destination: Path) -> WorkerSnapshot:
+        """Export one retained intent and immutable inputs, never controller state.
+
+        Destination must be new. The launcher transports this private snapshot;
+        it supplies no dispatch, cost, closure or reconciliation authority.
+        """
+        self._require_controller()
+        if job not in self.allocations():
+            raise ValueError("worker has no retained dispatch intent")
+        self._validate_work(job)
+        destination.mkdir(mode=0o700)
+        _write_private(destination / "worker.json", job.model_dump(mode="json"))
+        if isinstance(job.work, CaptureWork):
+            phase = "admission" if job.phase == "admission" else "main"
+            target = destination / phase
+            target.mkdir(mode=0o700)
+            shutil.copyfile(
+                self.directory / phase / "schedule.json", target / "schedule.json"
+            )
+            (target / "schedule.json").chmod(0o600)
+        else:
+            self.dataset()
+            for name in ("dataset.json", "dataset-binding.json"):
+                shutil.copyfile(self.directory / name, destination / name)
+                (destination / name).chmod(0o600)
+        return WorkerSnapshot(destination)
+
+    @_serial
+    def admit_outputs(
+        self, job: JobAllocation, returned: Path, read: LauncherRead
+    ) -> Literal["unavailable", "delivered"]:
+        """Admit launcher-inventoried worker bytes after every writer is closed.
+
+        Partial/fatal output is retained without inventing completion. All input
+        files are checked before writing; retries can only add identical bytes.
+        A copied ledger, closure, binding or another job's output is rejected.
+        """
+        if job not in self.allocations():
+            raise ValueError("delivery has no retained dispatch intent")
+        settlements = self._require_closed(self._observe(read))
+        observation = next(s for s in settlements if s.run == job.run)
+        allowed = self._output_names(job)
+        if set(observation.outputs) - allowed:
+            raise ValueError("launcher delivery contains unassigned output")
+        if isinstance(job.work, CaptureWork):
+            phase = "admission" if job.phase == "admission" else "main"
+            if (self.directory / phase / "closure.json").exists() and any(
+                not (self.directory / name).exists() for name in observation.outputs
+            ):
+                raise ValueError("collection is closed")
+        # A private staging directory lets validation finish before any bytes
+        # enter the authoritative evidence tree, including on corrupt delivery.
+        with tempfile.TemporaryDirectory(dir=self.directory) as temporary:
+            staged = Path(temporary)
+            for name, identity in observation.outputs.items():
+                source = returned / name
+                if source.is_symlink() or not source.is_file():
+                    raise ValueError("launcher output is missing or is a symlink")
+                if not source.resolve().is_relative_to(returned.resolve()):
+                    raise ValueError("launcher output escapes returned directory")
+                target = staged / name
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                shutil.copyfile(source, target)
+                target.chmod(0o600)
+                if _bytes_identity(target) != identity:
+                    raise ValueError("launcher delivery byte identity mismatch")
+                existing = self.directory / name
+                if existing.exists() and _bytes_identity(existing) != identity:
+                    raise ValueError("returned output conflicts with retained evidence")
+            self._validate_returned(job, staged)
+            for name in observation.outputs:
+                target = self.directory / name
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                if not target.exists():
+                    os.link(staged / name, target)
+        admitted = self.directory / "deliveries"
+        admitted.mkdir(exist_ok=True, mode=0o700)
+        binding = {"run": job.run, "outputs": observation.outputs}
+        receipt = admitted / f"{_digest(binding)}.json"
+        if not receipt.exists():
+            _write_private(receipt, binding)
+        return self.delivery(job, observation)
+
+    def _verify_admitted(self, settlements: tuple[JobSettlement, ...]) -> None:
+        observations = {s.run: s for s in settlements}
+        for job in self.allocations():
+            observation = observations[job.run]
+            present = {
+                name
+                for name in self._output_names(job)
+                if (self.directory / name).exists()
+            }
+            if not present and not observation.outputs:
+                continue
+            binding = {"run": job.run, "outputs": observation.outputs}
+            receipt = self.directory / "deliveries" / f"{_digest(binding)}.json"
+            if not receipt.exists() or json.loads(receipt.read_text()) != binding:
+                raise ValueError("worker output has not been admitted")
+            for name in present:
+                if (
+                    name not in observation.outputs
+                    or _bytes_identity(self.directory / name)
+                    != observation.outputs[name]
+                ):
+                    raise ValueError("admitted worker output changed")
+            if set(observation.outputs) != present:
+                raise ValueError("admitted worker output is missing")
+
+    @staticmethod
+    def _output_names(job: JobAllocation) -> set[str]:
+        if isinstance(job.work, FitWork):
+            return set(job.outputs) | {f"fits/{job.work.seed}/stop.json"}
+        phase = "admission" if job.phase == "admission" else "main"
+        return {
+            f"{phase}/game-{slot:06d}.{suffix}.json"
+            for slot in job.work.slots
+            for suffix in ("started", "result", "game", "stop")
+        }
+
+    def _validate_returned(self, job: JobAllocation, directory: Path) -> None:
+        if isinstance(job.work, FitWork):
+            started = directory / job.outputs[0]
+            complete = directory / job.outputs[1]
+            if not started.exists() and any(
+                (directory / name).exists()
+                for name in self._output_names(job) - {job.outputs[0]}
+            ):
+                raise ValueError("fit delivery has no started receipt")
+            if started.exists():
+                binding = json.loads(started.read_text())
+                if (
+                    binding["dataset_identity"] != job.work.dataset_identity
+                    or binding["seed"] != job.work.seed
+                    or _digest(binding["config"]) != job.work.configuration_identity
+                ):
+                    raise ValueError("fit delivery binding mismatch")
+            if complete.exists():
+                receipt = json.loads(complete.read_text())
+                checkpoint = directory / job.outputs[2]
+                if (
+                    not started.exists()
+                    or receipt["binding"] != binding
+                    or not checkpoint.exists()
+                    or receipt["checkpoint_identity"] != _bytes_identity(checkpoint)
+                ):
+                    raise ValueError("fit delivery completion mismatch")
+            return
+        phase = "admission" if job.phase == "admission" else "main"
+        schedule = json.loads((self.directory / phase / "schedule.json").read_text())
+        for slot in job.work.slots:
+            prefix = directory / phase / f"game-{slot:06d}"
+            started = prefix.with_suffix(".started.json")
+            result = prefix.with_suffix(".result.json")
+            shard = prefix.with_suffix(".game.json")
+            stop = prefix.with_suffix(".stop.json")
+            if any(p.exists() for p in (result, shard, stop)) and not started.exists():
+                raise ValueError("capture delivery has no started receipt")
+            if started.exists() and json.loads(started.read_text()) != {
+                "schedule_identity": job.work.schedule_identity,
+                "slot": schedule["capture"]["slots"][slot],
+            }:
+                raise ValueError("capture delivery binding mismatch")
+            if shard.exists():
+                game = json.loads(shard.read_text())["game"]
+                slot_binding = schedule["capture"]["slots"][slot]
+                if game is not None and any(
+                    game[key] != slot_binding[key]
+                    for key in ("game_id", "seed", "assignment", "split")
+                ):
+                    raise ValueError(
+                        "capture delivery game differs from scheduled slot"
+                    )
+            for path in (result, stop):
+                if (
+                    path.exists()
+                    and json.loads(path.read_text())["schedule_identity"]
+                    != job.work.schedule_identity
+                ):
+                    raise ValueError("capture delivery binding mismatch")
+            if result.exists():
+                receipt = json.loads(result.read_text())
+                status = receipt["status"]
+                if status not in ("completed", "failed", "interrupted"):
+                    raise ValueError("capture delivery status mismatch")
+                if status != "interrupted":
+                    if not shard.exists():
+                        raise ValueError("capture delivery missing terminal shard")
+                    payload = json.loads(shard.read_text())
+                    if _digest(payload) != receipt["shard_identity"] or (
+                        status == "failed"
+                    ) != (payload["failure"] is not None):
+                        raise ValueError("capture delivery shard mismatch")
 
     @_serial
     def continuation(self, read: LauncherRead) -> Continuation:
@@ -472,6 +697,7 @@ class EvidenceRoot:
         if not reason.strip():
             raise ValueError("restoration requires the repaired prerequisite")
         settlements = self._require_closed(self._observe(read))
+        self._verify_admitted(settlements)
         directory = self.directory / phase
         if (directory / "closure.json").exists():
             raise ValueError("collection is closed")
@@ -499,6 +725,7 @@ class EvidenceRoot:
         if not reason.strip():
             raise ValueError("closure requires a stop reason")
         settlements = self._require_closed(self._observe(read))
+        self._verify_admitted(settlements)
         directory = self.directory / phase
         closure = directory / "closure.json"
         if closure.exists():
@@ -602,4 +829,31 @@ class EvidenceRoot:
         dataset = read_dataset(self.directory / "dataset.json")
         if dataset.identity != binding["dataset_identity"]:
             raise ValueError("frozen dataset identity changed")
+        return dataset
+
+
+class WorkerSnapshot:
+    """Private execution inputs for one job, without controller capabilities."""
+
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
+        if (directory / "controller.json").exists():
+            raise ValueError("controller root is not a worker snapshot")
+        self.allocation = JobAllocation.model_validate_json(
+            (directory / "worker.json").read_bytes()
+        )
+
+    def dataset(self) -> SamplerDataset:
+        if not isinstance(self.allocation.work, FitWork):
+            raise ValueError("capture snapshot has no fit dataset")
+        binding = json.loads((self.directory / "dataset-binding.json").read_text())
+        path = self.directory / "dataset.json"
+        if _bytes_identity(path) != binding["dataset_sha256"]:
+            raise ValueError("worker dataset bytes changed")
+        dataset = read_dataset(path)
+        if (
+            dataset.identity != binding["dataset_identity"]
+            or dataset.identity != self.allocation.work.dataset_identity
+        ):
+            raise ValueError("worker dataset identity mismatch")
         return dataset

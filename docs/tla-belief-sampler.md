@@ -143,10 +143,30 @@ leave work reserved, even without a local started file; another run cannot
 claim it. Fresh launcher observations and delivery digests remain private.
 The continuation view distinguishes unknown/live work, verified delivery and
 ended work with unavailable delivery, and derives untouched slots/seeds.
-The worker adapter executes only the retained intent. A compatible live Etude
-adapter and remote commands remain unavailable; the continuation below describes
+The controller directory is bound to its host, resolved path and filesystem
+identity. Copies remain readable but cannot dispatch, reconcile, restore, close
+or freeze evidence. `stage_worker` exports a private `WorkerSnapshot` containing
+one retained intent and its immutable inputs, without a ledger or controller
+authority. `execute_work` accepts only that snapshot. `admit_outputs` uses fresh
+launcher observations to exclude all writers and verify assigned paths, byte
+identities and schedule/dataset/configuration receipts before retaining outputs.
+Fatal causes and orphan outputs survive as incomplete evidence. Controller
+closure and subsequent dispatch reject worker outputs awaiting admission.
+
+A compatible live Etude adapter and remote commands remain unavailable; the continuation below describes
 their required user interface. No pre-submit reference contract has been verified
-against the mini's existing controller.
+against the mini's existing controller. The live adapter must use one authoritative
+controller directory; copied worker staging directories execute assigned work and
+return evidence, without dispatching further jobs or closing collection. The
+owner enforces this boundary locally; transport and connected launcher lookup
+and delivery still require proof. Its filesystem lock coordinates invocations
+sharing the authoritative directory.
+
+Proposed recovery also covers a lost launch-preparation response. Repeating
+`run --out` must look up the original preparation through the same controller
+before preparing more work. A run ID returned only in the lost response is
+insufficient. Until that lookup contract is verified, remote dispatch remains
+unavailable; no manual preparation step is required from the operator.
 
 Repeat the same `run --out` command to reconcile existing jobs and continue
 untouched work. Unknown live jobs or costs stop new dispatch. Verify completed
