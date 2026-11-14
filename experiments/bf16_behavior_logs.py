@@ -208,20 +208,21 @@ def probe(output: Path, *, smoke: bool = False) -> None:
 
 
 def runs(revision: str, probe_only: bool = False) -> list[Run]:
-    """One L4 proof, with the USD 5 ceiling on the job itself.
+    """One L4 proof with a USD 5 ceiling, or the probe alone under USD 1.32.
 
     The probe is its own process ahead of the unmodified training worker, so
     training starts from a fresh interpreter and binds its source exactly once.
+    Alone, the probe completes, which is what delivers probe.json: cancelling
+    the training proof lost it. Its cap includes the startup allowance.
     """
+    probe_command = "uv run --locked python -m experiments.bf16_behavior_logs probe"
     if probe_only:
-        # Completion lets the launcher deliver probe.json; cancellation of the
-        # earlier training proof lost this output. Include startup in the cap.
         return Job(
             name="bf16-cuda-probe",
             repo=str(ROOT),
             revision=revision,
             setup=machine_setup(""),
-            command=f"{TOOLCHAIN_ENV}\nuv run --locked python -m experiments.bf16_behavior_logs probe",
+            command=f"{TOOLCHAIN_ENV}\n{probe_command}",
             max_hours=0.75,
             max_usd=Decimal("1.32"),
             max_attempts=1,
@@ -236,7 +237,6 @@ def runs(revision: str, probe_only: bool = False) -> list[Run]:
         finalization_seconds=300,
     ).job(repo=ROOT, revision=revision, max_hours=HOURS, max_usd=Decimal("5"))
     setup, train = job.command.split("\n")
-    probe_command = "uv run --locked python -m experiments.bf16_behavior_logs probe"
     job = job.model_copy(update={"command": f"{setup}\n{probe_command} && {train}"})
     return job.runs(SEED)
 

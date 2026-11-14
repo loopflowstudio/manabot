@@ -62,10 +62,6 @@ def test_auto_is_float32_on_every_device_and_width(device: Device, width: int) -
     execution = regime.stages[0].execution
     assert execution.device == device
     assert execution.resolved_precision == "float32"
-    # The record holds the resolved precision and reads back unchanged.
-    saved = regime.model_dump(mode="json")
-    assert saved["stages"][0]["execution"]["precision"] == "float32"
-    assert TrainingRegime.model_validate(saved) == regime
 
 
 def test_regimes_serialize_the_resolved_precision() -> None:

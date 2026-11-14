@@ -86,6 +86,64 @@ Median seconds per update over updates 1–140, which every run reached:
 Collection speeds up as well as learning, because behavior sampling runs the
 same forward. In a 7-hour window that is about 200 updates against 130.
 
+## Completed CUDA probe
+
+Run `e9ae5c2bfca4` completed on one NVIDIA L4 with torch 2.15.0+cu132 at
+revision `10e77ff53934` on 2026-11-14 UTC. Its
+[receipt](data/bf16_behavior_logs/cuda-probe/probe.json) is in the artifact
+store.
+
+### Device versus host exp
+
+The probe enumerated all 2,188,903 float32 log values from −104 through −87.3.
+CUDA minus host output spacings were −1 for 46,419 inputs, zero for
+2,127,031, and +1 for 15,453. CUDA returned zero for 3,660 inputs. The old
+`atol=0, rtol=1e-5` comparison rejected 1,149 inputs. These are float32 `exp`
+results, independent of whether the logits came from float32 or BF16 forwards;
+they reproduce the failure mechanism directly on CUDA.
+
+Before the fix, those 1,149 inputs would fail the redundant device/host check
+in either precision. After the fix, that comparison no longer exists: the
+packed rollout retains only logs, with normalized-legal-log and selected-log
+identity checks unchanged. This is removal of an invalid comparison, not a
+measured improvement in the forward's numerical agreement.
+
+### Fixed-weight collection versus learner forwards
+
+An initialized w384l8 policy saw 32 real native observations with seed 32401.
+Collection used all 32 rows with inference catalog caching; learner forwards
+used four eight-row chunks with a fresh differentiable catalog graph.
+Both kept the same weights, observations and sampled actions. The learner
+used either the collection's bucket sizes or twice their capacity, capped at
+the observation's limits. Values below are absolute differences in the sampled
+action's log probability; full bucket dimensions are in the receipt.
+
+| Precision | Layout | Learner buckets | Median | p95 | p99 | Maximum |
+|---|---|---:|---:|---:|---:|---:|
+| float32 | bucketed | 1× | 0 | 8.64e-08 | 1.19e-07 | 1.19e-07 |
+| float32 | bucketed | 2× | 0 | 5.96e-08 | 5.96e-08 | 5.96e-08 |
+| bf16 | bucketed | 1× | 7.69e-06 | 2.29e-05 | 2.3e-05 | 2.31e-05 |
+| bf16 | bucketed | 2× | 7.6e-06 | 2.19e-05 | 3.13e-05 | 3.5e-05 |
+| float32 | bucketed + live | 1× | 0 | 0 | 8.23e-08 | 1.19e-07 |
+| float32 | bucketed + live | 2× | 0 | 5.96e-08 | 1.01e-07 | 1.19e-07 |
+| bf16 | bucketed + live | 1× | 7.15e-06 | 2.15e-05 | 2.29e-05 | 2.29e-05 |
+| bf16 | bucketed + live | 2× | 9e-06 | 1.77e-05 | 2.47e-05 | 2.67e-05 |
+
+All differences were finite. BF16's maximum, 3.50e-5, corresponds to a
+probability ratio about 1.000035 at fixed weights. These deltas measure
+collection/learner forward variation, a different quantity from the removed
+host/device `exp` comparison. The fix changes no forward, so this distribution
+applies before and after the deletion; the probe does not replay an older
+revision. It changes no health tolerance and does not claim every BF16
+recomputation satisfies a 1e-5 absolute bound.
+
+Together with the incident regression and 200-update BF16 run, these checks
+support rerunning the controlled float32/BF16 learning A/B with explicit
+precisions. They do not establish equal playing strength or live-token
+training stability: this probe uses initialized weights and only 32 rows.
+The approximately USD 30 A/B still needs a person's approval naming that
+amount; it was not launched.
+
 ## Apple GPU backends
 
 On an M4 Max with torch 2.15.0 and MLX 0.32.4, one real w384l8 minibatch (64
@@ -114,7 +172,8 @@ Single-minibatch losses were in the same range in both precisions
 ## Cost
 
 USD 3.66 for the rerun, by the launcher. A two-run 50-update pair was launched
-and cancelled within minutes (USD 0.02); it produced no data.
+and cancelled within minutes (USD 0.02); it produced no data. The probe-only
+run was approximately USD 0.02.
 
 ## Limits
 
@@ -128,10 +187,9 @@ and cancelled within minutes (USD 0.02); it produced no data.
   one sample.
 - No playing-strength evaluation was run. "Learns the same" here means the
   training curves of one fixed run per seed overlap, over at most 188 updates.
-- The on-pod CUDA probe (device against host `exp`, and collection against
-  learner chosen-log differences under both precisions) wrote `probe.json`,
-  but the cancelled run delivered no output files, so those numbers are not
-  available. The CPU smoke of the same probe is wiring evidence only.
+- The cancelled training run delivered no probe output. The independent
+  completed CUDA probe above supplies those measurements at initialized
+  weights, not at the retained update-141 checkpoint.
 - The Apple updates ran at 16 streams on a machine busy with other work. They
   show explicit BF16 executes without a numerical stop, and their timings and
   losses support nothing more. Whole-update timings at 256 streams are in the
@@ -147,11 +205,15 @@ uv run etude launch experiments/bf16_behavior_logs.py --rent mtg324-l4-ab \
   --cohort mtg345-bf16-proof --max-usd 5 --revision COMMIT
 uv run --extra artifacts --extra reports python -m experiments.bf16_behavior_logs_report
 uv run --extra artifacts python -m manabot.data fetch experiments/data/bf16_behavior_logs
+# The CUDA probe alone; let it complete so the launcher delivers probe.json.
+uv run etude launch experiments/bf16_behavior_logs.py --rent mtg324-l4-ab \
+  --cohort mtg345-cuda-probe --max-usd 1.32 --revision 10e77ff53934 --probe-only
 ```
 
 The data directory holds `updates.csv` (every update of the five runs),
-`summary.json`, both charts, the CPU smoke receipts (`cpu-smoke/`) and the
-Apple receipts and scripts (`mac/`).
+`summary.json`, both charts, the CPU smoke receipts (`cpu-smoke/`), the Apple
+receipts and scripts (`mac/`) and the CUDA probe receipt
+(`cuda-probe/probe.json`).
 
 <details>
 <summary>Launch log</summary>
@@ -163,28 +225,16 @@ Apple receipts and scripts (`mac/`).
 - 2026-11-13 17:07 UTC: run `b00f4500b78d` started on
   `mtg324-l4-ab-e0f0acfca5a5`. The job runs the probe as its own process, then
   the unmodified training worker.
-- 2026-11-13 23:27 UTC: cancelled after update 200; machine terminated.
+- 2026-11-13 23:27 UTC: cancelled after update 200; machine terminated. The
+  cancellation delivered no output files, so the probe became its own job
+  (`--probe-only`), capped at the USD 1.32 left of the authorized budget,
+  startup allowance included.
+- 2026-11-14 00:13 UTC: the launcher's `runpod` provider, `r2` storage and L4
+  on-demand were added again through its CLI. Probe run `e9ae5c2bfca4` was
+  quoted USD 0.69, admitted at revision `10e77ff53934` and completed at 00:15
+  UTC. The full A/B was not launched.
+- This revision resolves `auto` to float32 on every device and width, with
+  explicit BF16 and saved precisions unchanged. That conflicts with the BF16
+  default for wide GPU models merged in PR #520 and is unresolved.
 
 </details>
-
-## Follow-up implementation (2026-11-13)
-
-Restored float32 defaults and `auto` resolution on all devices and widths;
-explicit BF16 and saved resolved precisions remain available. The probe-only
-launch option completes independently of training so output delivery does not
-require cancelling a long training job. Its job cap is USD 1.32, the remaining
-authorized budget after the two costs above, including startup allowance.
-
-Execution is blocked here: etude-sdk 0.3.2 uses `launcher-17.db`, which has no
-providers, storages or on-demands; the `mtg324-l4-ab` on-demand, `runpod`
-provider and `r2` storage exist only in the 0.2.x `launcher.db`. As
-[the launcher transition](../docs/experiments.md) says, they must be added
-again before launching. No launcher configuration was changed, and no
-additional rental was launched. CUDA distributions and fixed-weight comparisons, including live-token
-layouts, remain unavailable. The retained incident and 200-update run support
-considering another learning A/B, but the requested CUDA checks must still
-finish before deciding to rerun it. The full A/B was not launched.
-
-Once that configuration is available, launch the committed probe revision with
-`uv run etude launch experiments/bf16_behavior_logs.py --rent mtg324-l4-ab --cohort mtg345-cuda-probe --max-usd 1.32 --revision COMMIT --probe-only`.
-Let it complete and fetch `probe.json`; do not cancel after probe execution.
