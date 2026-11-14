@@ -175,6 +175,11 @@ files matches the manifest. Focused
 1 passed. Ruff and `git diff --check` clean. Compress then reworded report
 prose only (no figure or code change): `git diff --check` clean.
 
+Realign at `65fb0de8f0` (2026-11-13): rerunning `summary --all-payments`
+reproduced `all-payments-summary.json` byte-identically (SHA256 `cb66eb31…`);
+its rows give the report's 2.9–11.8%, exact max 28 and 655 identity >64;
+the two focused test files pass (6). Nothing to correct.
+
 If native code changes again: debug `flow::mana` tests
 (`CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml -p managym --lib flow::mana -- --test-threads 2`,
 27 passed at `1530995a9e`), rebuild the release extension, and `cmp` a fresh
