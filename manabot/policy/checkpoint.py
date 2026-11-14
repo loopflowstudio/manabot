@@ -77,7 +77,10 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
     if model.world is None or not model.catalog_records():
         reasons.append("a catalog world with record_vocabulary='catalog' is required")
     if observation.policy_input_version != 9:
-        reasons.append(f"policy_input_version={observation.policy_input_version}")
+        reasons.append(
+            f"policy_input_version={observation.policy_input_version} "
+            "(framework backends implement input v9 only)"
+        )
     if model.belief_count_buckets:
         reasons.append("belief inputs")
     if model.recent_events:

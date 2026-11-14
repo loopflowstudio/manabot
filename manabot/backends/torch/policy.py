@@ -28,6 +28,10 @@ from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
     RELATION_VALID_INDEX,
+    STACK_DEFINITION_INDEX,
+    STACK_DIM,
+    STACK_IS_MINE_INDEX,
+    STACK_SOURCE_INDEX,
     TURN_STATE_DIM,
     ObservationSpace,
 )
@@ -53,7 +57,8 @@ from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.policy.buckets import BucketSizes, object_columns
 import managym
 
-# Validity of the visible object table, in its concatenation order.
+# Validity of the visible object table, in its concatenation order. Input v11
+# appends the stack segment (`STACK_VALIDITY_KEY`); v9/v10 have none.
 OBJECT_VALIDITY_KEYS = (
     "agent_player_valid",
     "opponent_player_valid",
@@ -62,6 +67,7 @@ OBJECT_VALIDITY_KEYS = (
     "agent_permanents_valid",
     "opponent_permanents_valid",
 )
+STACK_VALIDITY_KEY = "stack_valid"
 
 
 @dataclass
@@ -119,9 +125,13 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        # Input v10 appends each seat's turn-state row to its player row and
-        # each card row's turn-state value to that card row.
-        self.turn_state = enc.config.policy_input_version == 10
+        # Inputs v10 and v11 append each seat's turn-state row to its player
+        # row and each card row's turn-state value to that card row.
+        self.turn_state = enc.turn_state
+        # Input v11 lists every spell and ability as a stack row after the
+        # permanents. The deprecated v9/v10 layouts (removed in 0.4.0) have no
+        # stack and narrower permanent rows, read from the encoder's width.
+        self.stack_tokens = enc.one_token
         if self.turn_state:
             player_dim += TURN_STATE_DIM
             card_dim += 1
@@ -324,6 +334,34 @@ class ActorCritic(nn.Module):
         self.facts.bucketed = self.bucketed_shapes
         self.name_candidates.bucketed = self.bucketed_shapes
 
+        # Input v11 stack rows, built after every v9/v10 parameter (except the
+        # value readout, built last) so those checkpoints keep their
+        # initialization and state-dict names. A row
+        # projects its numeric columns and adds its definition's program, as a
+        # permanent does; an ability's definition is its source's. Its source
+        # link (one-based object index) adds the source's pre-attention
+        # embedding through a zero-initialized layer, so the initial function
+        # ignores it.
+        self._numeric_stack_columns = [
+            column
+            for column in range(STACK_DIM)
+            if column not in (STACK_DEFINITION_INDEX, STACK_SOURCE_INDEX)
+        ]
+        self.stack_embedding: ProjectionLayer | None = None
+        self.stack_source: nn.Linear | None = None
+        if self.stack_tokens:
+            self.stack_embedding = ProjectionLayer(
+                len(self._numeric_stack_columns), embed_dim
+            )
+            self.stack_source = torch.nn.utils.skip_init(
+                nn.Linear, embed_dim, embed_dim
+            )
+            nn.init.zeros_(self.stack_source.weight)
+            nn.init.zeros_(self.stack_source.bias)
+            self.logger.info(
+                f"Stack embedding: ({len(self._numeric_stack_columns)} -> {embed_dim})"
+            )
+
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.
         self.value_readout = (
@@ -418,13 +456,19 @@ class ActorCritic(nn.Module):
         if not self.live_tokens or not self.config.attention_on:
             return None
         batch = obs["actions_valid"].shape[0]
-        count = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
+        count = sum(int(obs[key].count_nonzero()) for key in self._validity_keys())
         if self.belief_count_buckets > 0:
             # Belief rows plus one global belief row per observation.
             count += int(obs["belief_validity"].count_nonzero()) + batch
         if self.value_token is not None:
             count += batch
         return count
+
+    def _validity_keys(self) -> tuple[str, ...]:
+        """Validity keys of this policy's object table, in sequence order."""
+        if self.stack_tokens:
+            return (*OBJECT_VALIDITY_KEYS, STACK_VALIDITY_KEY)
+        return OBJECT_VALIDITY_KEYS
 
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
@@ -666,12 +710,22 @@ class ActorCritic(nn.Module):
             permanent_definitions = self.semantic_cards.lookup(
                 definitions, references.permanents
             )
+            stack_definitions = (
+                None
+                if references.stack is None
+                else self.semantic_cards.lookup(definitions, references.stack)
+            )
         else:
             assert self.card_definitions is not None
             cards = self.card_definitions(references.cards)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             permanent_definitions = self.card_definitions(references.permanents)
+            stack_definitions = (
+                None
+                if references.stack is None
+                else self.card_definitions(references.stack)
+            )
         permanent_features = [
             obs[key][..., self._numeric_permanent_columns]
             for key in ("agent_permanents", "opponent_permanents")
@@ -690,7 +744,17 @@ class ActorCritic(nn.Module):
             enc_agent_perms,
             enc_opp_perms,
         ]
-        validity_parts = [obs[key] for key in OBJECT_VALIDITY_KEYS]
+        validity_parts = [obs[key] for key in self._validity_keys()]
+        stack_is_agent = None
+        if self.stack_tokens:
+            assert self.stack_embedding is not None and stack_definitions is not None
+            stack = obs["stack"]
+            object_parts.append(
+                self.stack_embedding(stack[..., self._numeric_stack_columns])
+                + stack_definitions
+            )
+            # The stack is one shared zone: ownership is each row's controller.
+            stack_is_agent = stack[..., STACK_IS_MINE_INDEX] > 0
 
         belief_is_agent = None
         if self.belief_count_buckets > 0:
@@ -709,6 +773,8 @@ class ActorCritic(nn.Module):
             )
 
         objects = self._join_permanent_links(obs, torch.cat(object_parts, dim=1))
+        if self.stack_tokens:
+            objects = self._join_stack_sources(obs, objects)
         # Catalog fact and effect ids read the card encoder's rows.
         catalog = None
         if self.semantic_cards is not None and self.semantic_cards.records:
@@ -751,6 +817,8 @@ class ActorCritic(nn.Module):
         # registered buffer. Explicit belief rows extend it below.
         batch = objects.shape[0]
         is_agent = self._ownership(buckets).expand(batch, -1)
+        if stack_is_agent is not None:
+            is_agent = torch.cat((is_agent, stack_is_agent), dim=1)
         if belief_is_agent is not None:
             is_agent = torch.cat(
                 (
@@ -772,11 +840,43 @@ class ActorCritic(nn.Module):
         )
 
     def _ownership(self, buckets: BucketSizes | None) -> torch.Tensor:
-        """The static ownership mask [1,N] at this batch's object coordinates."""
+        """The static ownership mask [1,N] at this batch's player, card and
+        permanent coordinates; stack ownership is per row."""
         template = self._is_agent_template
         if buckets is None or not buckets.trims_objects:
             return template
+        # The template ends before the stack, whose slice selects nothing.
         return torch.cat([template[:, part] for part in object_columns(buckets)], 1)
+
+    def _join_stack_sources(
+        self, obs: Dict[str, torch.Tensor], objects: torch.Tensor
+    ) -> torch.Tensor:
+        """Add each ability's source embedding to its stack row.
+
+        Sources are object index + 1 (zero: none) into `objects` [B,N,D]; the
+        stack follows the four card and permanent segments.
+        """
+        assert self.stack_source is not None
+        start = (
+            2
+            + 2 * obs["agent_cards"].shape[1]
+            + 2 * obs["agent_permanents"].shape[1]
+        )
+        sources = obs["stack"][..., STACK_SOURCE_INDEX]
+        rows = sources.shape[1]
+        linked = (sources > 0).unsqueeze(-1)
+        targets = (sources.long() - 1).clamp_min(0).unsqueeze(-1).expand(
+            -1, -1, objects.shape[2]
+        )
+        delta = self.stack_source(objects.gather(1, targets)).masked_fill(~linked, 0)
+        return torch.cat(
+            (
+                objects[:, :start],
+                objects[:, start : start + rows] + delta.to(objects.dtype),
+                objects[:, start + rows :],
+            ),
+            dim=1,
+        )
 
     def _join_permanent_links(
         self, obs: Dict[str, torch.Tensor], objects: torch.Tensor
@@ -825,6 +925,8 @@ class ActorCritic(nn.Module):
         """
         assert self.semantic_cards is not None
         ids = [obs["semantic_cards"], permanent_ids, obs["known_hand"][..., 0]]
+        if self.stack_tokens:
+            ids.append(obs["stack"][..., STACK_DEFINITION_INDEX])
         if self.semantic_cards.decklist_projection is not None:
             ids.append(obs["decklists"][..., 0])
         if self.recent_events is not None:

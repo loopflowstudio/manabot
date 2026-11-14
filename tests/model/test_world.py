@@ -170,7 +170,7 @@ def test_a_refused_checkpoint_names_its_revision_and_the_changed_buffer() -> Non
     with pytest.raises(ValueError) as refused:
         validate_checkpoint_world(payload, ObservationSpace())
     message = str(refused.value)
-    assert "agent_permanents 40x37 -> 40x38" in message
+    assert "agent_permanents 40x37 -> 40x51" in message
     assert (
         "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in message
     )

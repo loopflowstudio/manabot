@@ -35,6 +35,8 @@ from manabot.backends.torch.arrays import to_numpy
 from manabot.backends.torch.rl import legal_mask
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
+    STACK_DEFINITION_INDEX,
+    STACK_SOURCE_INDEX,
 )
 from manabot.model.continuation import admit_relations
 from manabot.model.facts import admit_facts
@@ -62,6 +64,8 @@ _OBJECT_KEYS = (
     ("agent_permanents", "agent_permanents_valid"),
     ("opponent_permanents", "opponent_permanents_valid"),
 )
+# Input v11 appends the stack segment; v9/v10 batches have no stack keys.
+_STACK_KEYS = ("stack", "stack_valid")
 _PERMANENT_KEYS = ("agent_permanents", "opponent_permanents")
 _BELIEF_KEYS = (
     "belief_card_def_ids",
@@ -140,18 +144,34 @@ def check_observation(agent: "ActorCritic", obs: Mapping[str, torch.Tensor]) -> 
     _check(agent, obs)
 
 
+def _object_keys(agent: "ActorCritic") -> tuple[tuple[str, str], ...]:
+    """(rows, validity) keys of `agent`'s object table, in sequence order."""
+    if agent.stack_tokens:
+        return (*_OBJECT_KEYS, _STACK_KEYS)
+    return _OBJECT_KEYS
+
+
 def _check(
     agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
 ) -> tuple[CardReferences, bool]:
+    if agent.stack_tokens and any(key not in obs for key in _STACK_KEYS):
+        raise ValueError("policy input v11 requires stack and stack_valid")
     lookup = _semantic_lookup(agent, _device(obs))
     references = _references(agent, obs, lookup, check=True)
-    object_count = sum(obs[key].shape[1] for key, _ in _OBJECT_KEYS)
-    valid_count = sum(obs[key].shape[1] for _, key in _OBJECT_KEYS)
+    object_keys = _object_keys(agent)
+    object_count = sum(obs[key].shape[1] for key, _ in object_keys)
+    valid_count = sum(obs[key].shape[1] for _, key in object_keys)
     if agent.belief_count_buckets > 0:
         _admit_beliefs(agent, obs)
         object_count += obs["belief_card_def_ids"].shape[1] + 1
         valid_count += obs["belief_validity"].shape[1] + 1
     _admit_permanent_links(obs, object_count)
+    if agent.stack_tokens:
+        sources = to_numpy(obs["stack"][..., STACK_SOURCE_INDEX])
+        if not (
+            (sources == np.floor(sources)) & (sources >= 0) & (sources <= object_count)
+        ).all():
+            raise ValueError("invalid stack source object reference")
     # Catalog record ids read the card encoder's vocabulary; without one the
     # forward rejects the configuration itself.
     cards = agent.semantic_cards
@@ -180,7 +200,7 @@ def _check(
         and agent.belief_count_buckets == 0
     ):
         # Belief policies always add a valid global row.
-        validity = torch.cat([obs[key] for _, key in _OBJECT_KEYS], dim=1)
+        validity = torch.cat([obs[key] for _, key in object_keys], dim=1)
         if (validity.sum(1) == 0).any():
             raise ValueError("value aggregation requires a valid object")
     legal = legal_mask(obs["actions_valid"])
@@ -267,7 +287,8 @@ def _references(
     *,
     check: bool,
 ) -> CardReferences:
-    """Definition rows of visible cards, permanents, public hands and decklists."""
+    """Definition rows of visible cards, permanents, public hands, decklists
+    and (input v11) stack rows."""
     permanent_ids = torch.stack(
         [obs[key][..., PERMANENT_DEFINITION_INDEX] for key in _PERMANENT_KEYS], dim=1
     )
@@ -287,6 +308,7 @@ def _references(
         rows(obs["decklists"][..., 0])
         if cards is not None and cards.decklist_projection is not None
         else None,
+        rows(obs["stack"][..., STACK_DEFINITION_INDEX]) if agent.stack_tokens else None,
     )
 
 

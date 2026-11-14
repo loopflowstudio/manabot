@@ -415,12 +415,121 @@ pub fn parse(text: &str) -> Result<Observation, String> {
     if value != roundtrip || !observation.validate() {
         return Err("noncanonical viewer observation".into());
     }
-    Ok(observation)
+    Ok(upgrade_historical(observation))
+}
+
+/// A capture written before permanents and spells carried their card
+/// records lists them as cards: each side's battlefield card rows in
+/// permanent order, and stack spells' rows in stack order. Move them onto
+/// their permanents and spells, so every reader sees the current shape. A
+/// capture whose rows do not pair up stays as it is (`PermanentData::card`
+/// absent), which only the v9/v10 encoders read.
+fn upgrade_historical(mut observation: Observation) -> Observation {
+    if !observation.historical() {
+        return observation;
+    }
+    let mut upgraded = observation.clone();
+    for (cards, permanents) in [
+        (&mut upgraded.agent_cards, &mut upgraded.agent_permanents),
+        (
+            &mut upgraded.opponent_cards,
+            &mut upgraded.opponent_permanents,
+        ),
+    ] {
+        let battlefield: Vec<CardData> = cards
+            .iter()
+            .filter(|card| card.zone == ZoneType::Battlefield)
+            .cloned()
+            .collect();
+        if battlefield.len() != permanents.len()
+            || battlefield
+                .iter()
+                .zip(permanents.iter())
+                .any(|(card, permanent)| card.registry_key != permanent.registry_key)
+        {
+            return observation;
+        }
+        cards.retain(|card| card.zone != ZoneType::Battlefield);
+        for (permanent, card) in permanents.iter_mut().zip(battlefield) {
+            permanent.card = Some(card);
+        }
+    }
+    for object in upgraded
+        .stack_objects
+        .iter_mut()
+        .filter(|object| object.kind == StackObjectKindData::Spell && object.card.is_none())
+    {
+        let found = [&mut upgraded.agent_cards, &mut upgraded.opponent_cards]
+            .into_iter()
+            .find_map(|cards| {
+                let slot = cards.iter().position(|card| {
+                    card.zone == ZoneType::Stack
+                        && card.registry_key == object.source_card_registry_key
+                })?;
+                Some(cards.remove(slot))
+            });
+        match found {
+            Some(card) => object.card = Some(card),
+            None => return observation,
+        }
+    }
+    observation = upgraded;
+    observation
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn historical_captures_move_battlefield_and_spell_rows_onto_their_records() {
+        use crate::{
+            flow::game::Game,
+            state::{
+                game_object::{ObjectId, PlayerId},
+                player::PlayerConfig,
+            },
+        };
+        let mut game = Game::new(
+            vec![
+                PlayerConfig::new(
+                    "a",
+                    [("Mountain".into(), 20), ("Lightning Bolt".into(), 20)].into(),
+                ),
+                PlayerConfig::new(
+                    "b",
+                    [("Forest".into(), 20), ("Llanowar Elves".into(), 20)].into(),
+                ),
+            ],
+            111,
+            false,
+        );
+        game.move_object(ObjectId(0), ZoneType::Battlefield);
+        game.move_object(ObjectId(40), ZoneType::Battlefield);
+        game.push_spell_to_stack(ObjectId(1), PlayerId(0), vec![], vec![], Default::default());
+        let current = Observation::for_player(&game, PlayerId(0));
+        assert!(!current.historical());
+        // The same observation as a capture written before card records.
+        let mut historical = crate::agent::legacy_input::view(&current);
+        for permanent in historical
+            .agent_permanents
+            .iter_mut()
+            .chain(&mut historical.opponent_permanents)
+        {
+            permanent.card = None;
+        }
+        for object in &mut historical.stack_objects {
+            object.card = None;
+        }
+        assert!(historical.historical());
+        let upgraded = parse(&historical.to_json()).unwrap();
+        assert_eq!(upgraded.to_json(), current.to_json());
+        // The v9/v10 rows read the capture's own card lists.
+        let legacy = crate::agent::legacy_input::view(&upgraded);
+        assert_eq!(legacy.agent_cards, historical.agent_cards);
+        assert_eq!(legacy.opponent_cards, historical.opponent_cards);
+        assert!(!historical.agent_permanents.is_empty() && !historical.stack_objects.is_empty());
+    }
 
     #[test]
     fn every_action_family_in_the_tensor_contract_decodes() {

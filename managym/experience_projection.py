@@ -224,10 +224,26 @@ def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
     return out
 
 
+def card_records(obs: managym.Observation) -> list[managym.Card]:
+    """Every card record the viewer sees: listed cards, then permanents'
+    (agent side first) and stack spells' (top first)."""
+    return [
+        *obs.agent_cards,
+        *obs.opponent_cards,
+        *(
+            permanent.card
+            for permanent in (*obs.agent_permanents, *obs.opponent_permanents)
+            if permanent.card is not None
+        ),
+        *(item.card for item in obs.stack_objects if item.card is not None),
+    ]
+
+
 def _serialize_player(
     player: managym.Player,
     cards: list[managym.Card],
     permanents: list[managym.Permanent],
+    stack: list[managym.StackObject],
     *,
     include_details: bool = False,
 ) -> dict[str, Any]:
@@ -238,22 +254,20 @@ def _serialize_player(
         "EXILE": [],
         "STACK": [],
     }
-    battlefield_cards: list[managym.Card] = []
     for card in cards:
         zone_name = enum_name(ZoneEnum, card.zone)
-        if zone_name == "BATTLEFIELD":
-            battlefield_cards.append(card)
-        elif zone_name in grouped_cards:
+        if zone_name in grouped_cards:
             grouped_cards[zone_name].append(_serialize_card(card))
-
-    # Permanents and battlefield cards correspond 1:1 in order.
-    # Fall back to None if the lists don't align.
-    serialized_permanents = []
-    for i, permanent in enumerate(permanents):
-        card = battlefield_cards[i] if i < len(battlefield_cards) else None
-        serialized_permanents.append(
-            _serialize_permanent(permanent, card, include_details=include_details)
-        )
+    # The spells this player owns, top first.
+    grouped_cards["STACK"].extend(
+        _serialize_card(item.card)
+        for item in stack
+        if item.card is not None and int(item.card.owner_id) == int(player.id)
+    )
+    serialized_permanents = [
+        _serialize_permanent(permanent, permanent.card, include_details=include_details)
+        for permanent in permanents
+    ]
 
     zone_counts = {
         enum_name(ZoneEnum, index): int(count)
@@ -364,12 +378,14 @@ def serialize_observation(
             obs.agent,
             obs.agent_cards,
             obs.agent_permanents,
+            obs.stack_objects,
             include_details=include_details,
         ),
         "opponent": _serialize_player(
             obs.opponent,
             obs.opponent_cards,
             obs.opponent_permanents,
+            obs.stack_objects,
             include_details=include_details,
         ),
     }
@@ -406,15 +422,8 @@ def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
         *(observation.agent.sideboard_counts or {}),
         *observation.agent.known_hand,
         *observation.opponent.known_hand,
-        *(
-            card.registry_key
-            for cards in (
-                observation.agent_cards,
-                observation.agent_sideboard,
-                observation.opponent_cards,
-            )
-            for card in cards
-        ),
+        *(card.registry_key for card in card_records(observation)),
+        *(card.registry_key for card in observation.agent_sideboard),
         *(entry.source_card_registry_key for entry in observation.stack_objects),
     }
 
@@ -468,38 +477,21 @@ def _player_label(player: managym.Player) -> str:
     return "Hero" if int(player.player_index) == HERO_PLAYER_INDEX else "Villain"
 
 
-def _permanent_names(
-    cards: list[managym.Card],
-    permanents: list[managym.Permanent],
-) -> dict[int, str]:
-    """Map permanent ids to card names.
-
-    Permanents carry their own object ids (distinct from card ids), but the
-    observation lists permanents and battlefield cards in the same order —
-    the same alignment _serialize_player relies on.
-    """
-    battlefield_cards = [
-        card for card in cards if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
-    ]
-    names: dict[int, str] = {}
-    for index, permanent in enumerate(permanents):
-        if index < len(battlefield_cards):
-            names[int(permanent.id)] = battlefield_cards[index].name
-    return names
-
-
 def _build_id_to_name(obs: managym.Observation) -> dict[int, str]:
     """Map object ids (players, cards, permanents) to display names."""
     names: dict[int, str] = {
         int(obs.agent.id): _player_label(obs.agent),
         int(obs.opponent.id): _player_label(obs.opponent),
     }
-    names.update(
-        {int(card.id): card.name for card in [*obs.agent_cards, *obs.opponent_cards]}
-    )
+    names.update({int(card.id): card.name for card in card_records(obs)})
     names.update({int(card.candidate_id): card.name for card in obs.agent_sideboard})
-    names.update(_permanent_names(obs.agent_cards, obs.agent_permanents))
-    names.update(_permanent_names(obs.opponent_cards, obs.opponent_permanents))
+    names.update(
+        {
+            int(permanent.id): permanent.card.name
+            for permanent in (*obs.agent_permanents, *obs.opponent_permanents)
+            if permanent.card is not None
+        }
+    )
     return names
 
 

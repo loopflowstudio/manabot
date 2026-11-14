@@ -57,7 +57,6 @@ from manabot.verify.scenarios import (
     SPACE_TARGET,
     VILLAIN_SEAT,
     ZONE_HAND,
-    ZONE_STACK,
     Scenario,
     ScriptedVillain,
     action_casts,
@@ -346,11 +345,7 @@ class BehaviorProbe:
                             break
 
     def _stack_cards(self, raw: Any) -> list[Any]:
-        return [
-            c
-            for c in list(raw.agent_cards) + list(raw.opponent_cards)
-            if int(c.zone) == ZONE_STACK
-        ]
+        return [item.card for item in raw.stack_objects if item.card is not None]
 
     def _record_countered(self, card: Any) -> None:
         name = str(card.name)

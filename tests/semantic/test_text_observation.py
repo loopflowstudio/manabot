@@ -345,7 +345,7 @@ def test_effect_derived_characteristics_appear_only_when_present() -> None:
     (mountain_before, mountain_after), (ogre_before, ogre_after) = changed
     assert mountain_after == mountain_before.replace(
         "; timestamp rank",
-        "; attached to C2 (Gray Ogre); name set to Citizen; creature types set to"
+        "; attached to P2 (Gray Ogre); name set to Citizen; creature types set to"
         " Citizen; land through an effect; timestamp rank",
     )
     assert ogre_after == ogre_before.replace(
@@ -364,7 +364,7 @@ def test_stack_text_states_announced_x_only_when_present() -> None:
     stack = render_decision(_redigest(payload)).text.split(
         "Stack (native order, top to bottom):\n", 1
     )[1]
-    assert stack.startswith("S1: ") and "; X = 3" in stack.split("\n", 1)[0]
+    assert stack.startswith("S1") and "; X = 3" in stack.split("\n", 1)[0]
 
 
 def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
@@ -457,7 +457,10 @@ def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
     stack = capture_text_decision(env).text.split(
         "Stack (native order, top to bottom):\n", 1
     )[1]
-    assert stack.startswith("S1: spell [D1]; controller You; source C2 (Hakoda,")
+    assert stack.startswith(
+        "S1 (Hakoda, Selfless Commander): spell [D1]; controller You; "
+        "source S1 (Hakoda,"
+    )
 
 
 _KEYWORDS = (
@@ -481,6 +484,7 @@ _KEYWORDS = (
 # A field added to the native observation fails here until it is listed.
 _TEXT_FIELDS: dict[type, dict[str, str]] = {
     managym.Permanent: {
+        "card": "owner, cost, mana value, type flags, token, legendary, Ally, Lesson, ward and Rules",
         "id": "the permanent's alias",
         "registry_key": "[definition]",
         "controller_id": "controller",
@@ -552,6 +556,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "targets": "targets",
         "x": "X =",
         "granted_keywords": "granted keywords",
+        "kicked": "kicked",
+        "card": "Spell: owner, copy or token, power/toughness, cost, types, keywords and Rules",
     },
     managym.PlayerTurnHistory: {
         "attacked": "This turn: attacked",
@@ -675,7 +681,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         ],
     }
     text = render_decision(_redigest(payload)).text
-    assert "; blocking C2 (Gray Ogre);" in text
+    assert "; blocking P2 (Gray Ogre);" in text
     assert "; attacking;" in text
     assert (
         "; has lost all abilities; used-up abilities 1; dealt damage this turn" in text
@@ -909,8 +915,8 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration(
         line for line in text.splitlines() if "waiting delayed trigger" in line
     )
     assert "waits for the watched object to die" in relation
-    assert "watching C" in relation and "(Gray Ogre)" in relation
-    assert "remembered C" in relation and "(Mountain)" in relation
+    assert "watching P" in relation and "(Gray Ogre)" in relation
+    assert "remembered P" in relation and "(Mountain)" in relation
     assert (
         "waiting ends at this turn's cleanup" if this_turn else "no stated expiry"
     ) in relation
@@ -1018,11 +1024,7 @@ def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects(
                 ],
             }
         ]
-    ogre_card = next(
-        card
-        for card in state["agent_cards"]
-        if card["registry_key"] == ogre["registry_key"] and card["zone"] == 2
-    )
+    ogre_card = ogre["card"]
     assert "legendary no" in decision.text
     ogre_card["is_legendary"] = True
     text = render_decision(_redigest(payload)).text

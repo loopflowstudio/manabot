@@ -62,18 +62,22 @@ def _assert_names_the_recording_revision(message: str, version: int) -> None:
     )
 
 
-def test_v9_is_the_fresh_default_and_both_inputs_are_serialized() -> None:
+def test_v11_is_the_fresh_default_and_every_input_is_serialized() -> None:
     config = ObservationConfig()
-    assert config.policy_input_version == POLICY_INPUT_VERSION == 9
+    assert config.policy_input_version == POLICY_INPUT_VERSION == 11
     dumped = config.model_dump()
-    assert dumped["policy_input_version"] == 9 and dumped["max_facts"] == 512
+    assert dumped["policy_input_version"] == 11 and dumped["max_facts"] == 512
     assert ObservationConfig.from_checkpoint(dumped) == config
-    v10 = ObservationConfig(policy_input_version=10)
-    assert v10.model_dump()["policy_input_version"] == 10
-    assert ObservationConfig.from_checkpoint(v10.model_dump()) == v10
+    for version in (9, 10):
+        # The deprecated v9/v10 rows still load, and warn.
+        with pytest.warns(DeprecationWarning, match="removed in 0.4.0"):
+            legacy = ObservationConfig(policy_input_version=version)
+        assert legacy.model_dump()["policy_input_version"] == version
+        with pytest.warns(DeprecationWarning):
+            assert ObservationConfig.from_checkpoint(legacy.model_dump()) == legacy
 
 
-@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 11])
+@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 12])
 def test_saved_configuration_of_another_input_is_rejected(version: int) -> None:
     payload = {**ObservationConfig().model_dump(), "policy_input_version": version}
     with pytest.raises(UnsupportedPolicyInput) as raised:

@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from manabot.backends.torch.live_tokens import LiveTokens
-from manabot.backends.torch.policy import OBJECT_VALIDITY_KEYS, ActorCritic
+from manabot.backends.torch.policy import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
 from tests.model.test_inference import PolicyFixture, _policy
@@ -71,7 +71,9 @@ def test_outputs_and_gradients_match_padded(
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
     with torch.no_grad(), PolicyInference(live) as scope:
         prepared = scope.prepare(obs)
-        present = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
+        present = sum(
+            int(obs[key].count_nonzero()) for key in live._validity_keys()
+        )
         tokens = len(obs["actions_valid"]) if value_aggregation == "value_token" else 0
         assert prepared.live_token_count == present + tokens
         totals: list[int | None] = []

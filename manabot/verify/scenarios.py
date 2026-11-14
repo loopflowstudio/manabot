@@ -34,9 +34,7 @@ SPACE_TARGET = int(managym.ActionSpaceEnum.CHOOSE_TARGET)
 SPACE_SCRY = int(managym.ActionSpaceEnum.SCRY)
 SPACE_PAY_OR_NOT = int(managym.ActionSpaceEnum.PAY_OR_NOT)
 ZONE_HAND = int(managym.ZoneEnum.HAND)
-ZONE_BATTLEFIELD = int(managym.ZoneEnum.BATTLEFIELD)
 ZONE_GRAVEYARD = int(managym.ZoneEnum.GRAVEYARD)
-ZONE_STACK = int(managym.ZoneEnum.STACK)
 PHASE_PRECOMBAT = int(managym.PhaseEnum.PRECOMBAT_MAIN)
 PHASE_POSTCOMBAT = int(managym.PhaseEnum.POSTCOMBAT_MAIN)
 
@@ -59,17 +57,11 @@ def _card_name(raw: Any, object_id: int) -> str | None:
 
 
 def battlefield_pairs(raw: Any, side: str) -> list[tuple[Any, Any]]:
-    """(CardData, PermanentData) pairs for one side's battlefield.
+    """(CardData, PermanentData) pairs for one side's battlefield: each
+    permanent with its own card record."""
 
-    The engine pushes each permanent and its battlefield card in lockstep
-    (observation.rs add_permanent), so the k-th battlefield-zone card on a
-    side matches the k-th permanent on that side.
-    """
-
-    cards = raw.agent_cards if side == "agent" else raw.opponent_cards
     perms = raw.agent_permanents if side == "agent" else raw.opponent_permanents
-    battlefield_cards = [c for c in cards if int(c.zone) == ZONE_BATTLEFIELD]
-    return list(zip(battlefield_cards, perms))
+    return [(perm.card, perm) for perm in perms if perm.card is not None]
 
 
 def zone_names(raw: Any, side: str, zone: int) -> list[str]:
@@ -80,15 +72,7 @@ def zone_names(raw: Any, side: str, zone: int) -> list[str]:
 def stack_names(raw: Any) -> list[str]:
     """Names of spells on the stack, top first (both players' spells)."""
 
-    names = [
-        (int(c.id), str(c.name))
-        for c in list(raw.agent_cards) + list(raw.opponent_cards)
-        if int(c.zone) == ZONE_STACK
-    ]
-    # populate_cards pushes stack spells top-first per side; merge is
-    # approximate when both players have spells on the stack. Scenario and
-    # micro games essentially always have <= 2, with the opponent's below.
-    return [name for _, name in names]
+    return [str(item.card.name) for item in raw.stack_objects if item.card is not None]
 
 
 def hero_view(raw: Any) -> tuple[str, str]:

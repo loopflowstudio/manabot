@@ -24,9 +24,11 @@ action continuation joins, object references). Trimming therefore removes only
 all-zero rows nothing refers to, so admission outcomes and messages are
 unchanged and outputs differ only by floating-point summation order.
 
-Object axes (cards and permanents) move object coordinates. They are trimmed
-only when padding objects are inert: not under `historical_mean`, whose
-average includes padding, and not with belief rows, which follow the objects.
+Object axes (cards, permanents and the input v11 stack) move object
+coordinates. They are trimmed only when padding objects are inert: not under
+`historical_mean`, whose average includes padding, and not with belief rows,
+which follow the objects. The deprecated v9/v10 layouts have no stack: its
+capacity is zero and its keys are absent.
 """
 
 from collections.abc import Mapping
@@ -61,9 +63,13 @@ ROW_KEYS: dict[str, tuple[str, ...]] = {
         "agent_permanents_valid",
         "opponent_permanents_valid",
     ),
+    "stack": ("stack", "stack_valid"),
 }
+# Keys only input v11 carries; absent from v9/v10 batches.
+STACK_KEYS = ("stack", "stack_valid")
 SEAT_KEYS: dict[str, tuple[str, ...]] = {
-    "cards": ("semantic_cards",),
+    # `card_turn_state` (inputs v10 and v11) aligns with the card rows.
+    "cards": ("semantic_cards", "card_turn_state"),
     "known": ("known_hand",),
     "decklists": ("decklists",),
 }
@@ -94,6 +100,7 @@ ONE_BASED_REFERENCES: tuple[tuple[str, int], ...] = tuple(
         ("agent_permanents", "blocking"),
         ("opponent_permanents", "attached_to"),
         ("opponent_permanents", "blocking"),
+        ("stack", "source"),
     )
 )
 ZERO_BASED_REFERENCES: tuple[tuple[str, int], ...] = (
@@ -123,7 +130,7 @@ class BucketSizes:
     @property
     def trims_objects(self) -> bool:
         return any(
-            self.sizes[axis] < self.capacities[axis] for axis in ("cards", "permanents")
+            self.sizes[axis] < self.capacities[axis] for axis in OBJECT_AXES
         )
 
 
@@ -141,6 +148,7 @@ def _capacities(encoder: ObservationEncoder) -> dict[str, int]:
         "known": encoder.cards_per_player,
         "decklists": encoder.cards_per_player,
         "permanents": encoder.perms_per_player,
+        "stack": encoder.max_stack_objects,
     }
 
 
@@ -211,7 +219,11 @@ def has_history_events(obs: Mapping[str, object]) -> bool:
 def _object_references(obs: Mapping[str, np.ndarray]) -> list[np.ndarray]:
     """Every object reference in zero-based full object coordinates."""
     references = [obs["action_focus"].astype(np.float32)]
-    references.extend(obs[key][..., column] - 1 for key, column in ONE_BASED_REFERENCES)
+    references.extend(
+        obs[key][..., column] - 1
+        for key, column in ONE_BASED_REFERENCES
+        if key in obs
+    )
     if has_history_events(obs):
         references.extend(
             obs[key][..., column] for key, column in ZERO_BASED_REFERENCES
@@ -223,13 +235,14 @@ def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]
     """(axis, start, rows) of each object segment after the two player rows.
 
     The object table is players, agent cards, opponent cards, agent
-    permanents, opponent permanents, each segment at its declared capacity.
+    permanents, opponent permanents, then (input v11) the stack, each segment
+    at its declared capacity; a v9/v10 stack has none.
     """
     segments: list[tuple[str, int, int]] = []
     start = 2
-    for axis in ("cards", "cards", "permanents", "permanents"):
-        segments.append((axis, start, capacities[axis]))
-        start += capacities[axis]
+    for axis in ("cards", "cards", "permanents", "permanents", "stack"):
+        segments.append((axis, start, capacities.get(axis, 0)))
+        start += capacities.get(axis, 0)
     return segments
 
 
@@ -249,11 +262,10 @@ def _object_extents(
         index = np.floor(_float32(values, -1.0)).reshape(count, -1)
         inside = (index >= 0) & (index < objects)
         flat[(offsets + index.astype(np.int64))[inside]] = True
-    needs = {
-        "cards": np.zeros(count, np.int64),
-        "permanents": np.zeros(count, np.int64),
-    }
+    needs = {axis: np.zeros(count, np.int64) for axis in OBJECT_AXES}
     for axis, start, rows in segments:
+        if rows == 0:
+            continue
         # This segment's columns, last first.
         segment = np.ascontiguousarray(named[:, start + rows - 1 : start - 1 : -1])
         needs[axis] = np.maximum(needs[axis], _last_rows(segment))
@@ -272,7 +284,10 @@ AXES: tuple[str, ...] = (
     "known",
     "decklists",
     "permanents",
+    "stack",
 )
+# Axes whose rows are object-table segments.
+OBJECT_AXES: tuple[str, ...] = ("cards", "permanents", "stack")
 
 
 def row_needs(
@@ -304,11 +319,12 @@ def row_needs(
 
     for axis, keys in ROW_KEYS.items():
         for key in keys:
-            if key not in _UNMEASURED_KEYS:
+            if key not in _UNMEASURED_KEYS and key in obs:
                 need(axis, _extent(obs[key], 1))
     for axis, keys in SEAT_KEYS.items():
         for key in keys:
-            need(axis, _extent(obs[key], 2))
+            if key in obs:
+                need(axis, _extent(obs[key], 2))
     # Live effect headers name detail and member spans [offset, offset + count).
     effects = obs["effects"]
     for axis, (offset, length) in (
@@ -346,8 +362,8 @@ def sizes_of(
         for column, axis in enumerate(AXES)
     }
     if not objects:
-        sizes["cards"] = capacities["cards"]
-        sizes["permanents"] = capacities["permanents"]
+        for axis in OBJECT_AXES:
+            sizes[axis] = capacities[axis]
     return BucketSizes(sizes, capacities)
 
 

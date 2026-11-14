@@ -174,6 +174,7 @@ def test_object_embeddings(
         2  # Two players
         + observation_space.encoder.cards_per_player * 2  # Cards for both players
         + observation_space.encoder.perms_per_player * 2  # Permanents for both players
+        + observation_space.encoder.max_stack_objects  # One shared stack (v11)
     )
     batch_size = obs[next(iter(obs))].shape[0]
     assert objects.shape == (

@@ -31,7 +31,7 @@ from manabot.model.admission import admit_observation
 from manabot.verify.text_observation import priority_root
 import managym
 
-V9 = ObservationConfig()
+V9 = ObservationConfig(policy_input_version=9)
 V10 = ObservationConfig(policy_input_version=10)
 
 

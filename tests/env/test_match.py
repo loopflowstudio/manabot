@@ -79,32 +79,21 @@ def test_reward_progress_shaping():
             opponent_life_loss_reward=1.0,
         )
     )
-    battlefield = 2
+    def permanent(*, is_land: bool, is_creature: bool) -> SimpleNamespace:
+        types = SimpleNamespace(is_land=is_land, is_creature=is_creature)
+        return SimpleNamespace(card=SimpleNamespace(card_types=types))
+
     last_obs = SimpleNamespace(
-        agent_cards=[
-            SimpleNamespace(
-                zone=battlefield,
-                card_types=SimpleNamespace(is_land=True, is_creature=False),
-            )
-        ],
+        agent_permanents=[permanent(is_land=True, is_creature=False)],
         opponent=SimpleNamespace(life=20),
         game_over=False,
         won=False,
     )
     new_obs = SimpleNamespace(
-        agent_cards=[
-            SimpleNamespace(
-                zone=battlefield,
-                card_types=SimpleNamespace(is_land=True, is_creature=False),
-            ),
-            SimpleNamespace(
-                zone=battlefield,
-                card_types=SimpleNamespace(is_land=True, is_creature=False),
-            ),
-            SimpleNamespace(
-                zone=battlefield,
-                card_types=SimpleNamespace(is_land=False, is_creature=True),
-            ),
+        agent_permanents=[
+            permanent(is_land=True, is_creature=False),
+            permanent(is_land=True, is_creature=False),
+            permanent(is_land=False, is_creature=True),
         ],
         opponent=SimpleNamespace(life=18),
         game_over=False,
@@ -121,18 +110,18 @@ def test_reward_progress_shaping_stacks_with_terminal_reward():
             land_play_reward=1.0,
         )
     )
-    battlefield = 2
     last_obs = SimpleNamespace(
-        agent_cards=[],
+        agent_permanents=[],
         opponent=SimpleNamespace(life=20),
         game_over=False,
         won=False,
     )
     new_obs = SimpleNamespace(
-        agent_cards=[
+        agent_permanents=[
             SimpleNamespace(
-                zone=battlefield,
-                card_types=SimpleNamespace(is_land=True, is_creature=False),
+                card=SimpleNamespace(
+                    card_types=SimpleNamespace(is_land=True, is_creature=False)
+                )
             )
         ],
         opponent=SimpleNamespace(life=20),

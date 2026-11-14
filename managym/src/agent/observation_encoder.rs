@@ -518,15 +518,7 @@ pub fn encode_into(
             &legacy
         }
         InputLayout::OneToken => {
-            let complete = obs
-                .agent_permanents
-                .iter()
-                .chain(&obs.opponent_permanents)
-                .all(|permanent| permanent.card.is_some())
-                && obs.stack_objects.iter().all(|object| {
-                    (object.kind == StackObjectKindData::Spell) == object.card.is_some()
-                });
-            if !complete {
+            if obs.historical() {
                 return Err(ObservationEncodeError::HistoricalObservation);
             }
             obs

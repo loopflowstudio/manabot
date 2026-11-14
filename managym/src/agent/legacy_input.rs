@@ -29,12 +29,7 @@ pub const PERMANENT_DIM: usize = PERMANENT_VALID + 1;
 /// already hold them, is returned unchanged.
 pub fn view(obs: &Observation) -> Observation {
     let mut legacy = obs.clone();
-    let historical = obs
-        .agent_permanents
-        .iter()
-        .chain(&obs.opponent_permanents)
-        .any(|permanent| permanent.card.is_none());
-    if historical {
+    if obs.historical() {
         return legacy;
     }
     let spells = obs

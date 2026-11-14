@@ -143,13 +143,14 @@ def admission_catalog(cards: "SemanticCardEncoder | None") -> admission.Catalog 
 
 @dataclass(frozen=True)
 class CardReferences:
-    """Admitted catalog indexes for visible cards, permanents, public hands and
-    known decklists."""
+    """Admitted catalog indexes for visible cards, permanents, public hands,
+    known decklists and (input v11) stack rows [B, S]."""
 
     cards: torch.Tensor
     permanents: torch.Tensor
     known: torch.Tensor | None
     decklists: torch.Tensor | None = None
+    stack: torch.Tensor | None = None
 
 
 class SemanticCardEncoder(nn.Module):

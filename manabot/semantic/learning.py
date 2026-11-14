@@ -557,10 +557,40 @@ class BoundSemanticPack:
         slots: list[int] = []
         identity_ids: list[int] = []
 
+        # Card roles cover every card record on a side: its listed cards, the
+        # spells it owns (top first) and the permanents it controls. The
+        # schema's roles are a world-binding input, so permanents and spells
+        # keep the card role and slot order they had as card rows.
+        def side_cards(cards: Any, owner: int, permanents: Any) -> list[Any]:
+            spells = [
+                item.card
+                for item in observation.stack_objects
+                if item.card is not None and item.card.owner_id == owner
+            ]
+            return [
+                *cards,
+                *spells,
+                *(permanent.card for permanent in permanents if permanent.card),
+            ]
+
         for role_name, cards in (
-            ("agent_card", observation.agent_cards),
+            (
+                "agent_card",
+                side_cards(
+                    observation.agent_cards,
+                    observation.agent.id,
+                    observation.agent_permanents,
+                ),
+            ),
             ("agent_sideboard", observation.agent_sideboard),
-            ("opponent_card", observation.opponent_cards),
+            (
+                "opponent_card",
+                side_cards(
+                    observation.opponent_cards,
+                    observation.opponent.id,
+                    observation.opponent_permanents,
+                ),
+            ),
         ):
             role = self.schema.object_roles[role_name]
             for slot, card in enumerate(cards):
@@ -572,7 +602,7 @@ class BoundSemanticPack:
 
         stack_role = self.schema.object_roles["stack_ability"]
         for slot, stack_object in enumerate(observation.stack_objects):
-            if int(stack_object.kind) == 0:  # spell already appears in visible cards
+            if int(stack_object.kind) == 0:  # a spell has its card role above
                 continue
             card_def_id = int(stack_object.source_card_registry_key)
             definition_rows.append(self.definition_row(card_def_id))

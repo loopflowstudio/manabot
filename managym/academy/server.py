@@ -41,7 +41,6 @@ from managym.enums import (
     ActionSpaceEnum,
     EventTypeEnum,
     StepEnum,
-    ZoneEnum,
 )
 from managym.experience import (
     PROTOCOL_VERSION,
@@ -52,6 +51,7 @@ from managym.experience import (
 )
 from managym.experience_projection import (
     HERO_PLAYER_INDEX,
+    card_records,
     decision_surface_view,
     describe_actions,
     enum_name,
@@ -384,19 +384,10 @@ class StudyAttempt:
 def _definition_ids_by_object(obs: managym.Observation) -> dict[int, int]:
     """Resolve live card, permanent, and stack identities to typed definitions."""
 
-    result: dict[int, int] = {}
-    for cards, permanents in (
-        (obs.agent_cards, obs.agent_permanents),
-        (obs.opponent_cards, obs.opponent_permanents),
-    ):
-        for card in cards:
-            result[int(card.id)] = int(card.registry_key)
-        battlefield_cards = [
-            card for card in cards if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
-        ]
-        for index, permanent in enumerate(permanents):
-            if index < len(battlefield_cards):
-                result[int(permanent.id)] = int(battlefield_cards[index].registry_key)
+    result = {int(card.id): int(card.registry_key) for card in card_records(obs)}
+    for permanent in (*obs.agent_permanents, *obs.opponent_permanents):
+        if permanent.card is not None:
+            result[int(permanent.id)] = int(permanent.card.registry_key)
     for stack_object in obs.stack_objects:
         result[int(stack_object.stack_object_id)] = int(
             stack_object.source_card_registry_key
@@ -473,21 +464,12 @@ def _encountered_definition_ids(
     before_taps: dict[int, tuple[int, bool]] = {}
     after_taps: dict[int, tuple[int, bool]] = {}
     for observation, target in ((before, before_taps), (after, after_taps)):
-        for cards, permanents in (
-            (observation.agent_cards, observation.agent_permanents),
-            (observation.opponent_cards, observation.opponent_permanents),
-        ):
-            battlefield_cards = [
-                card
-                for card in cards
-                if enum_name(ZoneEnum, card.zone) == "BATTLEFIELD"
-            ]
-            for index, permanent in enumerate(permanents):
-                if index < len(battlefield_cards):
-                    target[int(permanent.id)] = (
-                        int(battlefield_cards[index].registry_key),
-                        bool(permanent.tapped),
-                    )
+        for permanent in (*observation.agent_permanents, *observation.opponent_permanents):
+            if permanent.card is not None:
+                target[int(permanent.id)] = (
+                    int(permanent.card.registry_key),
+                    bool(permanent.tapped),
+                )
     for identity, (definition_id, was_tapped) in before_taps.items():
         current = after_taps.get(identity)
         if current is not None and not was_tapped and current[1]:

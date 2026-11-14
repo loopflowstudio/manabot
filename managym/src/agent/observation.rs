@@ -2192,6 +2192,19 @@ impl Observation {
             )
     }
 
+    /// A capture written before permanents and spells carried card records:
+    /// some permanent or spell lacks its record.
+    pub fn historical(&self) -> bool {
+        self.agent_permanents
+            .iter()
+            .chain(&self.opponent_permanents)
+            .any(|permanent| permanent.card.is_none())
+            || self
+                .stack_objects
+                .iter()
+                .any(|object| object.kind == StackObjectKindData::Spell && object.card.is_none())
+    }
+
     pub fn validate(&self) -> bool {
         if self.agent.id == self.opponent.id {
             return false;

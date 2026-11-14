@@ -85,6 +85,8 @@ def transfer_admitted(
         joins["known"] = references.known
     if references.decklists is not None:
         joins["decklists"] = references.decklists
+    if references.stack is not None:
+        joins["stack"] = references.stack
     moved, transfers = transfer(
         {**admitted, **{f"references/{key}": value for key, value in joins.items()}},
         device,
@@ -97,6 +99,7 @@ def transfer_admitted(
             moved["references/permanents"],
             moved.get("references/known"),
             moved.get("references/decklists"),
+            moved.get("references/stack"),
         ),
         admitted.legal,
         admitted.buckets,
@@ -164,16 +167,20 @@ def trim_observation(
     trimmed = dict(obs)
     for axis, keys in ROW_KEYS.items():
         for key in keys:
-            trimmed[key] = obs[key][:, : buckets.sizes[axis]]
+            if key in obs:
+                trimmed[key] = obs[key][:, : buckets.sizes[axis]]
     for axis, keys in SEAT_KEYS.items():
         for key in keys:
-            trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
+            if key in obs:
+                trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
     if not buckets.trims_objects:
         return trimmed
     trimmed["action_focus"] = _object_remap(trimmed["action_focus"], buckets)
     for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
         for key in dict.fromkeys(key for key, _ in references):
             if key == "events" and not has_history_events(trimmed):
+                continue
+            if key not in trimmed:
                 continue
             columns = [column for name, column in references if name == key]
             value = trimmed[key].clone()
@@ -207,6 +214,7 @@ def trim_admitted(
             None
             if references.decklists is None
             else references.decklists[:, :, : sizes["decklists"]],
+            None if references.stack is None else references.stack[:, : sizes["stack"]],
         ),
         obs.legal,
     )

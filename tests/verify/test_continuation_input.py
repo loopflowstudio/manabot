@@ -180,9 +180,11 @@ def _without_active_effects(viewer_state: dict[str, JsonValue]) -> dict[str, Jso
     return viewer_state | {"shared_effects": []}
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_retained_eligibility_separates_portable_text_and_policy_input() -> None:
     torch.manual_seed(608)
-    space = ObservationSpace()
+    # The receipt retains v9 relation rows, whose object joins index v9 rows.
+    space = ObservationSpace(ObservationConfig(policy_input_version=9))
     agent = ActorCritic(space, ModelConfig(hidden_dim=16))
     encoded: list[dict[str, np.ndarray]] = []
     texts: list[str] = []

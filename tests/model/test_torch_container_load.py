@@ -46,7 +46,7 @@ def _convert(pt: Path, target: Path) -> None:
 
 @pytest.mark.parametrize("optimized", [False, True])
 def test_pt_and_container_load_the_same_policy(tmp_path: Path, optimized: bool) -> None:
-    space = ObservationSpace()
+    space = ObservationSpace(ObservationConfig(policy_input_version=9))
     torch.manual_seed(0)
     model = ActorCritic(
         space,
