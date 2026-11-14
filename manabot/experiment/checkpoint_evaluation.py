@@ -17,6 +17,7 @@ from manabot.eval.monitor import MonitorProtocol, MonitorResult, _request, _summ
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import authored_matchup_sha256, source_bundle_sha256
+from manabot.policy.protocol import Backend
 from manabot.sim import players
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
@@ -89,6 +90,7 @@ def checkpoint_manifest(
     coordinates: TrainingCoordinates,
     protocol: MonitorProtocol,
     *,
+    backend: Backend,
     execution: EvalExecution | None = None,
 ) -> MonitorResult:
     """Admit exact checkpoint bytes and runtime identities before playing games."""
@@ -102,6 +104,7 @@ def checkpoint_manifest(
         raise ValueError("monitoring requires its exact declared authored setup")
     admission = register_checkpoint(
         path,
+        backend=backend,
         match=run.regime.root_match,
         content_suite=suite,
         player_id="monitor-checkpoint",
@@ -181,6 +184,7 @@ def evaluate_checkpoint(
     *,
     protocol: MonitorProtocol | None = None,
     concurrent_activity: str = "unknown; host load is not contention attribution",
+    backend: Backend,
     execution: EvalExecution | None = None,
     inference: InferenceRuntime | None = None,
 ) -> MonitorResult:
@@ -198,6 +202,7 @@ def evaluate_checkpoint(
             artifact,
             coordinates,
             protocol,
+            backend=backend,
             execution=execution,
         )
     except Exception as exc:

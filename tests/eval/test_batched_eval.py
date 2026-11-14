@@ -15,8 +15,9 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.backends.torch.checkpoint import save_checkpoint
-from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.arrays import array_fields, on_device
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic, sample_rows
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.eval.admission import register_checkpoint
@@ -27,7 +28,6 @@ from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model.inference import transfer
 from manabot.sim import child, serving
 from manabot.sim.execution import EvalComputeV1, EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
@@ -39,7 +39,6 @@ from manabot.sim.serving import (
     _infer,
     _PendingRequest,
     _record_dispatch,
-    sample_rows,
 )
 from manabot.sim.serving_protocol import (
     DecisionRequest,
@@ -51,6 +50,8 @@ from manabot.sim.serving_protocol import (
 )
 from managym import WORLD_VERSION
 from tests.eval.arena_fixture import arena_fixture
+from tests.model.prepared_routes import host_inputs
+from tests.model.test_inference import _policy
 
 
 def fixture_policy(
@@ -137,15 +138,19 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
     logits = torch.tensor([[1.0, 2.0, -1e8], [3.0, 4.0, -1e8]])
     masks = torch.tensor([[1.0, 1.0, 0.0], [1.0, 1.0, 0.0]])
     before = torch.random.get_rng_state()
-    batched = sample_rows(logits, masks, [5, 7], False)
+    batched = sample_rows((logits).numpy(), (masks).numpy(), [5, 7], False)
     assert batched == [
-        sample_rows(logits[i : i + 1], masks[i : i + 1], [seed], False)[0]
+        sample_rows(
+            (logits[i : i + 1]).numpy(), (masks[i : i + 1]).numpy(), [seed], False
+        )[0]
         for i, seed in enumerate([5, 7])
     ]
     assert torch.equal(before, torch.random.get_rng_state())
-    assert batched[::-1] == sample_rows(logits.flip(0), masks.flip(0), [7, 5], False)
+    assert batched[::-1] == sample_rows(
+        (logits.flip(0)).numpy(), (masks.flip(0)).numpy(), [7, 5], False
+    )
     with pytest.raises(ValueError, match="invalid legal"):
-        sample_rows(logits, torch.zeros_like(masks), [5, 7], False)
+        sample_rows((logits).numpy(), (torch.zeros_like(masks)).numpy(), [5, 7], False)
 
 
 def test_served_checkpoint_records_its_input_version(tmp_path: Path) -> None:
@@ -176,7 +181,7 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
     execution = EvalExecution(deadline_unix=time.time() + 120)
     _, (player,) = bind_execution(key, (player,), execution)
     perf = EvalPerformance("test")
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     store.admit(PolicyAdmission(player, str(path), (selected_match(),)))
     requests = [request_for(player, execution, seed) for seed in (5, 7)]
     replies = _infer(store, requests, "batch")
@@ -190,18 +195,20 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
         for k in requests[0].observation
     }
     with torch.no_grad():
-        batched, _ = resident.agent(resident.scope.prepare(tensor))
+        batched, _ = resident.agent(resident.scope.prepare(host_inputs(tensor)))
         scalar = torch.cat(
             [
                 resident.agent(
-                    resident.scope.prepare({k: v[i : i + 1] for k, v in tensor.items()})
+                    resident.scope.prepare(
+                        host_inputs({k: v[i : i + 1] for k, v in tensor.items()})
+                    )
                 )[0]
                 for i in range(2)
             ]
         )
     torch.testing.assert_close(batched, scalar, rtol=1e-5, atol=1e-5)
     assert [r.action for r in replies] == sample_rows(
-        scalar, tensor["actions_valid"], [5, 7], False
+        (scalar).numpy(), (tensor["actions_valid"]).numpy(), [5, 7], False
     )
     _, second, _, second_path = fixture_policy(tmp_path, 84)
     _, (second,) = bind_execution(key, (second,), execution)
@@ -221,7 +228,7 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
     store.admit(PolicyAdmission(second, str(second_path), (selected_match(),)))
     assert perf.counters["evictions"] == 1
     with pytest.raises(RuntimeError, match="closed"):
-        resident.scope.catalog()
+        resident.scope.cache_programs()
     assert PolicyKey.from_registration(second, execution) != requests[0].policy
     store.close()
 
@@ -247,12 +254,13 @@ def test_registered_non_default_checkpoint_is_admitted_by_serving(
         content_suite=SELECTED_SUITE,
         player_id="non-default",
         display_name="Non-default space",
+        backend=TORCH_BACKEND,
     ).registration
     fresh = runtime_fingerprints(match_config=selected_match())
     assert player.observation_abi_sha256 != fresh["observation_abi_sha256"]
     execution = EvalExecution(deadline_unix=time.time() + 120)
     _, (player,) = bind_execution(key, (player,), execution)
-    store = PolicyStore(execution, EvalPerformance("test"))
+    store = PolicyStore(execution, EvalPerformance("test"), backend=TORCH_BACKEND)
     try:
         assert store.admit(PolicyAdmission(player, str(path), (selected_match(),))) == (
             space.encoder.config
@@ -263,7 +271,7 @@ def test_registered_non_default_checkpoint_is_admitted_by_serving(
     drifted = player.model_copy(
         update={"observation_abi_sha256": fresh["observation_abi_sha256"]}
     )
-    store = PolicyStore(execution, EvalPerformance("test"))
+    store = PolicyStore(execution, EvalPerformance("test"), backend=TORCH_BACKEND)
     try:
         with pytest.raises(ValueError, match="checkpoint observation ABI drift"):
             store.admit(PolicyAdmission(drifted, str(path), (selected_match(),)))
@@ -299,7 +307,7 @@ def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
         PolicyKey.from_registration(other, execution)
     )
     perf = EvalPerformance("test")
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     store.admit(PolicyAdmission(player, str(path), (selected_match(),)))
     store.admit(PolicyAdmission(other, str(path), (mirror,)))
     assert perf.counters["model_loads"] == 1
@@ -386,17 +394,24 @@ def test_service_batches_a_backlog_of_overdue_requests(
 
 
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
-    tensors = {
-        "a": torch.arange(6, dtype=torch.float32).reshape(2, 3),
-        "b": torch.ones(2, 4, 5),
-        "rows": torch.arange(4).reshape(2, 2),
+    case = _policy()
+    host = case.agent.prepare(host_inputs(case.obs))
+    arrays = array_fields(host, np.ndarray)
+    moved = array_fields(on_device(host, "meta"), torch.Tensor)
+    assert {
+        key: (value.shape, value.dtype, value.device.type)
+        for key, value in moved.items()
+    } == {
+        key: (torch.Size(value.shape), torch.from_numpy(value).dtype, "meta")
+        for key, value in arrays.items()
     }
-    moved, copies = transfer(tensors, torch.device("meta"))
-    assert copies == 2
-    assert {k: (v.shape, v.dtype, v.device.type) for k, v in moved.items()} == {
-        k: (v.shape, v.dtype, "meta") for k, v in tensors.items()
-    }
-    assert transfer(tensors, torch.device("cpu")) == (tensors, 0)
+    # Every dtype group shares exactly one transferred allocation.
+    assert len({value.untyped_storage()._cdata for value in moved.values()}) == len(
+        {value.dtype for value in moved.values()}
+    )
+    cpu = array_fields(on_device(host, "cpu"), torch.Tensor)
+    for key, value in cpu.items():
+        np.testing.assert_array_equal(value.numpy(), arrays[key])
 
 
 def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
@@ -444,7 +459,7 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
     execution = EvalExecution(deadline_unix=time.time() + 60)
     _, (player,) = bind_execution(key, (player,), execution)
     perf = EvalPerformance("controlled", started=0)
-    store = PolicyStore(execution, perf)
+    store = PolicyStore(execution, perf, backend=TORCH_BACKEND)
     store.admissions[PolicyKey.from_registration(player, execution)] = PolicyAdmission(
         player, str(path), (selected_match(),)
     )
@@ -452,7 +467,7 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
         replace(request_for(player, execution, seed), submitted=1) for seed in (5, 7)
     ]
     clock = [10.0]
-    load = serving.load_checkpoint
+    load = TORCH_BACKEND.load_policy
 
     def delayed_load(
         filename: str, *, bucketed_shapes: bool, live_tokens: bool
@@ -463,7 +478,7 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
         clock[0] += 40  # Inject the duration; never create resource pressure.
         return result
 
-    monkeypatch.setattr(serving, "load_checkpoint", delayed_load)
+    monkeypatch.setattr(TORCH_BACKEND, "load_policy", delayed_load)
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
     client, _ = Pipe()
     _record_dispatch(perf, [_PendingRequest(r, client, 3) for r in requests], "batch")
@@ -742,6 +757,7 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
 
     contract = arena_fixture()
     execution = EvalExecution(deadline_unix=time.time() + 120, max_active_games=2)
+    before = set(threading.enumerate())
     with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
         with CallbackEndpoint(runtime) as endpoint:
             with ProcessPoolExecutor(1, mp_context=mp.get_context("spawn")) as pool:
@@ -756,6 +772,7 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
     assert len(rows) == 2
     assert all(row["terminated"] and row["failure"] is None for row in rows)
     assert replay["passed"]
+    assert not (set(threading.enumerate()) - before)
 
 
 def test_expired_allocation_starts_no_games_and_search_stays_unbound(
@@ -799,7 +816,9 @@ def test_served_bucketed_policy_matches_the_padded_path(tmp_path: Path) -> None:
             deadline_unix=time.time() + 120, bucketed_shapes=bucketed
         )
         _, (bound,) = bind_execution(key, (player,), execution)
-        store = PolicyStore(execution, EvalPerformance(str(bucketed)))
+        store = PolicyStore(
+            execution, EvalPerformance(str(bucketed)), backend=TORCH_BACKEND
+        )
         store.admit(PolicyAdmission(bound, str(path), (selected_match(),)))
         request = request_for(bound, execution)
         policy = store.get(request.policy)
@@ -809,7 +828,7 @@ def test_served_bucketed_policy_matches_the_padded_path(tmp_path: Path) -> None:
                 k: torch.from_numpy(v).float().unsqueeze(0)
                 for k, v in request.observation.items()
             }
-            logits.append(policy.agent(policy.scope.prepare(inputs))[0])
+            logits.append(policy.agent(policy.scope.prepare(host_inputs(inputs)))[0])
         store.close()
     torch.testing.assert_close(logits[0], logits[1], atol=1e-5, rtol=1e-5)
 
@@ -821,7 +840,7 @@ def test_cuda_retained_input_parity(tmp_path: Path) -> None:
     for device in ("cpu", "cuda"):
         execution = EvalExecution(device=device, deadline_unix=time.time() + 120)
         _, (bound,) = bind_execution(key, (player,), execution)
-        store = PolicyStore(execution, EvalPerformance(device))
+        store = PolicyStore(execution, EvalPerformance(device), backend=TORCH_BACKEND)
         store.admit(PolicyAdmission(bound, str(path), (selected_match(),)))
         request = request_for(bound, execution)
         policy = store.get(request.policy)
@@ -830,7 +849,9 @@ def test_cuda_retained_input_parity(tmp_path: Path) -> None:
                 k: torch.from_numpy(v).float().unsqueeze(0)
                 for k, v in request.observation.items()
             }
-            logits.append(policy.agent(policy.scope.prepare(inputs))[0].cpu())
+            logits.append(
+                policy.agent(policy.scope.prepare(host_inputs(inputs)))[0].cpu()
+            )
         store.close()
     torch.testing.assert_close(logits[0], logits[1], atol=1e-4, rtol=1e-4)
 

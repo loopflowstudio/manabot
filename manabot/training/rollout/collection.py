@@ -32,17 +32,22 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 
+from manabot.backends.torch.arrays import array_fields
 from manabot.backends.torch.learner import forward_precision
-from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import NumericalError, legal_mask, policy_logs, require
+from manabot.backends.torch.policy import ActorCritic, PolicyInference
+from manabot.backends.torch.rl import NumericalError, policy_logs, require
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
+from manabot.env.observation import (
+    ACTION_TYPE_DIM,
+    ActionEnum,
+    ObservationBuffers,
+    ObservationSpace,
+)
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
-from manabot.model.admission import AdmittedObservation
-from manabot.model.inference import PolicyInference
 from manabot.policy.buckets import AXES
+from manabot.policy.prepare import Prepared
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
@@ -102,7 +107,7 @@ class _ObservationRows:
     """
 
     def __init__(
-        self, buffers: dict[str, np.ndarray], keys: list[str], capacity: int
+        self, buffers: ObservationBuffers, keys: list[str], capacity: int
     ) -> None:
         self._buffers = buffers
         self._keys = keys
@@ -225,7 +230,7 @@ class RolloutBatch:
     rewards: np.ndarray
     dones: np.ndarray
     values: np.ndarray
-    next_obs: dict[str, np.ndarray]
+    next_obs: ObservationBuffers
     next_done: np.ndarray
     action_data: PackedActions
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
@@ -255,7 +260,7 @@ class RolloutBatch:
             )
         return rows
 
-    def ordered_obs(self) -> dict[str, np.ndarray]:
+    def ordered_obs(self) -> ObservationBuffers:
         """Non-action fields gathered into [time, trajectory, ...] order."""
         return self.recorded.ordered(self.actions.shape)
 
@@ -769,7 +774,7 @@ class SeatRoutedCollector:
         self, agent: ActorCritic, rows: np.ndarray, inference: PolicyInference
     ) -> np.ndarray:
         if self.opponent_mode == "self":
-            obs = self._slice_obs_tensors(rows, inference)
+            obs = inference.prepare(self._slice_obs_rows(rows))
             with torch.inference_mode():
                 with forward_precision(self.precision, self.device):
                     logits, _ = agent.forward(obs)
@@ -782,35 +787,24 @@ class SeatRoutedCollector:
         return self._opponent.select(self._buffers, rows)
 
     @staticmethod
-    def _policy_logs(
-        logits: torch.Tensor, obs: dict[str, torch.Tensor]
-    ) -> torch.Tensor:
+    def _policy_logs(logits: torch.Tensor, obs: Prepared[torch.Tensor]) -> torch.Tensor:
         try:
-            return policy_logs(logits, legal_mask(obs["actions_valid"]))
+            return policy_logs(logits, obs.legal)
         except NumericalError as error:
             error.tensors.update(
-                {f"observation/{key}": value.detach() for key, value in obs.items()}
+                {
+                    f"observation/{key}": value.detach()
+                    for key, value in array_fields(obs, torch.Tensor).items()
+                }
             )
             raise
 
-    def _slice_obs_tensors(
-        self, rows: np.ndarray, inference: PolicyInference | None = None
-    ) -> dict[str, torch.Tensor]:
-        obs = {}
-        for key in self.observation_space.shapes:
-            tensor = torch.from_numpy(self._buffers[key][rows])
-            if key == "action_focus":
-                # Training convention (VectorEnv): action_focus as float32.
-                tensor = tensor.float()
-            obs[key] = tensor
-        if inference is not None:
-            if inference.device.type != self.device.type or (
-                self.device.index is not None
-                and inference.device.index != self.device.index
-            ):
-                raise ValueError("collector and inference policy devices differ")
-            return inference.prepare(obs)
-        return {key: tensor.to(self.device) for key, tensor in obs.items()}
+    def _slice_obs_rows(self, rows: np.ndarray) -> ObservationBuffers:
+        """Host observation rows with the training action-focus dtype."""
+        obs = {key: self._buffers[key][rows] for key in self.observation_space.shapes}
+        # Training convention (VectorEnv): action_focus as float32.
+        obs["action_focus"] = obs["action_focus"].astype(np.float32)
+        return obs
 
     def _count_action_types(
         self, counter: dict[str, int], rows: np.ndarray, actions: np.ndarray
@@ -898,6 +892,15 @@ class SeatRoutedCollector:
         opponent_inference: PolicyInference | None = None,
     ) -> RolloutBatch | tuple[RolloutBatch, RolloutBatch]:
 
+        for scope in (inference, opponent_inference):
+            if scope is not None and (
+                scope.device.type != self.device.type
+                or (
+                    self.device.index is not None
+                    and scope.device.index != self.device.index
+                )
+            ):
+                raise ValueError("collector and inference policy devices differ")
         if self._needs_assignment or self._results:
             raise ValueError("commit adaptive targets before the next collection")
         start = time.perf_counter()
@@ -1431,7 +1434,7 @@ class SeatRoutedCollector:
         inference: PolicyInference,
     ) -> np.ndarray:
         with self.profiler.track("Observation preparation"):
-            obs_t = self._slice_obs_tensors(rows, inference)
+            obs_t = inference.prepare(self._slice_obs_rows(rows))
         with self.profiler.track("Policy inference and action selection"):
             with torch.no_grad():
                 outcomes: np.ndarray | None = None
@@ -1450,7 +1453,7 @@ class SeatRoutedCollector:
                     torch.isfinite(value_t),
                     "nonfinite_collection_values",
                     values=value_t,
-                    valid=obs_t["actions_valid"] > 0,
+                    valid=obs_t.legal,
                 )
                 weights = logs.exp()
                 action_t = torch.multinomial(
@@ -1462,7 +1465,11 @@ class SeatRoutedCollector:
             logprobs = logprob_t.cpu().numpy()
             values = value_t.view(-1).cpu().numpy()
         with self.profiler.track("Rollout recording"):
-            needs = obs_t.needs if isinstance(obs_t, AdmittedObservation) else None
+            needs = (
+                None
+                if obs_t.bucket_needs is None
+                else np.asarray(obs_t.bucket_needs, dtype=np.int64)
+            )
             first = self._observations.append(rows, needs)
             packed = PackedActions.pack(
                 {

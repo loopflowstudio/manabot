@@ -22,7 +22,7 @@ from typing import Any
 
 import torch
 
-from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.checkpoint import load_checkpoint, load_metadata
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
@@ -261,12 +261,12 @@ def admit_learning_state(
             _admit_setups(agent, regime)
         if agent.config != regime.agent or space.encoder.config != regime.observation:
             raise ValueError("learning-state checkpoint architecture mismatch")
-        payload = torch.load(copied["path"], map_location="cpu", weights_only=False)
+        payload = load_metadata(copied["path"])
         # Adam stores positional parameter IDs. The historical checkpoint's
         # ordered state dictionary must agree with today's parameter ordering.
         parameter_names = list(dict(agent.named_parameters()))
         if [
-            name for name in payload["model_state_dict"] if name in parameter_names
+            name for name in payload["parameter_names"] if name in parameter_names
         ] != parameter_names:
             raise ValueError("learning-state parameter order mismatch")
         metadata = payload.get("bc", {})

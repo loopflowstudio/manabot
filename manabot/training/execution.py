@@ -19,7 +19,11 @@ import psutil
 import torch
 
 import manabot.backends.torch as torch_backend
-from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.checkpoint import (
+    load_checkpoint,
+    load_metadata,
+    save_checkpoint,
+)
 from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import NumericalError
@@ -691,7 +695,7 @@ def _execute_regime(
         )
         run.monitoring_checkpoints.append(receipt)
         tick = time.perf_counter()
-        target = out / f"monitor-{receipt.ordinal:08d}.pt"
+        target = out / f"monitor-{receipt.ordinal:08d}.safetensors"
         try:
             save_checkpoint(
                 model,
@@ -1163,9 +1167,7 @@ def _execute_regime(
                             raise ValueError(
                                 "retained initialization checkpoint differs"
                             )
-                        payload = torch.load(
-                            copied, map_location="cpu", weights_only=False
-                        )
+                        payload = load_metadata(copied)
                         if not isinstance(payload, dict):
                             raise ValueError(
                                 "initial weights require a checkpoint mapping"
@@ -1204,7 +1206,7 @@ def _execute_regime(
                     if snapshot is None:
                         phase = "export_seconds"
                         tick = time.perf_counter()
-                        target = out / f"{stage.id}-initial-raw.pt"
+                        target = out / f"{stage.id}-initial-raw.safetensors"
                         temporary = target.with_suffix(".tmp")
                         save_checkpoint(
                             agent,
@@ -1621,7 +1623,7 @@ def _execute_regime(
                 if ema is not None:
                     variants["ema"] = ema
                 for name, model in variants.items():
-                    target = out / f"{stage.id}-{name}.pt"
+                    target = out / f"{stage.id}-{name}.safetensors"
                     temporary = target.with_suffix(".tmp")
                     save_checkpoint(
                         model,

@@ -8,12 +8,12 @@ determinization invariants, playout termination) and the Python matchup loop
 import numpy as np
 import pytest
 
+from manabot.backends.torch.checkpoint import BACKEND as TORCH_BACKEND
 from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.runtime import ManabotPlayer
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.sim.anchors import RandomMatchupPlayer
-import manabot.sim.search.flat_mc as flat_mc
 from manabot.sim.search.flat_mc import (
     AgentMatchupPlayer,
     FlatMCPlayer,
@@ -113,7 +113,7 @@ def test_random_matchup_player_uses_valid_mask():
 
 
 def test_checkpoint_routes_by_serialized_agent_capability(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     observation_space = ObservationSpace()
     belief_agent = ActorCritic(
@@ -126,14 +126,18 @@ def test_checkpoint_routes_by_serialized_agent_capability(
         ),
     )
 
-    def load_belief_agent(_path, *, include_belief_binding=False):
-        if include_belief_binding:
-            return belief_agent, observation_space, object()
+    belief_agent.belief_binding = object()  # Only routing is exercised by this fixture.
+
+    def load_belief_agent(
+        _path: str, **kwargs: object
+    ) -> tuple[ActorCritic, ObservationSpace]:
         return belief_agent, observation_space
 
-    monkeypatch.setattr(flat_mc, "load_checkpoint", load_belief_agent)
+    monkeypatch.setattr(TORCH_BACKEND, "load_policy", load_belief_agent)
 
-    player, _ = make_player({"kind": "checkpoint", "path": "belief.pt"}, seed=1)
+    player, _ = make_player(
+        {"kind": "checkpoint", "path": "belief.pt"}, seed=1, backend=TORCH_BACKEND
+    )
     assert isinstance(player, ManabotPlayer)
 
     policy_agent = ActorCritic(
@@ -141,18 +145,20 @@ def test_checkpoint_routes_by_serialized_agent_capability(
         ModelConfig(hidden_dim=8, num_attention_heads=2),
     )
 
-    def load_policy_agent(_path, *, include_belief_binding=False):
-        if include_belief_binding:
-            return policy_agent, observation_space, None
+    def load_policy_agent(
+        _path: str, **kwargs: object
+    ) -> tuple[ActorCritic, ObservationSpace]:
         return policy_agent, observation_space
 
-    monkeypatch.setattr(flat_mc, "load_checkpoint", load_policy_agent)
-    player, _ = make_player({"kind": "checkpoint", "path": "policy.pt"}, seed=1)
+    monkeypatch.setattr(TORCH_BACKEND, "load_policy", load_policy_agent)
+    player, _ = make_player(
+        {"kind": "checkpoint", "path": "policy.pt"}, seed=1, backend=TORCH_BACKEND
+    )
     assert isinstance(player, AgentMatchupPlayer)
 
 
 def test_play_games_seat_balances_and_records():
-    result = play_games(SEARCH_4, RANDOM, num_games=4, seed=0)
+    result = play_games(SEARCH_4, RANDOM, num_games=4, seed=0, backend=TORCH_BACKEND)
     assert len(result.records) == 4
     assert [r.hero_seat for r in result.records] == [0, 1, 0, 1]
     assert result.hero_search is not None
@@ -164,7 +170,9 @@ def test_play_games_seat_balances_and_records():
 
 
 def test_play_games_game_offset_continues_seat_alternation():
-    result = play_games(SEARCH_4, RANDOM, num_games=2, seed=0, game_offset=1)
+    result = play_games(
+        SEARCH_4, RANDOM, num_games=2, seed=0, game_offset=1, backend=TORCH_BACKEND
+    )
     assert [r.hero_seat for r in result.records] == [1, 0]
 
 

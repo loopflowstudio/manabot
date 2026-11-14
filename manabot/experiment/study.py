@@ -408,7 +408,7 @@ def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedSt
         owner = next((root for root in factors if path.is_relative_to(root)), None)
         if owner and path.suffix == ".npz":
             category, factor = "shards", factors[owner][1]
-        elif owner and path.suffix == ".pt":
+        elif owner and path.suffix in {".pt", ".safetensors"}:
             category, factor = "checkpoints", 3 * checkpoints / 2
         elif owner or path.suffix == ".sqlite":
             category, factor = "training_records", max(v[0] for v in factors.values())

@@ -57,6 +57,7 @@ from manabot.infra.artifacts import local_checkpoint_file
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.source import source_commit, source_dirty
+from manabot.policy.protocol import Backend
 from manabot.sim.card_evidence import (
     CAPTURE_VERSION,
     EvidenceRef,
@@ -170,7 +171,7 @@ def _environment(values: dict[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
-def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
+def _entrants(spec: CardEvaluationSpec, backend: Backend | None) -> tuple[Player, ...]:
     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
     # Bind all Python inference code as well as the separately bound native
     # runtime; a registration's human label never establishes byte identity.
@@ -178,7 +179,7 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
     spaces = []
     for player in spec.players:
         _, space = validate_registered_player(
-            player, spec.checkpoints.get(player.player_id)
+            player, spec.checkpoints.get(player.player_id), backend=backend
         )
         if space is not None:
             spaces.append(space)
@@ -341,8 +342,10 @@ def _game_card_tables(
     }
 
 
-def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
-    entrants = _entrants(spec)
+def evaluate_cards(
+    spec: CardEvaluationSpec, directory: Path, *, backend: Backend | None = None
+) -> EvalRun:
+    entrants = _entrants(spec, backend)
     setup = spec.authored_matchup.match() if spec.authored_matchup else selected_match()
     runtime = runtime_fingerprints(match_config=setup)
     # File names and the compiled extension's platform bytes are not environment semantics.

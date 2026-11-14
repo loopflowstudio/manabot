@@ -19,6 +19,7 @@ import time
 from typing import Any
 
 from manabot.infra.config import MatchConfig
+from manabot.policy.protocol import Backend
 from manabot.sim import native_game
 from manabot.sim.registration import PlayerRegistration
 import managym
@@ -126,7 +127,19 @@ def _lost_payment_worker(
                 time.sleep(60)
             os._exit(7)
 
-    native_game.execute_game(game, registrations, checkpoint_paths, max_commands, send)
+    def backend_factory() -> Backend:
+        from manabot.backends.torch.checkpoint import BACKEND
+
+        return BACKEND
+
+    native_game.execute_game(
+        game,
+        registrations,
+        checkpoint_paths,
+        max_commands,
+        send,
+        backend_factory=backend_factory,
+    )
 
 
 def _bounded_fixture_replay(

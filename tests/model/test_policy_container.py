@@ -1,6 +1,8 @@
 """The shared checkpoint container and canonical names, without any framework."""
 
+import json
 from pathlib import Path
+import struct
 
 import numpy as np
 import pytest
@@ -9,6 +11,7 @@ from manabot.policy.checkpoint import (
     NotAContainer,
     canonical_name,
     read_container,
+    read_metadata,
     read_safetensors,
     write_safetensors,
 )
@@ -62,3 +65,25 @@ def test_reading_a_file_that_is_not_a_container_says_to_convert(
     write_safetensors(bare, {"w": np.zeros(2, dtype=np.float32)}, {})
     with pytest.raises(NotAContainer, match="no hypers, world_binding"):
         read_container(bare)
+
+
+def test_metadata_reader_never_reads_tensor_payload(tmp_path: Path) -> None:
+    path = tmp_path / "policy.safetensors"
+    metadata = {
+        key: json.dumps(value)
+        for key, value in {
+            "hypers": {"agent_hypers": {"hidden_dim": 8}},
+            "world_binding": {"world": "fixture"},
+            "architecture": None,
+            "source": {"commit": "fixture"},
+            "bc": {"value_semantic": "signed_outcome"},
+        }.items()
+    }
+    write_safetensors(path, {"weight": np.arange(8, dtype=np.float32)}, metadata)
+    data = path.read_bytes()
+    (length,) = struct.unpack("<Q", data[:8])
+    # A metadata inspector needs no tensor payload, even if it is unavailable.
+    path.write_bytes(data[: 8 + length])
+    assert read_metadata(path) == {
+        key: json.loads(value) for key, value in metadata.items()
+    }
