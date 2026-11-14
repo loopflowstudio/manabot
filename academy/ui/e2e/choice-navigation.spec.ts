@@ -78,6 +78,8 @@ for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
     await expect(options).toHaveCount(offers.length);
     await filter.fill(choice.label);
     await page.keyboard.press('Tab'); // Clear filter
+    await page.keyboard.press('Tab'); // keyboard-scrollable offer region
+    await expect(page.getByRole('group', { name: 'Legal choices', exact: true })).toBeFocused();
     await page.keyboard.press('Tab'); // first matching offer
     await expect(options.first()).toBeFocused();
     await page.keyboard.press('Enter');

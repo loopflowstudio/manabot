@@ -34,12 +34,9 @@
 </script>
 
 <div class="flex flex-wrap items-end gap-1.5" style:--card-width={cardWidth === undefined ? undefined : `${cardWidth}px`}>
-  {#if permanents.length === 0}
-    <div class="type-caption px-1 py-1 text-ink-3">No permanents</div>
-  {/if}
-
   {#each permanents as permanent}
     <Card
+      objectId={permanent.id}
       name={permanent.name ?? 'Unknown Permanent'}
       copyDescription={copyLabel(allPermanents, permanent.id)}
       power={permanent.power === 0 && permanent.toughness === 0 ? null : permanent.power}
