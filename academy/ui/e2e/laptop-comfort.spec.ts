@@ -350,6 +350,14 @@ for (const [seed, viewport] of [
           const sequences = (): Promise<number[]> => history.locator('li[data-presentation-seq]').evaluateAll(rows => rows.map(row => Number(row.getAttribute('data-presentation-seq'))));
           await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
           await page.screenshot({ path: testInfo.outputPath('game-final.png') });
+          // The saved transport cursor must not erase history on a fresh page.
+          // Reload has no in-memory facts, so it needs the server's retained tail.
+          await page.reload();
+          await expect(page.getByTestId('game-result')).toBeVisible();
+          await page.locator('details.secondary-panels').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          await history.locator('details').evaluate((element: HTMLDetailsElement) => { element.open = true; });
+          await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
+          await expect(page.getByTestId('presentation-stage')).toHaveCount(0);
           const saved = await page.evaluate(async id => {
             const tokens = JSON.parse(localStorage.getItem('etude.play.record-credentials') ?? '[]') as string[];
             const response = await fetch(`/api/traces/${id}`, { headers: { 'x-etude-participant-tokens': tokens.join(',') } });
@@ -360,7 +368,12 @@ for (const [seed, viewport] of [
           await page.goto(`/replay?trace=${encodeURIComponent(matchId)}`);
           await expect(page.getByRole('slider', { name: 'Replay position' })).toBeVisible();
           await page.getByRole('slider', { name: 'Replay position' }).fill(String(saved.events.length));
+          await expect(page.getByTestId('game-result-dialog')).toHaveAttribute('role', 'status');
           await history.locator('summary').click();
+          const replayHand = page.getByTestId('game-board').locator('.hand-cards').last();
+          const handBounds = (await replayHand.boundingBox())!;
+          const historyBounds = (await history.boundingBox())!;
+          expect(handBounds.y + handBounds.height).toBeLessThanOrEqual(historyBounds.y);
           await expect.poll(sequences).toEqual(sourceEvents.slice(-100).map(event => event.seq));
           await writeFile(testInfo.outputPath('history-source.json'), JSON.stringify({
             matchId, events: sourceEvents.length, kinds: [...new Set(sourceEvents.map(event => event.kind.kind))],

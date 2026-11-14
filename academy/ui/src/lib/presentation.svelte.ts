@@ -26,6 +26,7 @@ export class PresentationPlayer {
   scope = $state('');
   events = $state<PresentationEvent[]>([]);
   private eventLabels = $state<PresentationLabels[]>([]);
+  private retainedLabels = $derived(mergePresentationLabels(...this.eventLabels));
   private pending = $state<number[]>([]);
   private live = true;
   private missingPrefix = $state(false);
@@ -35,7 +36,7 @@ export class PresentationPlayer {
   reducedMotion = $state(false);
 
   get labels(): PresentationLabels {
-    return mergePresentationLabels(...this.eventLabels);
+    return this.retainedLabels;
   }
 
   labelsAt(index: number): PresentationLabels {
@@ -60,9 +61,6 @@ export class PresentationPlayer {
     return this.currentEvent ? this.duration(this.currentEvent) : 0;
   }
   get unavailablePrefix(): boolean { return this.missingPrefix || (this.events[0]?.seq ?? 0) > 0; }
-  get hasGaps(): boolean {
-    return this.events.some((event, index) => index > 0 && event.seq !== this.events[index - 1].seq + 1);
-  }
 
   /** Match/viewer/branch identity must be set before accepting any names. */
   setScope(scope: string): void {
@@ -77,11 +75,11 @@ export class PresentationPlayer {
 
   /** Replace a recorded sequence, with explicit uncapped ordered playback. */
   loadEvents(events: readonly PresentationEvent[], labels: PresentationLabels, scope = 'recorded'): void {
-    this.loadPrefix([{ events: [...events], labels }], scope);
+    this.loadPrefix([{ events, labels }], scope);
   }
 
   /** Canonical seek rebuilds exactly the selected prefix; only its last batch animates. */
-  loadPrefix(batches: readonly Pick<PresentationSequence, 'events' | 'labels'>[], scope: string, animate = true): void {
+  loadPrefix(batches: readonly { events: readonly PresentationEvent[]; labels: PresentationLabels }[], scope: string, animate = true): void {
     this.clear();
     this.scope = scope;
     this.live = false;
@@ -133,7 +131,7 @@ export class PresentationPlayer {
   }
 
   /** Same-scope recovery preserves reading, cancels stale motion, and animates only unseen facts. */
-  recover(events: readonly PresentationEvent[] = [], labels: PresentationLabels = emptyLabels(), cursor = 0): void {
+  recover(events: readonly PresentationEvent[], labels: PresentationLabels, cursor = 0): void {
     const validated = copyPresentationEvents($state.snapshot(events));
     const seen = new Set(this.events.map(event => event.seq));
     const unseen = validated.filter(event => !seen.has(event.seq));

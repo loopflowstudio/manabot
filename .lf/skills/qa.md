@@ -346,3 +346,21 @@ publish, land or choose the next Graph step from here.
   completed result explicitly before checking Next frame. Playwright offline
   mode did not close an existing localhost WebSocket in the MTG-355 run; it
   alone does not prove disconnect/reconnect behavior.
+- For a genuine local connection interruption, put a TCP forwarder between the
+  browser and the ordinary same-origin Academy CLI server. Stop its listener and
+  destroy both sockets of every forwarded pair; observe disconnected/reconnecting
+  and disabled offers, then restore the listener. Compare the pending frame and
+  recorded event identities before and after. Keep credentials out of receipts.
+  Also reload the whole page: a delta reconnect alone cannot detect a persisted
+  presentation cursor suppressing the tail when in-memory history is empty.
+  Fresh reload can recover older facts absent from an authored demo's initial
+  prefix; require committed facts to remain, with unique rows and no old motion.
+  Let keyboard Home scrolling settle before measuring a reading anchor. Prompt
+  kinds in frames are lowercase; `data-action-space-kind` uses uppercase names
+  such as `CHOOSE_TARGET` and `LOOK_AND_SELECT`. Identical card copies have
+  separate cast offers, so choose an explicit occurrence in browser scripts.
+  In Replay, open Consequences with a real pointer click at the final frame;
+  setting `<details>.open` cannot detect a hand overflowing over its summary.
+  Check the hand ends above history. Recorded terminal results have no next-game
+  action and must leave keyboard navigation available; the live Play Again
+  dialog retains its focus behavior.

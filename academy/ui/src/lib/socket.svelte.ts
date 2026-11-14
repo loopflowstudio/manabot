@@ -136,6 +136,7 @@ export class GameSocketController {
   private outboundQueue: SharedTableRequest[] = [];
   private inFlightCommand: string | null = null;
   private presentationCursor: number | null = null;
+  private loadingHistory = false;
 
   connect(): void {
     if (!browser) {
@@ -173,9 +174,17 @@ export class GameSocketController {
       if (!this.outboundQueue.some((message) => message.type === 'new_game')) {
         const credentials = loadResumeCredentials();
         if (credentials) {
-          this.presentationCursor = credentials.presentation_cursor ?? null;
+          this.loadingHistory = this.presentationCursor === null;
           this.pendingResume = true;
-          this.send({ type: 'resume', ...credentials });
+          // A persisted cursor outlives the in-memory history. Only request a
+          // delta while this controller still owns that history; reloads need
+          // the server's bounded tail as well as the authoritative frame.
+          this.send({
+            type: 'resume',
+            session_id: credentials.session_id,
+            resume_token: credentials.resume_token,
+            ...(this.presentationCursor === null ? {} : { presentation_cursor: this.presentationCursor }),
+          });
           return;
         }
       }
@@ -584,7 +593,6 @@ export class GameSocketController {
     if (current?.match_id !== update.frame.match_id) this.presentationCursor = null;
     presentationPlayer.setScope(`live:${update.frame.match_id}`);
     const labels = mergePresentationLabels(
-      presentationPlayer.labels,
       ...(current?.match_id === update.frame.match_id ? [presentationLabelsFromFrame(current)] : []),
       presentationLabelsFromFrame(update.frame),
     );
@@ -664,6 +672,10 @@ export class GameSocketController {
         presentationLabels,
         recovery.presentation_cursor,
       );
+      // Initial recovery loads recorded history, not live motion from before
+      // this page opened. Same-page reconnects animate only newly seen facts.
+      if (this.loadingHistory) presentationPlayer.finishSequence();
+      this.loadingHistory = false;
       this.persistResumeState(sessionId, resumeToken);
     } catch (error) {
       presentationPlayer.reject();

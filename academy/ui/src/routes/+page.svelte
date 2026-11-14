@@ -410,6 +410,7 @@
     <div class="play-workspace" data-testid="play-workspace">
       <div id="table-board" class="board-region" tabindex="-1"><a href="#table-choices" class="table-jump type-caption underline">Choose a play</a>
       <GameBoard
+        workspace
         observation={boardObservation}
         focusedIds={gameStore.focusIds}
         {clickableTargets}

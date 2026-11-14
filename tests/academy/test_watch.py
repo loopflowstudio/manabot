@@ -213,7 +213,7 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     assert response.status_code == 200
     assert response.json()["viewer"] == 1
     source["decisions"][0]["command"]["offer_id"] += 1
-    with pytest.raises(ValueError, match="verification failed"):
+    with pytest.raises(ValueError, match="Game trace digest mismatches"):
         import_arena(source)
 
 
@@ -274,9 +274,9 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     assert engine.state_digest() == digest
     assert len(decision.probabilities) == len(observation.action_space.actions)
     assert sum(decision.probabilities) == pytest.approx(1)
-    assert decision.action == max(
-        range(len(decision.probabilities)), key=decision.probabilities.__getitem__
-    )
+    # Softmax can round distinct logits to tied probabilities. The selected
+    # logit maximum need not be the first displayed probability maximum.
+    assert decision.probabilities[decision.action] == max(decision.probabilities)
 
 
 @pytest.mark.parametrize("kind", ["greedy", "heuristic"])

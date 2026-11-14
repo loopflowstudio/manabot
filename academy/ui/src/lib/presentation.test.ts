@@ -7,6 +7,7 @@ import {
   validatePresentationUpdate,
 } from './presentation';
 import { createPresentationPlayer } from './presentation.svelte';
+import { historyContext } from './presentation-history';
 import { COMBAT_TO_TURN_PRESENTATION, LIGHTNING_BOLT_PRESENTATION } from './presentation-fixtures';
 
 describe('Lightning Bolt presentation fixture', () => {
@@ -266,7 +267,7 @@ describe('scoped retained history', () => {
     expect(player.events).toHaveLength(5);
     expect(player.unavailablePrefix).toBe(true);
     player.enqueue([{ ...LIGHTNING_BOLT_PRESENTATION.events[0], seq: 910 }], LIGHTNING_BOLT_PRESENTATION.labels);
-    expect(player.hasGaps).toBe(true);
+    expect(historyContext(player.events).at(-1)?.gap).toEqual({ first: 905, last: 909 });
     player.reject();
     expect(player.incomplete).toBe(true);
     expect(player.currentEvent).toBeNull();
@@ -315,10 +316,10 @@ describe('recovery history gaps', () => {
     const fixture = LIGHTNING_BOLT_PRESENTATION;
     player.enqueue([fixture.events[0]], fixture.labels);
     player.recover(fixture.events.slice(3), fixture.labels);
-    expect(player.hasGaps).toBe(true);
+    expect(historyContext(player.events).at(-2)?.gap).toEqual({ first: 901, last: 902 });
     player.recover(fixture.events, fixture.labels);
     expect(player.events.map(event => event.seq)).toEqual([900, 901, 902, 903, 904]);
-    expect(player.hasGaps).toBe(false);
+    expect(historyContext(player.events).every(row => row.gap === null)).toBe(true);
     expect(player.currentEvent?.seq).toBe(901);
     expect(player.remaining).toBe(2);
     player.recover(fixture.events, fixture.labels);

@@ -33,6 +33,14 @@
   })));
   const inspected = $derived(selected ? available(selected) : null);
 
+  function visibleAnchor(): { seq: number; offset: number } | null {
+    if (!region) return null;
+    const top = region.getBoundingClientRect().top;
+    const row = Array.from(region.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
+      .find(row => row.getBoundingClientRect().bottom > top);
+    return row ? { seq: Number(row.dataset.presentationSeq), offset: row.getBoundingClientRect().top - top } : null;
+  }
+
   function available(id: ObjectRenderId) {
     // The current legacy projection certifies incarnation zero only. Never
     // substitute by name or use a catalog to resolve unavailable subjects.
@@ -48,19 +56,17 @@
   // Array indices are derived; only a sequence within this scope identifies a fact.
   $effect.pre(() => {
     const scope = player.scope;
-    const view = observation; // Permission changes can invalidate an open inspection.
-    void view;
+    observation; // Permission changes can invalidate an open inspection.
     const seqs = player.events.map(event => event.seq);
     untrack(() => {
       const changedScope = scope !== knownScope;
       const focused = region?.contains(document.activeElement) ? document.activeElement as HTMLElement : null;
-      const anchor = region ? Array.from(region.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
-        .find(row => row.getBoundingClientRect().bottom > region!.getBoundingClientRect().top) : undefined;
+      const anchor = visibleAnchor();
       // A parent seek can reconcile rows before this effect. Prefer the current
       // DOM for pending scroll events, unless the saved reader has disappeared.
       const saved = readingAnchor && !region?.querySelector(`[data-presentation-seq="${readingAnchor.seq}"]`) ? readingAnchor : null;
-      const anchorSeq = saved?.seq ?? (anchor ? Number(anchor.dataset.presentationSeq) : readingAnchor?.seq ?? pageSeq);
-      const offset = saved?.offset ?? (anchor && region ? anchor.getBoundingClientRect().top - region.getBoundingClientRect().top : 0);
+      const anchorSeq = saved?.seq ?? anchor?.seq ?? readingAnchor?.seq ?? pageSeq;
+      const offset = saved?.offset ?? anchor?.offset ?? 0;
       const targetSeq = anchorSeq === null ? null : precedingEvent(seqs, anchorSeq);
       const removedAnchor = anchorSeq !== null && !seqs.includes(anchorSeq);
       const inspectionRemoved = selected !== null && (changedScope || !seqs.includes(inspectionSeq ?? -1) || !available(selected));
@@ -121,11 +127,7 @@
   function onScroll(): void {
     if (!region) return;
     following = start === latestStart && region.scrollHeight - region.clientHeight - region.scrollTop <= 32;
-    if (!following) {
-      const anchor = Array.from(region.querySelectorAll<HTMLElement>('[data-presentation-seq]'))
-        .find(row => row.getBoundingClientRect().bottom > region!.getBoundingClientRect().top);
-      readingAnchor = anchor ? { seq: Number(anchor.dataset.presentationSeq), offset: anchor.getBoundingClientRect().top - region.getBoundingClientRect().top } : null;
-    } else readingAnchor = null;
+    readingAnchor = following ? null : visibleAnchor();
     if (!following && pageSeq === null) pageSeq = player.events[start]?.seq ?? null;
     if (following) {
       pageSeq = null;

@@ -26,6 +26,7 @@
     overlayActionLabel?: string | null;
     onOverlayAction?: () => void;
     presentationPlayer?: PresentationPlayer;
+    workspace?: boolean;
   }
 
   let {
@@ -41,6 +42,7 @@
     overlayActionLabel = null,
     onOverlayAction = undefined,
     presentationPlayer = undefined,
+    workspace = false,
   }: Props = $props();
 
   setContext(PRESENTATION_CONTEXT, () => presentationPlayer?.currentEvent ?? null);
@@ -53,9 +55,10 @@
   const narratedSubjects = $derived(presentationPlayer?.currentEvent ? presentationSubjects(presentationPlayer.currentEvent) : []);
   const narratedStacks = $derived(new Set(narratedSubjects.flatMap(subject => subject.kind === 'stack' ? [subject.id] : [])));
   const stackCards = $derived([...observation.opponent.stack, ...observation.agent.stack]);
+  const interactiveResult = $derived(!!overlayActionLabel && !!onOverlayAction);
 
   $effect(() => {
-    if (!observation.game_over) {
+    if (!observation.game_over || !interactiveResult) {
       return;
     }
     void tick().then(() => (resultAction ?? resultDialog)?.focus());
@@ -78,7 +81,7 @@
   }
 
   function keepResultFocus(event: KeyboardEvent): void {
-    if (event.key !== 'Tab') {
+    if (!interactiveResult || event.key !== 'Tab') {
       return;
     }
     event.preventDefault();
@@ -106,7 +109,7 @@
   });
 </script>
 
-<section data-testid="game-board" class="relative min-w-0">
+<section data-testid="game-board" class="relative min-w-0" class:workspace-board={workspace}>
 
   <!-- The turn, set as a tempo marking. -->
   <div
@@ -234,8 +237,8 @@
     <div class="absolute inset-0 z-[190] grid place-items-center rounded bg-[color-mix(in_srgb,var(--text)_45%,transparent)]">
       <div
         bind:this={resultDialog}
-        role="alertdialog"
-        aria-modal="true"
+        role={interactiveResult ? 'alertdialog' : 'status'}
+        aria-modal={interactiveResult ? 'true' : undefined}
         aria-labelledby="game-over-heading"
         aria-describedby="game-result"
         tabindex="-1"
@@ -275,7 +278,8 @@
     [data-testid="game-board"] { display: flex; flex-direction: column; }
     [data-testid="game-board"] > :global(.player-area) { flex: 1; }
     [data-testid="game-board"] > :global(.player-area.empty-battlefield) { flex: 0 0 auto; }
-    .hero-area { flex: 1 1 150px; display: flex; flex-direction: column; min-height: 0; }
+    .hero-area { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; }
+    .workspace-board .hero-area { flex: 1 1 150px; }
     .hero-area > :global(.player-area) { flex: 1; }
     .schedule-details, .ordered-stack { max-height: 90px; overflow-y: auto; flex-shrink: 0; }
     [aria-label="Inspected card"], [aria-label="Private inspection"], [aria-label="The stack"] { max-height: 130px; overflow-y: auto; flex-shrink: 0; }
