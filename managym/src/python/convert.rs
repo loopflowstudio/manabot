@@ -49,6 +49,15 @@ pub fn require_numpy_array<'py>(
         )));
     };
 
+    let ndarray = dict.py().import_bound("numpy")?.getattr("ndarray")?;
+    if !value.is_instance(&ndarray)? {
+        let type_name = value.get_type().qualname()?;
+        return Err(PyTypeError::new_err(format!(
+            "buffer '{key}' must be a NumPy array, got {type_name}; \
+             allocate NumPy buffers and convert them with torch.from_numpy"
+        )));
+    }
+
     let dtype_name = value
         .getattr("dtype")?
         .getattr("name")?

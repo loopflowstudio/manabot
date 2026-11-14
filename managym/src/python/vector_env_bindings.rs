@@ -22,7 +22,7 @@ use crate::{
             encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
         rollout_pool::RolloutPool,
-        vector_env::{ObservationWriteError, VectorEnv},
+        vector_env::{ObservationRead, ObservationWriteError, VectorEnv},
     },
     infra::profiler::InfoDict,
     python::{
@@ -350,6 +350,30 @@ impl PyVectorEnv {
 
     fn current_game_generations(&self) -> Vec<u64> {
         self.inner.current_game_generations()
+    }
+
+    /// Caller-owned observation-only buffers; registered execution buffers and
+    /// diagnostics are untouched. Keep the GIL held throughout the read/write.
+    #[pyo3(signature = (players, buffers, action_overflow="error"))]
+    fn write_observations_for_players(
+        &self,
+        py: Python<'_>,
+        players: Vec<usize>,
+        buffers: Bound<'_, PyDict>,
+        action_overflow: &str,
+    ) -> PyResult<Vec<ObservationRead>> {
+        let mut config = input_buffer_config(&buffers)?;
+        config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, false)?;
+        with_observation_field_slices(py, &buffers, |out| {
+            self.inner
+                .write_observations_for_players(&players, |slot, observation| {
+                    let row = out.encoded_row_mut(slot, &config)?;
+                    encode_into(observation, &config, row)
+                        .map_err(|err| AgentError(err.to_string()))
+                })
+                .map_err(map_agent_err)
+        })
     }
 
     fn hand_snapshots(&self, players: Vec<usize>) -> PyResult<Vec<HandSnapshot>> {
