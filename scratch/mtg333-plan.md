@@ -15,10 +15,15 @@ reports it CPU-bitwise and a CUDA summation reorder; its L4 PPO update fell
 69.97→32.23 s, mostly backward. The merge also changes the engine. Fresh
 post-merge CPU captures match all 3,410 tensors and five update cases exactly
 (2026-11-13). The post-#514 comparison below now isolates this Task.
-The later main merge `54a55684e1` (Etude SDK 0.3.2) changes only eval,
+The earlier main merge `54a55684e1` (Etude SDK 0.3.2) changes only eval,
 report and update-metrics readers, `pyproject.toml` and `uv.lock`; no
 `prepare`, backend, model, update or engine file, so the post-#514 CPU and
-CUDA receipts still describe this tree.
+CUDA receipts remained applicable at that merge. The latest main merge is
+`6fff54f7d2`, incorporating `ff881e3e04` (packaged Academy and native heuristic).
+Unlike the SDK-only merge, it changes native Env/VectorEnv and bindings.
+The retained CPU/parity receipts below predate it; final-runtime equivalence
+and installed-package validation remain open. CUDA results describe their
+recorded source and runtime, not a new measurement of this merge.
 
 ## Problem
 
@@ -83,7 +88,8 @@ optimize pass's before/after.
 
 ## State
 
-Slices 1–8 are implemented. The post-#514 CPU oracle and updates are exact.
+Slices 1–8 are implemented. The retained post-#514 CPU oracle and updates are
+exact; the latest native-runtime merge still needs the refresh described above.
 All CUDA jobs have ended; the successful rentals were terminated. Provider
 inventory confirms the final rental absent. The host optimizations and bounded
 PPO preparation pipeline are retained;
@@ -102,8 +108,8 @@ speedup over main is claimed (PPO prefetch iteration).
 4. `save_checkpoint` writes the container; `read_metadata` is header-only;
    `torch.load` remains only in legacy `.pt` readers.
 5. `manabot.backends.resolve`; exact-allowlist boundary test; sim/eval take a
-   `BackendPolicy`. Deferred imports are local Task `c2ef4a`
-   (`task_c2ef4a5da9cb437b921cca1ef40e94a1`, not started; Linear sync pending).
+   `BackendPolicy`. Deferred imports are MTG-343
+   (`task_c2ef4a5da9cb437b921cca1ef40e94a1`, unstarted).
 6. `ObservationBuffers`, `ParameterArrays`; docs describe the full PR
    (`manabot/backends/README.md` examples were run as written on CPU,
    2026-11-13). No unreleased release-notes section exists; the release note
@@ -141,7 +147,8 @@ discarded metadata attempt remain in the historical receipts below.
 - Gate's broader suites, Python 3.12 and installed-wheel checks have not run.
 
 Captures in `/tmp/mtg333/` are temporary. If gone, or after a change to
-`prepare`, `backends/torch/`, the model, the updates or the engine: rebuild the extension per `AGENTS.md`, extract the
+`prepare`, `backends/torch/`, the model, the updates or the engine: rebuild the
+extension when native source changed, per `AGENTS.md`, extract the
 base `manabot/` (`git archive 105e7e2aa manabot`), and capture base and head
 with one retained belief corpus (`EQUIV_BELIEF_INPUT`; see Receipts).
 
@@ -192,30 +199,30 @@ admission's private `_key`/`_word` and fact-kind tuples (one owner:
 `_numeric_permanent_columns` (read `policy.checkpoint.layout`), `pack(order=)`
 (takes `order_lengths`).
 
-Post-#514: remove unconditional `_referenced_definitions` scans, full padded-fact
+Post-#514: removed unconditional `_referenced_definitions` scans and full padded-fact
 integer work (the graph still gets identical padded rows). The attempted
 host-only metadata markers were discarded, not shipped.
 
-Concept cleanup: delete `_slice_obs_tensors` and its optional tensor-dictionary
+Concept cleanup removed `_slice_obs_tensors` and its optional tensor-dictionary
 return branch; `_slice_obs_rows` retains host values and the action-focus cast.
-Delete the grad-mode read in `prepare_admitted`, the worker's grad-mode
+Removed the grad-mode read in `prepare_admitted`, the worker's grad-mode
 context, and rollout's captured inference flag/`_prepare_rows(inference)`
 parameter; explicit preparation purpose and exact learning results survive.
 
-Concept review 4: delete the update protocol name `Backend`, the public
+Concept review 4 removed the update protocol name `Backend`, the public
 `load_mlx_policy` entry point, parity's `backend_module` helper and all
 `resolve(...).checkpoint.BACKEND` consumer access. Preserve configured MLX
 precision, lazy training imports, direct module updates and loader refusals.
 
-Direct compress, 2026-11-14: remove parity's `backend` selector in favor
+Direct compress, 2026-11-14, removed parity's `backend` selector in favor
 of `resolve`, MLX's single-use `_load_policy` and `mlx_gradients` wrappers,
 unused `Layout` capacities/`objects`, and action-gather coordinate parameters
-already carried by `Prepared`. Remove NumPy→Torch→NumPy round trips in
+already carried by `Prepared`. Removed NumPy→Torch→NumPy round trips in
 selection collection, coverage and the MLX pilot; batch regression tensors
 convert directly in one comprehension. Serialized lookup buffers, recurrent
 schedules, action ordering and numerical operations remain unchanged.
 
-Direct compress validation (CPython 3.13, existing cp313 native extension;
+Direct compress validation before `6fff54f7d2` (CPython 3.13, existing cp313 native extension;
 `uv sync --locked --extra dev --extra mlx --extra artifacts --no-install-package managym`
 installed the locked Python dependencies without rebuilding the unchanged engine):
 
@@ -260,10 +267,13 @@ regenerate and commit them. Frozen launch commits: `cd7afaec86` (A40
 comparison), `e6cd7f59cc` (optimization), `46e3db32d7` (final check).
 
 After #514, a CUDA speed or gradient comparison against `105e7e2aa` mixes
-this Task's change with #514's CUDA reorder. Use main's `de39d601fb` as the
-CUDA base (the CPU oracle keeps `105e7e2aa`, since #514 is CPU-bitwise); its
+this Task's change with #514's CUDA reorder. The retained runs use
+`de39d601fb` as the CUDA base (the CPU oracle keeps `105e7e2aa`, since #514 is CPU-bitwise); its
 `manabot/` lacks `Prepared`, so the speed patch is `git diff HEAD de39d601fb
--- manabot`, and `bench.py` must still run on both arms.
+-- manabot`, and `bench.py` runs on both arms. Any new final-tree speed
+comparison must use current main `ff881e3e04` and the same current native
+runtime in both arms, adapting the harness's moved imports as needed. Do not
+attribute upstream native changes to this Task or replace historical tables.
 
 Control: `ETUDE_HOME=/tmp/mtg333/launcher`, `uv run --extra artifacts etude …`
 (SDK 0.3.2). It opens a new schema-specific database beside the older
@@ -307,22 +317,23 @@ oracle, the update comparison and one same-card speed pass.
   hung a run at exit); plus the tests of every other changed file and the
   checks in `docs/development.md#validation-by-change-area`, including the
   installed-wheel smoke and an isolated Python 3.12 consumer.
-- World/shape suite from CLAUDE.md passes.
+- Current-world arena admission/monitoring suite from `AGENTS.md` passes.
 - `uv run --extra mlx python -m manabot.backends.parity CKPT --capture /tmp/mtg325-gate-capture`
   → `parity: pass (torch, mlx)`.
-- Round trip: `uv run manabot train --out /tmp/mtg333/run` writes
-  `.safetensors` policy files that `uv run manabot sim` plays; a `.pt` written
+- Round trip: the bounded installed-wheel training fixture in
+  `scripts/release/smoke.py` writes `.safetensors` policy files and checks
+  load/catalog admission; sim plays the resulting policy; a `.pt` written
   at base loads with identical logits; a belief policy and a `bc`
   `value_semantic` survive save → load.
-- `rg "AdmittedObservation|CardReferences|PreparedObservation" manabot academy scripts`
+- `rg "AdmittedObservation|CardReferences|PreparedObservation" manabot managym/academy scripts`
   → nothing.
-- Slice 7's CUDA results and the optimize before/after are in the PR body.
+- Slice 8's CUDA results and the optimize before/after are in the PR body.
 
 ## Exclusions
 
 MLX support for the newly carried configurations; PPO or a categorical critic
 on MLX; optimizer/update-snapshot/incident persistence; belief/ torch models,
-verify/, the executor choosing a backend (Task `c2ef4a`); engine, env, serving
+verify/, the executor choosing a backend (MTG-343); engine, env, serving
 protocol, worlds, policy-input versions; rerunning frozen experiments.
 
 ## Done when
@@ -418,11 +429,9 @@ action and failed-stage cases: 45 passed. Additional MLX/release/search run:
 186 passed, three stale search cases subsequently fixed and passed. Ruff and
 diff checks passed.
 
-PR #519 remains draft: its last published head has failing integration CI; the
-new head has not been pushed or checked by CI. Installed-wheel checks on both
-Python 3.12 and 3.13 and the remaining broader gate are outstanding. The task
-prohibits heavy laptop runs. Do not mark ready until these checks pass; the
-CUDA repeat-floor and performance limitations above remain review findings.
+That publication attempt left PR #519 draft with failing integration CI.
+Current publication and validation status is recorded below; the CUDA
+repeat-floor and performance limitations remain review findings.
 
 ## Concept review 4, 2026-11-14 (implemented)
 
@@ -459,7 +468,8 @@ A–C are implemented. No CUDA rerun: no values change.
 `resolve(name, precision=...)` now returns the loader object with lazy update
 modules. MLX precision stays on that object; library roots use `load_policy`.
 The update-only Protocol is `UpdateBackend`; directly imported modules still
-conform. MLX's loader helper is private. Parity's former module-identity test
+conform. The later compress pass removed MLX's single-use loader helper.
+Parity's former module-identity test
 skipped device transfer for the configured Torch object; it now recognizes the
 Torch policy type. The corrected capture replay passes.
 
@@ -472,8 +482,8 @@ Torch policy type. The corrected capture replay passes.
 Changed Python files: Ruff check and format check pass; `git diff --check`
 passes. `lf context`: 11,756/12,000 tokens, 44,844/98,304 bytes before this line.
 
-Broader gate, installed wheels on Python 3.12/3.13, publication and CI remain
-outstanding as recorded above.
+Broader gate and installed wheels on Python 3.12/3.13 remain outstanding;
+the current CI/publication snapshot is below.
 
 Implement sanity pass: the backend guide now opens with `resolve` and
 `backend.load_policy`; MLX's package header names its damped update.
@@ -481,3 +491,134 @@ The guide's load → prepare → evaluate example ran through `uv run --extra de
 --extra mlx --extra artifacts python` on one retained capture row batch for
 both backends: finite logits `(2, 512)` and values `(2,)`, exit 0. No games or
 training launched. Removed-interface search found no remaining callers.
+
+## Concept review 5, 2026-11-14
+
+Outcome for loop-or-next: **nothing to change and no open product choice;
+advance**. This headless review retains review 4's implemented design. It
+neither reopens its quoted decisions nor treats pending validation as proof.
+The review screen is `scratch/concept-review.html`.
+
+The experience remains: select a configured backend once, load a policy,
+prepare the viewer's NumPy observations once, and evaluate or sample through
+the policy. Academy discovers the training provider through the engine-owned
+entry point; the provider selects Torch and injects it into discovery. No
+framework-specific input vocabulary reaches Academy or sim/eval callers.
+Existing usage guidance in the backend and policy READMEs already shows this
+experience; no proposed usage or skill change is needed.
+
+Three counterexamples preserve necessary distinctions. A portable container
+does not make an unsupported MLX configuration runnable: refuse it and use
+Torch, converting a legacy file only when another backend needs the container.
+A policy file cannot resume an optimizer or collector: recovery snapshots
+remain separate, and scoped inference batches must be prepared again after
+the scope closes or weights change. An incompatible world cannot be repaired
+by renaming or converting the file: retain its source/bindings and use the
+recorded revision. These paths keep weights, value/belief meaning, seeded
+actions and recovery evidence; collapsing their records would lose behavior.
+
+The biggest remaining mismatch is evidence coverage, not the interaction:
+the retained numerical receipts predate the native-runtime merge. Next show
+the final-runtime oracle plus updates/parity and the installed-wheel
+train → container → load → catalog/provider proof already required below.
+This review changed no code, ran no games or training, and makes no new
+numerical or performance claim. MTG-343 remains the agreed follow-up.
+
+## Main integration and remaining work, 2026-11-14
+
+`6fff54f7d2` changes native player-policy dispatch and packages Academy in
+the engine distribution. Shared preparation, Torch forward and update code
+are unchanged from `59c2aaa533`; that does not establish final-runtime
+equivalence. Rebuild/confirm the current cp313 extension, refresh the CPU
+oracle and all five update cases using one belief corpus in both arms, and
+run captured Torch/MLX parity with a compatible current-world capture.
+Keep the earlier 3,410-tensor and CUDA results as historical receipts until
+those final-runtime checks pass; do not rebind old captures to bypass admission.
+
+The new Academy boundary is `managym.academy` → `managym`, with optional
+training capabilities through `managym.academy.bots`.
+`manabot.sim.table_bots.checkpoint_backend` selects Torch and
+`TrainingBots.discover` injects it into `model.catalog.discover_checkpoints`.
+`CheckpointVillain` uses the shared container/legacy loader and the existing
+Prepared verification adapter. Academy imports neither manabot nor Torch;
+manabot imports no Academy modules. Boundary and installed-provider checks
+must cover this route, replacing the deleted `academy/villain.py` root.
+
+The installed-wheel smoke now owns one `checkpoint_path` for both loading
+`self-play-raw.safetensors` and catalog discovery. The merge had left discovery
+requesting `self-play-raw.pt`, although training writes the container suffix.
+The provider docstring now describes both formats. No runtime or model change.
+
+Remaining validation follows `docs/development.md#validation-by-change-area`:
+the affected model/training/sim/eval consumers and world-admission checks;
+package boundaries including training-free Academy and Torch-free children;
+release/CI selection and moved-module collection; installed-wheel smoke in
+isolated Python 3.12 and 3.13 environments outside the checkout. The installed
+smoke must exercise `managym.academy.bots` discovery and catalog admission,
+not only source-tree imports. The bounded native training fixture in
+`scripts/release/smoke.py` replaces the unbounded default training demo as
+the automated train → container → load → catalog proof; sim consumption and
+legacy `.pt`/belief/value-semantic round trips remain required.
+
+GitHub snapshot during realign: PR #519 is draft, published head `6fff54f7d2`;
+preflight passes, integration/Academy/protocol/clean-machine jobs are running,
+and the four Python 3.12/3.13 Linux/macOS package jobs are queued. These are
+pending checks, not failures or completed proof. This pass neither publishes
+nor waits for CI; its local repairs are newer than that published head.
+
+MTG-343 is now tracker-synced and unstarted, with no PR. The retained direction
+in `scratch/README.md` quotes Jack Heart, 2026-11-14: "oh sure yeah that works"
+to starting it after #519 merges; its acceptance includes Torch-free imports
+of update rules and rollout code. It remains outside #519. No new product
+decision is needed here; the review-4 CUDA finding retains its quoted decision.
+
+Repair checks: `uv run --no-sync pytest tests/infra/test_release.py -q
+--basetemp /tmp/mtg333/realign-release-tests` → **39 passed (0.44 s)**.
+Ruff check/format on `scripts/release/smoke.py` and `manabot/sim/table_bots.py`
+pass. These verify release tooling and formatting, not an installed-wheel
+smoke or final-native equivalence; neither was rerun during this realign.
+
+## QA, 2026-11-14 (current native runtime)
+
+Report: `scratch/qa.html`, including installed-browser screenshots and transcripts.
+Built Academy's static SPA, staged source archives, and built both macOS engine
+wheels from the engine sdist. Empty external environments on Python **3.12.12**
+and **3.13.15**, without Cargo/Node on PATH: engine-only smoke completed a
+107-decision game; training smoke passed with **torch 2.15.0 / etude-sdk 0.3.2**,
+including the installed Academy provider and exact safetensors catalog path.
+Both installed consumers loaded a real pre-change `.pt`, resaved/reloaded
+exact logits/values, retained `signed_outcome`, detected container bytes under
+`.pt`, de-duplicated identical catalog files, and refused corrupt files and
+empty action sampling. Terminal/bootstrap preparation may carry an empty mask.
+
+The installed simulator completed a **129-decision game, zero timeouts** using
+the written policy. Installed `belief-demo` passed its schema-bound container
+round trip and hidden-world invariance checks. An installed local CLI process
+was interrupted with SIGINT after its committed start snapshot (exit 130,
+`interrupted`), then resumed by run ID into a sibling output and completed
+both updates. The ordinary source-tree local CLI also completed one update
+in 8.19 s; this is not a speed comparison.
+
+Installed Academy on port 18933: current policy catalogued, selected by digest,
+New Game → legal Play Island → Pass Turn → trained opponent's turn → reload
+restored the same settled pending-decision revision **8**; no page errors.
+Elemental UR/GW were correctly refused for this policy's distinct bound UR
+Lessons/GW Allies lists. Read both browser screenshots. Server and browser
+closed; no QA server remains. Drivers and full logs: `/tmp/mtg333qa-final/`
+and `/tmp/mtg333/qa-final-*`; builds and CLI output: `.runs/qa-final/`.
+
+Fresh root cp313 build installed atomically. `qa-final-head.pt` versus retained
+`post514-base.pt`, with the same `post514-belief.pt` corpus: **3,410 tensors,
+differing 0**. `qa-final-updates.json` versus `updates-post514-base.json`:
+**cmp exit 0**, all five cases. Normal-admission captured Torch/MLX parity
+(one learner minibatch, one collection call) passed, clipped-step weight max
+MLX difference **1.2e-7** (`qa-final-parity.json`). Baseline bytes and capture
+were retained, not regenerated or rebound; CUDA evidence remains historical.
+
+No runtime implementation defect found. Corrected the training guide's stale
+claim that updates cannot take configured backend objects, and updated the
+repository QA skill with current loading, bounded installed smoke and settled
+browser reconnect guidance. Validated existing realign catalog-suffix repair.
+Workflow compiler, `lf help qa`, Ruff and diff whitespace checks pass.
+Broader gate, Linux consumers, legacy package upgrade and hosted CI remain
+separate; no claim that those checks or exhaustive fault scenarios ran here.

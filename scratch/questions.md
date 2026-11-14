@@ -110,3 +110,9 @@ inference rows, with and without buckets, under both grad modes.
 Move checkpoint backend selection from the deleted Academy villain module to
 `manabot.sim.table_bots`, the new optional training provider; inject it into
 catalog discovery. Keep both sides' package-boundary checks and container fixtures.
+
+QA, 2026-11-14: use the release smoke's bounded native lethal-target training
+for both installed interpreters, then one full simulator game with the written
+policy. This keeps local QA bounded; it is not a throughput or strength claim.
+Fresh builds use one task-owned Cargo target with two build jobs. Keep legacy
+files unchanged and load them under normal admission; never rebind evidence.

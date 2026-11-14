@@ -34,7 +34,7 @@ def checkpoint_backend() -> Backend:
 
 
 class CheckpointVillain:
-    """A trained ActorCritic loaded from a training checkpoint (.pt).
+    """A trained ActorCritic loaded from a policy container or legacy .pt.
 
     Torch and the model stack are imported lazily so that search/random games
     never pay the import cost.

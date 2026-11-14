@@ -38,8 +38,9 @@ it. Its learning record selects the update; both live in
   epoch joins its preparation worker even if an update fails. Use PPO as the
   baseline a new method must beat.
 
-Both are written once and take the backend as their first argument: the
-module `manabot.backends.torch`, not an object to configure. Then come a
+Both are written once and take the backend as their first argument: a
+configured backend from `manabot.backends.resolve` or the module
+`manabot.backends.torch`. Then come a
 `Learner` (`manabot.backends.torch.learner`), which holds the model, its Adam
 optimizer, the precision and a profiler, and a learning record
 (`manabot.training.regime`). Call them directly to reproduce a recipe's
