@@ -41,6 +41,22 @@ def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
         assert row["count"] == revision + 1
         assert row["observation"]["opponent"]["hand"] == []
         assert not row["revealed"]
+        history = row["presentation"]
+        assert len(history) <= 256
+        assert all(
+            event["seq"] < row["decision"]["presentation_cursor"] for event in history
+        )
+        game = server._live_record_for_trace(trace_id).game
+        track = next(
+            track
+            for track in game.canonical_replay().presentation_tracks
+            if track.viewer == row["decision"]["viewer"]
+        )
+        cursor = row["decision"]["presentation_cursor"]
+        assert history == [
+            event.model_dump(mode="json")
+            for event in track.events[max(0, cursor - 256) : cursor]
+        ]
         outputs = row["outputs"]
         assert sum(outputs["probabilities"]) == pytest.approx(1)
         assert outputs["probabilities"][outputs["action"]] > 0
@@ -49,6 +65,7 @@ def test_watch_steps_are_exact_and_actor_safe(watch: WatchCreated) -> None:
         assert spectator["revealed"]
         assert spectator["decision"] == row["decision"]
         assert spectator["outputs"] == row["outputs"]
+        assert spectator["presentation"] == row["presentation"]
         assert (
             spectator["observation"]
             == server._live_record_for_trace(trace_id)
@@ -196,7 +213,7 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     assert response.status_code == 200
     assert response.json()["viewer"] == 1
     source["decisions"][0]["command"]["offer_id"] += 1
-    with pytest.raises(ValueError, match="verification failed"):
+    with pytest.raises(ValueError, match="Game trace digest mismatches"):
         import_arena(source)
 
 
@@ -257,9 +274,9 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     assert engine.state_digest() == digest
     assert len(decision.probabilities) == len(observation.action_space.actions)
     assert sum(decision.probabilities) == pytest.approx(1)
-    assert decision.action == max(
-        range(len(decision.probabilities)), key=decision.probabilities.__getitem__
-    )
+    # Softmax can round distinct logits to tied probabilities. The selected
+    # logit maximum need not be the first displayed probability maximum.
+    assert decision.probabilities[decision.action] == max(decision.probabilities)
 
 
 @pytest.mark.parametrize("kind", ["greedy", "heuristic"])

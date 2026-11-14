@@ -56,7 +56,8 @@ jobs:
             tests/academy/test_elemental_play_launcher.py \
             tests/academy/test_named_search_recovery.py \
             tests/academy/test_schedule_recovery.py \
-            tests/academy/test_forced_step_automation.py
+            tests/academy/test_forced_step_automation.py \
+            tests/academy/test_watch.py
 
       - name: Frozen-policy search fixtures
         run: |

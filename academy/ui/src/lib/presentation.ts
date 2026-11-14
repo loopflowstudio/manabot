@@ -102,7 +102,7 @@ function objectLabel(id: ObjectRenderId, labels: PresentationLabels): string {
   return labels.objects[objectLabelKey(id)] ?? `object ${objectLabelKey(id)}`;
 }
 
-function subjectLabel(subject: SubjectRef, labels: PresentationLabels): string {
+export function subjectLabel(subject: SubjectRef, labels: PresentationLabels): string {
   if (subject.kind === 'object') {
     return objectLabel(subject.id, labels);
   }
@@ -371,3 +371,34 @@ export function presentationBeat(
     ariaLabel: `${heading}. ${detail}`,
   };
 }
+
+/** Exact subjects mentioned by an authoritative event, never inferred causes. */
+export function presentationSubjects(event: PresentationEvent): SubjectRef[] {
+  const object = (id: ObjectRenderId): SubjectRef => ({ kind: 'object', id });
+  const kind = event.kind;
+  switch (kind.kind) {
+    case 'cast': return [object(kind.object), { kind: 'player', id: kind.controller }, { kind: 'stack', id: kind.stack }];
+    case 'targeted': return [kind.source, kind.target];
+    case 'resolved': return [{ kind: 'stack', id: kind.stack }];
+    case 'damage': return [...(kind.source ? [kind.source] : []), kind.target];
+    case 'died': case 'destroyed': return kind.objects.map(object);
+    case 'attack_group': return [...kind.attackers.map(object), kind.defender];
+    case 'blocked': return [object(kind.attacker), ...kind.blockers.map(object)];
+    case 'turn_started': return [{ kind: 'player', id: kind.player }];
+  }
+}
+
+/** Retain only the viewer-safe names this event actually needs. */
+export function presentationEventLabels(event: PresentationEvent, labels: PresentationLabels): PresentationLabels {
+  const retained: PresentationLabels = { objects: {}, players: {}, stacks: {} };
+  for (const subject of presentationSubjects(event)) {
+    const table = subject.kind === 'object' ? 'objects' : subject.kind === 'player' ? 'players' : 'stacks';
+    const key = subject.kind === 'object' ? objectLabelKey(subject.id) : String(subject.id);
+    const value = labels[table][key];
+    if (value !== undefined) retained[table][key] = value;
+  }
+  return retained;
+}
+
+/** Read-only board context; narration never changes choice focus or lane paging. */
+export const PRESENTATION_CONTEXT = Symbol('presentation');
