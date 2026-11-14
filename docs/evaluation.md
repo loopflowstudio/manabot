@@ -96,9 +96,18 @@ for _ in range(replicates):
 
 ## Anchors and ratings
 
-Working anchors are the rule-based `heuristic` player
-([`manabot/sim/heuristic.py`](../manabot/sim/heuristic.py)) and frozen
-checkpoints. The code anchors `scripted_greedy` and `random`
+Working anchors are the rule-based `heuristic` player and frozen checkpoints.
+Select `--opponent heuristic` for local evaluation or
+`MonitorProtocol(opponent="heuristic")` for checkpoint monitoring. The scalar
+adapter and batched opponent share the
+[native heuristic rules](engine.md#built-in-heuristic).
+New arena registrations use `version="native-v2"` and bind the native rule
+sources and adapter as their source identity. The `managym` wheel includes engine
+sources at their original package paths, so installed registration and validation hash
+the same paths and bytes as a checkout. Results recorded against the Python
+heuristic retain their original identity.
+A changed anchor identity needs a new version, never a relabeling of old games.
+The code anchors `scripted_greedy` and `random`
 (`manabot.sim.anchors`, frozen v1 sources) remain admissible for compatibility
 and diagnostics, not as working anchors; `fit_population` still places
 `random-v1` at the origin by default. Head-to-head

@@ -65,7 +65,7 @@ def vector_env(
         observation_space=observation_space,
         reward=reward,
         device="cpu",
-        opponent_policy="random",
+        player_policies=("agent", "random"),
     )
 
 
@@ -197,7 +197,7 @@ class TestEnvironment:
             observation_space=observation_space,
             reward=reward,
             device="cpu",
-            opponent_policy="random",
+            player_policies=("agent", "random"),
         )
 
         obs, _ = vector_env.reset()

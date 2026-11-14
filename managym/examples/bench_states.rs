@@ -8,7 +8,7 @@ use managym::{
         env::Env,
         observation::Observation,
         observation_encoder::{encode, encode_into, ObservationEncoderConfig},
-        opponent::OpponentPolicy,
+        player_policy::PlayerPolicy,
         vector_env::VectorEnv,
     },
     benchmark_allocations, benchmark_layers, benchmark_payments,
@@ -590,7 +590,7 @@ fn run(
         let mut clone_bytes = None;
         for sample in 0..3 {
             let mut env = root.fork().unwrap();
-            let mut vector = VectorEnv::new(1, 7, true, OpponentPolicy::None);
+            let mut vector = VectorEnv::new(1, 7, true, [PlayerPolicy::Agent; 2]);
             let buffer = std::cell::RefCell::new(encode(&obs, &config).unwrap());
             if layer == "vector" {
                 vector.reset_all(root.player_configs().to_vec()).unwrap();
