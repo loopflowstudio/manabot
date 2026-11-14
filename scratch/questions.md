@@ -479,3 +479,18 @@ Left for demo/gate judgment, not changed: replaying a retained vector receipt
 passes its legacy name to native construction, so that replay emits the
 alias's DeprecationWarning, and the 0.3.0 removal must translate retained
 names inside `manabot/env/replay.py` instead.
+
+## Realign after fourth-review implementation (2026-11-13, at a0f46dd874)
+
+The iteration direction to implement the four fourth-review changes is already
+satisfied by `9636eadc60`; no code edit was needed. Rechecked by reading:
+`agent/opponent.rs` is gone (`player_policy.rs` only); outside the alias
+tests, `opponent_policy` remains only in the alias resolver, the receipt's
+optional legacy field, retained-receipt replay (`manabot/env/replay.py`), the
+pre-existing `manabot/verify` schema/`opponents.py`, and assertions on the
+retained `tla-pilot-*` fixtures; the guide has "Per-seat players" and
+"Built-in heuristic", with the four links pointed at the right heading. The
+installed cp313 extension (16:31) was built from the rename's source (commit 16:32,
+rename only). No test was rerun. Gate is unchanged: full debug Rust suite,
+clippy, affected Python suites, consumer interpreter matrix, full release
+training smoke and normal same-runner Engine Budget.
